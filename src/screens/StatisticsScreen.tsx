@@ -111,8 +111,6 @@ const StatisticsScreen = () => {
                     <tr>
                       <th>#</th>
                       <th>Player</th>
-                      <th style={{ textAlign: 'right' }}>Gains</th>
-                      <th style={{ textAlign: 'right' }}>Losses</th>
                       <th style={{ textAlign: 'right' }}>Profit</th>
                       <th style={{ textAlign: 'center' }}>Games</th>
                       <th style={{ textAlign: 'center' }}>Win %</th>
@@ -127,12 +125,6 @@ const StatisticsScreen = () => {
                           {index + 1}
                         </td>
                         <td style={{ fontWeight: '600' }}>{player.playerName}</td>
-                        <td style={{ textAlign: 'right' }} className="profit">
-                          +{formatCurrency(player.totalGains)}
-                        </td>
-                        <td style={{ textAlign: 'right' }} className="loss">
-                          -{formatCurrency(player.totalLosses)}
-                        </td>
                         <td style={{ textAlign: 'right', fontWeight: '700' }} className={getProfitColor(player.totalProfit)}>
                           {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
                         </td>
