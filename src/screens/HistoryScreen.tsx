@@ -74,7 +74,7 @@ const HistoryScreen = () => {
                     })}
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                    {game.players.length} players • ₪{game.totalPot.toFixed(2)} pot
+                    {game.players.length} players • ₪{game.totalPot.toFixed(1)} pot
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -95,7 +95,7 @@ const HistoryScreen = () => {
                     key={p.id}
                     className={`badge ${p.profit > 0 ? 'badge-success' : p.profit < 0 ? 'badge-danger' : ''}`}
                   >
-                    {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{p.profit.toFixed(2)}
+                    {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{p.profit.toFixed(1)}
                   </span>
                 ))}
                 {game.players.length > 4 && (

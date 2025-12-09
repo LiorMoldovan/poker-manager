@@ -83,7 +83,7 @@ const LiveGameScreen = () => {
 
       <div className="summary-card">
         <div className="summary-title">Total Pot</div>
-        <div className="summary-value">₪{totalPot.toFixed(2)}</div>
+        <div className="summary-value">₪{totalPot.toFixed(1)}</div>
       </div>
 
       <div className="card">
@@ -97,7 +97,7 @@ const LiveGameScreen = () => {
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                ₪{(player.rebuys * rebuyValue).toFixed(2)} invested
+                ₪{(player.rebuys * rebuyValue).toFixed(1)} invested
               </div>
             </div>
             <div className="player-rebuys">
