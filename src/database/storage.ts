@@ -39,6 +39,21 @@ const DEFAULT_SETTINGS: Settings = {
   minTransfer: 5,
 };
 
+// Default players
+const DEFAULT_PLAYERS: Player[] = [
+  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString() },
+  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString() },
+  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString() },
+  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString() },
+  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString() },
+  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString() },
+  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString() },
+  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString() },
+  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString() },
+  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString() },
+  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString() },
+];
+
 // Initialize default values if not exist
 export const initializeStorage = (): void => {
   if (!localStorage.getItem(STORAGE_KEYS.CHIP_VALUES)) {
@@ -48,7 +63,7 @@ export const initializeStorage = (): void => {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
   }
   if (!localStorage.getItem(STORAGE_KEYS.PLAYERS)) {
-    setItem(STORAGE_KEYS.PLAYERS, []);
+    setItem(STORAGE_KEYS.PLAYERS, DEFAULT_PLAYERS);
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
     setItem(STORAGE_KEYS.GAMES, []);
