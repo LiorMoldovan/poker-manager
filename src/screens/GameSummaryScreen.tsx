@@ -110,13 +110,13 @@ const GameSummaryScreen = () => {
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {chipGap > 0 ? (
-                <>Counted ₪{chipGap} more than expected (extra chips)</>
+                <>Counted ₪{chipGap.toFixed(2)} more than expected (extra chips)</>
               ) : (
-                <>Counted ₪{Math.abs(chipGap)} less than expected (missing chips)</>
+                <>Counted ₪{Math.abs(chipGap).toFixed(2)} less than expected (missing chips)</>
               )}
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-              Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0)} per player to balance
+              Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0).toFixed(2)} per player to balance
             </div>
           </div>
         )}
@@ -138,9 +138,9 @@ const GameSummaryScreen = () => {
 
       {skippedTransfers.length > 0 && (
         <div className="card">
-          <h2 className="card-title mb-2">💡 Small Amounts Note</h2>
+          <h2 className="card-title mb-2">💡 Small Amounts</h2>
           <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            These transfers are below the minimum threshold (₪{getSettings().minTransfer}) but still need to be paid
+            Payments below ₪{getSettings().minTransfer} are not mandatory
           </p>
           {skippedTransfers.map((s, index) => (
             <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>

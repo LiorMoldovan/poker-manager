@@ -30,8 +30,8 @@ export const generateGameSummary = (
     const emoji = player.profit > 0 ? '🟢' : player.profit < 0 ? '🔴' : '⚪';
     const medal = index === 0 && player.profit > 0 ? ' 🏆' : '';
     const profitText = player.profit >= 0 
-      ? `+${Math.abs(player.profit)}₪` 
-      : `-${Math.abs(player.profit)}₪`;
+      ? `+${Math.abs(player.profit).toFixed(2)}₪` 
+      : `-${Math.abs(player.profit).toFixed(2)}₪`;
     summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
   });
 
@@ -39,9 +39,9 @@ export const generateGameSummary = (
   if (chipGap && chipGap !== 0) {
     summary += `\n⚠️ *Chip Count Adjustment:*\n`;
     if (chipGap > 0) {
-      summary += `Counted ₪${chipGap} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0)} per player\n`;
+      summary += `Counted ₪${chipGap.toFixed(2)} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0).toFixed(2)} per player\n`;
     } else {
-      summary += `Counted ₪${Math.abs(chipGap)} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0)} per player\n`;
+      summary += `Counted ₪${Math.abs(chipGap).toFixed(2)} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0).toFixed(2)} per player\n`;
     }
   }
 
@@ -49,14 +49,14 @@ export const generateGameSummary = (
     summary += `\n💸 *Settlements:*\n`;
     settlements.forEach(s => {
       // s.from = loser (pays), s.to = winner (receives)
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toFixed(2)}\n`;
     });
   }
 
   if (skippedTransfers.length > 0) {
-    summary += `\n💡 *Note - small amounts (still to be paid):*\n`;
+    summary += `\n💡 *Small amounts (not mandatory):*\n`;
     skippedTransfers.forEach(s => {
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toFixed(2)}\n`;
     });
   }
 
