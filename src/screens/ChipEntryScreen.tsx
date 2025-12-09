@@ -71,7 +71,7 @@ const ChipEntryScreen = () => {
   // Convert chip points to money value
   const getPlayerMoneyValue = (playerId: string): number => {
     const chipPoints = getPlayerChipPoints(playerId);
-    return Math.round(chipPoints * valuePerChip * 100) / 100; // Round to 2 decimals
+    return chipPoints * valuePerChip; // No rounding - keep exact value
   };
 
   const getPlayerProfit = (playerId: string): number => {
@@ -105,12 +105,12 @@ const ChipEntryScreen = () => {
       // If chips are missing (gap < 0), each player's loss is reduced (profit increased)
       const baseProfit = calculateProfitLoss(moneyValue, player.rebuys, rebuyValue);
       const adjustedProfit = baseProfit - gapPerPlayer;
-      updateGamePlayerResults(player.id, moneyValue, Math.round(adjustedProfit));
+      updateGamePlayerResults(player.id, moneyValue, adjustedProfit); // No rounding
     });
     
     // Save gap info to the game
     if (Math.abs(gapInMoney) > 0.01) {
-      updateGameChipGap(gameId, Math.round(gapInMoney), Math.round(gapPerPlayer * 100) / 100);
+      updateGameChipGap(gameId, gapInMoney, gapPerPlayer); // No rounding
     }
     
     updateGameStatus(gameId, 'completed');

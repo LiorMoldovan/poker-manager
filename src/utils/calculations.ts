@@ -46,19 +46,18 @@ export const calculateSettlement = (
     const amount = Math.min(winner.profit, Math.abs(loser.profit));
 
     if (amount > 0) {
-      // Round to 2 decimal places to preserve half-rebuy precision
-      const roundedAmount = Math.round(amount * 100) / 100;
+      // No rounding - keep exact value
       const transfer = {
         from: loser.name,
         to: winner.name,
-        amount: roundedAmount,
+        amount: amount,
       };
       
       // All transfers are included in settlements
       settlements.push(transfer);
       
       // Track which ones are small (below threshold) for display purposes
-      if (roundedAmount < minTransfer) {
+      if (amount < minTransfer) {
         smallTransfers.push(transfer);
       }
     }
