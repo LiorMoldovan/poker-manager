@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus } from '../database/storage';
+import { cleanNumber } from '../utils/calculations';
 
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -83,7 +84,7 @@ const LiveGameScreen = () => {
 
       <div className="summary-card">
         <div className="summary-title">Total Pot</div>
-        <div className="summary-value">₪{totalPot.toString()}</div>
+        <div className="summary-value">₪{cleanNumber(totalPot)}</div>
       </div>
 
       <div className="card">
@@ -97,7 +98,7 @@ const LiveGameScreen = () => {
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                ₪{(player.rebuys * rebuyValue).toString()} invested
+                ₪{cleanNumber(player.rebuys * rebuyValue)} invested
               </div>
             </div>
             <div className="player-rebuys">

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
 import { getGame, getGamePlayers, getSettings } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 import { generateGameSummary, shareToWhatsApp } from '../utils/sharing';
 
 const GameSummaryScreen = () => {
@@ -110,13 +110,13 @@ const GameSummaryScreen = () => {
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {chipGap > 0 ? (
-                <>Counted ₪{chipGap.toString()} more than expected (extra chips)</>
+                <>Counted ₪{cleanNumber(chipGap)} more than expected (extra chips)</>
               ) : (
-                <>Counted ₪{Math.abs(chipGap).toString()} less than expected (missing chips)</>
+                <>Counted ₪{cleanNumber(Math.abs(chipGap))} less than expected (missing chips)</>
               )}
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-              Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0).toString()} per player to balance
+              Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player to balance
             </div>
           </div>
         )}
@@ -140,7 +140,7 @@ const GameSummaryScreen = () => {
         <div className="card">
           <h2 className="card-title mb-2">💡 Small Amounts</h2>
           <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            Payments below ₪{getSettings().minTransfer.toString()} are not mandatory
+            Payments below ₪{cleanNumber(getSettings().minTransfer)} are not mandatory
           </p>
           {skippedTransfers.map((s, index) => (
             <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>

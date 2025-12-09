@@ -72,11 +72,15 @@ export const calculateSettlement = (
   return { settlements, smallTransfers };
 };
 
+// Clean up floating-point artifacts (e.g., 30.000000001 -> 30)
+export const cleanNumber = (num: number): number => {
+  return Math.round(num * 100) / 100;
+};
+
 export const formatCurrency = (amount: number): string => {
-  const absAmount = Math.abs(amount);
+  const cleaned = cleanNumber(Math.abs(amount));
   const sign = amount >= 0 ? '' : '-';
-  // Show exact number - no rounding
-  return `${sign}₪${absAmount}`;
+  return `${sign}₪${cleaned}`;
 };
 
 export const getProfitColor = (profit: number): string => {

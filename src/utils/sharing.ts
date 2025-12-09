@@ -1,5 +1,5 @@
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
-import { formatCurrency } from './calculations';
+import { formatCurrency, cleanNumber } from './calculations';
 
 export const generateGameSummary = (
   date: string,
@@ -35,8 +35,8 @@ export const generateGameSummary = (
     else if (index === 2) medal = ' 🥉';
     
     const profitText = player.profit >= 0 
-      ? `+₪${Math.abs(player.profit).toString()}` 
-      : `-₪${Math.abs(player.profit).toString()}`;
+      ? `+₪${cleanNumber(Math.abs(player.profit))}` 
+      : `-₪${cleanNumber(Math.abs(player.profit))}`;
     summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
   });
 
@@ -44,9 +44,9 @@ export const generateGameSummary = (
   if (chipGap && chipGap !== 0) {
     summary += `\n⚠️ *Chip Count Adjustment:*\n`;
     if (chipGap > 0) {
-      summary += `Counted ₪${chipGap.toString()} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0).toString()} per player\n`;
+      summary += `Counted ₪${cleanNumber(chipGap)} extra • Adjusted -₪${cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player\n`;
     } else {
-      summary += `Counted ₪${Math.abs(chipGap).toString()} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0).toString()} per player\n`;
+      summary += `Counted ₪${cleanNumber(Math.abs(chipGap))} short • Adjusted +₪${cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player\n`;
     }
   }
 
@@ -54,14 +54,14 @@ export const generateGameSummary = (
     summary += `\n💸 *Settlements:*\n`;
     settlements.forEach(s => {
       // s.from = loser (pays), s.to = winner (receives)
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toString()}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${cleanNumber(s.amount)}\n`;
     });
   }
 
   if (skippedTransfers.length > 0) {
     summary += `\n💡 *Small amounts (not mandatory):*\n`;
     skippedTransfers.forEach(s => {
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toString()}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${cleanNumber(s.amount)}\n`;
     });
   }
 

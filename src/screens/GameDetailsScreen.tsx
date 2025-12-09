@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
 import { getGame, getGamePlayers, getSettings } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 import { generateGameSummary, shareToWhatsApp } from '../utils/sharing';
 
 const GameDetailsScreen = () => {
@@ -78,7 +78,7 @@ const GameDetailsScreen = () => {
           <div className="stat-label">Players</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">₪{totalPot.toString()}</div>
+          <div className="stat-value">₪{cleanNumber(totalPot)}</div>
           <div className="stat-label">Total Pot</div>
         </div>
         <div className="stat-card">
@@ -108,7 +108,7 @@ const GameDetailsScreen = () => {
                   {player.playerName}
                 </td>
                 <td style={{ textAlign: 'center' }}>{player.rebuys}</td>
-                <td style={{ textAlign: 'right' }}>₪{player.finalValue.toString()}</td>
+                <td style={{ textAlign: 'right' }}>₪{cleanNumber(player.finalValue)}</td>
                 <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
                   {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
                 </td>
@@ -130,11 +130,11 @@ const GameDetailsScreen = () => {
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {chipGap > 0 ? (
-                <>Counted ₪{chipGap.toString()} more than expected</>
+                <>Counted ₪{cleanNumber(chipGap)} more than expected</>
               ) : (
-                <>Counted ₪{Math.abs(chipGap).toString()} less than expected</>
+                <>Counted ₪{cleanNumber(Math.abs(chipGap))} less than expected</>
               )}
-              {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0).toString()} per player
+              {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player
             </div>
           </div>
         )}

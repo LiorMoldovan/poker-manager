@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GameWithDetails } from '../types';
 import { getAllGames, getGamePlayers, getSettings, deleteGame } from '../database/storage';
+import { cleanNumber } from '../utils/calculations';
 
 const HistoryScreen = () => {
   const navigate = useNavigate();
@@ -74,7 +75,7 @@ const HistoryScreen = () => {
                     })}
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                    {game.players.length} players • ₪{game.totalPot.toString()} pot
+                    {game.players.length} players • ₪{cleanNumber(game.totalPot)} pot
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -95,7 +96,7 @@ const HistoryScreen = () => {
                     key={p.id}
                     className={`badge ${p.profit > 0 ? 'badge-success' : p.profit < 0 ? 'badge-danger' : ''}`}
                   >
-                    {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{p.profit.toString()}
+                    {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{cleanNumber(p.profit)}
                   </span>
                 ))}
                 {game.players.length > 4 && (
