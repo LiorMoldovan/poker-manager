@@ -267,61 +267,52 @@ const ChipEntryScreen = () => {
           </div>
 
           <div className="chip-grid">
-            {chipValues.map(chip => {
-              const count = chipCounts[player.id]?.[chip.id] || 0;
-              return (
-                <div key={chip.id} className="chip-entry-card" style={{ 
-                  borderLeft: `4px solid ${chip.displayColor}`,
-                  background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
-                }}>
-                  <div className="chip-entry-header">
-                    <div 
-                      className="chip-circle-small" 
-                      style={{ 
-                        backgroundColor: chip.displayColor,
-                        border: chip.displayColor === '#FFFFFF' || chip.displayColor === '#EAB308' ? '2px solid #888' : 'none'
-                      }} 
-                    />
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
-                  </div>
-                  <div className="chip-entry-controls">
-                    <button 
-                      className="chip-btn chip-btn-minus"
-                      onClick={() => updateChipCount(player.id, chip.id, count - 1)}
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      className="chip-count-input"
-                      value={count}
-                      onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
-                      min="0"
-                    />
-                    <button 
-                      className="chip-btn chip-btn-plus"
-                      onClick={() => updateChipCount(player.id, chip.id, count + 1)}
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="chip-entry-quick">
-                    <button 
-                      className="chip-btn-quick chip-btn-minus"
-                      onClick={() => updateChipCount(player.id, chip.id, count - 5)}
-                    >
-                      -5
-                    </button>
-                    <button 
-                      className="chip-btn-quick chip-btn-plus"
-                      onClick={() => updateChipCount(player.id, chip.id, count + 5)}
-                    >
-                      +5
-                    </button>
-                  </div>
+            {chipValues.map(chip => (
+              <div key={chip.id} className="chip-entry-card" style={{ 
+                borderLeft: `4px solid ${chip.displayColor}`,
+                background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
+              }}>
+                <div className="chip-entry-header">
+                  <div 
+                    className="chip-circle-small" 
+                    style={{ 
+                      backgroundColor: chip.displayColor,
+                      border: chip.displayColor === '#FFFFFF' || chip.displayColor === '#EAB308' ? '2px solid #888' : 'none'
+                    }} 
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
                 </div>
-              );
-            })}
+                <div className="chip-entry-controls">
+                  <button 
+                    className="chip-btn chip-btn-minus"
+                    onClick={() => updateChipCount(
+                      player.id, 
+                      chip.id, 
+                      (chipCounts[player.id]?.[chip.id] || 0) - 1
+                    )}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    className="chip-count-input"
+                    value={chipCounts[player.id]?.[chip.id] || 0}
+                    onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
+                    min="0"
+                  />
+                  <button 
+                    className="chip-btn chip-btn-plus"
+                    onClick={() => updateChipCount(
+                      player.id, 
+                      chip.id, 
+                      (chipCounts[player.id]?.[chip.id] || 0) + 1
+                    )}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
           
           <div style={{ textAlign: 'right', marginTop: '0.75rem', fontWeight: '600' }}>
