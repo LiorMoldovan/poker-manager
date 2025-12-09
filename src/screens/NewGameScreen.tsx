@@ -125,6 +125,7 @@ const NewGameScreen = () => {
         className="btn btn-primary btn-lg btn-block"
         onClick={handleStartGame}
         disabled={selectedIds.size < 2}
+        style={{ marginBottom: '2rem' }}
       >
         🎰 Start Game ({selectedIds.size} players)
       </button>

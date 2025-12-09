@@ -45,7 +45,7 @@ body {
 .main-content {
   flex: 1;
   padding: 1rem;
-  padding-bottom: 5rem;
+  padding-bottom: 6rem;
   max-width: 800px;
   margin: 0 auto;
   width: 100%;
@@ -56,6 +56,7 @@ body {
 @media (min-width: 640px) {
   .main-content {
     padding: 1.5rem;
+    padding-bottom: 6rem;
   }
 }
 
