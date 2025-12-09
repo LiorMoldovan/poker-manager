@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { PlayerStats } from '../types';
-import { getPlayerStats } from '../database/storage';
+import { getPlayerStats, clearAllGameHistory } from '../database/storage';
 import { formatCurrency, getProfitColor } from '../utils/calculations';
 
 const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -15,6 +16,12 @@ const StatisticsScreen = () => {
   const loadStats = () => {
     const playerStats = getPlayerStats();
     setStats(playerStats);
+  };
+
+  const handleReset = () => {
+    clearAllGameHistory();
+    setStats([]);
+    setShowResetConfirm(false);
   };
 
   const sortedStats = [...stats].sort((a, b) => {
@@ -218,7 +225,51 @@ const StatisticsScreen = () => {
               </div>
             </div>
           ))}
+
+          {/* Reset Button */}
+          <div className="card" style={{ marginTop: '2rem' }}>
+            <button 
+              className="btn btn-danger btn-block"
+              onClick={() => setShowResetConfirm(true)}
+            >
+              🗑️ Reset All Statistics
+            </button>
+          </div>
         </>
+      )}
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="modal-overlay" onClick={() => setShowResetConfirm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">⚠️ Reset Statistics</h3>
+              <button className="modal-close" onClick={() => setShowResetConfirm(false)}>×</button>
+            </div>
+            <p style={{ marginBottom: '1rem' }}>
+              Are you sure you want to delete all game history? This action cannot be undone.
+            </p>
+            <p className="text-muted" style={{ marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+              This will remove all games and statistics. Player list will be kept.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ flex: 1 }}
+                onClick={() => setShowResetConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-danger" 
+                style={{ flex: 1 }}
+                onClick={handleReset}
+              >
+                🗑️ Delete All
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

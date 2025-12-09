@@ -172,6 +172,12 @@ export const deleteGame = (id: string): void => {
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
 };
 
+// Clear all game history (reset statistics)
+export const clearAllGameHistory = (): void => {
+  setItem(STORAGE_KEYS.GAMES, []);
+  setItem(STORAGE_KEYS.GAME_PLAYERS, []);
+};
+
 // Game Players
 export const getGamePlayers = (gameId: string): GamePlayer[] => {
   return getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId === gameId);
