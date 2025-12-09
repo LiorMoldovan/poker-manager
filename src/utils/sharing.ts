@@ -35,8 +35,8 @@ export const generateGameSummary = (
     else if (index === 2) medal = ' 🥉';
     
     const profitText = player.profit >= 0 
-      ? `₪+${Math.abs(player.profit).toFixed(1)}` 
-      : `₪-${Math.abs(player.profit).toFixed(1)}`;
+      ? `+₪${Math.abs(player.profit).toFixed(1)}` 
+      : `-₪${Math.abs(player.profit).toFixed(1)}`;
     summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
   });
 
@@ -44,9 +44,9 @@ export const generateGameSummary = (
   if (chipGap && chipGap !== 0) {
     summary += `\n⚠️ *Chip Count Adjustment:*\n`;
     if (chipGap > 0) {
-      summary += `Counted ₪${chipGap.toFixed(1)} extra • Adjusted ₪-${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
+      summary += `Counted ₪${chipGap.toFixed(1)} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
     } else {
-      summary += `Counted ₪${Math.abs(chipGap).toFixed(1)} short • Adjusted ₪+${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
+      summary += `Counted ₪${Math.abs(chipGap).toFixed(1)} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
     }
   }
 
