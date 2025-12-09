@@ -22,11 +22,17 @@ export const generateGameSummary = (
   // Sort players by profit (winners first)
   const sortedPlayers = [...players].sort((a, b) => b.profit - a.profit);
 
+  // LTR mark to force left-to-right display in WhatsApp
+  const LTR = '\u200E';
+  
   summary += `💰 *Results:*\n`;
   sortedPlayers.forEach((player, index) => {
     const emoji = player.profit > 0 ? '🟢' : player.profit < 0 ? '🔴' : '⚪';
     const medal = index === 0 && player.profit > 0 ? ' 🏆' : '';
-    summary += `${emoji} ${player.playerName}: ${formatCurrency(player.profit)}${medal}\n`;
+    const profitText = player.profit >= 0 
+      ? `+₪${Math.abs(player.profit)}` 
+      : `₪${Math.abs(player.profit)}-`;
+    summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
   });
 
   // Show chip gap adjustment if present
@@ -42,14 +48,15 @@ export const generateGameSummary = (
   if (settlements.length > 0) {
     summary += `\n💸 *Settlements:*\n`;
     settlements.forEach(s => {
-      summary += `${s.to} ← ${s.from}: ${formatCurrency(s.amount)}\n`;
+      // Format: "payer → receiver: amount" with LTR mark
+      summary += `${LTR}${s.from} → ${s.to}: ₪${s.amount}\n`;
     });
   }
 
   if (skippedTransfers.length > 0) {
     summary += `\n💡 *Note - small amounts (still to be paid):*\n`;
     skippedTransfers.forEach(s => {
-      summary += `${s.to} ← ${s.from}: ${formatCurrency(s.amount)}\n`;
+      summary += `${LTR}${s.from} → ${s.to}: ₪${s.amount}\n`;
     });
   }
 

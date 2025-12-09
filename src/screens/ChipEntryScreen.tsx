@@ -275,10 +275,10 @@ const ChipEntryScreen = () => {
                   border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none'
                 }} 
               />
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: '500' }}>{chip.color}</span>
-                <span className="text-muted" style={{ marginLeft: '0.5rem' }}>
-                  (×{chip.value})
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                <span className="chip-color-name" style={{ fontWeight: '500' }}>{chip.color} </span>
+                <span className="text-muted" style={{ fontSize: '0.85rem' }}>
+                  ×{chip.value}
                 </span>
               </div>
               <div className="number-stepper">
