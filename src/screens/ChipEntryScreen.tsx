@@ -263,7 +263,7 @@ const ChipEntryScreen = () => {
           </div>
           
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {player.rebuys} buy-in{player.rebuys > 1 ? 's' : ''} (₪{player.rebuys * rebuyValue} = {(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
+            {player.rebuys} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{(player.rebuys * rebuyValue).toFixed(2)} = {(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
           </div>
 
           <div className="chip-grid">
