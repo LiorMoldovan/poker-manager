@@ -73,14 +73,18 @@ export const calculateSettlement = (
 };
 
 // Clean up floating-point artifacts (e.g., 30.000000001 -> 30)
-export const cleanNumber = (num: number): number => {
-  return Math.round(num * 100) / 100;
+export const cleanNumber = (num: number): string => {
+  const rounded = Math.round(num * 100) / 100;
+  // Convert to string and remove unnecessary trailing zeros
+  if (rounded % 1 === 0) {
+    return rounded.toString();
+  }
+  return rounded.toFixed(2).replace(/\.?0+$/, '');
 };
 
 export const formatCurrency = (amount: number): string => {
-  const cleaned = cleanNumber(Math.abs(amount));
   const sign = amount >= 0 ? '' : '-';
-  return `${sign}₪${cleaned}`;
+  return `${sign}₪${cleanNumber(Math.abs(amount))}`;
 };
 
 export const getProfitColor = (profit: number): string => {
