@@ -257,7 +257,7 @@ const ChipEntryScreen = () => {
             <h3 className="card-title">{player.playerName}</h3>
             <div>
               <span className={getProfitColor(getPlayerProfit(player.id))}>
-                {getPlayerProfit(player.id) >= 0 ? '+' : ''}₪{Math.round(getPlayerProfit(player.id))}
+                {getPlayerProfit(player.id) >= 0 ? '+' : ''}₪{getPlayerProfit(player.id).toFixed(2)}
               </span>
             </div>
           </div>
