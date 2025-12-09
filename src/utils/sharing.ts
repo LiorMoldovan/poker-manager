@@ -28,13 +28,12 @@ export const generateGameSummary = (
   summary += `💰 *Results:*\n`;
   sortedPlayers.forEach((player, index) => {
     const emoji = player.profit > 0 ? '🟢' : player.profit < 0 ? '🔴' : '⚪';
-    // Add medals for top 3 positions (only for players with profit)
+    // Add medals for top 3 positions
     let medal = '';
-    if (player.profit > 0) {
-      if (index === 0) medal = ' 🥇';
-      else if (index === 1) medal = ' 🥈';
-      else if (index === 2) medal = ' 🥉';
-    }
+    if (index === 0) medal = ' 🥇';
+    else if (index === 1) medal = ' 🥈';
+    else if (index === 2) medal = ' 🥉';
+    
     const profitText = player.profit >= 0 
       ? `+${Math.abs(player.profit).toFixed(2)}₪` 
       : `-${Math.abs(player.profit).toFixed(2)}₪`;
