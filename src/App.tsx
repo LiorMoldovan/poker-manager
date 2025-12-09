@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { initializeStorage } from './database/storage';
 import Navigation from './components/Navigation';
 import NewGameScreen from './screens/NewGameScreen';
@@ -13,7 +13,6 @@ import SettingsScreen from './screens/SettingsScreen';
 
 function App() {
   const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
     initializeStorage();

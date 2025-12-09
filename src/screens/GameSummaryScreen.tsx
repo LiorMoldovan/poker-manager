@@ -48,7 +48,6 @@ const GameSummaryScreen = () => {
     shareToWhatsApp(summary);
   };
 
-  const totalPot = players.reduce((sum, p) => sum + p.finalValue, 0);
   const winner = players[0];
 
   return (
