@@ -58,6 +58,14 @@ const DEFAULT_PLAYERS: Player[] = [
 export const initializeStorage = (): void => {
   if (!localStorage.getItem(STORAGE_KEYS.CHIP_VALUES)) {
     setItem(STORAGE_KEYS.CHIP_VALUES, DEFAULT_CHIP_VALUES);
+  } else {
+    // Force update black chip to pure black if it's the old gray color
+    const chipValues = getItem<ChipValue[]>(STORAGE_KEYS.CHIP_VALUES, []);
+    const blackChip = chipValues.find(c => c.color === 'Black');
+    if (blackChip && blackChip.displayColor !== '#000000') {
+      blackChip.displayColor = '#000000';
+      setItem(STORAGE_KEYS.CHIP_VALUES, chipValues);
+    }
   }
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
