@@ -29,7 +29,7 @@ const DEFAULT_CHIP_VALUES: ChipValue[] = [
   { id: '2', color: 'Red', value: 100, displayColor: '#EF4444' },
   { id: '3', color: 'Blue', value: 200, displayColor: '#3B82F6' },
   { id: '4', color: 'Green', value: 500, displayColor: '#22C55E' },
-  { id: '5', color: 'Black', value: 1000, displayColor: '#1F2937' },
+  { id: '5', color: 'Black', value: 1000, displayColor: '#000000' },
   { id: '6', color: 'Yellow', value: 5000, displayColor: '#EAB308' },
 ];
 
