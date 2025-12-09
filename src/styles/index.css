@@ -516,7 +516,101 @@ th {
   }
 }
 
-/* Chip input */
+/* Chip Grid Layout */
+.chip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 400px) {
+  .chip-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.chip-entry-card {
+  background: var(--surface-light);
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chip-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.chip-circle-small {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.chip-entry-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.chip-btn {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.chip-btn-minus {
+  background: #ef4444;
+  color: white;
+}
+
+.chip-btn-minus:hover {
+  background: #dc2626;
+}
+
+.chip-btn-plus {
+  background: #22c55e;
+  color: white;
+}
+
+.chip-btn-plus:hover {
+  background: #16a34a;
+}
+
+.chip-count-input {
+  width: 45px;
+  height: 44px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0;
+}
+
+.chip-count-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Legacy chip input (kept for compatibility) */
 .chip-input-row {
   display: flex;
   align-items: center;
@@ -525,31 +619,25 @@ th {
   background: var(--surface-light);
   border-radius: 8px;
   margin-bottom: 0.5rem;
-  flex-wrap: nowrap;
-  min-width: 0;
 }
 
 .chip-input {
   width: 50px;
-  min-width: 50px;
   padding: 0.4rem;
   text-align: center;
   font-size: 1rem;
   font-weight: 600;
 }
 
-/* Number stepper */
 .number-stepper {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  flex-shrink: 0;
 }
 
 .stepper-btn {
   width: 32px;
   height: 32px;
-  min-width: 32px;
   border-radius: 8px;
   display: flex;
   align-items: center;

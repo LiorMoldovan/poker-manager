@@ -266,52 +266,54 @@ const ChipEntryScreen = () => {
             {player.rebuys} buy-in{player.rebuys > 1 ? 's' : ''} (₪{player.rebuys * rebuyValue} = {(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
           </div>
 
-          {chipValues.map(chip => (
-            <div key={chip.id} className="chip-input-row">
-              <div 
-                className="chip-circle" 
-                style={{ 
-                  backgroundColor: chip.displayColor,
-                  border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none'
-                }} 
-              />
-              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                <span className="chip-color-name" style={{ fontWeight: '500' }}>{chip.color} </span>
-                <span className="text-muted" style={{ fontSize: '0.85rem' }}>
-                  ×{chip.value}
-                </span>
+          <div className="chip-grid">
+            {chipValues.map(chip => (
+              <div key={chip.id} className="chip-entry-card" style={{ 
+                borderLeft: `4px solid ${chip.displayColor}`,
+                background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
+              }}>
+                <div className="chip-entry-header">
+                  <div 
+                    className="chip-circle-small" 
+                    style={{ 
+                      backgroundColor: chip.displayColor,
+                      border: chip.displayColor === '#FFFFFF' || chip.displayColor === '#EAB308' ? '2px solid #888' : 'none'
+                    }} 
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
+                </div>
+                <div className="chip-entry-controls">
+                  <button 
+                    className="chip-btn chip-btn-minus"
+                    onClick={() => updateChipCount(
+                      player.id, 
+                      chip.id, 
+                      (chipCounts[player.id]?.[chip.id] || 0) - 1
+                    )}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    className="chip-count-input"
+                    value={chipCounts[player.id]?.[chip.id] || 0}
+                    onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
+                    min="0"
+                  />
+                  <button 
+                    className="chip-btn chip-btn-plus"
+                    onClick={() => updateChipCount(
+                      player.id, 
+                      chip.id, 
+                      (chipCounts[player.id]?.[chip.id] || 0) + 1
+                    )}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-              <div className="number-stepper">
-                <button 
-                  className="stepper-btn btn btn-secondary"
-                  onClick={() => updateChipCount(
-                    player.id, 
-                    chip.id, 
-                    (chipCounts[player.id]?.[chip.id] || 0) - 1
-                  )}
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  className="input chip-input"
-                  value={chipCounts[player.id]?.[chip.id] || 0}
-                  onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
-                  min="0"
-                />
-                <button 
-                  className="stepper-btn btn btn-secondary"
-                  onClick={() => updateChipCount(
-                    player.id, 
-                    chip.id, 
-                    (chipCounts[player.id]?.[chip.id] || 0) + 1
-                  )}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
           
           <div style={{ textAlign: 'right', marginTop: '0.75rem', fontWeight: '600' }}>
             Chips: {getPlayerChipPoints(player.id).toLocaleString()} = ₪{getPlayerMoneyValue(player.id).toFixed(2)}
