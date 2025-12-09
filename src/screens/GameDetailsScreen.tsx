@@ -78,7 +78,7 @@ const GameDetailsScreen = () => {
           <div className="stat-label">Players</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">₪{totalPot}</div>
+          <div className="stat-value">₪{totalPot.toFixed(2)}</div>
           <div className="stat-label">Total Pot</div>
         </div>
         <div className="stat-card">
@@ -108,7 +108,7 @@ const GameDetailsScreen = () => {
                   {player.playerName}
                 </td>
                 <td style={{ textAlign: 'center' }}>{player.rebuys}</td>
-                <td style={{ textAlign: 'right' }}>₪{Math.round(player.finalValue)}</td>
+                <td style={{ textAlign: 'right' }}>₪{player.finalValue.toFixed(2)}</td>
                 <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
                   {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
                 </td>
@@ -130,11 +130,11 @@ const GameDetailsScreen = () => {
             </div>
             <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {chipGap > 0 ? (
-                <>Counted ₪{chipGap} more than expected</>
+                <>Counted ₪{chipGap.toFixed(2)} more than expected</>
               ) : (
-                <>Counted ₪{Math.abs(chipGap)} less than expected</>
+                <>Counted ₪{Math.abs(chipGap).toFixed(2)} less than expected</>
               )}
-              {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0)} per player
+              {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{Math.abs(chipGapPerPlayer || 0).toFixed(2)} per player
             </div>
           </div>
         )}
