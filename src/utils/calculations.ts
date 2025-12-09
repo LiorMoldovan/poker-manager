@@ -76,8 +76,8 @@ export const calculateSettlement = (
 export const formatCurrency = (amount: number): string => {
   const absAmount = Math.abs(amount);
   const sign = amount >= 0 ? '' : '-';
-  // Always show 1 decimal place
-  return `${sign}₪${absAmount.toFixed(1)}`;
+  // Show exact number - no rounding
+  return `${sign}₪${absAmount}`;
 };
 
 export const getProfitColor = (profit: number): string => {

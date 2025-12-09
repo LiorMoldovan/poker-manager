@@ -35,8 +35,8 @@ export const generateGameSummary = (
     else if (index === 2) medal = ' 🥉';
     
     const profitText = player.profit >= 0 
-      ? `+₪${Math.abs(player.profit).toFixed(1)}` 
-      : `-₪${Math.abs(player.profit).toFixed(1)}`;
+      ? `+₪${Math.abs(player.profit).toString()}` 
+      : `-₪${Math.abs(player.profit).toString()}`;
     summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
   });
 
@@ -44,9 +44,9 @@ export const generateGameSummary = (
   if (chipGap && chipGap !== 0) {
     summary += `\n⚠️ *Chip Count Adjustment:*\n`;
     if (chipGap > 0) {
-      summary += `Counted ₪${chipGap.toFixed(1)} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
+      summary += `Counted ₪${chipGap.toString()} extra • Adjusted -₪${Math.abs(chipGapPerPlayer || 0).toString()} per player\n`;
     } else {
-      summary += `Counted ₪${Math.abs(chipGap).toFixed(1)} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0).toFixed(1)} per player\n`;
+      summary += `Counted ₪${Math.abs(chipGap).toString()} short • Adjusted +₪${Math.abs(chipGapPerPlayer || 0).toString()} per player\n`;
     }
   }
 
@@ -54,14 +54,14 @@ export const generateGameSummary = (
     summary += `\n💸 *Settlements:*\n`;
     settlements.forEach(s => {
       // s.from = loser (pays), s.to = winner (receives)
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toFixed(1)}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toString()}\n`;
     });
   }
 
   if (skippedTransfers.length > 0) {
     summary += `\n💡 *Small amounts (not mandatory):*\n`;
     skippedTransfers.forEach(s => {
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toFixed(1)}\n`;
+      summary += `${s.from} משלם ל${s.to}: ₪${s.amount.toString()}\n`;
     });
   }
 

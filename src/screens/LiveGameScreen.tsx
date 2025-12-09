@@ -83,7 +83,7 @@ const LiveGameScreen = () => {
 
       <div className="summary-card">
         <div className="summary-title">Total Pot</div>
-        <div className="summary-value">₪{totalPot.toFixed(1)}</div>
+        <div className="summary-value">₪{totalPot.toString()}</div>
       </div>
 
       <div className="card">
@@ -97,11 +97,11 @@ const LiveGameScreen = () => {
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                ₪{(player.rebuys * rebuyValue).toFixed(1)} invested
+                ₪{(player.rebuys * rebuyValue).toString()} invested
               </div>
             </div>
             <div className="player-rebuys">
-              <span className="rebuy-count">{player.rebuys % 1 !== 0 ? player.rebuys.toFixed(1) : player.rebuys}</span>
+              <span className="rebuy-count">{player.rebuys % 1 !== 0 ? player.rebuys.toString() : player.rebuys}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <button 
                   className="btn btn-primary btn-sm"

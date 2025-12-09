@@ -140,7 +140,7 @@ const SettingsScreen = () => {
             min="1"
           />
           <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Each rebuy of ₪{settings.rebuyValue.toFixed(1)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
+            Each rebuy of ₪{settings.rebuyValue.toString()} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
             <br />
             Value per chip: ₪{(settings.rebuyValue / (settings.chipsPerRebuy || 10000)).toFixed(4)}
           </p>
