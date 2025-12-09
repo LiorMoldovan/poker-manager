@@ -158,7 +158,7 @@ const ChipEntryScreen = () => {
               {expectedChipPoints.toLocaleString()} chips
             </div>
             <div style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#0369a1' }}>
-              {players.reduce((sum, p) => sum + p.rebuys, 0)} rebuys total
+              {cleanNumber(players.reduce((sum, p) => sum + p.rebuys, 0))} rebuys total
             </div>
           </div>
           
@@ -263,7 +263,7 @@ const ChipEntryScreen = () => {
           </div>
           
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {player.rebuys} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(player.rebuys * rebuyValue)} = {(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
+            {cleanNumber(player.rebuys)} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(player.rebuys * rebuyValue)} = {cleanNumber(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
           </div>
 
           <div className="chip-grid">

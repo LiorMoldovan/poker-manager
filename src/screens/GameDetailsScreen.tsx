@@ -82,7 +82,7 @@ const GameDetailsScreen = () => {
           <div className="stat-label">Total Pot</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{players.reduce((sum, p) => sum + p.rebuys, 0)}</div>
+          <div className="stat-value">{cleanNumber(players.reduce((sum, p) => sum + p.rebuys, 0))}</div>
           <div className="stat-label">Total Buy-ins</div>
         </div>
       </div>
@@ -107,7 +107,7 @@ const GameDetailsScreen = () => {
                   {index === 2 && player.profit > 0 && '🥉 '}
                   {player.playerName}
                 </td>
-                <td style={{ textAlign: 'center' }}>{player.rebuys}</td>
+                <td style={{ textAlign: 'center' }}>{cleanNumber(player.rebuys)}</td>
                 <td style={{ textAlign: 'right' }}>₪{cleanNumber(player.finalValue)}</td>
                 <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
                   {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}

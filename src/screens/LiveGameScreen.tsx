@@ -102,7 +102,7 @@ const LiveGameScreen = () => {
               </div>
             </div>
             <div className="player-rebuys">
-              <span className="rebuy-count">{player.rebuys % 1 !== 0 ? player.rebuys.toString() : player.rebuys}</span>
+              <span className="rebuy-count">{cleanNumber(player.rebuys)}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <button 
                   className="btn btn-primary btn-sm"
