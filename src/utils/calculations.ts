@@ -22,52 +22,67 @@ export const calculateSettlement = (
   players: GamePlayer[],
   minTransfer: number
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
-  // Create copies with profit values
-  const winners = players
-    .filter(p => p.profit > 0)
-    .map(p => ({ name: p.playerName, profit: p.profit }))
-    .sort((a, b) => b.profit - a.profit);
-
-  const losers = players
-    .filter(p => p.profit < 0)
-    .map(p => ({ name: p.playerName, profit: p.profit }))
-    .sort((a, b) => a.profit - b.profit);
+  // Use optimized minimum transactions algorithm
+  const balances = players
+    .filter(p => Math.abs(p.profit) > 0.001) // Filter out zero balances
+    .map(p => ({ name: p.playerName, balance: p.profit }));
 
   const settlements: Settlement[] = [];
   const smallTransfers: SkippedTransfer[] = [];
 
-  let winnerIdx = 0;
-  let loserIdx = 0;
-
-  while (winnerIdx < winners.length && loserIdx < losers.length) {
-    const winner = winners[winnerIdx];
-    const loser = losers[loserIdx];
-
-    const amount = Math.min(winner.profit, Math.abs(loser.profit));
-
-    if (amount > 0) {
-      // No rounding - keep exact value
-      const transfer = {
-        from: loser.name,
-        to: winner.name,
-        amount: amount,
-      };
+  // Step 1: Find exact matches first (minimizes transactions)
+  for (let i = 0; i < balances.length; i++) {
+    if (Math.abs(balances[i].balance) < 0.001) continue;
+    
+    for (let j = i + 1; j < balances.length; j++) {
+      if (Math.abs(balances[j].balance) < 0.001) continue;
       
-      // All transfers are included in settlements
-      settlements.push(transfer);
-      
-      // Track which ones are small (below threshold) for display purposes
-      if (amount < minTransfer) {
-        smallTransfers.push(transfer);
+      // Check if they cancel each other out (one positive, one negative, same absolute value)
+      const sum = balances[i].balance + balances[j].balance;
+      if (Math.abs(sum) < 0.01) {
+        const [debtor, creditor] = balances[i].balance < 0 
+          ? [balances[i], balances[j]] 
+          : [balances[j], balances[i]];
+        
+        const amount = Math.abs(debtor.balance);
+        const transfer = { from: debtor.name, to: creditor.name, amount };
+        settlements.push(transfer);
+        if (amount < minTransfer) smallTransfers.push(transfer);
+        
+        balances[i].balance = 0;
+        balances[j].balance = 0;
       }
     }
-
-    winner.profit -= amount;
-    loser.profit += amount;
-
-    if (winner.profit <= 0) winnerIdx++;
-    if (loser.profit >= 0) loserIdx++;
   }
+
+  // Step 2: Greedy matching for remaining balances
+  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
+  const debtors = balances.filter(b => b.balance < -0.001).sort((a, b) => a.balance - b.balance);
+
+  let creditorIdx = 0;
+  let debtorIdx = 0;
+
+  while (creditorIdx < creditors.length && debtorIdx < debtors.length) {
+    const creditor = creditors[creditorIdx];
+    const debtor = debtors[debtorIdx];
+
+    const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
+
+    if (amount > 0.001) {
+      const transfer = { from: debtor.name, to: creditor.name, amount };
+      settlements.push(transfer);
+      if (amount < minTransfer) smallTransfers.push(transfer);
+    }
+
+    creditor.balance -= amount;
+    debtor.balance += amount;
+
+    if (creditor.balance <= 0.001) creditorIdx++;
+    if (debtor.balance >= -0.001) debtorIdx++;
+  }
+
+  // Sort settlements by amount (largest first) for better readability
+  settlements.sort((a, b) => b.amount - a.amount);
 
   return { settlements, smallTransfers };
 };
