@@ -62,7 +62,9 @@ export const initializeStorage = (): void => {
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
   }
-  if (!localStorage.getItem(STORAGE_KEYS.PLAYERS)) {
+  // Initialize players - use defaults if no players exist or if array is empty
+  const existingPlayers = localStorage.getItem(STORAGE_KEYS.PLAYERS);
+  if (!existingPlayers || JSON.parse(existingPlayers).length === 0) {
     setItem(STORAGE_KEYS.PLAYERS, DEFAULT_PLAYERS);
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
