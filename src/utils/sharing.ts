@@ -48,15 +48,14 @@ export const generateGameSummary = (
   if (settlements.length > 0) {
     summary += `\n💸 *Settlements:*\n`;
     settlements.forEach(s => {
-      // Format: "payer משלם ל receiver: amount" (payer pays receiver in Hebrew)
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount}\n`;
+      summary += `${s.to} משלם ל${s.from}: ₪${s.amount}\n`;
     });
   }
 
   if (skippedTransfers.length > 0) {
     summary += `\n💡 *Note - small amounts (still to be paid):*\n`;
     skippedTransfers.forEach(s => {
-      summary += `${s.from} משלם ל${s.to}: ₪${s.amount}\n`;
+      summary += `${s.to} משלם ל${s.from}: ₪${s.amount}\n`;
     });
   }
 
