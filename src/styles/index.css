@@ -604,6 +604,14 @@ th {
   font-weight: 700;
   text-align: center;
   padding: 0;
+  /* Hide number input spinners */
+  -moz-appearance: textfield;
+}
+
+.chip-count-input::-webkit-outer-spin-button,
+.chip-count-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .chip-count-input:focus {
