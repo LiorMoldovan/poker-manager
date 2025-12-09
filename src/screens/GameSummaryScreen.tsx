@@ -140,7 +140,7 @@ const GameSummaryScreen = () => {
         <div className="card">
           <h2 className="card-title mb-2">💡 Small Amounts</h2>
           <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            Payments below ₪{getSettings().minTransfer} are not mandatory
+            Payments below ₪{getSettings().minTransfer.toFixed(2)} are not mandatory
           </p>
           {skippedTransfers.map((s, index) => (
             <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
