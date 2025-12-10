@@ -74,6 +74,7 @@ const LiveGameScreen = () => {
   };
 
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
+  const totalRebuys = players.reduce((sum, p) => sum + p.rebuys, 0);
 
   return (
     <div className="fade-in">
@@ -82,9 +83,15 @@ const LiveGameScreen = () => {
         <p className="page-subtitle">Track rebuys during the game</p>
       </div>
 
-      <div className="summary-card">
-        <div className="summary-title">Total Pot</div>
-        <div className="summary-value">₪{cleanNumber(totalPot)}</div>
+      <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
+        <div>
+          <div className="summary-title">Total Pot</div>
+          <div className="summary-value">₪{cleanNumber(totalPot)}</div>
+        </div>
+        <div>
+          <div className="summary-title">Total Rebuys</div>
+          <div className="summary-value">{cleanNumber(totalRebuys)}</div>
+        </div>
       </div>
 
       <div className="card">
