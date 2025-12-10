@@ -296,9 +296,9 @@ body {
 /* Player cards */
 .player-card {
   background: var(--surface);
-  border-radius: 12px;
-  padding: 1rem;
-  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 0.35rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
