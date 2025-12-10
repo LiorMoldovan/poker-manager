@@ -136,7 +136,13 @@ const StatisticsScreen = () => {
                           {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
                         </td>
                         <td style={{ textAlign: 'center' }}>{player.gamesPlayed}</td>
-                        <td style={{ textAlign: 'center' }}>{player.winPercentage.toFixed(0)}%</td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                          fontWeight: '600'
+                        }}>
+                          {player.winPercentage.toFixed(0)}%
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -165,11 +171,13 @@ const StatisticsScreen = () => {
                   <div className="stat-label">Games</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value">{player.winPercentage.toFixed(0)}%</div>
+                  <div className="stat-value" style={{ color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)' }}>
+                    {player.winPercentage.toFixed(0)}%
+                  </div>
                   <div className="stat-label">Win Rate</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value" style={{ color: 'var(--primary)' }}>
+                  <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                     {formatCurrency(player.avgProfit)}
                   </div>
                   <div className="stat-label">Avg P/L</div>
