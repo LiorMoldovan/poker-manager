@@ -81,8 +81,12 @@ export const calculateSettlement = (
     if (debtor.balance >= -0.001) debtorIdx++;
   }
 
-  // Sort settlements by amount (largest first) for better readability
-  settlements.sort((a, b) => b.amount - a.amount);
+  // Sort settlements: first by payer name, then by amount (largest first)
+  settlements.sort((a, b) => {
+    const nameCompare = a.from.localeCompare(b.from);
+    if (nameCompare !== 0) return nameCompare;
+    return b.amount - a.amount;
+  });
 
   return { settlements, smallTransfers };
 };
