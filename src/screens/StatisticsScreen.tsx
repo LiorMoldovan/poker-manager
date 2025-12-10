@@ -132,7 +132,7 @@ const StatisticsScreen = () => {
                           {index + 1}
                         </td>
                         <td style={{ fontWeight: '600' }}>{player.playerName}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '700' }} className={getProfitColor(player.totalProfit)}>
+                        <td style={{ textAlign: 'right', fontWeight: '700', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
                           {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
                         </td>
                         <td style={{ textAlign: 'center' }}>{player.gamesPlayed}</td>
