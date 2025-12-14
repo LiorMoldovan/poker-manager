@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.7.4';
+export const APP_VERSION = '1.7.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.7.5',
+    date: '2024-12-14',
+    changes: [
+      'Increased spacing between player selection tiles'
+    ]
+  },
   {
     version: '1.7.4',
     date: '2024-12-14',

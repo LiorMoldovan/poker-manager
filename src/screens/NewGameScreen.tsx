@@ -95,7 +95,7 @@ const NewGameScreen = () => {
             <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>Add players to get started</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
             {players.map(player => (
               <div
                 key={player.id}
