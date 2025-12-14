@@ -16,6 +16,8 @@ const GameSummaryScreen = () => {
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
   const [rebuyValue, setRebuyValue] = useState(30);
   const [isSharing, setIsSharing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player
@@ -34,6 +36,9 @@ const GameSummaryScreen = () => {
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setIsLoading(false);
+      setGameNotFound(true);
     }
   }, [gameId]);
 
@@ -43,11 +48,15 @@ const GameSummaryScreen = () => {
     const gamePlayers = getGamePlayers(gameId);
     const settings = getSettings();
     
-    if (game) {
-      setGameDate(game.date);
-      setChipGap(game.chipGap || null);
-      setChipGapPerPlayer(game.chipGapPerPlayer || null);
+    if (!game || gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
     }
+    
+    setGameDate(game.date);
+    setChipGap(game.chipGap || null);
+    setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setRebuyValue(settings.rebuyValue);
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
@@ -58,6 +67,7 @@ const GameSummaryScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    setIsLoading(false);
   };
 
   const handleShare = async () => {
@@ -113,6 +123,20 @@ const GameSummaryScreen = () => {
       setIsSharing(false);
     }
   };
+
+  // Show error if game not found
+  if (gameNotFound || (!isLoading && players.length === 0)) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
+        <h2>Game not found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>
+          🏠 Go Home
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">

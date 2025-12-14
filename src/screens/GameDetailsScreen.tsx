@@ -15,10 +15,15 @@ const GameDetailsScreen = () => {
   const [rebuyValue, setRebuyValue] = useState(50);
   const [chipGap, setChipGap] = useState<number | null>(null);
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
 
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setIsLoading(false);
+      setGameNotFound(true);
     }
   }, [gameId]);
 
@@ -28,11 +33,15 @@ const GameDetailsScreen = () => {
     const gamePlayers = getGamePlayers(gameId);
     const settings = getSettings();
     
-    if (game) {
-      setGameDate(game.date);
-      setChipGap(game.chipGap || null);
-      setChipGapPerPlayer(game.chipGapPerPlayer || null);
+    if (!game || gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
     }
+    
+    setGameDate(game.date);
+    setChipGap(game.chipGap || null);
+    setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
     setRebuyValue(settings.rebuyValue);
@@ -43,6 +52,7 @@ const GameDetailsScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    setIsLoading(false);
   };
 
   const handleShare = () => {
@@ -51,6 +61,20 @@ const GameDetailsScreen = () => {
   };
 
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
+
+  // Show error if game not found
+  if (gameNotFound || (!isLoading && players.length === 0)) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
+        <h2>Game not found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>
+          🏠 Go Home
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">

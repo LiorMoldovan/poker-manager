@@ -305,8 +305,22 @@ const ChipEntryScreen = () => {
     return 'neutral';
   };
 
+  // Redirect if no game found
+  if (!gameId || (players.length === 0 && chipValues.length > 0)) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
+        <h2>Game not found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>
+          🏠 Go Home
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="fade-in" style={{ paddingBottom: '180px' }}>
+    <div className="fade-in" style={{ paddingBottom: '140px' }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Select a player to count their chips</p>
