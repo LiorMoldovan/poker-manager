@@ -1,0 +1,36 @@
+/**
+ * App Version Management
+ * Increment version with each change for tracking purposes
+ */
+
+export const APP_VERSION = '1.1.0';
+
+export interface ChangelogEntry {
+  version: string;
+  date: string;
+  changes: string[];
+}
+
+export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.1.0',
+    date: '2024-12-14',
+    changes: [
+      'Added app versioning system',
+      'Added changelog tracking in Settings',
+      'Version now displayed in Settings screen'
+    ]
+  },
+  {
+    version: '1.0.0',
+    date: '2024-12-01',
+    changes: [
+      'Initial release',
+      'Poker game management',
+      'Player tracking',
+      'Chip calculations',
+      'Game history and statistics'
+    ]
+  }
+];
+

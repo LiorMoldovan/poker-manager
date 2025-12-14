@@ -12,6 +12,7 @@ import {
   saveSettings,
   getPlayerByName
 } from '../database/storage';
+import { APP_VERSION, CHANGELOG } from '../version';
 
 const SettingsScreen = () => {
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
@@ -226,6 +227,48 @@ const SettingsScreen = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Version Info */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">ℹ️ App Version</h2>
+          <span style={{ 
+            background: 'var(--primary)', 
+            color: 'white', 
+            padding: '0.25rem 0.75rem', 
+            borderRadius: '1rem',
+            fontSize: '0.875rem',
+            fontWeight: '600'
+          }}>
+            v{APP_VERSION}
+          </span>
+        </div>
+        
+        <div style={{ marginTop: '1rem' }}>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
+            Changelog
+          </h3>
+          {CHANGELOG.map((entry, index) => (
+            <div key={entry.version} style={{ 
+              marginBottom: index < CHANGELOG.length - 1 ? '1rem' : 0,
+              paddingBottom: index < CHANGELOG.length - 1 ? '1rem' : 0,
+              borderBottom: index < CHANGELOG.length - 1 ? '1px solid var(--border)' : 'none'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: '600', color: 'var(--primary)' }}>v{entry.version}</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>{entry.date}</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                {entry.changes.map((change, i) => (
+                  <li key={i} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                    {change}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Add Player Modal */}
