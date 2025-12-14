@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { initializeStorage } from './database/storage';
 import Navigation from './components/Navigation';
+import PinLock from './components/PinLock';
 import NewGameScreen from './screens/NewGameScreen';
 import LiveGameScreen from './screens/LiveGameScreen';
 import ChipEntryScreen from './screens/ChipEntryScreen';
@@ -11,12 +12,25 @@ import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
+// PIN code for app access
+const APP_PIN = '9876';
+
 function App() {
   const location = useLocation();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     initializeStorage();
+    // Check if already authenticated
+    if (sessionStorage.getItem('poker_authenticated') === 'true') {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  // Show PIN lock if not authenticated
+  if (!isAuthenticated) {
+    return <PinLock correctPin={APP_PIN} onUnlock={() => setIsAuthenticated(true)} />;
+  }
 
   // Hide navigation on game flow screens
   const hideNav = ['/live-game', '/chip-entry', '/game-summary'].some(path => 
