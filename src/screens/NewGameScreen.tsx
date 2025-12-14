@@ -95,21 +95,26 @@ const NewGameScreen = () => {
             <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>Add players to get started</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+              gap: '0.75rem'
+            }}>
             {players.map(player => (
               <div
                 key={player.id}
                 onClick={() => togglePlayer(player.id)}
                 style={{
-                  padding: '0.6rem 1rem',
-                  borderRadius: '24px',
-                  fontSize: '1.1rem',
+                  padding: '0.6rem 0.5rem',
+                  borderRadius: '12px',
+                  fontSize: '1rem',
                   fontWeight: '600',
                   cursor: 'pointer',
                   border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
                   background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
                   color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
-                  transition: 'all 0.15s ease'
+                  transition: 'all 0.15s ease',
+                  textAlign: 'center'
                 }}
               >
                 {selectedIds.has(player.id) && '✓ '}{player.name}
