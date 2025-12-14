@@ -60,8 +60,6 @@ const GameDetailsScreen = () => {
     shareToWhatsApp(summary);
   };
 
-  const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
-
   // Show loading state
   if (isLoading) {
     return (
@@ -85,6 +83,8 @@ const GameDetailsScreen = () => {
       </div>
     );
   }
+
+  const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
 
   return (
     <div className="fade-in">

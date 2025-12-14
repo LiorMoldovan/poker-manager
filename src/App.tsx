@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { initializeStorage } from './database/storage';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
@@ -17,15 +17,35 @@ const APP_PIN = '2580';
 
 function App() {
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    // Check authentication on initial render to avoid flash
+    return sessionStorage.getItem('poker_authenticated') === 'true';
+  });
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
+    // Initialize storage
     initializeStorage();
-    // Check if already authenticated
-    if (sessionStorage.getItem('poker_authenticated') === 'true') {
-      setIsAuthenticated(true);
-    }
+    setIsInitialized(true);
   }, []);
+
+  // Show loading while initializing
+  if (!isInitialized) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'var(--background)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
+          <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show PIN lock if not authenticated
   if (!isAuthenticated) {
@@ -49,6 +69,8 @@ function App() {
           <Route path="/game/:gameId" element={<GameDetailsScreen />} />
           <Route path="/statistics" element={<StatisticsScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
+          {/* Catch-all route - redirect to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       {!hideNav && <Navigation />}
@@ -57,4 +79,3 @@ function App() {
 }
 
 export default App;
-

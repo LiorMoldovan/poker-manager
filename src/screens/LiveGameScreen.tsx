@@ -11,25 +11,29 @@ const LiveGameScreen = () => {
   const [actions, setActions] = useState<GameAction[]>([]);
   const [rebuyValue, setRebuyValue] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
 
   useEffect(() => {
-    if (gameId) {
-      loadData();
-    } else {
+    if (!gameId) {
+      setGameNotFound(true);
       setIsLoading(false);
+      return;
     }
-  }, [gameId]);
-
-  const loadData = () => {
-    if (!gameId) return;
+    
     const gamePlayers = getGamePlayers(gameId);
+    if (gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
+    
     setPlayers(gamePlayers);
     const settings = getSettings();
     setRebuyValue(settings.rebuyValue);
     setIsLoading(false);
-  };
+  }, [gameId]);
 
-  // Show loading state
+  // Show loading state FIRST
   if (isLoading) {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
@@ -40,7 +44,7 @@ const LiveGameScreen = () => {
   }
 
   // Show error if game not found
-  if (!gameId || players.length === 0) {
+  if (gameNotFound) {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
