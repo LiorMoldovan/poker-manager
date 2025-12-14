@@ -5,7 +5,7 @@ import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculatio
 
 const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
-  const [viewMode, setViewMode] = useState<'records' | 'table' | 'individual'>('records');
+  const [viewMode, setViewMode] = useState<'records' | 'table' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
 
   useEffect(() => {
@@ -113,24 +113,27 @@ const StatisticsScreen = () => {
         </div>
       ) : (
         <>
-          {/* View Mode Toggle */}
-          <div className="card">
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button 
-                className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setViewMode('records')}
-              >
-                🏆 Records
-              </button>
+          {/* View Mode Toggle - all on one line */}
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button 
                 className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('table')}
+                style={{ flex: 1 }}
               >
                 📊 Table
               </button>
               <button 
+                className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setViewMode('records')}
+                style={{ flex: 1 }}
+              >
+                🏆 Records
+              </button>
+              <button 
                 className={`btn btn-sm ${viewMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('individual')}
+                style={{ flex: 1 }}
               >
                 👤 Players
               </button>
@@ -303,44 +306,43 @@ const StatisticsScreen = () => {
 
           {/* TABLE VIEW */}
           {viewMode === 'table' && (
-            <div className="card">
-              <h2 className="card-title mb-2">📋 All Players Summary</h2>
-              <div style={{ overflowX: 'auto' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Player</th>
-                      <th style={{ textAlign: 'right' }}>Profit</th>
-                      <th style={{ textAlign: 'center' }}>Games</th>
-                      <th style={{ textAlign: 'center' }}>Win %</th>
+            <div className="card" style={{ padding: '0.75rem' }}>
+              <h2 className="card-title mb-2" style={{ fontSize: '1rem' }}>📋 All Players Summary</h2>
+              <table style={{ width: '100%', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '0.4rem 0.25rem', width: '30px' }}>#</th>
+                    <th style={{ padding: '0.4rem 0.25rem' }}>Player</th>
+                    <th style={{ textAlign: 'right', padding: '0.4rem 0.25rem' }}>Profit</th>
+                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '45px' }}>Games</th>
+                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '45px' }}>Win%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedStats.map((player, index) => (
+                    <tr key={player.playerId}>
+                      <td style={{ padding: '0.4rem 0.25rem' }}>
+                        {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
+                          sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
+                        {index + 1}
+                      </td>
+                      <td style={{ fontWeight: '600', padding: '0.4rem 0.25rem' }}>{player.playerName}</td>
+                      <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.4rem 0.25rem' }} className={getProfitColor(player.totalProfit)}>
+                        {player.totalProfit >= 0 ? '+' : ''}₪{cleanNumber(player.totalProfit)}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>{player.gamesPlayed}</td>
+                      <td style={{ 
+                        textAlign: 'center',
+                        padding: '0.4rem 0.25rem',
+                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                        fontWeight: '600'
+                      }}>
+                        {player.winPercentage.toFixed(0)}%
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sortedStats.map((player, index) => (
-                      <tr key={player.playerId}>
-                        <td>
-                          {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
-                            sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
-                          {index + 1}
-                        </td>
-                        <td style={{ fontWeight: '600' }}>{player.playerName}</td>
-                        <td style={{ textAlign: 'right', fontWeight: '700', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
-                          {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>{player.gamesPlayed}</td>
-                        <td style={{ 
-                          textAlign: 'center',
-                          color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
-                          fontWeight: '600'
-                        }}>
-                          {player.winPercentage.toFixed(0)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
