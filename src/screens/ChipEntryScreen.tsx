@@ -313,81 +313,10 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in">
-      {/* Floating Progress Bar */}
-      <div style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-        background: 'var(--background)',
-        padding: '0.75rem 1rem',
-        marginBottom: '1rem',
-        borderRadius: '0 0 12px 12px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
-            {completedPlayersCount}/{players.length} players
-          </span>
-          <span style={{ 
-            fontSize: '0.875rem', 
-            fontWeight: '700',
-            color: isBalanced && totalChipPoints > 0 
-              ? '#22c55e' 
-              : totalChipPoints > expectedChipPoints 
-                ? '#ef4444' 
-                : 'var(--text-secondary)'
-          }}>
-            {totalChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()} chips
-          </span>
-        </div>
-        
-        {/* Progress bar */}
-        <div style={{
-          height: '8px',
-          background: 'var(--surface)',
-          borderRadius: '4px',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            height: '100%',
-            width: `${Math.min(progressPercentage, 100)}%`,
-            background: isBalanced && totalChipPoints > 0 
-              ? '#22c55e' 
-              : totalChipPoints > expectedChipPoints 
-                ? '#ef4444' 
-                : progressPercentage > 50 
-                  ? '#f59e0b'
-                  : '#3b82f6',
-            borderRadius: '4px',
-            transition: 'width 0.3s ease, background 0.3s ease'
-          }} />
-        </div>
-        
-        {/* Status text */}
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '0.5rem',
-          fontSize: '0.75rem',
-          color: isBalanced && totalChipPoints > 0 
-            ? '#22c55e' 
-            : totalChipPoints > expectedChipPoints 
-              ? '#ef4444' 
-              : 'var(--text-muted)'
-        }}>
-          {isBalanced && totalChipPoints > 0 
-            ? '✓ Chips balanced!' 
-            : totalChipPoints > expectedChipPoints 
-              ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()} over`
-              : totalChipPoints > 0 
-                ? `${(expectedChipPoints - totalChipPoints).toLocaleString()} remaining`
-                : 'Start counting chips'}
-        </div>
-      </div>
-
-      <div className="page-header" style={{ paddingTop: 0 }}>
+    <div className="fade-in" style={{ paddingBottom: '140px' }}>
+      <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
-        <p className="page-subtitle">Tap player header to collapse when done</p>
+        <p className="page-subtitle">Tap Done when finished with each player</p>
       </div>
 
       {/* Live Summary Card */}
@@ -679,87 +608,98 @@ const ChipEntryScreen = () => {
         );
       })}
 
-      {/* Bottom Summary Counter */}
-      <div className="card" style={{ 
+      {/* Fixed Bottom Progress Bar */}
+      <div style={{ 
+        position: 'fixed',
+        bottom: '60px',
+        left: 0,
+        right: 0,
+        zIndex: 100,
         background: isBalanced && totalChipPoints > 0 
           ? '#dcfce7' 
           : totalChipPoints > expectedChipPoints 
             ? '#fee2e2' 
-            : '#f8fafc',
-        borderLeft: `4px solid ${
+            : 'var(--background)',
+        padding: '0.75rem 1rem',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
+        borderTop: `3px solid ${
           isBalanced && totalChipPoints > 0 
             ? '#22c55e' 
             : totalChipPoints > expectedChipPoints 
               ? '#ef4444' 
               : '#3b82f6'
-        }`,
-        position: 'sticky',
-        bottom: '70px',
-        boxShadow: '0 -4px 12px rgba(0,0,0,0.15)'
+        }`
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: '600' }}>Expected</div>
-            <div style={{ fontWeight: '800', color: '#0c4a6e', fontSize: '1.1rem' }}>₪{cleanNumber(totalBuyIns)}</div>
-            <div style={{ fontSize: '0.8rem', color: '#0284c7' }}>{expectedChipPoints.toLocaleString()} chips</div>
+        {/* Progress bar */}
+        <div style={{
+          height: '10px',
+          background: 'rgba(0,0,0,0.1)',
+          borderRadius: '5px',
+          overflow: 'hidden',
+          marginBottom: '0.5rem'
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${Math.min(progressPercentage, 100)}%`,
+            background: isBalanced && totalChipPoints > 0 
+              ? '#22c55e' 
+              : totalChipPoints > expectedChipPoints 
+                ? '#ef4444' 
+                : progressPercentage > 50 
+                  ? '#f59e0b'
+                  : '#3b82f6',
+            borderRadius: '5px',
+            transition: 'width 0.3s ease, background 0.3s ease'
+          }} />
+        </div>
+        
+        {/* Stats row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '0.8rem' }}>
+            <span style={{ color: 'var(--text-muted)' }}>{completedPlayersCount}/{players.length} done</span>
           </div>
+          
           <div style={{ textAlign: 'center' }}>
             {isBalanced && totalChipPoints > 0 ? (
-              <span style={{ color: '#166534', fontWeight: '800', fontSize: '1.3rem' }}>🟢 Match!</span>
+              <span style={{ color: '#166534', fontWeight: '700', fontSize: '1rem' }}>✓ Balanced!</span>
             ) : totalChipPoints > 0 ? (
-              <div>
-                <span style={{ 
-                  color: totalChipPoints > expectedChipPoints ? '#dc2626' : '#b45309', 
-                  fontWeight: '700',
-                  fontSize: '1.1rem'
-                }}>
-                  {totalChipPoints > expectedChipPoints ? '🔴 +' : '🟡 '}{(totalChipPoints - expectedChipPoints).toLocaleString()}
-                </span>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>chips diff</div>
-              </div>
+              <span style={{ 
+                color: totalChipPoints > expectedChipPoints ? '#dc2626' : '#b45309', 
+                fontWeight: '700',
+                fontSize: '0.9rem'
+              }}>
+                {totalChipPoints > expectedChipPoints 
+                  ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()} over` 
+                  : `${(expectedChipPoints - totalChipPoints).toLocaleString()} left`}
+              </span>
             ) : (
-              <span style={{ color: '#64748b' }}>-</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Start counting</span>
             )}
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ 
-              fontSize: '0.75rem', 
-              fontWeight: '600',
-              color: isBalanced && totalChipPoints > 0 
-                ? '#166534' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#b91c1c' 
-                  : '#475569'
-            }}>Counted</div>
-            <div style={{ 
-              fontWeight: '800', 
-              fontSize: '1.1rem',
+          
+          <div style={{ fontSize: '0.8rem', textAlign: 'right' }}>
+            <span style={{ 
+              fontWeight: '700',
               color: isBalanced && totalChipPoints > 0 
                 ? '#166534' 
                 : totalChipPoints > expectedChipPoints 
                   ? '#dc2626' 
-                  : '#1e293b'
+                  : 'var(--text)'
             }}>
-              ₪{cleanNumber(totalChipPoints * valuePerChip)}
-            </div>
-            <div style={{ 
-              fontSize: '0.8rem',
-              color: isBalanced && totalChipPoints > 0 
-                ? '#22c55e' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#ef4444' 
-                  : '#64748b'
-            }}>{totalChipPoints.toLocaleString()} chips</div>
+              {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
+            </span>
           </div>
         </div>
+        
+        {/* Calculate button */}
+        <button 
+          className="btn btn-primary btn-block"
+          onClick={handleCalculate}
+          style={{ marginTop: '0.5rem', padding: '0.75rem' }}
+        >
+          🧮 Calculate Results
+        </button>
       </div>
-
-      <button 
-        className="btn btn-primary btn-lg btn-block"
-        onClick={handleCalculate}
-      >
-        🧮 Calculate Results
-      </button>
 
       {/* Numpad Modal */}
       <NumpadModal
