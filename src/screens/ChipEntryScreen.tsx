@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, ChipValue } from '../types';
 import { 
@@ -12,6 +12,108 @@ import {
 } from '../database/storage';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 
+// Numpad Modal Component
+interface NumpadModalProps {
+  isOpen: boolean;
+  chipColor: string;
+  chipDisplayColor: string;
+  currentValue: number;
+  onConfirm: (value: number) => void;
+  onClose: () => void;
+}
+
+const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConfirm, onClose }: NumpadModalProps) => {
+  const [value, setValue] = useState(currentValue.toString());
+  
+  useEffect(() => {
+    if (isOpen) {
+      setValue(currentValue.toString());
+    }
+  }, [isOpen, currentValue]);
+
+  if (!isOpen) return null;
+
+  const handleKey = (key: string) => {
+    if (key === 'C') {
+      setValue('0');
+    } else if (key === '⌫') {
+      setValue(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
+    } else {
+      setValue(prev => prev === '0' ? key : prev + key);
+    }
+  };
+
+  const handleConfirm = () => {
+    onConfirm(parseInt(value) || 0);
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div 
+              style={{ 
+                width: '24px', 
+                height: '24px', 
+                borderRadius: '50%', 
+                backgroundColor: chipDisplayColor,
+                border: chipDisplayColor === '#FFFFFF' || chipDisplayColor === '#EAB308' ? '2px solid #888' : 'none'
+              }} 
+            />
+            <h3 className="modal-title">{chipColor} Chips</h3>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        <div style={{ 
+          fontSize: '2.5rem', 
+          fontWeight: '700', 
+          textAlign: 'center', 
+          padding: '1rem',
+          background: 'var(--surface)',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          fontFamily: 'monospace'
+        }}>
+          {value}
+        </div>
+        
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(3, 1fr)', 
+          gap: '0.5rem',
+          marginBottom: '1rem'
+        }}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(key => (
+            <button
+              key={key}
+              onClick={() => handleKey(key)}
+              style={{
+                padding: '1rem',
+                fontSize: '1.5rem',
+                fontWeight: '600',
+                borderRadius: '8px',
+                border: 'none',
+                background: key === 'C' ? 'var(--danger)' : key === '⌫' ? 'var(--warning)' : 'var(--surface)',
+                color: key === 'C' || key === '⌫' ? 'white' : 'var(--text)',
+                cursor: 'pointer'
+              }}
+            >
+              {key}
+            </button>
+          ))}
+        </div>
+        
+        <button className="btn btn-primary btn-block" onClick={handleConfirm}>
+          ✓ Confirm
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ChipEntryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
@@ -20,6 +122,15 @@ const ChipEntryScreen = () => {
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
   const [rebuyValue, setRebuyValue] = useState(30);
   const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
+  
+  // Numpad state
+  const [numpadOpen, setNumpadOpen] = useState(false);
+  const [numpadPlayerId, setNumpadPlayerId] = useState('');
+  const [numpadChip, setNumpadChip] = useState<ChipValue | null>(null);
+  
+  // Long-press state
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
@@ -62,6 +173,59 @@ const ChipEntryScreen = () => {
       },
     }));
   };
+
+  // Open numpad for a specific chip
+  const openNumpad = (playerId: string, chip: ChipValue) => {
+    setNumpadPlayerId(playerId);
+    setNumpadChip(chip);
+    setNumpadOpen(true);
+  };
+
+  // Handle numpad confirm
+  const handleNumpadConfirm = (value: number) => {
+    if (numpadPlayerId && numpadChip) {
+      updateChipCount(numpadPlayerId, numpadChip.id, value);
+    }
+  };
+
+  // Long-press handlers for rapid increment/decrement
+  const startLongPress = useCallback((playerId: string, chipId: string, delta: number) => {
+    // Clear any existing intervals
+    stopLongPress();
+    
+    // Start rapid increment after 300ms delay
+    timeoutRef.current = setTimeout(() => {
+      intervalRef.current = setInterval(() => {
+        setChipCounts(prev => {
+          const currentValue = prev[playerId]?.[chipId] || 0;
+          const newValue = Math.max(0, currentValue + delta);
+          return {
+            ...prev,
+            [playerId]: {
+              ...prev[playerId],
+              [chipId]: newValue,
+            },
+          };
+        });
+      }, 80); // Rapid fire every 80ms
+    }, 300);
+  }, []);
+
+  const stopLongPress = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => stopLongPress();
+  }, [stopLongPress]);
 
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
@@ -272,7 +436,12 @@ const ChipEntryScreen = () => {
                 borderLeft: `4px solid ${chip.displayColor}`,
                 background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
               }}>
-                <div className="chip-entry-header">
+                <div 
+                  className="chip-entry-header"
+                  onClick={() => openNumpad(player.id, chip)}
+                  style={{ cursor: 'pointer' }}
+                  title="Tap to enter with numpad"
+                >
                   <div 
                     className="chip-circle-small" 
                     style={{ 
@@ -290,6 +459,11 @@ const ChipEntryScreen = () => {
                       chip.id, 
                       (chipCounts[player.id]?.[chip.id] || 0) - 1
                     )}
+                    onMouseDown={() => startLongPress(player.id, chip.id, -1)}
+                    onMouseUp={stopLongPress}
+                    onMouseLeave={stopLongPress}
+                    onTouchStart={() => startLongPress(player.id, chip.id, -1)}
+                    onTouchEnd={stopLongPress}
                   >
                     −
                   </button>
@@ -298,6 +472,9 @@ const ChipEntryScreen = () => {
                     className="chip-count-input"
                     value={chipCounts[player.id]?.[chip.id] || 0}
                     onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
+                    onClick={() => openNumpad(player.id, chip)}
+                    readOnly
+                    style={{ cursor: 'pointer' }}
                     min="0"
                   />
                   <button 
@@ -307,6 +484,11 @@ const ChipEntryScreen = () => {
                       chip.id, 
                       (chipCounts[player.id]?.[chip.id] || 0) + 1
                     )}
+                    onMouseDown={() => startLongPress(player.id, chip.id, 1)}
+                    onMouseUp={stopLongPress}
+                    onMouseLeave={stopLongPress}
+                    onTouchStart={() => startLongPress(player.id, chip.id, 1)}
+                    onTouchEnd={stopLongPress}
                   >
                     +
                   </button>
@@ -402,6 +584,16 @@ const ChipEntryScreen = () => {
       >
         🧮 Calculate Results
       </button>
+
+      {/* Numpad Modal */}
+      <NumpadModal
+        isOpen={numpadOpen}
+        chipColor={numpadChip?.color || ''}
+        chipDisplayColor={numpadChip?.displayColor || '#3B82F6'}
+        currentValue={numpadPlayerId && numpadChip ? (chipCounts[numpadPlayerId]?.[numpadChip.id] || 0) : 0}
+        onConfirm={handleNumpadConfirm}
+        onClose={() => setNumpadOpen(false)}
+      />
     </div>
   );
 };
