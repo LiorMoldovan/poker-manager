@@ -230,6 +230,29 @@ const ChipEntryScreen = () => {
     return () => stopLongPress();
   }, [stopLongPress]);
 
+  // Get total chip points for a player
+  const getPlayerChipPoints = (playerId: string): number => {
+    return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
+  };
+
+  // Convert chip points to money value
+  const getPlayerMoneyValue = (playerId: string): number => {
+    const chipPoints = getPlayerChipPoints(playerId);
+    return chipPoints * valuePerChip; // No rounding - keep exact value
+  };
+
+  const getPlayerProfit = (playerId: string): number => {
+    const player = players.find(p => p.id === playerId);
+    if (!player) return 0;
+    const moneyValue = getPlayerMoneyValue(playerId);
+    return calculateProfitLoss(moneyValue, player.rebuys, rebuyValue);
+  };
+
+  const totalBuyIns = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
+  const totalChipPoints = players.reduce((sum, p) => sum + getPlayerChipPoints(p.id), 0);
+  const expectedChipPoints = players.reduce((sum, p) => sum + p.rebuys * chipsPerRebuy, 0);
+  const isBalanced = totalChipPoints === expectedChipPoints;
+
   // Toggle player collapsed state
   const togglePlayerCollapse = (playerId: string) => {
     setCollapsedPlayers(prev => {
@@ -257,29 +280,6 @@ const ChipEntryScreen = () => {
   const completedPlayersCount = players.filter(p => 
     collapsedPlayers.has(p.id) && playerHasChips(p.id)
   ).length;
-
-  // Get total chip points for a player
-  const getPlayerChipPoints = (playerId: string): number => {
-    return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
-  };
-
-  // Convert chip points to money value
-  const getPlayerMoneyValue = (playerId: string): number => {
-    const chipPoints = getPlayerChipPoints(playerId);
-    return chipPoints * valuePerChip; // No rounding - keep exact value
-  };
-
-  const getPlayerProfit = (playerId: string): number => {
-    const player = players.find(p => p.id === playerId);
-    if (!player) return 0;
-    const moneyValue = getPlayerMoneyValue(playerId);
-    return calculateProfitLoss(moneyValue, player.rebuys, rebuyValue);
-  };
-
-  const totalBuyIns = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
-  const totalChipPoints = players.reduce((sum, p) => sum + getPlayerChipPoints(p.id), 0);
-  const expectedChipPoints = players.reduce((sum, p) => sum + p.rebuys * chipsPerRebuy, 0);
-  const isBalanced = totalChipPoints === expectedChipPoints;
 
   const handleCalculate = () => {
     if (!gameId) return;
