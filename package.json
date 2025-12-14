@@ -1,6 +1,6 @@
 {
   "name": "poker-web",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Poker Game Manager - Track friendly poker games",
   "type": "module",
   "scripts": {
