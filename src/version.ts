@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.6.2';
+export const APP_VERSION = '1.6.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.6.3',
+    date: '2024-12-14',
+    changes: [
+      'Compact player selection with pill-style buttons',
+      'Reduced page header and spacing for less scrolling',
+      'Start Game button now visible without scrolling'
+    ]
+  },
   {
     version: '1.6.2',
     date: '2024-12-14',

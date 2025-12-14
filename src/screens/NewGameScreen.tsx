@@ -69,55 +69,70 @@ const NewGameScreen = () => {
 
   return (
     <div className="fade-in">
-      <div className="page-header">
-        <h1 className="page-title">New Game</h1>
-        <p className="page-subtitle">Select players for tonight's game</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+        <div>
+          <h1 className="page-title" style={{ fontSize: '1.5rem', marginBottom: '0.1rem' }}>New Game</h1>
+          <p className="page-subtitle" style={{ fontSize: '0.8rem' }}>Select players</p>
+        </div>
+        {players.length > 0 && (
+          <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}>
+            {selectedIds.size === players.length ? 'Deselect All' : 'Select All'}
+          </button>
+        )}
       </div>
 
       {error && (
-        <div className="card" style={{ background: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid var(--danger)' }}>
-          <p style={{ color: 'var(--danger)' }}>{error}</p>
+        <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.5rem', borderLeft: '3px solid var(--danger)' }}>
+          <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{error}</p>
         </div>
       )}
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">Players ({selectedIds.size} selected)</h2>
-          {players.length > 0 && (
-            <button className="btn btn-sm btn-secondary" onClick={selectAll}>
-              {selectedIds.size === players.length ? 'Deselect All' : 'Select All'}
-            </button>
-          )}
-        </div>
-
+      <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
         {players.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">👥</div>
-            <p>No players yet</p>
-            <p className="text-muted">Add players to get started</p>
+          <div style={{ textAlign: 'center', padding: '1rem' }}>
+            <div style={{ fontSize: '2rem' }}>👥</div>
+            <p style={{ margin: '0.5rem 0 0.25rem', fontWeight: '500' }}>No players yet</p>
+            <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>Add players to get started</p>
           </div>
         ) : (
-          <div className="list">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
             {players.map(player => (
               <div
                 key={player.id}
-                className={`player-card ${selectedIds.has(player.id) ? 'selected' : ''}`}
                 onClick={() => togglePlayer(player.id)}
+                style={{
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: '20px',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
+                  background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                  color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
+                  transition: 'all 0.15s ease'
+                }}
               >
-                <span className="player-name">{player.name}</span>
-                <div className={`checkbox ${selectedIds.has(player.id) ? 'checked' : ''}`}>
-                  {selectedIds.has(player.id) && <span className="checkbox-mark">✓</span>}
-                </div>
+                {selectedIds.has(player.id) && '✓ '}{player.name}
               </div>
             ))}
           </div>
         )}
 
         <button 
-          className="btn btn-outline btn-block mt-2"
           onClick={() => setShowAddPlayer(true)}
+          style={{
+            width: '100%',
+            marginTop: '0.75rem',
+            padding: '0.5rem',
+            border: '2px dashed var(--border)',
+            borderRadius: '8px',
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            fontSize: '0.85rem',
+            cursor: 'pointer'
+          }}
         >
-          + Add New Player
+          + Add Player
         </button>
       </div>
 
@@ -125,7 +140,7 @@ const NewGameScreen = () => {
         className="btn btn-primary btn-lg btn-block"
         onClick={handleStartGame}
         disabled={selectedIds.size < 2}
-        style={{ marginBottom: '2rem' }}
+        style={{ padding: '0.875rem', marginBottom: '1rem' }}
       >
         🎰 Start Game ({selectedIds.size} players)
       </button>
