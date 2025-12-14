@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.1.6';
+export const APP_VERSION = '2.1.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.7',
+    date: '2024-12-14',
+    changes: [
+      'Fixed 404 error on page refresh - added Vercel rewrites'
+    ]
+  },
   {
     version: '2.1.6',
     date: '2024-12-14',
