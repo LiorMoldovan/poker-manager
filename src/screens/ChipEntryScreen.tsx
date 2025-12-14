@@ -342,7 +342,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '85px' }}>
+    <div className="fade-in" style={{ paddingBottom: '115px' }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Tap Done when finished with each player</p>
@@ -592,44 +592,56 @@ const ChipEntryScreen = () => {
         right: 0,
         zIndex: 200,
         background: 'var(--background)',
-        padding: '0.5rem 1rem 0.6rem',
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.2)'
+        padding: '0.5rem 1rem 0.75rem',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
+        borderTop: `3px solid ${getProgressColor(progressPercentage)}`
       }}>
         {/* Progress bar */}
         <div style={{
-          height: '16px',
-          background: '#374151',
-          borderRadius: '8px',
+          height: '10px',
+          background: 'rgba(255,255,255,0.1)',
+          borderRadius: '5px',
           overflow: 'hidden',
-          marginBottom: '0.4rem',
-          position: 'relative'
+          marginBottom: '0.5rem'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
             background: getProgressColor(progressPercentage),
-            borderRadius: '8px',
+            borderRadius: '5px',
             transition: 'width 0.3s ease'
           }} />
-          <div style={{
-            position: 'absolute',
-            top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.7rem',
-            fontWeight: '700',
-            color: 'white',
-            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+        </div>
+        
+        {/* Stats row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {completedPlayersCount}/{players.length} done
+          </span>
+          <span style={{ 
+            fontSize: '0.9rem', 
+            fontWeight: '700', 
+            color: isBalanced && totalChipPoints > 0 ? '#22c55e' : getProgressColor(progressPercentage)
           }}>
-            {completedPlayersCount}/{players.length} • {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
-          </div>
+            {isBalanced && totalChipPoints > 0 ? '✓ Balanced!' : `${totalChipPoints.toLocaleString()} / ${expectedChipPoints.toLocaleString()}`}
+          </span>
+          <span style={{ 
+            fontSize: '0.8rem', 
+            fontWeight: '600',
+            color: totalChipPoints > expectedChipPoints ? '#ef4444' : totalChipPoints === expectedChipPoints && totalChipPoints > 0 ? '#22c55e' : '#f59e0b'
+          }}>
+            {totalChipPoints > expectedChipPoints 
+              ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()}` 
+              : totalChipPoints === expectedChipPoints && totalChipPoints > 0
+                ? '✓'
+                : `-${(expectedChipPoints - totalChipPoints).toLocaleString()}`}
+          </span>
         </div>
         
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
-          style={{ padding: '0.5rem' }}
+          style={{ padding: '0.6rem' }}
         >
           🧮 Calculate Results
         </button>
