@@ -283,10 +283,16 @@ export const getPlayerStats = (): PlayerStats[] => {
   const games = getAllGames().filter(g => g.status === 'completed');
   const completedGameIds = new Set(games.map(g => g.id));
   
+  // Sort games by date for streak calculation
+  const sortedGames = [...games].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  
   return players.map(player => {
-    const playerGames = allGamePlayers.filter(
-      gp => gp.playerId === player.id && completedGameIds.has(gp.gameId)
-    );
+    // Get player's games sorted by date
+    const playerGames = sortedGames
+      .map(game => allGamePlayers.find(gp => gp.playerId === player.id && gp.gameId === game.id))
+      .filter((gp): gp is GamePlayer => gp !== undefined);
     
     const gamesPlayed = playerGames.length;
     const totalProfit = playerGames.reduce((sum, pg) => sum + pg.profit, 0);
@@ -306,6 +312,51 @@ export const getPlayerStats = (): PlayerStats[] => {
     const biggestWin = profits.length > 0 ? Math.max(...profits, 0) : 0;
     const biggestLoss = profits.length > 0 ? Math.min(...profits, 0) : 0;
     
+    // Calculate streaks
+    let currentStreak = 0;
+    let longestWinStreak = 0;
+    let longestLossStreak = 0;
+    let tempWinStreak = 0;
+    let tempLossStreak = 0;
+    
+    // Traverse from oldest to newest to calculate streaks
+    for (const pg of playerGames) {
+      if (pg.profit > 0) {
+        tempWinStreak++;
+        tempLossStreak = 0;
+        longestWinStreak = Math.max(longestWinStreak, tempWinStreak);
+      } else if (pg.profit < 0) {
+        tempLossStreak++;
+        tempWinStreak = 0;
+        longestLossStreak = Math.max(longestLossStreak, tempLossStreak);
+      } else {
+        // Break-even doesn't break streaks but doesn't extend them either
+      }
+    }
+    
+    // Current streak is the streak at the end (most recent games)
+    // Positive = wins, negative = losses
+    if (playerGames.length > 0) {
+      const lastGame = playerGames[playerGames.length - 1];
+      if (lastGame.profit > 0) {
+        currentStreak = tempWinStreak;
+      } else if (lastGame.profit < 0) {
+        currentStreak = -tempLossStreak;
+      } else {
+        currentStreak = 0;
+      }
+    }
+    
+    // Last 5 results (most recent first)
+    const lastFiveResults = [...playerGames]
+      .slice(-5)
+      .reverse()
+      .map(pg => pg.profit);
+    
+    // Most rebuys in a single game
+    const rebuysPerGame = playerGames.map(pg => pg.rebuys);
+    const mostRebuysInGame = rebuysPerGame.length > 0 ? Math.max(...rebuysPerGame) : 0;
+    
     return {
       playerId: player.id,
       playerName: player.name,
@@ -320,6 +371,12 @@ export const getPlayerStats = (): PlayerStats[] => {
       totalRebuys,
       biggestWin,
       biggestLoss,
+      currentStreak,
+      longestWinStreak,
+      longestLossStreak,
+      lastFiveResults,
+      avgRebuysPerGame: gamesPlayed > 0 ? totalRebuys / gamesPlayed : 0,
+      mostRebuysInGame,
     };
   }).filter(stats => stats.gamesPlayed > 0);
 };

@@ -71,6 +71,13 @@ export interface PlayerStats {
   totalRebuys: number;
   biggestWin: number;
   biggestLoss: number;
+  // Streak data
+  currentStreak: number;        // Positive = wins, negative = losses
+  longestWinStreak: number;
+  longestLossStreak: number;
+  lastFiveResults: number[];    // Last 5 game profits (most recent first)
+  avgRebuysPerGame: number;
+  mostRebuysInGame: number;
 }
 
 export interface GameWithDetails extends Game {
