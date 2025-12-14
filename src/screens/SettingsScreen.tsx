@@ -24,6 +24,7 @@ const SettingsScreen = () => {
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [showFullChangelog, setShowFullChangelog] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -247,21 +248,60 @@ const SettingsScreen = () => {
         
         <div style={{ marginTop: '1rem' }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
-            Changelog
+            Latest Changes
           </h3>
-          {CHANGELOG.map((entry, index) => (
+          
+          {/* Show only the latest entry */}
+          {CHANGELOG.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontWeight: '600', color: 'var(--primary)' }}>v{CHANGELOG[0].version}</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>{CHANGELOG[0].date}</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                {CHANGELOG[0].changes.map((change, i) => (
+                  <li key={i} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                    {change}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Show history button */}
+          {CHANGELOG.length > 1 && (
+            <button
+              onClick={() => setShowFullChangelog(!showFullChangelog)}
+              style={{
+                marginTop: '1rem',
+                padding: '0.5rem 1rem',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text-muted)',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                width: '100%'
+              }}
+            >
+              {showFullChangelog ? '▲ Hide History' : `▼ Show History (${CHANGELOG.length - 1} more)`}
+            </button>
+          )}
+
+          {/* Full changelog history */}
+          {showFullChangelog && CHANGELOG.slice(1).map((entry, index) => (
             <div key={entry.version} style={{ 
-              marginBottom: index < CHANGELOG.length - 1 ? '1rem' : 0,
-              paddingBottom: index < CHANGELOG.length - 1 ? '1rem' : 0,
-              borderBottom: index < CHANGELOG.length - 1 ? '1px solid var(--border)' : 'none'
+              marginTop: index === 0 ? '1rem' : '0.75rem',
+              paddingTop: '0.75rem',
+              borderTop: '1px solid var(--border)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontWeight: '600', color: 'var(--primary)' }}>v{entry.version}</span>
+                <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>v{entry.version}</span>
                 <span className="text-muted" style={{ fontSize: '0.75rem' }}>{entry.date}</span>
               </div>
               <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
                 {entry.changes.map((change, i) => (
-                  <li key={i} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                  <li key={i} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
                     {change}
                   </li>
                 ))}
