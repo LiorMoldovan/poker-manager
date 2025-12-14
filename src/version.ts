@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.4';
+export const APP_VERSION = '2.3.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.5',
+    date: '2024-12-14',
+    changes: [
+      'Fixed Statistics: loss colors now red (not blue)',
+      'Removed confusing Best/Worst streak from player cards',
+      'Fixed -0 display - shows dash if no value',
+      'Streak records only show if > 1 game',
+      'Changed Ice Cold to Cold Streak with red color'
+    ]
+  },
   {
     version: '2.3.4',
     date: '2024-12-14',

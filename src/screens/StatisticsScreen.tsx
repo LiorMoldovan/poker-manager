@@ -151,15 +151,15 @@ const StatisticsScreen = () => {
                   </div>
                   <div style={{ 
                     padding: '1rem', 
-                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.1))',
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1))',
                     borderRadius: '12px',
                     textAlign: 'center',
-                    border: '1px solid rgba(59, 130, 246, 0.3)'
+                    border: '1px solid rgba(239, 68, 68, 0.3)'
                   }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>❄️ Ice Cold</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>❄️ Cold Streak</div>
                     {records.iceCold ? (
                       <>
-                        <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#3b82f6' }}>
+                        <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ef4444' }}>
                           {records.iceCold.playerName}
                         </div>
                         <div style={{ fontSize: '0.9rem', color: 'var(--danger)' }}>
@@ -216,22 +216,28 @@ const StatisticsScreen = () => {
                 </div>
               </div>
 
-              {/* Streak Records */}
-              <div className="card">
-                <h2 className="card-title mb-2">📈 Streak Records</h2>
-                <div className="grid grid-2">
-                  <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🏆 Longest Win Streak</div>
-                    <div style={{ fontWeight: '700' }}>{records.longestWinStreakPlayer.playerName}</div>
-                    <div style={{ color: 'var(--success)', fontWeight: '700' }}>{records.longestWinStreakPlayer.longestWinStreak} wins</div>
-                  </div>
-                  <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💔 Longest Loss Streak</div>
-                    <div style={{ fontWeight: '700' }}>{records.longestLossStreakPlayer.playerName}</div>
-                    <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{records.longestLossStreakPlayer.longestLossStreak} losses</div>
+              {/* Streak Records - only show if there are meaningful streaks */}
+              {(records.longestWinStreakPlayer.longestWinStreak > 1 || records.longestLossStreakPlayer.longestLossStreak > 1) && (
+                <div className="card">
+                  <h2 className="card-title mb-2">📈 Streak Records</h2>
+                  <div className="grid grid-2">
+                    {records.longestWinStreakPlayer.longestWinStreak > 1 && (
+                      <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🏆 Longest Win Streak</div>
+                        <div style={{ fontWeight: '700' }}>{records.longestWinStreakPlayer.playerName}</div>
+                        <div style={{ color: 'var(--success)', fontWeight: '700' }}>{records.longestWinStreakPlayer.longestWinStreak} wins</div>
+                      </div>
+                    )}
+                    {records.longestLossStreakPlayer.longestLossStreak > 1 && (
+                      <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💔 Longest Loss Streak</div>
+                        <div style={{ fontWeight: '700' }}>{records.longestLossStreakPlayer.playerName}</div>
+                        <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{records.longestLossStreakPlayer.longestLossStreak} losses</div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Other Records */}
               <div className="card">
@@ -349,12 +355,12 @@ const StatisticsScreen = () => {
                   fontSize: '0.8rem',
                   fontWeight: '600',
                   background: player.currentStreak > 0 
-                    ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(234, 88, 12, 0.2))' 
-                    : 'linear-gradient(135deg, rgba(59, 130, 246, 0.3), rgba(37, 99, 235, 0.2))',
-                  color: player.currentStreak > 0 ? '#f97316' : '#3b82f6',
-                  border: `1px solid ${player.currentStreak > 0 ? 'rgba(249, 115, 22, 0.4)' : 'rgba(59, 130, 246, 0.4)'}`
+                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.2))' 
+                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.2))',
+                  color: player.currentStreak > 0 ? '#22c55e' : '#ef4444',
+                  border: `1px solid ${player.currentStreak > 0 ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
                 }}>
-                  {player.currentStreak > 0 ? '🔥' : '❄️'} {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'wins' : 'losses'} in a row
+                  {player.currentStreak > 0 ? '🔥' : '📉'} {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'wins' : 'losses'} in a row
                 </div>
               )}
 
@@ -399,34 +405,16 @@ const StatisticsScreen = () => {
                   <div className="stat-label">Win Rate</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value profit">+₪{cleanNumber(player.biggestWin)}</div>
+                  <div className="stat-value" style={{ color: 'var(--success)' }}>
+                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}
+                  </div>
                   <div className="stat-label">Best Win</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value loss">-₪{cleanNumber(Math.abs(player.biggestLoss))}</div>
+                  <div className="stat-value" style={{ color: 'var(--danger)' }}>
+                    {player.biggestLoss < 0 ? `₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}
+                  </div>
                   <div className="stat-label">Worst Loss</div>
-                </div>
-              </div>
-              
-              {/* Streak Records */}
-              <div className="grid grid-2 mt-1">
-                <div style={{ 
-                  padding: '0.5rem', 
-                  background: 'rgba(249, 115, 22, 0.1)', 
-                  borderRadius: '8px',
-                  textAlign: 'center'
-                }}>
-                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>🏅 Best Streak</div>
-                  <div style={{ fontWeight: '600', color: 'var(--success)' }}>{player.longestWinStreak} wins</div>
-                </div>
-                <div style={{ 
-                  padding: '0.5rem', 
-                  background: 'rgba(59, 130, 246, 0.1)', 
-                  borderRadius: '8px',
-                  textAlign: 'center'
-                }}>
-                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>💔 Worst Streak</div>
-                  <div style={{ fontWeight: '600', color: 'var(--danger)' }}>{player.longestLossStreak} losses</div>
                 </div>
               </div>
             </div>
