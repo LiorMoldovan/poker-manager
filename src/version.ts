@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.9.4';
+export const APP_VERSION = '2.2.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,61 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.2.8',
+    date: '2024-12-14',
+    changes: [
+      'Statistics: Simplified to Table and Individual views',
+      'Removed Records view',
+      'Table is default, no horizontal scroll',
+      'Restored Reset Statistics button'
+    ]
+  },
+  {
+    version: '2.2.7',
+    date: '2024-12-14',
+    changes: [
+      'Statistics: Table is now default view and first tab',
+      'Tabs appear on same line',
+      'Table fits in one view'
+    ]
+  },
+  {
+    version: '2.2.6',
+    date: '2024-12-14',
+    changes: [
+      'Fixed progress bar - now 28px with visible background',
+      'Bottom bar fixed to bottom - no scrolling past it'
+    ]
+  },
+  {
+    version: '2.2.5',
+    date: '2024-12-14',
+    changes: [
+      'Removed Reset All Statistics button'
+    ]
+  },
+  {
+    version: '2.2.4',
+    date: '2024-12-14',
+    changes: [
+      'Progress bar 36px with chip count overlay'
+    ]
+  },
+  {
+    version: '2.2.3',
+    date: '2024-12-14',
+    changes: [
+      'Bottom bar flows with content - no empty space'
+    ]
+  },
+  {
+    version: '2.2.2',
+    date: '2024-12-14',
+    changes: [
+      'Added version to PIN login screen'
+    ]
+  },
   {
     version: '1.9.4',
     date: '2024-12-14',
