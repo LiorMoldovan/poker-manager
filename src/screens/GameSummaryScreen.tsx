@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
-import { getGame, getGamePlayers, getSettings } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 import { generateGameSummary, shareToWhatsApp } from '../utils/sharing';
 
@@ -14,6 +14,20 @@ const GameSummaryScreen = () => {
   const [gameDate, setGameDate] = useState('');
   const [chipGap, setChipGap] = useState<number | null>(null);
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
+  const [rebuyValue, setRebuyValue] = useState(30);
+
+  // Calculate total chips for a player
+  const getTotalChips = (player: GamePlayer): number => {
+    const chipValues = getChipValues();
+    let total = 0;
+    for (const [chipId, count] of Object.entries(player.chipCounts)) {
+      const chip = chipValues.find(c => c.id === chipId);
+      if (chip) {
+        total += count * chip.value;
+      }
+    }
+    return total;
+  };
 
   useEffect(() => {
     if (gameId) {
@@ -33,6 +47,7 @@ const GameSummaryScreen = () => {
       setChipGapPerPlayer(game.chipGapPerPlayer || null);
     }
     
+    setRebuyValue(settings.rebuyValue);
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
     
     const { settlements: settl, smallTransfers: small } = calculateSettlement(
@@ -44,7 +59,8 @@ const GameSummaryScreen = () => {
   };
 
   const handleShare = () => {
-    const summary = generateGameSummary(gameDate, players, settlements, skippedTransfers, chipGap, chipGapPerPlayer);
+    const chipValues = getChipValues();
+    const summary = generateGameSummary(gameDate, players, settlements, skippedTransfers, chipGap, chipGapPerPlayer, rebuyValue, chipValues);
     shareToWhatsApp(summary);
   };
 
@@ -73,29 +89,39 @@ const GameSummaryScreen = () => {
 
       <div className="card">
         <h2 className="card-title mb-2">Results</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th style={{ textAlign: 'right' }}>Profit/Loss</th>
-            </tr>
-          </thead>
-          <tbody>
-            {players.map((player, index) => (
-              <tr key={player.id}>
-                <td>
-                  {index === 0 && player.profit > 0 && '🥇 '}
-                  {index === 1 && player.profit > 0 && '🥈 '}
-                  {index === 2 && player.profit > 0 && '🥉 '}
-                  {player.playerName}
-                </td>
-                <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
-                  {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th style={{ textAlign: 'right' }}>Chips</th>
+                <th style={{ textAlign: 'right' }}>Rebuys</th>
+                <th style={{ textAlign: 'right' }}>Profit/Loss</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {players.map((player, index) => (
+                <tr key={player.id}>
+                  <td>
+                    {index === 0 && player.profit > 0 && '🥇 '}
+                    {index === 1 && player.profit > 0 && '🥈 '}
+                    {index === 2 && player.profit > 0 && '🥉 '}
+                    {player.playerName}
+                  </td>
+                  <td style={{ textAlign: 'right' }} className="text-muted">
+                    {getTotalChips(player).toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: 'right' }} className="text-muted">
+                    {player.rebuys} (₪{cleanNumber(player.rebuys * rebuyValue)})
+                  </td>
+                  <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
+                    {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         
         {chipGap !== null && chipGap !== 0 && (
           <div style={{ 

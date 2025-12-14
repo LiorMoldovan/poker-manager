@@ -1,5 +1,17 @@
-import { GamePlayer, Settlement, SkippedTransfer } from '../types';
+import { GamePlayer, Settlement, SkippedTransfer, ChipValue } from '../types';
 import { formatCurrency, cleanNumber } from './calculations';
+
+// Calculate total chips for a player
+const getTotalChipsForPlayer = (player: GamePlayer, chipValues: ChipValue[]): number => {
+  let total = 0;
+  for (const [chipId, count] of Object.entries(player.chipCounts)) {
+    const chip = chipValues.find(c => c.id === chipId);
+    if (chip) {
+      total += count * chip.value;
+    }
+  }
+  return total;
+};
 
 export const generateGameSummary = (
   date: string,
@@ -7,7 +19,9 @@ export const generateGameSummary = (
   settlements: Settlement[],
   skippedTransfers: SkippedTransfer[],
   chipGap?: number | null,
-  chipGapPerPlayer?: number | null
+  chipGapPerPlayer?: number | null,
+  rebuyValue?: number,
+  chipValues?: ChipValue[]
 ): string => {
   const gameDate = new Date(date).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -37,7 +51,15 @@ export const generateGameSummary = (
     const profitText = player.profit >= 0 
       ? `+₪${cleanNumber(Math.abs(player.profit))}` 
       : `-₪${cleanNumber(Math.abs(player.profit))}`;
-    summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}\n`;
+    
+    // Add chips and rebuys info
+    const totalChips = chipValues ? getTotalChipsForPlayer(player, chipValues) : 0;
+    const rebuyAmount = rebuyValue ? player.rebuys * rebuyValue : 0;
+    const detailsText = chipValues && rebuyValue 
+      ? ` | 🎰${totalChips.toLocaleString()} | 🔄${player.rebuys}(₪${cleanNumber(rebuyAmount)})`
+      : '';
+    
+    summary += `${LTR}${emoji} ${player.playerName}: ${profitText}${medal}${detailsText}\n`;
   });
 
   // Show chip gap adjustment if present
