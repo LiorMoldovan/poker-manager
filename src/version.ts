@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.2.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.2.1',
+    date: '2024-12-14',
+    changes: [
+      'FIXED: Removed minHeight that was causing empty space',
+      'Progress bar now 24px tall (was 10px)',
+      'Removed flex layout that was stretching content'
+    ]
+  },
   {
     version: '2.2.0',
     date: '2024-12-14',

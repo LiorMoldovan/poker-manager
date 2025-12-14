@@ -336,12 +336,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ 
-      paddingBottom: '100px',
-      minHeight: 'calc(100vh - 100px)',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
+    <div className="fade-in" style={{ paddingBottom: '95px' }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Select a player to count their chips</p>
@@ -432,7 +427,7 @@ const ChipEntryScreen = () => {
 
       {/* Selected Player Chip Entry */}
       {selectedPlayer && (
-        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="card">
           <div className="card-header">
             <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
             <span className={getProfitColorClass(getPlayerProfit(selectedPlayer.id))} style={{ fontWeight: '700' }}>
@@ -498,7 +493,7 @@ const ChipEntryScreen = () => {
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center',
-            marginTop: 'auto',
+            marginTop: '1rem',
             paddingTop: '1rem',
             borderTop: '1px solid var(--border)'
           }}>
@@ -553,19 +548,19 @@ const ChipEntryScreen = () => {
         padding: '0.4rem 1rem 0.5rem',
         boxShadow: '0 -2px 10px rgba(0,0,0,0.15)'
       }}>
-        {/* Progress bar */}
+        {/* Progress bar - LARGE */}
         <div style={{ 
-          height: '10px', 
+          height: '24px', 
           background: 'rgba(255,255,255,0.1)', 
-          borderRadius: '5px', 
+          borderRadius: '12px', 
           overflow: 'hidden',
           marginBottom: '0.4rem'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
-            background: getProgressColor(progressPercentage),
-            borderRadius: '5px',
+            background: `linear-gradient(90deg, ${getProgressColor(progressPercentage)}, ${getProgressColor(progressPercentage)}cc)`,
+            borderRadius: '12px',
             transition: 'width 0.3s ease'
           }} />
         </div>
