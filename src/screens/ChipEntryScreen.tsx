@@ -336,7 +336,12 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '75px' }}>
+    <div className="fade-in" style={{ 
+      paddingBottom: '100px',
+      minHeight: 'calc(100vh - 100px)',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Select a player to count their chips</p>
@@ -427,7 +432,7 @@ const ChipEntryScreen = () => {
 
       {/* Selected Player Chip Entry */}
       {selectedPlayer && (
-        <div className="card">
+        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div className="card-header">
             <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
             <span className={getProfitColorClass(getPlayerProfit(selectedPlayer.id))} style={{ fontWeight: '700' }}>
@@ -493,7 +498,7 @@ const ChipEntryScreen = () => {
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center',
-            marginTop: '1rem',
+            marginTop: 'auto',
             paddingTop: '1rem',
             borderTop: '1px solid var(--border)'
           }}>
@@ -537,7 +542,7 @@ const ChipEntryScreen = () => {
         </div>
       )}
 
-      {/* Fixed Bottom Bar - minimal padding */}
+      {/* Fixed Bottom Bar */}
       <div style={{ 
         position: 'fixed',
         bottom: 0,
@@ -545,47 +550,52 @@ const ChipEntryScreen = () => {
         right: 0,
         zIndex: 200,
         background: 'var(--background)',
-        padding: '0.2rem 0.75rem 0.3rem'
+        padding: '0.4rem 1rem 0.5rem',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.15)'
       }}>
-        {/* Progress bar - much bigger */}
+        {/* Progress bar */}
         <div style={{ 
-          height: '18px', 
+          height: '10px', 
           background: 'rgba(255,255,255,0.1)', 
-          borderRadius: '9px', 
+          borderRadius: '5px', 
           overflow: 'hidden',
-          marginBottom: '0.2rem',
-          position: 'relative'
+          marginBottom: '0.4rem'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
-            background: `linear-gradient(90deg, ${getProgressColor(progressPercentage)}, ${getProgressColor(progressPercentage)}dd)`,
-            borderRadius: '9px',
+            background: getProgressColor(progressPercentage),
+            borderRadius: '5px',
             transition: 'width 0.3s ease'
           }} />
-          {/* Overlay text on progress bar */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: '0.7rem',
-            fontWeight: '700',
-            color: 'white',
-            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+        </div>
+        
+        {/* Stats row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{completedPlayersCount}/{players.length}</span>
+          <span style={{ 
+            fontSize: '0.85rem', 
+            fontWeight: '700', 
+            color: isBalanced && totalChipPoints > 0 ? '#22c55e' : '#f59e0b' 
           }}>
-            {totalChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()}
-          </div>
+            {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
+          </span>
+          <span style={{ 
+            fontSize: '0.75rem', 
+            color: totalChipPoints > expectedChipPoints ? '#ef4444' : totalChipPoints === expectedChipPoints ? '#22c55e' : '#f59e0b'
+          }}>
+            {totalChipPoints > expectedChipPoints 
+              ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()}` 
+              : totalChipPoints === expectedChipPoints && totalChipPoints > 0
+                ? '✓'
+                : `-${(expectedChipPoints - totalChipPoints).toLocaleString()}`}
+          </span>
         </div>
         
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
-          style={{ padding: '0.4rem', fontSize: '0.9rem' }}
+          style={{ padding: '0.5rem' }}
         >
           🧮 Calculate Results
         </button>
