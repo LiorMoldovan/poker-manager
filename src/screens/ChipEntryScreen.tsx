@@ -313,7 +313,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '140px' }}>
+    <div className="fade-in" style={{ paddingBottom: '180px' }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Tap Done when finished with each player</p>
@@ -611,10 +611,10 @@ const ChipEntryScreen = () => {
       {/* Fixed Bottom Progress Bar */}
       <div style={{ 
         position: 'fixed',
-        bottom: '60px',
+        bottom: 0,
         left: 0,
         right: 0,
-        zIndex: 100,
+        zIndex: 200,
         background: isBalanced && totalChipPoints > 0 
           ? '#dcfce7' 
           : totalChipPoints > expectedChipPoints 
