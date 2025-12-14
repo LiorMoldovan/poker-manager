@@ -342,7 +342,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '180px' }}>
+    <div className="fade-in" style={{ paddingBottom: '85px' }}>
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Tap Done when finished with each player</p>
@@ -584,7 +584,7 @@ const ChipEntryScreen = () => {
         </div>
       )}
 
-      {/* Fixed Bottom Progress Bar */}
+      {/* Fixed Bottom Bar */}
       <div style={{ 
         position: 'fixed',
         bottom: 0,
@@ -592,70 +592,44 @@ const ChipEntryScreen = () => {
         right: 0,
         zIndex: 200,
         background: 'var(--background)',
-        padding: '0.75rem 1rem',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
-        borderTop: `3px solid ${getProgressColor(progressPercentage)}`
+        padding: '0.5rem 1rem 0.6rem',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.2)'
       }}>
         {/* Progress bar */}
         <div style={{
-          height: '12px',
-          background: 'rgba(0,0,0,0.15)',
-          borderRadius: '6px',
+          height: '16px',
+          background: '#374151',
+          borderRadius: '8px',
           overflow: 'hidden',
-          marginBottom: '0.5rem'
+          marginBottom: '0.4rem',
+          position: 'relative'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
             background: getProgressColor(progressPercentage),
-            borderRadius: '6px',
-            transition: 'width 0.3s ease, background 0.5s ease'
+            borderRadius: '8px',
+            transition: 'width 0.3s ease'
           }} />
-        </div>
-        
-        {/* Stats row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '0.8rem' }}>
-            <span style={{ color: 'var(--text-muted)' }}>{completedPlayersCount}/{players.length} done</span>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            {isBalanced && totalChipPoints > 0 ? (
-              <span style={{ color: '#166534', fontWeight: '700', fontSize: '1rem' }}>✓ Balanced!</span>
-            ) : totalChipPoints > 0 ? (
-              <span style={{ 
-                color: totalChipPoints > expectedChipPoints ? '#dc2626' : '#b45309', 
-                fontWeight: '700',
-                fontSize: '0.9rem'
-              }}>
-                {totalChipPoints > expectedChipPoints 
-                  ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()} over` 
-                  : `${(expectedChipPoints - totalChipPoints).toLocaleString()} left`}
-              </span>
-            ) : (
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Start counting</span>
-            )}
-          </div>
-          
-          <div style={{ fontSize: '0.8rem', textAlign: 'right' }}>
-            <span style={{ 
-              fontWeight: '700',
-              color: isBalanced && totalChipPoints > 0 
-                ? '#166534' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#dc2626' 
-                  : 'var(--text)'
-            }}>
-              {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
-            </span>
+          <div style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.7rem',
+            fontWeight: '700',
+            color: 'white',
+            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+          }}>
+            {completedPlayersCount}/{players.length} • {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
           </div>
         </div>
         
-        {/* Calculate button */}
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
-          style={{ marginTop: '0.5rem', padding: '0.75rem' }}
+          style={{ padding: '0.5rem' }}
         >
           🧮 Calculate Results
         </button>

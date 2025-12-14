@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.3';
+export const APP_VERSION = '2.3.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.4',
+    date: '2024-12-14',
+    changes: [
+      'Fixed chip entry page - reduced empty space',
+      'More compact bottom bar with progress overlay'
+    ]
+  },
   {
     version: '2.3.3',
     date: '2024-12-14',
