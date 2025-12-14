@@ -544,21 +544,39 @@ const ChipEntryScreen = () => {
         borderRadius: '12px',
         marginTop: '0.5rem'
       }}>
-        {/* Progress bar - LARGE */}
+        {/* Progress bar - EXTRA LARGE */}
         <div style={{ 
-          height: '24px', 
+          height: '36px', 
           background: 'rgba(255,255,255,0.1)', 
-          borderRadius: '12px', 
+          borderRadius: '18px', 
           overflow: 'hidden',
-          marginBottom: '0.4rem'
+          marginBottom: '0.5rem',
+          position: 'relative'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
             background: `linear-gradient(90deg, ${getProgressColor(progressPercentage)}, ${getProgressColor(progressPercentage)}cc)`,
-            borderRadius: '12px',
+            borderRadius: '18px',
             transition: 'width 0.3s ease'
           }} />
+          {/* Progress text overlay */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.85rem',
+            fontWeight: '700',
+            color: 'white',
+            textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+          }}>
+            {totalChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()}
+          </div>
         </div>
         
         {/* Stats row */}
