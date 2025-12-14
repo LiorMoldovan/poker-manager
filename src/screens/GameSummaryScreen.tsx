@@ -136,8 +136,8 @@ const GameSummaryScreen = () => {
               <thead>
                 <tr>
                   <th>Player</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>🎰</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>🔄</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>🪙</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>➕</th>
                   <th style={{ textAlign: 'right' }}>+/-</th>
                 </tr>
               </thead>
