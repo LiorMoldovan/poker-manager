@@ -336,7 +336,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in">
+    <div className="fade-in" style={{ paddingBottom: '120px' }}
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Select a player to count their chips</p>
@@ -537,27 +537,32 @@ const ChipEntryScreen = () => {
         </div>
       )}
 
-      {/* Bottom Bar - flows with content */}
+      {/* Fixed Bottom Bar */}
       <div style={{ 
-        background: 'var(--surface)',
-        padding: '0.75rem 1rem',
-        borderRadius: '12px',
-        marginTop: '0.5rem'
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        background: 'var(--background)',
+        padding: '0.5rem 1rem 0.75rem',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.2)',
+        zIndex: 100
       }}>
-        {/* Progress bar - EXTRA LARGE */}
+        {/* Progress bar */}
         <div style={{ 
-          height: '36px', 
-          background: 'rgba(255,255,255,0.1)', 
-          borderRadius: '18px', 
+          height: '28px', 
+          background: '#374151', 
+          borderRadius: '14px', 
           overflow: 'hidden',
           marginBottom: '0.5rem',
-          position: 'relative'
+          position: 'relative',
+          border: '1px solid #4b5563'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
-            background: `linear-gradient(90deg, ${getProgressColor(progressPercentage)}, ${getProgressColor(progressPercentage)}cc)`,
-            borderRadius: '18px',
+            background: `linear-gradient(90deg, ${getProgressColor(progressPercentage)}, ${getProgressColor(progressPercentage)}bb)`,
+            borderRadius: '14px',
             transition: 'width 0.3s ease'
           }} />
           {/* Progress text overlay */}
@@ -570,13 +575,13 @@ const ChipEntryScreen = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '0.85rem',
+            fontSize: '0.8rem',
             fontWeight: '700',
             color: 'white',
-            textShadow: '0 1px 3px rgba(0,0,0,0.5)'
+            textShadow: '0 1px 2px rgba(0,0,0,0.6)'
           }}>
             {totalChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()}
-          </div>
+        </div>
         </div>
         
         {/* Stats row */}
@@ -587,7 +592,7 @@ const ChipEntryScreen = () => {
             fontWeight: '700', 
             color: isBalanced && totalChipPoints > 0 ? '#22c55e' : '#f59e0b' 
           }}>
-            {totalChipPoints.toLocaleString()}/{expectedChipPoints.toLocaleString()}
+            {isBalanced && totalChipPoints > 0 ? '✓ Balanced!' : `${(expectedChipPoints - totalChipPoints).toLocaleString()} left`}
           </span>
           <span style={{ 
             fontSize: '0.75rem', 
