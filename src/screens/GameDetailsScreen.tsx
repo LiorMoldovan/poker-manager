@@ -15,24 +15,38 @@ const GameDetailsScreen = () => {
   const [rebuyValue, setRebuyValue] = useState(50);
   const [chipGap, setChipGap] = useState<number | null>(null);
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
 
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
     }
   }, [gameId]);
 
   const loadData = () => {
-    if (!gameId) return;
+    if (!gameId) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     const game = getGame(gameId);
     const gamePlayers = getGamePlayers(gameId);
+    
+    if (!game || gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
+    
     const settings = getSettings();
     
-    if (game) {
-      setGameDate(game.date);
-      setChipGap(game.chipGap || null);
-      setChipGapPerPlayer(game.chipGapPerPlayer || null);
-    }
+    setGameDate(game.date);
+    setChipGap(game.chipGap || null);
+    setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
     setRebuyValue(settings.rebuyValue);
@@ -43,7 +57,30 @@ const GameDetailsScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    setIsLoading(false);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
+        <p className="text-muted">Loading game...</p>
+      </div>
+    );
+  }
+
+  // Game not found
+  if (gameNotFound) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
+        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/history')}>Go to History</button>
+      </div>
+    );
+  }
 
   const handleShare = () => {
     const summary = generateGameSummary(gameDate, players, settlements, skippedTransfers, chipGap, chipGapPerPlayer);

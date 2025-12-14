@@ -122,6 +122,8 @@ const ChipEntryScreen = () => {
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
   const [rebuyValue, setRebuyValue] = useState(30);
   const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
   
   // Numpad state
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -137,12 +139,24 @@ const ChipEntryScreen = () => {
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
     }
   }, [gameId]);
 
   const loadData = () => {
-    if (!gameId) return;
+    if (!gameId) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     const gamePlayers = getGamePlayers(gameId);
+    if (gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     const chips = getChipValues();
     const settings = getSettings();
     
@@ -160,7 +174,30 @@ const ChipEntryScreen = () => {
       });
     });
     setChipCounts(initialCounts);
+    setIsLoading(false);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
+        <p className="text-muted">Loading game...</p>
+      </div>
+    );
+  }
+
+  // Game not found
+  if (gameNotFound) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
+        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+      </div>
+    );
+  }
 
   const updateChipCount = (playerId: string, chipId: string, value: number) => {
     const newValue = Math.max(0, value);

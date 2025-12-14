@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { initializeStorage } from './database/storage';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
@@ -18,14 +18,34 @@ const APP_PIN = '2580';
 function App() {
   const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     initializeStorage();
+    setIsInitialized(true);
     // Check if already authenticated
     if (sessionStorage.getItem('poker_authenticated') === 'true') {
       setIsAuthenticated(true);
     }
   }, []);
+
+  // Show loading while initializing
+  if (!isInitialized) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'var(--background)'
+      }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   // Show PIN lock if not authenticated
   if (!isAuthenticated) {
@@ -49,6 +69,8 @@ function App() {
           <Route path="/game/:gameId" element={<GameDetailsScreen />} />
           <Route path="/statistics" element={<StatisticsScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
+          {/* Catch-all route - redirect unknown URLs to home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       {!hideNav && <Navigation />}

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.2.9';
+export const APP_VERSION = '2.3.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.0',
+    date: '2024-12-14',
+    changes: [
+      'MAJOR FIX: Restored Vercel rewrites for page refresh',
+      'Added loading states to all game screens',
+      'Added catch-all route for unknown URLs',
+      'Fixed chip grid to always show 2 columns',
+      'App initialization loading screen'
+    ]
+  },
   {
     version: '2.2.9',
     date: '2024-12-14',

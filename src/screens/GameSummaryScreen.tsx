@@ -16,6 +16,8 @@ const GameSummaryScreen = () => {
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
   const [rebuyValue, setRebuyValue] = useState(30);
   const [isSharing, setIsSharing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player
@@ -34,20 +36,32 @@ const GameSummaryScreen = () => {
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
     }
   }, [gameId]);
 
   const loadData = () => {
-    if (!gameId) return;
+    if (!gameId) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     const game = getGame(gameId);
     const gamePlayers = getGamePlayers(gameId);
+    
+    if (!game || gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
+    
     const settings = getSettings();
     
-    if (game) {
-      setGameDate(game.date);
-      setChipGap(game.chipGap || null);
-      setChipGapPerPlayer(game.chipGapPerPlayer || null);
-    }
+    setGameDate(game.date);
+    setChipGap(game.chipGap || null);
+    setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setRebuyValue(settings.rebuyValue);
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
@@ -58,7 +72,30 @@ const GameSummaryScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    setIsLoading(false);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
+        <p className="text-muted">Loading summary...</p>
+      </div>
+    );
+  }
+
+  // Game not found
+  if (gameNotFound) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
+        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+      </div>
+    );
+  }
 
   const handleShare = async () => {
     if (!summaryRef.current || isSharing) return;

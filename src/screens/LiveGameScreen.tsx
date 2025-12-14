@@ -10,20 +10,57 @@ const LiveGameScreen = () => {
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [actions, setActions] = useState<GameAction[]>([]);
   const [rebuyValue, setRebuyValue] = useState(50);
+  const [isLoading, setIsLoading] = useState(true);
+  const [gameNotFound, setGameNotFound] = useState(false);
 
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
     }
   }, [gameId]);
 
   const loadData = () => {
-    if (!gameId) return;
+    if (!gameId) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     const gamePlayers = getGamePlayers(gameId);
+    if (gamePlayers.length === 0) {
+      setGameNotFound(true);
+      setIsLoading(false);
+      return;
+    }
     setPlayers(gamePlayers);
     const settings = getSettings();
     setRebuyValue(settings.rebuyValue);
+    setIsLoading(false);
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
+        <p className="text-muted">Loading game...</p>
+      </div>
+    );
+  }
+
+  // Game not found
+  if (gameNotFound) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
+        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+      </div>
+    );
+  }
 
   const handleRebuy = (player: GamePlayer, amount: number = 1) => {
     const newRebuys = player.rebuys + amount;
