@@ -95,16 +95,16 @@ const NewGameScreen = () => {
             <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>Add players to get started</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             {players.map(player => (
               <div
                 key={player.id}
                 onClick={() => togglePlayer(player.id)}
                 style={{
-                  padding: '0.4rem 0.75rem',
-                  borderRadius: '20px',
-                  fontSize: '0.9rem',
-                  fontWeight: '500',
+                  padding: '0.6rem 1rem',
+                  borderRadius: '24px',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
                   cursor: 'pointer',
                   border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
                   background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
