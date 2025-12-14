@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.9.1';
+export const APP_VERSION = '1.9.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.9.2',
+    date: '2024-12-14',
+    changes: [
+      'Centered Home and Share buttons on summary screen'
+    ]
+  },
   {
     version: '1.9.1',
     date: '2024-12-14',

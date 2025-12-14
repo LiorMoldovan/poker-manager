@@ -234,7 +234,7 @@ const GameSummaryScreen = () => {
       </div>
 
       {/* Action buttons - outside the screenshot area */}
-      <div className="actions mt-3">
+      <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
         <button className="btn btn-secondary btn-lg" onClick={() => navigate('/')}>
           🏠 Home
         </button>
