@@ -275,6 +275,19 @@ const ChipEntryScreen = () => {
   const progressPercentage = expectedChipPoints > 0 
     ? Math.min(100, (totalChipPoints / expectedChipPoints) * 100) 
     : 0;
+
+  // Get gradient color from red (0%) to green (100%)
+  // Uses HSL: hue 0 = red, hue 60 = yellow, hue 120 = green
+  const getProgressColor = (percentage: number): string => {
+    if (totalChipPoints > expectedChipPoints) {
+      return '#ef4444'; // Red if over
+    }
+    // Clamp percentage between 0 and 100
+    const p = Math.min(100, Math.max(0, percentage));
+    // Map 0-100% to hue 0-120 (red to green)
+    const hue = (p / 100) * 120;
+    return `hsl(${hue}, 75%, 45%)`;
+  };
   
   // Count completed players (those with chips who are collapsed)
   const completedPlayersCount = players.filter(p => 
@@ -615,41 +628,25 @@ const ChipEntryScreen = () => {
         left: 0,
         right: 0,
         zIndex: 200,
-        background: isBalanced && totalChipPoints > 0 
-          ? '#dcfce7' 
-          : totalChipPoints > expectedChipPoints 
-            ? '#fee2e2' 
-            : 'var(--background)',
+        background: 'var(--background)',
         padding: '0.75rem 1rem',
         boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
-        borderTop: `3px solid ${
-          isBalanced && totalChipPoints > 0 
-            ? '#22c55e' 
-            : totalChipPoints > expectedChipPoints 
-              ? '#ef4444' 
-              : '#3b82f6'
-        }`
+        borderTop: `3px solid ${getProgressColor(progressPercentage)}`
       }}>
         {/* Progress bar */}
         <div style={{
-          height: '10px',
-          background: 'rgba(0,0,0,0.1)',
-          borderRadius: '5px',
+          height: '12px',
+          background: 'rgba(0,0,0,0.15)',
+          borderRadius: '6px',
           overflow: 'hidden',
           marginBottom: '0.5rem'
         }}>
           <div style={{
             height: '100%',
             width: `${Math.min(progressPercentage, 100)}%`,
-            background: isBalanced && totalChipPoints > 0 
-              ? '#22c55e' 
-              : totalChipPoints > expectedChipPoints 
-                ? '#ef4444' 
-                : progressPercentage > 50 
-                  ? '#f59e0b'
-                  : '#3b82f6',
-            borderRadius: '5px',
-            transition: 'width 0.3s ease, background 0.3s ease'
+            background: getProgressColor(progressPercentage),
+            borderRadius: '6px',
+            transition: 'width 0.3s ease, background 0.5s ease'
           }} />
         </div>
         

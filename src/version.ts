@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.7.1';
+export const APP_VERSION = '1.7.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.7.2',
+    date: '2024-12-14',
+    changes: [
+      'Progress bar now uses gradient colors',
+      'Red (0%) → Orange → Yellow → Green (100%)',
+      'Smooth color transition as you count'
+    ]
+  },
   {
     version: '1.7.1',
     date: '2024-12-14',
