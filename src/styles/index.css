@@ -565,33 +565,37 @@ th {
 .chip-btn {
   flex: 1;
   height: 44px;
-  border: none;
-  border-radius: 8px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.chip-btn:hover {
+  background: var(--surface-light);
+  border-color: var(--primary);
+}
+
+.chip-btn:active {
+  transform: scale(0.95);
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
 }
 
 .chip-btn-minus {
-  background: #ef4444;
-  color: white;
-}
-
-.chip-btn-minus:hover {
-  background: #dc2626;
+  /* No special color - uses base styles */
 }
 
 .chip-btn-plus {
-  background: #22c55e;
-  color: white;
-}
-
-.chip-btn-plus:hover {
-  background: #16a34a;
+  /* No special color - uses base styles */
 }
 
 .chip-count-input {
@@ -801,7 +805,7 @@ th {
 .chip-btn-small {
   width: 32px;
   height: 32px;
-  border: none;
+  border: 2px solid var(--border);
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 700;
@@ -810,24 +814,18 @@ th {
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  background: var(--surface);
+  color: var(--text);
 }
 
-.chip-btn-small.chip-btn-minus {
-  background: #dc2626;
+.chip-btn-small:hover {
+  border-color: var(--primary);
+}
+
+.chip-btn-small:active {
+  background: var(--primary);
   color: white;
-}
-
-.chip-btn-small.chip-btn-minus:hover {
-  background: #b91c1c;
-}
-
-.chip-btn-small.chip-btn-plus {
-  background: #16a34a;
-  color: white;
-}
-
-.chip-btn-small.chip-btn-plus:hover {
-  background: #15803d;
+  border-color: var(--primary);
 }
 
 .chip-count-input {

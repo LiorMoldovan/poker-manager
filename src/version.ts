@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.7.8';
+export const APP_VERSION = '1.8.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.8.0',
+    date: '2024-12-14',
+    changes: [
+      'Neutral +/- buttons - no red/green colors',
+      'Cleaner top counter design',
+      'Simplified Expected vs Counted display'
+    ]
+  },
   {
     version: '1.7.8',
     date: '2024-12-14',
