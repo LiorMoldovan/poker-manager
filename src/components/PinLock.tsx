@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { APP_VERSION } from '../version';
 
 interface PinLockProps {
   correctPin: string;
@@ -146,15 +145,6 @@ const PinLock = ({ correctPin, onUnlock }: PinLockProps) => {
             {key}
           </button>
         ))}
-      </div>
-
-      {/* Version */}
-      <div style={{ 
-        marginTop: '2rem', 
-        color: 'var(--text-muted)', 
-        fontSize: '0.75rem' 
-      }}>
-        v{APP_VERSION}
       </div>
 
       {/* Shake animation */}
