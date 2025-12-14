@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.9.0';
+export const APP_VERSION = '1.9.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,11 +13,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.9.1',
+    date: '2024-12-14',
+    changes: [
+      'Updated PIN code'
+    ]
+  },
+  {
     version: '1.9.0',
     date: '2024-12-14',
     changes: [
       'Added PIN lock screen for app access',
-      'PIN: 9876 required to enter app',
       'Session persists until browser is closed'
     ]
   },

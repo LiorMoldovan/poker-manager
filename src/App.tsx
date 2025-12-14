@@ -13,7 +13,7 @@ import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
 // PIN code for app access
-const APP_PIN = '9876';
+const APP_PIN = '2580';
 
 function App() {
   const location = useLocation();
