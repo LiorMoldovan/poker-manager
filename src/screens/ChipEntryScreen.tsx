@@ -336,7 +336,7 @@ const ChipEntryScreen = () => {
   };
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '95px' }}>
+    <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title">Count Chips</h1>
         <p className="page-subtitle">Select a player to count their chips</p>
@@ -537,16 +537,12 @@ const ChipEntryScreen = () => {
         </div>
       )}
 
-      {/* Fixed Bottom Bar */}
+      {/* Bottom Bar - flows with content */}
       <div style={{ 
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 200,
-        background: 'var(--background)',
-        padding: '0.4rem 1rem 0.5rem',
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.15)'
+        background: 'var(--surface)',
+        padding: '0.75rem 1rem',
+        borderRadius: '12px',
+        marginTop: '0.5rem'
       }}>
         {/* Progress bar - LARGE */}
         <div style={{ 
