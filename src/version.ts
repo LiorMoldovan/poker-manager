@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.1.1';
+export const APP_VERSION = '2.1.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.1.2',
+    date: '2024-12-14',
+    changes: [
+      'Fixed page refresh - now shows loading state before content',
+      'Proper loading state on all game screens',
+      'No more errors when refreshing pages'
+    ]
+  },
   {
     version: '2.1.1',
     date: '2024-12-14',

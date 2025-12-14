@@ -122,6 +122,7 @@ const ChipEntryScreen = () => {
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
   const [rebuyValue, setRebuyValue] = useState(30);
   const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Numpad state
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -140,6 +141,8 @@ const ChipEntryScreen = () => {
   useEffect(() => {
     if (gameId) {
       loadData();
+    } else {
+      setIsLoading(false);
     }
   }, [gameId]);
 
@@ -168,6 +171,8 @@ const ChipEntryScreen = () => {
     if (gamePlayers.length > 0) {
       setSelectedPlayerId(gamePlayers[0].id);
     }
+    
+    setIsLoading(false);
   };
 
   const updateChipCount = (playerId: string, chipId: string, value: number) => {
@@ -305,8 +310,8 @@ const ChipEntryScreen = () => {
     return 'neutral';
   };
 
-  // Redirect if no game found
-  if (!gameId || (players.length === 0 && chipValues.length > 0)) {
+  // Show error only after loading is complete and no players found
+  if (!isLoading && (!gameId || players.length === 0)) {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
@@ -315,6 +320,16 @@ const ChipEntryScreen = () => {
         <button className="btn btn-primary" onClick={() => navigate('/')}>
           🏠 Go Home
         </button>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+        <p className="text-muted">Loading...</p>
       </div>
     );
   }

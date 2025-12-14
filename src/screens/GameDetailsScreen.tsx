@@ -62,8 +62,18 @@ const GameDetailsScreen = () => {
 
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
+        <p className="text-muted">Loading...</p>
+      </div>
+    );
+  }
+
   // Show error if game not found
-  if (gameNotFound || (!isLoading && players.length === 0)) {
+  if (gameNotFound || players.length === 0) {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎰</div>
