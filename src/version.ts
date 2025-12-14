@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.6.1';
+export const APP_VERSION = '1.6.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.6.2',
+    date: '2024-12-14',
+    changes: [
+      'Added visible Done button to collapse player after counting',
+      'Button turns green when player has chips counted'
+    ]
+  },
   {
     version: '1.6.1',
     date: '2024-12-14',

@@ -640,9 +640,39 @@ const ChipEntryScreen = () => {
             ))}
           </div>
           
-          <div style={{ textAlign: 'right', marginTop: '0.75rem', fontWeight: '600' }}>
-            Chips: {getPlayerChipPoints(player.id).toLocaleString()} = ₪{cleanNumber(getPlayerMoneyValue(player.id))}
-          </div>
+          <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginTop: '0.75rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid var(--border)'
+              }}>
+                <span style={{ fontWeight: '600' }}>
+                  {getPlayerChipPoints(player.id).toLocaleString()} chips = ₪{cleanNumber(getPlayerMoneyValue(player.id))}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayerCollapse(player.id);
+                  }}
+                  style={{
+                    background: hasChips ? '#22c55e' : 'var(--surface)',
+                    color: hasChips ? 'white' : 'var(--text-muted)',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '8px',
+                    fontWeight: '600',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem'
+                  }}
+                >
+                  ✓ Done
+                </button>
+              </div>
             </>
           )}
         </div>
