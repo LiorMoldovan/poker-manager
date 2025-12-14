@@ -229,16 +229,28 @@ const ChipEntryScreen = () => {
     : 0;
 
   // Get gradient color from red (0%) to green (100%)
-  // Uses HSL: hue 0 = red, hue 60 = yellow, hue 120 = green
+  // Stays red/orange longer, only turns green near completion
   const getProgressColor = (percentage: number): string => {
     if (totalChipPoints > expectedChipPoints) {
       return '#ef4444'; // Red if over
     }
     // Clamp percentage between 0 and 100
     const p = Math.min(100, Math.max(0, percentage));
-    // Map 0-100% to hue 0-120 (red to green)
-    const hue = (p / 100) * 120;
-    return `hsl(${hue}, 75%, 45%)`;
+    
+    // Use power curve to stay red/orange longer
+    // 0-60%: red to orange (hue 0-30)
+    // 60-90%: orange to yellow (hue 30-60)  
+    // 90-100%: yellow to green (hue 60-120)
+    let hue: number;
+    if (p < 60) {
+      hue = (p / 60) * 30; // 0-30 (red to orange)
+    } else if (p < 90) {
+      hue = 30 + ((p - 60) / 30) * 30; // 30-60 (orange to yellow)
+    } else {
+      hue = 60 + ((p - 90) / 10) * 60; // 60-120 (yellow to green)
+    }
+    
+    return `hsl(${hue}, 80%, 45%)`;
   };
   
   // Count completed players (those who are collapsed/marked done)
@@ -288,14 +300,8 @@ const ChipEntryScreen = () => {
           ? 'rgba(34, 197, 94, 0.1)' 
           : totalChipPoints > expectedChipPoints 
             ? 'rgba(239, 68, 68, 0.1)' 
-            : 'rgba(255, 255, 255, 0.95)',
-        borderLeft: `4px solid ${
-          isBalanced && totalChipPoints > 0 
-            ? '#22c55e' 
-            : totalChipPoints > expectedChipPoints 
-              ? '#ef4444' 
-              : '#3b82f6'
-        }` 
+            : 'var(--surface)',
+        borderLeft: `4px solid ${getProgressColor(progressPercentage)}`
       }}>
         <div className="grid grid-2" style={{ gap: '1.5rem' }}>
           {/* Buy-ins (Expected) */}
@@ -327,53 +333,35 @@ const ChipEntryScreen = () => {
               ? '#dcfce7' 
               : totalChipPoints > expectedChipPoints 
                 ? '#fee2e2' 
-                : '#f1f5f9', 
+                : '#fff7ed', 
             borderRadius: '8px',
             textAlign: 'center',
-            border: `1px solid ${
-              isBalanced && totalChipPoints > 0 
-                ? '#86efac' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#fca5a5' 
-                  : '#cbd5e1'
-            }`
+            border: `2px solid ${getProgressColor(progressPercentage)}`
           }}>
             <div style={{ 
               fontSize: '0.8rem', 
               marginBottom: '0.25rem', 
               fontWeight: '700',
-              color: isBalanced && totalChipPoints > 0 
-                ? '#166534' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#b91c1c' 
-                  : '#475569'
+              color: getProgressColor(progressPercentage)
             }}>
               🔢 CHIPS COUNTED
             </div>
             <div style={{ 
               fontSize: '1.6rem', 
               fontWeight: '800', 
-              color: isBalanced && totalChipPoints > 0 
-                ? '#166534' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#dc2626' 
-                  : '#1e293b'
+              color: getProgressColor(progressPercentage)
             }}>
               ₪{cleanNumber(totalChipPoints * valuePerChip)}
             </div>
             <div style={{ 
               fontSize: '1.1rem', 
               fontWeight: '700',
-              color: isBalanced && totalChipPoints > 0 
-                ? '#22c55e' 
-                : totalChipPoints > expectedChipPoints 
-                  ? '#ef4444' 
-                  : '#64748b'
+              color: getProgressColor(progressPercentage)
             }}>
               {totalChipPoints.toLocaleString()} chips
             </div>
             <div style={{ fontSize: '0.8rem', marginTop: '0.25rem', color: '#64748b' }}>
-              Live count
+              {totalChipPoints === 0 ? 'Start counting below' : 'Live count'}
             </div>
           </div>
         </div>
