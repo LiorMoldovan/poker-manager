@@ -90,31 +90,32 @@ const GameSummaryScreen = () => {
       <div className="card">
         <h2 className="card-title mb-2">Results</h2>
         <div style={{ overflowX: 'auto' }}>
-          <table>
+          <table style={{ fontSize: '0.9rem' }}>
             <thead>
               <tr>
                 <th>Player</th>
-                <th style={{ textAlign: 'right' }}>Chips</th>
-                <th style={{ textAlign: 'right' }}>Rebuys</th>
-                <th style={{ textAlign: 'right' }}>Profit/Loss</th>
+                <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>🎰</th>
+                <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>🔄</th>
+                <th style={{ textAlign: 'right' }}>+/-</th>
               </tr>
             </thead>
             <tbody>
               {players.map((player, index) => (
                 <tr key={player.id}>
-                  <td>
-                    {index === 0 && player.profit > 0 && '🥇 '}
-                    {index === 1 && player.profit > 0 && '🥈 '}
-                    {index === 2 && player.profit > 0 && '🥉 '}
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {index === 0 && player.profit > 0 && '🥇'}
+                    {index === 1 && player.profit > 0 && '🥈'}
+                    {index === 2 && player.profit > 0 && '🥉'}
+                    {index > 2 || player.profit <= 0 ? '' : ' '}
                     {player.playerName}
                   </td>
-                  <td style={{ textAlign: 'right' }} className="text-muted">
-                    {getTotalChips(player).toLocaleString()}
+                  <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
+                    {(getTotalChips(player) / 1000).toFixed(0)}k
                   </td>
-                  <td style={{ textAlign: 'right' }} className="text-muted">
-                    {player.rebuys} (₪{cleanNumber(player.rebuys * rebuyValue)})
+                  <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
+                    {player.rebuys}
                   </td>
-                  <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
                     {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
                   </td>
                 </tr>
