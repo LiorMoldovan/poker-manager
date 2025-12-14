@@ -114,8 +114,6 @@ const GameSummaryScreen = () => {
     }
   };
 
-  const winner = players[0];
-
   return (
     <div className="fade-in">
       {/* Content to be captured for screenshot */}
@@ -130,14 +128,6 @@ const GameSummaryScreen = () => {
             })}
           </p>
         </div>
-
-        {winner && winner.profit > 0 && (
-          <div className="summary-card">
-            <div className="summary-title">🏆 Winner</div>
-            <div className="summary-value">{winner.playerName}</div>
-            <div style={{ opacity: 0.9 }}>+{formatCurrency(winner.profit)}</div>
-          </div>
-        )}
 
         <div className="card">
           <h2 className="card-title mb-2">Results</h2>
