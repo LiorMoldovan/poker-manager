@@ -53,12 +53,32 @@ const StatisticsScreen = () => {
     const sharpshooter = qualifiedForWinRate.length > 0 
       ? [...qualifiedForWinRate].sort((a, b) => b.winPercentage - a.winPercentage)[0]
       : null;
+    const worstWinRate = qualifiedForWinRate.length > 0
+      ? [...qualifiedForWinRate].sort((a, b) => a.winPercentage - b.winPercentage)[0]
+      : null;
     
     const onFire = [...stats].sort((a, b) => b.currentStreak - a.currentStreak)[0];
     const iceCold = [...stats].sort((a, b) => a.currentStreak - b.currentStreak)[0];
     const mostDedicated = [...stats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
     const longestWinStreakPlayer = [...stats].sort((a, b) => b.longestWinStreak - a.longestWinStreak)[0];
     const longestLossStreakPlayer = [...stats].sort((a, b) => b.longestLossStreak - a.longestLossStreak)[0];
+    
+    // Additional records
+    const qualifiedForAvg = stats.filter(s => s.gamesPlayed >= 3);
+    const highestAvgProfit = qualifiedForAvg.length > 0
+      ? [...qualifiedForAvg].sort((a, b) => b.avgProfit - a.avgProfit)[0]
+      : null;
+    const lowestAvgProfit = qualifiedForAvg.length > 0
+      ? [...qualifiedForAvg].sort((a, b) => a.avgProfit - b.avgProfit)[0]
+      : null;
+    const mostWins = [...stats].sort((a, b) => b.winCount - a.winCount)[0];
+    const mostLosses = [...stats].sort((a, b) => b.lossCount - a.lossCount)[0];
+    const highestAvgWin = stats.filter(s => s.avgWin > 0).length > 0
+      ? [...stats].filter(s => s.avgWin > 0).sort((a, b) => b.avgWin - a.avgWin)[0]
+      : null;
+    const highestAvgLoss = stats.filter(s => s.avgLoss > 0).length > 0
+      ? [...stats].filter(s => s.avgLoss > 0).sort((a, b) => b.avgLoss - a.avgLoss)[0]
+      : null;
     
     return {
       leader,
@@ -67,11 +87,18 @@ const StatisticsScreen = () => {
       biggestLossPlayer,
       rebuyKing,
       sharpshooter,
-      onFire: onFire.currentStreak > 0 ? onFire : null,
-      iceCold: iceCold.currentStreak < 0 ? iceCold : null,
+      worstWinRate,
+      onFire: onFire?.currentStreak > 0 ? onFire : null,
+      iceCold: iceCold?.currentStreak < 0 ? iceCold : null,
       mostDedicated,
       longestWinStreakPlayer,
       longestLossStreakPlayer,
+      highestAvgProfit,
+      lowestAvgProfit,
+      mostWins,
+      mostLosses,
+      highestAvgWin,
+      highestAvgLoss,
     };
   };
 
@@ -239,6 +266,29 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
+              {/* Average Performance Records */}
+              {(records.highestAvgProfit || records.lowestAvgProfit) && (
+                <div className="card">
+                  <h2 className="card-title mb-2">📊 Average Performance (3+ games)</h2>
+                  <div className="grid grid-2">
+                    {records.highestAvgProfit && (
+                      <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📈 Best Avg/Game</div>
+                        <div style={{ fontWeight: '700' }}>{records.highestAvgProfit.playerName}</div>
+                        <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(records.highestAvgProfit.avgProfit)}</div>
+                      </div>
+                    )}
+                    {records.lowestAvgProfit && (
+                      <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Worst Avg/Game</div>
+                        <div style={{ fontWeight: '700' }}>{records.lowestAvgProfit.playerName}</div>
+                        <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(records.lowestAvgProfit.avgProfit)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Other Records */}
               <div className="card">
                 <h2 className="card-title mb-2">🎖️ Other Records</h2>
@@ -247,10 +297,24 @@ const StatisticsScreen = () => {
                     <span style={{ color: 'var(--text-muted)' }}>🎮 Most Games</span>
                     <span style={{ fontWeight: '600' }}>{records.mostDedicated.playerName} ({records.mostDedicated.gamesPlayed})</span>
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>🏆 Most Wins</span>
+                    <span style={{ fontWeight: '600', color: 'var(--success)' }}>{records.mostWins.playerName} ({records.mostWins.winCount})</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>💔 Most Losses</span>
+                    <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.mostLosses.playerName} ({records.mostLosses.lossCount})</span>
+                  </div>
                   {records.sharpshooter && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--text-muted)' }}>🎯 Best Win Rate (3+ games)</span>
-                      <span style={{ fontWeight: '600' }}>{records.sharpshooter.playerName} ({records.sharpshooter.winPercentage.toFixed(0)}%)</span>
+                      <span style={{ fontWeight: '600', color: 'var(--success)' }}>{records.sharpshooter.playerName} ({records.sharpshooter.winPercentage.toFixed(0)}%)</span>
+                    </div>
+                  )}
+                  {records.worstWinRate && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>🎲 Worst Win Rate (3+ games)</span>
+                      <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.worstWinRate.playerName} ({records.worstWinRate.winPercentage.toFixed(0)}%)</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
@@ -360,7 +424,7 @@ const StatisticsScreen = () => {
                   color: player.currentStreak > 0 ? '#22c55e' : '#ef4444',
                   border: `1px solid ${player.currentStreak > 0 ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
                 }}>
-                  {player.currentStreak > 0 ? '🔥' : '📉'} {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'wins' : 'losses'} in a row
+                  {player.currentStreak > 0 ? '🔥' : '❄️'} {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'wins' : 'losses'} in a row
                 </div>
               )}
 
@@ -393,7 +457,8 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
-              <div className="grid grid-4">
+              {/* Main Stats Row 1 */}
+              <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
                 <div className="stat-card">
                   <div className="stat-value">{player.gamesPlayed}</div>
                   <div className="stat-label">Games</div>
@@ -405,6 +470,22 @@ const StatisticsScreen = () => {
                   <div className="stat-label">Win Rate</div>
                 </div>
                 <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {player.winCount}
+                  </div>
+                  <div className="stat-label">Wins</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {player.lossCount}
+                  </div>
+                  <div className="stat-label">Losses</div>
+                </div>
+              </div>
+
+              {/* Main Stats Row 2 */}
+              <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
+                <div className="stat-card">
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
                     {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}
                   </div>
@@ -415,6 +496,44 @@ const StatisticsScreen = () => {
                     {player.biggestLoss < 0 ? `₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}
                   </div>
                   <div className="stat-label">Worst Loss</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {player.avgWin > 0 ? `+₪${cleanNumber(player.avgWin)}` : '-'}
+                  </div>
+                  <div className="stat-label">Avg Win</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.avgLoss > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {player.avgLoss > 0 ? `₪${cleanNumber(player.avgLoss)}` : '-'}
+                  </div>
+                  <div className="stat-label">Avg Loss</div>
+                </div>
+              </div>
+
+              {/* Additional Stats Row */}
+              <div className="grid grid-4">
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                    {player.avgProfit >= 0 ? '+' : ''}₪{cleanNumber(player.avgProfit)}
+                  </div>
+                  <div className="stat-label">Avg/Game</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value">{player.totalRebuys}</div>
+                  <div className="stat-label">Total Rebuys</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {player.longestWinStreak > 0 ? player.longestWinStreak : '-'}
+                  </div>
+                  <div className="stat-label">Best Streak</div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {player.longestLossStreak > 0 ? player.longestLossStreak : '-'}
+                  </div>
+                  <div className="stat-label">Worst Streak</div>
                 </div>
               </div>
             </div>

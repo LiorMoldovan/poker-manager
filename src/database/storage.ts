@@ -283,10 +283,23 @@ export const getPlayerStats = (): PlayerStats[] => {
   const games = getAllGames().filter(g => g.status === 'completed');
   const completedGameIds = new Set(games.map(g => g.id));
   
+  // Sort games by date for streak calculation
+  const sortedGames = [...games].sort((a, b) => 
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  
   return players.map(player => {
     const playerGames = allGamePlayers.filter(
       gp => gp.playerId === player.id && completedGameIds.has(gp.gameId)
     );
+    
+    // Sort player games by game date
+    const sortedPlayerGames = [...playerGames].sort((a, b) => {
+      const gameA = sortedGames.find(g => g.id === a.gameId);
+      const gameB = sortedGames.find(g => g.id === b.gameId);
+      if (!gameA || !gameB) return 0;
+      return new Date(gameA.createdAt).getTime() - new Date(gameB.createdAt).getTime();
+    });
     
     const gamesPlayed = playerGames.length;
     const totalProfit = playerGames.reduce((sum, pg) => sum + pg.profit, 0);
@@ -295,16 +308,60 @@ export const getPlayerStats = (): PlayerStats[] => {
     const totalRebuys = playerGames.reduce((sum, pg) => sum + pg.rebuys, 0);
     
     // Calculate total gains (sum of positive profits) and total losses (sum of negative profits as positive)
-    const totalGains = playerGames
-      .filter(pg => pg.profit > 0)
-      .reduce((sum, pg) => sum + pg.profit, 0);
-    const totalLosses = Math.abs(playerGames
-      .filter(pg => pg.profit < 0)
-      .reduce((sum, pg) => sum + pg.profit, 0));
+    const winningGames = playerGames.filter(pg => pg.profit > 0);
+    const losingGames = playerGames.filter(pg => pg.profit < 0);
+    const totalGains = winningGames.reduce((sum, pg) => sum + pg.profit, 0);
+    const totalLosses = Math.abs(losingGames.reduce((sum, pg) => sum + pg.profit, 0));
     
     const profits = playerGames.map(pg => pg.profit);
     const biggestWin = profits.length > 0 ? Math.max(...profits, 0) : 0;
     const biggestLoss = profits.length > 0 ? Math.min(...profits, 0) : 0;
+    
+    // Calculate streaks
+    let currentStreak = 0;
+    let longestWinStreak = 0;
+    let longestLossStreak = 0;
+    let tempWinStreak = 0;
+    let tempLossStreak = 0;
+    
+    for (const pg of sortedPlayerGames) {
+      if (pg.profit > 0) {
+        tempWinStreak++;
+        tempLossStreak = 0;
+        if (tempWinStreak > longestWinStreak) longestWinStreak = tempWinStreak;
+      } else if (pg.profit < 0) {
+        tempLossStreak++;
+        tempWinStreak = 0;
+        if (tempLossStreak > longestLossStreak) longestLossStreak = tempLossStreak;
+      } else {
+        // Break-even doesn't break streaks but doesn't extend them either
+      }
+    }
+    
+    // Calculate current streak (from most recent games)
+    for (let i = sortedPlayerGames.length - 1; i >= 0; i--) {
+      const profit = sortedPlayerGames[i].profit;
+      if (profit > 0) {
+        if (currentStreak >= 0) currentStreak++;
+        else break;
+      } else if (profit < 0) {
+        if (currentStreak <= 0) currentStreak--;
+        else break;
+      } else {
+        break; // Break-even ends streak counting
+      }
+    }
+    
+    // Last 5 game results (most recent first)
+    const lastFiveResults = sortedPlayerGames
+      .slice(-5)
+      .reverse()
+      .map(pg => pg.profit);
+    
+    // Average stats
+    const avgRebuysPerGame = gamesPlayed > 0 ? totalRebuys / gamesPlayed : 0;
+    const avgWin = winCount > 0 ? totalGains / winCount : 0;
+    const avgLoss = lossCount > 0 ? totalLosses / lossCount : 0;
     
     return {
       playerId: player.id,
@@ -320,6 +377,13 @@ export const getPlayerStats = (): PlayerStats[] => {
       totalRebuys,
       biggestWin,
       biggestLoss,
+      currentStreak,
+      longestWinStreak,
+      longestLossStreak,
+      lastFiveResults,
+      avgRebuysPerGame,
+      avgWin,
+      avgLoss,
     };
   }).filter(stats => stats.gamesPlayed > 0);
 };

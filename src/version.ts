@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.6';
+export const APP_VERSION = '2.3.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.7',
+    date: '2024-12-14',
+    changes: [
+      'Enriched player statistics with more data',
+      'Added wins/losses count, avg win/loss, best/worst streak',
+      'Added Average Performance records section',
+      'Added Most Wins, Most Losses, Worst Win Rate records',
+      'Fixed streak calculations in storage'
+    ]
+  },
   {
     version: '2.3.6',
     date: '2024-12-14',
