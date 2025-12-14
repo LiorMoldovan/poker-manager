@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.5.1';
+export const APP_VERSION = '1.6.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.6.0',
+    date: '2024-12-14',
+    changes: [
+      'Added collapsible player cards in chip counting',
+      'Added floating progress bar showing count progress',
+      'Tap player header to collapse/expand after counting'
+    ]
+  },
   {
     version: '1.5.1',
     date: '2024-12-14',

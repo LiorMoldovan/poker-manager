@@ -128,6 +128,9 @@ const ChipEntryScreen = () => {
   const [numpadPlayerId, setNumpadPlayerId] = useState('');
   const [numpadChip, setNumpadChip] = useState<ChipValue | null>(null);
   
+  // Collapsed players state
+  const [collapsedPlayers, setCollapsedPlayers] = useState<Set<string>>(new Set());
+  
   // Long-press state
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -227,6 +230,34 @@ const ChipEntryScreen = () => {
     return () => stopLongPress();
   }, [stopLongPress]);
 
+  // Toggle player collapsed state
+  const togglePlayerCollapse = (playerId: string) => {
+    setCollapsedPlayers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(playerId)) {
+        newSet.delete(playerId);
+      } else {
+        newSet.add(playerId);
+      }
+      return newSet;
+    });
+  };
+
+  // Check if player has chips counted
+  const playerHasChips = (playerId: string): boolean => {
+    return getPlayerChipPoints(playerId) > 0;
+  };
+
+  // Calculate progress percentage
+  const progressPercentage = expectedChipPoints > 0 
+    ? Math.min(100, (totalChipPoints / expectedChipPoints) * 100) 
+    : 0;
+  
+  // Count completed players (those with chips who are collapsed)
+  const completedPlayersCount = players.filter(p => 
+    collapsedPlayers.has(p.id) && playerHasChips(p.id)
+  ).length;
+
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
     return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
@@ -283,9 +314,80 @@ const ChipEntryScreen = () => {
 
   return (
     <div className="fade-in">
-      <div className="page-header">
+      {/* Floating Progress Bar */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        background: 'var(--background)',
+        padding: '0.75rem 1rem',
+        marginBottom: '1rem',
+        borderRadius: '0 0 12px 12px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: '600' }}>
+            {completedPlayersCount}/{players.length} players
+          </span>
+          <span style={{ 
+            fontSize: '0.875rem', 
+            fontWeight: '700',
+            color: isBalanced && totalChipPoints > 0 
+              ? '#22c55e' 
+              : totalChipPoints > expectedChipPoints 
+                ? '#ef4444' 
+                : 'var(--text-secondary)'
+          }}>
+            {totalChipPoints.toLocaleString()} / {expectedChipPoints.toLocaleString()} chips
+          </span>
+        </div>
+        
+        {/* Progress bar */}
+        <div style={{
+          height: '8px',
+          background: 'var(--surface)',
+          borderRadius: '4px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${Math.min(progressPercentage, 100)}%`,
+            background: isBalanced && totalChipPoints > 0 
+              ? '#22c55e' 
+              : totalChipPoints > expectedChipPoints 
+                ? '#ef4444' 
+                : progressPercentage > 50 
+                  ? '#f59e0b'
+                  : '#3b82f6',
+            borderRadius: '4px',
+            transition: 'width 0.3s ease, background 0.3s ease'
+          }} />
+        </div>
+        
+        {/* Status text */}
+        <div style={{ 
+          textAlign: 'center', 
+          marginTop: '0.5rem',
+          fontSize: '0.75rem',
+          color: isBalanced && totalChipPoints > 0 
+            ? '#22c55e' 
+            : totalChipPoints > expectedChipPoints 
+              ? '#ef4444' 
+              : 'var(--text-muted)'
+        }}>
+          {isBalanced && totalChipPoints > 0 
+            ? '✓ Chips balanced!' 
+            : totalChipPoints > expectedChipPoints 
+              ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()} over`
+              : totalChipPoints > 0 
+                ? `${(expectedChipPoints - totalChipPoints).toLocaleString()} remaining`
+                : 'Start counting chips'}
+        </div>
+      </div>
+
+      <div className="page-header" style={{ paddingTop: 0 }}>
         <h1 className="page-title">Count Chips</h1>
-        <p className="page-subtitle">Enter chip counts for each player</p>
+        <p className="page-subtitle">Tap player header to collapse when done</p>
       </div>
 
       {/* Live Summary Card */}
@@ -415,22 +517,63 @@ const ChipEntryScreen = () => {
         )}
       </div>
 
-      {players.map(player => (
-        <div key={player.id} className="card">
-          <div className="card-header">
-            <h3 className="card-title">{player.playerName}</h3>
-            <div>
+      {players.map(player => {
+        const isCollapsed = collapsedPlayers.has(player.id);
+        const hasChips = playerHasChips(player.id);
+        
+        return (
+        <div key={player.id} className="card" style={{
+          opacity: isCollapsed ? 0.7 : 1,
+          transition: 'opacity 0.2s ease'
+        }}>
+          {/* Collapsible Header */}
+          <div 
+            className="card-header"
+            onClick={() => togglePlayerCollapse(player.id)}
+            style={{ cursor: 'pointer', userSelect: 'none' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ 
+                display: 'inline-block',
+                transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease',
+                fontSize: '0.75rem',
+                color: 'var(--text-muted)'
+              }}>
+                ▼
+              </span>
+              <h3 className="card-title" style={{ margin: 0 }}>{player.playerName}</h3>
+              {isCollapsed && hasChips && (
+                <span style={{ 
+                  background: '#22c55e', 
+                  color: 'white', 
+                  fontSize: '0.65rem', 
+                  padding: '0.15rem 0.4rem', 
+                  borderRadius: '4px',
+                  fontWeight: '600'
+                }}>
+                  ✓ Done
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span className="text-muted" style={{ fontSize: '0.875rem' }}>
+                {getPlayerChipPoints(player.id).toLocaleString()} chips
+              </span>
               <span className={getProfitColor(getPlayerProfit(player.id))}>
                 {getPlayerProfit(player.id) >= 0 ? '+' : ''}₪{cleanNumber(getPlayerProfit(player.id))}
               </span>
             </div>
           </div>
           
-          <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {cleanNumber(player.rebuys)} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(player.rebuys * rebuyValue)} = {cleanNumber(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
-          </div>
+          {/* Collapsible Content */}
+          {!isCollapsed && (
+            <>
+              <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
+                {cleanNumber(player.rebuys)} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(player.rebuys * rebuyValue)} = {cleanNumber(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
+              </div>
 
-          <div className="chip-grid">
+              <div className="chip-grid">
             {chipValues.map(chip => (
               <div key={chip.id} className="chip-entry-card" style={{ 
                 borderLeft: `4px solid ${chip.displayColor}`,
@@ -500,8 +643,11 @@ const ChipEntryScreen = () => {
           <div style={{ textAlign: 'right', marginTop: '0.75rem', fontWeight: '600' }}>
             Chips: {getPlayerChipPoints(player.id).toLocaleString()} = ₪{cleanNumber(getPlayerMoneyValue(player.id))}
           </div>
+            </>
+          )}
         </div>
-      ))}
+        );
+      })}
 
       {/* Bottom Summary Counter */}
       <div className="card" style={{ 
