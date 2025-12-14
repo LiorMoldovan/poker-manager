@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.0';
+export const APP_VERSION = '2.3.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.1',
+    date: '2024-12-14',
+    changes: [
+      'Restored player selector on chip count page',
+      'Select one player at a time to count chips',
+      'Done button marks player complete and auto-advances',
+      'Tap completed player to edit their count'
+    ]
+  },
   {
     version: '2.3.0',
     date: '2024-12-14',

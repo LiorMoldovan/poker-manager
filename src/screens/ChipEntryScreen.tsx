@@ -130,8 +130,9 @@ const ChipEntryScreen = () => {
   const [numpadPlayerId, setNumpadPlayerId] = useState('');
   const [numpadChip, setNumpadChip] = useState<ChipValue | null>(null);
   
-  // Collapsed players state
-  const [collapsedPlayers, setCollapsedPlayers] = useState<Set<string>>(new Set());
+  // Player selector state
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
@@ -174,8 +175,40 @@ const ChipEntryScreen = () => {
       });
     });
     setChipCounts(initialCounts);
+    // Select first player by default
+    if (gamePlayers.length > 0) {
+      setSelectedPlayerId(gamePlayers[0].id);
+    }
     setIsLoading(false);
   };
+
+  // Mark player as done and move to next
+  const markPlayerDone = (playerId: string) => {
+    setCompletedPlayers(prev => new Set([...prev, playerId]));
+    // Find next uncompleted player
+    const currentIndex = players.findIndex(p => p.id === playerId);
+    const nextPlayer = players.find((p, i) => i > currentIndex && !completedPlayers.has(p.id));
+    if (nextPlayer) {
+      setSelectedPlayerId(nextPlayer.id);
+    } else {
+      // Try from beginning
+      const firstUncompleted = players.find(p => p.id !== playerId && !completedPlayers.has(p.id));
+      setSelectedPlayerId(firstUncompleted?.id || null);
+    }
+  };
+
+  // Undo player completion
+  const undoPlayerCompletion = (playerId: string) => {
+    setCompletedPlayers(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(playerId);
+      return newSet;
+    });
+    setSelectedPlayerId(playerId);
+  };
+
+  const selectedPlayer = players.find(p => p.id === selectedPlayerId);
+  const completedPlayersCount = completedPlayers.size;
 
   // Loading state
   if (isLoading) {
@@ -247,19 +280,6 @@ const ChipEntryScreen = () => {
   const expectedChipPoints = players.reduce((sum, p) => sum + p.rebuys * chipsPerRebuy, 0);
   const isBalanced = totalChipPoints === expectedChipPoints;
 
-  // Toggle player collapsed state
-  const togglePlayerCollapse = (playerId: string) => {
-    setCollapsedPlayers(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(playerId)) {
-        newSet.delete(playerId);
-      } else {
-        newSet.add(playerId);
-      }
-      return newSet;
-    });
-  };
-
   // Calculate progress percentage
   const progressPercentage = expectedChipPoints > 0 
     ? Math.min(100, (totalChipPoints / expectedChipPoints) * 100) 
@@ -289,9 +309,6 @@ const ChipEntryScreen = () => {
     
     return `hsl(${hue}, 80%, 45%)`;
   };
-  
-  // Count completed players (those who are collapsed/marked done)
-  const completedPlayersCount = players.filter(p => collapsedPlayers.has(p.id)).length;
 
   const handleCalculate = () => {
     if (!gameId) return;
@@ -404,62 +421,73 @@ const ChipEntryScreen = () => {
         </div>
       </div>
 
-      {players.map(player => {
-        const isCollapsed = collapsedPlayers.has(player.id);
-        
-        return (
-        <div key={player.id} className="card" style={{
-          opacity: isCollapsed ? 0.7 : 1,
-          transition: 'opacity 0.2s ease'
-        }}>
-          {/* Collapsible Header */}
-          <div 
-            className="card-header"
-            onClick={() => togglePlayerCollapse(player.id)}
-            style={{ cursor: 'pointer', userSelect: 'none' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ 
-                display: 'inline-block',
-                transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease',
-                fontSize: '0.75rem',
-                color: 'var(--text-muted)'
-              }}>
-                ▼
-              </span>
-              <h3 className="card-title" style={{ margin: 0 }}>{player.playerName}</h3>
-              {isCollapsed && (
+      {/* Player Selector */}
+      <div className="card" style={{ padding: '0.75rem' }}>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '600' }}>
+          SELECT PLAYER ({completedPlayersCount}/{players.length} done)
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {players.map(player => {
+            const isCompleted = completedPlayers.has(player.id);
+            const isSelected = selectedPlayerId === player.id;
+            const chips = getPlayerChipPoints(player.id);
+            const profit = getPlayerProfit(player.id);
+            
+            return (
+              <button
+                key={player.id}
+                onClick={() => isCompleted ? undoPlayerCompletion(player.id) : setSelectedPlayerId(player.id)}
+                style={{
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '20px',
+                  border: isSelected ? '2px solid var(--primary)' : isCompleted ? '2px solid #22c55e' : '2px solid var(--border)',
+                  background: isCompleted ? 'rgba(34, 197, 94, 0.15)' : isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  minWidth: '80px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
                 <span style={{ 
-                  background: '#22c55e', 
-                  color: 'white', 
-                  fontSize: '0.65rem', 
-                  padding: '0.15rem 0.4rem', 
-                  borderRadius: '4px',
-                  fontWeight: '600'
+                  fontWeight: '600', 
+                  fontSize: '0.9rem',
+                  color: isCompleted ? '#22c55e' : isSelected ? 'var(--primary)' : 'var(--text)'
                 }}>
-                  ✓ Done
+                  {isCompleted && '✓ '}{player.playerName}
                 </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span className="text-muted" style={{ fontSize: '0.875rem' }}>
-                {getPlayerChipPoints(player.id).toLocaleString()} chips
-              </span>
-              <span className={getProfitColor(getPlayerProfit(player.id))}>
-                {getPlayerProfit(player.id) >= 0 ? '+' : ''}₪{cleanNumber(getPlayerProfit(player.id))}
-              </span>
-            </div>
+                {chips > 0 && (
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    color: profit >= 0 ? 'var(--success)' : 'var(--danger)',
+                    marginTop: '0.15rem'
+                  }}>
+                    {profit >= 0 ? '+' : ''}₪{cleanNumber(profit)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected Player Chip Entry */}
+      {selectedPlayer && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
+            <span className={getProfitColor(getPlayerProfit(selectedPlayer.id))} style={{ fontWeight: '700' }}>
+              {getPlayerProfit(selectedPlayer.id) >= 0 ? '+' : ''}₪{cleanNumber(getPlayerProfit(selectedPlayer.id))}
+            </span>
           </div>
           
-          {/* Collapsible Content */}
-          {!isCollapsed && (
-            <>
-              <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-                {cleanNumber(player.rebuys)} buy-in{player.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(player.rebuys * rebuyValue)} = {cleanNumber(player.rebuys * chipsPerRebuy).toLocaleString()} chips)
-              </div>
+          <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
+            {cleanNumber(selectedPlayer.rebuys)} buy-in{selectedPlayer.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()} chips expected)
+          </div>
 
-              <div className="chip-grid">
+          {/* Chip Grid */}
+          <div className="chip-grid">
             {chipValues.map(chip => (
               <div key={chip.id} className="chip-entry-card" style={{ 
                 borderLeft: `4px solid ${chip.displayColor}`,
@@ -467,9 +495,8 @@ const ChipEntryScreen = () => {
               }}>
                 <div 
                   className="chip-entry-header"
-                  onClick={() => openNumpad(player.id, chip)}
+                  onClick={() => openNumpad(selectedPlayer.id, chip)}
                   style={{ cursor: 'pointer' }}
-                  title="Tap to enter with numpad"
                 >
                   <div 
                     className="chip-circle-small" 
@@ -483,31 +510,23 @@ const ChipEntryScreen = () => {
                 <div className="chip-entry-controls">
                   <button 
                     className="chip-btn chip-btn-minus"
-                    onClick={() => updateChipCount(
-                      player.id, 
-                      chip.id, 
-                      (chipCounts[player.id]?.[chip.id] || 0) - 1
-                    )}
+                    onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) - 1)}
                   >
                     −
                   </button>
                   <input
                     type="number"
                     className="chip-count-input"
-                    value={chipCounts[player.id]?.[chip.id] || 0}
-                    onChange={e => updateChipCount(player.id, chip.id, parseInt(e.target.value) || 0)}
-                    onClick={() => openNumpad(player.id, chip)}
+                    value={chipCounts[selectedPlayer.id]?.[chip.id] || 0}
+                    onChange={e => updateChipCount(selectedPlayer.id, chip.id, parseInt(e.target.value) || 0)}
+                    onClick={() => openNumpad(selectedPlayer.id, chip)}
                     readOnly
                     style={{ cursor: 'pointer' }}
                     min="0"
                   />
                   <button 
                     className="chip-btn chip-btn-plus"
-                    onClick={() => updateChipCount(
-                      player.id, 
-                      chip.id, 
-                      (chipCounts[player.id]?.[chip.id] || 0) + 1
-                    )}
+                    onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) + 1)}
                   >
                     +
                   </button>
@@ -516,44 +535,54 @@ const ChipEntryScreen = () => {
             ))}
           </div>
           
+          {/* Player Total & Done Button */}
           <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginTop: '0.75rem',
-                paddingTop: '0.75rem',
-                borderTop: '1px solid var(--border)'
-              }}>
-                <span style={{ fontWeight: '600' }}>
-                  {getPlayerChipPoints(player.id).toLocaleString()} chips = ₪{cleanNumber(getPlayerMoneyValue(player.id))}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlayerCollapse(player.id);
-                  }}
-                  style={{
-                    background: '#22c55e',
-                    color: 'white',
-                    border: 'none',
-                    padding: '0.5rem 1rem',
-                    borderRadius: '8px',
-                    fontWeight: '600',
-                    fontSize: '0.875rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.25rem'
-                  }}
-                >
-                  ✓ Done
-                </button>
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginTop: '1rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid var(--border)'
+          }}>
+            <div>
+              <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>
+                {getPlayerChipPoints(selectedPlayer.id).toLocaleString()} chips
               </div>
-            </>
-          )}
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                = ₪{cleanNumber(getPlayerMoneyValue(selectedPlayer.id))}
+              </div>
+            </div>
+            <button
+              onClick={() => markPlayerDone(selectedPlayer.id)}
+              style={{
+                background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                color: 'white',
+                border: 'none',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '12px',
+                fontWeight: '700',
+                fontSize: '1rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)'
+              }}
+            >
+              ✓ Done
+            </button>
+          </div>
         </div>
-        );
-      })}
+      )}
+
+      {/* All Players Done Message */}
+      {!selectedPlayer && completedPlayersCount === players.length && players.length > 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
+          <h3 style={{ marginBottom: '0.5rem' }}>All Players Counted!</h3>
+          <p className="text-muted">Click Calculate Results below to finish</p>
+        </div>
+      )}
 
       {/* Fixed Bottom Progress Bar */}
       <div style={{ 
