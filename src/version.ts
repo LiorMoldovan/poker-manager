@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '1.7.2';
+export const APP_VERSION = '1.7.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.7.3',
+    date: '2024-12-14',
+    changes: [
+      'Players with 0 chips can now be marked as Done',
+      'Removed long-press rapid increment feature',
+      'Simplified +/- button behavior'
+    ]
+  },
   {
     version: '1.7.2',
     date: '2024-12-14',

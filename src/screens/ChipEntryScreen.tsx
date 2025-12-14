@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, ChipValue } from '../types';
 import { 
@@ -130,10 +130,6 @@ const ChipEntryScreen = () => {
   
   // Collapsed players state
   const [collapsedPlayers, setCollapsedPlayers] = useState<Set<string>>(new Set());
-  
-  // Long-press state
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
@@ -191,45 +187,6 @@ const ChipEntryScreen = () => {
     }
   };
 
-  // Long-press handlers for rapid increment/decrement
-  const startLongPress = useCallback((playerId: string, chipId: string, delta: number) => {
-    // Clear any existing intervals
-    stopLongPress();
-    
-    // Start rapid increment after 300ms delay
-    timeoutRef.current = setTimeout(() => {
-      intervalRef.current = setInterval(() => {
-        setChipCounts(prev => {
-          const currentValue = prev[playerId]?.[chipId] || 0;
-          const newValue = Math.max(0, currentValue + delta);
-          return {
-            ...prev,
-            [playerId]: {
-              ...prev[playerId],
-              [chipId]: newValue,
-            },
-          };
-        });
-      }, 80); // Rapid fire every 80ms
-    }, 300);
-  }, []);
-
-  const stopLongPress = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => stopLongPress();
-  }, [stopLongPress]);
-
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
     return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
@@ -266,11 +223,6 @@ const ChipEntryScreen = () => {
     });
   };
 
-  // Check if player has chips counted
-  const playerHasChips = (playerId: string): boolean => {
-    return getPlayerChipPoints(playerId) > 0;
-  };
-
   // Calculate progress percentage
   const progressPercentage = expectedChipPoints > 0 
     ? Math.min(100, (totalChipPoints / expectedChipPoints) * 100) 
@@ -289,10 +241,8 @@ const ChipEntryScreen = () => {
     return `hsl(${hue}, 75%, 45%)`;
   };
   
-  // Count completed players (those with chips who are collapsed)
-  const completedPlayersCount = players.filter(p => 
-    collapsedPlayers.has(p.id) && playerHasChips(p.id)
-  ).length;
+  // Count completed players (those who are collapsed/marked done)
+  const completedPlayersCount = players.filter(p => collapsedPlayers.has(p.id)).length;
 
   const handleCalculate = () => {
     if (!gameId) return;
@@ -461,7 +411,6 @@ const ChipEntryScreen = () => {
 
       {players.map(player => {
         const isCollapsed = collapsedPlayers.has(player.id);
-        const hasChips = playerHasChips(player.id);
         
         return (
         <div key={player.id} className="card" style={{
@@ -485,7 +434,7 @@ const ChipEntryScreen = () => {
                 ▼
               </span>
               <h3 className="card-title" style={{ margin: 0 }}>{player.playerName}</h3>
-              {isCollapsed && hasChips && (
+              {isCollapsed && (
                 <span style={{ 
                   background: '#22c55e', 
                   color: 'white', 
@@ -544,11 +493,6 @@ const ChipEntryScreen = () => {
                       chip.id, 
                       (chipCounts[player.id]?.[chip.id] || 0) - 1
                     )}
-                    onMouseDown={() => startLongPress(player.id, chip.id, -1)}
-                    onMouseUp={stopLongPress}
-                    onMouseLeave={stopLongPress}
-                    onTouchStart={() => startLongPress(player.id, chip.id, -1)}
-                    onTouchEnd={stopLongPress}
                   >
                     −
                   </button>
@@ -569,11 +513,6 @@ const ChipEntryScreen = () => {
                       chip.id, 
                       (chipCounts[player.id]?.[chip.id] || 0) + 1
                     )}
-                    onMouseDown={() => startLongPress(player.id, chip.id, 1)}
-                    onMouseUp={stopLongPress}
-                    onMouseLeave={stopLongPress}
-                    onTouchStart={() => startLongPress(player.id, chip.id, 1)}
-                    onTouchEnd={stopLongPress}
                   >
                     +
                   </button>
@@ -599,8 +538,8 @@ const ChipEntryScreen = () => {
                     togglePlayerCollapse(player.id);
                   }}
                   style={{
-                    background: hasChips ? '#22c55e' : 'var(--surface)',
-                    color: hasChips ? 'white' : 'var(--text-muted)',
+                    background: '#22c55e',
+                    color: 'white',
                     border: 'none',
                     padding: '0.5rem 1rem',
                     borderRadius: '8px',
