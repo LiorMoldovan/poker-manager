@@ -660,19 +660,19 @@ th {
 /* Summary section */
 .summary-card {
   background: linear-gradient(135deg, var(--primary-dark), var(--secondary));
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
 }
 
 .summary-title {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   opacity: 0.9;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .summary-value {
-  font-size: 2rem;
+  font-size: 1.25rem;
   font-weight: 700;
 }
 
