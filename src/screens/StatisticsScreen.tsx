@@ -520,7 +520,7 @@ const StatisticsScreen = () => {
                   <div className="stat-label">Avg/Game</div>
                 </div>
                 <div className="stat-card">
-                  <div className="stat-value">{player.totalRebuys}</div>
+                  <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
                   <div className="stat-label">Total Rebuys</div>
                 </div>
                 <div className="stat-card">
