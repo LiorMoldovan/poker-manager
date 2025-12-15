@@ -12,7 +12,6 @@ const GameDetailsScreen = () => {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
   const [gameDate, setGameDate] = useState('');
-  const [rebuyValue, setRebuyValue] = useState(50);
   const [chipGap, setChipGap] = useState<number | null>(null);
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,7 +75,6 @@ const GameDetailsScreen = () => {
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
-    setRebuyValue(settings.rebuyValue);
     
     const { settlements: settl, smallTransfers: small } = calculateSettlement(
       gamePlayers, 
@@ -163,8 +161,6 @@ const GameDetailsScreen = () => {
     }
   };
 
-  const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
-
   return (
     <div className="fade-in">
       <button 
@@ -188,23 +184,13 @@ const GameDetailsScreen = () => {
           </p>
         </div>
 
-        <div className="grid grid-3 mb-2">
-          <div className="stat-card">
-            <div className="stat-value">{players.length}</div>
-            <div className="stat-label">Players</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">₪{cleanNumber(totalPot)}</div>
-            <div className="stat-label">Total Pot</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-value">{cleanNumber(players.reduce((sum, p) => sum + p.rebuys, 0))}</div>
-            <div className="stat-label">Total Buy-ins</div>
-          </div>
-        </div>
-
         <div className="card" style={{ overflow: 'hidden' }}>
-          <h2 className="card-title mb-2">Results</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>Results</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Total Rebuys: <span style={{ color: 'var(--text)', fontWeight: '600' }}>{Math.round(players.reduce((sum, p) => sum + p.rebuys, 0))}</span>
+            </div>
+          </div>
           <table style={{ fontSize: '0.85rem', width: '100%', tableLayout: 'fixed' }}>
             <thead>
               <tr>

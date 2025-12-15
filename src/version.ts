@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.5.5';
+export const APP_VERSION = '2.5.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.5.6',
+    date: '2024-12-15',
+    changes: [
+      'Simplified Game Details - removed stat tiles, added Total Rebuys to Results header'
+    ]
+  },
   {
     version: '2.5.5',
     date: '2024-12-15',
