@@ -94,6 +94,9 @@ export const initializeStorage = (): void => {
   if (!localStorage.getItem(STORAGE_KEYS.GAME_PLAYERS)) {
     setItem(STORAGE_KEYS.GAME_PLAYERS, []);
   }
+  
+  // Import historical games if not already imported
+  importDec7GameIfNeeded();
 };
 
 // Players
@@ -410,5 +413,86 @@ export const getPlayerStats = (): PlayerStats[] => {
       avgLoss,
     };
   }).filter(stats => stats.gamesPlayed > 0);
+};
+
+// Import a historical completed game (safe - only adds data, doesn't modify existing)
+export const importHistoricalGame = (
+  gameDate: string,
+  playersData: Array<{
+    playerName: string;
+    rebuys: number;
+    chipCounts: Record<string, number>;
+    finalValue: number;
+    profit: number;
+  }>
+): Game | null => {
+  const players = getAllPlayers();
+  const games = getAllGames();
+  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  
+  // Check if a game with this exact date already exists (prevent duplicates)
+  const existingGame = games.find(g => g.date.startsWith(gameDate.split('T')[0]));
+  if (existingGame) {
+    console.log('Game for this date already exists, skipping import');
+    return null;
+  }
+  
+  const gameId = generateId();
+  const newGame: Game = {
+    id: gameId,
+    date: gameDate,
+    status: 'completed',
+    createdAt: gameDate,
+  };
+  
+  // Create GamePlayer entries
+  playersData.forEach(pd => {
+    const player = players.find(p => p.name === pd.playerName);
+    if (player) {
+      gamePlayers.push({
+        id: generateId(),
+        gameId,
+        playerId: player.id,
+        playerName: pd.playerName,
+        rebuys: pd.rebuys,
+        chipCounts: pd.chipCounts,
+        finalValue: pd.finalValue,
+        profit: pd.profit,
+      });
+    }
+  });
+  
+  games.push(newGame);
+  setItem(STORAGE_KEYS.GAMES, games);
+  setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
+  
+  return newGame;
+};
+
+// Check if Dec 7 game needs to be imported
+export const importDec7GameIfNeeded = (): void => {
+  const games = getAllGames();
+  
+  // Check if Dec 7 game already exists
+  const dec7Exists = games.some(g => g.date.includes('2024-12-07'));
+  if (dec7Exists) {
+    return; // Already imported
+  }
+  
+  // Dec 7, 2024 game data
+  // Chip values: White=50, Red=100, Blue=200, Green=500, Black=1000, Yellow=5000
+  const dec7Data = [
+    { playerName: 'אייל', rebuys: 2.5, chipCounts: { '1': 14, '2': 14, '3': 11, '4': 25, '5': 11, '6': 6 }, finalValue: 57800, profit: 98.4 },
+    { playerName: 'ליאור', rebuys: 2, chipCounts: { '1': 1, '2': 7, '3': 7, '4': 12, '5': 24, '6': 7 }, finalValue: 67150, profit: 141.5 },
+    { playerName: 'ארז', rebuys: 3, chipCounts: { '1': 9, '2': 0, '3': 9, '4': 1, '5': 2, '6': 13 }, finalValue: 69750, profit: 119.3 },
+    { playerName: 'ליכטר', rebuys: 6, chipCounts: { '1': 7, '2': 1, '3': 11, '4': 10, '5': 3, '6': 2 }, finalValue: 20650, profit: -118.1 },
+    { playerName: 'תומר', rebuys: 3, chipCounts: { '1': 49, '2': 13, '3': 10, '4': 0, '5': 3, '6': 9 }, finalValue: 53750, profit: 71.3 },
+    { playerName: 'אסף', rebuys: 3, chipCounts: { '1': 7, '2': 3, '3': 0, '4': 0, '5': 4, '6': 0 }, finalValue: 4650, profit: -76.1 },
+    { playerName: 'סגל', rebuys: 8, chipCounts: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }, finalValue: 0, profit: -240.0 },
+    { playerName: 'אורן', rebuys: 2, chipCounts: { '1': 13, '2': 11, '3': 2, '4': 2, '5': 3, '6': 3 }, finalValue: 21150, profit: 3.5 },
+  ];
+  
+  importHistoricalGame('2024-12-07T22:00:00.000Z', dec7Data);
+  console.log('Dec 7, 2024 game imported successfully!');
 };
 
