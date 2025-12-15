@@ -200,10 +200,9 @@ const SettingsScreen = () => {
       {/* Tabs */}
       <div style={{ 
         display: 'flex', 
-        gap: '0.25rem', 
-        marginBottom: '1rem',
-        overflowX: 'auto',
-        paddingBottom: '0.25rem'
+        flexWrap: 'wrap',
+        gap: '0.35rem', 
+        marginBottom: '1rem'
       }}>
         {tabs.map(tab => (
           <button

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.3';
+export const APP_VERSION = '2.7.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.7.4',
+    date: '2024-12-15',
+    changes: [
+      'Settings tabs now wrap to new line instead of scrolling'
+    ]
+  },
   {
     version: '2.7.3',
     date: '2024-12-15',
