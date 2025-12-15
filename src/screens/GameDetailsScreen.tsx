@@ -145,7 +145,7 @@ const GameDetailsScreen = () => {
                   {player.playerName}
                 </td>
                 <td style={{ textAlign: 'center' }}>{cleanNumber(player.rebuys)}</td>
-                <td style={{ textAlign: 'right' }}>₪{cleanNumber(player.finalValue)}</td>
+                <td style={{ textAlign: 'right' }}>{player.finalValue > 0 ? `${(player.finalValue / 1000).toFixed(0)}k` : '0'}</td>
                 <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
                   {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
                 </td>

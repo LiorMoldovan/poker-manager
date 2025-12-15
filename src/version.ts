@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.4.5';
+export const APP_VERSION = '2.4.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.6',
+    date: '2024-12-15',
+    changes: [
+      'Fixed Chips column in Game Details - shows chips not shekels'
+    ]
+  },
   {
     version: '2.4.5',
     date: '2024-12-15',
