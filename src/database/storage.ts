@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   GAME_PLAYERS: 'poker_game_players',
   CHIP_VALUES: 'poker_chip_values',
   SETTINGS: 'poker_settings',
+  BACKUPS: 'poker_backups',
+  LAST_BACKUP_DATE: 'poker_last_backup_date',
 };
 
 // Generate unique ID
@@ -97,6 +99,9 @@ export const initializeStorage = (): void => {
   
   // Import historical games if not already imported
   importDec6GameIfNeeded();
+  
+  // Check for automatic Sunday backup
+  checkAndAutoBackup();
 };
 
 // Players
@@ -494,5 +499,138 @@ export const importDec6GameIfNeeded = (): void => {
   
   importHistoricalGame('2024-12-06T22:00:00.000Z', dec6Data);
   console.log('Dec 6, 2024 game imported successfully!');
+};
+
+// ==================== BACKUP & RESTORE ====================
+
+export interface BackupData {
+  id: string;
+  date: string;
+  players: Player[];
+  games: Game[];
+  gamePlayers: GamePlayer[];
+  chipValues: ChipValue[];
+  settings: Settings;
+}
+
+// Create a backup of all data
+export const createBackup = (isAutomatic: boolean = false): BackupData => {
+  const backup: BackupData = {
+    id: generateId(),
+    date: new Date().toISOString(),
+    players: getAllPlayers(),
+    games: getAllGames(),
+    gamePlayers: getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []),
+    chipValues: getChipValues(),
+    settings: getSettings(),
+  };
+  
+  // Save to backups list
+  const backups = getBackups();
+  backups.unshift(backup); // Add to beginning (newest first)
+  
+  // Keep only last 4 backups
+  while (backups.length > 4) {
+    backups.pop();
+  }
+  
+  setItem(STORAGE_KEYS.BACKUPS, backups);
+  
+  if (isAutomatic) {
+    // Record that we did an auto-backup today
+    setItem(STORAGE_KEYS.LAST_BACKUP_DATE, new Date().toDateString());
+  }
+  
+  return backup;
+};
+
+// Get all available backups
+export const getBackups = (): BackupData[] => {
+  return getItem<BackupData[]>(STORAGE_KEYS.BACKUPS, []);
+};
+
+// Get last backup date
+export const getLastBackupDate = (): string | null => {
+  const backups = getBackups();
+  if (backups.length === 0) return null;
+  return backups[0].date;
+};
+
+// Restore from a backup
+export const restoreFromBackup = (backupId: string): boolean => {
+  const backups = getBackups();
+  const backup = backups.find(b => b.id === backupId);
+  
+  if (!backup) return false;
+  
+  // Restore all data
+  setItem(STORAGE_KEYS.PLAYERS, backup.players);
+  setItem(STORAGE_KEYS.GAMES, backup.games);
+  setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
+  setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
+  setItem(STORAGE_KEYS.SETTINGS, backup.settings);
+  
+  return true;
+};
+
+// Download backup as JSON file
+export const downloadBackup = (): void => {
+  const backup = createBackup(false);
+  const dataStr = JSON.stringify(backup, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `poker-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  
+  URL.revokeObjectURL(url);
+};
+
+// Import backup from JSON file
+export const importBackupFromFile = (jsonData: string): boolean => {
+  try {
+    const backup = JSON.parse(jsonData) as BackupData;
+    
+    // Validate backup structure
+    if (!backup.players || !backup.games || !backup.gamePlayers || !backup.chipValues || !backup.settings) {
+      console.error('Invalid backup file structure');
+      return false;
+    }
+    
+    // Restore all data
+    setItem(STORAGE_KEYS.PLAYERS, backup.players);
+    setItem(STORAGE_KEYS.GAMES, backup.games);
+    setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
+    setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
+    setItem(STORAGE_KEYS.SETTINGS, backup.settings);
+    
+    return true;
+  } catch (error) {
+    console.error('Error importing backup:', error);
+    return false;
+  }
+};
+
+// Check if we should auto-backup (Sunday and not already backed up today)
+export const checkAndAutoBackup = (): boolean => {
+  const today = new Date();
+  const isSunday = today.getDay() === 0;
+  
+  if (!isSunday) return false;
+  
+  const lastBackupDate = getItem<string | null>(STORAGE_KEYS.LAST_BACKUP_DATE, null);
+  const todayStr = today.toDateString();
+  
+  if (lastBackupDate === todayStr) {
+    // Already backed up today
+    return false;
+  }
+  
+  // Create automatic backup
+  createBackup(true);
+  console.log('Automatic Sunday backup created!');
+  return true;
 };
 

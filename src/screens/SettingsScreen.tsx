@@ -10,7 +10,14 @@ import {
   deleteChipValue,
   getSettings, 
   saveSettings,
-  getPlayerByName
+  getPlayerByName,
+  getBackups,
+  getLastBackupDate,
+  createBackup,
+  restoreFromBackup,
+  downloadBackup,
+  importBackupFromFile,
+  BackupData
 } from '../database/storage';
 import { APP_VERSION, CHANGELOG } from '../version';
 
@@ -25,6 +32,11 @@ const SettingsScreen = () => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
+  const [backups, setBackups] = useState<BackupData[]>([]);
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
+  const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -34,6 +46,8 @@ const SettingsScreen = () => {
     setSettings(getSettings());
     setChipValues(getChipValues());
     setPlayers(getAllPlayers());
+    setBackups(getBackups());
+    setLastBackup(getLastBackupDate());
   };
 
   const handleSettingsChange = (key: keyof Settings, value: number) => {
@@ -99,6 +113,64 @@ const SettingsScreen = () => {
       setChipValues(chipValues.map(c => c.id === chipId ? updated : c));
       showSaved();
     }
+  };
+
+  // Backup handlers
+  const handleCreateBackup = () => {
+    createBackup(false);
+    setBackups(getBackups());
+    setLastBackup(getLastBackupDate());
+    setBackupMessage({ type: 'success', text: 'Backup created successfully!' });
+    setTimeout(() => setBackupMessage(null), 3000);
+  };
+
+  const handleDownloadBackup = () => {
+    downloadBackup();
+    setBackupMessage({ type: 'success', text: 'Backup downloaded!' });
+    setTimeout(() => setBackupMessage(null), 3000);
+  };
+
+  const handleRestore = (backupId: string) => {
+    const success = restoreFromBackup(backupId);
+    if (success) {
+      setBackupMessage({ type: 'success', text: 'Data restored successfully! Reloading...' });
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      setBackupMessage({ type: 'error', text: 'Failed to restore backup' });
+    }
+    setShowRestoreModal(false);
+    setRestoreConfirm(null);
+  };
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      const success = importBackupFromFile(content);
+      if (success) {
+        setBackupMessage({ type: 'success', text: 'Backup imported successfully! Reloading...' });
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setBackupMessage({ type: 'error', text: 'Failed to import backup - invalid file' });
+        setTimeout(() => setBackupMessage(null), 3000);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    event.target.value = '';
+  };
+
+  const formatBackupDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -228,6 +300,55 @@ const SettingsScreen = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Backup & Restore */}
+      <div className="card">
+        <h2 className="card-title mb-2">📦 Backup & Restore</h2>
+        
+        {backupMessage && (
+          <div style={{ 
+            padding: '0.75rem', 
+            marginBottom: '1rem',
+            borderRadius: '8px',
+            background: backupMessage.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderLeft: `4px solid ${backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)'}`
+          }}>
+            <p style={{ color: backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)', margin: 0 }}>
+              {backupMessage.text}
+            </p>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '1rem' }}>
+          <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+            Last backup: {lastBackup ? formatBackupDate(lastBackup) : 'Never'}
+          </p>
+          <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+            Auto-backup runs every Sunday when you open the app
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button className="btn btn-primary" onClick={handleCreateBackup}>
+            💾 Backup Now
+          </button>
+          <button className="btn btn-secondary" onClick={handleDownloadBackup}>
+            📥 Download Backup
+          </button>
+          <button className="btn btn-outline" onClick={() => setShowRestoreModal(true)}>
+            🔄 Restore from Backup
+          </button>
+          <label className="btn btn-outline" style={{ textAlign: 'center', cursor: 'pointer' }}>
+            📤 Import from File
+            <input 
+              type="file" 
+              accept=".json"
+              onChange={handleImportFile}
+              style={{ display: 'none' }}
+            />
+          </label>
+        </div>
       </div>
 
       {/* Version Info */}
@@ -395,6 +516,66 @@ const SettingsScreen = () => {
                 Add Chip
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restore Backup Modal */}
+      {showRestoreModal && (
+        <div className="modal-overlay" onClick={() => { setShowRestoreModal(false); setRestoreConfirm(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Restore from Backup</h3>
+              <button className="modal-close" onClick={() => { setShowRestoreModal(false); setRestoreConfirm(null); }}>×</button>
+            </div>
+            
+            {restoreConfirm ? (
+              <>
+                <p style={{ marginBottom: '1rem', color: 'var(--warning)' }}>
+                  ⚠️ This will replace ALL current data with the backup from {formatBackupDate(backups.find(b => b.id === restoreConfirm)?.date || '')}.
+                </p>
+                <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
+                  This action cannot be undone. Consider downloading current data first.
+                </p>
+                <div className="actions">
+                  <button className="btn btn-secondary" onClick={() => setRestoreConfirm(null)}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-danger" onClick={() => handleRestore(restoreConfirm)}>
+                    Restore
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {backups.length === 0 ? (
+                  <p className="text-muted">No backups available yet. Create a backup first.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {backups.map((backup, index) => (
+                      <button
+                        key={backup.id}
+                        className="btn btn-outline"
+                        style={{ textAlign: 'left', justifyContent: 'space-between', display: 'flex' }}
+                        onClick={() => setRestoreConfirm(backup.id)}
+                      >
+                        <span>{formatBackupDate(backup.date)}</span>
+                        <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                          {index === 0 ? '(Latest)' : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button 
+                  className="btn btn-secondary mt-2" 
+                  style={{ width: '100%' }}
+                  onClick={() => setShowRestoreModal(false)}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

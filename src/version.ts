@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.5.6';
+export const APP_VERSION = '2.6.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.6.0',
+    date: '2024-12-15',
+    changes: [
+      'Added Backup & Restore feature in Settings',
+      'Auto-backup every Sunday on app open',
+      'Manual backup, download, and import options',
+      'Keeps last 4 backups (1 month)'
+    ]
+  },
   {
     version: '2.5.6',
     date: '2024-12-15',
