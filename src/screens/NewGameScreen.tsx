@@ -86,262 +86,158 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // Generate forecast with matched expected profit and sentence
-  const generateForecast = (stats: PlayerStats | undefined, playerName: string): { expected: number; sentence: string } => {
-    // New player - no data
-    if (!stats || stats.gamesPlayed === 0) {
-      const newPlayerSentences = [
-        `🆕 ${playerName} מגיע בלי היסטוריה - הכל פתוח! מזל מתחילים או טעות מתחילים? רק הלילה יגלה`,
-        `🎲 שחקן חדש בזירה! ${playerName} יכול להפתיע לטוב או לרע - אין לנו מושג מה יקרה`,
-        `👀 ${playerName} הוא חידה עטופה בתעלומה. בלי נתונים, בלי תחזית - רק הרגשת בטן`,
-        `🐣 טירון על השולחן! ${playerName} עדיין לא נחשף לחוקי המשחק האמיתיים. יתחיל בגדול או יפול קשה?`,
-        `❓ ${playerName} הוא סימן שאלה ענק. יכול להיות הכוכב של הלילה או התרומה הגדולה`,
-        `🎭 פנים חדשות! ${playerName} מביא אנרגיה לא ידועה - מסוכן או קורבן קל?`,
-        `🌟 ${playerName} עולה לבמה בפעם הראשונה. האם זו תהיה הופעת בכורה מרשימה או אסון על הבמה?`,
-        `🎪 ${playerName} נכנס למעגל הקסמים. מה שיקרה הלילה יכתוב את ההיסטוריה שלו`,
-      ];
-      return {
-        expected: 0,
-        sentence: newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)]
-      };
-    }
-
-    const { avgProfit, currentStreak, winPercentage, biggestWin, biggestLoss, gamesPlayed, totalProfit } = stats;
-    const random = Math.random();
-    
-    // 12% chance for SURPRISE prediction (against the trend)
-    const isSurprise = random < 0.12;
-    
-    // Calculate base expected profit
-    let expected = Math.round(avgProfit);
-    
-    // Adjust based on streak
-    if (currentStreak >= 2) expected = Math.round(expected * 1.2);
-    if (currentStreak <= -2) expected = Math.round(expected * 0.8);
-    
-    // Big winner with good track record
-    if (avgProfit > 50) {
-      if (isSurprise) {
-        // Predict bad night for usually good player
-        expected = Math.round(-Math.abs(avgProfit) * 0.5);
-        const surpriseSentences = [
-          `⚠️ ${playerName} תמיד מנצח, אבל משהו באוויר אומר שהלילה יהיה שונה. גם לאלופים יש לילות קשים - והלילה נראה כזה`,
-          `🔄 ${playerName} רגיל לשלוט, אבל הכוכבים מסמנים הפתעה. בניגוד להיסטוריה המרשימה - תחושת בטן אומרת שהיום קשה`,
-          `🌙 ${playerName} הוא מכונת רווחים, אבל אפילו מכונות מתקלקלות. הלילה יכול להיות הלילה שהמזל מסתובב`,
-          `💫 ${playerName} עם ממוצע רווח של ${Math.round(avgProfit)}₪, אבל התחזית הלילה? הפתעה שלילית באופק. לפעמים הסטטיסטיקה משקרת`,
-          `🎲 כולם יודעים ש${playerName} מנצח, אבל הלילה מרגיש אחרת. תחזית אמיצה: הפסד בניגוד לכל ההיגיון`,
-        ];
-        return { expected, sentence: surpriseSentences[Math.floor(Math.random() * surpriseSentences.length)] };
-      }
-      
-      const winnerSentences = [
-        `🔥 ${playerName} הוא הסיוט של השולחן! ממוצע רווח של ${Math.round(avgProfit)}₪ למשחק - פשוט מכונת כסף. תתכוננו להפסיד`,
-        `👑 ${playerName} הוא המלך הבלתי מעורער. עם ${Math.round(winPercentage)}% נצחונות, השאלה היא לא אם ירוויח אלא כמה`,
-        `🦈 התראת כריש! ${playerName} מריח דם ובא לטרוף. ${gamesPlayed} משחקים של שליטה - תחביאו את הארנקים`,
-        `💰 ${playerName} הוא הבנקאי הלא רשמי של הקבוצה. כבר הרוויח ${Math.round(totalProfit)}₪ בסך הכל - והלילה ימשיך את המגמה`,
-        `🏆 ${playerName} פשוט ברמה אחרת. ניצחון אחרי ניצחון, ${currentStreak > 0 ? `עם ${currentStreak} נצחונות ברצף` : 'עם עקביות מפחידה'}. תתכוננו`,
-        `⚔️ ${playerName} הוא לוחם ותיק עם ידיים מנצחות. הרווח הממוצע שלו (${Math.round(avgProfit)}₪) אומר הכל - זה לא מזל, זה כישרון`,
-        `🎯 ${playerName} יורה ופוגע. אחוזי הניצחון שלו (${Math.round(winPercentage)}%) הופכים אותו למסוכן ביותר הלילה`,
-        `💎 ${playerName} הפך את הפוקר לעסק רווחי. עם הרקורד שלו, הלילה צפוי להיות עוד יום משכורת`,
-      ];
-      return { expected, sentence: winnerSentences[Math.floor(Math.random() * winnerSentences.length)] };
-    }
-    
-    // Good winner (avg 20-50)
-    if (avgProfit > 20) {
-      if (isSurprise) {
-        expected = Math.round(-avgProfit * 0.7);
-        const surpriseSentences = [
-          `🔄 ${playerName} בדרך כלל ברווח, אבל הלילה מרגיש אחרת. תחושת בטן: הפסד מפתיע באופק`,
-          `⚠️ ${playerName} עם ממוצע חיובי, אבל משהו ישתנה הלילה. התחזית הלא קונבנציונלית: ירידה`,
-        ];
-        return { expected, sentence: surpriseSentences[Math.floor(Math.random() * surpriseSentences.length)] };
-      }
-      
-      const goodWinnerSentences = [
-        `📈 ${playerName} במגמת עלייה יציבה! ממוצע של ${Math.round(avgProfit)}₪ למשחק - לא הכי גדול אבל עקבי ומסוכן`,
-        `🎯 ${playerName} עושה כסף בשקט בלי להתרברב. ${Math.round(winPercentage)}% נצחונות - שחקן חכם שכדאי לשים עליו עין`,
-        `💵 ${playerName} הוא סוג השחקן שלא שמים לב אליו עד שמגלים שהוא לקח את כל הכסף. צפי: רווח נאה`,
-        `🌱 ${playerName} צומח בכל משחק! עם ${gamesPlayed} משחקים תחת החגורה ומגמה חיובית, הלילה נראה מבטיח`,
-        `✨ ${playerName} הוכיח את עצמו עם ${Math.round(totalProfit)}₪ רווח כולל. לא מפציץ, אבל בהחלט מרוויח`,
-      ];
-      return { expected, sentence: goodWinnerSentences[Math.floor(Math.random() * goodWinnerSentences.length)] };
-    }
-    
-    // Big loser (avg < -50)
-    if (avgProfit < -50) {
-      if (isSurprise) {
-        // Predict good night for usually bad player
-        expected = Math.round(Math.abs(avgProfit) * 0.6);
-        const surpriseSentences = [
-          `✨ ${playerName} תמיד מפסיד, אבל הלילה הכל משתנה! תחושה חזקה שזה יהיה הלילה של הקאמבק הגדול`,
-          `🌈 ${playerName} עם ממוצע הפסד של ${Math.round(Math.abs(avgProfit))}₪, אבל בניגוד לכל ההיגיון - הלילה הוא ינצח!`,
-          `🦋 ${playerName} היה הזחל של הקבוצה, אבל הלילה הוא יהפוך לפרפר! תחזית מפתיעה: רווח משמעותי`,
-          `🚀 ${playerName} נמצא בתחתית הטבלה, אבל משהו באוויר אומר שהלילה הכל מתהפך. תתכוננו להפתעה!`,
-          `💫 ${playerName} הפסיד ${Math.round(Math.abs(totalProfit))}₪ בסך הכל, אבל הכוכבים מסמנים מהפך. הלילה של הנקמה!`,
-        ];
-        return { expected, sentence: surpriseSentences[Math.floor(Math.random() * surpriseSentences.length)] };
-      }
-      
-      const loserSentences = [
-        `💸 ${playerName} הוא ראש מחלקת התרומות של הקבוצה! ממוצע הפסד של ${Math.round(Math.abs(avgProfit))}₪ - תודה על המימון`,
-        `🏧 ${playerName} הוא הכספומט הרשמי של הערב. כבר תרם ${Math.round(Math.abs(totalProfit))}₪ לקבוצה - והלילה ימשיך`,
-        `🎁 ${playerName} הוא הספונסר האהוב על כולם! עם ${Math.round(100 - winPercentage)}% הפסדים, הוא הסיבה שיש משקאות`,
-        `📉 ${playerName} מתמיד בירידה. ${gamesPlayed} משחקים של הפסדים עקביים - לפחות הוא אמין`,
-        `😇 ${playerName} ממן את החלומות של כולם! ממוצע הפסד של ${Math.round(Math.abs(avgProfit))}₪ - גיבור אמיתי`,
-        `🕳️ ${playerName} כבר בבור של ${Math.round(Math.abs(totalProfit))}₪. הלילה? כנראה יחפור עוד קצת`,
-        `💔 ${playerName} והפוקר - סיפור אהבה חד צדדי. הוא אוהב את המשחק, המשחק לא אוהב אותו בחזרה`,
-        `🌧️ ${playerName} מביא את העננים איתו. עם רצף של הפסדים, השמש לא צפויה לזרוח הלילה`,
-      ];
-      return { expected, sentence: loserSentences[Math.floor(Math.random() * loserSentences.length)] };
-    }
-    
-    // Moderate loser (avg -20 to -50)
-    if (avgProfit < -20) {
-      if (isSurprise) {
-        expected = Math.round(Math.abs(avgProfit) * 0.8);
-        const surpriseSentences = [
-          `🌈 ${playerName} בדרך כלל מפסיד, אבל הלילה יש תחושה של מהפך! אולי סוף סוף המזל יחייך`,
-          `✨ ${playerName} מגיע עם היסטוריה בינונית, אבל משהו מיוחד באוויר. תחזית: הפתעה חיובית!`,
-        ];
-        return { expected, sentence: surpriseSentences[Math.floor(Math.random() * surpriseSentences.length)] };
-      }
-      
-      const moderateLoserSentences = [
-        `📉 ${playerName} במגמת ירידה עקבית. ממוצע של ${Math.round(Math.abs(avgProfit))}₪ הפסד - לא נורא אבל גם לא טוב`,
-        `🎢 ${playerName} על רכבת הרים שרק יורדת. ${Math.round(winPercentage)}% נצחונות זה לא מספיק`,
-        `🌧️ ${playerName} חי תחת ענן אפור. הפסד ממוצע של ${Math.round(Math.abs(avgProfit))}₪ - והלילה לא נראה שונה`,
-        `💭 ${playerName} חולם על ימים טובים יותר, אבל הסטטיסטיקה מראה תמונה אחרת. צפי: הפסד קל עד בינוני`,
-        `🤔 ${playerName} צריך לשנות אסטרטגיה. עם ${gamesPlayed} משחקים של תוצאות בינוניות-שליליות, הלילה לא צפוי להיות שונה`,
-      ];
-      return { expected, sentence: moderateLoserSentences[Math.floor(Math.random() * moderateLoserSentences.length)] };
-    }
-    
-    // Hot winning streak (3+)
-    if (currentStreak >= 3) {
-      expected = Math.round(Math.max(avgProfit * 1.3, 30));
-      const hotStreakSentences = [
-        `🔥 ${playerName} על רצף לוהט! ${currentStreak} נצחונות ברצף - היד חמה והלילה צפוי להמשיך את המגמה!`,
-        `⚡ ${playerName} בלתי ניתן לעצירה! אחרי ${currentStreak} נצחונות, הביטחון בשמיים והכסף זורם`,
-        `🚀 ${playerName} בדרך לירח! ${currentStreak} משחקים ברצף של הצלחה - מי יעצור אותו?`,
-        `💥 ${playerName} פיצוץ של הצלחה! הרצף של ${currentStreak} נצחונות הופך אותו למועמד מספר 1 לרווח גדול`,
-        `🌋 ${playerName} כמו הר געש פעיל - ${currentStreak} נצחונות והלבה עדיין זורמת! צפי: עוד ניצחון`,
-      ];
-      return { expected, sentence: hotStreakSentences[Math.floor(Math.random() * hotStreakSentences.length)] };
-    }
-    
-    // Winning streak (2)
-    if (currentStreak >= 2) {
-      expected = Math.round(Math.max(avgProfit * 1.15, 15));
-      const streakSentences = [
-        `📈 ${playerName} על גל חיובי! ${currentStreak} נצחונות ברצף יוצרים מומנטום - הלילה נראה מבטיח`,
-        `✌️ ${playerName} עם ${currentStreak} נצחונות ברצף! השאלה אם ימשיך את המגמה או שהמזל יסתובב`,
-        `🎰 ${playerName} על רצף! המזל לצידו לאחרונה ואין סיבה שזה ישתנה הלילה`,
-        `💪 ${playerName} בונה מומנטום! ${currentStreak} נצחונות ברצף והביטחון עולה. צפי: רווח`,
-      ];
-      return { expected, sentence: streakSentences[Math.floor(Math.random() * streakSentences.length)] };
-    }
-    
-    // Bad losing streak (3+)
-    if (currentStreak <= -3) {
-      expected = Math.round(Math.min(avgProfit * 1.3, -30));
-      const badStreakSentences = [
-        `😱 ${playerName} ברצף הפסדים קשה! ${Math.abs(currentStreak)} הפסדים ברצף - האם זה הלילה של המהפך או עוד אסון?`,
-        `🆘 ${playerName} זקוק לניצחון בדחיפות! ${Math.abs(currentStreak)} הפסדים ברצף שוחקים את הביטחון והארנק`,
-        `🌑 ${playerName} בתקופה חשוכה. ${Math.abs(currentStreak)} הפסדים ברצף ואין אור בקצה המנהרה`,
-        `💀 ${playerName} ברצף הפסדים אכזרי! ${Math.abs(currentStreak)} משחקים של כאב - הלילה לא נראה טוב יותר`,
-        `❄️ ${playerName} בתקופת קרח עמוקה. ${Math.abs(currentStreak)} הפסדים ברצף - מתי ההפשרה?`,
-      ];
-      return { expected, sentence: badStreakSentences[Math.floor(Math.random() * badStreakSentences.length)] };
-    }
-    
-    // Losing streak (2)
-    if (currentStreak <= -2) {
-      expected = Math.round(Math.min(avgProfit * 1.1, -10));
-      const loseStreakSentences = [
-        `😰 ${playerName} עם ${Math.abs(currentStreak)} הפסדים ברצף. מגיע לו קאמבק, אבל האם זה יקרה הלילה?`,
-        `📉 ${playerName} במגמת ירידה. ${Math.abs(currentStreak)} הפסדים אחרונים לא מבשרים טובות`,
-        `🍀 ${playerName} צריך קצת מזל! אחרי ${Math.abs(currentStreak)} הפסדים, השאלה אם הלילה יביא שינוי`,
-        `🌧️ ${playerName} תחת ענן. ${Math.abs(currentStreak)} הפסדים ברצף והתחזית לא אופטימית`,
-      ];
-      return { expected, sentence: loseStreakSentences[Math.floor(Math.random() * loseStreakSentences.length)] };
-    }
-    
-    // High win rate but neutral profit
-    if (winPercentage > 60 && avgProfit >= -20 && avgProfit <= 20) {
-      expected = Math.round(avgProfit + 15);
-      const highWinRateSentences = [
-        `📊 ${playerName} מנצח הרבה (${Math.round(winPercentage)}%) אבל ברווחים קטנים. הלילה יכול להיות הפריצה הגדולה`,
-        `🎯 ${playerName} עם אחוזי ניצחון גבוהים! ${Math.round(winPercentage)}% - הסטטיסטיקה לצידו גם הלילה`,
-        `⚖️ ${playerName} מנצח יותר מפסיד (${Math.round(winPercentage)}%), אז למרות הממוצע הנמוך - הסיכויים טובים`,
-      ];
-      return { expected, sentence: highWinRateSentences[Math.floor(Math.random() * highWinRateSentences.length)] };
-    }
-    
-    // Low win rate but neutral profit
-    if (winPercentage < 40 && avgProfit >= -20 && avgProfit <= 20) {
-      expected = Math.round(avgProfit - 10);
-      const lowWinRateSentences = [
-        `🎲 ${playerName} עם אחוזי ניצחון נמוכים (${Math.round(winPercentage)}%). הסטטיסטיקה לא לטובתו הלילה`,
-        `📉 ${playerName} מפסיד יותר ממנצח. ${Math.round(winPercentage)}% נצחונות זה לא הרבה - צפי: הפסד קל`,
-        `💭 ${playerName} מאמין בנסים עם ${Math.round(winPercentage)}% נצחונות. האם הלילה יהיה הנס?`,
-      ];
-      return { expected, sentence: lowWinRateSentences[Math.floor(Math.random() * lowWinRateSentences.length)] };
-    }
-    
-    // Experienced player
-    if (gamesPlayed >= 10 && avgProfit >= -20 && avgProfit <= 20) {
-      const experiencedSentences = [
-        `🎖️ ${playerName} ותיק מנוסה עם ${gamesPlayed} משחקים! יודע את כל הטריקים. ממוצע קרוב לאפס - יכול ללכת לכל כיוון`,
-        `🧠 ${playerName} צבר ניסיון ב-${gamesPlayed} משחקים. הרקורד מעורב, אבל הניסיון שווה משהו`,
-        `⚔️ ${playerName} לוחם ותיק! ${gamesPlayed} קרבות מאחוריו עם תוצאות מעורבות. הלילה? סימן שאלה`,
-      ];
-      return { expected, sentence: experiencedSentences[Math.floor(Math.random() * experiencedSentences.length)] };
-    }
-    
-    // Few games played
-    if (gamesPlayed <= 3) {
-      const newishSentences = [
-        `🌱 ${playerName} עדיין בתחילת הדרך עם ${gamesPlayed} משחקים. מעט נתונים, הרבה אי-ודאות`,
-        `📝 ${playerName} עם מעט ניסיון (${gamesPlayed} משחקים). עדיין לומד את המשחק - יכול להפתיע לטוב או לרע`,
-        `🔍 ${playerName} תחת תצפית! רק ${gamesPlayed} משחקים - קשה לחזות לאן זה הולך`,
-      ];
-      return { expected, sentence: newishSentences[Math.floor(Math.random() * newishSentences.length)] };
-    }
-    
-    // Truly neutral player - break even
-    const neutralSentences = [
-      `⚖️ ${playerName} מאוזן לחלוטין! ממוצע קרוב לאפס - הלילה יכול להיות רווח או הפסד, חמישים חמישים`,
-      `🎭 ${playerName} הוא הקלף הפראי של הערב! עם ממוצע של ${Math.round(avgProfit)}₪, אי אפשר לדעת מה יקרה`,
-      `🤷 ${playerName} יכול ללכת לכל כיוון! ${gamesPlayed} משחקים עם תוצאות מעורבות - הלילה יכול להפתיע`,
-      `🔮 ${playerName} קשה לחזות! ממוצע קרוב לאפס (${Math.round(avgProfit)}₪) אומר שהכל פתוח`,
-      `🎲 ${playerName} הוא ההגרלה של הערב! עם רקורד מעורב, כל תוצאה אפשרית`,
-      `🌊 ${playerName} זורם עם הזרם. לפעמים למעלה, לפעמים למטה - הלילה? תלוי ברוח`,
-      `☁️ ${playerName} לא שמש ולא גשם. ממוצע אפסי אומר שהלילה יכול להיות כל דבר`,
-      `🎯 ${playerName} לפעמים פוגע, לפעמים מפספס. עם ${Math.round(winPercentage)}% נצחונות - הכל פתוח`,
-    ];
-    return { expected, sentence: neutralSentences[Math.floor(Math.random() * neutralSentences.length)] };
-  };
-
-  // Generate forecasts for all selected players
+  // Generate forecasts for all selected players (balanced to sum to zero)
   const generateForecasts = () => {
-    const forecasts = Array.from(selectedIds).map(playerId => {
+    // Step 1: Get initial raw expected profits
+    const rawForecasts = Array.from(selectedIds).map(playerId => {
       const player = players.find(p => p.id === playerId);
       if (!player) return null;
       
       const stats = getStatsForPlayer(playerId);
-      const { expected, sentence } = generateForecast(stats, player.name);
+      // Get raw expected based on stats
+      let rawExpected = 0;
+      if (stats && stats.gamesPlayed > 0) {
+        rawExpected = stats.avgProfit;
+        // Adjust based on streak
+        if (stats.currentStreak >= 2) rawExpected *= 1.2;
+        if (stats.currentStreak <= -2) rawExpected *= 0.8;
+      }
       
       return {
         player,
-        expected,
-        sentence,
+        stats,
+        rawExpected: Math.round(rawExpected),
         gamesPlayed: stats?.gamesPlayed || 0
       };
-    }).filter(Boolean) as { player: Player; expected: number; sentence: string; gamesPlayed: number }[];
+    }).filter(Boolean) as { player: Player; stats: PlayerStats | undefined; rawExpected: number; gamesPlayed: number }[];
+    
+    // Step 2: Calculate total imbalance
+    const totalRaw = rawForecasts.reduce((sum, f) => sum + f.rawExpected, 0);
+    
+    // Step 3: Distribute imbalance proportionally to balance to zero
+    // Players with higher absolute expected values absorb more of the adjustment
+    const totalAbsolute = rawForecasts.reduce((sum, f) => sum + Math.abs(f.rawExpected) + 10, 0); // +10 to avoid division by zero
+    
+    const balancedForecasts = rawForecasts.map(f => {
+      const weight = (Math.abs(f.rawExpected) + 10) / totalAbsolute;
+      const adjustment = -totalRaw * weight;
+      const balancedExpected = Math.round(f.rawExpected + adjustment);
+      
+      // Generate sentence based on the BALANCED expected value
+      const { sentence } = generateForecastSentence(f.stats, f.player.name, balancedExpected);
+      
+      return {
+        player: f.player,
+        expected: balancedExpected,
+        sentence,
+        gamesPlayed: f.gamesPlayed
+      };
+    });
 
     // Sort by expected profit (winners first)
-    return forecasts.sort((a, b) => b.expected - a.expected);
+    return balancedForecasts.sort((a, b) => b.expected - a.expected);
+  };
+  
+  // Generate sentence based on the final balanced expected value
+  const generateForecastSentence = (stats: PlayerStats | undefined, playerName: string, expected: number): { sentence: string } => {
+    // New player - no data
+    if (!stats || stats.gamesPlayed === 0) {
+      const newPlayerSentences = [
+        `🆕 ${playerName} מגיע בלי היסטוריה - הכל פתוח! התחזית מעורבת כי אין מספיק נתונים`,
+        `🎲 שחקן חדש בזירה! ${playerName} יכול להפתיע לטוב או לרע`,
+        `👀 ${playerName} הוא חידה עטופה בתעלומה. בלי נתונים, קשה לחזות`,
+        `🐣 טירון על השולחן! ${playerName} עדיין לא נחשף לחוקי המשחק האמיתיים`,
+        `❓ ${playerName} הוא סימן שאלה ענק - יכול להפתיע לכל כיוון`,
+        `🎭 פנים חדשות! ${playerName} מביא אנרגיה לא ידועה לשולחן`,
+        `🌟 ${playerName} עולה לבמה בפעם הראשונה - נראה מה יקרה`,
+        `🎪 ${playerName} נכנס למעגל - מה שיקרה הלילה יכתוב את ההיסטוריה שלו`,
+      ];
+      return { sentence: newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)] };
+    }
+
+    const { avgProfit, currentStreak, winPercentage, gamesPlayed, totalProfit } = stats;
+    
+    // Big winner expected (expected > 40)
+    if (expected > 40) {
+      const sentences = [
+        `🔥 ${playerName} צפוי להיות הכוכב של הלילה! עם ממוצע של ${Math.round(avgProfit)}₪ והיסטוריה מרשימה, הכסף זורם אליו`,
+        `👑 ${playerName} במצב מעולה! ${currentStreak > 0 ? `${currentStreak} נצחונות ברצף ו` : ''}התחזית מבטיחה רווח יפה`,
+        `💰 ${playerName} הוא המועמד המוביל לרווח הגדול! ${Math.round(winPercentage)}% נצחונות מדברים בעד עצמם`,
+        `🦈 ${playerName} מגיע כשהוא מסוכן ורעב! ההיסטוריה מראה שזה הזמן שלו לקצור`,
+        `⭐ ${playerName} בשיא הפורמה! עם ${gamesPlayed} משחקים של ניסיון, הלילה נראה מבטיח מאוד`,
+        `🎯 ${playerName} מכוון גבוה הלילה! הסטטיסטיקות והאינסטינקט אומרים: רווח משמעותי`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Good winner expected (expected 15-40)
+    if (expected > 15) {
+      const sentences = [
+        `📈 ${playerName} במגמת עלייה! צפוי רווח נאה הלילה בהתבסס על ${gamesPlayed} משחקים של נתונים`,
+        `✨ ${playerName} נראה טוב הלילה! הממוצע החיובי שלו (${Math.round(avgProfit)}₪) מרמז על רווח`,
+        `💵 ${playerName} עושה כסף לאט אבל בטוח. הלילה לא יהיה שונה - צפוי רווח סולידי`,
+        `🎖️ ${playerName} עם סיכויים טובים! ${Math.round(winPercentage)}% נצחונות זה בסיס חזק`,
+        `🌱 ${playerName} צומח בכל משחק והלילה ימשיך את המגמה החיובית`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Slight winner (expected 5-15)  
+    if (expected > 5) {
+      const sentences = [
+        `📊 ${playerName} צפוי לרווח קטן הלילה - לא מרשים אבל חיובי`,
+        `⚖️ ${playerName} קרוב לאיזון עם נטייה קלה לחיוב. לילה סביר צפוי`,
+        `🎲 ${playerName} במצב ניטרלי-חיובי. סיכוי לרווח קטן`,
+        `✌️ ${playerName} עם יתרון קל - לא גדול אבל בכיוון הנכון`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Neutral (expected -5 to 5)
+    if (expected >= -5) {
+      const sentences = [
+        `⚖️ ${playerName} במצב מאוזן לחלוטין - יכול ללכת לכל כיוון הלילה`,
+        `🎭 ${playerName} הוא הקלף הפראי! עם תחזית קרובה לאפס, הכל פתוח`,
+        `🤷 ${playerName} בדיוק על הגבול - לא מנצח ולא מפסיד, תלוי במזל`,
+        `☁️ ${playerName} עם תחזית ניטרלית - לא שמש ולא גשם הלילה`,
+        `🔮 ${playerName} קשה לחזות! התוצאה יכולה להפתיע לכל כיוון`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Slight loser (expected -15 to -5)
+    if (expected >= -15) {
+      const sentences = [
+        `📉 ${playerName} עם סיכוי להפסד קטן הלילה - לא דרמטי אבל שלילי`,
+        `🌧️ ${playerName} תחת ענן קל - צפוי הפסד קטן`,
+        `💭 ${playerName} במגמה שלילית קלה - אולי הלילה יפתיע?`,
+        `🎲 ${playerName} עם סיכויים לא אופטימיים - הפסד קטן צפוי`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Moderate loser (expected -40 to -15)
+    if (expected >= -40) {
+      const sentences = [
+        `📉 ${playerName} צפוי להפסד הלילה. עם ממוצע של ${Math.round(avgProfit)}₪, המגמה לא משתנה`,
+        `🌧️ ${playerName} תחת עננים כבדים. ${Math.round(100-winPercentage)}% הפסדים בהיסטוריה לא מבשרים טובות`,
+        `💸 ${playerName} צפוי לתרום לקופה הלילה - ההיסטוריה לא לצידו`,
+        `😕 ${playerName} עם סיכויים נמוכים. ${gamesPlayed} משחקים של נתונים מראים מגמה שלילית`,
+        `🎢 ${playerName} על רכבת הרים יורדת - הלילה לא נראה טוב`,
+      ];
+      return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
+    }
+    
+    // Big loser expected (expected < -40)
+    const sentences = [
+      `💸 ${playerName} צפוי להפסד משמעותי הלילה! ממוצע של ${Math.round(avgProfit)}₪ מספר את הסיפור`,
+      `🏧 ${playerName} ימשיך לממן את הקבוצה הלילה! ${Math.round(Math.abs(totalProfit))}₪ הפסד כולל עד היום`,
+      `📉 ${playerName} בירידה חופשית! ${Math.round(100-winPercentage)}% הפסדים - הלילה לא יהיה שונה`,
+      `💔 ${playerName} והפוקר - סיפור טרגי שממשיך. הלילה צפוי להפסד נוסף`,
+      `🌪️ ${playerName} בעין הסערה! ההיסטוריה מראה שהארנק שלו בסכנה`,
+      `😓 ${playerName} יצטרך לחפור עמוק בכיס הלילה - התחזית לא אופטימית`,
+    ];
+    return { sentence: sentences[Math.floor(Math.random() * sentences.length)] };
   };
 
   // Share forecast to WhatsApp
