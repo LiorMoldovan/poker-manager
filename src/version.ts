@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.6';
+export const APP_VERSION = '2.7.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.7.7',
+    date: '2024-12-15',
+    changes: [
+      'Settings: Players tab is now first',
+      'Settings: Tabs styled like Statistics page (max 4 per row)',
+      'Settings: Tab layout matches Statistics page format'
+    ]
+  },
   {
     version: '2.7.6',
     date: '2024-12-15',

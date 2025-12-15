@@ -38,7 +38,7 @@ const SettingsScreen = () => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('game');
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('players');
   const [backups, setBackups] = useState<BackupData[]>([]);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -218,9 +218,9 @@ const SettingsScreen = () => {
   };
 
   const tabs = [
-    { id: 'game', label: '💰 Game', icon: '💰' },
-    { id: 'chips', label: '🎰 Chips', icon: '🎰' },
     { id: 'players', label: '👥 Players', icon: '👥' },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰' },
+    { id: 'game', label: '💰 Game', icon: '💰' },
     { id: 'backup', label: '📦 Backup', icon: '📦' },
     { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
   ] as const;
@@ -232,32 +232,42 @@ const SettingsScreen = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{ 
-        display: 'flex', 
-        flexWrap: 'wrap',
-        gap: '0.35rem', 
-        marginBottom: '1rem'
-      }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '0.5rem 0.75rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: activeTab === tab.id ? 'var(--primary)' : 'var(--surface)',
-              color: activeTab === tab.id ? 'white' : 'var(--text-muted)',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="card" style={{ padding: '0.75rem', marginBottom: '1rem' }}>
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: '0.5rem'
+        }}>
+          {tabs.slice(0, 4).map(tab => (
+            <button
+              key={tab.id}
+              className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setActiveTab(tab.id)}
+              style={{ flex: '1 1 calc(25% - 0.5rem)', minWidth: '70px' }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {tabs.length > 4 && (
+          <div style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            marginTop: '0.5rem'
+          }}>
+            {tabs.slice(4).map(tab => (
+              <button
+                key={tab.id}
+                className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveTab(tab.id)}
+                style={{ flex: '1 1 calc(25% - 0.5rem)', minWidth: '70px' }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {saved && (
