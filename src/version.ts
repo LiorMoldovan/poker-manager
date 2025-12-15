@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.5.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.5.1',
+    date: '2024-12-15',
+    changes: [
+      'Fixed table alignment - profit column no longer wraps to new line'
+    ]
+  },
   {
     version: '2.5.0',
     date: '2024-12-15',

@@ -188,13 +188,13 @@ const GameDetailsScreen = () => {
 
         <div className="card" style={{ overflow: 'hidden' }}>
           <h2 className="card-title mb-2">Results</h2>
-          <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '0.9rem' }}>
+          <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '0.85rem' }}>
             <thead>
               <tr>
-                <th style={{ width: '35%' }}>Player</th>
-                <th style={{ textAlign: 'center', width: '15%' }}>Buys</th>
-                <th style={{ textAlign: 'center', width: '20%' }}>Chips</th>
-                <th style={{ textAlign: 'right', width: '30%' }}>+/-</th>
+                <th style={{ width: '32%' }}>Player</th>
+                <th style={{ textAlign: 'center', width: '14%' }}>Buys</th>
+                <th style={{ textAlign: 'center', width: '18%' }}>Chips</th>
+                <th style={{ textAlign: 'right', width: '36%' }}>+/-</th>
               </tr>
             </thead>
             <tbody>
@@ -210,7 +210,7 @@ const GameDetailsScreen = () => {
                   <td style={{ textAlign: 'center' }} className="text-muted">
                     {getChipDisplay(player)}
                   </td>
-                  <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
                     {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
                   </td>
                 </tr>
