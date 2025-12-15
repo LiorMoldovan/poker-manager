@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
+import { getGame, getGamePlayers, getSettings } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 const GameDetailsScreen = () => {
@@ -20,24 +20,12 @@ const GameDetailsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Calculate total chips for a player (use finalValue as fallback if chipCounts is empty)
-  const getTotalChips = (player: GamePlayer): number => {
-    // If chipCounts is empty or undefined, use finalValue
-    if (!player.chipCounts || Object.keys(player.chipCounts).length === 0) {
-      return player.finalValue;
-    }
-    
-    const chipValues = getChipValues();
-    let total = 0;
-    for (const [chipId, count] of Object.entries(player.chipCounts)) {
-      const chip = chipValues.find(c => c.id === chipId);
-      if (chip) {
-        total += count * chip.value;
-      }
-    }
-    
-    // If calculated total is 0 but finalValue isn't, use finalValue
-    return total > 0 ? total : player.finalValue;
+  // Get chip value for display - always use finalValue which is stored correctly
+  const getChipDisplay = (player: GamePlayer): string => {
+    const value = player.finalValue;
+    if (value <= 0) return '0';
+    if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+    return value.toString();
   };
 
   useEffect(() => {
@@ -220,7 +208,7 @@ const GameDetailsScreen = () => {
                   </td>
                   <td style={{ textAlign: 'center' }}>{cleanNumber(player.rebuys)}</td>
                   <td style={{ textAlign: 'center' }} className="text-muted">
-                    {getTotalChips(player) > 0 ? `${(getTotalChips(player) / 1000).toFixed(0)}k` : '0'}
+                    {getChipDisplay(player)}
                   </td>
                   <td style={{ textAlign: 'right' }} className={getProfitColor(player.profit)}>
                     {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
