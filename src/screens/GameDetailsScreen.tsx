@@ -124,24 +124,24 @@ const GameDetailsScreen = () => {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" style={{ overflow: 'hidden' }}>
         <h2 className="card-title mb-2">Results</h2>
-        <table>
+        <table style={{ width: '100%', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th>Player</th>
-              <th style={{ textAlign: 'center' }}>Buy-ins</th>
-              <th style={{ textAlign: 'right' }}>Chips</th>
-              <th style={{ textAlign: 'right' }}>Profit/Loss</th>
+              <th style={{ width: '35%' }}>Player</th>
+              <th style={{ textAlign: 'center', width: '15%' }}>Buys</th>
+              <th style={{ textAlign: 'right', width: '20%' }}>Chips</th>
+              <th style={{ textAlign: 'right', width: '30%' }}>Profit</th>
             </tr>
           </thead>
           <tbody>
             {players.map((player, index) => (
               <tr key={player.id}>
-                <td>
-                  {index === 0 && player.profit > 0 && '🥇 '}
-                  {index === 1 && player.profit > 0 && '🥈 '}
-                  {index === 2 && player.profit > 0 && '🥉 '}
+                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {index === 0 && player.profit > 0 && '🥇'}
+                  {index === 1 && player.profit > 0 && '🥈'}
+                  {index === 2 && player.profit > 0 && '🥉'}
                   {player.playerName}
                 </td>
                 <td style={{ textAlign: 'center' }}>{cleanNumber(player.rebuys)}</td>
