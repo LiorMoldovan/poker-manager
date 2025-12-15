@@ -369,10 +369,18 @@ const SettingsScreen = () => {
                 min="1"
               />
               <button 
-                className="btn btn-sm btn-danger"
+                className="btn btn-sm"
+                style={{ 
+                  padding: '0.35rem 0.5rem', 
+                  fontSize: '0.75rem',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: 'var(--danger)'
+                }}
                 onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
+                title="Delete chip"
               >
-                ×
+                🗑️
               </button>
             </div>
           ))}
