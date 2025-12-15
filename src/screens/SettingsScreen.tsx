@@ -5,6 +5,7 @@ import {
   getAllPlayers, 
   addPlayer, 
   deletePlayer,
+  updatePlayerType,
   getChipValues, 
   saveChipValue,
   deleteChipValue,
@@ -28,6 +29,7 @@ const SettingsScreen = () => {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddChip, setShowAddChip] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('permanent');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -73,11 +75,18 @@ const SettingsScreen = () => {
       setError('Player already exists');
       return;
     }
-    const player = addPlayer(trimmedName);
+    const player = addPlayer(trimmedName, newPlayerType);
     setPlayers([...players, player]);
     setNewPlayerName('');
+    setNewPlayerType('permanent');
     setShowAddPlayer(false);
     setError('');
+  };
+
+  const handlePlayerTypeChange = (playerId: string, type: 'permanent' | 'guest') => {
+    updatePlayerType(playerId, type);
+    setPlayers(players.map(p => p.id === playerId ? { ...p, type } : p));
+    showSaved();
   };
 
   const handleDeletePlayer = (id: string) => {
@@ -331,14 +340,40 @@ const SettingsScreen = () => {
           ) : (
             <div className="list">
               {players.map(player => (
-                <div key={player.id} className="list-item">
-                  <span>{player.name}</span>
-                  <button 
-                    className="btn btn-sm btn-danger"
-                    onClick={() => handleDeletePlayer(player.id)}
-                  >
-                    ×
-                  </button>
+                <div key={player.id} className="list-item" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                    <span style={{ fontWeight: '500' }}>{player.name}</span>
+                    <span style={{ 
+                      fontSize: '0.7rem', 
+                      padding: '0.15rem 0.4rem', 
+                      borderRadius: '4px',
+                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 100, 100, 0.15)',
+                      color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
+                    }}>
+                      {player.type === 'permanent' ? '⭐ קבוע' : '👤 אורח'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <button 
+                      className="btn btn-sm"
+                      style={{ 
+                        padding: '0.25rem 0.5rem', 
+                        fontSize: '0.7rem',
+                        background: player.type === 'permanent' ? 'var(--surface)' : 'rgba(16, 185, 129, 0.15)',
+                        border: '1px solid var(--border)',
+                        color: player.type === 'permanent' ? 'var(--text-muted)' : 'var(--primary)'
+                      }}
+                      onClick={() => handlePlayerTypeChange(player.id, player.type === 'permanent' ? 'guest' : 'permanent')}
+                    >
+                      {player.type === 'permanent' ? 'הפוך לאורח' : 'הפוך לקבוע'}
+                    </button>
+                    <button 
+                      className="btn btn-sm btn-danger"
+                      onClick={() => handleDeletePlayer(player.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -500,6 +535,35 @@ const SettingsScreen = () => {
                 onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
                 autoFocus
               />
+            </div>
+            <div className="input-group">
+              <label className="label">Player Type</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    background: newPlayerType === 'permanent' ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface)',
+                    border: newPlayerType === 'permanent' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    color: newPlayerType === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setNewPlayerType('permanent')}
+                >
+                  ⭐ קבוע
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    background: newPlayerType === 'guest' ? 'rgba(100, 100, 100, 0.2)' : 'var(--surface)',
+                    border: newPlayerType === 'guest' ? '2px solid var(--text-muted)' : '1px solid var(--border)',
+                    color: newPlayerType === 'guest' ? 'var(--text)' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setNewPlayerType('guest')}
+                >
+                  👤 אורח
+                </button>
+              </div>
             </div>
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setShowAddPlayer(false)}>

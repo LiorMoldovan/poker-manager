@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.2';
+export const APP_VERSION = '2.7.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.7.3',
+    date: '2024-12-15',
+    changes: [
+      'Settings: Player list now shows type (קבוע/אורח)',
+      'Settings: Can choose player type when adding new player',
+      'Settings: Can toggle player type for existing players'
+    ]
+  },
   {
     version: '2.7.2',
     date: '2024-12-15',
