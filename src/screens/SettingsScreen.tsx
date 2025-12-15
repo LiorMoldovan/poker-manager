@@ -32,6 +32,7 @@ const SettingsScreen = () => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('game');
   const [backups, setBackups] = useState<BackupData[]>([]);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -173,11 +174,48 @@ const SettingsScreen = () => {
     });
   };
 
+  const tabs = [
+    { id: 'game', label: '💰 Game', icon: '💰' },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰' },
+    { id: 'players', label: '👥 Players', icon: '👥' },
+    { id: 'backup', label: '📦 Backup', icon: '📦' },
+    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
+  ] as const;
+
   return (
     <div className="fade-in">
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: '0.5rem' }}>
         <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Configure your poker games</p>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.25rem', 
+        marginBottom: '1rem',
+        overflowX: 'auto',
+        paddingBottom: '0.25rem'
+      }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '0.5rem 0.75rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: activeTab === tab.id ? 'var(--primary)' : 'var(--surface)',
+              color: activeTab === tab.id ? 'white' : 'var(--text-muted)',
+              fontSize: '0.8rem',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {saved && (
@@ -190,247 +228,257 @@ const SettingsScreen = () => {
         </div>
       )}
 
-      {/* Game Settings */}
-      <div className="card">
-        <h2 className="card-title mb-2">💰 Game Settings</h2>
-        
-        <div className="input-group">
-          <label className="label">Rebuy Value (₪)</label>
-          <input
-            type="number"
-            className="input"
-            value={settings.rebuyValue}
-            onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
-            min="1"
-          />
-        </div>
-
-        <div className="input-group">
-          <label className="label">Chips per Rebuy</label>
-          <input
-            type="number"
-            className="input"
-            value={settings.chipsPerRebuy}
-            onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
-            min="1"
-          />
-          <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Each rebuy of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
-            <br />
-            Value per 1000 chips: ₪{((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000).toFixed(1)}
-          </p>
-        </div>
-
-        <div className="input-group">
-          <label className="label">Minimum Transfer (₪)</label>
-          <input
-            type="number"
-            className="input"
-            value={settings.minTransfer}
-            onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
-            min="0"
-          />
-          <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            Transfers below this amount will be skipped
-          </p>
-        </div>
-      </div>
-
-      {/* Chip Values */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">🎰 Chip Values</h2>
-          <button className="btn btn-sm btn-outline" onClick={() => setShowAddChip(true)}>
-            + Add Chip
-          </button>
-        </div>
-
-        {chipValues.map(chip => (
-          <div key={chip.id} className="chip-input-row">
-            <div 
-              className="chip-circle" 
-              style={{ 
-                backgroundColor: chip.displayColor,
-                border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none'
-              }} 
-            />
-            <span style={{ flex: 1, fontWeight: '500' }}>{chip.color}</span>
-            <span className="text-muted">×</span>
+      {/* Game Settings Tab */}
+      {activeTab === 'game' && (
+        <div className="card">
+          <h2 className="card-title mb-2">💰 Game Settings</h2>
+          
+          <div className="input-group">
+            <label className="label">Rebuy Value (₪)</label>
             <input
               type="number"
               className="input"
-              style={{ width: '80px', textAlign: 'center' }}
-              value={chip.value}
-              onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
+              value={settings.rebuyValue}
+              onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
               min="1"
             />
-            <button 
-              className="btn btn-sm btn-danger"
-              onClick={() => handleDeleteChip(chip.id)}
-            >
-              ×
-            </button>
           </div>
-        ))}
-      </div>
 
-      {/* Players */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">👥 Players ({players.length})</h2>
-          <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
-            + Add Player
-          </button>
-        </div>
-
-        {players.length === 0 ? (
-          <p className="text-muted">No players added yet</p>
-        ) : (
-          <div className="list">
-            {players.map(player => (
-              <div key={player.id} className="list-item">
-                <span>{player.name}</span>
-                <button 
-                  className="btn btn-sm btn-danger"
-                  onClick={() => handleDeletePlayer(player.id)}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Backup & Restore */}
-      <div className="card">
-        <h2 className="card-title mb-2">📦 Backup & Restore</h2>
-        
-        {backupMessage && (
-          <div style={{ 
-            padding: '0.75rem', 
-            marginBottom: '1rem',
-            borderRadius: '8px',
-            background: backupMessage.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-            borderLeft: `4px solid ${backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)'}`
-          }}>
-            <p style={{ color: backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)', margin: 0 }}>
-              {backupMessage.text}
+          <div className="input-group">
+            <label className="label">Chips per Rebuy</label>
+            <input
+              type="number"
+              className="input"
+              value={settings.chipsPerRebuy}
+              onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
+              min="1"
+            />
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              Each rebuy of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
+              <br />
+              Value per 1000 chips: ₪{((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000).toFixed(1)}
             </p>
           </div>
-        )}
 
-        <div style={{ marginBottom: '1rem' }}>
-          <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-            Last backup: {lastBackup ? formatBackupDate(lastBackup) : 'Never'}
-          </p>
-          <p className="text-muted" style={{ fontSize: '0.8rem' }}>
-            Auto-backup runs every Sunday when you open the app
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <button className="btn btn-primary" onClick={handleCreateBackup}>
-            💾 Backup Now
-          </button>
-          <button className="btn btn-secondary" onClick={handleDownloadBackup}>
-            📥 Download Backup
-          </button>
-          <button className="btn btn-outline" onClick={() => setShowRestoreModal(true)}>
-            🔄 Restore from Backup
-          </button>
-          <label className="btn btn-outline" style={{ textAlign: 'center', cursor: 'pointer' }}>
-            📤 Import from File
-            <input 
-              type="file" 
-              accept=".json"
-              onChange={handleImportFile}
-              style={{ display: 'none' }}
+          <div className="input-group">
+            <label className="label">Minimum Transfer (₪)</label>
+            <input
+              type="number"
+              className="input"
+              value={settings.minTransfer}
+              onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
+              min="0"
             />
-          </label>
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              Transfers below this amount will be skipped
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Version Info */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">ℹ️ App Version</h2>
-          <span style={{ 
-            background: 'var(--primary)', 
-            color: 'white', 
-            padding: '0.25rem 0.75rem', 
-            borderRadius: '1rem',
-            fontSize: '0.875rem',
-            fontWeight: '600'
-          }}>
-            v{APP_VERSION}
-          </span>
-        </div>
-        
-        <div style={{ marginTop: '1rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
-            Latest Changes
-          </h3>
-          
-          {/* Show only the latest entry */}
-          {CHANGELOG.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontWeight: '600', color: 'var(--primary)' }}>v{CHANGELOG[0].version}</span>
-                <span className="text-muted" style={{ fontSize: '0.75rem' }}>{CHANGELOG[0].date}</span>
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                {CHANGELOG[0].changes.map((change, i) => (
-                  <li key={i} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                    {change}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Show history button */}
-          {CHANGELOG.length > 1 && (
-            <button
-              onClick={() => setShowFullChangelog(!showFullChangelog)}
-              style={{
-                marginTop: '1rem',
-                padding: '0.5rem 1rem',
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                color: 'var(--text-muted)',
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                width: '100%'
-              }}
-            >
-              {showFullChangelog ? '▲ Hide History' : `▼ Show History (${CHANGELOG.length - 1} more)`}
+      {/* Chip Values Tab */}
+      {activeTab === 'chips' && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">🎰 Chip Values</h2>
+            <button className="btn btn-sm btn-outline" onClick={() => setShowAddChip(true)}>
+              + Add Chip
             </button>
-          )}
+          </div>
 
-          {/* Full changelog history */}
-          {showFullChangelog && CHANGELOG.slice(1).map((entry, index) => (
-            <div key={entry.version} style={{ 
-              marginTop: index === 0 ? '1rem' : '0.75rem',
-              paddingTop: '0.75rem',
-              borderTop: '1px solid var(--border)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>v{entry.version}</span>
-                <span className="text-muted" style={{ fontSize: '0.75rem' }}>{entry.date}</span>
-              </div>
-              <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
-                {entry.changes.map((change, i) => (
-                  <li key={i} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
-                    {change}
-                  </li>
-                ))}
-              </ul>
+          {chipValues.map(chip => (
+            <div key={chip.id} className="chip-input-row">
+              <div 
+                className="chip-circle" 
+                style={{ 
+                  backgroundColor: chip.displayColor,
+                  border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none'
+                }} 
+              />
+              <span style={{ flex: 1, fontWeight: '500' }}>{chip.color}</span>
+              <span className="text-muted">×</span>
+              <input
+                type="number"
+                className="input"
+                style={{ width: '80px', textAlign: 'center' }}
+                value={chip.value}
+                onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
+                min="1"
+              />
+              <button 
+                className="btn btn-sm btn-danger"
+                onClick={() => handleDeleteChip(chip.id)}
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
-      </div>
+      )}
+
+      {/* Players Tab */}
+      {activeTab === 'players' && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">👥 Players ({players.length})</h2>
+            <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
+              + Add Player
+            </button>
+          </div>
+
+          {players.length === 0 ? (
+            <p className="text-muted">No players added yet</p>
+          ) : (
+            <div className="list">
+              {players.map(player => (
+                <div key={player.id} className="list-item">
+                  <span>{player.name}</span>
+                  <button 
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleDeletePlayer(player.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Backup & Restore Tab */}
+      {activeTab === 'backup' && (
+        <div className="card">
+          <h2 className="card-title mb-2">📦 Backup & Restore</h2>
+          
+          {backupMessage && (
+            <div style={{ 
+              padding: '0.75rem', 
+              marginBottom: '1rem',
+              borderRadius: '8px',
+              background: backupMessage.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              borderLeft: `4px solid ${backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)'}`
+            }}>
+              <p style={{ color: backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)', margin: 0 }}>
+                {backupMessage.text}
+              </p>
+            </div>
+          )}
+
+          <div style={{ marginBottom: '1rem' }}>
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+              Last backup: {lastBackup ? formatBackupDate(lastBackup) : 'Never'}
+            </p>
+            <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+              Auto-backup runs every Sunday when you open the app
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button className="btn btn-primary" onClick={handleCreateBackup}>
+              💾 Backup Now
+            </button>
+            <button className="btn btn-secondary" onClick={handleDownloadBackup}>
+              📥 Download Backup
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowRestoreModal(true)}>
+              🔄 Restore from Backup
+            </button>
+            <label className="btn btn-outline" style={{ textAlign: 'center', cursor: 'pointer' }}>
+              📤 Import from File
+              <input 
+                type="file" 
+                accept=".json"
+                onChange={handleImportFile}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* About Tab */}
+      {activeTab === 'about' && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">ℹ️ App Version</h2>
+            <span style={{ 
+              background: 'var(--primary)', 
+              color: 'white', 
+              padding: '0.25rem 0.75rem', 
+              borderRadius: '1rem',
+              fontSize: '0.875rem',
+              fontWeight: '600'
+            }}>
+              v{APP_VERSION}
+            </span>
+          </div>
+          
+          <div style={{ marginTop: '1rem' }}>
+            <h3 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
+              Latest Changes
+            </h3>
+            
+            {/* Show only the latest entry */}
+            {CHANGELOG.length > 0 && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: '600', color: 'var(--primary)' }}>v{CHANGELOG[0].version}</span>
+                  <span className="text-muted" style={{ fontSize: '0.75rem' }}>{CHANGELOG[0].date}</span>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                  {CHANGELOG[0].changes.map((change, i) => (
+                    <li key={i} style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                      {change}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Show history button */}
+            {CHANGELOG.length > 1 && (
+              <button
+                onClick={() => setShowFullChangelog(!showFullChangelog)}
+                style={{
+                  marginTop: '1rem',
+                  padding: '0.5rem 1rem',
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                {showFullChangelog ? '▲ Hide History' : `▼ Show History (${CHANGELOG.length - 1} more)`}
+              </button>
+            )}
+
+            {/* Full changelog history */}
+            {showFullChangelog && CHANGELOG.slice(1).map((entry, index) => (
+              <div key={entry.version} style={{ 
+                marginTop: index === 0 ? '1rem' : '0.75rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid var(--border)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>v{entry.version}</span>
+                  <span className="text-muted" style={{ fontSize: '0.75rem' }}>{entry.date}</span>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                  {entry.changes.map((change, i) => (
+                    <li key={i} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
+                      {change}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add Player Modal */}
       {showAddPlayer && (

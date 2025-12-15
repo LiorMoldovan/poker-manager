@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.0';
+export const APP_VERSION = '2.7.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.7.1',
+    date: '2024-12-15',
+    changes: [
+      'Settings page now has tabs: Game, Chips, Players, Backup, About',
+      'Cleaner navigation between settings sections'
+    ]
+  },
   {
     version: '2.7.0',
     date: '2024-12-15',
