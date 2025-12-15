@@ -20,12 +20,14 @@ const GameDetailsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Get chip value for display - always use finalValue which is stored correctly
+  // Get chip value for display
   const getChipDisplay = (player: GamePlayer): string => {
     const value = player.finalValue;
     if (value <= 0) return '0';
-    if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
-    return value.toString();
+    // If value is large (chip points like 57800), show as "58k"
+    if (value >= 1000) return `${Math.round(value / 1000)}k`;
+    // If value is small (could be shekels like 351.15), just show rounded
+    return Math.round(value).toString();
   };
 
   useEffect(() => {
@@ -188,30 +190,26 @@ const GameDetailsScreen = () => {
 
         <div className="card" style={{ overflow: 'hidden' }}>
           <h2 className="card-title mb-2">Results</h2>
-          <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '0.85rem' }}>
+          <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '0.9rem' }}>
             <thead>
               <tr>
-                <th style={{ width: '32%' }}>Player</th>
-                <th style={{ textAlign: 'center', width: '14%' }}>Buys</th>
-                <th style={{ textAlign: 'center', width: '18%' }}>Chips</th>
-                <th style={{ textAlign: 'right', width: '36%' }}>+/-</th>
+                <th style={{ width: '40%', paddingRight: '8px' }}>Player</th>
+                <th style={{ textAlign: 'center', width: '20%' }}>Rebuys</th>
+                <th style={{ textAlign: 'right', width: '40%', paddingLeft: '8px' }}>Profit/Loss</th>
               </tr>
             </thead>
             <tbody>
               {players.map((player, index) => (
                 <tr key={player.id}>
-                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {index === 0 && player.profit > 0 && '🥇'}
-                    {index === 1 && player.profit > 0 && '🥈'}
-                    {index === 2 && player.profit > 0 && '🥉'}
+                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '8px' }}>
+                    {index === 0 && player.profit > 0 && '🥇 '}
+                    {index === 1 && player.profit > 0 && '🥈 '}
+                    {index === 2 && player.profit > 0 && '🥉 '}
                     {player.playerName}
                   </td>
-                  <td style={{ textAlign: 'center' }}>{cleanNumber(player.rebuys)}</td>
-                  <td style={{ textAlign: 'center' }} className="text-muted">
-                    {getChipDisplay(player)}
-                  </td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
-                    {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                  <td style={{ textAlign: 'center' }}>{Math.round(player.rebuys)}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: '8px' }} className={getProfitColor(player.profit)}>
+                    {player.profit >= 0 ? '+' : ''}₪{Math.round(player.profit)}
                   </td>
                 </tr>
               ))}
