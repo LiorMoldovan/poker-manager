@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.8';
+export const APP_VERSION = '2.3.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.3.9',
+    date: '2024-12-14',
+    changes: [
+      'Added multi-select player filter to Statistics page',
+      'Filter works across Table, Records, and Players views',
+      'Select/deselect players to compare stats'
+    ]
+  },
   {
     version: '2.3.8',
     date: '2024-12-14',

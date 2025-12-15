@@ -7,6 +7,7 @@ const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
+  const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadStats();
@@ -15,10 +16,42 @@ const StatisticsScreen = () => {
   const loadStats = () => {
     const playerStats = getPlayerStats();
     setStats(playerStats);
+    // By default, select all players
+    setSelectedPlayers(new Set(playerStats.map(p => p.playerId)));
   };
 
+  // Toggle player selection
+  const togglePlayer = (playerId: string) => {
+    setSelectedPlayers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(playerId)) {
+        // Don't allow deselecting if only one player is selected
+        if (newSet.size > 1) {
+          newSet.delete(playerId);
+        }
+      } else {
+        newSet.add(playerId);
+      }
+      return newSet;
+    });
+  };
 
-  const sortedStats = [...stats].sort((a, b) => {
+  // Select/Deselect all players
+  const toggleAllPlayers = () => {
+    if (selectedPlayers.size === stats.length) {
+      // If all selected, keep only the first one
+      setSelectedPlayers(new Set([stats[0]?.playerId].filter(Boolean)));
+    } else {
+      // Select all
+      setSelectedPlayers(new Set(stats.map(p => p.playerId)));
+    }
+  };
+
+  // Filtered stats based on selection
+  const filteredStats = stats.filter(s => selectedPlayers.has(s.playerId));
+
+
+  const sortedStats = [...filteredStats].sort((a, b) => {
     switch (sortBy) {
       case 'profit':
         return b.totalProfit - a.totalProfit;
@@ -39,17 +72,17 @@ const StatisticsScreen = () => {
     return '';
   };
 
-  // Calculate group records
+  // Calculate group records based on filtered stats
   const getRecords = () => {
-    if (stats.length === 0) return null;
+    if (filteredStats.length === 0) return null;
     
-    const leader = [...stats].sort((a, b) => b.totalProfit - a.totalProfit)[0];
-    const biggestLoser = [...stats].sort((a, b) => a.totalProfit - b.totalProfit)[0];
-    const biggestWinPlayer = [...stats].sort((a, b) => b.biggestWin - a.biggestWin)[0];
-    const biggestLossPlayer = [...stats].sort((a, b) => a.biggestLoss - b.biggestLoss)[0];
-    const rebuyKing = [...stats].sort((a, b) => b.totalRebuys - a.totalRebuys)[0];
+    const leader = [...filteredStats].sort((a, b) => b.totalProfit - a.totalProfit)[0];
+    const biggestLoser = [...filteredStats].sort((a, b) => a.totalProfit - b.totalProfit)[0];
+    const biggestWinPlayer = [...filteredStats].sort((a, b) => b.biggestWin - a.biggestWin)[0];
+    const biggestLossPlayer = [...filteredStats].sort((a, b) => a.biggestLoss - b.biggestLoss)[0];
+    const rebuyKing = [...filteredStats].sort((a, b) => b.totalRebuys - a.totalRebuys)[0];
     
-    const qualifiedForWinRate = stats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForWinRate = filteredStats.filter(s => s.gamesPlayed >= 3);
     const sharpshooter = qualifiedForWinRate.length > 0 
       ? [...qualifiedForWinRate].sort((a, b) => b.winPercentage - a.winPercentage)[0]
       : null;
@@ -57,27 +90,27 @@ const StatisticsScreen = () => {
       ? [...qualifiedForWinRate].sort((a, b) => a.winPercentage - b.winPercentage)[0]
       : null;
     
-    const onFire = [...stats].sort((a, b) => b.currentStreak - a.currentStreak)[0];
-    const iceCold = [...stats].sort((a, b) => a.currentStreak - b.currentStreak)[0];
-    const mostDedicated = [...stats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
-    const longestWinStreakPlayer = [...stats].sort((a, b) => b.longestWinStreak - a.longestWinStreak)[0];
-    const longestLossStreakPlayer = [...stats].sort((a, b) => b.longestLossStreak - a.longestLossStreak)[0];
+    const onFire = [...filteredStats].sort((a, b) => b.currentStreak - a.currentStreak)[0];
+    const iceCold = [...filteredStats].sort((a, b) => a.currentStreak - b.currentStreak)[0];
+    const mostDedicated = [...filteredStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
+    const longestWinStreakPlayer = [...filteredStats].sort((a, b) => b.longestWinStreak - a.longestWinStreak)[0];
+    const longestLossStreakPlayer = [...filteredStats].sort((a, b) => b.longestLossStreak - a.longestLossStreak)[0];
     
     // Additional records
-    const qualifiedForAvg = stats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForAvg = filteredStats.filter(s => s.gamesPlayed >= 3);
     const highestAvgProfit = qualifiedForAvg.length > 0
       ? [...qualifiedForAvg].sort((a, b) => b.avgProfit - a.avgProfit)[0]
       : null;
     const lowestAvgProfit = qualifiedForAvg.length > 0
       ? [...qualifiedForAvg].sort((a, b) => a.avgProfit - b.avgProfit)[0]
       : null;
-    const mostWins = [...stats].sort((a, b) => b.winCount - a.winCount)[0];
-    const mostLosses = [...stats].sort((a, b) => b.lossCount - a.lossCount)[0];
-    const highestAvgWin = stats.filter(s => s.avgWin > 0).length > 0
-      ? [...stats].filter(s => s.avgWin > 0).sort((a, b) => b.avgWin - a.avgWin)[0]
+    const mostWins = [...filteredStats].sort((a, b) => b.winCount - a.winCount)[0];
+    const mostLosses = [...filteredStats].sort((a, b) => b.lossCount - a.lossCount)[0];
+    const highestAvgWin = filteredStats.filter(s => s.avgWin > 0).length > 0
+      ? [...filteredStats].filter(s => s.avgWin > 0).sort((a, b) => b.avgWin - a.avgWin)[0]
       : null;
-    const highestAvgLoss = stats.filter(s => s.avgLoss > 0).length > 0
-      ? [...stats].filter(s => s.avgLoss > 0).sort((a, b) => b.avgLoss - a.avgLoss)[0]
+    const highestAvgLoss = filteredStats.filter(s => s.avgLoss > 0).length > 0
+      ? [...filteredStats].filter(s => s.avgLoss > 0).sort((a, b) => b.avgLoss - a.avgLoss)[0]
       : null;
     
     return {
@@ -145,6 +178,58 @@ const StatisticsScreen = () => {
               >
                 👤 Players
               </button>
+            </div>
+          </div>
+
+          {/* Player Selector */}
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '0.5rem'
+            }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                FILTER PLAYERS ({selectedPlayers.size}/{stats.length})
+              </span>
+              <button
+                onClick={toggleAllPlayers}
+                style={{
+                  padding: '0.25rem 0.5rem',
+                  fontSize: '0.7rem',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer'
+                }}
+              >
+                {selectedPlayers.size === stats.length ? 'Clear' : 'Select All'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {stats.map(player => {
+                const isSelected = selectedPlayers.has(player.playerId);
+                return (
+                  <button
+                    key={player.playerId}
+                    onClick={() => togglePlayer(player.playerId)}
+                    style={{
+                      padding: '0.4rem 0.65rem',
+                      borderRadius: '16px',
+                      border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
+                      background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {isSelected && '✓ '}{player.playerName}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
