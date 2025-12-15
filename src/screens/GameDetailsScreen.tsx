@@ -205,40 +205,38 @@ const GameDetailsScreen = () => {
 
         <div className="card" style={{ overflow: 'hidden' }}>
           <h2 className="card-title mb-2">Results</h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ fontSize: '0.9rem', width: '100%' }}>
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Chips</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Rebuy</th>
-                  <th style={{ textAlign: 'right' }}>+/-</th>
+          <table style={{ fontSize: '0.85rem', width: '100%', tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '35%' }}>Player</th>
+                <th style={{ textAlign: 'center', width: '18%' }}>Chips</th>
+                <th style={{ textAlign: 'center', width: '15%' }}>Rebuy</th>
+                <th style={{ textAlign: 'right', width: '32%' }}>+/-</th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map((player, index) => (
+                <tr key={player.id}>
+                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {index === 0 && player.profit > 0 && '🥇'}
+                    {index === 1 && player.profit > 0 && '🥈'}
+                    {index === 2 && player.profit > 0 && '🥉'}
+                    {index > 2 || player.profit <= 0 ? '' : ' '}
+                    {player.playerName}
+                  </td>
+                  <td style={{ textAlign: 'center' }} className="text-muted">
+                    {formatChips(getTotalChips(player))}
+                  </td>
+                  <td style={{ textAlign: 'center' }} className="text-muted">
+                    {Math.round(player.rebuys)}
+                  </td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
+                    {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {players.map((player, index) => (
-                  <tr key={player.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {index === 0 && player.profit > 0 && '🥇'}
-                      {index === 1 && player.profit > 0 && '🥈'}
-                      {index === 2 && player.profit > 0 && '🥉'}
-                      {index > 2 || player.profit <= 0 ? '' : ' '}
-                      {player.playerName}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
-                      {formatChips(getTotalChips(player))}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
-                      {Math.round(player.rebuys)}
-                    </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
-                      {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
           
           {chipGap !== null && chipGap !== 0 && (
             <div style={{ 
