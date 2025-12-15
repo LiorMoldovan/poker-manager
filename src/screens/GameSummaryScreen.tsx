@@ -167,7 +167,12 @@ const GameSummaryScreen = () => {
         </div>
 
         <div className="card">
-          <h2 className="card-title mb-2">Results</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>Results</h2>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Total Rebuys: <span style={{ color: 'var(--text)', fontWeight: '600' }}>{players.reduce((sum, p) => sum + p.rebuys, 0)}</span>
+            </div>
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ fontSize: '0.9rem' }}>
               <thead>
