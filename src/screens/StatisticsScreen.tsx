@@ -505,7 +505,7 @@ const StatisticsScreen = () => {
                 <button 
                   className={`btn btn-sm ${sortBy === 'profit' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setSortBy('profit')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
                 >
                   <span>💰</span>
                   <span style={{ fontSize: '0.7rem' }}>Profit</span>
@@ -513,7 +513,7 @@ const StatisticsScreen = () => {
                 <button 
                   className={`btn btn-sm ${sortBy === 'games' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setSortBy('games')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
                 >
                   <span>🎮</span>
                   <span style={{ fontSize: '0.7rem' }}>Games</span>
@@ -521,7 +521,7 @@ const StatisticsScreen = () => {
                 <button 
                   className={`btn btn-sm ${sortBy === 'winRate' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => setSortBy('winRate')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}
+                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
                 >
                   <span>📊</span>
                   <span style={{ fontSize: '0.7rem' }}>Win Rate</span>

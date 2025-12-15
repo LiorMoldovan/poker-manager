@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.4.3';
+export const APP_VERSION = '2.4.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.4',
+    date: '2024-12-14',
+    changes: [
+      'Sort tabs (Profit/Games/Win Rate) now equally spread'
+    ]
+  },
   {
     version: '2.4.3',
     date: '2024-12-14',
