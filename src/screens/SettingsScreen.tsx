@@ -30,8 +30,9 @@ const SettingsScreen = () => {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddChip, setShowAddChip] = useState(false);
   const [showEditPlayer, setShowEditPlayer] = useState(false);
-  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; type: 'permanent' | 'guest' } | null>(null);
   const [editPlayerName, setEditPlayerName] = useState('');
+  const [editPlayerType, setEditPlayerType] = useState<'permanent' | 'guest'>('permanent');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('permanent');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
@@ -93,9 +94,10 @@ const SettingsScreen = () => {
     showSaved();
   };
 
-  const openEditPlayer = (player: { id: string; name: string }) => {
+  const openEditPlayer = (player: { id: string; name: string; type: 'permanent' | 'guest' }) => {
     setEditingPlayer(player);
     setEditPlayerName(player.name);
+    setEditPlayerType(player.type || 'permanent');
     setShowEditPlayer(true);
     setError('');
   };
@@ -115,7 +117,12 @@ const SettingsScreen = () => {
       return;
     }
     
-    setPlayers(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName } : p));
+    // Also update type if changed
+    if (editPlayerType !== editingPlayer.type) {
+      updatePlayerType(editingPlayer.id, editPlayerType);
+    }
+    
+    setPlayers(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, type: editPlayerType } : p));
     setShowEditPlayer(false);
     setEditingPlayer(null);
     setEditPlayerName('');
@@ -396,39 +403,34 @@ const SettingsScreen = () => {
                       {player.type === 'permanent' ? '⭐ קבוע' : '👤 אורח'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
                     <button 
                       className="btn btn-sm"
                       style={{ 
-                        padding: '0.25rem 0.5rem', 
-                        fontSize: '0.7rem',
+                        padding: '0.35rem 0.6rem', 
+                        fontSize: '0.75rem',
                         background: 'var(--surface)',
                         border: '1px solid var(--border)',
-                        color: 'var(--text-muted)'
+                        color: 'var(--text)'
                       }}
                       onClick={() => openEditPlayer(player)}
-                      title="Edit name"
+                      title="Edit player"
                     >
-                      ✏️
+                      ✏️ Edit
                     </button>
                     <button 
                       className="btn btn-sm"
                       style={{ 
-                        padding: '0.25rem 0.5rem', 
-                        fontSize: '0.7rem',
-                        background: player.type === 'permanent' ? 'var(--surface)' : 'rgba(16, 185, 129, 0.15)',
-                        border: '1px solid var(--border)',
-                        color: player.type === 'permanent' ? 'var(--text-muted)' : 'var(--primary)'
+                        padding: '0.35rem 0.5rem', 
+                        fontSize: '0.75rem',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: 'var(--danger)'
                       }}
-                      onClick={() => handlePlayerTypeChange(player.id, player.type === 'permanent' ? 'guest' : 'permanent')}
-                    >
-                      {player.type === 'permanent' ? 'אורח' : 'קבוע'}
-                    </button>
-                    <button 
-                      className="btn btn-sm btn-danger"
                       onClick={() => handleDeletePlayer(player.id)}
+                      title="Delete player"
                     >
-                      ×
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -457,34 +459,71 @@ const SettingsScreen = () => {
             </div>
           )}
 
-          <div style={{ marginBottom: '1rem' }}>
-            <p className="text-muted" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-              Last backup: {lastBackup ? formatBackupDate(lastBackup) : 'Never'}
-            </p>
-            <p className="text-muted" style={{ fontSize: '0.8rem' }}>
-              Auto-backup runs every Sunday when you open the app
+          {/* Status info */}
+          <div style={{ 
+            background: 'var(--surface)', 
+            borderRadius: '8px', 
+            padding: '0.75rem',
+            marginBottom: '1rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Last backup:</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{lastBackup ? formatBackupDate(lastBackup) : 'Never'}</span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+              ⏰ Auto-backup runs every Sunday
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <button className="btn btn-primary" onClick={handleCreateBackup}>
-              💾 Backup Now
-            </button>
-            <button className="btn btn-secondary" onClick={handleDownloadBackup}>
-              📥 Download Backup
-            </button>
-            <button className="btn btn-outline" onClick={() => setShowRestoreModal(true)}>
-              🔄 Restore from Backup
-            </button>
-            <label className="btn btn-outline" style={{ textAlign: 'center', cursor: 'pointer' }}>
-              📤 Import from File
-              <input 
-                type="file" 
-                accept=".json"
-                onChange={handleImportFile}
-                style={{ display: 'none' }}
-              />
-            </label>
+          {/* Backup Actions */}
+          <div style={{ marginBottom: '1rem' }}>
+            <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Create Backup
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleCreateBackup}
+                style={{ flex: 1 }}
+              >
+                💾 Backup Now
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleDownloadBackup}
+                style={{ flex: 1 }}
+              >
+                📥 Download
+              </button>
+            </div>
+          </div>
+
+          {/* Restore Actions */}
+          <div>
+            <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              Restore Data
+            </p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowRestoreModal(true)}
+                style={{ flex: 1 }}
+              >
+                🔄 From Backup
+              </button>
+              <label 
+                className="btn btn-secondary" 
+                style={{ flex: 1, textAlign: 'center', cursor: 'pointer', margin: 0 }}
+              >
+                📤 From File
+                <input 
+                  type="file" 
+                  accept=".json"
+                  onChange={handleImportFile}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
           </div>
         </div>
       )}
@@ -655,8 +694,27 @@ const SettingsScreen = () => {
                 autoFocus
               />
             </div>
+            <div className="input-group">
+              <label className="label">Player Type</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className={`btn ${editPlayerType === 'permanent' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setEditPlayerType('permanent')}
+                >
+                  ⭐ קבוע
+                </button>
+                <button
+                  className={`btn ${editPlayerType === 'guest' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setEditPlayerType('guest')}
+                >
+                  👤 אורח
+                </button>
+              </div>
+            </div>
             <p className="text-muted" style={{ fontSize: '0.8rem', marginBottom: '1rem' }}>
-              ⚠️ All historical data and statistics will be updated to the new name
+              ⚠️ Changing name will update all historical data
             </p>
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setShowEditPlayer(false)}>

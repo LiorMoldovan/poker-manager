@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.7';
+export const APP_VERSION = '2.7.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.7.8',
+    date: '2024-12-15',
+    changes: [
+      'Settings: Unified player edit - name & type in one modal',
+      'Settings: Cleaner player buttons (Edit + Delete only)',
+      'Settings: Backup section redesigned with grouped actions'
+    ]
+  },
   {
     version: '2.7.7',
     date: '2024-12-15',
