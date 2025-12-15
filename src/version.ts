@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.7.9';
+export const APP_VERSION = '2.8.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.8.0',
+    date: '2024-12-15',
+    changes: [
+      'Delete confirmation dialogs for players and chips',
+      'All deletions now require confirmation before proceeding'
+    ]
+  },
   {
     version: '2.7.9',
     date: '2024-12-15',

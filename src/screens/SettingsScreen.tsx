@@ -45,6 +45,8 @@ const SettingsScreen = () => {
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -133,6 +135,7 @@ const SettingsScreen = () => {
   const handleDeletePlayer = (id: string) => {
     deletePlayer(id);
     setPlayers(players.filter(p => p.id !== id));
+    setDeletePlayerConfirm(null);
   };
 
   const handleAddChip = () => {
@@ -154,6 +157,7 @@ const SettingsScreen = () => {
   const handleDeleteChip = (id: string) => {
     deleteChipValue(id);
     setChipValues(chipValues.filter(c => c.id !== id));
+    setDeleteChipConfirm(null);
   };
 
   const handleChipValueChange = (chipId: string, value: number) => {
@@ -366,7 +370,7 @@ const SettingsScreen = () => {
               />
               <button 
                 className="btn btn-sm btn-danger"
-                onClick={() => handleDeleteChip(chip.id)}
+                onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
               >
                 ×
               </button>
@@ -427,7 +431,7 @@ const SettingsScreen = () => {
                         border: '1px solid rgba(239, 68, 68, 0.3)',
                         color: 'var(--danger)'
                       }}
-                      onClick={() => handleDeletePlayer(player.id)}
+                      onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
                       title="Delete player"
                     >
                       🗑️
@@ -839,6 +843,55 @@ const SettingsScreen = () => {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delete Player Confirmation Modal */}
+      {deletePlayerConfirm && (
+        <div className="modal-overlay" onClick={() => setDeletePlayerConfirm(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">🗑️ Delete Player</h3>
+              <button className="modal-close" onClick={() => setDeletePlayerConfirm(null)}>×</button>
+            </div>
+            <p style={{ marginBottom: '1rem' }}>
+              Are you sure you want to delete <strong>{deletePlayerConfirm.name}</strong>?
+            </p>
+            <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+              ⚠️ This will not delete their game history, but they will no longer appear in the player list.
+            </p>
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setDeletePlayerConfirm(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={() => handleDeletePlayer(deletePlayerConfirm.id)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Chip Confirmation Modal */}
+      {deleteChipConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteChipConfirm(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">🗑️ Delete Chip</h3>
+              <button className="modal-close" onClick={() => setDeleteChipConfirm(null)}>×</button>
+            </div>
+            <p style={{ marginBottom: '1rem' }}>
+              Are you sure you want to delete the <strong>{deleteChipConfirm.name}</strong> chip?
+            </p>
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setDeleteChipConfirm(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={() => handleDeleteChip(deleteChipConfirm.id)}>
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
