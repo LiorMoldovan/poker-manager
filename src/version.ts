@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.8.0';
+export const APP_VERSION = '2.8.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.8.1',
+    date: '2024-12-15',
+    changes: [
+      'Auto backup after each game ends',
+      'Backups now show type: Auto (Game End), Auto (Sunday), Manual',
+      'Backup list shows trigger information'
+    ]
+  },
   {
     version: '2.8.0',
     date: '2024-12-15',

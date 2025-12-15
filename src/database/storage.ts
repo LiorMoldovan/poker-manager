@@ -533,6 +533,8 @@ export const importDec6GameIfNeeded = (): void => {
 export interface BackupData {
   id: string;
   date: string;
+  type: 'auto' | 'manual';
+  trigger?: 'sunday' | 'game-end';  // For auto backups, what triggered it
   players: Player[];
   games: Game[];
   gamePlayers: GamePlayer[];
@@ -541,10 +543,12 @@ export interface BackupData {
 }
 
 // Create a backup of all data
-export const createBackup = (isAutomatic: boolean = false): BackupData => {
+export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'sunday' | 'game-end'): BackupData => {
   const backup: BackupData = {
     id: generateId(),
     date: new Date().toISOString(),
+    type,
+    trigger: type === 'auto' ? trigger : undefined,
     players: getAllPlayers(),
     games: getAllGames(),
     gamePlayers: getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []),
@@ -563,7 +567,7 @@ export const createBackup = (isAutomatic: boolean = false): BackupData => {
   
   setItem(STORAGE_KEYS.BACKUPS, backups);
   
-  if (isAutomatic) {
+  if (type === 'auto') {
     // Record that we did an auto-backup today
     setItem(STORAGE_KEYS.LAST_BACKUP_DATE, new Date().toDateString());
   }
@@ -602,7 +606,7 @@ export const restoreFromBackup = (backupId: string): boolean => {
 
 // Download backup as JSON file
 export const downloadBackup = (): void => {
-  const backup = createBackup(false);
+  const backup = createBackup('manual');
   const dataStr = JSON.stringify(backup, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -656,8 +660,14 @@ export const checkAndAutoBackup = (): boolean => {
   }
   
   // Create automatic backup
-  createBackup(true);
+  createBackup('auto', 'sunday');
   console.log('Automatic Sunday backup created!');
   return true;
+};
+
+// Create auto backup after game ends
+export const createGameEndBackup = (): void => {
+  createBackup('auto', 'game-end');
+  console.log('Auto backup created after game end!');
 };
 

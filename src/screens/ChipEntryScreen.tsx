@@ -8,7 +8,8 @@ import {
   updateGamePlayerChips,
   updateGamePlayerResults,
   updateGameStatus,
-  updateGameChipGap
+  updateGameChipGap,
+  createGameEndBackup
 } from '../database/storage';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 
@@ -338,6 +339,10 @@ const ChipEntryScreen = () => {
     }
     
     updateGameStatus(gameId, 'completed');
+    
+    // Create auto backup after game ends
+    createGameEndBackup();
+    
     navigate(`/game-summary/${gameId}`);
   };
 

@@ -172,7 +172,7 @@ const SettingsScreen = () => {
 
   // Backup handlers
   const handleCreateBackup = () => {
-    createBackup(false);
+    createBackup('manual');
     setBackups(getBackups());
     setLastBackup(getLastBackupDate());
     setBackupMessage({ type: 'success', text: 'Backup created successfully!' });
@@ -475,7 +475,7 @@ const SettingsScreen = () => {
               <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{lastBackup ? formatBackupDate(lastBackup) : 'Never'}</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
-              ⏰ Auto-backup runs every Sunday
+              ⏰ Auto-backup after each game + every Sunday
             </p>
           </div>
 
@@ -823,10 +823,21 @@ const SettingsScreen = () => {
                       <button
                         key={backup.id}
                         className="btn btn-outline"
-                        style={{ textAlign: 'left', justifyContent: 'space-between', display: 'flex' }}
+                        style={{ textAlign: 'left', justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}
                         onClick={() => setRestoreConfirm(backup.id)}
                       >
-                        <span>{formatBackupDate(backup.date)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <span>{formatBackupDate(backup.date)}</span>
+                          <span style={{ 
+                            fontSize: '0.7rem', 
+                            color: backup.type === 'auto' ? 'var(--primary)' : 'var(--text-muted)',
+                            marginTop: '0.15rem'
+                          }}>
+                            {backup.type === 'auto' 
+                              ? (backup.trigger === 'game-end' ? '🎮 Auto (Game End)' : '📅 Auto (Sunday)')
+                              : '👤 Manual'}
+                          </span>
+                        </div>
                         <span className="text-muted" style={{ fontSize: '0.8rem' }}>
                           {index === 0 ? '(Latest)' : ''}
                         </span>
