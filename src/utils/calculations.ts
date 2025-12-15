@@ -27,8 +27,7 @@ export const calculateSettlement = (
     .filter(p => Math.abs(p.profit) > 0.001) // Filter out zero balances
     .map(p => ({ name: p.playerName, balance: p.profit }));
 
-  const settlements: Settlement[] = [];
-  const smallTransfers: SkippedTransfer[] = [];
+  const allTransfers: Settlement[] = [];
 
   // Step 1: Find exact matches first (minimizes transactions)
   for (let i = 0; i < balances.length; i++) {
@@ -45,9 +44,7 @@ export const calculateSettlement = (
           : [balances[j], balances[i]];
         
         const amount = Math.abs(debtor.balance);
-        const transfer = { from: debtor.name, to: creditor.name, amount };
-        settlements.push(transfer);
-        if (amount < minTransfer) smallTransfers.push(transfer);
+        allTransfers.push({ from: debtor.name, to: creditor.name, amount });
         
         balances[i].balance = 0;
         balances[j].balance = 0;
@@ -69,9 +66,7 @@ export const calculateSettlement = (
     const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
 
     if (amount > 0.001) {
-      const transfer = { from: debtor.name, to: creditor.name, amount };
-      settlements.push(transfer);
-      if (amount < minTransfer) smallTransfers.push(transfer);
+      allTransfers.push({ from: debtor.name, to: creditor.name, amount });
     }
 
     creditor.balance -= amount;
@@ -81,8 +76,19 @@ export const calculateSettlement = (
     if (debtor.balance >= -0.001) debtorIdx++;
   }
 
+  // Separate into regular settlements and small transfers (no duplicates)
+  const settlements = allTransfers.filter(t => t.amount >= minTransfer);
+  const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
+
   // Sort settlements: first by payer name, then by amount (largest first)
   settlements.sort((a, b) => {
+    const nameCompare = a.from.localeCompare(b.from);
+    if (nameCompare !== 0) return nameCompare;
+    return b.amount - a.amount;
+  });
+
+  // Sort small transfers the same way
+  smallTransfers.sort((a, b) => {
     const nameCompare = a.from.localeCompare(b.from);
     if (nameCompare !== 0) return nameCompare;
     return b.amount - a.amount;

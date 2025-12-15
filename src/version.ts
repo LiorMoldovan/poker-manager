@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.4.2';
+export const APP_VERSION = '2.4.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.3',
+    date: '2024-12-14',
+    changes: [
+      'Fixed bug: small transfers no longer displayed twice',
+      'Settlements and Small Amounts are now separate lists'
+    ]
+  },
   {
     version: '2.4.2',
     date: '2024-12-14',
