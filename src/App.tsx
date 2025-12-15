@@ -12,22 +12,36 @@ import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
-// PIN code for app access
-const APP_PIN = '2580';
+// PIN codes for app access
+const FULL_ACCESS_PIN = '2580';
+const STATS_ONLY_PIN = '9876';
+
+export type AccessLevel = 'none' | 'stats_only' | 'full';
 
 function App() {
   const location = useLocation();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accessLevel, setAccessLevel] = useState<AccessLevel>('none');
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     initializeStorage();
     setIsInitialized(true);
     // Check if already authenticated
-    if (sessionStorage.getItem('poker_authenticated') === 'true') {
-      setIsAuthenticated(true);
+    const savedAccess = sessionStorage.getItem('poker_access_level') as AccessLevel;
+    if (savedAccess === 'full' || savedAccess === 'stats_only') {
+      setAccessLevel(savedAccess);
     }
   }, []);
+
+  const handleUnlock = (pin: string) => {
+    if (pin === FULL_ACCESS_PIN) {
+      setAccessLevel('full');
+      sessionStorage.setItem('poker_access_level', 'full');
+    } else if (pin === STATS_ONLY_PIN) {
+      setAccessLevel('stats_only');
+      sessionStorage.setItem('poker_access_level', 'stats_only');
+    }
+  };
 
   // Show loading while initializing
   if (!isInitialized) {
@@ -48,10 +62,32 @@ function App() {
   }
 
   // Show PIN lock if not authenticated
-  if (!isAuthenticated) {
-    return <PinLock correctPin={APP_PIN} onUnlock={() => setIsAuthenticated(true)} />;
+  if (accessLevel === 'none') {
+    return (
+      <PinLock 
+        validPins={[FULL_ACCESS_PIN, STATS_ONLY_PIN]} 
+        onUnlock={handleUnlock} 
+      />
+    );
   }
 
+  // Stats-only access - show only statistics page
+  if (accessLevel === 'stats_only') {
+    return (
+      <div className="app-container">
+        <main className="main-content">
+          <Routes>
+            <Route path="/statistics" element={<StatisticsScreen />} />
+            {/* Redirect everything to statistics */}
+            <Route path="*" element={<Navigate to="/statistics" replace />} />
+          </Routes>
+        </main>
+        {/* No navigation for stats-only users */}
+      </div>
+    );
+  }
+
+  // Full access
   // Hide navigation on game flow screens
   const hideNav = ['/live-game', '/chip-entry', '/game-summary'].some(path => 
     location.pathname.startsWith(path)
@@ -79,4 +115,3 @@ function App() {
 }
 
 export default App;
-

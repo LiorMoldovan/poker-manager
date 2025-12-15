@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.4.0';
+export const APP_VERSION = '2.4.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.1',
+    date: '2024-12-14',
+    changes: [
+      'Added stats-only PIN (9876) for view-only access',
+      'Stats-only users can only see Statistics page',
+      'Full access PIN (2580) unchanged'
+    ]
+  },
   {
     version: '2.4.0',
     date: '2024-12-14',

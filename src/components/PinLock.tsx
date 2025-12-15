@@ -2,21 +2,22 @@ import { useState, useEffect } from 'react';
 import { APP_VERSION } from '../version';
 
 interface PinLockProps {
-  correctPin: string;
-  onUnlock: () => void;
+  validPins: string[];
+  onUnlock: (pin: string) => void;
 }
 
-const PinLock = ({ correctPin, onUnlock }: PinLockProps) => {
+const PinLock = ({ validPins, onUnlock }: PinLockProps) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
 
   useEffect(() => {
     // Check if already authenticated this session
-    if (sessionStorage.getItem('poker_authenticated') === 'true') {
-      onUnlock();
+    const savedAccess = sessionStorage.getItem('poker_access_level');
+    if (savedAccess === 'full' || savedAccess === 'stats_only') {
+      // Already handled by App.tsx
     }
-  }, [onUnlock]);
+  }, []);
 
   const handleKeyPress = (digit: string) => {
     if (pin.length < 4) {
@@ -26,9 +27,8 @@ const PinLock = ({ correctPin, onUnlock }: PinLockProps) => {
       
       // Auto-submit when 4 digits entered
       if (newPin.length === 4) {
-        if (newPin === correctPin) {
-          sessionStorage.setItem('poker_authenticated', 'true');
-          onUnlock();
+        if (validPins.includes(newPin)) {
+          onUnlock(newPin);
         } else {
           setError(true);
           setShake(true);
@@ -170,4 +170,3 @@ const PinLock = ({ correctPin, onUnlock }: PinLockProps) => {
 };
 
 export default PinLock;
-
