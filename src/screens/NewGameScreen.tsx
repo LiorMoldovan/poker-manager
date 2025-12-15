@@ -86,14 +86,14 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // Generate funny sentence based on player stats
+  // Generate funny sentence based on player stats (Hebrew)
   const generateFunnySentence = (stats: PlayerStats | undefined, player: Player): string => {
     if (!stats || stats.gamesPlayed === 0) {
       const newPlayerSentences = [
-        "🆕 Fresh meat for the table!",
-        "🎲 Beginner's luck incoming?",
-        "👀 The mysterious newcomer...",
-        "🤔 No history, no mercy!",
+        "🆕 בשר טרי לשולחן!",
+        "🎲 מזל מתחילים בדרך?",
+        "👀 החידה המסתורית...",
+        "🤔 בלי היסטוריה, בלי רחמים!",
       ];
       return newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)];
     }
@@ -103,11 +103,11 @@ const NewGameScreen = () => {
     // Big winner
     if (avgProfit > 50) {
       const winnerSentences = [
-        "🔥 The table's worst nightmare",
-        "💰 Professional chip collector",
-        "👑 Bow before the king/queen",
-        "🎯 Money magnet activated",
-        "🦈 Shark alert! Hide your chips!",
+        "🔥 הסיוט של השולחן",
+        "💰 אספן ז'יטונים מקצועי",
+        "👑 תשתחוו בפני המלך",
+        "🎯 מגנט כסף מופעל",
+        "🦈 התראת כריש! תחביאו את הז'יטונים!",
       ];
       return winnerSentences[Math.floor(Math.random() * winnerSentences.length)];
     }
@@ -115,11 +115,11 @@ const NewGameScreen = () => {
     // Big loser
     if (avgProfit < -50) {
       const loserSentences = [
-        "💸 Chief Donation Officer",
-        "🎁 The group's favorite sponsor",
-        "🏧 Walking ATM machine",
-        "😇 Funding everyone's drinks",
-        "🙏 Thank you for your service",
+        "💸 ראש מחלקת תרומות",
+        "🎁 הספונסר האהוב של הקבוצה",
+        "🏧 כספומט מהלך",
+        "😇 ממן את המשקאות של כולם",
+        "🙏 תודה על השירות",
       ];
       return loserSentences[Math.floor(Math.random() * loserSentences.length)];
     }
@@ -127,10 +127,10 @@ const NewGameScreen = () => {
     // On a winning streak
     if (currentStreak >= 2) {
       const streakSentences = [
-        `🔥 ${currentStreak} wins in a row! Hot hand!`,
-        "⚡ Currently unstoppable",
-        "📈 Riding the wave",
-        "🎰 The luck is strong with this one",
+        `🔥 ${currentStreak} נצחונות ברצף! יד חמה!`,
+        "⚡ כרגע בלתי ניתן לעצירה",
+        "📈 רוכב על הגל",
+        "🎰 המזל חזק איתו הלילה",
       ];
       return streakSentences[Math.floor(Math.random() * streakSentences.length)];
     }
@@ -138,41 +138,41 @@ const NewGameScreen = () => {
     // On a losing streak
     if (currentStreak <= -2) {
       const loseStreakSentences = [
-        `😰 ${Math.abs(currentStreak)} losses in a row... ouch`,
-        "📉 Due for a comeback... right?",
-        "🍀 Needs some serious luck tonight",
-        "🤞 Recovery mode activated",
+        `😰 ${Math.abs(currentStreak)} הפסדים ברצף... אאוץ'`,
+        "📉 מגיע לו קאמבק... נכון?",
+        "🍀 צריך מזל רציני הלילה",
+        "🤞 מצב התאוששות מופעל",
       ];
       return loseStreakSentences[Math.floor(Math.random() * loseStreakSentences.length)];
     }
 
     // High win rate
     if (winPercentage > 60) {
-      return "📊 Statistically dangerous";
+      return "📊 סטטיסטית מסוכן";
     }
 
     // Low win rate
     if (winPercentage < 40 && stats.gamesPlayed >= 3) {
-      return "🎲 Optimism over statistics";
+      return "🎲 אופטימיות מנצחת סטטיסטיקה";
     }
 
     // Had a big win recently
     if (biggestWin > 150) {
-      return "💎 Remembers that one amazing night...";
+      return "💎 זוכר את הלילה המטורף ההוא...";
     }
 
     // Had a big loss
     if (biggestLoss < -150) {
-      return "😅 Still recovering emotionally";
+      return "😅 עדיין מתאושש רגשית";
     }
 
     // Break-even player
     const neutralSentences = [
-      "😐 Professional chip babysitter",
-      "⚖️ Perfectly balanced, as all things should be",
-      "🎭 The wildcard",
-      "🤷 Could go either way",
-      "📊 Mr./Ms. Average",
+      "😐 שומר ז'יטונים מקצועי",
+      "⚖️ מאוזן לחלוטין",
+      "🎭 הקלף הפראי",
+      "🤷 יכול ללכת לכל כיוון",
+      "📊 מר ממוצע",
     ];
     return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
   };
