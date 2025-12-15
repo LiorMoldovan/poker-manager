@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
-import { getGame, getGamePlayers, getSettings } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 const GameDetailsScreen = () => {
@@ -20,13 +20,28 @@ const GameDetailsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Get chip value for display
-  const getChipDisplay = (player: GamePlayer): string => {
-    const value = player.finalValue;
+  // Calculate total chips for a player (same as GameSummaryScreen)
+  const getTotalChips = (player: GamePlayer): number => {
+    // First try to calculate from chipCounts
+    if (player.chipCounts && Object.keys(player.chipCounts).length > 0) {
+      const chipValues = getChipValues();
+      let total = 0;
+      for (const [chipId, count] of Object.entries(player.chipCounts)) {
+        const chip = chipValues.find(c => c.id === chipId);
+        if (chip) {
+          total += count * chip.value;
+        }
+      }
+      if (total > 0) return total;
+    }
+    // Fallback to finalValue
+    return player.finalValue;
+  };
+
+  // Format chips for display
+  const formatChips = (value: number): string => {
     if (value <= 0) return '0';
-    // If value is large (chip points like 57800), show as "58k"
     if (value >= 1000) return `${Math.round(value / 1000)}k`;
-    // If value is small (could be shekels like 351.15), just show rounded
     return Math.round(value).toString();
   };
 
@@ -190,31 +205,40 @@ const GameDetailsScreen = () => {
 
         <div className="card" style={{ overflow: 'hidden' }}>
           <h2 className="card-title mb-2">Results</h2>
-          <table style={{ width: '100%', tableLayout: 'fixed', fontSize: '0.9rem' }}>
-            <thead>
-              <tr>
-                <th style={{ width: '40%', paddingRight: '8px' }}>Player</th>
-                <th style={{ textAlign: 'center', width: '20%' }}>Rebuys</th>
-                <th style={{ textAlign: 'right', width: '40%', paddingLeft: '8px' }}>Profit/Loss</th>
-              </tr>
-            </thead>
-            <tbody>
-              {players.map((player, index) => (
-                <tr key={player.id}>
-                  <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '8px' }}>
-                    {index === 0 && player.profit > 0 && '🥇 '}
-                    {index === 1 && player.profit > 0 && '🥈 '}
-                    {index === 2 && player.profit > 0 && '🥉 '}
-                    {player.playerName}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>{Math.round(player.rebuys)}</td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingLeft: '8px' }} className={getProfitColor(player.profit)}>
-                    {player.profit >= 0 ? '+' : ''}₪{Math.round(player.profit)}
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ fontSize: '0.9rem', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Chips</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Rebuy</th>
+                  <th style={{ textAlign: 'right' }}>+/-</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {players.map((player, index) => (
+                  <tr key={player.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {index === 0 && player.profit > 0 && '🥇'}
+                      {index === 1 && player.profit > 0 && '🥈'}
+                      {index === 2 && player.profit > 0 && '🥉'}
+                      {index > 2 || player.profit <= 0 ? '' : ' '}
+                      {player.playerName}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
+                      {formatChips(getTotalChips(player))}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
+                      {Math.round(player.rebuys)}
+                    </td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
+                      {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           
           {chipGap !== null && chipGap !== 0 && (
             <div style={{ 
