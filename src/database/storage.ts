@@ -100,7 +100,7 @@ export const initializeStorage = (): void => {
   // Import historical games if not already imported
   importDec6GameIfNeeded();
   
-  // Check for automatic Sunday backup
+  // Check for automatic Friday backup
   checkAndAutoBackup();
 };
 
@@ -534,7 +534,7 @@ export interface BackupData {
   id: string;
   date: string;
   type: 'auto' | 'manual';
-  trigger?: 'sunday' | 'game-end';  // For auto backups, what triggered it
+  trigger?: 'friday' | 'game-end';  // For auto backups, what triggered it
   players: Player[];
   games: Game[];
   gamePlayers: GamePlayer[];
@@ -644,12 +644,12 @@ export const importBackupFromFile = (jsonData: string): boolean => {
   }
 };
 
-// Check if we should auto-backup (Sunday and not already backed up today)
+// Check if we should auto-backup (Friday and not already backed up today)
 export const checkAndAutoBackup = (): boolean => {
   const today = new Date();
-  const isSunday = today.getDay() === 0;
+  const isFriday = today.getDay() === 5;
   
-  if (!isSunday) return false;
+  if (!isFriday) return false;
   
   const lastBackupDate = getItem<string | null>(STORAGE_KEYS.LAST_BACKUP_DATE, null);
   const todayStr = today.toDateString();
@@ -660,8 +660,8 @@ export const checkAndAutoBackup = (): boolean => {
   }
   
   // Create automatic backup
-  createBackup('auto', 'sunday');
-  console.log('Automatic Sunday backup created!');
+  createBackup('auto', 'friday');
+  console.log('Automatic Friday backup created!');
   return true;
 };
 

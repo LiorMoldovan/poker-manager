@@ -483,7 +483,7 @@ const SettingsScreen = () => {
               <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{lastBackup ? formatBackupDate(lastBackup) : 'Never'}</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
-              ⏰ Auto-backup after each game + every Sunday
+              ⏰ Auto-backup after each game + every Friday
             </p>
           </div>
 
@@ -842,7 +842,7 @@ const SettingsScreen = () => {
                             marginTop: '0.15rem'
                           }}>
                             {backup.type === 'auto' 
-                              ? (backup.trigger === 'game-end' ? '🎮 Auto (Game End)' : '📅 Auto (Sunday)')
+                              ? (backup.trigger === 'game-end' ? '🎮 Auto (Game End)' : '📅 Auto (Friday)')
                               : '👤 Manual'}
                           </span>
                         </div>
