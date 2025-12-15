@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { PlayerStats } from '../types';
-import { getPlayerStats } from '../database/storage';
+import { PlayerStats, Player } from '../types';
+import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+  const [includeGuests, setIncludeGuests] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -15,10 +17,31 @@ const StatisticsScreen = () => {
 
   const loadStats = () => {
     const playerStats = getPlayerStats();
+    const allPlayers = getAllPlayers();
     setStats(playerStats);
-    // By default, select all players
-    setSelectedPlayers(new Set(playerStats.map(p => p.playerId)));
+    setPlayers(allPlayers);
+    // By default, select only permanent players
+    const permanentPlayerIds = allPlayers
+      .filter(p => p.type === 'permanent')
+      .map(p => p.id);
+    const permanentStatsIds = playerStats
+      .filter(s => permanentPlayerIds.includes(s.playerId))
+      .map(s => s.playerId);
+    setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
   };
+
+  // Get player type
+  const getPlayerType = (playerId: string): 'permanent' | 'guest' => {
+    const player = players.find(p => p.id === playerId);
+    return player?.type || 'permanent';
+  };
+
+  // Separate stats by player type
+  const permanentStats = stats.filter(s => getPlayerType(s.playerId) === 'permanent');
+  const guestStats = stats.filter(s => getPlayerType(s.playerId) === 'guest');
+
+  // Stats available for selection based on includeGuests toggle
+  const availableStats = includeGuests ? stats : permanentStats;
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -38,17 +61,39 @@ const StatisticsScreen = () => {
 
   // Select/Deselect all players
   const toggleAllPlayers = () => {
-    if (selectedPlayers.size === stats.length) {
+    if (selectedPlayers.size === availableStats.length) {
       // If all selected, keep only the first one
-      setSelectedPlayers(new Set([stats[0]?.playerId].filter(Boolean)));
+      setSelectedPlayers(new Set([availableStats[0]?.playerId].filter(Boolean)));
     } else {
-      // Select all
+      // Select all available
+      setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
+    }
+  };
+
+  // Toggle include guests
+  const handleToggleGuests = () => {
+    const newIncludeGuests = !includeGuests;
+    setIncludeGuests(newIncludeGuests);
+    // Update selection based on new setting
+    if (newIncludeGuests) {
+      // Include all players
       setSelectedPlayers(new Set(stats.map(p => p.playerId)));
+    } else {
+      // Keep only permanent players that are currently selected
+      const permanentIds = permanentStats.map(s => s.playerId);
+      const newSelected = new Set(
+        [...selectedPlayers].filter(id => permanentIds.includes(id))
+      );
+      // Make sure at least one is selected
+      if (newSelected.size === 0 && permanentStats.length > 0) {
+        newSelected.add(permanentStats[0].playerId);
+      }
+      setSelectedPlayers(newSelected);
     }
   };
 
   // Filtered stats based on selection
-  const filteredStats = stats.filter(s => selectedPlayers.has(s.playerId));
+  const filteredStats = availableStats.filter(s => selectedPlayers.has(s.playerId));
 
 
   const sortedStats = [...filteredStats].sort((a, b) => {
@@ -183,6 +228,46 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
+            {/* Include Guests Toggle */}
+            {guestStats.length > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                marginBottom: '0.75rem',
+                paddingBottom: '0.75rem',
+                borderBottom: '1px solid var(--border)'
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+                  Include Guest Players
+                </span>
+                <button
+                  onClick={handleToggleGuests}
+                  style={{
+                    width: '48px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    background: includeGuests ? 'var(--primary)' : 'var(--border)',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'background 0.2s ease'
+                  }}
+                >
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    position: 'absolute',
+                    top: '3px',
+                    left: includeGuests ? '25px' : '3px',
+                    transition: 'left 0.2s ease'
+                  }} />
+                </button>
+              </div>
+            )}
+
             <div style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
@@ -190,7 +275,7 @@ const StatisticsScreen = () => {
               marginBottom: '0.5rem'
             }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                FILTER PLAYERS ({selectedPlayers.size}/{stats.length})
+                FILTER PLAYERS ({selectedPlayers.size}/{availableStats.length})
               </span>
               <button
                 onClick={toggleAllPlayers}
@@ -204,12 +289,13 @@ const StatisticsScreen = () => {
                   cursor: 'pointer'
                 }}
               >
-                {selectedPlayers.size === stats.length ? 'Clear' : 'Select All'}
+                {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
               </button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-              {stats.map(player => {
+              {availableStats.map(player => {
                 const isSelected = selectedPlayers.has(player.playerId);
+                const isGuest = getPlayerType(player.playerId) === 'guest';
                 return (
                   <button
                     key={player.playerId}
@@ -226,7 +312,7 @@ const StatisticsScreen = () => {
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    {isSelected && '✓ '}{player.playerName}
+                    {isSelected && '✓ '}{isGuest && '👤 '}{player.playerName}
                   </button>
                 );
               })}

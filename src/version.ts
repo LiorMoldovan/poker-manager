@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '2.3.9';
+export const APP_VERSION = '2.4.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '2.4.0',
+    date: '2024-12-14',
+    changes: [
+      'Added permanent vs guest player types',
+      'Settings: new players are permanent by default',
+      'New Game: new players are guests by default with toggle',
+      'New Game: guests shown in collapsible section',
+      'Statistics: toggle to include/exclude guests',
+      'Existing players migrated to permanent'
+    ]
+  },
   {
     version: '2.3.9',
     date: '2024-12-14',

@@ -39,19 +39,19 @@ const DEFAULT_SETTINGS: Settings = {
   minTransfer: 5,
 };
 
-// Default players
+// Default players (all permanent)
 const DEFAULT_PLAYERS: Player[] = [
-  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString() },
-  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString() },
-  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString() },
-  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString() },
-  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString() },
-  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString() },
-  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString() },
-  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString() },
-  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString() },
-  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString() },
-  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString() },
+  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString(), type: 'permanent' },
 ];
 
 // Initialize default values if not exist
@@ -74,6 +74,19 @@ export const initializeStorage = (): void => {
   const existingPlayers = localStorage.getItem(STORAGE_KEYS.PLAYERS);
   if (!existingPlayers || JSON.parse(existingPlayers).length === 0) {
     setItem(STORAGE_KEYS.PLAYERS, DEFAULT_PLAYERS);
+  } else {
+    // Migrate existing players - add type: 'permanent' if missing
+    const players = JSON.parse(existingPlayers) as Player[];
+    let needsUpdate = false;
+    players.forEach(p => {
+      if (!p.type) {
+        p.type = 'permanent';
+        needsUpdate = true;
+      }
+    });
+    if (needsUpdate) {
+      setItem(STORAGE_KEYS.PLAYERS, players);
+    }
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
     setItem(STORAGE_KEYS.GAMES, []);
@@ -88,16 +101,27 @@ export const getAllPlayers = (): Player[] => {
   return getItem<Player[]>(STORAGE_KEYS.PLAYERS, []);
 };
 
-export const addPlayer = (name: string): Player => {
+export const addPlayer = (name: string, type: 'permanent' | 'guest' = 'permanent'): Player => {
   const players = getAllPlayers();
   const newPlayer: Player = {
     id: generateId(),
     name,
     createdAt: new Date().toISOString(),
+    type,
   };
   players.push(newPlayer);
   setItem(STORAGE_KEYS.PLAYERS, players);
   return newPlayer;
+};
+
+// Update player type
+export const updatePlayerType = (playerId: string, type: 'permanent' | 'guest'): void => {
+  const players = getAllPlayers();
+  const player = players.find(p => p.id === playerId);
+  if (player) {
+    player.type = type;
+    setItem(STORAGE_KEYS.PLAYERS, players);
+  }
 };
 
 export const deletePlayer = (id: string): void => {

@@ -9,7 +9,9 @@ const NewGameScreen = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('guest');
   const [error, setError] = useState('');
+  const [showGuests, setShowGuests] = useState(false);
 
   useEffect(() => {
     loadPlayers();
@@ -18,6 +20,10 @@ const NewGameScreen = () => {
   const loadPlayers = () => {
     setPlayers(getAllPlayers());
   };
+
+  // Separate permanent and guest players
+  const permanentPlayers = players.filter(p => p.type === 'permanent');
+  const guestPlayers = players.filter(p => p.type === 'guest');
 
   const togglePlayer = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -49,12 +55,17 @@ const NewGameScreen = () => {
       return;
     }
 
-    const newPlayer = addPlayer(trimmedName);
+    const newPlayer = addPlayer(trimmedName, newPlayerType);
     setPlayers([...players, newPlayer]);
     setSelectedIds(new Set([...selectedIds, newPlayer.id]));
     setNewPlayerName('');
+    setNewPlayerType('guest');
     setShowAddPlayer(false);
     setError('');
+    // If adding a guest, expand the guests section
+    if (newPlayerType === 'guest') {
+      setShowGuests(true);
+    }
   };
 
   const handleStartGame = () => {
@@ -66,6 +77,28 @@ const NewGameScreen = () => {
     const game = createGame(Array.from(selectedIds));
     navigate(`/live-game/${game.id}`);
   };
+
+  // Render player tile
+  const renderPlayerTile = (player: Player) => (
+    <div
+      key={player.id}
+      onClick={() => togglePlayer(player.id)}
+      style={{
+        padding: '0.6rem 0.5rem',
+        borderRadius: '12px',
+        fontSize: '1rem',
+        fontWeight: '600',
+        cursor: 'pointer',
+        border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
+        background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+        color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
+        transition: 'all 0.15s ease',
+        textAlign: 'center'
+      }}
+    >
+      {selectedIds.has(player.id) && '✓ '}{player.name}
+    </div>
+  );
 
   return (
     <div className="fade-in">
@@ -87,47 +120,33 @@ const NewGameScreen = () => {
         </div>
       )}
 
+      {/* Permanent Players */}
       <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
-        {players.length === 0 ? (
+        {permanentPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '1rem' }}>
             <div style={{ fontSize: '2rem' }}>👥</div>
             <p style={{ margin: '0.5rem 0 0.25rem', fontWeight: '500' }}>No players yet</p>
             <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>Add players to get started</p>
           </div>
         ) : (
-          <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-              gap: '0.75rem'
-            }}>
-            {players.map(player => (
-              <div
-                key={player.id}
-                onClick={() => togglePlayer(player.id)}
-                style={{
-                  padding: '0.6rem 0.5rem',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
-                  background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                  color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
-                  transition: 'all 0.15s ease',
-                  textAlign: 'center'
-                }}
-              >
-                {selectedIds.has(player.id) && '✓ '}{player.name}
+          <>
+            {permanentPlayers.length > 0 && (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                gap: '0.75rem'
+              }}>
+                {permanentPlayers.map(renderPlayerTile)}
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         <button 
           onClick={() => setShowAddPlayer(true)}
           style={{
             width: '100%',
-            marginTop: '0.75rem',
+            marginTop: permanentPlayers.length > 0 ? '0.75rem' : '0',
             padding: '0.5rem',
             border: '2px dashed var(--border)',
             borderRadius: '8px',
@@ -140,6 +159,44 @@ const NewGameScreen = () => {
           + Add Player
         </button>
       </div>
+
+      {/* Guest Players Section */}
+      {guestPlayers.length > 0 && (
+        <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <button
+            onClick={() => setShowGuests(!showGuests)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              color: 'var(--text)'
+            }}
+          >
+            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+              👤 Guest Players ({guestPlayers.length})
+            </span>
+            <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
+              {showGuests ? '▲' : '▼'}
+            </span>
+          </button>
+          
+          {showGuests && (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+              gap: '0.75rem',
+              marginTop: '0.75rem'
+            }}>
+              {guestPlayers.map(renderPlayerTile)}
+            </div>
+          )}
+        </div>
+      )}
 
       <button 
         className="btn btn-primary btn-lg btn-block"
@@ -170,6 +227,53 @@ const NewGameScreen = () => {
                 autoFocus
               />
             </div>
+            
+            {/* Player Type Toggle */}
+            <div className="input-group">
+              <label className="label">Player Type</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setNewPlayerType('guest')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '8px',
+                    border: newPlayerType === 'guest' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: newPlayerType === 'guest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: newPlayerType === 'guest' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  👤 Guest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPlayerType('permanent')}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    borderRadius: '8px',
+                    border: newPlayerType === 'permanent' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: newPlayerType === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: newPlayerType === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  ⭐ Permanent
+                </button>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                {newPlayerType === 'guest' 
+                  ? 'Guest players appear in a separate section' 
+                  : 'Permanent players always appear in the main list'}
+              </p>
+            </div>
+
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setShowAddPlayer(false)}>
                 Cancel
@@ -186,4 +290,3 @@ const NewGameScreen = () => {
 };
 
 export default NewGameScreen;
-

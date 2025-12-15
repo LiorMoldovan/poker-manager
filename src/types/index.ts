@@ -2,6 +2,7 @@ export interface Player {
   id: string;
   name: string;
   createdAt: string;
+  type: 'permanent' | 'guest';
 }
 
 export interface Game {
