@@ -16,7 +16,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '2.4.5',
     date: '2024-12-15',
     changes: [
-      'Added historical game import (Dec 7, 2024)',
+      'Added historical game import (Dec 6, 2024)',
       'Historical data automatically imported on first load'
     ]
   },

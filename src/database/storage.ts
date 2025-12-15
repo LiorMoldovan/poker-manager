@@ -96,7 +96,7 @@ export const initializeStorage = (): void => {
   }
   
   // Import historical games if not already imported
-  importDec7GameIfNeeded();
+  importDec6GameIfNeeded();
 };
 
 // Players
@@ -469,19 +469,19 @@ export const importHistoricalGame = (
   return newGame;
 };
 
-// Check if Dec 7 game needs to be imported
-export const importDec7GameIfNeeded = (): void => {
+// Check if Dec 6 game needs to be imported
+export const importDec6GameIfNeeded = (): void => {
   const games = getAllGames();
   
-  // Check if Dec 7 game already exists
-  const dec7Exists = games.some(g => g.date.includes('2024-12-07'));
-  if (dec7Exists) {
+  // Check if Dec 6 game already exists
+  const dec6Exists = games.some(g => g.date.includes('2024-12-06'));
+  if (dec6Exists) {
     return; // Already imported
   }
   
-  // Dec 7, 2024 game data
+  // Dec 6, 2024 game data
   // Chip values: White=50, Red=100, Blue=200, Green=500, Black=1000, Yellow=5000
-  const dec7Data = [
+  const dec6Data = [
     { playerName: 'אייל', rebuys: 2.5, chipCounts: { '1': 14, '2': 14, '3': 11, '4': 25, '5': 11, '6': 6 }, finalValue: 57800, profit: 98.4 },
     { playerName: 'ליאור', rebuys: 2, chipCounts: { '1': 1, '2': 7, '3': 7, '4': 12, '5': 24, '6': 7 }, finalValue: 67150, profit: 141.5 },
     { playerName: 'ארז', rebuys: 3, chipCounts: { '1': 9, '2': 0, '3': 9, '4': 1, '5': 2, '6': 13 }, finalValue: 69750, profit: 119.3 },
@@ -492,7 +492,7 @@ export const importDec7GameIfNeeded = (): void => {
     { playerName: 'אורן', rebuys: 2, chipCounts: { '1': 13, '2': 11, '3': 2, '4': 2, '5': 3, '6': 3 }, finalValue: 21150, profit: 3.5 },
   ];
   
-  importHistoricalGame('2024-12-07T22:00:00.000Z', dec7Data);
-  console.log('Dec 7, 2024 game imported successfully!');
+  importHistoricalGame('2024-12-06T22:00:00.000Z', dec6Data);
+  console.log('Dec 6, 2024 game imported successfully!');
 };
 
