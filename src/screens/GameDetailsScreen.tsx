@@ -20,8 +20,13 @@ const GameDetailsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  // Calculate total chips for a player
+  // Calculate total chips for a player (use finalValue as fallback if chipCounts is empty)
   const getTotalChips = (player: GamePlayer): number => {
+    // If chipCounts is empty or undefined, use finalValue
+    if (!player.chipCounts || Object.keys(player.chipCounts).length === 0) {
+      return player.finalValue;
+    }
+    
     const chipValues = getChipValues();
     let total = 0;
     for (const [chipId, count] of Object.entries(player.chipCounts)) {
@@ -30,7 +35,9 @@ const GameDetailsScreen = () => {
         total += count * chip.value;
       }
     }
-    return total;
+    
+    // If calculated total is 0 but finalValue isn't, use finalValue
+    return total > 0 ? total : player.finalValue;
   };
 
   useEffect(() => {
