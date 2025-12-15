@@ -132,6 +132,33 @@ export const updatePlayerType = (playerId: string, type: 'permanent' | 'guest'):
   }
 };
 
+// Update player name and migrate all historical data
+export const updatePlayerName = (playerId: string, newName: string): boolean => {
+  const players = getAllPlayers();
+  const player = players.find(p => p.id === playerId);
+  
+  if (!player) return false;
+  
+  // Check if new name already exists (different player)
+  const existingPlayer = players.find(p => p.name.toLowerCase() === newName.toLowerCase() && p.id !== playerId);
+  if (existingPlayer) return false;
+  
+  // Update player name
+  player.name = newName;
+  setItem(STORAGE_KEYS.PLAYERS, players);
+  
+  // Update all GamePlayer entries with this playerId
+  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  gamePlayers.forEach(gp => {
+    if (gp.playerId === playerId) {
+      gp.playerName = newName;
+    }
+  });
+  setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
+  
+  return true;
+};
+
 export const deletePlayer = (id: string): void => {
   const players = getAllPlayers().filter(p => p.id !== id);
   setItem(STORAGE_KEYS.PLAYERS, players);

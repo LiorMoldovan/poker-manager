@@ -6,6 +6,7 @@ import {
   addPlayer, 
   deletePlayer,
   updatePlayerType,
+  updatePlayerName,
   getChipValues, 
   saveChipValue,
   deleteChipValue,
@@ -28,6 +29,9 @@ const SettingsScreen = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddChip, setShowAddChip] = useState(false);
+  const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [editPlayerName, setEditPlayerName] = useState('');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('permanent');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
@@ -86,6 +90,36 @@ const SettingsScreen = () => {
   const handlePlayerTypeChange = (playerId: string, type: 'permanent' | 'guest') => {
     updatePlayerType(playerId, type);
     setPlayers(players.map(p => p.id === playerId ? { ...p, type } : p));
+    showSaved();
+  };
+
+  const openEditPlayer = (player: { id: string; name: string }) => {
+    setEditingPlayer(player);
+    setEditPlayerName(player.name);
+    setShowEditPlayer(true);
+    setError('');
+  };
+
+  const handleEditPlayer = () => {
+    if (!editingPlayer) return;
+    
+    const trimmedName = editPlayerName.trim();
+    if (!trimmedName) {
+      setError('Please enter a name');
+      return;
+    }
+    
+    const success = updatePlayerName(editingPlayer.id, trimmedName);
+    if (!success) {
+      setError('Player name already exists');
+      return;
+    }
+    
+    setPlayers(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName } : p));
+    setShowEditPlayer(false);
+    setEditingPlayer(null);
+    setEditPlayerName('');
+    setError('');
     showSaved();
   };
 
@@ -358,13 +392,27 @@ const SettingsScreen = () => {
                       style={{ 
                         padding: '0.25rem 0.5rem', 
                         fontSize: '0.7rem',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-muted)'
+                      }}
+                      onClick={() => openEditPlayer(player)}
+                      title="Edit name"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      className="btn btn-sm"
+                      style={{ 
+                        padding: '0.25rem 0.5rem', 
+                        fontSize: '0.7rem',
                         background: player.type === 'permanent' ? 'var(--surface)' : 'rgba(16, 185, 129, 0.15)',
                         border: '1px solid var(--border)',
                         color: player.type === 'permanent' ? 'var(--text-muted)' : 'var(--primary)'
                       }}
                       onClick={() => handlePlayerTypeChange(player.id, player.type === 'permanent' ? 'guest' : 'permanent')}
                     >
-                      {player.type === 'permanent' ? 'הפוך לאורח' : 'הפוך לקבוע'}
+                      {player.type === 'permanent' ? 'אורח' : 'קבוע'}
                     </button>
                     <button 
                       className="btn btn-sm btn-danger"
@@ -570,6 +618,42 @@ const SettingsScreen = () => {
               </button>
               <button className="btn btn-primary" onClick={handleAddPlayer}>
                 Add Player
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Player Modal */}
+      {showEditPlayer && editingPlayer && (
+        <div className="modal-overlay" onClick={() => setShowEditPlayer(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Player</h3>
+              <button className="modal-close" onClick={() => setShowEditPlayer(false)}>×</button>
+            </div>
+            {error && <p style={{ color: 'var(--danger)', marginBottom: '0.5rem' }}>{error}</p>}
+            <div className="input-group">
+              <label className="label">Player Name</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="Enter name"
+                value={editPlayerName}
+                onChange={e => setEditPlayerName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleEditPlayer()}
+                autoFocus
+              />
+            </div>
+            <p className="text-muted" style={{ fontSize: '0.8rem', marginBottom: '1rem' }}>
+              ⚠️ All historical data and statistics will be updated to the new name
+            </p>
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setShowEditPlayer(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={handleEditPlayer}>
+                Save Changes
               </button>
             </div>
           </div>
