@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Player } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName } from '../database/storage';
+import { Player, PlayerStats } from '../types';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 
 const NewGameScreen = () => {
   const navigate = useNavigate();
@@ -12,6 +12,8 @@ const NewGameScreen = () => {
   const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('guest');
   const [error, setError] = useState('');
   const [showGuests, setShowGuests] = useState(false);
+  const [showForecast, setShowForecast] = useState(false);
+  const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
 
   useEffect(() => {
     loadPlayers();
@@ -19,6 +21,7 @@ const NewGameScreen = () => {
 
   const loadPlayers = () => {
     setPlayers(getAllPlayers());
+    setPlayerStats(getPlayerStats());
   };
 
   // Separate permanent and guest players
@@ -76,6 +79,157 @@ const NewGameScreen = () => {
     
     const game = createGame(Array.from(selectedIds));
     navigate(`/live-game/${game.id}`);
+  };
+
+  // Get stats for a player
+  const getStatsForPlayer = (playerId: string): PlayerStats | undefined => {
+    return playerStats.find(s => s.playerId === playerId);
+  };
+
+  // Generate funny sentence based on player stats
+  const generateFunnySentence = (stats: PlayerStats | undefined, player: Player): string => {
+    if (!stats || stats.gamesPlayed === 0) {
+      const newPlayerSentences = [
+        "🆕 Fresh meat for the table!",
+        "🎲 Beginner's luck incoming?",
+        "👀 The mysterious newcomer...",
+        "🤔 No history, no mercy!",
+      ];
+      return newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)];
+    }
+
+    const { avgProfit, currentStreak, winPercentage, biggestWin, biggestLoss } = stats;
+
+    // Big winner
+    if (avgProfit > 50) {
+      const winnerSentences = [
+        "🔥 The table's worst nightmare",
+        "💰 Professional chip collector",
+        "👑 Bow before the king/queen",
+        "🎯 Money magnet activated",
+        "🦈 Shark alert! Hide your chips!",
+      ];
+      return winnerSentences[Math.floor(Math.random() * winnerSentences.length)];
+    }
+
+    // Big loser
+    if (avgProfit < -50) {
+      const loserSentences = [
+        "💸 Chief Donation Officer",
+        "🎁 The group's favorite sponsor",
+        "🏧 Walking ATM machine",
+        "😇 Funding everyone's drinks",
+        "🙏 Thank you for your service",
+      ];
+      return loserSentences[Math.floor(Math.random() * loserSentences.length)];
+    }
+
+    // On a winning streak
+    if (currentStreak >= 2) {
+      const streakSentences = [
+        `🔥 ${currentStreak} wins in a row! Hot hand!`,
+        "⚡ Currently unstoppable",
+        "📈 Riding the wave",
+        "🎰 The luck is strong with this one",
+      ];
+      return streakSentences[Math.floor(Math.random() * streakSentences.length)];
+    }
+
+    // On a losing streak
+    if (currentStreak <= -2) {
+      const loseStreakSentences = [
+        `😰 ${Math.abs(currentStreak)} losses in a row... ouch`,
+        "📉 Due for a comeback... right?",
+        "🍀 Needs some serious luck tonight",
+        "🤞 Recovery mode activated",
+      ];
+      return loseStreakSentences[Math.floor(Math.random() * loseStreakSentences.length)];
+    }
+
+    // High win rate
+    if (winPercentage > 60) {
+      return "📊 Statistically dangerous";
+    }
+
+    // Low win rate
+    if (winPercentage < 40 && stats.gamesPlayed >= 3) {
+      return "🎲 Optimism over statistics";
+    }
+
+    // Had a big win recently
+    if (biggestWin > 150) {
+      return "💎 Remembers that one amazing night...";
+    }
+
+    // Had a big loss
+    if (biggestLoss < -150) {
+      return "😅 Still recovering emotionally";
+    }
+
+    // Break-even player
+    const neutralSentences = [
+      "😐 Professional chip babysitter",
+      "⚖️ Perfectly balanced, as all things should be",
+      "🎭 The wildcard",
+      "🤷 Could go either way",
+      "📊 Mr./Ms. Average",
+    ];
+    return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
+  };
+
+  // Get expected profit for a player
+  const getExpectedProfit = (stats: PlayerStats | undefined): number => {
+    if (!stats || stats.gamesPlayed === 0) return 0;
+    return Math.round(stats.avgProfit);
+  };
+
+  // Generate forecast for all selected players
+  const generateForecast = () => {
+    const forecasts = Array.from(selectedIds).map(playerId => {
+      const player = players.find(p => p.id === playerId);
+      if (!player) return null;
+      
+      const stats = getStatsForPlayer(playerId);
+      const expected = getExpectedProfit(stats);
+      const sentence = generateFunnySentence(stats, player);
+      
+      return {
+        player,
+        expected,
+        sentence,
+        gamesPlayed: stats?.gamesPlayed || 0
+      };
+    }).filter(Boolean) as { player: Player; expected: number; sentence: string; gamesPlayed: number }[];
+
+    // Sort by expected profit (winners first)
+    return forecasts.sort((a, b) => b.expected - a.expected);
+  };
+
+  // Share forecast to WhatsApp
+  const shareForecast = () => {
+    const forecasts = generateForecast();
+    const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+    
+    let message = `🔮 *תחזית פוקר - ${today}*\n\n`;
+    
+    forecasts.forEach((f, index) => {
+      const emoji = f.expected > 20 ? '🟢' : f.expected < -20 ? '🔴' : '⚪';
+      const profitStr = f.expected >= 0 ? `+₪${f.expected}` : `-₪${Math.abs(f.expected)}`;
+      message += `${emoji} *${f.player.name}*: ${profitStr}\n`;
+      message += `   ${f.sentence}\n\n`;
+    });
+
+    message += `\n🃏 Good luck everyone!`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleShowForecast = () => {
+    if (selectedIds.size < 2) {
+      setError('Select at least 2 players');
+      return;
+    }
+    setShowForecast(true);
   };
 
   // Render player tile
@@ -198,14 +352,24 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      <button 
-        className="btn btn-primary btn-lg btn-block"
-        onClick={handleStartGame}
-        disabled={selectedIds.size < 2}
-        style={{ padding: '0.875rem', marginBottom: '1rem' }}
-      >
-        🎰 Start Game ({selectedIds.size} players)
-      </button>
+      <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+        <button 
+          className="btn btn-secondary btn-lg"
+          onClick={handleShowForecast}
+          disabled={selectedIds.size < 2}
+          style={{ padding: '0.875rem', flex: '1' }}
+        >
+          🔮 Forecast
+        </button>
+        <button 
+          className="btn btn-primary btn-lg"
+          onClick={handleStartGame}
+          disabled={selectedIds.size < 2}
+          style={{ padding: '0.875rem', flex: '2' }}
+        >
+          🎰 Start Game ({selectedIds.size})
+        </button>
+      </div>
 
       {/* Add Player Modal */}
       {showAddPlayer && (
@@ -280,6 +444,78 @@ const NewGameScreen = () => {
               </button>
               <button className="btn btn-primary" onClick={handleAddPlayer}>
                 Add Player
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forecast Modal */}
+      {showForecast && (
+        <div className="modal-overlay" onClick={() => setShowForecast(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflow: 'auto' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🔮 Tonight's Forecast</h3>
+              <button className="modal-close" onClick={() => setShowForecast(false)}>×</button>
+            </div>
+            
+            <div style={{ marginBottom: '1rem' }}>
+              {generateForecast().map((forecast, index) => {
+                const { player, expected, sentence, gamesPlayed } = forecast;
+                const isWinner = expected > 20;
+                const isLoser = expected < -20;
+                
+                return (
+                  <div 
+                    key={player.id}
+                    style={{
+                      padding: '0.75rem',
+                      marginBottom: '0.5rem',
+                      borderRadius: '10px',
+                      background: isWinner 
+                        ? 'rgba(34, 197, 94, 0.1)' 
+                        : isLoser 
+                          ? 'rgba(239, 68, 68, 0.1)' 
+                          : 'rgba(100, 100, 100, 0.1)',
+                      borderLeft: `4px solid ${isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text-muted)'}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ fontWeight: '600', fontSize: '1rem' }}>
+                        {index === 0 && expected > 0 && '👑 '}
+                        {player.name}
+                      </span>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        fontSize: '1rem',
+                        color: isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text)'
+                      }}>
+                        {expected >= 0 ? '+' : ''}₪{expected}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {sentence}
+                    </div>
+                    {gamesPlayed > 0 && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', opacity: 0.7 }}>
+                        Based on {gamesPlayed} game{gamesPlayed > 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1rem' }}>
+              ⚠️ Forecast based on historical averages. Actual results may vary! 🎲
+            </p>
+
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setShowForecast(false)}>
+                Close
+              </button>
+              <button className="btn btn-primary" onClick={shareForecast}>
+                📤 Share to WhatsApp
               </button>
             </div>
           </div>
