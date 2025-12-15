@@ -86,21 +86,62 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // Generate funny sentence based on player stats (Hebrew)
+  // Generate funny sentence based on player stats (Hebrew) - with variety and surprises!
   const generateFunnySentence = (stats: PlayerStats | undefined, player: Player): string => {
+    const random = Math.random();
+    
     if (!stats || stats.gamesPlayed === 0) {
       const newPlayerSentences = [
         "🆕 בשר טרי לשולחן!",
         "🎲 מזל מתחילים בדרך?",
         "👀 החידה המסתורית...",
         "🤔 בלי היסטוריה, בלי רחמים!",
+        "🌟 כוכב עולה או נופל?",
+        "🎭 הפנים החדשות - מסוכן או קל?",
+        "🔮 הכדור הבדולח לא עובד עליו",
+        "❓ סימן שאלה גדול",
+        "🎪 הפתעה בדרך?",
+        "🐣 טירון בזירה",
+        "🎯 מטרה קלה או מלכודת?",
+        "🌊 גל חדש מתקרב",
       ];
       return newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)];
     }
 
-    const { avgProfit, currentStreak, winPercentage, biggestWin, biggestLoss } = stats;
+    const { avgProfit, currentStreak, winPercentage, biggestWin, biggestLoss, gamesPlayed } = stats;
+    
+    // 15% chance for a SURPRISE prediction that goes against the data
+    if (random < 0.15) {
+      if (avgProfit > 30) {
+        // Predict bad night for a usually good player
+        const surpriseDownSentences = [
+          "🔄 משהו אומר לי שהלילה יהיה שונה...",
+          "⚠️ יש תחושה שהמזל עומד להסתובב",
+          "🌙 גם לאלופים יש לילות קשים",
+          "💫 הכוכבים מסמנים הפתעה הלילה",
+          "🎲 הסטטיסטיקה לא תמיד צודקת...",
+          "🔮 חזון: לילה מאתגר בדרך",
+          "⬇️ בניגוד להיסטוריה - הרגשה שהיום קשה",
+          "🌪️ סערה בדרך לאלוף?",
+        ];
+        return surpriseDownSentences[Math.floor(Math.random() * surpriseDownSentences.length)];
+      } else if (avgProfit < -30) {
+        // Predict good night for a usually bad player
+        const surpriseUpSentences = [
+          "✨ הלילה הכל משתנה!",
+          "🌈 סוף סוף הלילה של הקאמבק הגדול",
+          "🚀 משהו באוויר אומר: הלילה שלו!",
+          "🔥 בניגוד לכל הסיכויים - מרגיש ניצחון",
+          "💎 היהלום המוסתר יתגלה הלילה",
+          "⭐ הלילה הוא יפתיע את כולם",
+          "🎰 המכונה עומדת לפלוט ג'קפוט",
+          "🦋 הזחל יהפוך לפרפר הלילה",
+        ];
+        return surpriseUpSentences[Math.floor(Math.random() * surpriseUpSentences.length)];
+      }
+    }
 
-    // Big winner
+    // Big winner (avg profit > 50)
     if (avgProfit > 50) {
       const winnerSentences = [
         "🔥 הסיוט של השולחן",
@@ -108,11 +149,37 @@ const NewGameScreen = () => {
         "👑 תשתחוו בפני המלך",
         "🎯 מגנט כסף מופעל",
         "🦈 התראת כריש! תחביאו את הז'יטונים!",
+        "💵 הבנקאי של הערב",
+        "🏆 פשוט ברמה אחרת",
+        "🎖️ ותיק מנוסה ומסוכן",
+        "📈 גרף שרק עולה",
+        "🌟 כוכב על בפוקר",
+        "🐺 הזאב של השולחן",
+        "💪 שריר הפוקר מפותח",
+        "🎩 ג'נטלמן שלוקח את הכל",
+        "⚔️ לוחם ותיק בזירה",
+        "🏦 הקופה האישית שלו",
       ];
       return winnerSentences[Math.floor(Math.random() * winnerSentences.length)];
     }
 
-    // Big loser
+    // Good winner (avg profit 20-50)
+    if (avgProfit > 20) {
+      const goodWinnerSentences = [
+        "📊 ברווח יציב - מסוכן!",
+        "💵 עושה כסף בשקט",
+        "🎯 מדויק ויעיל",
+        "📈 מגמה חיובית ברורה",
+        "🧠 שחקן חכם עם תוצאות",
+        "💎 יהלום לא מלוטש",
+        "🎖️ בדרך לפסגה",
+        "✨ כישרון אמיתי",
+        "🌱 צומח בכל משחק",
+      ];
+      return goodWinnerSentences[Math.floor(Math.random() * goodWinnerSentences.length)];
+    }
+
+    // Big loser (avg profit < -50)
     if (avgProfit < -50) {
       const loserSentences = [
         "💸 ראש מחלקת תרומות",
@@ -120,59 +187,194 @@ const NewGameScreen = () => {
         "🏧 כספומט מהלך",
         "😇 ממן את המשקאות של כולם",
         "🙏 תודה על השירות",
+        "🎪 הבדרן של הערב",
+        "💝 לב רחב מאוד",
+        "🌧️ ענן גשם אישי",
+        "🎭 טרגדיה יוונית בזמן אמת",
+        "📉 גרף שרק יורד",
+        "🕳️ בור עמוק מאוד",
+        "🎰 מכור להפסדים?",
+        "🤝 נותן צדקה בכל משחק",
+        "💔 הלב נשבר שוב ושוב",
+        "🌊 שוחה נגד הזרם",
       ];
       return loserSentences[Math.floor(Math.random() * loserSentences.length)];
     }
 
-    // On a winning streak
+    // Moderate loser (avg profit -20 to -50)
+    if (avgProfit < -20) {
+      const moderateLoserSentences = [
+        "📉 במגמת ירידה קלה",
+        "🎢 רכבת הרים למטה",
+        "🌧️ ימים אפורים",
+        "🤔 צריך לשנות אסטרטגיה",
+        "💭 חולם על ימים טובים יותר",
+        "🎲 המזל לא לצידו לאחרונה",
+        "🌪️ בעין הסערה",
+      ];
+      return moderateLoserSentences[Math.floor(Math.random() * moderateLoserSentences.length)];
+    }
+
+    // On a hot winning streak (3+)
+    if (currentStreak >= 3) {
+      const hotStreakSentences = [
+        `🔥 ${currentStreak} נצחונות ברצף! בוער!`,
+        "⚡ בלתי ניתן לעצירה!",
+        "🚀 טיל בדרך לירח",
+        "💥 פיצוץ של הצלחה",
+        "🌋 הר געש פעיל",
+        "⭐ כוכב על בשיאו",
+        "🎯 כל יריה בול!",
+        "👊 מכה ולא מפסיק",
+      ];
+      return hotStreakSentences[Math.floor(Math.random() * hotStreakSentences.length)];
+    }
+
+    // On a winning streak (2)
     if (currentStreak >= 2) {
       const streakSentences = [
-        `🔥 ${currentStreak} נצחונות ברצף! יד חמה!`,
-        "⚡ כרגע בלתי ניתן לעצירה",
+        `✌️ ${currentStreak} נצחונות ברצף - ממשיך?`,
         "📈 רוכב על הגל",
-        "🎰 המזל חזק איתו הלילה",
+        "🎰 המזל חזק לאחרונה",
+        "💪 בנייה של מומנטום",
+        "🌊 גל חיובי",
+        "✨ ניצוץ שהופך ללהבה",
       ];
       return streakSentences[Math.floor(Math.random() * streakSentences.length)];
     }
 
-    // On a losing streak
+    // On a bad losing streak (3+)
+    if (currentStreak <= -3) {
+      const badStreakSentences = [
+        `😱 ${Math.abs(currentStreak)} הפסדים ברצף! אסון!`,
+        "🆘 קריאת מצוקה",
+        "🌑 חושך בקצה המנהרה",
+        "💀 סימן מוות לארנק",
+        "🕳️ נופל לתהום",
+        "❄️ תקופת קרח ארוכה",
+        "🏳️ דגל לבן באופק?",
+        "😵 סחרחורת הפסדים",
+      ];
+      return badStreakSentences[Math.floor(Math.random() * badStreakSentences.length)];
+    }
+
+    // On a losing streak (2)
     if (currentStreak <= -2) {
       const loseStreakSentences = [
-        `😰 ${Math.abs(currentStreak)} הפסדים ברצף... אאוץ'`,
-        "📉 מגיע לו קאמבק... נכון?",
-        "🍀 צריך מזל רציני הלילה",
-        "🤞 מצב התאוששות מופעל",
+        `😰 ${Math.abs(currentStreak)} הפסדים ברצף...`,
+        "📉 מגיע לו קאמבק",
+        "🍀 צריך קצת מזל",
+        "🤞 מצב התאוששות",
+        "🌧️ עננים מעל הראש",
+        "💫 מחפש את הכוכב שלו",
       ];
       return loseStreakSentences[Math.floor(Math.random() * loseStreakSentences.length)];
     }
 
-    // High win rate
+    // High win rate (60%+)
     if (winPercentage > 60) {
-      return "📊 סטטיסטית מסוכן";
+      const highWinRateSentences = [
+        "📊 סטטיסטית מסוכן",
+        "🧮 המספרים לטובתו",
+        "📈 אחוזי ניצחון גבוהים",
+        "🎯 יותר פעמים מנצח מפסיד",
+        "🏅 סיכויים טובים",
+        "⚖️ ההיסטוריה לצידו",
+      ];
+      return highWinRateSentences[Math.floor(Math.random() * highWinRateSentences.length)];
     }
 
-    // Low win rate
-    if (winPercentage < 40 && stats.gamesPlayed >= 3) {
-      return "🎲 אופטימיות מנצחת סטטיסטיקה";
+    // Low win rate (40% or less)
+    if (winPercentage < 40 && gamesPlayed >= 3) {
+      const lowWinRateSentences = [
+        "🎲 אופטימיות מנצחת סטטיסטיקה?",
+        "📉 ההיסטוריה לא לצידו",
+        "🤞 מקווה לשינוי",
+        "🌈 מחכה לקשת",
+        "🎰 מאמין בנסים",
+        "💭 חלומות גדולים",
+      ];
+      return lowWinRateSentences[Math.floor(Math.random() * lowWinRateSentences.length)];
     }
 
-    // Had a big win recently
-    if (biggestWin > 150) {
-      return "💎 זוכר את הלילה המטורף ההוא...";
+    // Had a massive win
+    if (biggestWin > 200) {
+      const bigWinSentences = [
+        "💎 זוכר את הלילה האגדי...",
+        "🏆 יש לו רגע שיא להגן עליו",
+        "⭐ כוכב עם רגע מזהיר",
+        "🎰 פעם אחת פגע בג'קפוט",
+        "💰 יודע איך זה להרוויח גדול",
+      ];
+      return bigWinSentences[Math.floor(Math.random() * bigWinSentences.length)];
+    }
+
+    // Had a big win
+    if (biggestWin > 100) {
+      return "✨ יודע לעשות לילות טובים";
+    }
+
+    // Had a massive loss
+    if (biggestLoss < -200) {
+      const bigLossSentences = [
+        "😅 עדיין מתאושש מהלילה ההוא",
+        "💔 צלקות עמוקות",
+        "🌪️ שרד סופה קשה",
+        "📚 למד שיעור יקר",
+      ];
+      return bigLossSentences[Math.floor(Math.random() * bigLossSentences.length)];
     }
 
     // Had a big loss
-    if (biggestLoss < -150) {
-      return "😅 עדיין מתאושש רגשית";
+    if (biggestLoss < -100) {
+      return "😬 יודע איך זה להפסיד גדול";
     }
 
-    // Break-even player
+    // Experienced player
+    if (gamesPlayed >= 10) {
+      const experiencedSentences = [
+        "🎖️ ותיק מנוסה",
+        "🧠 יודע את המשחק",
+        "🎭 ראה הכל",
+        "📊 הרבה נתונים עליו",
+        "⚔️ לוחם ותיק",
+      ];
+      return experiencedSentences[Math.floor(Math.random() * experiencedSentences.length)];
+    }
+
+    // Few games played
+    if (gamesPlayed <= 3) {
+      const newishSentences = [
+        "🌱 עדיין לומד את השטח",
+        "📝 מעט נתונים",
+        "❓ עדיין סימן שאלה",
+        "🔍 תחת תצפית",
+      ];
+      return newishSentences[Math.floor(Math.random() * newishSentences.length)];
+    }
+
+    // Break-even / neutral player - many options!
     const neutralSentences = [
       "😐 שומר ז'יטונים מקצועי",
       "⚖️ מאוזן לחלוטין",
       "🎭 הקלף הפראי",
       "🤷 יכול ללכת לכל כיוון",
       "📊 מר ממוצע",
+      "🎲 הכל יכול לקרות",
+      "🌊 שוחה עם הזרם",
+      "☁️ לא שמש ולא גשם",
+      "🔄 עקבי בחוסר עקביות",
+      "🎯 לפעמים כאן, לפעמים שם",
+      "🧩 חתיכה במשחק",
+      "🎪 חלק מההצגה",
+      "🌙 תלוי במצב הרוח",
+      "🎵 רוקד לפי המוזיקה",
+      "🌿 זורם עם הרוח",
+      "🎨 צבעים משתנים",
+      "🔮 קשה לחזות",
+      "⚡ פוטנציאל מוסתר",
+      "🌀 מסתורי",
+      "🎭 בעל שני פנים",
     ];
     return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
   };
