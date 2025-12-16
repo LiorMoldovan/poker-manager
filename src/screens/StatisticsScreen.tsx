@@ -11,7 +11,7 @@ const StatisticsScreen = () => {
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
-  const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('permanent');
+  const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [minGames, setMinGames] = useState<number>(0);
@@ -88,17 +88,8 @@ const StatisticsScreen = () => {
   const permanentGuestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent_guest');
   const guestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'guest');
 
-  // Stats available for selection based on filter
-  const getFilteredStats = () => {
-    switch (playerTypeFilter) {
-      case 'permanent': return permanentStats;
-      case 'permanent_guest': return permanentGuestStats;
-      case 'guest': return guestStats;
-      case 'all': return statsWithMinGames;
-      default: return permanentStats;
-    }
-  };
-  const availableStats = getFilteredStats();
+  // Stats available for selection based on selected types
+  const availableStats = statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -127,22 +118,34 @@ const StatisticsScreen = () => {
     }
   };
 
-  // Change player type filter
-  const handleFilterChange = (filter: 'all' | 'permanent' | 'permanent_guest' | 'guest') => {
-    setPlayerTypeFilter(filter);
-    // Update selection based on new filter
-    let targetStats: PlayerStats[];
-    switch (filter) {
-      case 'permanent': targetStats = permanentStats; break;
-      case 'permanent_guest': targetStats = permanentGuestStats; break;
-      case 'guest': targetStats = guestStats; break;
-      case 'all': targetStats = stats; break;
-      default: targetStats = permanentStats;
-    }
-    if (targetStats.length > 0) {
-      setSelectedPlayers(new Set(targetStats.map(p => p.playerId)));
-    }
+  // Toggle player type in filter
+  const toggleType = (type: PlayerType) => {
+    setSelectedTypes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(type)) {
+        // Don't allow deselecting if only one type is selected
+        if (newSet.size > 1) {
+          newSet.delete(type);
+        }
+      } else {
+        newSet.add(type);
+      }
+      return newSet;
+    });
   };
+
+  // Select all types
+  const selectAllTypes = () => {
+    setSelectedTypes(new Set(['permanent', 'permanent_guest', 'guest']));
+  };
+
+  // Update selected players when types change
+  useEffect(() => {
+    const newAvailable = statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+    if (newAvailable.length > 0) {
+      setSelectedPlayers(new Set(newAvailable.map(p => p.playerId)));
+    }
+  }, [selectedTypes, statsWithMinGames]);
 
   // Filtered stats based on selection
   const filteredStats = availableStats.filter(s => selectedPlayers.has(s.playerId));
@@ -418,79 +421,79 @@ const StatisticsScreen = () => {
               </div>
             </div>
 
-            {/* Player Type Filter */}
+            {/* Player Type Filter (Multi-select) */}
             <div style={{ 
               marginBottom: '0.75rem',
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
-                PLAYER TYPE
-              </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                  PLAYER TYPE
+                </span>
+                <button
+                  onClick={selectAllTypes}
+                  style={{
+                    padding: '0.2rem 0.4rem',
+                    fontSize: '0.65rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  הכל
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => handleFilterChange('permanent')}
+                  onClick={() => toggleType('permanent')}
                   style={{
                     flex: 1,
                     minWidth: '60px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: playerTypeFilter === 'permanent' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: playerTypeFilter === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: playerTypeFilter === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: selectedTypes.has('permanent') ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: selectedTypes.has('permanent') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('permanent') ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
-                  ⭐ קבוע ({permanentStats.length})
+                  {selectedTypes.has('permanent') && '✓ '}⭐ קבוע ({permanentStats.length})
                 </button>
                 <button
-                  onClick={() => handleFilterChange('permanent_guest')}
+                  onClick={() => toggleType('permanent_guest')}
                   style={{
                     flex: 1,
                     minWidth: '60px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: playerTypeFilter === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
-                    background: playerTypeFilter === 'permanent_guest' ? 'rgba(139, 92, 246, 0.15)' : 'var(--surface)',
-                    color: playerTypeFilter === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)',
+                    border: selectedTypes.has('permanent_guest') ? '2px solid #8B5CF6' : '1px solid var(--border)',
+                    background: selectedTypes.has('permanent_guest') ? 'rgba(139, 92, 246, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('permanent_guest') ? '#8B5CF6' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
-                  ⭐ אורח קבוע ({permanentGuestStats.length})
+                  {selectedTypes.has('permanent_guest') && '✓ '}⭐ אורח קבוע ({permanentGuestStats.length})
                 </button>
                 <button
-                  onClick={() => handleFilterChange('guest')}
+                  onClick={() => toggleType('guest')}
                   style={{
                     flex: 1,
                     minWidth: '60px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: playerTypeFilter === 'guest' ? '2px solid var(--text-muted)' : '1px solid var(--border)',
-                    background: playerTypeFilter === 'guest' ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
-                    color: playerTypeFilter === 'guest' ? 'var(--text)' : 'var(--text-muted)',
+                    border: selectedTypes.has('guest') ? '2px solid #6B7280' : '1px solid var(--border)',
+                    background: selectedTypes.has('guest') ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('guest') ? 'var(--text)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
-                  👤 אורח ({guestStats.length})
-                </button>
-                <button
-                  onClick={() => handleFilterChange('all')}
-                  style={{
-                    flex: 1,
-                    minWidth: '60px',
-                    padding: '0.4rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '6px',
-                    border: playerTypeFilter === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: playerTypeFilter === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: playerTypeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  הכל ({stats.length})
+                  {selectedTypes.has('guest') && '✓ '}👤 אורח ({guestStats.length})
                 </button>
               </div>
             </div>
