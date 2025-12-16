@@ -187,13 +187,15 @@ const SettingsScreen = () => {
   };
 
   const handleShareBackup = async () => {
-    const shared = await shareBackupAsFile();
-    if (shared) {
-      setBackupMessage({ type: 'success', text: 'Backup shared!' });
+    const result = await shareBackupAsFile();
+    if (result === 'shared') {
+      setBackupMessage({ type: 'success', text: 'Backup shared successfully!' });
+    } else if (result === 'downloaded') {
+      setBackupMessage({ type: 'success', text: 'Backup file downloaded! Share it manually via WhatsApp.' });
     } else {
-      setBackupMessage({ type: 'success', text: 'Backup downloaded!' });
+      setBackupMessage({ type: 'error', text: 'Share cancelled' });
     }
-    setTimeout(() => setBackupMessage(null), 3000);
+    setTimeout(() => setBackupMessage(null), 4000);
   };
 
   const handleRestore = (backupId: string) => {

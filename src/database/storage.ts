@@ -626,7 +626,7 @@ export const downloadBackup = (): void => {
 };
 
 // Share backup as file (for WhatsApp, etc.)
-export const shareBackupAsFile = async (): Promise<boolean> => {
+export const shareBackupAsFile = async (): Promise<'shared' | 'downloaded' | 'error'> => {
   const backup = createBackup('manual');
   const today = new Date().toISOString().split('T')[0];
   const fileName = `poker-backup-${today}.json`;
@@ -636,29 +636,54 @@ export const shareBackupAsFile = async (): Promise<boolean> => {
   const blob = new Blob([dataStr], { type: 'application/json' });
   const file = new File([blob], fileName, { type: 'application/json' });
   
-  // Check if Web Share API with files is supported
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
-        files: [file],
-        title: 'Poker Backup',
-        text: `🎰 Poker Backup - ${today}`
-      });
-      return true;
-    } catch (error) {
-      // User cancelled or error - fall back to download
-      console.log('Share cancelled or failed, downloading instead');
+  // Try Web Share API with files
+  try {
+    if (navigator.share) {
+      // Check if we can share files
+      const canShareFiles = navigator.canShare && navigator.canShare({ files: [file] });
+      
+      if (canShareFiles) {
+        await navigator.share({
+          files: [file],
+          title: 'Poker Backup',
+          text: `🎰 Poker Backup - ${today}`
+        });
+        return 'shared';
+      } else {
+        // Try sharing without files (just triggers share dialog, user downloads first)
+        // Download the file first, then show share dialog for the text
+        downloadFile(blob, fileName);
+        await navigator.share({
+          title: 'Poker Backup',
+          text: `🎰 Poker Backup saved as ${fileName}. Send this file via WhatsApp or save it somewhere safe!`
+        });
+        return 'shared';
+      }
     }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // AbortError means user cancelled - that's fine
+    if (errorMessage.includes('abort') || errorMessage.includes('cancel')) {
+      return 'error';
+    }
+    console.log('Share failed:', errorMessage);
   }
   
-  // Fallback: download the file
+  // Fallback: just download the file
+  downloadFile(blob, fileName);
+  return 'downloaded';
+};
+
+// Helper to download a file
+const downloadFile = (blob: Blob, fileName: string): void => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  return false;
 };
 
 // Import backup from JSON file
