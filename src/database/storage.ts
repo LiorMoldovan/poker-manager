@@ -543,7 +543,7 @@ export interface BackupData {
 }
 
 // Create a backup of all data
-export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'sunday' | 'game-end'): BackupData => {
+export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'friday' | 'game-end'): BackupData => {
   const backup: BackupData = {
     id: generateId(),
     date: new Date().toISOString(),
