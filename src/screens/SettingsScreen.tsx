@@ -48,6 +48,7 @@ const SettingsScreen = () => {
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [showShareInstructions, setShowShareInstructions] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -190,12 +191,14 @@ const SettingsScreen = () => {
     const result = await shareBackupAsFile();
     if (result === 'shared') {
       setBackupMessage({ type: 'success', text: 'Backup shared successfully!' });
+      setTimeout(() => setBackupMessage(null), 4000);
     } else if (result === 'downloaded') {
-      setBackupMessage({ type: 'success', text: 'Backup file downloaded! Share it manually via WhatsApp.' });
+      // Show instructions modal for manual sharing
+      setShowShareInstructions(true);
     } else {
       setBackupMessage({ type: 'error', text: 'Share cancelled' });
+      setTimeout(() => setBackupMessage(null), 4000);
     }
-    setTimeout(() => setBackupMessage(null), 4000);
   };
 
   const handleRestore = (backupId: string) => {
@@ -931,6 +934,42 @@ const SettingsScreen = () => {
               </button>
               <button className="btn btn-danger" onClick={() => handleDeleteChip(deleteChipConfirm.id)}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Instructions Modal */}
+      {showShareInstructions && (
+        <div className="modal-overlay" onClick={() => setShowShareInstructions(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">📤 Backup Downloaded!</h3>
+              <button className="modal-close" onClick={() => setShowShareInstructions(false)}>×</button>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <p style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
+                ✅ File saved to your Downloads folder
+              </p>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                To backup via WhatsApp:
+              </p>
+              <ol style={{ fontSize: '0.85rem', color: 'var(--text)', paddingLeft: '1.25rem', lineHeight: '1.8' }}>
+                <li>Open <strong>WhatsApp</strong></li>
+                <li>Go to a chat (yourself or a group)</li>
+                <li>Click <strong>📎 Attach</strong></li>
+                <li>Select <strong>Document</strong></li>
+                <li>Choose the <strong>poker-backup</strong> file</li>
+                <li>Send it! ✅</li>
+              </ol>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem', fontStyle: 'italic' }}>
+                💡 Tip: Send it to yourself or a dedicated backup group
+              </p>
+            </div>
+            <div className="actions">
+              <button className="btn btn-primary" onClick={() => setShowShareInstructions(false)}>
+                Got it!
               </button>
             </div>
           </div>
