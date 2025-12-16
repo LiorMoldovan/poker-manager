@@ -100,8 +100,8 @@ Object.keys(playerGameData).forEach(name => {
   let type = 'guest';
   if (PERMANENT_PLAYERS.includes(name)) {
     type = 'permanent';
-  } else if (gamesCount >= 5) {
-    // Players with 5+ games are permanent guests
+  } else if (gamesCount >= 50) {
+    // Players with 50+ games are permanent guests
     type = 'permanent_guest';
   }
   
@@ -221,13 +221,13 @@ players.filter(p => p.type === 'permanent').forEach(p => {
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nPermanent Guests (5+ games):');
+console.log('\nPermanent Guests (50+ games):');
 players.filter(p => p.type === 'permanent_guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nGuests (<5 games):');
+console.log('\nGuests (<50 games):');
 players.filter(p => p.type === 'guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
