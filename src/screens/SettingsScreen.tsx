@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Player, ChipValue, Settings } from '../types';
+import { Player, PlayerType, ChipValue, Settings } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
   getAllPlayers, 
@@ -30,11 +30,11 @@ const SettingsScreen = () => {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddChip, setShowAddChip] = useState(false);
   const [showEditPlayer, setShowEditPlayer] = useState(false);
-  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; type: 'permanent' | 'guest' } | null>(null);
+  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; type: PlayerType } | null>(null);
   const [editPlayerName, setEditPlayerName] = useState('');
-  const [editPlayerType, setEditPlayerType] = useState<'permanent' | 'guest'>('permanent');
+  const [editPlayerType, setEditPlayerType] = useState<PlayerType>('permanent');
   const [newPlayerName, setNewPlayerName] = useState('');
-  const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('permanent');
+  const [newPlayerType, setNewPlayerType] = useState<PlayerType>('permanent');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -90,13 +90,13 @@ const SettingsScreen = () => {
     setError('');
   };
 
-  const handlePlayerTypeChange = (playerId: string, type: 'permanent' | 'guest') => {
+  const handlePlayerTypeChange = (playerId: string, type: PlayerType) => {
     updatePlayerType(playerId, type);
     setPlayers(players.map(p => p.id === playerId ? { ...p, type } : p));
     showSaved();
   };
 
-  const openEditPlayer = (player: { id: string; name: string; type: 'permanent' | 'guest' }) => {
+  const openEditPlayer = (player: { id: string; name: string; type: PlayerType }) => {
     setEditingPlayer(player);
     setEditPlayerName(player.name);
     setEditPlayerType(player.type || 'permanent');
@@ -409,10 +409,10 @@ const SettingsScreen = () => {
                       fontSize: '0.7rem', 
                       padding: '0.15rem 0.4rem', 
                       borderRadius: '4px',
-                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 100, 100, 0.15)',
-                      color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
+                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : player.type === 'permanent_guest' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(100, 100, 100, 0.15)',
+                      color: player.type === 'permanent' ? 'var(--primary)' : player.type === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
                     }}>
-                      {player.type === 'permanent' ? '⭐ קבוע' : '👤 אורח'}
+                      {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '⭐ אורח קבוע' : '👤 אורח'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.35rem' }}>
@@ -646,11 +646,14 @@ const SettingsScreen = () => {
             </div>
             <div className="input-group">
               <label className="label">Player Type</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 <button
                   className="btn"
                   style={{
                     flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
                     background: newPlayerType === 'permanent' ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface)',
                     border: newPlayerType === 'permanent' ? '2px solid var(--primary)' : '1px solid var(--border)',
                     color: newPlayerType === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
@@ -663,6 +666,24 @@ const SettingsScreen = () => {
                   className="btn"
                   style={{
                     flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: newPlayerType === 'permanent_guest' ? 'rgba(139, 92, 246, 0.2)' : 'var(--surface)',
+                    border: newPlayerType === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
+                    color: newPlayerType === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setNewPlayerType('permanent_guest')}
+                >
+                  ⭐ אורח קבוע
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
                     background: newPlayerType === 'guest' ? 'rgba(100, 100, 100, 0.2)' : 'var(--surface)',
                     border: newPlayerType === 'guest' ? '2px solid var(--text-muted)' : '1px solid var(--border)',
                     color: newPlayerType === 'guest' ? 'var(--text)' : 'var(--text-muted)'
@@ -708,17 +729,48 @@ const SettingsScreen = () => {
             </div>
             <div className="input-group">
               <label className="label">Player Type</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 <button
-                  className={`btn ${editPlayerType === 'permanent' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1 }}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: editPlayerType === 'permanent' ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface)',
+                    border: editPlayerType === 'permanent' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    color: editPlayerType === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
+                  }}
                   onClick={() => setEditPlayerType('permanent')}
                 >
                   ⭐ קבוע
                 </button>
                 <button
-                  className={`btn ${editPlayerType === 'guest' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ flex: 1 }}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: editPlayerType === 'permanent_guest' ? 'rgba(139, 92, 246, 0.2)' : 'var(--surface)',
+                    border: editPlayerType === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
+                    color: editPlayerType === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setEditPlayerType('permanent_guest')}
+                >
+                  ⭐ אורח קבוע
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    minWidth: '70px',
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: editPlayerType === 'guest' ? 'rgba(100, 100, 100, 0.2)' : 'var(--surface)',
+                    border: editPlayerType === 'guest' ? '2px solid var(--text-muted)' : '1px solid var(--border)',
+                    color: editPlayerType === 'guest' ? 'var(--text)' : 'var(--text-muted)'
+                  }}
                   onClick={() => setEditPlayerType('guest')}
                 >
                   👤 אורח

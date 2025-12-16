@@ -1,8 +1,10 @@
+export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
+
 export interface Player {
   id: string;
   name: string;
   createdAt: string;
-  type: 'permanent' | 'guest';
+  type: PlayerType;
 }
 
 export interface Game {

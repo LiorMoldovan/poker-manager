@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PlayerStats, Player } from '../types';
+import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
@@ -9,7 +9,7 @@ const StatisticsScreen = () => {
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
-  const [includeGuests, setIncludeGuests] = useState(false);
+  const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('permanent');
 
   useEffect(() => {
     loadStats();
@@ -31,17 +31,27 @@ const StatisticsScreen = () => {
   };
 
   // Get player type
-  const getPlayerType = (playerId: string): 'permanent' | 'guest' => {
+  const getPlayerType = (playerId: string): PlayerType => {
     const player = players.find(p => p.id === playerId);
     return player?.type || 'permanent';
   };
 
   // Separate stats by player type
   const permanentStats = stats.filter(s => getPlayerType(s.playerId) === 'permanent');
+  const permanentGuestStats = stats.filter(s => getPlayerType(s.playerId) === 'permanent_guest');
   const guestStats = stats.filter(s => getPlayerType(s.playerId) === 'guest');
 
-  // Stats available for selection based on includeGuests toggle
-  const availableStats = includeGuests ? stats : permanentStats;
+  // Stats available for selection based on filter
+  const getFilteredStats = () => {
+    switch (playerTypeFilter) {
+      case 'permanent': return permanentStats;
+      case 'permanent_guest': return permanentGuestStats;
+      case 'guest': return guestStats;
+      case 'all': return stats;
+      default: return permanentStats;
+    }
+  };
+  const availableStats = getFilteredStats();
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -70,25 +80,20 @@ const StatisticsScreen = () => {
     }
   };
 
-  // Toggle include guests
-  const handleToggleGuests = () => {
-    const newIncludeGuests = !includeGuests;
-    setIncludeGuests(newIncludeGuests);
-    // Update selection based on new setting
-    if (newIncludeGuests) {
-      // Include all players
-      setSelectedPlayers(new Set(stats.map(p => p.playerId)));
-    } else {
-      // Keep only permanent players that are currently selected
-      const permanentIds = permanentStats.map(s => s.playerId);
-      const newSelected = new Set(
-        [...selectedPlayers].filter(id => permanentIds.includes(id))
-      );
-      // Make sure at least one is selected
-      if (newSelected.size === 0 && permanentStats.length > 0) {
-        newSelected.add(permanentStats[0].playerId);
-      }
-      setSelectedPlayers(newSelected);
+  // Change player type filter
+  const handleFilterChange = (filter: 'all' | 'permanent' | 'permanent_guest' | 'guest') => {
+    setPlayerTypeFilter(filter);
+    // Update selection based on new filter
+    let targetStats: PlayerStats[];
+    switch (filter) {
+      case 'permanent': targetStats = permanentStats; break;
+      case 'permanent_guest': targetStats = permanentGuestStats; break;
+      case 'guest': targetStats = guestStats; break;
+      case 'all': targetStats = stats; break;
+      default: targetStats = permanentStats;
+    }
+    if (targetStats.length > 0) {
+      setSelectedPlayers(new Set(targetStats.map(p => p.playerId)));
     }
   };
 
@@ -228,45 +233,82 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
-            {/* Include Guests Toggle */}
-            {guestStats.length > 0 && (
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                marginBottom: '0.75rem',
-                paddingBottom: '0.75rem',
-                borderBottom: '1px solid var(--border)'
-              }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
-                  Include Guest Players
-                </span>
+            {/* Player Type Filter */}
+            <div style={{ 
+              marginBottom: '0.75rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
+                PLAYER TYPE
+              </span>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 <button
-                  onClick={handleToggleGuests}
+                  onClick={() => handleFilterChange('permanent')}
                   style={{
-                    width: '48px',
-                    height: '26px',
-                    borderRadius: '13px',
-                    border: 'none',
-                    background: includeGuests ? 'var(--primary)' : 'var(--border)',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    transition: 'background 0.2s ease'
+                    flex: 1,
+                    minWidth: '60px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: playerTypeFilter === 'permanent' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: playerTypeFilter === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: playerTypeFilter === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
                   }}
                 >
-                  <div style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background: 'white',
-                    position: 'absolute',
-                    top: '3px',
-                    left: includeGuests ? '25px' : '3px',
-                    transition: 'left 0.2s ease'
-                  }} />
+                  ⭐ קבוע ({permanentStats.length})
+                </button>
+                <button
+                  onClick={() => handleFilterChange('permanent_guest')}
+                  style={{
+                    flex: 1,
+                    minWidth: '60px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: playerTypeFilter === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
+                    background: playerTypeFilter === 'permanent_guest' ? 'rgba(139, 92, 246, 0.15)' : 'var(--surface)',
+                    color: playerTypeFilter === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⭐ אורח קבוע ({permanentGuestStats.length})
+                </button>
+                <button
+                  onClick={() => handleFilterChange('guest')}
+                  style={{
+                    flex: 1,
+                    minWidth: '60px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: playerTypeFilter === 'guest' ? '2px solid var(--text-muted)' : '1px solid var(--border)',
+                    background: playerTypeFilter === 'guest' ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
+                    color: playerTypeFilter === 'guest' ? 'var(--text)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  👤 אורח ({guestStats.length})
+                </button>
+                <button
+                  onClick={() => handleFilterChange('all')}
+                  style={{
+                    flex: 1,
+                    minWidth: '60px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: playerTypeFilter === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: playerTypeFilter === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: playerTypeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  הכל ({stats.length})
                 </button>
               </div>
-            )}
+            </div>
 
             <div style={{ 
               display: 'flex', 

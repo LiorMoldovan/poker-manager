@@ -1,4 +1,4 @@
-import { Player, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats } from '../types';
+import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats } from '../types';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -109,7 +109,7 @@ export const getAllPlayers = (): Player[] => {
   return getItem<Player[]>(STORAGE_KEYS.PLAYERS, []);
 };
 
-export const addPlayer = (name: string, type: 'permanent' | 'guest' = 'permanent'): Player => {
+export const addPlayer = (name: string, type: PlayerType = 'permanent'): Player => {
   const players = getAllPlayers();
   const newPlayer: Player = {
     id: generateId(),
@@ -123,7 +123,7 @@ export const addPlayer = (name: string, type: 'permanent' | 'guest' = 'permanent
 };
 
 // Update player type
-export const updatePlayerType = (playerId: string, type: 'permanent' | 'guest'): void => {
+export const updatePlayerType = (playerId: string, type: PlayerType): void => {
   const players = getAllPlayers();
   const player = players.find(p => p.id === playerId);
   if (player) {

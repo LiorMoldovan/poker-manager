@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Player, PlayerStats } from '../types';
+import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 
 const NewGameScreen = () => {
@@ -9,8 +9,9 @@ const NewGameScreen = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
-  const [newPlayerType, setNewPlayerType] = useState<'permanent' | 'guest'>('guest');
+  const [newPlayerType, setNewPlayerType] = useState<PlayerType>('guest');
   const [error, setError] = useState('');
+  const [showPermanentGuests, setShowPermanentGuests] = useState(false);
   const [showGuests, setShowGuests] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
@@ -24,8 +25,9 @@ const NewGameScreen = () => {
     setPlayerStats(getPlayerStats());
   };
 
-  // Separate permanent and guest players
+  // Separate players by type
   const permanentPlayers = players.filter(p => p.type === 'permanent');
+  const permanentGuestPlayers = players.filter(p => p.type === 'permanent_guest');
   const guestPlayers = players.filter(p => p.type === 'guest');
 
   const togglePlayer = (id: string) => {
@@ -65,9 +67,11 @@ const NewGameScreen = () => {
     setNewPlayerType('guest');
     setShowAddPlayer(false);
     setError('');
-    // If adding a guest, expand the guests section
+    // Expand the relevant section when adding
     if (newPlayerType === 'guest') {
       setShowGuests(true);
+    } else if (newPlayerType === 'permanent_guest') {
+      setShowPermanentGuests(true);
     }
   };
 
@@ -436,7 +440,7 @@ const NewGameScreen = () => {
 
       {/* Permanent Players */}
       <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
-        {permanentPlayers.length === 0 && guestPlayers.length === 0 ? (
+        {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '1rem' }}>
             <div style={{ fontSize: '2rem' }}>👥</div>
             <p style={{ margin: '0.5rem 0 0.25rem', fontWeight: '500' }}>No players yet</p>
@@ -474,6 +478,44 @@ const NewGameScreen = () => {
         </button>
       </div>
 
+      {/* Permanent Guest Players Section */}
+      {permanentGuestPlayers.length > 0 && (
+        <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <button
+            onClick={() => setShowPermanentGuests(!showPermanentGuests)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              color: 'var(--text)'
+            }}
+          >
+            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+              ⭐ Permanent Guests ({permanentGuestPlayers.length})
+            </span>
+            <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
+              {showPermanentGuests ? '▲' : '▼'}
+            </span>
+          </button>
+          
+          {showPermanentGuests && (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+              gap: '0.75rem',
+              marginTop: '0.75rem'
+            }}>
+              {permanentGuestPlayers.map(renderPlayerTile)}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Guest Players Section */}
       {guestPlayers.length > 0 && (
         <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
@@ -492,7 +534,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              👤 Guest Players ({guestPlayers.length})
+              👤 Guests ({guestPlayers.length})
             </span>
             <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
               {showGuests ? '▲' : '▼'}
@@ -555,46 +597,66 @@ const NewGameScreen = () => {
             {/* Player Type Toggle */}
             <div className="input-group">
               <label className="label">Player Type</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setNewPlayerType('guest')}
-                  style={{
-                    flex: 1,
-                    padding: '0.6rem',
-                    borderRadius: '8px',
-                    border: newPlayerType === 'guest' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                    background: newPlayerType === 'guest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: newPlayerType === 'guest' ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  👤 Guest
-                </button>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => setNewPlayerType('permanent')}
                   style={{
                     flex: 1,
-                    padding: '0.6rem',
+                    minWidth: '80px',
+                    padding: '0.5rem',
                     borderRadius: '8px',
                     border: newPlayerType === 'permanent' ? '2px solid var(--primary)' : '2px solid var(--border)',
                     background: newPlayerType === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
                     color: newPlayerType === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer',
                     fontWeight: '600',
-                    fontSize: '0.9rem'
+                    fontSize: '0.75rem'
                   }}
                 >
                   ⭐ Permanent
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPlayerType('permanent_guest')}
+                  style={{
+                    flex: 1,
+                    minWidth: '80px',
+                    padding: '0.5rem',
+                    borderRadius: '8px',
+                    border: newPlayerType === 'permanent_guest' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: newPlayerType === 'permanent_guest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: newPlayerType === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.75rem'
+                  }}
+                >
+                  ⭐ Perm Guest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewPlayerType('guest')}
+                  style={{
+                    flex: 1,
+                    minWidth: '80px',
+                    padding: '0.5rem',
+                    borderRadius: '8px',
+                    border: newPlayerType === 'guest' ? '2px solid var(--primary)' : '2px solid var(--border)',
+                    background: newPlayerType === 'guest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: newPlayerType === 'guest' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.75rem'
+                  }}
+                >
+                  👤 Guest
+                </button>
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                {newPlayerType === 'guest' 
-                  ? 'Guest players appear in a separate section' 
-                  : 'Permanent players always appear in the main list'}
+                {newPlayerType === 'permanent' && 'Main list - core group members'}
+                {newPlayerType === 'permanent_guest' && 'Collapsible section - regular guests'}
+                {newPlayerType === 'guest' && 'Collapsible section - occasional players'}
               </p>
             </div>
 
