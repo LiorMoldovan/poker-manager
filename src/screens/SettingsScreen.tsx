@@ -18,7 +18,7 @@ import {
   createBackup,
   restoreFromBackup,
   downloadBackup,
-  shareBackupToWhatsApp,
+  shareBackupAsFile,
   importBackupFromFile,
   BackupData
 } from '../database/storage';
@@ -186,9 +186,13 @@ const SettingsScreen = () => {
     setTimeout(() => setBackupMessage(null), 3000);
   };
 
-  const handleShareToWhatsApp = () => {
-    shareBackupToWhatsApp();
-    setBackupMessage({ type: 'success', text: 'Opening WhatsApp...' });
+  const handleShareBackup = async () => {
+    const shared = await shareBackupAsFile();
+    if (shared) {
+      setBackupMessage({ type: 'success', text: 'Backup shared!' });
+    } else {
+      setBackupMessage({ type: 'success', text: 'Backup downloaded!' });
+    }
     setTimeout(() => setBackupMessage(null), 3000);
   };
 
@@ -518,10 +522,10 @@ const SettingsScreen = () => {
               </button>
               <button 
                 className="btn btn-secondary" 
-                onClick={handleShareToWhatsApp}
-                style={{ flex: 1, background: 'rgba(37, 211, 102, 0.15)', borderColor: '#25D366' }}
+                onClick={handleShareBackup}
+                style={{ flex: 1 }}
               >
-                📱 WhatsApp
+                📤 Share
               </button>
             </div>
           </div>

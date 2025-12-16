@@ -625,23 +625,40 @@ export const downloadBackup = (): void => {
   URL.revokeObjectURL(url);
 };
 
-// Share backup to WhatsApp
-export const shareBackupToWhatsApp = (): void => {
+// Share backup as file (for WhatsApp, etc.)
+export const shareBackupAsFile = async (): Promise<boolean> => {
   const backup = createBackup('manual');
-  const today = new Date().toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const today = new Date().toISOString().split('T')[0];
+  const fileName = `poker-backup-${today}.json`;
   
-  // Create minified JSON (smaller for WhatsApp)
-  const backupJson = JSON.stringify(backup);
+  // Create the file
+  const dataStr = JSON.stringify(backup, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const file = new File([blob], fileName, { type: 'application/json' });
   
-  // Create message with header and JSON
-  const message = `🎰 *Poker Backup - ${today}*\n\n` +
-    `📊 Players: ${backup.players.length}\n` +
-    `🎮 Games: ${backup.games.length}\n` +
-    `💰 Chips: ${backup.chipValues.length}\n\n` +
-    `---BACKUP START---\n${backupJson}\n---BACKUP END---\n\n` +
-    `💡 To restore: Copy the JSON between the markers and import in the app.`;
+  // Check if Web Share API with files is supported
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: 'Poker Backup',
+        text: `🎰 Poker Backup - ${today}`
+      });
+      return true;
+    } catch (error) {
+      // User cancelled or error - fall back to download
+      console.log('Share cancelled or failed, downloading instead');
+    }
+  }
   
-  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  // Fallback: download the file
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+  return false;
 };
 
 // Import backup from JSON file
