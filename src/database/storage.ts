@@ -411,9 +411,9 @@ export const getPlayerStats = (): PlayerStats[] => {
       }
     }
     
-    // Last 5 game results (most recent first)
-    const lastFiveResults = sortedPlayerGames
-      .slice(-5)
+    // Last 6 game results (most recent first)
+    const lastGameResults = sortedPlayerGames
+      .slice(-6)
       .reverse()
       .map(pg => pg.profit);
     
@@ -439,7 +439,7 @@ export const getPlayerStats = (): PlayerStats[] => {
       currentStreak,
       longestWinStreak,
       longestLossStreak,
-      lastFiveResults,
+      lastGameResults,
       avgRebuysPerGame,
       avgWin,
       avgLoss,

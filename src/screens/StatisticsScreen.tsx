@@ -605,12 +605,12 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
-              {/* Last 5 Games */}
-              {player.lastFiveResults && player.lastFiveResults.length > 0 && (
+              {/* Last 6 Games */}
+              {player.lastGameResults && player.lastGameResults.length > 0 && (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastFiveResults.length} games</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastGameResults.length} games</div>
                   <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    {player.lastFiveResults.map((result, i) => (
+                    {player.lastGameResults.map((result, i) => (
                       <div 
                         key={i}
                         style={{

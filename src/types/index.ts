@@ -77,7 +77,7 @@ export interface PlayerStats {
   longestWinStreak: number;
   longestLossStreak: number;
   // Recent history
-  lastFiveResults: number[];  // Last 5 game results (profit values)
+  lastGameResults: number[];  // Last 6 game results (profit values, most recent first)
   // Additional stats
   avgRebuysPerGame: number;
   avgWin: number;             // Average profit when winning
