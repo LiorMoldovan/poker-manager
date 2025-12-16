@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.0.0';
+export const APP_VERSION = '3.1.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.1.0',
+    date: '2024-12-16',
+    changes: [
+      'Excel Import: Added one-click import for ~213 historical games',
+      'Import creates backup before applying',
+      'Intelligent merge - avoids duplicate games/players'
+    ]
+  },
   {
     version: '3.0.0',
     date: '2024-12-16',

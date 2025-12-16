@@ -738,3 +738,75 @@ export const createGameEndBackup = (): void => {
   console.log('Auto backup created after game end!');
 };
 
+// Import historical data from Excel (pre-generated JSON)
+export const importHistoricalData = async (): Promise<{ success: boolean; message: string; stats?: { games: number; players: number } }> => {
+  try {
+    // Create backup before import
+    createBackup('manual');
+    
+    // Fetch the pre-generated import data
+    const response = await fetch('/import-data.json');
+    if (!response.ok) {
+      throw new Error('Could not find import data file');
+    }
+    
+    const importData = await response.json();
+    
+    // Parse the data
+    const players: Player[] = JSON.parse(importData.poker_players);
+    const games: Game[] = JSON.parse(importData.poker_games);
+    const gamePlayers: GamePlayer[] = JSON.parse(importData.poker_game_players);
+    
+    // Get existing data
+    const existingPlayers = getAllPlayers();
+    const existingGames = getAllGames();
+    const existingGamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+    
+    // Merge players (avoid duplicates by name)
+    const existingPlayerNames = new Set(existingPlayers.map(p => p.name));
+    const newPlayers = players.filter(p => !existingPlayerNames.has(p.name));
+    
+    // Create a map from import player IDs to existing/new IDs
+    const playerIdMap: Record<string, string> = {};
+    
+    // Map existing players
+    players.forEach(importPlayer => {
+      const existing = existingPlayers.find(p => p.name === importPlayer.name);
+      if (existing) {
+        playerIdMap[importPlayer.id] = existing.id;
+      } else {
+        playerIdMap[importPlayer.id] = importPlayer.id;
+      }
+    });
+    
+    // Update game players with correct IDs
+    const mappedGamePlayers = gamePlayers.map(gp => ({
+      ...gp,
+      playerId: playerIdMap[gp.playerId] || gp.playerId
+    }));
+    
+    // Merge games (avoid duplicates by date - same day = same game)
+    const existingGameDates = new Set(existingGames.map((g: Game) => g.date.split('T')[0]));
+    const newGames = games.filter(g => !existingGameDates.has(g.date.split('T')[0]));
+    const newGameIds = new Set(newGames.map(g => g.id));
+    const newGamePlayers = mappedGamePlayers.filter(gp => newGameIds.has(gp.gameId));
+    
+    // Save merged data
+    localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify([...existingPlayers, ...newPlayers]));
+    localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify([...existingGames, ...newGames]));
+    localStorage.setItem(STORAGE_KEYS.GAME_PLAYERS, JSON.stringify([...existingGamePlayers, ...newGamePlayers]));
+    
+    return {
+      success: true,
+      message: `Imported ${newGames.length} games and ${newPlayers.length} new players`,
+      stats: { games: newGames.length, players: newPlayers.length }
+    };
+  } catch (error) {
+    console.error('Import error:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Import failed'
+    };
+  }
+};
+

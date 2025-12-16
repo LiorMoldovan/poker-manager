@@ -19,6 +19,7 @@ import {
   restoreFromBackup,
   downloadBackup,
   importBackupFromFile,
+  importHistoricalData,
   BackupData
 } from '../database/storage';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -47,6 +48,7 @@ const SettingsScreen = () => {
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [importingHistory, setImportingHistory] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -216,6 +218,29 @@ const SettingsScreen = () => {
     reader.readAsText(file);
     // Reset input
     event.target.value = '';
+  };
+
+  const handleImportHistory = async () => {
+    if (importingHistory) return;
+    
+    if (!confirm('This will import ~213 historical games from your Excel file. A backup will be created first. Continue?')) {
+      return;
+    }
+    
+    setImportingHistory(true);
+    setBackupMessage({ type: 'success', text: 'Importing historical data...' });
+    
+    const result = await importHistoricalData();
+    
+    setImportingHistory(false);
+    
+    if (result.success) {
+      setBackupMessage({ type: 'success', text: `✅ ${result.message}. Reloading...` });
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      setBackupMessage({ type: 'error', text: `❌ ${result.message}` });
+      setTimeout(() => setBackupMessage(null), 5000);
+    }
   };
 
   const formatBackupDate = (dateStr: string) => {
@@ -511,7 +536,7 @@ const SettingsScreen = () => {
           </div>
 
           {/* Restore Actions */}
-          <div>
+          <div style={{ marginBottom: '1rem' }}>
             <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Restore Data
             </p>
@@ -536,6 +561,34 @@ const SettingsScreen = () => {
                 />
               </label>
             </div>
+          </div>
+
+          {/* Import Historical Data */}
+          <div style={{ 
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.1))',
+            borderRadius: '8px',
+            padding: '0.75rem',
+            border: '1px dashed rgba(139, 92, 246, 0.3)'
+          }}>
+            <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#8B5CF6', marginBottom: '0.5rem' }}>
+              📊 Import Excel History
+            </p>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              Import ~213 games from your Excel file (Feb 2021 - Dec 2025)
+            </p>
+            <button 
+              className="btn" 
+              onClick={handleImportHistory}
+              disabled={importingHistory}
+              style={{ 
+                width: '100%',
+                background: importingHistory ? 'var(--surface)' : 'linear-gradient(135deg, #8B5CF6, #10B981)',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              {importingHistory ? '⏳ Importing...' : '📥 Import Historical Data'}
+            </button>
           </div>
         </div>
       )}
