@@ -625,6 +625,25 @@ export const downloadBackup = (): void => {
   URL.revokeObjectURL(url);
 };
 
+// Share backup to WhatsApp
+export const shareBackupToWhatsApp = (): void => {
+  const backup = createBackup('manual');
+  const today = new Date().toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  
+  // Create minified JSON (smaller for WhatsApp)
+  const backupJson = JSON.stringify(backup);
+  
+  // Create message with header and JSON
+  const message = `🎰 *Poker Backup - ${today}*\n\n` +
+    `📊 Players: ${backup.players.length}\n` +
+    `🎮 Games: ${backup.games.length}\n` +
+    `💰 Chips: ${backup.chipValues.length}\n\n` +
+    `---BACKUP START---\n${backupJson}\n---BACKUP END---\n\n` +
+    `💡 To restore: Copy the JSON between the markers and import in the app.`;
+  
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+};
+
 // Import backup from JSON file
 export const importBackupFromFile = (jsonData: string): boolean => {
   try {

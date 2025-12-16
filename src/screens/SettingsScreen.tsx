@@ -18,6 +18,7 @@ import {
   createBackup,
   restoreFromBackup,
   downloadBackup,
+  shareBackupToWhatsApp,
   importBackupFromFile,
   BackupData
 } from '../database/storage';
@@ -182,6 +183,12 @@ const SettingsScreen = () => {
   const handleDownloadBackup = () => {
     downloadBackup();
     setBackupMessage({ type: 'success', text: 'Backup downloaded!' });
+    setTimeout(() => setBackupMessage(null), 3000);
+  };
+
+  const handleShareToWhatsApp = () => {
+    shareBackupToWhatsApp();
+    setBackupMessage({ type: 'success', text: 'Opening WhatsApp...' });
     setTimeout(() => setBackupMessage(null), 3000);
   };
 
@@ -492,7 +499,7 @@ const SettingsScreen = () => {
             <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Create Backup
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <button 
                 className="btn btn-primary" 
                 onClick={handleCreateBackup}
@@ -500,12 +507,21 @@ const SettingsScreen = () => {
               >
                 💾 Backup Now
               </button>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button 
                 className="btn btn-secondary" 
                 onClick={handleDownloadBackup}
                 style={{ flex: 1 }}
               >
                 📥 Download
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleShareToWhatsApp}
+                style={{ flex: 1, background: 'rgba(37, 211, 102, 0.15)', borderColor: '#25D366' }}
+              >
+                📱 WhatsApp
               </button>
             </div>
           </div>
