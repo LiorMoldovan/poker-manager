@@ -630,7 +630,12 @@ const StatisticsScreen = () => {
                           {result > 0 ? 'W' : result < 0 ? 'L' : '-'}
                         </div>
                         {i === 0 && (
-                          <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', marginTop: '2px' }}>▲</div>
+                          <div style={{ 
+                            fontSize: '0.55rem', 
+                            color: 'var(--primary)', 
+                            marginTop: '3px',
+                            fontWeight: '600'
+                          }}>אחרון</div>
                         )}
                       </div>
                     ))}
