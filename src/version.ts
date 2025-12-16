@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.2.0';
+export const APP_VERSION = '3.3.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.3.0',
+    date: '2024-12-16',
+    changes: [
+      'Statistics: Added minimum games filter',
+      'Filter players by games played (All, 5+, 10+, 20+, 50+)'
+    ]
+  },
   {
     version: '3.2.0',
     date: '2024-12-16',

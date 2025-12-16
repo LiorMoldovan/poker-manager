@@ -14,6 +14,7 @@ const StatisticsScreen = () => {
   const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('permanent');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [minGames, setMinGames] = useState<number>(0);
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -79,10 +80,13 @@ const StatisticsScreen = () => {
     return player?.type || 'permanent';
   };
 
-  // Separate stats by player type
-  const permanentStats = stats.filter(s => getPlayerType(s.playerId) === 'permanent');
-  const permanentGuestStats = stats.filter(s => getPlayerType(s.playerId) === 'permanent_guest');
-  const guestStats = stats.filter(s => getPlayerType(s.playerId) === 'guest');
+  // Filter stats by minimum games
+  const statsWithMinGames = stats.filter(s => s.gamesPlayed >= minGames);
+
+  // Separate stats by player type (after minGames filter)
+  const permanentStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent');
+  const permanentGuestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent_guest');
+  const guestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'guest');
 
   // Stats available for selection based on filter
   const getFilteredStats = () => {
@@ -90,7 +94,7 @@ const StatisticsScreen = () => {
       case 'permanent': return permanentStats;
       case 'permanent_guest': return permanentGuestStats;
       case 'guest': return guestStats;
-      case 'all': return stats;
+      case 'all': return statsWithMinGames;
       default: return permanentStats;
     }
   };
@@ -380,6 +384,38 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
               )}
+            </div>
+
+            {/* Minimum Games Filter */}
+            <div style={{ 
+              marginBottom: '0.75rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
+                🎮 MIN GAMES
+              </span>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                {[0, 5, 10, 20, 50].map(num => (
+                  <button
+                    key={num}
+                    onClick={() => setMinGames(num)}
+                    style={{
+                      flex: 1,
+                      minWidth: '40px',
+                      padding: '0.4rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '6px',
+                      border: minGames === num ? '2px solid #06B6D4' : '1px solid var(--border)',
+                      background: minGames === num ? 'rgba(6, 182, 212, 0.15)' : 'var(--surface)',
+                      color: minGames === num ? '#06B6D4' : 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {num === 0 ? 'הכל' : `${num}+`}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Player Type Filter */}
