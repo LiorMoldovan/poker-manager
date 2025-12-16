@@ -952,24 +952,29 @@ const SettingsScreen = () => {
               <p style={{ marginBottom: '0.75rem', fontWeight: '600' }}>
                 ✅ File saved to your Downloads folder
               </p>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                To backup via WhatsApp:
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Click the button below to open WhatsApp, then:
               </p>
               <ol style={{ fontSize: '0.85rem', color: 'var(--text)', paddingLeft: '1.25rem', lineHeight: '1.8' }}>
-                <li>Open <strong>WhatsApp</strong></li>
-                <li>Go to a chat (yourself or a group)</li>
                 <li>Click <strong>📎 Attach</strong></li>
                 <li>Select <strong>Document</strong></li>
-                <li>Choose the <strong>poker-backup</strong> file</li>
+                <li>Choose <strong>poker-backup-{new Date().toISOString().split('T')[0]}.json</strong></li>
                 <li>Send it! ✅</li>
               </ol>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem', fontStyle: 'italic' }}>
-                💡 Tip: Send it to yourself or a dedicated backup group
-              </p>
             </div>
             <div className="actions">
-              <button className="btn btn-primary" onClick={() => setShowShareInstructions(false)}>
-                Got it!
+              <button className="btn btn-secondary" onClick={() => setShowShareInstructions(false)}>
+                Close
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  setShowShareInstructions(false);
+                  window.open('https://wa.me/?text=' + encodeURIComponent('🎰 Poker Backup - ' + new Date().toLocaleDateString('he-IL') + '\n\n📎 Attaching backup file...'), '_blank');
+                }}
+                style={{ background: '#25D366', borderColor: '#25D366' }}
+              >
+                📱 Open WhatsApp
               </button>
             </div>
           </div>
