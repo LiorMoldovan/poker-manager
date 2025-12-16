@@ -3,6 +3,8 @@ import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
+
 const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -10,13 +12,54 @@ const StatisticsScreen = () => {
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [playerTypeFilter, setPlayerTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('permanent');
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  // Get available years from games
+  const getAvailableYears = (): number[] => {
+    const years = new Set<number>();
+    const now = new Date();
+    // Add current year and go back to 2021
+    for (let y = now.getFullYear(); y >= 2021; y--) {
+      years.add(y);
+    }
+    return Array.from(years).sort((a, b) => b - a);
+  };
+
+  // Get date filter based on time period
+  const getDateFilter = (): { start?: Date; end?: Date } | undefined => {
+    const now = new Date();
+    const year = selectedYear;
+    
+    switch (timePeriod) {
+      case 'h1': // First half of selected year (Jan-Jun)
+        return {
+          start: new Date(year, 0, 1),
+          end: new Date(year, 5, 30, 23, 59, 59)
+        };
+      case 'h2': // Second half of selected year (Jul-Dec)
+        return {
+          start: new Date(year, 6, 1),
+          end: new Date(year, 11, 31, 23, 59, 59)
+        };
+      case 'year': // Full selected year
+        return {
+          start: new Date(year, 0, 1),
+          end: new Date(year, 11, 31, 23, 59, 59)
+        };
+      case 'all':
+      default:
+        return undefined;
+    }
+  };
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [timePeriod, selectedYear]);
 
   const loadStats = () => {
-    const playerStats = getPlayerStats();
+    const dateFilter = getDateFilter();
+    const playerStats = getPlayerStats(dateFilter);
     const allPlayers = getAllPlayers();
     setStats(playerStats);
     setPlayers(allPlayers);
@@ -233,6 +276,112 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
+            {/* Time Period Filter */}
+            <div style={{ 
+              marginBottom: '0.75rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
+                📅 TIME PERIOD
+              </span>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                <button
+                  onClick={() => setTimePeriod('all')}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'all' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  הכל
+                </button>
+                <button
+                  onClick={() => setTimePeriod('year')}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'year' ? '2px solid #F59E0B' : '1px solid var(--border)',
+                    background: timePeriod === 'year' ? 'rgba(245, 158, 11, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'year' ? '#F59E0B' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  שנה
+                </button>
+                <button
+                  onClick={() => setTimePeriod('h1')}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'h1' ? '2px solid #3B82F6' : '1px solid var(--border)',
+                    background: timePeriod === 'h1' ? 'rgba(59, 130, 246, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h1' ? '#3B82F6' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  H1
+                </button>
+                <button
+                  onClick={() => setTimePeriod('h2')}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'h2' ? '2px solid #EC4899' : '1px solid var(--border)',
+                    background: timePeriod === 'h2' ? 'rgba(236, 72, 153, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h2' ? '#EC4899' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  H2
+                </button>
+              </div>
+              {/* Year Selector - only show when not "all" */}
+              {timePeriod !== 'all' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>שנה:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    style={{
+                      flex: 1,
+                      padding: '0.35rem',
+                      fontSize: '0.8rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {getAvailableYears().map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {timePeriod === 'h1' && `ינו-יוני ${selectedYear}`}
+                    {timePeriod === 'h2' && `יולי-דצמ ${selectedYear}`}
+                    {timePeriod === 'year' && `${selectedYear}`}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Player Type Filter */}
             <div style={{ 
               marginBottom: '0.75rem',

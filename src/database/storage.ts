@@ -336,10 +336,21 @@ export const getGameWithDetails = (gameId: string): GameWithDetails | null => {
 };
 
 // Player Statistics
-export const getPlayerStats = (): PlayerStats[] => {
+export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): PlayerStats[] => {
   const players = getAllPlayers();
   const allGamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
-  const games = getAllGames().filter(g => g.status === 'completed');
+  let games = getAllGames().filter(g => g.status === 'completed');
+  
+  // Apply date filter if provided
+  if (dateFilter) {
+    games = games.filter(g => {
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+  }
+  
   const completedGameIds = new Set(games.map(g => g.id));
   
   // Sort games by date for streak calculation

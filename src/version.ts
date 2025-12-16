@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.1.0';
+export const APP_VERSION = '3.2.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.2.0',
+    date: '2024-12-16',
+    changes: [
+      'Statistics: Added time period filter (All, Year, H1, H2)',
+      'Filter by any year from 2021 to present',
+      'H1 = Jan-Jun, H2 = Jul-Dec'
+    ]
+  },
   {
     version: '3.1.0',
     date: '2024-12-16',
