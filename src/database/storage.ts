@@ -411,11 +411,17 @@ export const getPlayerStats = (): PlayerStats[] => {
       }
     }
     
-    // Last 6 game results (most recent first)
+    // Last 6 game results (most recent first) with dates
     const lastGameResults = sortedPlayerGames
       .slice(-6)
       .reverse()
-      .map(pg => pg.profit);
+      .map(pg => {
+        const game = sortedGames.find(g => g.id === pg.gameId);
+        return {
+          profit: pg.profit,
+          date: game ? game.date || game.createdAt : ''
+        };
+      });
     
     // Average stats
     const avgRebuysPerGame = gamesPlayed > 0 ? totalRebuys / gamesPlayed : 0;

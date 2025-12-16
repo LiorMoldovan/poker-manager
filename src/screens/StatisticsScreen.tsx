@@ -610,35 +610,37 @@ const StatisticsScreen = () => {
                 <div style={{ marginBottom: '0.75rem' }}>
                   <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastGameResults.length} games</div>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
-                    {player.lastGameResults.map((result, i) => (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div 
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.9rem',
-                            fontWeight: '700',
-                            background: result > 0 ? 'rgba(34, 197, 94, 0.2)' : result < 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(156, 163, 175, 0.2)',
-                            color: result > 0 ? 'var(--success)' : result < 0 ? 'var(--danger)' : 'var(--text-muted)',
-                            border: `1px solid ${result > 0 ? 'var(--success)' : result < 0 ? 'var(--danger)' : 'var(--border)'}`
-                          }}
-                        >
-                          {result > 0 ? 'W' : result < 0 ? 'L' : '-'}
-                        </div>
-                        {i === 0 && (
+                    {player.lastGameResults.map((game, i) => {
+                      const gameDate = new Date(game.date);
+                      const dateStr = gameDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+                      return (
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div 
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.9rem',
+                              fontWeight: '700',
+                              background: game.profit > 0 ? 'rgba(34, 197, 94, 0.2)' : game.profit < 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(156, 163, 175, 0.2)',
+                              color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text-muted)',
+                              border: `1px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`
+                            }}
+                          >
+                            {game.profit > 0 ? 'W' : game.profit < 0 ? 'L' : '-'}
+                          </div>
                           <div style={{ 
-                            fontSize: '0.55rem', 
-                            color: 'var(--primary)', 
-                            marginTop: '3px',
-                            fontWeight: '600'
-                          }}>אחרון</div>
-                        )}
-                      </div>
-                    ))}
+                            fontSize: '0.5rem', 
+                            color: 'var(--text-muted)', 
+                            marginTop: '2px',
+                            whiteSpace: 'nowrap'
+                          }}>{dateStr}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
