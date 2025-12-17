@@ -823,7 +823,9 @@ const StatisticsScreen = () => {
                         'onFire',
                         records.onFirePlayers,
                         (p) => <div style={{ fontSize: '0.9rem', color: 'var(--success)' }}>{p.currentStreak} wins in a row!</div>,
-                        { fontSize: '1.25rem', color: '#f97316' }
+                        { fontSize: '1.25rem', color: '#f97316' },
+                        'currentWinStreak',
+                        '🔥 רצף נצחונות נוכחי'
                       )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active win streak</div>
@@ -842,7 +844,9 @@ const StatisticsScreen = () => {
                         'iceCold',
                         records.iceColdPlayers,
                         (p) => <div style={{ fontSize: '0.9rem', color: 'var(--danger)' }}>{Math.abs(p.currentStreak)} losses in a row</div>,
-                        { fontSize: '1.25rem', color: '#ef4444' }
+                        { fontSize: '1.25rem', color: '#ef4444' },
+                        'currentLossStreak',
+                        '❄️ רצף הפסדים נוכחי'
                       )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active loss streak</div>
@@ -862,7 +866,9 @@ const StatisticsScreen = () => {
                         'leader',
                         records.leaders,
                         (p) => <div className="profit" style={{ fontSize: '1.1rem', fontWeight: '700' }}>+{formatCurrency(p.totalProfit)}</div>,
-                        { fontSize: '1.1rem' }
+                        { fontSize: '1.1rem' },
+                        'all',
+                        '🥇 כל המשחקים'
                       )}
                     </div>
                   </div>
@@ -874,7 +880,9 @@ const StatisticsScreen = () => {
                         'biggestLoser',
                         records.biggestLosers,
                         (p) => <div className="loss" style={{ fontSize: '1.1rem', fontWeight: '700' }}>{formatCurrency(p.totalProfit)}</div>,
-                        { fontSize: '1.1rem' }
+                        { fontSize: '1.1rem' },
+                        'all',
+                        '📉 כל המשחקים'
                       )}
                     </div>
                   </div>
@@ -890,7 +898,10 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'biggestWin',
                       records.biggestWinPlayers,
-                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.biggestWin)}</div>
+                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.biggestWin)}</div>,
+                      undefined,
+                      'biggestWin',
+                      '💰 הניצחון הגדול'
                     )}
                   </div>
                   <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
@@ -898,7 +909,10 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'biggestLoss',
                       records.biggestLossPlayers,
-                      (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.biggestLoss)}</div>
+                      (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.biggestLoss)}</div>,
+                      undefined,
+                      'biggestLoss',
+                      '💸 ההפסד הגדול'
                     )}
                   </div>
                 </div>
@@ -915,7 +929,10 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'longestWinStreak',
                           records.longestWinStreakPlayers.filter(p => p.longestWinStreak > 1),
-                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{p.longestWinStreak} wins</div>
+                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{p.longestWinStreak} wins</div>,
+                          undefined,
+                          'longestWinStreak',
+                          '🏆 רצף נצחונות ארוך'
                         )}
                       </div>
                     )}
@@ -925,7 +942,10 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'longestLossStreak',
                           records.longestLossStreakPlayers.filter(p => p.longestLossStreak > 1),
-                          (p) => <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{p.longestLossStreak} losses</div>
+                          (p) => <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{p.longestLossStreak} losses</div>,
+                          undefined,
+                          'longestLossStreak',
+                          '💔 רצף הפסדים ארוך'
                         )}
                       </div>
                     )}
@@ -944,7 +964,10 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'highestAvgProfit',
                           records.highestAvgProfits,
-                          (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.avgProfit)}</div>
+                          (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.avgProfit)}</div>,
+                          undefined,
+                          'all',
+                          '📈 ממוצע למשחק'
                         )}
                       </div>
                     )}
@@ -954,7 +977,10 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'lowestAvgProfit',
                           records.lowestAvgProfits,
-                          (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.avgProfit)}</div>
+                          (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.avgProfit)}</div>,
+                          undefined,
+                          'all',
+                          '📉 ממוצע למשחק'
                         )}
                       </div>
                     )}
@@ -971,7 +997,10 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'mostGames',
                       records.mostDedicatedPlayers,
-                      (p) => <span style={{ fontWeight: '600' }}>({p.gamesPlayed})</span>
+                      (p) => <span style={{ fontWeight: '600' }}>({p.gamesPlayed})</span>,
+                      undefined,
+                      'all',
+                      '🎮 כל המשחקים'
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
@@ -979,7 +1008,10 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'mostWins',
                       records.mostWinsPlayers,
-                      (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winCount})</span>
+                      (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winCount})</span>,
+                      undefined,
+                      'wins',
+                      '🏆 ניצחונות'
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
@@ -987,7 +1019,10 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'mostLosses',
                       records.mostLossesPlayers,
-                      (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.lossCount})</span>
+                      (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.lossCount})</span>,
+                      undefined,
+                      'losses',
+                      '💔 הפסדים'
                     )}
                   </div>
                   {records.sharpshooters.length > 0 && (
@@ -996,7 +1031,10 @@ const StatisticsScreen = () => {
                       {renderRecord(
                         'sharpshooter',
                         records.sharpshooters,
-                        (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winPercentage.toFixed(0)}%)</span>
+                        (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winPercentage.toFixed(0)}%)</span>,
+                        undefined,
+                        'wins',
+                        '🎯 ניצחונות'
                       )}
                     </div>
                   )}
@@ -1006,7 +1044,10 @@ const StatisticsScreen = () => {
                       {renderRecord(
                         'worstWinRate',
                         records.worstWinRates,
-                        (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.winPercentage.toFixed(0)}%)</span>
+                        (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.winPercentage.toFixed(0)}%)</span>,
+                        undefined,
+                        'losses',
+                        '🎲 הפסדים'
                       )}
                     </div>
                   )}
@@ -1016,7 +1057,10 @@ const StatisticsScreen = () => {
                       {renderRecord(
                         'rebuyKing',
                         records.rebuyKings.filter(p => p.totalRebuys > 0),
-                        (p) => <span style={{ fontWeight: '600' }}>({p.totalRebuys} total)</span>
+                        (p) => <span style={{ fontWeight: '600' }}>({p.totalRebuys} total)</span>,
+                        undefined,
+                        'all',
+                        '🎰 כל המשחקים'
                       )}
                     </div>
                   )}
@@ -1256,6 +1300,101 @@ const StatisticsScreen = () => {
           ))}
 
           </>
+      )}
+
+      {/* Record Details Modal */}
+      {recordDetails && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setRecordDetails(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              borderRadius: '12px',
+              padding: '1rem',
+              maxWidth: '400px',
+              width: '100%',
+              maxHeight: '70vh',
+              overflow: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>{recordDetails.title}</h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{recordDetails.playerName}</div>
+              </div>
+              <button 
+                onClick={() => setRecordDetails(null)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  fontSize: '1.5rem', 
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              {recordDetails.games.length} משחקים
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {recordDetails.games.map((game, idx) => (
+                <div 
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.5rem',
+                    background: 'var(--surface)',
+                    borderRadius: '6px',
+                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`
+                  }}
+                >
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {new Date(game.date).toLocaleDateString('he-IL', { 
+                      day: 'numeric', 
+                      month: 'short',
+                      year: '2-digit'
+                    })}
+                  </span>
+                  <span style={{ 
+                    fontWeight: '600',
+                    color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text)'
+                  }}>
+                    {game.profit > 0 ? '+' : ''}{formatCurrency(game.profit)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            
+            {recordDetails.games.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                אין נתונים להצגה
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

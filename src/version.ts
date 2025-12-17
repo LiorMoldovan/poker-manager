@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.2.0';
+export const APP_VERSION = '4.2.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.2.1',
+    date: '2024-12-17',
+    changes: [
+      'Records: Click 🔍 to see game details behind any record',
+      'Modal shows all relevant games with dates and profits',
+      'Works for streaks, wins, losses, biggest games, etc.'
+    ]
+  },
   {
     version: '4.2.0',
     date: '2024-12-17',
