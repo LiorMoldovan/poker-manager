@@ -495,7 +495,7 @@ const NewGameScreen = () => {
         </button>
       </div>
 
-      {/* Permanent Guest Players Section */}
+      {/* Guests Section */}
       {permanentGuestPlayers.length > 0 && (
         <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
           <button
@@ -513,7 +513,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              ⭐ Permanent Guests ({permanentGuestPlayers.length})
+              👥 אורחים ({permanentGuestPlayers.length})
             </span>
             <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
               {showPermanentGuests ? '▲' : '▼'}
@@ -533,7 +533,7 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Guest Players Section */}
+      {/* Occasional Players Section */}
       {guestPlayers.length > 0 && (
         <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
           <button
@@ -551,7 +551,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              👤 Guests ({guestPlayers.length})
+              👤 מזדמנים ({guestPlayers.length})
             </span>
             <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
               {showGuests ? '▲' : '▼'}
@@ -649,7 +649,7 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  ⭐ Perm Guest
+                  👥 אורחים
                 </button>
                 <button
                   type="button"
@@ -667,13 +667,13 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  👤 Guest
+                  👤 מזדמנים
                 </button>
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                {newPlayerType === 'permanent' && 'Main list - core group members'}
-                {newPlayerType === 'permanent_guest' && 'Collapsible section - regular guests'}
-                {newPlayerType === 'guest' && 'Collapsible section - occasional players'}
+                {newPlayerType === 'permanent' && 'רשימה ראשית - חברי הקבוצה הקבועים'}
+                {newPlayerType === 'permanent_guest' && 'אורחים קבועים שמגיעים לעתים קרובות'}
+                {newPlayerType === 'guest' && 'שחקנים מזדמנים שמגיעים לפעמים'}
               </p>
             </div>
 

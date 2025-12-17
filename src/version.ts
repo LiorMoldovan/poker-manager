@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.4.3';
+export const APP_VERSION = '3.5.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.5.0',
+    date: '2024-12-16',
+    changes: [
+      'Renamed player types: קבוע, אורחים, מזדמנים',
+      'New icons: ⭐ Permanent, 👥 Guests, 👤 Occasional',
+      'Hebrew descriptions for player type selection'
+    ]
+  },
   {
     version: '3.4.3',
     date: '2024-12-16',

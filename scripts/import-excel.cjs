@@ -221,13 +221,13 @@ players.filter(p => p.type === 'permanent').forEach(p => {
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nPermanent Guests (50+ games):');
+console.log('\nGuests - אורחים (50+ games):');
 players.filter(p => p.type === 'permanent_guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nGuests (<50 games):');
+console.log('\nOccasional - מזדמנים (<50 games):');
 players.filter(p => p.type === 'guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
