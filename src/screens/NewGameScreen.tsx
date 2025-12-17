@@ -576,8 +576,8 @@ const NewGameScreen = () => {
 
       {/* Location Selector */}
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📍</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>📍 מיקום:</span>
           {LOCATION_OPTIONS.map(loc => (
             <button
               key={loc}
