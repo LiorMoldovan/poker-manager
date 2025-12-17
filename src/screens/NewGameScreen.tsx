@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 
@@ -20,6 +21,9 @@ const NewGameScreen = () => {
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
+  const [isSharing, setIsSharing] = useState(false);
+  const [cachedForecasts, setCachedForecasts] = useState<ReturnType<typeof generateForecasts> | null>(null);
+  const forecastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadPlayers();
