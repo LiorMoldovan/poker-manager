@@ -620,7 +620,7 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: '1.1rem' }}>
-                  33% מממוצע המשחקים בתקופה
+                  מעל 33% מממוצע המשחקים בתקופה
                 </span>
               </div>
                 <button
