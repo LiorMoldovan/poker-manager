@@ -290,7 +290,7 @@ const SettingsScreen = () => {
     { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const },
     { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const },
     { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const },
-    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null },
+    { id: 'backup', label: '📦 Backup & Restore', icon: '📦', requiresPermission: null },
     { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null },
   ];
   
