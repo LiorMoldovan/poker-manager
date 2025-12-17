@@ -745,10 +745,12 @@ const StatisticsScreen = () => {
                       <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.worstWinRate.playerName} ({records.worstWinRate.winPercentage.toFixed(0)}%)</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>🎰 Rebuy King</span>
-                    <span style={{ fontWeight: '600' }}>{records.rebuyKing.playerName} ({records.rebuyKing.totalRebuys} total)</span>
-                  </div>
+                  {records.rebuyKing.totalRebuys > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>🎰 Rebuy King</span>
+                      <span style={{ fontWeight: '600' }}>{records.rebuyKing.playerName} ({records.rebuyKing.totalRebuys} total)</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </>
