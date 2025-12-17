@@ -43,7 +43,6 @@ const SettingsScreen = () => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('backup');
   const [backups, setBackups] = useState<BackupData[]>([]);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -59,6 +58,14 @@ const SettingsScreen = () => {
   const canEditPlayers = hasPermission('player:edit');
   const canDeletePlayers = hasPermission('player:delete');
   const canAddPlayers = hasPermission('player:add');
+
+  // Determine default tab based on permissions: players for admin/member, backup for viewer
+  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' => {
+    if (canAddPlayers) return 'players';  // Admin or Member
+    return 'backup';  // Viewer
+  };
+  
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>(getDefaultTab());
 
   useEffect(() => {
     loadData();
