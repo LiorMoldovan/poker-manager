@@ -9,7 +9,12 @@ type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const initialViewMode = (location.state as { viewMode?: 'table' | 'records' | 'individual' })?.viewMode || 'table';
+  const locationState = location.state as { 
+    viewMode?: 'table' | 'records' | 'individual';
+    recordInfo?: { title: string; playerId: string; recordType: string };
+  } | null;
+  const initialViewMode = locationState?.viewMode || 'table';
+  const savedRecordInfo = locationState?.recordInfo;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -31,6 +36,8 @@ const StatisticsScreen = () => {
   const [recordDetails, setRecordDetails] = useState<{
     title: string;
     playerName: string;
+    playerId: string;
+    recordType: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for record details
 
@@ -75,6 +82,19 @@ const StatisticsScreen = () => {
   useEffect(() => {
     loadStats();
   }, [timePeriod, selectedYear]);
+
+  // Restore record details modal when coming back from game details
+  useEffect(() => {
+    if (savedRecordInfo && stats.length > 0) {
+      const player = stats.find(s => s.playerId === savedRecordInfo.playerId);
+      if (player) {
+        // Restore the modal with the saved record info
+        showRecordDetails(savedRecordInfo.title, player, savedRecordInfo.recordType);
+      }
+      // Clear the location state to prevent re-triggering
+      window.history.replaceState({}, document.title);
+    }
+  }, [savedRecordInfo, stats]);
 
   const loadStats = () => {
     const dateFilter = getDateFilter();
@@ -362,6 +382,8 @@ const StatisticsScreen = () => {
     setRecordDetails({
       title,
       playerName: player.playerName,
+      playerId: player.playerId,
+      recordType,
       games: filteredGames
     });
   };
@@ -1396,8 +1418,19 @@ const StatisticsScreen = () => {
                 <div 
                   key={idx}
                   onClick={() => {
+                    const savedRecordInfo = recordDetails ? {
+                      title: recordDetails.title,
+                      playerId: recordDetails.playerId,
+                      recordType: recordDetails.recordType
+                    } : null;
                     setRecordDetails(null);
-                    navigate(`/game/${game.gameId}`, { state: { from: 'records', viewMode: 'records' } });
+                    navigate(`/game/${game.gameId}`, { 
+                      state: { 
+                        from: 'records', 
+                        viewMode: 'records',
+                        recordInfo: savedRecordInfo
+                      } 
+                    });
                   }}
                   style={{
                     display: 'flex',

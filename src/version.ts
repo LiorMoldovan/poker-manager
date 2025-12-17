@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.3.5';
+export const APP_VERSION = '4.3.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.3.6',
+    date: '2025-12-17',
+    changes: [
+      'Back button returns to exact record details modal (not just Records page)',
+      'Record info is preserved when navigating from game details back to records'
+    ]
+  },
   {
     version: '4.3.5',
     date: '2024-12-17',

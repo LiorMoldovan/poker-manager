@@ -127,11 +127,26 @@ const NewGameScreen = () => {
     recentAvg: number;
     gamesCount: number;
     trend: 'hot' | 'cold' | 'improving' | 'declining' | 'stable';
-    highlights: string; // Dynamic personalized insight
+    highlights: string;
+    daysSinceLastGame: number;
+    isActive: boolean; // played in last 2 months
   }
   
-  // Generate DYNAMIC personalized highlight - picks the most interesting insight for each player
-  const generateDynamicHighlight = (stats: PlayerStats): string => {
+  // Calculate days since last game
+  const getDaysSinceLastGame = (stats: PlayerStats): number => {
+    const lastGames = stats.lastGameResults || [];
+    if (lastGames.length === 0) return 999;
+    
+    const lastGameDate = lastGames[0]?.date;
+    if (!lastGameDate) return 999;
+    
+    const lastDate = new Date(lastGameDate);
+    const now = new Date();
+    return Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+  };
+  
+  // Generate DYNAMIC personalized highlight based on ACTUAL recency
+  const generateDynamicHighlight = (stats: PlayerStats, daysSince: number): string => {
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
     if (gamesCount === 0) return '';
@@ -144,132 +159,154 @@ const NewGameScreen = () => {
     const streak = stats.currentStreak;
     const winPct = Math.round(stats.winPercentage);
     const recentWinPct = Math.round((recentWins / gamesCount) * 100);
+    const totalProfit = Math.round(stats.totalProfit);
+    const totalGames = stats.gamesPlayed;
     
-    // Find best and worst recent games
+    // Find best and worst games
     const bestRecent = Math.max(...lastGames.map(g => g.profit));
     const worstRecent = Math.min(...lastGames.map(g => g.profit));
     
-    // Collect all possible interesting insights
+    // Determine time context
+    const isActive = daysSince <= 60; // played in last 2 months
+    const isRecent = daysSince <= 30; // played in last month
+    const monthsAgo = Math.floor(daysSince / 30);
+    
+    // Collect all possible insights with CORRECT time context
     const insights: { priority: number; text: string }[] = [];
     
-    // HOT STREAK - very high priority
-    if (streak >= 4) {
-      insights.push({ priority: 100, text: `🔥 ${streak} נצחונות ברצף! הטפסן החם ביותר כרגע` });
-    } else if (streak >= 3) {
-      insights.push({ priority: 95, text: `🔥 ${streak} נצחונות ברצף - על גל חם` });
-    } else if (streak === 2) {
-      insights.push({ priority: 60, text: `ניצח 2 משחקים אחרונים ברצף` });
+    // === ACTIVE PLAYERS (played recently) ===
+    if (isActive) {
+      // HOT STREAK
+      if (streak >= 4) {
+        insights.push({ priority: 100, text: `🔥 רצף מטורף של ${streak} נצחונות! השחקן הכי חם כרגע על השולחן` });
+        insights.push({ priority: 98, text: `🔥 ${streak} נצחונות ברצף - מישהו צריך לעצור אותו לפני שהוא לוקח את כל הכסף` });
+      } else if (streak >= 3) {
+        insights.push({ priority: 95, text: `🔥 על גל חם עם ${streak} נצחונות רצופים - המומנטום לצידו` });
+        insights.push({ priority: 93, text: `🔥 ${streak} נצחונות ברצף, והביטחון שלו בשמיים` });
+      } else if (streak === 2) {
+        insights.push({ priority: 60, text: `שני נצחונות רצופים - אולי תחילת רצף חם?` });
+      }
+      
+      // COLD STREAK  
+      if (streak <= -4) {
+        insights.push({ priority: 100, text: `❄️ ${Math.abs(streak)} הפסדים ברצף - תקופה קשה, אבל כל רצף נשבר מתישהו` });
+        insights.push({ priority: 98, text: `❄️ רצף של ${Math.abs(streak)} הפסדים. המזל חייב להשתנות, לא?` });
+      } else if (streak <= -3) {
+        insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים רצופים - צריך שינוי מזל דחוף` });
+      } else if (streak === -2) {
+        insights.push({ priority: 60, text: `שני הפסדים אחרונים - הלילה ההזדמנות לשבור את הרצף` });
+      }
+      
+      // IMPROVEMENT vs HISTORY (only if active)
+      if (recentAvg > overallAvg + 30) {
+        insights.push({ priority: 90, text: `📈 שיפור דרמטי! ממוצע של +${recentAvg}₪ במשחקים האחרונים, הרבה מעל הממוצע ההיסטורי שלו (${overallAvg}₪)` });
+      } else if (recentAvg > overallAvg + 15 && gamesCount >= 4) {
+        insights.push({ priority: 75, text: `📈 בעלייה ברורה: ממוצע ${recentAvg > 0 ? '+' : ''}${recentAvg}₪ במשחקים האחרונים לעומת ${overallAvg}₪ בסה"כ` });
+      }
+      
+      // DECLINE vs HISTORY (only if active)
+      if (recentAvg < overallAvg - 30) {
+        insights.push({ priority: 90, text: `📉 ירידה חדה! ממוצע ${recentAvg}₪ במשחקים האחרונים - הרבה מתחת לממוצע ההיסטורי שלו (${overallAvg > 0 ? '+' : ''}${overallAvg}₪)` });
+      } else if (recentAvg < overallAvg - 15 && gamesCount >= 4) {
+        insights.push({ priority: 75, text: `📉 ירידה בביצועים: ${recentAvg}₪ ממוצע במשחקים האחרונים, לעומת ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ היסטורית` });
+      }
+      
+      // DOMINANT PERFORMANCE
+      if (recentWins >= gamesCount - 1 && gamesCount >= 4) {
+        insights.push({ priority: 85, text: `שליטה מוחלטת: ${recentWins} מתוך ${gamesCount} משחקים אחרונים סיים ברווח!` });
+      } else if (recentLosses >= gamesCount - 1 && gamesCount >= 4) {
+        insights.push({ priority: 85, text: `מתקשה מאוד: רק ${recentWins} מתוך ${gamesCount} משחקים אחרונים ברווח` });
+      }
     }
     
-    // COLD STREAK - very high priority
-    if (streak <= -4) {
-      insights.push({ priority: 100, text: `❄️ ${Math.abs(streak)} הפסדים ברצף - תקופה קשה` });
-    } else if (streak <= -3) {
-      insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים ברצף` });
-    } else if (streak === -2) {
-      insights.push({ priority: 60, text: `הפסיד 2 משחקים אחרונים` });
+    // === INACTIVE PLAYERS (haven't played in a while) ===
+    else {
+      // Time since last game
+      if (monthsAgo >= 6) {
+        insights.push({ priority: 90, text: `⏰ לא שיחק כבר ${monthsAgo} חודשים! חזרה מסקרנת - נראה אם הוא עדיין זוכר לשחק` });
+        insights.push({ priority: 88, text: `⏰ חצי שנה מאז המשחק האחרון - הרבה חלודה לנער` });
+      } else if (monthsAgo >= 3) {
+        insights.push({ priority: 85, text: `⏰ ${monthsAgo} חודשים מאז המשחק האחרון - סקרנים לראות באיזה מצב הוא חוזר` });
+        insights.push({ priority: 83, text: `⏰ הפסקה של ${monthsAgo} חודשים. יחזור חזק או חלוד?` });
+      } else {
+        insights.push({ priority: 75, text: `⏰ לא שיחק חודשיים - זמן לבדוק אם הוא עדיין בכושר` });
+      }
     }
     
-    // DRAMATIC IMPROVEMENT compared to history
-    if (recentAvg > overallAvg + 30) {
-      insights.push({ priority: 90, text: `📈 קפיצה דרמטית! ממוצע +${recentAvg}₪ לאחרונה (במקום ${overallAvg}₪)` });
-    } else if (recentAvg > overallAvg + 15 && gamesCount >= 4) {
-      insights.push({ priority: 75, text: `📈 בעלייה: ${recentAvg > 0 ? '+' : ''}${recentAvg}₪ ממוצע לאחרונה vs ${overallAvg}₪ כללי` });
-    }
+    // === HISTORICAL PATTERNS (always relevant) ===
     
-    // DRAMATIC DECLINE compared to history
-    if (recentAvg < overallAvg - 30) {
-      insights.push({ priority: 90, text: `📉 נפילה חדה! ממוצע ${recentAvg}₪ לאחרונה (במקום ${overallAvg > 0 ? '+' : ''}${overallAvg}₪)` });
-    } else if (recentAvg < overallAvg - 15 && gamesCount >= 4) {
-      insights.push({ priority: 75, text: `📉 בירידה: ${recentAvg}₪ לאחרונה vs ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ כללי` });
-    }
-    
-    // RECENT BIG WIN
+    // BIG WINS
     if (bestRecent >= 100) {
-      insights.push({ priority: 70, text: `💰 ניצחון גדול לאחרונה: +${bestRecent}₪` });
+      insights.push({ priority: 70, text: `💰 הנצחון הגדול שלו: +${bestRecent}₪ - מוכיח שכשהוא בפורמה, הוא יכול לקחת הרבה` });
     } else if (bestRecent >= 60 && recentAvg < 0) {
-      insights.push({ priority: 65, text: `יש לו נצחונות גדולים (+${bestRecent}₪) אבל לא עקבי` });
+      insights.push({ priority: 65, text: `יודע לנצח גדול (+${bestRecent}₪) אבל לא עקבי - תלוי באיזה יום תפסת אותו` });
     }
     
-    // RECENT BIG LOSS
+    // BIG LOSSES
     if (worstRecent <= -100) {
-      insights.push({ priority: 70, text: `💸 הפסד כבד לאחרונה: ${worstRecent}₪` });
+      insights.push({ priority: 70, text: `💸 הפסד כואב של ${worstRecent}₪ - יודע גם ליפול חזק` });
     } else if (worstRecent <= -60 && recentAvg > 0) {
-      insights.push({ priority: 65, text: `הפסד כואב (${worstRecent}₪) אבל עדיין ברווח כולל` });
+      insights.push({ priority: 65, text: `גם כשהוא מפסיד, הוא מפסיד גדול (${worstRecent}₪) - אבל בסופו של דבר ברווח` });
     }
     
-    // DOMINANT RECENT PERFORMANCE
-    if (recentWins >= gamesCount - 1 && gamesCount >= 4) {
-      insights.push({ priority: 85, text: `שולט לאחרונה: ${recentWins} מתוך ${gamesCount} נצחונות!` });
-    } else if (recentLosses >= gamesCount - 1 && gamesCount >= 4) {
-      insights.push({ priority: 85, text: `נאבק: רק ${recentWins} מתוך ${gamesCount} אחרונים ברווח` });
+    // WIN RATE
+    if (winPct >= 65) {
+      insights.push({ priority: 70, text: `🎯 אחוז נצחון של ${winPct}% מתוך ${totalGames} משחקים - שחקן מנצח מובהק` });
+    } else if (winPct <= 35 && totalGames >= 5) {
+      insights.push({ priority: 70, text: `😅 רק ${winPct}% נצחונות מתוך ${totalGames} משחקים - אבל ממשיך לנסות` });
     }
     
-    // WIN RATE CHANGE
-    if (recentWinPct > winPct + 25 && gamesCount >= 5) {
-      insights.push({ priority: 70, text: `אחוז נצחון עלה: ${recentWinPct}% לאחרונה (${winPct}% כללי)` });
-    } else if (recentWinPct < winPct - 25 && gamesCount >= 5) {
-      insights.push({ priority: 70, text: `אחוז נצחון ירד: ${recentWinPct}% לאחרונה (${winPct}% כללי)` });
+    // COMEBACK POTENTIAL
+    if (totalProfit < -200 && recentAvg > 10 && isActive) {
+      insights.push({ priority: 80, text: `🔄 בדרך לקאמבק? הפסיד ${Math.abs(totalProfit)}₪ בסה"כ, אבל בביצועים האחרונים יש שיפור` });
+    } else if (totalProfit < -200) {
+      insights.push({ priority: 65, text: `📊 הפסיד ${Math.abs(totalProfit)}₪ לאורך ההיסטוריה - השאלה אם הוא למד משהו` });
     }
     
-    // CONSISTENT WINNER
-    if (recentAvg > 20 && recentWins >= Math.ceil(gamesCount * 0.6) && stats.avgProfit > 15) {
-      insights.push({ priority: 65, text: `יציב ברווח: +${recentAvg}₪ ממוצע, ${recentWins}/${gamesCount} נצחונות` });
+    // LOSING THE EDGE
+    if (totalProfit > 200 && recentAvg < -10 && isActive) {
+      insights.push({ priority: 80, text: `⚠️ היה מרוויח גדול (+${totalProfit}₪ כולל) אבל הביצועים האחרונים מדאיגים` });
     }
     
-    // CONSISTENT LOSER  
-    if (recentAvg < -20 && recentLosses >= Math.ceil(gamesCount * 0.6) && stats.avgProfit < -15) {
-      insights.push({ priority: 65, text: `מתקשה: ${recentAvg}₪ ממוצע, ${recentLosses}/${gamesCount} הפסדים` });
+    // VOLATILE
+    if (bestRecent - worstRecent > 150) {
+      insights.push({ priority: 55, text: `🎢 שחקן של קיצוניות: בין +${bestRecent}₪ ל-${Math.abs(worstRecent)}₪ - אתו אף פעם לא יודעים` });
     }
     
-    // COMEBACK POTENTIAL - was losing historically but recent is better
-    if (stats.totalProfit < -100 && recentAvg > 10) {
-      insights.push({ priority: 80, text: `🔄 סימני קאמבק? +${recentAvg}₪ לאחרונה למרות ${Math.round(stats.totalProfit)}₪ כולל` });
+    // TOTAL PROFIT MILESTONES
+    if (totalProfit > 500) {
+      insights.push({ priority: 50, text: `💎 רווח כולל של +${totalProfit}₪ מ-${totalGames} משחקים - אחד המנצחים הגדולים` });
+      insights.push({ priority: 48, text: `💎 +${totalProfit}₪ בקופה - ההיסטוריה מדברת בעד עצמה` });
+    } else if (totalProfit < -500) {
+      insights.push({ priority: 50, text: `📊 הפסיד ${Math.abs(totalProfit)}₪ לאורך ${totalGames} משחקים - הספונסר שלנו` });
     }
     
-    // LOSING THE EDGE - was winning historically but recent is worse
-    if (stats.totalProfit > 100 && recentAvg < -10) {
-      insights.push({ priority: 80, text: `⚠️ מאבד קצב? ${recentAvg}₪ לאחרונה למרות +${Math.round(stats.totalProfit)}₪ כולל` });
-    }
-    
-    // VOLATILE PLAYER - big swings
-    if (bestRecent - worstRecent > 150 && gamesCount >= 4) {
-      insights.push({ priority: 55, text: `🎢 תנודתי: בין +${bestRecent}₪ ל-${Math.abs(worstRecent)}₪ לאחרונה` });
-    }
-    
-    // PERFECTLY BALANCED (rare)
+    // BALANCED
     if (Math.abs(recentAvg) <= 5 && recentWins === recentLosses && gamesCount >= 4) {
-      insights.push({ priority: 50, text: `⚖️ מאוזן לחלוטין: ${recentWins} נצחונות, ${recentLosses} הפסדים` });
+      insights.push({ priority: 50, text: `⚖️ מאוזן להפליא: ${recentWins} נצחונות ו-${recentLosses} הפסדים - לא נוטה לשום כיוון` });
     }
     
-    // TOTAL PROFIT MILESTONE
-    if (stats.totalProfit > 500) {
-      insights.push({ priority: 45, text: `💎 +${Math.round(stats.totalProfit)}₪ רווח כולל מ-${stats.gamesPlayed} משחקים` });
-    } else if (stats.totalProfit < -500) {
-      insights.push({ priority: 45, text: `📊 ${Math.round(stats.totalProfit)}₪ כולל מ-${stats.gamesPlayed} משחקים` });
-    }
-    
-    // DEFAULT - multiple variations for basic summary
-    if (gamesCount >= 3) {
-      insights.push({ priority: 30, text: `${recentWins}/${gamesCount} נצחונות לאחרונה, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪` });
-      insights.push({ priority: 28, text: `ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב-${gamesCount} משחקים אחרונים` });
-      insights.push({ priority: 26, text: `${recentWins} נצחונות מתוך ${gamesCount} אחרונים (${recentWinPct}%)` });
+    // DEFAULT summaries based on data quality
+    if (totalGames >= 10) {
+      insights.push({ priority: 35, text: `${totalGames} משחקים בהיסטוריה, ${winPct}% נצחונות, ממוצע ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪ למשחק` });
+      insights.push({ priority: 33, text: `שחקן ותיק עם ${totalGames} משחקים: סה"כ ${totalProfit >= 0 ? '+' : ''}${totalProfit}₪` });
+    } else if (totalGames >= 5) {
+      insights.push({ priority: 30, text: `${totalGames} משחקים עד היום: ${recentWins} נצחונות, ממוצע ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪` });
     } else {
-      insights.push({ priority: 20, text: `${gamesCount} משחקים אחרונים: ${recentProfit >= 0 ? '+' : ''}${recentProfit}₪` });
+      insights.push({ priority: 25, text: `עדיין מתחיל: רק ${totalGames} משחקים בהיסטוריה` });
     }
     
-    // RANDOM SELECTION from top candidates (not just the highest!)
-    // Sort by priority, then pick randomly from top tier with weighted probability
+    // RANDOM SELECTION from top candidates
     insights.sort((a, b) => b.priority - a.priority);
     
     if (insights.length === 0) return '';
     if (insights.length === 1) return insights[0].text;
     
-    // Get top tier (within 20 points of highest priority)
+    // Get top tier (within 15 points of highest priority)
     const topPriority = insights[0].priority;
-    const topTier = insights.filter(i => i.priority >= topPriority - 20);
+    const topTier = insights.filter(i => i.priority >= topPriority - 15);
     
-    // Weighted random selection - higher priority = more likely but not guaranteed
+    // Weighted random selection
     const totalWeight = topTier.reduce((sum, i) => sum + i.priority, 0);
     let random = Math.random() * totalWeight;
     
@@ -284,11 +321,13 @@ const NewGameScreen = () => {
   const analyzeRecent = (stats: PlayerStats): RecentAnalysis => {
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
+    const daysSinceLastGame = getDaysSinceLastGame(stats);
+    const isActive = daysSinceLastGame <= 60;
     
     if (gamesCount === 0) {
       return { 
         recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0, 
-        gamesCount: 0, trend: 'stable', highlights: '' 
+        gamesCount: 0, trend: 'stable', highlights: '', daysSinceLastGame: 999, isActive: false
       };
     }
     
@@ -298,41 +337,54 @@ const NewGameScreen = () => {
     const recentAvg = Math.round(recentProfit / gamesCount);
     const streak = stats.currentStreak;
     
-    // Determine trend
+    // Determine trend (only relevant for active players)
     let trend: RecentAnalysis['trend'] = 'stable';
-    if (streak >= 3) trend = 'hot';
-    else if (streak <= -3) trend = 'cold';
-    else if (recentAvg > stats.avgProfit + 15) trend = 'improving';
-    else if (recentAvg < stats.avgProfit - 15) trend = 'declining';
+    if (isActive) {
+      if (streak >= 3) trend = 'hot';
+      else if (streak <= -3) trend = 'cold';
+      else if (recentAvg > stats.avgProfit + 15) trend = 'improving';
+      else if (recentAvg < stats.avgProfit - 15) trend = 'declining';
+    }
     
-    // Generate dynamic personalized highlight
-    const highlights = generateDynamicHighlight(stats);
+    // Generate dynamic personalized highlight with recency context
+    const highlights = generateDynamicHighlight(stats, daysSinceLastGame);
     
-    return { recentWins, recentLosses, recentProfit, recentAvg, gamesCount, trend, highlights };
+    return { recentWins, recentLosses, recentProfit, recentAvg, gamesCount, trend, highlights, daysSinceLastGame, isActive };
   };
 
-  // Generate CREATIVE forecast sentence (fun, dramatic, no stats - those go in highlights)
+  // Generate CREATIVE forecast sentence - LONGER and more engaging
   const generateCreativeSentence = (
     name: string, 
     stats: PlayerStats,
-    trend: RecentAnalysis['trend'],
+    recent: RecentAnalysis,
     expectedOutcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss',
     isSurprise: boolean
   ): string => {
+    const { trend, isActive, daysSinceLastGame } = recent;
+    const monthsAway = Math.floor(daysSinceLastGame / 30);
+    
+    // INACTIVE PLAYERS - returning after long break
+    if (!isActive && monthsAway >= 3) {
+      const returningSentences = [
+        `${name} חוזר אחרי ${monthsAway} חודשים של היעדרות - מסקרן לראות אם השהות הרחק מהשולחן עשתה לו טוב או שהוא חלוד לגמרי`,
+        `${name} לא נגע בקלפים ${monthsAway} חודשים. יש כאלה שחוזרים רעננים, ויש כאלה ששוכחים הכל. באיזה צד הוא?`,
+        `חזרה גדולה ל${name} אחרי הפסקה ארוכה. האם הוא יפתיע את כולם או שהחלודה תנצח?`,
+        `${name} חוזר למשחק אחרי תקופה ארוכה - הכל יכול לקרות כשמישהו חוזר מחופשה כזו`,
+        `אורח מפתיע: ${name} לא היה כאן הרבה זמן. נראה מה הוא זוכר`,
+      ];
+      return returningSentences[Math.floor(Math.random() * returningSentences.length)];
+    }
     
     // Hot streak sentences - many options for variety
     if (trend === 'hot') {
       const sentences = [
-        `${name} בוער! מי מעז להתמודד איתו?`,
-        `${name} על גל חם - קשה להמר נגדו`,
-        `מי עוצר את ${name}? אף אחד כרגע`,
-        `${name} בא לקחת הכל הלילה`,
-        `זהירות: ${name} במצב רצח`,
-        `${name} לא מפסיק לנצח. מה קורה פה?`,
-        `${name} בטירוף! הכסף פשוט נדבק אליו`,
-        `אין מה לעשות - ${name} פשוט חם`,
-        `${name} שובר שיאים. מי הבא בתור?`,
-        `הכוכבים לצד ${name} הלילה`,
+        `${name} על רצף נצחונות מטורף - הוא פשוט לא יכול להפסיד עכשיו, ואף אחד לא יודע מתי זה ייגמר`,
+        `כשאתה חם, אתה חם. ${name} עכשיו במצב שבו כל מה שהוא נוגע בו הופך לזהב`,
+        `${name} שובר את כל הסטטיסטיקות עם הרצף שלו - קשה מאוד להמר נגדו במצב כזה`,
+        `מי עוצר את ${name}? רצף הנצחונות שלו מרשים, והביטחון שלו בשמיים`,
+        `${name} על גל חם רציני - כשהמומנטום לצידך, הכל נראה קל`,
+        `הקלפים אוהבים את ${name} עכשיו. רצף כזה לא קורה במקרה`,
+        `${name} במצב טירוף - אם הייתי צריך לבחור מנצח, הייתי בוחר בו בלי לחשוב פעמיים`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -340,16 +392,13 @@ const NewGameScreen = () => {
     // Cold streak sentences
     if (trend === 'cold') {
       const sentences = [
-        `${name} בתקופה קשה... אבל כל רצף נשבר מתישהו`,
-        `${name} סובל לאחרונה. הקלפים ישתנו?`,
-        `${name} צריך נס קטן הלילה`,
-        `כולם אוהבים קאמבק - ${name} מחכה לשלו`,
-        `${name} יודע שהמזל חייב להשתנות`,
-        `${name} עובר ימים קשים. הלילה יהיה שונה?`,
-        `${name} בחושך, מחפש את האור`,
-        `הקלפים לא מחבבים את ${name} לאחרונה`,
-        `${name} צריך לשבור את הרצף הרע`,
-        `מתי ${name} יתעורר? אולי הלילה`,
+        `${name} עובר תקופה קשה עם הרצף השלילי, אבל כל רצף נשבר מתישהו - השאלה אם הלילה`,
+        `הקלפים לא מחייכים ל${name} לאחרונה, אבל כולם יודעים שהמזל מתהפך. אולי הלילה?`,
+        `${name} בתקופת יובש - מספיק הפסדים כדי שכולם יתחילו לשאול מה קורה לו`,
+        `כולם אוהבים סיפור קאמבק, ו${name} בדיוק במצב שבו הוא צריך אחד. הלילה ההזדמנות שלו`,
+        `${name} יודע שהרצף השלילי חייב להישבר - השאלה היא האם יש לו את הכוח הנפשי לזה`,
+        `תקופה קשה ל${name}, אבל שחקנים אמיתיים יודעים איך לצאת מבורות. נראה מה יקרה`,
+        `${name} מחפש את הנצחון שישבור את הרצף - כשזה יקרה, זה יהיה מתוק במיוחד`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -357,16 +406,12 @@ const NewGameScreen = () => {
     // Improving trend
     if (trend === 'improving') {
       const sentences = [
-        `${name} בעלייה! משהו השתנה`,
-        `${name} מתחיל להרגיש את המשחק`,
-        `מומנטום חיובי ל${name}`,
-        `${name} פיצח משהו לאחרונה`,
-        `עין על ${name} - הוא מתחמם`,
-        `${name} מתעורר לחיים`,
-        `הרוח משתנה לטובת ${name}`,
-        `${name} בדרך למעלה`,
-        `${name} מראה סימני שיפור`,
-        `משהו טוב קורה ל${name} לאחרונה`,
+        `משהו השתנה אצל ${name} לטובה - הביצועים האחרונים שלו הרבה יותר טובים מהממוצע ההיסטורי`,
+        `${name} בעלייה ברורה - נראה שהוא פיצח משהו והמשחק שלו השתפר משמעותית`,
+        `המומנטום לצד ${name} - מי שעוקב אחרי הנתונים רואה שהוא בכיוון הנכון`,
+        `${name} מראה סימני שיפור מרשימים - יכול להיות שהוא עומד לפרוץ`,
+        `הרוח משתנה לטובת ${name} - הביצועים האחרונים מבטיחים משהו טוב`,
+        `${name} בתהליך של שיפור עקבי - השאלה היא האם הלילה הוא ימשיך את המגמה`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -374,16 +419,12 @@ const NewGameScreen = () => {
     // Declining trend
     if (trend === 'declining') {
       const sentences = [
-        `${name} קצת ירד מהקצב`,
-        `${name} לא באותה פורמה`,
-        `ימים יותר טובים היו ל${name}`,
-        `${name} מחפש את עצמו מחדש`,
-        `${name} צריך ערב טוב כדי לחזור`,
-        `${name} בירידה קלה`,
-        `${name} לא במיטבו לאחרונה`,
-        `${name} צריך לעצור את המגמה`,
-        `הרוח נגד ${name} לאחרונה`,
-        `${name} מאבד קצת את הקסם`,
+        `${name} לא באותה פורמה של פעם - הביצועים האחרונים חלשים יותר מהממוצע שלו`,
+        `משהו לא עובד ל${name} בתקופה האחרונה - הנתונים מראים ירידה ברורה`,
+        `${name} מאבד קצת את הקצב - ימים יותר טובים היו לו בעבר`,
+        `${name} צריך לעצור את מגמת הירידה - הביצועים האחרונים לא משקפים את הפוטנציאל שלו`,
+        `${name} בירידה קלה אבל מורגשת - נראה אם הוא יצליח להתאושש הלילה`,
+        `לא הזמן הכי טוב של ${name} - הנתונים האחרונים מדאיגים קצת`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -392,75 +433,57 @@ const NewGameScreen = () => {
     if (isSurprise) {
       if (expectedOutcome.includes('win')) {
         const sentences = [
-          `⚡ הפתעה צפויה! ${name} עם אנרגיה מיוחדת`,
-          `⚡ משהו אומר ש${name} יפתיע הלילה`,
-          `⚡ ${name} לא הולך לפי התסריט`,
-          `⚡ קאמבק באוויר ל${name}`,
-          `⚡ ${name} מגיע עם משהו להוכיח`,
-          `⚡ אל תמעיטו ב${name} הלילה`,
-          `⚡ ${name} עשוי להפתיע את כולם`,
-          `⚡ תחושת בטן: ${name} יעשה בום`,
+          `⚡ תחושת בטן חזקה: ${name} הולך להפתיע הלילה. הנתונים אומרים דבר אחד, אבל משהו באוויר אומר אחרת`,
+          `⚡ ${name} מגיע עם משהו להוכיח - לפעמים הדחף להוכיח שווה יותר מכל סטטיסטיקה`,
+          `⚡ נגד כל הסיכויים: ${name} עשוי לעשות קאמבק מפתיע. יש לו את האנרגיה לזה`,
+          `⚡ ${name} לא הולך לפי התסריט הלילה - יש משהו שונה בו, תחושה של פריצה`,
+          `⚡ הפתעה באוויר: ${name} יכול לשנות את הכל הלילה ולהפוך את הקערה על פיה`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       } else {
         const sentences = [
-          `⚡ אזהרה: גם מלכים נופלים`,
-          `⚡ ${name} עשוי לאכול אותה הפעם`,
-          `⚡ ביטחון יתר? ${name} צריך להיזהר`,
-          `⚡ לא הכל ורוד ל${name} הלילה`,
-          `⚡ ${name} עלול להיתקל בהפתעה`,
-          `⚡ משהו לא מסתדר ל${name} הערב`,
-          `⚡ ${name} בסכנה - יש משהו באוויר`,
-          `⚡ נבואה: ${name} לא ינצח הפעם`,
+          `⚡ אזהרה: גם מלכים נופלים. ${name} בא עם ביטחון, אבל משהו יכול להשתבש`,
+          `⚡ ${name} צריך להיזהר הלילה - ביטחון יתר יכול להיות מסוכן, וההיסטוריה לא תמיד מגינה`,
+          `⚡ משהו לא מרגיש נכון לגבי ${name} הערב - למרות הנתונים הטובים, יש תחושה של נפילה`,
+          `⚡ ${name} עלול להיתקל בהפתעה לא נעימה - לפעמים דברים לא הולכים לפי התוכנית`,
+          `⚡ נבואה מפתיעה: ${name} יכול לאכול אותה הלילה למרות ההיסטוריה המרשימה שלו`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       }
     }
     
-    // Regular predictions - fun and dramatic with MANY options
+    // Regular predictions - fun and dramatic with LONGER sentences
     switch (expectedOutcome) {
       case 'big_win':
         const bigWinSentences = [
-          `${name} המועמד לכתר - הימנעו מעימות ישיר`,
-          `${name} בא לגבות מיסים מכולם`,
-          `${name} הוא הסיבה שכולם מפחדים`,
-          `מי ינסה לעצור את ${name}? בהצלחה`,
-          `${name} - לא משחק, שולט`,
-          `${name} הוא המלך של הערב`,
-          `כולם מפחדים מ${name} - ובצדק`,
-          `${name} בא לקחת הכל הביתה`,
-          `${name} - הסיכויים לצידו בגדול`,
-          `אם הייתי מהמר, הייתי שם על ${name}`,
+          `${name} הוא המועמד המוביל לקחת הכי הרבה כסף הלילה - הנתונים והפורמה שלו פשוט מדברים בעד עצמם`,
+          `כולם צריכים להיזהר מ${name} הערב - הוא בא לגבות מיסים ולא נראה שמישהו יכול לעצור אותו`,
+          `${name} במצב שבו הכל עובד לטובתו - אם הייתי צריך להמר על מישהו, הוא היה הבחירה הראשונה שלי`,
+          `${name} הוא הסיבה שכמה אנשים סביב השולחן קצת מודאגים - וזה מוצדק לגמרי`,
+          `מי ינסה להתמודד עם ${name}? עם הנתונים שלו, זה כמו להילחם נגד הסיכויים`,
+          `${name} לא בא לשחק - הוא בא לשלוט. וזה בדיוק מה שהוא כנראה יעשה`,
         ];
         return bigWinSentences[Math.floor(Math.random() * bigWinSentences.length)];
         
       case 'win':
         const winSentences = [
-          `${name} יודע לשחק - וזה נראה`,
-          `${name} בפורמה טובה`,
-          `${name} - מועמד רציני לרווח`,
-          `${name} לא בא להשתתף, בא לנצח`,
-          `${name} מריח כסף באוויר`,
-          `${name} נראה חזק הערב`,
-          `${name} יודע מה הוא עושה`,
-          `${name} בא מוכן`,
-          `${name} - שחקן רציני לכל דבר`,
-          `יש ל${name} סיכוי טוב`,
+          `${name} בפורמה טובה ויש לו סיכוי ממשי לצאת עם רווח יפה הלילה`,
+          `הנתונים תומכים ב${name} - הוא יודע לשחק והתוצאות מוכיחות את זה`,
+          `${name} מגיע עם יתרון סטטיסטי ברור - לא מועמד לכתר, אבל בהחלט שחקן רציני`,
+          `${name} לא בא להשתתף, הוא בא לנצח - והסיכויים בהחלט לצידו`,
+          `יש משהו ב${name} הערב שאומר שהוא ייקח כסף הביתה - הנתונים מחזקים את התחושה`,
+          `${name} בא מוכן ויודע מה הוא עושה - צפו לערב טוב עבורו`,
         ];
         return winSentences[Math.floor(Math.random() * winSentences.length)];
         
       case 'slight_win':
         const slightWinSentences = [
-          `${name} עם יתרון קל - צפו לערב סביר`,
-          `סיכוי טוב ל${name} לסיים ברווח`,
-          `${name} בכיוון הנכון`,
-          `${name} - לא מפחיד, אבל לא פרייר`,
-          `${name} צפוי לערב בסדר`,
-          `${name} - יתרון קל בלבד`,
-          `${name} יכול לסיים ברווח קטן`,
-          `${name} עם סיכויים סבירים`,
-          `${name} - לא המועמד הראשי, אבל בהחלט בתמונה`,
-          `${name} בא עם אופטימיות זהירה`,
+          `${name} עם יתרון קטן אבל משמעותי - לא יגרום לאף אחד לפחד, אבל בהחלט יכול להפתיע`,
+          `הסיכויים קצת לטובת ${name} הערב - לא מרשים במיוחד, אבל מספיק כדי להיות אופטימי`,
+          `${name} בכיוון הנכון - לא המועמד הראשי, אבל בהחלט יכול לסיים ברווח`,
+          `${name} מגיע עם אופטימיות זהירה - הנתונים לא מבטיחים הרבה, אבל גם לא מאיימים`,
+          `צפו לערב סביר עבור ${name} - לא פסטיבל, אבל כנראה יצא עם משהו בכיס`,
+          `${name} לא יגנוב את ההצגה, אבל בהחלט יכול להפתיע ולסיים ברווח קטן`,
         ];
         return slightWinSentences[Math.floor(Math.random() * slightWinSentences.length)];
         
