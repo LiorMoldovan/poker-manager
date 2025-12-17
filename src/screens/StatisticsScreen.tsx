@@ -418,18 +418,42 @@ const StatisticsScreen = () => {
         {isExpanded && hasTies && (
           <div style={{ 
             width: '100%',
-            marginTop: '0.2rem', 
-            paddingTop: '0.2rem', 
+            marginTop: '0.3rem', 
+            paddingTop: '0.3rem', 
             borderTop: '1px dashed var(--border)',
             fontSize: '0.75rem',
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.3rem'
+            flexDirection: 'column',
+            gap: '0.25rem'
           }}>
             {players.slice(1).map(p => (
-              <span key={p.playerId} style={{ fontWeight: '500' }}>
-                {p.playerName}{p !== players[players.length - 1] ? ',' : ''}
-              </span>
+              <div 
+                key={p.playerId} 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.3rem',
+                  padding: '0.2rem 0'
+                }}
+              >
+                <span style={{ fontWeight: '500' }}>{p.playerName}</span>
+                {canShowDetails && (
+                  <span
+                    style={{ 
+                      fontSize: '0.5rem', 
+                      cursor: 'pointer',
+                      background: 'var(--primary)',
+                      color: 'white',
+                      padding: '0.1rem 0.25rem',
+                      borderRadius: '4px',
+                      fontWeight: '600'
+                    }}
+                    onClick={() => showRecordDetails(recordTitle!, p, recordType!)}
+                  >
+                    פרטים ❯
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         )}
