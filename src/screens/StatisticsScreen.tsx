@@ -22,6 +22,7 @@ const StatisticsScreen = () => {
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
   const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set()); // Track which record sections are expanded
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -217,66 +218,139 @@ const StatisticsScreen = () => {
   };
 
   // Calculate group records based on filtered stats
+  // Helper to find all players tied for a record
+  const findTied = <T extends PlayerStats>(
+    arr: T[],
+    getValue: (s: T) => number,
+    sortDesc: boolean = true
+  ): T[] => {
+    if (arr.length === 0) return [];
+    const sorted = [...arr].sort((a, b) => sortDesc ? getValue(b) - getValue(a) : getValue(a) - getValue(b));
+    const topValue = getValue(sorted[0]);
+    return sorted.filter(s => getValue(s) === topValue);
+  };
+
   const getRecords = () => {
     if (filteredStats.length === 0) return null;
     
-    const leader = [...filteredStats].sort((a, b) => b.totalProfit - a.totalProfit)[0];
-    const biggestLoser = [...filteredStats].sort((a, b) => a.totalProfit - b.totalProfit)[0];
-    const biggestWinPlayer = [...filteredStats].sort((a, b) => b.biggestWin - a.biggestWin)[0];
-    const biggestLossPlayer = [...filteredStats].sort((a, b) => a.biggestLoss - b.biggestLoss)[0];
-    const rebuyKing = [...filteredStats].sort((a, b) => b.totalRebuys - a.totalRebuys)[0];
+    const leaders = findTied(filteredStats, s => s.totalProfit, true);
+    const biggestLosers = findTied(filteredStats, s => s.totalProfit, false);
+    const biggestWinPlayers = findTied(filteredStats, s => s.biggestWin, true);
+    const biggestLossPlayers = findTied(filteredStats, s => s.biggestLoss, false);
+    const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
     
     const qualifiedForWinRate = filteredStats.filter(s => s.gamesPlayed >= 3);
-    const sharpshooter = qualifiedForWinRate.length > 0 
-      ? [...qualifiedForWinRate].sort((a, b) => b.winPercentage - a.winPercentage)[0]
-      : null;
-    const worstWinRate = qualifiedForWinRate.length > 0
-      ? [...qualifiedForWinRate].sort((a, b) => a.winPercentage - b.winPercentage)[0]
-      : null;
+    const sharpshooters = qualifiedForWinRate.length > 0 
+      ? findTied(qualifiedForWinRate, s => s.winPercentage, true)
+      : [];
+    const worstWinRates = qualifiedForWinRate.length > 0
+      ? findTied(qualifiedForWinRate, s => s.winPercentage, false)
+      : [];
     
-    const onFire = [...filteredStats].sort((a, b) => b.currentStreak - a.currentStreak)[0];
-    const iceCold = [...filteredStats].sort((a, b) => a.currentStreak - b.currentStreak)[0];
-    const mostDedicated = [...filteredStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
-    const longestWinStreakPlayer = [...filteredStats].sort((a, b) => b.longestWinStreak - a.longestWinStreak)[0];
-    const longestLossStreakPlayer = [...filteredStats].sort((a, b) => b.longestLossStreak - a.longestLossStreak)[0];
+    const onFirePlayers = findTied(filteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
+    const iceColdPlayers = findTied(filteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
+    const mostDedicatedPlayers = findTied(filteredStats, s => s.gamesPlayed, true);
+    const longestWinStreakPlayers = findTied(filteredStats, s => s.longestWinStreak, true);
+    const longestLossStreakPlayers = findTied(filteredStats, s => s.longestLossStreak, true);
     
     // Additional records
     const qualifiedForAvg = filteredStats.filter(s => s.gamesPlayed >= 3);
-    const highestAvgProfit = qualifiedForAvg.length > 0
-      ? [...qualifiedForAvg].sort((a, b) => b.avgProfit - a.avgProfit)[0]
-      : null;
-    const lowestAvgProfit = qualifiedForAvg.length > 0
-      ? [...qualifiedForAvg].sort((a, b) => a.avgProfit - b.avgProfit)[0]
-      : null;
-    const mostWins = [...filteredStats].sort((a, b) => b.winCount - a.winCount)[0];
-    const mostLosses = [...filteredStats].sort((a, b) => b.lossCount - a.lossCount)[0];
-    const highestAvgWin = filteredStats.filter(s => s.avgWin > 0).length > 0
-      ? [...filteredStats].filter(s => s.avgWin > 0).sort((a, b) => b.avgWin - a.avgWin)[0]
-      : null;
-    const highestAvgLoss = filteredStats.filter(s => s.avgLoss > 0).length > 0
-      ? [...filteredStats].filter(s => s.avgLoss > 0).sort((a, b) => b.avgLoss - a.avgLoss)[0]
-      : null;
+    const highestAvgProfits = qualifiedForAvg.length > 0
+      ? findTied(qualifiedForAvg, s => s.avgProfit, true)
+      : [];
+    const lowestAvgProfits = qualifiedForAvg.length > 0
+      ? findTied(qualifiedForAvg, s => s.avgProfit, false)
+      : [];
+    const mostWinsPlayers = findTied(filteredStats, s => s.winCount, true);
+    const mostLossesPlayers = findTied(filteredStats, s => s.lossCount, true);
     
     return {
-      leader,
-      biggestLoser,
-      biggestWinPlayer,
-      biggestLossPlayer,
-      rebuyKing,
-      sharpshooter,
-      worstWinRate,
-      onFire: onFire?.currentStreak > 0 ? onFire : null,
-      iceCold: iceCold?.currentStreak < 0 ? iceCold : null,
-      mostDedicated,
-      longestWinStreakPlayer,
-      longestLossStreakPlayer,
-      highestAvgProfit,
-      lowestAvgProfit,
-      mostWins,
-      mostLosses,
-      highestAvgWin,
-      highestAvgLoss,
+      leaders,
+      biggestLosers,
+      biggestWinPlayers,
+      biggestLossPlayers,
+      rebuyKings,
+      sharpshooters,
+      worstWinRates,
+      onFirePlayers,
+      iceColdPlayers,
+      mostDedicatedPlayers,
+      longestWinStreakPlayers,
+      longestLossStreakPlayers,
+      highestAvgProfits,
+      lowestAvgProfits,
+      mostWinsPlayers,
+      mostLossesPlayers,
     };
+  };
+
+  // Toggle expanded state for a record
+  const toggleRecordExpand = (recordKey: string) => {
+    setExpandedRecords(prev => {
+      const next = new Set(prev);
+      if (next.has(recordKey)) {
+        next.delete(recordKey);
+      } else {
+        next.add(recordKey);
+      }
+      return next;
+    });
+  };
+
+  // Render a record with tie support
+  const renderRecord = (
+    recordKey: string,
+    players: PlayerStats[],
+    renderValue: (p: PlayerStats) => React.ReactNode,
+    style?: React.CSSProperties
+  ) => {
+    if (players.length === 0) return null;
+    const isExpanded = expandedRecords.has(recordKey);
+    const hasTies = players.length > 1;
+    
+    return (
+      <div style={style}>
+        <div 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.3rem',
+            cursor: hasTies ? 'pointer' : 'default'
+          }}
+          onClick={() => hasTies && toggleRecordExpand(recordKey)}
+        >
+          <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
+          {hasTies && (
+            <span style={{ 
+              fontSize: '0.65rem', 
+              background: 'var(--primary)', 
+              color: 'white',
+              padding: '0.1rem 0.3rem',
+              borderRadius: '8px',
+              fontWeight: '600'
+            }}>
+              +{players.length - 1} {isExpanded ? '▲' : '▼'}
+            </span>
+          )}
+        </div>
+        {renderValue(players[0])}
+        {isExpanded && hasTies && (
+          <div style={{ 
+            marginTop: '0.3rem', 
+            paddingTop: '0.3rem', 
+            borderTop: '1px dashed var(--border)',
+            fontSize: '0.8rem'
+          }}>
+            {players.slice(1).map(p => (
+              <div key={p.playerId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.1rem 0' }}>
+                <span>{p.playerName}</span>
+                {renderValue(p)}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const records = getRecords();
@@ -667,15 +741,13 @@ const StatisticsScreen = () => {
                     border: '1px solid rgba(249, 115, 22, 0.3)'
                   }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🔥 On Fire</div>
-                    {records.onFire ? (
-                      <>
-                        <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f97316' }}>
-                          {records.onFire.playerName}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--success)' }}>
-                          {records.onFire.currentStreak} wins in a row!
-                        </div>
-                      </>
+                    {records.onFirePlayers.length > 0 ? (
+                      renderRecord(
+                        'onFire',
+                        records.onFirePlayers,
+                        (p) => <div style={{ fontSize: '0.9rem', color: 'var(--success)' }}>{p.currentStreak} wins in a row!</div>,
+                        { fontSize: '1.25rem', color: '#f97316' }
+                      )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active win streak</div>
                     )}
@@ -688,15 +760,13 @@ const StatisticsScreen = () => {
                     border: '1px solid rgba(239, 68, 68, 0.3)'
                   }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>❄️ Cold Streak</div>
-                    {records.iceCold ? (
-                      <>
-                        <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ef4444' }}>
-                          {records.iceCold.playerName}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--danger)' }}>
-                          {Math.abs(records.iceCold.currentStreak)} losses in a row
-                        </div>
-                      </>
+                    {records.iceColdPlayers.length > 0 ? (
+                      renderRecord(
+                        'iceCold',
+                        records.iceColdPlayers,
+                        (p) => <div style={{ fontSize: '0.9rem', color: 'var(--danger)' }}>{Math.abs(p.currentStreak)} losses in a row</div>,
+                        { fontSize: '1.25rem', color: '#ef4444' }
+                      )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active loss streak</div>
                     )}
@@ -708,23 +778,27 @@ const StatisticsScreen = () => {
               <div className="card">
                 <h2 className="card-title mb-2">👑 All-Time Leaders</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
-                    <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
+                    <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 All-Time Leader</span>
-                      <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>{records.leader.playerName}</div>
-                    </div>
-                    <div className="profit" style={{ fontSize: '1.1rem', fontWeight: '700' }}>
-                      +{formatCurrency(records.leader.totalProfit)}
+                      {renderRecord(
+                        'leader',
+                        records.leaders,
+                        (p) => <div className="profit" style={{ fontSize: '1.1rem', fontWeight: '700' }}>+{formatCurrency(p.totalProfit)}</div>,
+                        { fontSize: '1.1rem' }
+                      )}
                     </div>
                   </div>
                   
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
-                    <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
+                    <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</span>
-                      <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>{records.biggestLoser.playerName}</div>
-                    </div>
-                    <div className="loss" style={{ fontSize: '1.1rem', fontWeight: '700' }}>
-                      {formatCurrency(records.biggestLoser.totalProfit)}
+                      {renderRecord(
+                        'biggestLoser',
+                        records.biggestLosers,
+                        (p) => <div className="loss" style={{ fontSize: '1.1rem', fontWeight: '700' }}>{formatCurrency(p.totalProfit)}</div>,
+                        { fontSize: '1.1rem' }
+                      )}
                     </div>
                   </div>
                 </div>
@@ -736,34 +810,46 @@ const StatisticsScreen = () => {
                 <div className="grid grid-2">
                   <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💰 Biggest Win</div>
-                    <div style={{ fontWeight: '700' }}>{records.biggestWinPlayer.playerName}</div>
-                    <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(records.biggestWinPlayer.biggestWin)}</div>
+                    {renderRecord(
+                      'biggestWin',
+                      records.biggestWinPlayers,
+                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.biggestWin)}</div>
+                    )}
                   </div>
                   <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💸 Biggest Loss</div>
-                    <div style={{ fontWeight: '700' }}>{records.biggestLossPlayer.playerName}</div>
-                    <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(records.biggestLossPlayer.biggestLoss)}</div>
+                    {renderRecord(
+                      'biggestLoss',
+                      records.biggestLossPlayers,
+                      (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.biggestLoss)}</div>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Streak Records - only show if there are meaningful streaks */}
-              {(records.longestWinStreakPlayer.longestWinStreak > 1 || records.longestLossStreakPlayer.longestLossStreak > 1) && (
+              {(records.longestWinStreakPlayers[0]?.longestWinStreak > 1 || records.longestLossStreakPlayers[0]?.longestLossStreak > 1) && (
                 <div className="card">
                   <h2 className="card-title mb-2">📈 Streak Records</h2>
                   <div className="grid grid-2">
-                    {records.longestWinStreakPlayer.longestWinStreak > 1 && (
+                    {records.longestWinStreakPlayers[0]?.longestWinStreak > 1 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🏆 Longest Win Streak</div>
-                        <div style={{ fontWeight: '700' }}>{records.longestWinStreakPlayer.playerName}</div>
-                        <div style={{ color: 'var(--success)', fontWeight: '700' }}>{records.longestWinStreakPlayer.longestWinStreak} wins</div>
+                        {renderRecord(
+                          'longestWinStreak',
+                          records.longestWinStreakPlayers.filter(p => p.longestWinStreak > 1),
+                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{p.longestWinStreak} wins</div>
+                        )}
                       </div>
                     )}
-                    {records.longestLossStreakPlayer.longestLossStreak > 1 && (
+                    {records.longestLossStreakPlayers[0]?.longestLossStreak > 1 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💔 Longest Loss Streak</div>
-                        <div style={{ fontWeight: '700' }}>{records.longestLossStreakPlayer.playerName}</div>
-                        <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{records.longestLossStreakPlayer.longestLossStreak} losses</div>
+                        {renderRecord(
+                          'longestLossStreak',
+                          records.longestLossStreakPlayers.filter(p => p.longestLossStreak > 1),
+                          (p) => <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{p.longestLossStreak} losses</div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -771,22 +857,28 @@ const StatisticsScreen = () => {
               )}
 
               {/* Average Performance Records */}
-              {(records.highestAvgProfit || records.lowestAvgProfit) && (
+              {(records.highestAvgProfits.length > 0 || records.lowestAvgProfits.length > 0) && (
                 <div className="card">
                   <h2 className="card-title mb-2">📊 Average Performance</h2>
                   <div className="grid grid-2">
-                    {records.highestAvgProfit && (
+                    {records.highestAvgProfits.length > 0 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📈 Best Avg/Game</div>
-                        <div style={{ fontWeight: '700' }}>{records.highestAvgProfit.playerName}</div>
-                        <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(records.highestAvgProfit.avgProfit)}</div>
+                        {renderRecord(
+                          'highestAvgProfit',
+                          records.highestAvgProfits,
+                          (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.avgProfit)}</div>
+                        )}
                       </div>
                     )}
-                    {records.lowestAvgProfit && (
+                    {records.lowestAvgProfits.length > 0 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Worst Avg/Game</div>
-                        <div style={{ fontWeight: '700' }}>{records.lowestAvgProfit.playerName}</div>
-                        <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(records.lowestAvgProfit.avgProfit)}</div>
+                        {renderRecord(
+                          'lowestAvgProfit',
+                          records.lowestAvgProfits,
+                          (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.avgProfit)}</div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -797,34 +889,58 @@ const StatisticsScreen = () => {
               <div className="card">
                 <h2 className="card-title mb-2">🎖️ Other Records</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>🎮 Most Games</span>
-                    <span style={{ fontWeight: '600' }}>{records.mostDedicated.playerName} ({records.mostDedicated.gamesPlayed})</span>
+                    {renderRecord(
+                      'mostGames',
+                      records.mostDedicatedPlayers,
+                      (p) => <span style={{ fontWeight: '600' }}>({p.gamesPlayed})</span>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>🏆 Most Wins</span>
-                    <span style={{ fontWeight: '600', color: 'var(--success)' }}>{records.mostWins.playerName} ({records.mostWins.winCount})</span>
+                    {renderRecord(
+                      'mostWins',
+                      records.mostWinsPlayers,
+                      (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winCount})</span>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>💔 Most Losses</span>
-                    <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.mostLosses.playerName} ({records.mostLosses.lossCount})</span>
+                    {renderRecord(
+                      'mostLosses',
+                      records.mostLossesPlayers,
+                      (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.lossCount})</span>
+                    )}
                   </div>
-                  {records.sharpshooter && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                  {records.sharpshooters.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--text-muted)' }}>🎯 Best Win Rate</span>
-                      <span style={{ fontWeight: '600', color: 'var(--success)' }}>{records.sharpshooter.playerName} ({records.sharpshooter.winPercentage.toFixed(0)}%)</span>
+                      {renderRecord(
+                        'sharpshooter',
+                        records.sharpshooters,
+                        (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winPercentage.toFixed(0)}%)</span>
+                      )}
                     </div>
                   )}
-                  {records.worstWinRate && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
+                  {records.worstWinRates.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--text-muted)' }}>🎲 Worst Win Rate</span>
-                      <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.worstWinRate.playerName} ({records.worstWinRate.winPercentage.toFixed(0)}%)</span>
+                      {renderRecord(
+                        'worstWinRate',
+                        records.worstWinRates,
+                        (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.winPercentage.toFixed(0)}%)</span>
+                      )}
                     </div>
                   )}
-                  {records.rebuyKing.totalRebuys > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
+                  {records.rebuyKings[0]?.totalRebuys > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
                       <span style={{ color: 'var(--text-muted)' }}>🎰 Buyin King</span>
-                      <span style={{ fontWeight: '600' }}>{records.rebuyKing.playerName} ({records.rebuyKing.totalRebuys} total)</span>
+                      {renderRecord(
+                        'rebuyKing',
+                        records.rebuyKings.filter(p => p.totalRebuys > 0),
+                        (p) => <span style={{ fontWeight: '600' }}>({p.totalRebuys} total)</span>
+                      )}
                     </div>
                   )}
                 </div>
