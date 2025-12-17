@@ -411,6 +411,7 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
     }
     
     // Calculate current streak (from most recent games)
+    // Break-even games are skipped (don't break or extend streaks) - consistent with longest streak calculation
     for (let i = sortedPlayerGames.length - 1; i >= 0; i--) {
       const profit = sortedPlayerGames[i].profit;
       if (profit > 0) {
@@ -419,9 +420,8 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       } else if (profit < 0) {
         if (currentStreak <= 0) currentStreak--;
         else break;
-      } else {
-        break; // Break-even ends streak counting
       }
+      // Break-even (profit === 0): skip and continue checking previous games
     }
     
     // Last 6 game results (most recent first) with dates and gameId

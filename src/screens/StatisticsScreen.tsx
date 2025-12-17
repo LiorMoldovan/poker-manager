@@ -609,13 +609,18 @@ const StatisticsScreen = () => {
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
-                <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
-                  פעילים בלבד
-                </span>
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                  ({activeThreshold}+)
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
+                  <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
+                    שחקנים פעילים בלבד
+                  </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                    ({activeThreshold}+ משחקים)
+                  </span>
+                </div>
+                <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: '1.1rem' }}>
+                  33% מממוצע המשחקים בתקופה
                 </span>
               </div>
                 <button
