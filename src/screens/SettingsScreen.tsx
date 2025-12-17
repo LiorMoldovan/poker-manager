@@ -54,10 +54,25 @@ const SettingsScreen = () => {
     loadData();
   }, []);
 
+  // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
+  const sortPlayersByType = (playerList: Player[]): Player[] => {
+    const typeOrder: Record<PlayerType, number> = {
+      'permanent': 0,
+      'permanent_guest': 1,
+      'guest': 2
+    };
+    return [...playerList].sort((a, b) => {
+      const orderDiff = typeOrder[a.type] - typeOrder[b.type];
+      if (orderDiff !== 0) return orderDiff;
+      // Within same type, sort alphabetically
+      return a.name.localeCompare(b.name, 'he');
+    });
+  };
+
   const loadData = () => {
     setSettings(getSettings());
     setChipValues(getChipValues());
-    setPlayers(getAllPlayers());
+    setPlayers(sortPlayersByType(getAllPlayers()));
     setBackups(getBackups());
     setLastBackup(getLastBackupDate());
   };
@@ -85,7 +100,7 @@ const SettingsScreen = () => {
       return;
     }
     const player = addPlayer(trimmedName, newPlayerType);
-    setPlayers([...players, player]);
+    setPlayers(sortPlayersByType([...players, player]));
     setNewPlayerName('');
     setNewPlayerType('permanent');
     setShowAddPlayer(false);
@@ -94,7 +109,7 @@ const SettingsScreen = () => {
 
   const handlePlayerTypeChange = (playerId: string, type: PlayerType) => {
     updatePlayerType(playerId, type);
-    setPlayers(players.map(p => p.id === playerId ? { ...p, type } : p));
+    setPlayers(sortPlayersByType(players.map(p => p.id === playerId ? { ...p, type } : p)));
     showSaved();
   };
 
@@ -126,7 +141,7 @@ const SettingsScreen = () => {
       updatePlayerType(editingPlayer.id, editPlayerType);
     }
     
-    setPlayers(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, type: editPlayerType } : p));
+    setPlayers(sortPlayersByType(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, type: editPlayerType } : p)));
     setShowEditPlayer(false);
     setEditingPlayer(null);
     setEditPlayerName('');
