@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
@@ -6,6 +7,7 @@ import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculatio
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
 
 const StatisticsScreen = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
@@ -1366,23 +1368,34 @@ const StatisticsScreen = () => {
               {recordDetails.games.map((game, idx) => (
                 <div 
                   key={idx}
+                  onClick={() => {
+                    setRecordDetails(null);
+                    navigate(`/game/${game.gameId}`);
+                  }}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    padding: '0.5rem',
+                    padding: '0.5rem 0.75rem',
                     background: 'var(--surface)',
                     borderRadius: '6px',
-                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`
+                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
                 >
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    {new Date(game.date).toLocaleDateString('he-IL', { 
-                      day: 'numeric', 
-                      month: 'short',
-                      year: '2-digit'
-                    })}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+                      {new Date(game.date).toLocaleDateString('en-GB', { 
+                        day: '2-digit', 
+                        month: '2-digit',
+                        year: 'numeric'
+                      })}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+                  </div>
                   <span style={{ 
                     fontWeight: '600',
                     color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text)'
