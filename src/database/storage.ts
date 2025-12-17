@@ -424,9 +424,9 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       }
     }
     
-    // Last 6 game results (most recent first) with dates
+    // Last 10 game results (most recent first) with dates
     const lastGameResults = sortedPlayerGames
-      .slice(-6)
+      .slice(-10)
       .reverse()
       .map(pg => {
         const game = sortedGames.find(g => g.id === pg.gameId);

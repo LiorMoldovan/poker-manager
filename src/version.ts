@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.2.3';
+export const APP_VERSION = '4.3.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.3.0',
+    date: '2024-12-17',
+    changes: [
+      'Forecast: Dynamic personalized highlights for each player',
+      'Each player gets unique insight based on their actual data',
+      'Detects: streaks, improvement/decline, comebacks, volatility',
+      'Compares recent (last 10 games) vs historical performance'
+    ]
+  },
   {
     version: '4.2.3',
     date: '2024-12-17',

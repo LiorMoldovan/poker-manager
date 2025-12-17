@@ -118,9 +118,8 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // ============ SMART FORECAST SYSTEM WITH HIGHLIGHTS ============
+  // ============ SMART FORECAST SYSTEM WITH DYNAMIC HIGHLIGHTS ============
   
-  // Analyze recent performance (last 10 games or whatever available)
   interface RecentAnalysis {
     recentWins: number;
     recentLosses: number;
@@ -128,11 +127,141 @@ const NewGameScreen = () => {
     recentAvg: number;
     gamesCount: number;
     trend: 'hot' | 'cold' | 'improving' | 'declining' | 'stable';
-    highlights: string; // Short stats line
+    highlights: string; // Dynamic personalized insight
   }
   
+  // Generate DYNAMIC personalized highlight - picks the most interesting insight for each player
+  const generateDynamicHighlight = (stats: PlayerStats): string => {
+    const lastGames = stats.lastGameResults || [];
+    const gamesCount = lastGames.length;
+    if (gamesCount === 0) return '';
+    
+    const recentWins = lastGames.filter(g => g.profit > 0).length;
+    const recentLosses = lastGames.filter(g => g.profit < 0).length;
+    const recentProfit = lastGames.reduce((sum, g) => sum + g.profit, 0);
+    const recentAvg = Math.round(recentProfit / gamesCount);
+    const overallAvg = Math.round(stats.avgProfit);
+    const streak = stats.currentStreak;
+    const winPct = Math.round(stats.winPercentage);
+    const recentWinPct = Math.round((recentWins / gamesCount) * 100);
+    
+    // Find best and worst recent games
+    const bestRecent = Math.max(...lastGames.map(g => g.profit));
+    const worstRecent = Math.min(...lastGames.map(g => g.profit));
+    
+    // Collect all possible interesting insights
+    const insights: { priority: number; text: string }[] = [];
+    
+    // HOT STREAK - very high priority
+    if (streak >= 4) {
+      insights.push({ priority: 100, text: `🔥 ${streak} נצחונות ברצף! הטפסן החם ביותר כרגע` });
+    } else if (streak >= 3) {
+      insights.push({ priority: 95, text: `🔥 ${streak} נצחונות ברצף - על גל חם` });
+    } else if (streak === 2) {
+      insights.push({ priority: 60, text: `ניצח 2 משחקים אחרונים ברצף` });
+    }
+    
+    // COLD STREAK - very high priority
+    if (streak <= -4) {
+      insights.push({ priority: 100, text: `❄️ ${Math.abs(streak)} הפסדים ברצף - תקופה קשה` });
+    } else if (streak <= -3) {
+      insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים ברצף` });
+    } else if (streak === -2) {
+      insights.push({ priority: 60, text: `הפסיד 2 משחקים אחרונים` });
+    }
+    
+    // DRAMATIC IMPROVEMENT compared to history
+    if (recentAvg > overallAvg + 30) {
+      insights.push({ priority: 90, text: `📈 קפיצה דרמטית! ממוצע +${recentAvg}₪ לאחרונה (במקום ${overallAvg}₪)` });
+    } else if (recentAvg > overallAvg + 15 && gamesCount >= 4) {
+      insights.push({ priority: 75, text: `📈 בעלייה: ${recentAvg > 0 ? '+' : ''}${recentAvg}₪ ממוצע לאחרונה vs ${overallAvg}₪ כללי` });
+    }
+    
+    // DRAMATIC DECLINE compared to history
+    if (recentAvg < overallAvg - 30) {
+      insights.push({ priority: 90, text: `📉 נפילה חדה! ממוצע ${recentAvg}₪ לאחרונה (במקום ${overallAvg > 0 ? '+' : ''}${overallAvg}₪)` });
+    } else if (recentAvg < overallAvg - 15 && gamesCount >= 4) {
+      insights.push({ priority: 75, text: `📉 בירידה: ${recentAvg}₪ לאחרונה vs ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ כללי` });
+    }
+    
+    // RECENT BIG WIN
+    if (bestRecent >= 100) {
+      insights.push({ priority: 70, text: `💰 ניצחון גדול לאחרונה: +${bestRecent}₪` });
+    } else if (bestRecent >= 60 && recentAvg < 0) {
+      insights.push({ priority: 65, text: `יש לו נצחונות גדולים (+${bestRecent}₪) אבל לא עקבי` });
+    }
+    
+    // RECENT BIG LOSS
+    if (worstRecent <= -100) {
+      insights.push({ priority: 70, text: `💸 הפסד כבד לאחרונה: ${worstRecent}₪` });
+    } else if (worstRecent <= -60 && recentAvg > 0) {
+      insights.push({ priority: 65, text: `הפסד כואב (${worstRecent}₪) אבל עדיין ברווח כולל` });
+    }
+    
+    // DOMINANT RECENT PERFORMANCE
+    if (recentWins >= gamesCount - 1 && gamesCount >= 4) {
+      insights.push({ priority: 85, text: `שולט לאחרונה: ${recentWins} מתוך ${gamesCount} נצחונות!` });
+    } else if (recentLosses >= gamesCount - 1 && gamesCount >= 4) {
+      insights.push({ priority: 85, text: `נאבק: רק ${recentWins} מתוך ${gamesCount} אחרונים ברווח` });
+    }
+    
+    // WIN RATE CHANGE
+    if (recentWinPct > winPct + 25 && gamesCount >= 5) {
+      insights.push({ priority: 70, text: `אחוז נצחון עלה: ${recentWinPct}% לאחרונה (${winPct}% כללי)` });
+    } else if (recentWinPct < winPct - 25 && gamesCount >= 5) {
+      insights.push({ priority: 70, text: `אחוז נצחון ירד: ${recentWinPct}% לאחרונה (${winPct}% כללי)` });
+    }
+    
+    // CONSISTENT WINNER
+    if (recentAvg > 20 && recentWins >= Math.ceil(gamesCount * 0.6) && stats.avgProfit > 15) {
+      insights.push({ priority: 65, text: `יציב ברווח: +${recentAvg}₪ ממוצע, ${recentWins}/${gamesCount} נצחונות` });
+    }
+    
+    // CONSISTENT LOSER  
+    if (recentAvg < -20 && recentLosses >= Math.ceil(gamesCount * 0.6) && stats.avgProfit < -15) {
+      insights.push({ priority: 65, text: `מתקשה: ${recentAvg}₪ ממוצע, ${recentLosses}/${gamesCount} הפסדים` });
+    }
+    
+    // COMEBACK POTENTIAL - was losing historically but recent is better
+    if (stats.totalProfit < -100 && recentAvg > 10) {
+      insights.push({ priority: 80, text: `🔄 סימני קאמבק? +${recentAvg}₪ לאחרונה למרות ${Math.round(stats.totalProfit)}₪ כולל` });
+    }
+    
+    // LOSING THE EDGE - was winning historically but recent is worse
+    if (stats.totalProfit > 100 && recentAvg < -10) {
+      insights.push({ priority: 80, text: `⚠️ מאבד קצב? ${recentAvg}₪ לאחרונה למרות +${Math.round(stats.totalProfit)}₪ כולל` });
+    }
+    
+    // VOLATILE PLAYER - big swings
+    if (bestRecent - worstRecent > 150 && gamesCount >= 4) {
+      insights.push({ priority: 55, text: `🎢 תנודתי: בין +${bestRecent}₪ ל-${Math.abs(worstRecent)}₪ לאחרונה` });
+    }
+    
+    // PERFECTLY BALANCED (rare)
+    if (Math.abs(recentAvg) <= 5 && recentWins === recentLosses && gamesCount >= 4) {
+      insights.push({ priority: 50, text: `⚖️ מאוזן לחלוטין: ${recentWins} נצחונות, ${recentLosses} הפסדים` });
+    }
+    
+    // TOTAL PROFIT MILESTONE
+    if (stats.totalProfit > 500) {
+      insights.push({ priority: 45, text: `💎 +${Math.round(stats.totalProfit)}₪ רווח כולל מ-${stats.gamesPlayed} משחקים` });
+    } else if (stats.totalProfit < -500) {
+      insights.push({ priority: 45, text: `📊 ${Math.round(stats.totalProfit)}₪ כולל מ-${stats.gamesPlayed} משחקים` });
+    }
+    
+    // DEFAULT - basic recent summary
+    if (gamesCount >= 3) {
+      insights.push({ priority: 30, text: `${recentWins}/${gamesCount} נצחונות לאחרונה, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪` });
+    } else {
+      insights.push({ priority: 20, text: `${gamesCount} משחקים אחרונים: ${recentProfit >= 0 ? '+' : ''}${recentProfit}₪` });
+    }
+    
+    // Pick the highest priority insight
+    insights.sort((a, b) => b.priority - a.priority);
+    return insights[0]?.text || '';
+  };
+  
   const analyzeRecent = (stats: PlayerStats): RecentAnalysis => {
-    // Use last 10 games (or whatever is available - lastGameResults has up to 6 by default)
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
     
@@ -156,25 +285,8 @@ const NewGameScreen = () => {
     else if (recentAvg > stats.avgProfit + 15) trend = 'improving';
     else if (recentAvg < stats.avgProfit - 15) trend = 'declining';
     
-    // Build highlights line - compact stats summary
-    const parts: string[] = [];
-    
-    // Streak info (most important)
-    if (streak >= 2) parts.push(`🔥${streak} ברצף`);
-    else if (streak <= -2) parts.push(`❄️${Math.abs(streak)} ברצף`);
-    
-    // Win/loss ratio
-    parts.push(`${recentWins}/${gamesCount} נצחונות`);
-    
-    // Average profit
-    const avgSign = recentAvg >= 0 ? '+' : '';
-    parts.push(`ממוצע ${avgSign}${recentAvg}₪`);
-    
-    // Trend indicator if significant
-    if (trend === 'improving') parts.push('📈');
-    else if (trend === 'declining') parts.push('📉');
-    
-    const highlights = parts.join(' • ');
+    // Generate dynamic personalized highlight
+    const highlights = generateDynamicHighlight(stats);
     
     return { recentWins, recentLosses, recentProfit, recentAvg, gamesCount, trend, highlights };
   };
@@ -950,17 +1062,18 @@ const NewGameScreen = () => {
                         </span>
                       </div>
                       
-                      {/* Highlights - stats from last games */}
+                      {/* Dynamic personalized highlight */}
                       {gamesPlayed > 0 && highlights && (
                         <div style={{ 
-                          fontSize: '0.75rem', 
+                          fontSize: '0.78rem', 
                           color: 'var(--text)',
-                          opacity: 0.7,
-                          marginBottom: '0.35rem',
+                          opacity: 0.8,
+                          marginBottom: '0.4rem',
                           direction: 'rtl',
-                          fontFamily: 'system-ui'
+                          fontFamily: 'system-ui',
+                          lineHeight: '1.4'
                         }}>
-                          📊 {highlights}
+                          {highlights}
                         </div>
                       )}
                       
