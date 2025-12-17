@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PlayerStats, Player, PlayerType } from '../types';
-import { getPlayerStats, getAllPlayers } from '../database/storage';
+import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
+import { getPlayerStats, getAllPlayers, getAllGames, getGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
@@ -23,6 +23,11 @@ const StatisticsScreen = () => {
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
   const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
   const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set()); // Track which record sections are expanded
+  const [recordDetails, setRecordDetails] = useState<{
+    title: string;
+    playerName: string;
+    games: Array<{ date: string; profit: number; gameId: string }>;
+  } | null>(null); // Modal for record details
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -297,16 +302,78 @@ const StatisticsScreen = () => {
     });
   };
 
+  // Show record details modal
+  const showRecordDetails = (title: string, player: PlayerStats, recordType: string) => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getGamePlayers();
+    
+    // Get all games for this player
+    const playerGames = allGamePlayers
+      .filter(gp => gp.playerId === player.playerId)
+      .map(gp => {
+        const game = allGames.find(g => g.id === gp.gameId);
+        return game ? { date: game.date, profit: gp.profit, gameId: game.id } : null;
+      })
+      .filter((g): g is { date: string; profit: number; gameId: string } => g !== null)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    let filteredGames = playerGames;
+
+    // Filter based on record type
+    if (recordType === 'wins') {
+      filteredGames = playerGames.filter(g => g.profit > 0);
+    } else if (recordType === 'losses') {
+      filteredGames = playerGames.filter(g => g.profit < 0);
+    } else if (recordType === 'biggestWin') {
+      const maxProfit = Math.max(...playerGames.map(g => g.profit));
+      filteredGames = playerGames.filter(g => g.profit === maxProfit);
+    } else if (recordType === 'biggestLoss') {
+      const minProfit = Math.min(...playerGames.map(g => g.profit));
+      filteredGames = playerGames.filter(g => g.profit === minProfit);
+    } else if (recordType === 'currentWinStreak' || recordType === 'longestWinStreak') {
+      // Find consecutive wins from most recent
+      const streakGames: typeof playerGames = [];
+      for (const game of playerGames) {
+        if (game.profit > 0) {
+          streakGames.push(game);
+        } else if (recordType === 'currentWinStreak') {
+          break; // Current streak stops at first loss
+        }
+      }
+      filteredGames = recordType === 'currentWinStreak' ? streakGames : streakGames.slice(0, player.longestWinStreak);
+    } else if (recordType === 'currentLossStreak' || recordType === 'longestLossStreak') {
+      // Find consecutive losses from most recent
+      const streakGames: typeof playerGames = [];
+      for (const game of playerGames) {
+        if (game.profit < 0) {
+          streakGames.push(game);
+        } else if (recordType === 'currentLossStreak') {
+          break; // Current streak stops at first win
+        }
+      }
+      filteredGames = recordType === 'currentLossStreak' ? streakGames : streakGames.slice(0, player.longestLossStreak);
+    }
+
+    setRecordDetails({
+      title,
+      playerName: player.playerName,
+      games: filteredGames
+    });
+  };
+
   // Render a record with tie support
   const renderRecord = (
     recordKey: string,
     players: PlayerStats[],
     renderValue: (p: PlayerStats) => React.ReactNode,
-    style?: React.CSSProperties
+    style?: React.CSSProperties,
+    recordType?: string,
+    recordTitle?: string
   ) => {
     if (players.length === 0) return null;
     const isExpanded = expandedRecords.has(recordKey);
     const hasTies = players.length > 1;
+    const canShowDetails = recordType && recordTitle;
     
     return (
       <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
@@ -328,6 +395,19 @@ const StatisticsScreen = () => {
           </span>
         )}
         {renderValue(players[0])}
+        {canShowDetails && (
+          <span
+            style={{ 
+              fontSize: '0.7rem', 
+              cursor: 'pointer',
+              opacity: 0.7
+            }}
+            onClick={() => showRecordDetails(recordTitle, players[0], recordType)}
+            title="לחץ לפרטים"
+          >
+            🔍
+          </span>
+        )}
         {isExpanded && hasTies && (
           <div style={{ 
             width: '100%',

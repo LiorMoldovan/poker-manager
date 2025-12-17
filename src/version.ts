@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.1.3';
+export const APP_VERSION = '4.2.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.2.0',
+    date: '2024-12-17',
+    changes: [
+      'Improved: Forecast now weighs recent performance (60%) over overall history (40%)',
+      'Improved: Sentences reference actual data (X/Y wins, streak info, averages)',
+      'Added: Streak badges show hot/cold streaks (🔥/❄️)',
+      'Added: Trend detection - improving vs declining players',
+      'Fixed: Smarter surprise predictions based on contradicting trends'
+    ]
+  },
   {
     version: '4.1.3',
     date: '2024-12-17',

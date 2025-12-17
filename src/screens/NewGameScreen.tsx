@@ -118,153 +118,197 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // ============ ENGAGING FORECAST SENTENCES ============
+  // ============ SMART FORECAST SYSTEM WITH RECENT DATA ============
   
-  // NEW PLAYERS - Mystery, intrigue, fun
-  const newPlayerSentences = [
-    `מי זה בכלל {name}? בלי היסטוריה, הוא יכול להיות הכל - גאון או טרגדיה`,
-    `{name} נכנס כמו סוס אפל. אין לנו מושג מה הוא מסתיר`,
-    `פרק ראשון בסאגה של {name}. מתרגשים לראות איך הוא מתמודד עם לחץ`,
-    `{name} עדיין לא הספיק לבנות אויבים על השולחן. הלילה זה ישתנה`,
-    `הכל חדש ל{name} - הריח של הצ'יפים, הטעם של בלאף כושל. או אולי של ניצחון?`,
-    `{name} מגיע בלי תיק עבר. לפעמים זה בדיוק מה שצריך כדי להפתיע`,
-    `דף חלק, קלפים חדשים: {name} מתחיל מאפס. כולם שווים בהתחלה`,
-    `אין לנו נתונים על {name}, אז נסמוך על אינטואיציה. יש משהו באוויר...`,
-  ];
-
-  // SURPRISE WIN - The underdog rises
-  const surpriseWinSentences = [
-    `תשכחו מה{avgProfit}₪- שהוא הפסיד בממוצע. {name} מגיע עם עיניים רעבות הלילה`,
-    `{name} השאיר {totalProfit}₪ על השולחנות. הלילה הוא מתכנן לקחת משהו בחזרה`,
-    `נגד {lossPercent}% הפסדים, נגד הסיכויים - {name} מריח הזדמנות`,
-    `{name} נמאס לו להיות פרייר. הלילה יש אנרגיה של קאמבק באוויר`,
-    `{name} עם {gamesPlayed} משחקים של לימוד. אולי סוף סוף ישתלם?`,
-    `הסטטיסטיקה נגדו, אבל {name} מגיע עם חיוך מסוכן הלילה`,
-  ];
-
-  // SURPRISE LOSS - The mighty may fall
-  const surpriseLossSentences = [
-    `{name} התרגל ל{winPercent}% נצחונות. אבל ביטחון יתר הוא אויב מסוכן`,
-    `+{avgProfit}₪ ממוצע? מרשים. אבל יש תחושה ש{name} הולך לאכול אותה הלילה`,
-    `{name} חושב שהוא המלך. הקלפים עשויים להזכיר לו מי באמת שולט`,
-    `אזהרה ל{name}: {totalProfit}₪ רווח לא מגן עליך הלילה`,
-    `{name} בא עם הביטחון של מנצח. לפעמים זו בדיוק הנפילה`,
-    `הכוכבים לא לצד {name} הערב. משהו עומד לקרות`,
-  ];
-
-  // BIG WINNERS - Respect mixed with fear
-  const bigWinnerSentences = [
-    `{name} לקח {totalProfit}₪ מכולנו. השאלה היחידה: כמה עוד הלילה?`,
-    `{winPercent}% נצחונות? {name} לא משחק פוקר - הוא גובה מיסים`,
-    `ב-{gamesPlayed} משחקים {name} הוכיח: הוא יודע משהו שאחרים לא`,
-    `{name} מרוויח {avgProfit}₪ בממוצע. עכשיו חשבו כמה זה יעלה לכם הלילה`,
-    `{name} הוא הסיבה שחלק מכם חוזרים הביתה בלי כסף לפיצה`,
-    `יש שחקנים, ויש {name}. הפער? {totalProfit}₪`,
-    `אם {name} היה מניה, כולם היו קונים. {avgProfit}₪ ממוצע לא משקר`,
-    `{name} קורא אתכם כמו ספר פתוח. {winPercent}% הצלחה - לא מקרי`,
-  ];
-
-  // GOOD WINNERS - Solid performers
-  const goodWinnerSentences = [
-    `{name} לא הכי רעשני, אבל +{avgProfit}₪ ממוצע אומר שהוא יודע את העבודה`,
-    `{name} משחק שקט ולוקח כסף. {winPercent}% הצלחה מדברים`,
-    `הכסף אוהב את {name}. לא רומן סוער, אבל יחסים יציבים`,
-    `{name} לא יגנוב כותרות, אבל כנראה יגנוב מהכסף שלכם`,
-    `ב-{gamesPlayed} משחקים {name} בנה רפוטציה של שחקן רווחי. זה לא ישתנה`,
-    `{name} מהסוג שמדבר בשקט ויוצא עם הכסף`,
-    `{name} יודע שפוקר זה מרתון. אחרי {gamesPlayed} משחקים - הוא מוביל`,
-    `+{avgProfit}₪ ממוצע אומר הכל על {name}. צפו לעוד ערב רווחי בשבילו`,
-  ];
-
-  // SLIGHT WINNERS - Small edge
-  const slightWinnerSentences = [
-    `{name} עם יתרון קל. לא מרשים, אבל כסף זה כסף`,
-    `{avgProfit}₪ ממוצע - {name} לא יהיה עשיר, אבל גם לא עני`,
-    `{name} בדרך כלל יוצא עם קצת יותר ממה שהביא. צפוי להמשיך`,
-    `{winPercent}% הצלחה נותנים ל{name} סיכוי קל. נראה`,
-    `{name} בירוק קל - לא פסטיבל, אבל חיובי`,
-    `{name} צפוי לערב סביר. לא עושר, לא עוני`,
-    `יתרון סטטיסטי קטן ל{name}. מספיק לשמור על חיוך`,
-    `{name} - לא הכי טוב, לא הכי גרוע. באמצע עם נטייה לטוב`,
-  ];
-
-  // NEUTRAL - Wild cards
-  const neutralSentences = [
-    `{name} הוא הג'וקר הלילה. יכול לקחת הכל או להפסיד הכל`,
-    `אם היו שואלים את {name} מה יקרה, גם הוא לא היה יודע`,
-    `{name} על קו האפס. הערב יחליט לאן`,
-    `{name} הוא חידה: לא מספיק טוב לפחד ממנו, לא מספיק גרוע לזלזל`,
-    `50-50 ל{name}. השאלה באיזה צד הוא ינחת`,
-    `ההיסטוריה של {name} לא עוזרת. הלילה זה משחק חדש`,
-    `{name} יכול להפתיע לכל כיוון. זה מה שמעניין בו`,
-    `{name} - תעלומה. הנתונים לא מספרים כלום`,
-  ];
-
-  // SLIGHT LOSERS - Struggling
-  const slightLoserSentences = [
-    `{name} עם נטייה קלה למינוס. לא דרמטי, אבל בואו נודה - כואב`,
-    `{avgProfit}₪ ממוצע לא משקר. {name} יצטרך מזל`,
-    `{name} בדרך כלל יוצא עם קצת פחות. הלילה כנראה אותו דבר`,
-    `{lossPercent}% הפסדים. {name} עדיין מחפש את הנוסחה`,
-    `{name} לא בדיוק כוכב פוקר. אבל הוא ממשיך לנסות`,
-    `רוח קלה נגד {name}. צריך לעבוד קשה כדי להפוך`,
-    `{name} מעט מתחת לאפס. לא אסון, אבל גם לא מסיבה`,
-    `{name} עם הפסד קטן צפוי. כבר ראינו את הסרט הזה`,
-  ];
-
-  // MODERATE LOSERS - Clear pattern
-  const moderateLoserSentences = [
-    `{name} משלם שכר לימוד יקר - {totalProfit}₪ עד היום. השאלה אם הוא לומד`,
-    `{avgProfit}₪ ממוצע? {name} צריך להתחיל לדאוג`,
-    `{lossPercent}% הפסדים. {name} או אופטימי מדי או עיקש מדי`,
-    `ב-{gamesPlayed} משחקים {name} ראה יותר הפסדים מנצחונות. הלילה לא ישנה`,
-    `{name} יודע שהוא מתחיל מאחור. השאלה אם הוא יודע למה`,
-    `האמת כואבת: {name} לא בדיוק מומחה פוקר`,
-    `{name} - הארנק שלו פתוח והכסף זורם החוצה`,
-    `{name} מביא למשחק יותר תקווה מאשר כישרון. הנתונים ברורים`,
-  ];
-
-  // BIG LOSERS - The sponsors
-  const bigLoserSentences = [
-    `{name} השאיר {totalProfit}₪ על השולחנות. הספונסר הלא רשמי שלנו`,
-    `רק {winPercent}% נצחונות? {name} או הכי אופטימי בעולם או לא מבין רמז`,
-    `{name} תורם למשחק כל ערב. תודה על {totalProfit}₪ חבר`,
-    `{avgProfit}₪ ממוצע. {name} כנראה אוהב את החברה יותר מאשר לנצח`,
-    `ב-{gamesPlayed} משחקים {name} הוכיח עקביות מרשימה - בהפסדים`,
-    `כולם שמחים כש{name} מגיע. בעיקר הארנקים של כולם`,
-    `אם {name} היה מניה - הייתם מוכרים מזמן. {avgProfit}₪ ממוצע`,
-    `{name} ההוכחה שאופטימיות לא משלמת חשבונות. {totalProfit}₪ בהפסדים`,
-  ];
-
-  // Helper to fill in template with stats
-  const fillTemplate = (template: string, name: string, stats: PlayerStats): string => {
-    return template
-      .replace(/{name}/g, name)
-      .replace(/{avgProfit}/g, String(Math.round(stats.avgProfit)))
-      .replace(/{winPercent}/g, String(Math.round(stats.winPercentage)))
-      .replace(/{lossPercent}/g, String(Math.round(100 - stats.winPercentage)))
-      .replace(/{gamesPlayed}/g, String(stats.gamesPlayed))
-      .replace(/{totalProfit}/g, String(Math.round(stats.totalProfit)))
-      .replace(/{streak}/g, String(Math.abs(stats.currentStreak)));
-  };
-
-  // Pick random sentence from pool, avoiding already used ones
-  const pickUniqueSentence = (pool: string[], usedSentences: Set<string>, name: string, stats?: PlayerStats): string => {
-    const availablePool = pool.filter(s => !usedSentences.has(s));
-    const selectedPool = availablePool.length > 0 ? availablePool : pool;
-    const template = selectedPool[Math.floor(Math.random() * selectedPool.length)];
-    
-    if (stats) {
-      return fillTemplate(template, name, stats);
+  // Analyze recent performance (last 6 games)
+  interface RecentAnalysis {
+    recentWins: number;
+    recentLosses: number;
+    recentProfit: number;
+    recentAvg: number;
+    trend: 'hot' | 'cold' | 'improving' | 'declining' | 'stable';
+    streakText: string;
+  }
+  
+  const analyzeRecent = (stats: PlayerStats): RecentAnalysis => {
+    const lastGames = stats.lastGameResults || [];
+    if (lastGames.length === 0) {
+      return { recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0, trend: 'stable', streakText: '' };
     }
-    return template.replace(/{name}/g, name);
+    
+    const recentWins = lastGames.filter(g => g.profit > 0).length;
+    const recentLosses = lastGames.filter(g => g.profit < 0).length;
+    const recentProfit = lastGames.reduce((sum, g) => sum + g.profit, 0);
+    const recentAvg = recentProfit / lastGames.length;
+    
+    // Determine trend
+    let trend: RecentAnalysis['trend'] = 'stable';
+    const streak = stats.currentStreak;
+    
+    if (streak >= 3) trend = 'hot';
+    else if (streak <= -3) trend = 'cold';
+    else if (recentAvg > stats.avgProfit + 15) trend = 'improving';
+    else if (recentAvg < stats.avgProfit - 15) trend = 'declining';
+    
+    // Build streak text
+    let streakText = '';
+    if (streak >= 2) streakText = `🔥 ${streak} נצחונות ברצף`;
+    else if (streak <= -2) streakText = `❄️ ${Math.abs(streak)} הפסדים ברצף`;
+    else if (recentWins >= 4) streakText = `${recentWins} מתוך ${lastGames.length} אחרונים ברווח`;
+    else if (recentLosses >= 4) streakText = `${recentLosses} מתוך ${lastGames.length} אחרונים בהפסד`;
+    
+    return { recentWins, recentLosses, recentProfit, recentAvg, trend, streakText };
   };
 
-  // Generate forecasts for all selected players (balanced to sum to zero)
-  const generateForecasts = () => {
-    const usedSentences = new Set<string>();
+  // Generate dynamic sentence based on actual data
+  const generateSentence = (
+    name: string, 
+    stats: PlayerStats, 
+    recent: RecentAnalysis,
+    expectedOutcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss',
+    isSurprise: boolean
+  ): string => {
+    const { recentWins, recentLosses, recentAvg, trend, streakText } = recent;
+    const lastGamesCount = stats.lastGameResults?.length || 0;
+    const overallAvg = Math.round(stats.avgProfit);
+    const recentAvgRound = Math.round(recentAvg);
     
-    // Step 1: Analyze all players
+    // Hot streak - player is on fire
+    if (trend === 'hot' && stats.currentStreak >= 3) {
+      const sentences = [
+        `${name} בוער! ${stats.currentStreak} נצחונות ברצף ולא נראה שהוא מתכוון לעצור`,
+        `${name} על גל חם - ${stats.currentStreak} נצחונות רצופים. קשה להמר נגדו עכשיו`,
+        `מי עוצר את ${name}? ${stats.currentStreak} נצחונות ברצף, ממוצע ${recentAvgRound > 0 ? '+' : ''}${recentAvgRound}₪ לאחרונה`,
+      ];
+      return sentences[Math.floor(Math.random() * sentences.length)];
+    }
+    
+    // Cold streak - player is struggling
+    if (trend === 'cold' && stats.currentStreak <= -3) {
+      const sentences = [
+        `${name} בתקופה קשה - ${Math.abs(stats.currentStreak)} הפסדים ברצף. השאלה אם הלילה זה ישתנה`,
+        `${Math.abs(stats.currentStreak)} הפסדים רצופים ל${name}. הסטטיסטיקה לא לצידו`,
+        `${name} סובל לאחרונה - ${Math.abs(stats.currentStreak)} הפסדים ברצף, ${recentAvgRound}₪ ממוצע אחרון`,
+      ];
+      return sentences[Math.floor(Math.random() * sentences.length)];
+    }
+    
+    // Improving - recent better than overall
+    if (trend === 'improving' && lastGamesCount >= 4) {
+      const sentences = [
+        `${name} בעלייה! ממוצע ${recentAvgRound > 0 ? '+' : ''}${recentAvgRound}₪ ב-${lastGamesCount} משחקים אחרונים (לעומת ${overallAvg}₪ כללי)`,
+        `${name} השתפר: ${recentWins} מתוך ${lastGamesCount} אחרונים ברווח. המומנטום לצידו`,
+        `שינוי מגמה ל${name} - מ-${overallAvg}₪ ממוצע כללי ל-${recentAvgRound}₪ לאחרונה`,
+      ];
+      return sentences[Math.floor(Math.random() * sentences.length)];
+    }
+    
+    // Declining - recent worse than overall  
+    if (trend === 'declining' && lastGamesCount >= 4) {
+      const sentences = [
+        `${name} בירידה: ממוצע ${recentAvgRound}₪ ב-${lastGamesCount} אחרונים (לעומת ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ כללי)`,
+        `${name} לא באותה פורמה - ${recentLosses} הפסדים מתוך ${lastGamesCount} אחרונים`,
+        `הנתונים האחרונים של ${name} מדאיגים: ${recentAvgRound}₪ ממוצע, ${recentWins}/${lastGamesCount} נצחונות`,
+      ];
+      return sentences[Math.floor(Math.random() * sentences.length)];
+    }
+    
+    // Surprise prediction
+    if (isSurprise) {
+      if (expectedOutcome.includes('win')) {
+        const sentences = [
+          `נגד הנתונים: ${name} עם ${overallAvg}₪ ממוצע, אבל ${recentWins}/${lastGamesCount} נצחונות אחרונים. יכול להפתיע`,
+          `${name} בדרך כלל מפסיד (${overallAvg}₪), אבל משהו באחרונה השתנה. שווה לעקוב`,
+          `הפתעה אפשרית: ${name} עם היסטוריה קשה, אבל ${recentWins} נצחונות ב-${lastGamesCount} אחרונים`,
+        ];
+        return sentences[Math.floor(Math.random() * sentences.length)];
+      } else {
+        const sentences = [
+          `אזהרה ל${name}: למרות ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ ממוצע, רק ${recentWins}/${lastGamesCount} נצחונות אחרונים`,
+          `${name} רגיל לנצח (${stats.winPercentage.toFixed(0)}%), אבל הנתונים האחרונים (${recentAvgRound}₪) מדאיגים`,
+          `לא הכל ורוד ל${name} - ${recentLosses} הפסדים מתוך ${lastGamesCount} אחרונים למרות היסטוריה טובה`,
+        ];
+        return sentences[Math.floor(Math.random() * sentences.length)];
+      }
+    }
+    
+    // Regular predictions based on combined data
+    const winPct = Math.round(stats.winPercentage);
+    const totalProfit = Math.round(Math.abs(stats.totalProfit));
+    
+    switch (expectedOutcome) {
+      case 'big_win':
+        const bigWinSentences = [
+          `${name} שולט: ${recentWins}/${lastGamesCount} נצחונות אחרונים, +${overallAvg}₪ ממוצע כללי. המועמד לכתר`,
+          `הנתונים ברורים - ${name} עם ${winPct}% נצחונות, +${recentAvgRound}₪ לאחרונה. מסוכן`,
+          `${name} לקח ${totalProfit}₪ עד היום. ${recentWins} נצחונות ב-${lastGamesCount} אחרונים. ממשיך לשלוט`,
+        ];
+        return bigWinSentences[Math.floor(Math.random() * bigWinSentences.length)];
+        
+      case 'win':
+        const winSentences = [
+          `${name} בפורמה טובה: ${recentWins}/${lastGamesCount} נצחונות אחרונים, ${winPct}% הצלחה כללית`,
+          `הנתונים תומכים ב${name} - ממוצע +${overallAvg}₪, ${recentAvgRound > 0 ? '+' : ''}${recentAvgRound}₪ לאחרונה`,
+          `${name} עקבי: ${winPct}% נצחונות כלליים, ${recentWins} מתוך ${lastGamesCount} אחרונים ברווח`,
+        ];
+        return winSentences[Math.floor(Math.random() * winSentences.length)];
+        
+      case 'slight_win':
+        const slightWinSentences = [
+          `${name} עם יתרון קל: ${recentWins}/${lastGamesCount} אחרונים, ממוצע +${overallAvg}₪`,
+          `סיכוי טוב ל${name} - ${winPct}% הצלחה כללית, ${recentAvgRound > 0 ? 'פלוס' : 'מאוזן'} לאחרונה`,
+          `${name} בכיוון חיובי: ממוצע +${overallAvg}₪, ${recentWins} נצחונות מתוך ${lastGamesCount} אחרונים`,
+        ];
+        return slightWinSentences[Math.floor(Math.random() * slightWinSentences.length)];
+        
+      case 'neutral':
+        const neutralSentences = [
+          `${name} על הגבול: ${recentWins}/${lastGamesCount} נצחונות אחרונים, ממוצע ${overallAvg}₪. יכול ללכת לכל כיוון`,
+          `50-50 ל${name} - ${winPct}% הצלחה כללית, ${recentAvgRound}₪ לאחרונה. תלוי במזל`,
+          `${name} באמצע: ${recentWins} נצחונות, ${recentLosses} הפסדים ב-${lastGamesCount} אחרונים. מי יודע?`,
+        ];
+        return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
+        
+      case 'slight_loss':
+        const slightLossSentences = [
+          `${name} עם נטייה למינוס: ${recentLosses}/${lastGamesCount} הפסדים אחרונים, ממוצע ${overallAvg}₪`,
+          `הנתונים לא לטובת ${name} - ${winPct}% הצלחה, ${recentAvgRound}₪ לאחרונה`,
+          `${name} מתקשה: ${recentWins} נצחונות מתוך ${lastGamesCount} אחרונים, ממוצע כללי ${overallAvg}₪`,
+        ];
+        return slightLossSentences[Math.floor(Math.random() * slightLossSentences.length)];
+        
+      case 'loss':
+        const lossSentences = [
+          `${name} בקושי: רק ${recentWins}/${lastGamesCount} נצחונות אחרונים, ${winPct}% הצלחה כללית`,
+          `הנתונים קשים ל${name} - ממוצע ${overallAvg}₪, ${recentAvgRound}₪ לאחרונה`,
+          `${name} צפוי להפסד: ${recentLosses} הפסדים מתוך ${lastGamesCount} אחרונים, ${winPct}% הצלחה`,
+        ];
+        return lossSentences[Math.floor(Math.random() * lossSentences.length)];
+        
+      case 'big_loss':
+        const bigLossSentences = [
+          `${name} בבעיה: ${recentLosses}/${lastGamesCount} הפסדים אחרונים, ${totalProfit}₪- עד היום`,
+          `הנתונים חד משמעיים - ${name} עם ${winPct}% הצלחה, ${recentAvgRound}₪ לאחרונה. קשה`,
+          `${name} הספונסר שלנו: ${recentWins} נצחונות מתוך ${lastGamesCount} אחרונים, ממוצע ${overallAvg}₪`,
+        ];
+        return bigLossSentences[Math.floor(Math.random() * bigLossSentences.length)];
+    }
+    
+    return `${name} - ${recentWins}/${lastGamesCount} נצחונות אחרונים`;
+  };
+
+  // NEW PLAYERS - No history
+  const newPlayerSentences = [
+    `{name} - שחקן חדש, אין נתונים. הכל פתוח!`,
+    `אין לנו היסטוריה על {name}. הלילה נגלה מה הוא שווה`,
+    `{name} מתחיל מאפס - בלי יתרון, בלי חיסרון. טאבולה ראסה`,
+    `{name} נכנס בלי תיק עבר. יכול להיות הכל`,
+  ];
+
+
+  // Generate forecasts for all selected players - WEIGHTED RECENT PERFORMANCE
+  const generateForecasts = () => {
+    // Step 1: Analyze all players with recent performance
     const playerAnalysis = Array.from(selectedIds).map(playerId => {
       const player = players.find(p => p.id === playerId);
       if (!player) return null;
@@ -273,17 +317,42 @@ const NewGameScreen = () => {
       const gamesPlayed = stats?.gamesPlayed || 0;
       const avgProfit = stats?.avgProfit || 0;
       
-      // Determine historical tendency
+      // Get recent analysis (last 6 games)
+      const recent = stats ? analyzeRecent(stats) : { 
+        recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0, trend: 'stable' as const, streakText: '' 
+      };
+      
+      // WEIGHTED SCORE: 60% recent performance, 40% overall (if enough recent data)
+      let weightedAvg: number;
+      const hasRecentData = stats?.lastGameResults && stats.lastGameResults.length >= 3;
+      
+      if (gamesPlayed === 0) {
+        weightedAvg = 0;
+      } else if (hasRecentData) {
+        // Weight recent performance more heavily
+        weightedAvg = (recent.recentAvg * 0.6) + (avgProfit * 0.4);
+      } else {
+        // Not enough recent data, use overall
+        weightedAvg = avgProfit;
+      }
+      
+      // Apply streak bonuses/penalties
+      if (stats && stats.currentStreak >= 3) weightedAvg *= 1.25; // Hot streak bonus
+      else if (stats && stats.currentStreak >= 2) weightedAvg *= 1.1;
+      else if (stats && stats.currentStreak <= -3) weightedAvg *= 0.75; // Cold streak penalty
+      else if (stats && stats.currentStreak <= -2) weightedAvg *= 0.9;
+      
+      // Determine tendency based on weighted average
       let tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new' = 'new';
       if (gamesPlayed === 0) {
         tendency = 'new';
-      } else if (avgProfit > 20) {
+      } else if (weightedAvg > 25) {
         tendency = 'strong_winner';
-      } else if (avgProfit > 5) {
+      } else if (weightedAvg > 8) {
         tendency = 'winner';
-      } else if (avgProfit >= -5) {
+      } else if (weightedAvg >= -8) {
         tendency = 'neutral';
-      } else if (avgProfit >= -20) {
+      } else if (weightedAvg >= -25) {
         tendency = 'loser';
       } else {
         tendency = 'strong_loser';
@@ -294,26 +363,35 @@ const NewGameScreen = () => {
         stats,
         gamesPlayed,
         avgProfit,
+        recent,
         tendency,
-        rawExpected: gamesPlayed > 0 ? avgProfit : 0
+        rawExpected: weightedAvg
       };
     }).filter(Boolean) as {
       player: Player;
       stats: PlayerStats | undefined;
       gamesPlayed: number;
       avgProfit: number;
+      recent: RecentAnalysis;
       tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new';
       rawExpected: number;
     }[];
 
-    // Step 2: Smart surprise selection - UP TO 30% (not forced!)
-    // Only apply to players with strong historical patterns
-    const eligibleForSurprise = playerAnalysis.filter(p => 
-      p.gamesPlayed >= 5 && (p.tendency === 'strong_winner' || p.tendency === 'strong_loser')
-    );
+    // Step 2: Smart surprise selection - UP TO 25% (not forced!)
+    // Only when recent trend CONTRADICTS overall history
+    const eligibleForSurprise = playerAnalysis.filter(p => {
+      if (p.gamesPlayed < 5) return false;
+      // Surprise when overall is positive but recent is negative, or vice versa
+      const overallPositive = p.avgProfit > 10;
+      const overallNegative = p.avgProfit < -10;
+      const recentPositive = p.recent.recentAvg > 10;
+      const recentNegative = p.recent.recentAvg < -10;
+      
+      return (overallPositive && recentNegative) || (overallNegative && recentPositive);
+    });
     
     const maxSurprises = Math.min(
-      Math.ceil(playerAnalysis.length * 0.30), // Max 30%
+      Math.ceil(playerAnalysis.length * 0.25), // Max 25%
       eligibleForSurprise.length
     );
     
@@ -325,21 +403,17 @@ const NewGameScreen = () => {
     const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
     shuffled.slice(0, numSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
 
-    // Step 3: Calculate expected values
+    // Step 3: Calculate expected values with variance
     const withExpected = playerAnalysis.map(p => {
       const isSurprise = surprisePlayerIds.has(p.player.id);
       let expectedValue = p.rawExpected;
       
       if (isSurprise) {
-        // Flip the expected value
-        expectedValue = -expectedValue * (0.6 + Math.random() * 0.4);
+        // Flip the expected value based on recent contradicting trend
+        expectedValue = -expectedValue * (0.5 + Math.random() * 0.3);
       } else {
-        // Add some variance
-        expectedValue = expectedValue + (Math.random() - 0.5) * 15;
-        
-        // Streak adjustments
-        if (p.stats && p.stats.currentStreak >= 2) expectedValue *= 1.15;
-        if (p.stats && p.stats.currentStreak <= -2) expectedValue *= 0.85;
+        // Add small variance
+        expectedValue = expectedValue + (Math.random() - 0.5) * 10;
       }
       
       return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
@@ -354,38 +428,33 @@ const NewGameScreen = () => {
       const adjustment = -totalExpected * weight;
       const balancedExpected = Math.round(f.expectedValue + adjustment);
       
-      // Pick sentence based on category
+      // Determine outcome category
+      let outcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss';
+      if (balancedExpected > 35) outcome = 'big_win';
+      else if (balancedExpected > 15) outcome = 'win';
+      else if (balancedExpected > 3) outcome = 'slight_win';
+      else if (balancedExpected >= -3) outcome = 'neutral';
+      else if (balancedExpected >= -15) outcome = 'slight_loss';
+      else if (balancedExpected >= -35) outcome = 'loss';
+      else outcome = 'big_loss';
+      
+      // Generate sentence - new players get template, others get dynamic
       let sentence: string;
       
       if (f.gamesPlayed === 0) {
-        sentence = pickUniqueSentence(newPlayerSentences, usedSentences, f.player.name);
-      } else if (f.isSurprise) {
-        if (f.tendency === 'strong_loser' || f.tendency === 'loser') {
-          sentence = pickUniqueSentence(surpriseWinSentences, usedSentences, f.player.name, f.stats);
-        } else {
-          sentence = pickUniqueSentence(surpriseLossSentences, usedSentences, f.player.name, f.stats);
-        }
+        const template = newPlayerSentences[Math.floor(Math.random() * newPlayerSentences.length)];
+        sentence = template.replace(/{name}/g, f.player.name);
       } else {
-        let pool: string[];
-        if (balancedExpected > 35) pool = bigWinnerSentences;
-        else if (balancedExpected > 15) pool = goodWinnerSentences;
-        else if (balancedExpected > 3) pool = slightWinnerSentences;
-        else if (balancedExpected >= -3) pool = neutralSentences;
-        else if (balancedExpected >= -15) pool = slightLoserSentences;
-        else if (balancedExpected >= -35) pool = moderateLoserSentences;
-        else pool = bigLoserSentences;
-        
-        sentence = pickUniqueSentence(pool, usedSentences, f.player.name, f.stats);
+        sentence = generateSentence(f.player.name, f.stats!, f.recent, outcome, f.isSurprise);
       }
-      
-      usedSentences.add(sentence);
       
       return {
         player: f.player,
         expected: balancedExpected,
         sentence,
         gamesPlayed: f.gamesPlayed,
-        isSurprise: f.isSurprise
+        isSurprise: f.isSurprise,
+        recent: f.recent
       };
     });
 
@@ -791,7 +860,7 @@ const NewGameScreen = () => {
               {/* Player forecasts */}
               <div style={{ marginBottom: '1rem' }}>
                 {cachedForecasts.map((forecast, index) => {
-                  const { player, expected, sentence, gamesPlayed, isSurprise } = forecast;
+                  const { player, expected, sentence, gamesPlayed, isSurprise, recent } = forecast;
                   
                   // Simple, clear colors
                   const getStyle = () => {
@@ -842,7 +911,7 @@ const NewGameScreen = () => {
                         </span>
                       </div>
                       
-                      {/* Sentence */}
+                      {/* Sentence - with data reference */}
                       <div style={{ 
                         fontSize: '0.85rem', 
                         color: 'var(--text-muted)',
@@ -852,16 +921,16 @@ const NewGameScreen = () => {
                         {sentence}
                       </div>
                       
-                      {/* Games count */}
-                      {gamesPlayed > 0 && (
+                      {/* Recent form badge */}
+                      {gamesPlayed > 0 && recent?.streakText && (
                         <div style={{ 
-                          fontSize: '0.7rem', 
-                          color: 'var(--text-muted)', 
-                          marginTop: '0.3rem',
-                          opacity: 0.6,
+                          fontSize: '0.75rem', 
+                          color: recent.trend === 'hot' ? '#22c55e' : recent.trend === 'cold' ? '#ef4444' : 'var(--text-muted)', 
+                          marginTop: '0.35rem',
+                          fontWeight: '600',
                           direction: 'rtl'
                         }}>
-                          {gamesPlayed} משחקים בהיסטוריה
+                          {recent.streakText}
                         </div>
                       )}
                     </div>
@@ -901,7 +970,7 @@ const NewGameScreen = () => {
                 color: 'var(--text-muted)',
                 opacity: 0.5
               }}>
-                Poker Manager 🎲 • מבוסס על היסטוריה + קצת מזל
+                Poker Manager 🎲 • 60% משחקים אחרונים + 40% היסטוריה
               </div>
             </div>
 
