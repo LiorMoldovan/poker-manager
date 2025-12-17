@@ -40,21 +40,28 @@ const NewGameScreen = () => {
     setSelectedIds(newSelected);
   };
 
-  // Select/Deselect only permanent players
+  // Select/Deselect only permanent players (dynamically based on player.type === 'permanent')
   const selectAll = () => {
-    const permanentIds = permanentPlayers.map(p => p.id);
-    const allPermanentSelected = permanentIds.every(id => selectedIds.has(id));
+    // Get IDs of players with type 'permanent' only
+    const permanentIds = new Set(permanentPlayers.map(p => p.id));
+    const allPermanentSelected = permanentPlayers.length > 0 && 
+      permanentPlayers.every(p => selectedIds.has(p.id));
     
-    if (allPermanentSelected && permanentIds.length > 0) {
-      // All permanent are selected - deselect them (keep other selections)
-      const newSet = new Set(selectedIds);
-      permanentIds.forEach(id => newSet.delete(id));
-      setSelectedIds(newSet);
+    if (allPermanentSelected) {
+      // All permanent are selected - deselect ONLY permanent players
+      setSelectedIds(prev => {
+        const newSet = new Set<string>();
+        // Keep only non-permanent selections
+        prev.forEach(id => {
+          if (!permanentIds.has(id)) {
+            newSet.add(id);
+          }
+        });
+        return newSet;
+      });
     } else {
-      // Select all permanent (add to existing selections)
-      const newSet = new Set(selectedIds);
-      permanentIds.forEach(id => newSet.add(id));
-      setSelectedIds(newSet);
+      // Select ONLY permanent players (replace current selection)
+      setSelectedIds(new Set(permanentPlayers.map(p => p.id)));
     }
   };
 
