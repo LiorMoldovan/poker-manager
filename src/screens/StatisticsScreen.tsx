@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
@@ -74,25 +74,40 @@ const StatisticsScreen = () => {
     setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
   };
 
-  // Get player type
-  const getPlayerType = (playerId: string): PlayerType => {
+  // Get player type - memoized
+  const getPlayerType = useCallback((playerId: string): PlayerType => {
     const player = players.find(p => p.id === playerId);
     return player?.type || 'permanent';
-  };
+  }, [players]);
 
-  // Filter stats by minimum games
-  const statsWithMinGames = stats.filter(s => s.gamesPlayed >= minGames);
+  // Memoize filtered stats to prevent infinite loops
+  const statsWithMinGames = useMemo(() => 
+    stats.filter(s => s.gamesPlayed >= minGames),
+    [stats, minGames]
+  );
 
-  // Separate stats by player type (after minGames filter)
-  const permanentStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent');
-  const permanentGuestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent_guest');
-  const guestStats = statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'guest');
+  // Separate stats by player type (after minGames filter) - memoized
+  const permanentStats = useMemo(() => 
+    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent'),
+    [statsWithMinGames, getPlayerType]
+  );
+  const permanentGuestStats = useMemo(() => 
+    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent_guest'),
+    [statsWithMinGames, getPlayerType]
+  );
+  const guestStats = useMemo(() => 
+    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'guest'),
+    [statsWithMinGames, getPlayerType]
+  );
 
-  // Stats available for selection based on selected types
-  const availableStats = statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
+  // Stats available for selection based on selected types - memoized
+  const availableStats = useMemo(() => 
+    statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId))),
+    [statsWithMinGames, selectedTypes, getPlayerType]
+  );
 
   // Toggle player selection
-  const togglePlayer = (playerId: string) => {
+  const togglePlayer = useCallback((playerId: string) => {
     setSelectedPlayers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(playerId)) {
@@ -105,10 +120,10 @@ const StatisticsScreen = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Select/Deselect all players
-  const toggleAllPlayers = () => {
+  const toggleAllPlayers = useCallback(() => {
     if (selectedPlayers.size === availableStats.length) {
       // If all selected, keep only the first one
       setSelectedPlayers(new Set([availableStats[0]?.playerId].filter(Boolean)));
@@ -116,10 +131,10 @@ const StatisticsScreen = () => {
       // Select all available
       setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
-  };
+  }, [selectedPlayers.size, availableStats]);
 
   // Toggle player type in filter
-  const toggleType = (type: PlayerType) => {
+  const toggleType = useCallback((type: PlayerType) => {
     setSelectedTypes(prev => {
       const newSet = new Set(prev);
       if (newSet.has(type)) {
@@ -132,23 +147,31 @@ const StatisticsScreen = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Select all types
-  const selectAllTypes = () => {
+  const selectAllTypes = useCallback(() => {
     setSelectedTypes(new Set(['permanent', 'permanent_guest', 'guest']));
-  };
+  }, []);
 
-  // Update selected players when types change
+  // Create a stable key for selectedTypes to use in useEffect
+  const selectedTypesKey = useMemo(() => 
+    Array.from(selectedTypes).sort().join(','),
+    [selectedTypes]
+  );
+
+  // Update selected players when types or minGames change
   useEffect(() => {
-    const newAvailable = statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId)));
-    if (newAvailable.length > 0) {
-      setSelectedPlayers(new Set(newAvailable.map(p => p.playerId)));
+    if (availableStats.length > 0) {
+      setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
-  }, [selectedTypes, statsWithMinGames]);
+  }, [selectedTypesKey, minGames, stats.length]);
 
   // Filtered stats based on selection
-  const filteredStats = availableStats.filter(s => selectedPlayers.has(s.playerId));
+  const filteredStats = useMemo(() => 
+    availableStats.filter(s => selectedPlayers.has(s.playerId)),
+    [availableStats, selectedPlayers]
+  );
 
 
   const sortedStats = [...filteredStats].sort((a, b) => {
