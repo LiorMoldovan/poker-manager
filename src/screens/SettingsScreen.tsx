@@ -223,7 +223,7 @@ const SettingsScreen = () => {
   const handleImportHistory = async () => {
     if (importingHistory) return;
     
-    if (!confirm('This will import ~213 historical games from your Excel file. A backup will be created first. Continue?')) {
+    if (!confirm('⚠️ WARNING: This will REPLACE all current data with the Excel import (217 games). A backup will be created first. Any games added manually will be lost. Continue?')) {
       return;
     }
     
@@ -574,7 +574,7 @@ const SettingsScreen = () => {
               📊 Import Excel History
             </p>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Import ~213 games from your Excel file (Feb 2021 - Dec 2025)
+              Replace all data with 217 games from Excel (Feb 2021 - Dec 2025)
             </p>
             <button 
               className="btn" 

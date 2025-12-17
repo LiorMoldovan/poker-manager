@@ -121,14 +121,14 @@ console.log(`Permanent: ${players.filter(p => p.type === 'permanent').length}`);
 console.log(`Permanent Guest: ${players.filter(p => p.type === 'permanent_guest').length}`);
 console.log(`Guest: ${players.filter(p => p.type === 'guest').length}`);
 
-// Create games (skip last 2 as per user request)
-const gameDates = dates.slice(0, -2); // Skip last 2 games
+// Create games (include ALL games from Excel)
+const gameDates = dates; // Include all games
 const games = [];
 const gamePlayers = [];
 
 console.log(`\n=== GAMES ===`);
 console.log(`Total dates: ${dates.length}`);
-console.log(`Importing: ${gameDates.length} (skipping last 2)`);
+console.log(`Importing: ${gameDates.length} (ALL games)`);
 
 gameDates.forEach((dateStr, index) => {
   const isoDate = parseHebrewDate(dateStr);
