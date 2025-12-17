@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.5';
+export const APP_VERSION = '4.5.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.6',
+    date: '2025-12-17',
+    changes: [
+      'Fixed: Stat box data now respects the selected time period filter',
+      'Fixed: Game details page scrolls to top when opened',
+      'Fixed: Back navigation returns to correct view (individual/records/table)',
+      'Fixed: Navigation from individual view stays in individual view'
+    ]
+  },
   {
     version: '4.5.5',
     date: '2024-12-17',

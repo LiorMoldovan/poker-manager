@@ -59,6 +59,9 @@ const GameDetailsScreen = () => {
   };
 
   useEffect(() => {
+    // Scroll to top when page loads
+    window.scrollTo(0, 0);
+    
     if (gameId) {
       loadData();
     } else {

@@ -383,10 +383,19 @@ const StatisticsScreen = () => {
 
   // Show record details modal
   const showRecordDetails = (title: string, player: PlayerStats, recordType: string) => {
-    const allGames = getAllGames().filter(g => g.status === 'completed');
+    // Apply the current date filter to games
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
     const allGamePlayers = getAllGamePlayers();
     
-    // Get all games for this player
+    // Get all games for this player (filtered by date)
     const playerGames = allGamePlayers
       .filter(gp => gp.playerId === player.playerId)
       .map(gp => {
@@ -1312,7 +1321,10 @@ const StatisticsScreen = () => {
                       <div 
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
-                          onClick={() => navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName } } })}
+                          onClick={() => {
+                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName } } });
+                            window.scrollTo(0, 0);
+                          }}
                         >
                           <div 
                         style={{
@@ -1528,11 +1540,14 @@ const StatisticsScreen = () => {
                     setRecordDetails(null);
                     navigate(`/game/${game.gameId}`, { 
                       state: { 
-                        from: 'records', 
-                        viewMode: 'records',
-                        recordInfo: savedRecordInfo
+                        from: viewMode === 'individual' ? 'individual' : 'records', 
+                        viewMode: viewMode,
+                        recordInfo: savedRecordInfo,
+                        playerInfo: viewMode === 'individual' ? { playerId: recordDetails.playerId, playerName: recordDetails.playerName } : undefined
                       } 
                     });
+                    // Scroll to top after navigation
+                    window.scrollTo(0, 0);
                   }}
                   style={{
                     display: 'flex',
@@ -1649,6 +1664,7 @@ const StatisticsScreen = () => {
                         viewMode: viewMode
                       } 
                     });
+                    window.scrollTo(0, 0);
                   }}
                   style={{
                     display: 'flex',
