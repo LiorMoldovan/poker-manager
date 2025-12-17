@@ -1,24 +1,31 @@
 /**
  * Import Excel data into localStorage-compatible format
- * Run with: node scripts/import-excel.js
+ * Run with: node scripts/import-excel.cjs
+ * 
+ * Excel structure:
+ * - Column A: Player type (קבוע, אורח, מזדמן)
+ * - Column B: Player name
+ * - Columns C+: Dates with profit/loss values
  */
 
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
 
-// Permanent players (core group)
-const PERMANENT_PLAYERS = [
-  'ליאור', 'אייל', 'חרדון', 'אורן', 'ליכטר', 'סגל', 'תומר', 'פיליפ', 'אסף מוזס', 'פאבל'
-];
+// Player type mapping from Hebrew
+const TYPE_MAP = {
+  'קבוע': 'permanent',
+  'אורח': 'permanent_guest',
+  'מזדמן': 'guest'
+};
 
 // Read and parse Excel
 const wb = XLSX.readFile('Poker results.xlsx');
 const ws = wb.Sheets[wb.SheetNames[0]];
 const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
 
-// Get all dates (columns) - skip first column which is player name
-const dates = data[0].slice(1);
+// Get all dates (columns) - skip first 2 columns (type and name)
+const dates = data[0].slice(2);
 
 // Parse dates from various formats
 function parseHebrewDate(dateStr) {
@@ -61,19 +68,25 @@ function parseHebrewDate(dateStr) {
 
 // Get all unique players and their data
 const playerGameData = {}; // { playerName: { date: profit } }
+const playerTypes = {}; // { playerName: type }
 
 for (let i = 1; i < data.length; i++) {
-  const playerName = data[i][0];
+  const typeHebrew = data[i][0]; // Column A: type
+  const playerName = data[i][1]; // Column B: name
   if (!playerName) continue;
   
+  // Get player type from first column
+  const type = TYPE_MAP[typeHebrew] || 'guest';
+  playerTypes[playerName] = type;
   playerGameData[playerName] = {};
   
-  for (let j = 1; j < data[i].length; j++) {
+  // Read game data starting from column C (index 2)
+  for (let j = 2; j < data[i].length; j++) {
     const val = data[i][j];
     if (val !== null && val !== undefined && val !== '') {
       const numVal = parseFloat(String(val).replace(',', '').trim());
       if (!isNaN(numVal)) {
-        playerGameData[playerName][dates[j-1]] = numVal;
+        playerGameData[playerName][dates[j-2]] = numVal;
       }
     }
   }
@@ -94,16 +107,9 @@ const playerIdMap = {}; // name -> id
 
 Object.keys(playerGameData).forEach(name => {
   const id = generateId();
-  const gamesCount = Object.keys(playerGameData[name]).length;
   
-  // Determine player type
-  let type = 'guest';
-  if (PERMANENT_PLAYERS.includes(name)) {
-    type = 'permanent';
-  } else if (gamesCount >= 50) {
-    // Players with 50+ games are permanent guests
-    type = 'permanent_guest';
-  }
+  // Use type from Excel (first column)
+  const type = playerTypes[name] || 'guest';
   
   players.push({
     id,
@@ -214,20 +220,20 @@ fs.writeFileSync(scriptPath, importScript);
 console.log(`\n📋 Easy import script saved to: ${scriptPath}`);
 
 // Display player breakdown
-console.log('\n=== PLAYER BREAKDOWN ===');
-console.log('\nPermanent Players:');
+console.log('\n=== PLAYER BREAKDOWN (from Excel) ===');
+console.log('\n⭐ קבוע - Permanent Players:');
 players.filter(p => p.type === 'permanent').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nGuests - אורחים (50+ games):');
+console.log('\n👥 אורח - Guests:');
 players.filter(p => p.type === 'permanent_guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
 });
 
-console.log('\nOccasional - מזדמנים (<50 games):');
+console.log('\n👤 מזדמן - Occasional:');
 players.filter(p => p.type === 'guest').forEach(p => {
   const games = Object.keys(playerGameData[p.name]).length;
   console.log(`  ${p.name}: ${games} games`);
