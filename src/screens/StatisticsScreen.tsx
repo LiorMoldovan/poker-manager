@@ -343,6 +343,7 @@ const StatisticsScreen = () => {
                 <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
               </button>
               {showTimePeriod && (
+              <>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
                   onClick={() => setTimePeriod('all')}
@@ -438,6 +439,7 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
               )}
+              </>
               )}
             </div>
 
