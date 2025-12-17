@@ -13,10 +13,7 @@ const PinLock = ({ validPins, onUnlock }: PinLockProps) => {
 
   useEffect(() => {
     // Check if already authenticated this session
-    const savedAccess = sessionStorage.getItem('poker_access_level');
-    if (savedAccess === 'full' || savedAccess === 'stats_only') {
-      // Already handled by App.tsx
-    }
+    // This is already handled by App.tsx
   }, []);
 
   const handleKeyPress = (digit: string) => {

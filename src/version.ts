@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.0.0';
+export const APP_VERSION = '4.1.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.1.0',
+    date: '2024-12-17',
+    changes: [
+      'Role-Based Permissions: Admin, Member, Viewer',
+      'Admin (2351): Full control over everything',
+      'Member (2580): Can manage games and add players',
+      'Viewer (9876): View-only access + backup features',
+      'Settings shows current role with emoji indicator',
+      'UI adapts based on permissions (hide/disable buttons)',
+      'All roles can use Backup & Data features'
+    ]
+  },
   {
     version: '4.0.0',
     date: '2024-12-17',

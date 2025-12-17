@@ -1,12 +1,18 @@
 import { NavLink } from 'react-router-dom';
+import { usePermissions } from '../App';
 
 const Navigation = () => {
+  const { hasPermission } = usePermissions();
+  const canCreateGame = hasPermission('game:create');
+
   return (
     <nav className="bottom-nav">
-      <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-        <span className="nav-icon">🃏</span>
-        <span>New Game</span>
-      </NavLink>
+      {canCreateGame && (
+        <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          <span className="nav-icon">🃏</span>
+          <span>New Game</span>
+        </NavLink>
+      )}
       <NavLink to="/history" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <span className="nav-icon">📚</span>
         <span>History</span>
@@ -24,4 +30,3 @@ const Navigation = () => {
 };
 
 export default Navigation;
-

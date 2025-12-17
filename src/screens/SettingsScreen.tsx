@@ -23,8 +23,11 @@ import {
   BackupData
 } from '../database/storage';
 import { APP_VERSION, CHANGELOG } from '../version';
+import { usePermissions } from '../App';
+import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 
 const SettingsScreen = () => {
+  const { role, hasPermission } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -40,7 +43,7 @@ const SettingsScreen = () => {
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('players');
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>('backup');
   const [backups, setBackups] = useState<BackupData[]>([]);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
@@ -49,6 +52,13 @@ const SettingsScreen = () => {
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
   const [importingHistory, setImportingHistory] = useState(false);
+
+  // Permission checks
+  const canEditSettings = hasPermission('settings:edit');
+  const canEditChips = hasPermission('chips:edit');
+  const canEditPlayers = hasPermission('player:edit');
+  const canDeletePlayers = hasPermission('player:delete');
+  const canAddPlayers = hasPermission('player:add');
 
   useEffect(() => {
     loadData();
@@ -268,18 +278,34 @@ const SettingsScreen = () => {
     });
   };
 
-  const tabs = [
-    { id: 'players', label: '👥 Players', icon: '👥' },
-    { id: 'chips', label: '🎰 Chips', icon: '🎰' },
-    { id: 'game', label: '💰 Game', icon: '💰' },
-    { id: 'backup', label: '📦 Backup', icon: '📦' },
-    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
-  ] as const;
+  // Filter tabs based on permissions
+  const allTabs = [
+    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const },
+    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const },
+    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null },
+    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null },
+  ];
+  
+  const tabs = allTabs.filter(tab => 
+    tab.requiresPermission === null || hasPermission(tab.requiresPermission)
+  ) as { id: 'players' | 'chips' | 'game' | 'backup' | 'about'; label: string; icon: string }[];
 
   return (
     <div className="fade-in">
       <div className="page-header" style={{ marginBottom: '0.5rem' }}>
         <h1 className="page-title">Settings</h1>
+        {role && (
+          <span style={{ 
+            fontSize: '0.75rem', 
+            padding: '0.25rem 0.5rem', 
+            borderRadius: '8px',
+            background: role === 'admin' ? 'rgba(234, 179, 8, 0.15)' : role === 'member' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 100, 100, 0.15)',
+            color: role === 'admin' ? '#EAB308' : role === 'member' ? 'var(--primary)' : 'var(--text-muted)'
+          }}>
+            {getRoleEmoji(role)} {getRoleDisplayName(role)}
+          </span>
+        )}
       </div>
 
       {/* Tabs */}
@@ -336,6 +362,20 @@ const SettingsScreen = () => {
         <div className="card">
           <h2 className="card-title mb-2">💰 Game Settings</h2>
           
+          {!canEditSettings && (
+            <div style={{ 
+              padding: '0.5rem 0.75rem', 
+              marginBottom: '1rem',
+              borderRadius: '8px',
+              background: 'rgba(234, 179, 8, 0.1)',
+              borderLeft: '4px solid #EAB308'
+            }}>
+              <p style={{ color: '#EAB308', margin: 0, fontSize: '0.85rem' }}>
+                🔒 Only Admin can edit game settings
+              </p>
+            </div>
+          )}
+          
           <div className="input-group">
             <label className="label">Buyin Value (₪)</label>
             <input
@@ -344,6 +384,7 @@ const SettingsScreen = () => {
               value={settings.rebuyValue}
               onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
               min="1"
+              disabled={!canEditSettings}
             />
           </div>
 
@@ -355,6 +396,7 @@ const SettingsScreen = () => {
               value={settings.chipsPerRebuy}
               onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
               min="1"
+              disabled={!canEditSettings}
             />
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Each buyin of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
@@ -371,6 +413,7 @@ const SettingsScreen = () => {
               value={settings.minTransfer}
               onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
               min="0"
+              disabled={!canEditSettings}
             />
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Transfers below this amount will be skipped
@@ -384,9 +427,11 @@ const SettingsScreen = () => {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">🎰 Chip Values</h2>
-            <button className="btn btn-sm btn-outline" onClick={() => setShowAddChip(true)}>
-              + Add Chip
-            </button>
+            {canEditChips && (
+              <button className="btn btn-sm btn-outline" onClick={() => setShowAddChip(true)}>
+                + Add Chip
+              </button>
+            )}
           </div>
 
           {chipValues.map(chip => (
@@ -407,21 +452,24 @@ const SettingsScreen = () => {
                 value={chip.value}
                 onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
                 min="1"
+                disabled={!canEditChips}
               />
-              <button 
-                className="btn btn-sm"
-                style={{ 
-                  padding: '0.35rem 0.5rem', 
-                  fontSize: '0.75rem',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: 'var(--danger)'
-                }}
-                onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
-                title="Delete chip"
-              >
-                🗑️
-              </button>
+              {canEditChips && (
+                <button 
+                  className="btn btn-sm"
+                  style={{ 
+                    padding: '0.35rem 0.5rem', 
+                    fontSize: '0.75rem',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: 'var(--danger)'
+                  }}
+                  onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
+                  title="Delete chip"
+                >
+                  🗑️
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -432,9 +480,11 @@ const SettingsScreen = () => {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">👥 Players ({players.length})</h2>
-            <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
-              + Add Player
-            </button>
+            {canAddPlayers && (
+              <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
+                + Add Player
+              </button>
+            )}
           </div>
 
           {players.length === 0 ? (
@@ -455,36 +505,42 @@ const SettingsScreen = () => {
                       {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '🏠 אורח' : '👤 מזדמן'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <button 
-                      className="btn btn-sm"
-                      style={{ 
-                        padding: '0.35rem 0.6rem', 
-                        fontSize: '0.75rem',
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        color: 'var(--text)'
-                      }}
-                      onClick={() => openEditPlayer(player)}
-                      title="Edit player"
-                    >
-                      ✏️ Edit
-                    </button>
-                    <button 
-                      className="btn btn-sm"
-                      style={{ 
-                        padding: '0.35rem 0.5rem', 
-                        fontSize: '0.75rem',
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        color: 'var(--danger)'
-                      }}
-                      onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
-                      title="Delete player"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+                  {(canEditPlayers || canDeletePlayers) && (
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      {canEditPlayers && (
+                        <button 
+                          className="btn btn-sm"
+                          style={{ 
+                            padding: '0.35rem 0.6rem', 
+                            fontSize: '0.75rem',
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            color: 'var(--text)'
+                          }}
+                          onClick={() => openEditPlayer(player)}
+                          title="Edit player"
+                        >
+                          ✏️ Edit
+                        </button>
+                      )}
+                      {canDeletePlayers && (
+                        <button 
+                          className="btn btn-sm"
+                          style={{ 
+                            padding: '0.35rem 0.5rem', 
+                            fontSize: '0.75rem',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: 'var(--danger)'
+                          }}
+                          onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
+                          title="Delete player"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

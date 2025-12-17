@@ -1,5 +1,30 @@
 export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
 
+// Permission system
+export type PermissionRole = 'admin' | 'member' | 'viewer';
+
+export type Permission = 
+  // Game management
+  | 'game:create'
+  | 'game:manage_rebuys'
+  | 'game:enter_chips'
+  | 'game:finalize'
+  | 'game:delete'
+  | 'game:clear_all'
+  // Player management
+  | 'player:add'
+  | 'player:edit'
+  | 'player:change_type'
+  | 'player:delete'
+  // Chip values
+  | 'chips:edit'
+  // Settings
+  | 'settings:edit'
+  // Backup (all roles have this)
+  | 'backup:all'
+  // View (all roles have this)
+  | 'view:all';
+
 export interface Player {
   id: string;
   name: string;

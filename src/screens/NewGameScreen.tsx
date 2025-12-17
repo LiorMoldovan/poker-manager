@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 
@@ -21,9 +20,6 @@ const NewGameScreen = () => {
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
-  const [isSharing, setIsSharing] = useState(false);
-  const [cachedForecasts, setCachedForecasts] = useState<ReturnType<typeof generateForecasts> | null>(null);
-  const forecastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadPlayers();
@@ -118,335 +114,302 @@ const NewGameScreen = () => {
     return playerStats.find(s => s.playerId === playerId);
   };
 
-  // ============ PROFESSIONAL FORECAST SYSTEM ============
+  // ============ FORECAST SENTENCE POOLS ============
   
-  // Sentence templates organized by category - each player gets a truly unique sentence
-  // Templates use {name} and stats placeholders: {avgProfit}, {winPercent}, {gamesPlayed}, {totalProfit}
-  
-  interface ForecastTemplate {
-    text: string;
-    minGames?: number; // Minimum games required for this template
-  }
-
-  // NEW PLAYERS - First time playing, no historical data
-  const newPlayerTemplates: ForecastTemplate[] = [
-    { text: `{name} נכנס בפעם הראשונה - הכל פתוח!` },
-    { text: `שחקן חדש על השולחן: {name}. מה יהיה?` },
-    { text: `{name} פותח את הדרך שלו הלילה` },
-    { text: `טריק חדש? {name} מצטרף למשחק` },
-    { text: `{name} - דף חלק, סיפור חדש` },
-    { text: `ברוכים הבאים {name}! נראה מה יש לך` },
-    { text: `{name} בהופעת בכורה` },
-    { text: `פרצוף חדש: {name} מתחיל מאפס` },
+  // New player sentences (no historical data) - creative and fun
+  const newPlayerSentences = [
+    `🆕 {name} נכנס לזירה בלי תיק עבר - הכל אפשרי הלילה!`,
+    `🎲 שחקן מסתורי מצטרף! {name} יכול להיות הכוכב או הבדיחה של הערב`,
+    `👀 {name} - פרצוף חדש, קלפים חדשים, אין לנו מושג מה יהיה`,
+    `🐣 טירון על השולחן! {name} עוד לא יודע מה מחכה לו`,
+    `❓ {name} הוא תעלומה עטופה בבלאף - נראה מה יוציא מהשרוול`,
+    `🎭 פנים חדשות באולם! {name} מביא אווירה לא צפויה`,
+    `🌟 {name} עולה לבמה - הלילה הזה יכתוב את הפרק הראשון שלו`,
+    `🎪 ברוכים הבאים ל-{name}! בלי היסטוריה, יש רק עתיד`,
+    `🔮 {name} עדיין לא גרם לאף אחד לבכות או לצחוק - הלילה זה ישתנה`,
+    `🎰 {name} מסובב את הגלגל בפעם הראשונה - שיהיה בהצלחה!`,
+    `🦄 {name} נחשף לפוקר כמו לאור השמש - בהתחלה מסנוור, אחר כך מתרגל`,
+    `🧩 {name} הוא החלק החסר בפאזל - או שהוא ישלים אותו או יהרוס הכל`,
+    `🚀 {name} משגר את הקריירה שלו הלילה - נראה אם זו שיגור מוצלח`,
+    `🎬 תחילת הסרט של {name} - עדיין לא יודעים אם זה קומדיה או טרגדיה`,
+    `🌈 {name} בא עם תקוות גדולות - נראה אם המציאות תשתף פעולה`,
   ];
 
-  // STRONG WINNERS - Very positive history, expected to win big
-  const strongWinnerTemplates: ForecastTemplate[] = [
-    { text: `{name} בא לנצח. ממוצע {avgProfit}₪ לא משקר`, minGames: 3 },
-    { text: `{name} - {winPercent}% נצחונות. הבאנק רועד`, minGames: 5 },
-    { text: `{name} כבר הרוויח {totalProfit}₪ כולל. עוד הלילה?`, minGames: 5 },
-    { text: `הכסף אוהב את {name}. ממוצע +{avgProfit}₪`, minGames: 3 },
-    { text: `{name} ב-{gamesPlayed} משחקים הוכיח: הוא מנצח`, minGames: 5 },
-    { text: `{name} עם אחוזי נצחון של {winPercent}% - סיכויים טובים`, minGames: 3 },
-    { text: `{name} המועדף הלילה`, minGames: 2 },
-    { text: `רצף של הצלחות: {name} ממשיך`, minGames: 3 },
+  // Surprise sentences - when prediction goes AGAINST history
+  const surpriseWinSentences = [
+    `🎲 הפתעה! {name} עם היסטוריה של הפסד ({avgProfit}₪ ממוצע), אבל הלילה משהו באוויר אומר שזה הזמן שלו!`,
+    `🌟 נגד כל הסיכויים! {name} בדרך כלל מפסיד, אבל יש תחושה שהלילה הקלפים יסתדרו`,
+    `🔄 הגלגל מסתובב! {name} עם {lossPercent}% הפסדים בהיסטוריה, אבל התחזית שלנו אומרת: הפתעה!`,
+    `✨ קסם בדרך? {name} רגיל להפסיד, אבל משהו מיוחד עומד לקרות הלילה`,
+    `🦋 מטמורפוזה! {name} עם עבר לא מזהיר ({gamesPlayed} משחקים, רוב הפסדים) יכול להפוך הכל`,
+    `🎯 תחזית מפתיעה! למרות ממוצע של {avgProfit}₪, {name} עשוי לעשות קאמבק גדול`,
+    `🌪️ רוח שינוי! {name} סבל מספיק - הלילה התחזית מנבאת הפתעה חיובית`,
+    `🎁 מתנה מהשמיים? {name} לא רגיל לנצח, אבל הלילה יכול להיות שונה לגמרי`,
+    `🔮 נגד הסטטיסטיקה! {name} עם רקע של הפסדים, אבל האינטואיציה אומרת: הפתעה`,
+    `💫 פעם ראשונה לכל דבר! {name} שרגיל להפסיד, עשוי סוף סוף לטעום ניצחון`,
+    `🎰 הימור על האאוטסיידר! {name} לא הכי מוצלח ({winPercent}% נצחונות), אבל הלילה יכול להפתיע`,
+    `🌅 שחר חדש? {name} עם היסטוריה עגומה של {totalProfit}₪, אבל אולי הלילה הכל ישתנה`,
   ];
 
-  // MODERATE WINNERS - Positive history, expected small profit
-  const moderateWinnerTemplates: ForecastTemplate[] = [
-    { text: `{name} בכיוון טוב עם ממוצע {avgProfit}₪`, minGames: 2 },
-    { text: `{name} - {winPercent}% הצלחה, צפוי לפלוס`, minGames: 3 },
-    { text: `{name} נראה מבטיח הלילה`, minGames: 1 },
-    { text: `{name} עם סיכוי טוב לרווח`, minGames: 2 },
-    { text: `{name} בדרך כלל מסיים חיובי`, minGames: 3 },
-    { text: `{name} צפוי לערב נעים`, minGames: 2 },
-    { text: `{name} - ההיסטוריה לטובתו`, minGames: 3 },
-    { text: `{name} עם ממוצע חיובי של {avgProfit}₪`, minGames: 2 },
+  const surpriseLossSentences = [
+    `⚡ הפתעה! {name} רגיל לנצח ({avgProfit}₪ ממוצע), אבל הלילה משהו לא מסתדר...`,
+    `🌧️ עננים באופק! {name} עם {winPercent}% נצחונות, אבל התחזית מראה סערה בדרך`,
+    `🎭 פלוט טוויסט! {name} המנצחן הגדול ({gamesPlayed} משחקים מוצלחים) עלול להיכשל הלילה`,
+    `📉 נפילה צפויה? {name} שבדרך כלל מרוויח, עשוי לגלות שהמזל התהפך`,
+    `🔮 תחזית מפתיעה! למרות היסטוריה של רווח, {name} עשוי להתאכזב הלילה`,
+    `⚠️ אזהרה לאלוף! {name} עם ממוצע חיובי של {avgProfit}₪, אבל הלילה נראה מסוכן`,
+    `🎲 הקוביות לא לצידו! {name} רגיל להרוויח {avgProfit}₪, אבל הלילה יש תחושה אחרת`,
+    `💨 הרוח משתנה! {name} המנצח המסורתי ({winPercent}% הצלחה) עלול להיתקל בקיר`,
+    `🌀 סחרור בדרך? {name} עם הרקורד היפה שלו עשוי לחטוף הפתעה לא נעימה`,
+    `🃏 הג'וקר יוצא! {name} שתמיד בפלוס, עלול לגלות שהלילה הקלפים נגדו`,
+    `🦅 נפילה מהפסגה? {name} רגיל לשלוט ({avgProfit}₪ ממוצע) אבל הלילה יש ספקות`,
+    `🎪 הקרקס מתהפך! {name} האמין שלו ({totalProfit}₪ רווח כולל) עלול לחטוף מפח נפש`,
   ];
 
-  // NEUTRAL - Could go either way
-  const neutralTemplates: ForecastTemplate[] = [
-    { text: `{name} - יכול ללכת לכל כיוון`, minGames: 1 },
-    { text: `{name} על הגדר הלילה`, minGames: 2 },
-    { text: `{name} עם סיכויים שווים`, minGames: 2 },
-    { text: `{name} - 50/50`, minGames: 1 },
-    { text: `{name} בתחום הניטרלי`, minGames: 2 },
-    { text: `{name} יכול להפתיע לכל כיוון`, minGames: 1 },
-    { text: `{name} - ממוצע קרוב לאפס`, minGames: 3 },
-    { text: `{name} בערפל - נראה מה יהיה`, minGames: 1 },
+  // Regular sentences based on expected outcome (with historical data references)
+  const bigWinnerSentences = [
+    `🔥 {name} בדרך לכבוש! עם ממוצע של {avgProfit}₪ ב-{gamesPlayed} משחקים, הוא המועמד לכתר`,
+    `👑 {name} מגיע כאשר הכל לטובתו! {winPercent}% נצחונות בהיסטוריה - הלילה לא יהיה שונה`,
+    `💰 {name} הוא מכונת כסף! רווח כולל של {totalProfit}₪ והלילה ימשיך להוסיף`,
+    `🦈 {name} מריח דם! עם הממוצע שלו ({avgProfit}₪), הוא בא לקצור`,
+    `⭐ {name} בשיא הכושר! {gamesPlayed} משחקים של ניסיון אומרים: רווח גדול בדרך`,
+    `🎯 {name} מכוון ישר לפסגה! {winPercent}% הצלחה זה לא מקרי`,
+    `🏆 {name} בא לקחת את הכסף! עם רקורד כזה ({avgProfit}₪ ממוצע), מי יעצור אותו?`,
+    `💎 {name} הוא יהלום! {totalProfit}₪ רווח כולל והלילה עוד יהלום מצטרף`,
+    `🚀 {name} בטיסה! ממוצע של {avgProfit}₪ והלילה ממשיכים למעלה`,
+    `🎰 {name} פוגע בג'קפוט! עם {winPercent}% נצחונות, הסיכויים לצידו`,
+    `🌟 {name} זורח הלילה! ב-{gamesPlayed} משחקים הוכיח שהוא יודע לנצח`,
+    `⚡ {name} חשמלי! רווח ממוצע של {avgProfit}₪ אומר: זה הזמן שלו`,
   ];
 
-  // MODERATE LOSERS - Negative history, expected small loss
-  const moderateLoserTemplates: ForecastTemplate[] = [
-    { text: `{name} עם ממוצע {avgProfit}₪ - לא מזהיר`, minGames: 2 },
-    { text: `{name} - {winPercent}% הצלחה לא מספיק`, minGames: 3 },
-    { text: `{name} צפוי ללילה מאתגר`, minGames: 2 },
-    { text: `{name} - ההיסטוריה לא לטובתו`, minGames: 3 },
-    { text: `{name} בכיוון הפחות טוב`, minGames: 2 },
-    { text: `{name} יצטרך מזל הלילה`, minGames: 2 },
-    { text: `{name} עם מגמה שלילית`, minGames: 3 },
-    { text: `{name} - הנתונים לא משקרים`, minGames: 2 },
+  const goodWinnerSentences = [
+    `📈 {name} במגמת עלייה! {gamesPlayed} משחקים של נתונים מראים שהלילה יהיה טוב`,
+    `✨ {name} נראה מבטיח! ממוצע של {avgProfit}₪ מרמז על רווח נאה`,
+    `💵 {name} עושה כסף יפה! עם {winPercent}% נצחונות, הלילה ימשיך את המגמה`,
+    `🎖️ {name} עם סיכויים טובים! {gamesPlayed} משחקים בנו לו בסיס חזק`,
+    `🌱 {name} צומח יפה! ממוצע של {avgProfit}₪ והלילה עוד צמיחה`,
+    `🎯 {name} בכיוון הנכון! ההיסטוריה ({totalProfit}₪ רווח) תומכת בו`,
+    `📊 {name} עם הנתונים לצידו! {winPercent}% הצלחה זה סימן טוב`,
+    `🌈 {name} רואה קשת! עם {avgProfit}₪ ממוצע, הסיום יהיה יפה`,
+    `🎪 {name} מופיע יפה! {gamesPlayed} הופעות קודמות מבטיחות עוד אחת טובה`,
+    `💫 {name} בכוכב עולה! הממוצע שלו ({avgProfit}₪) מדבר בעד עצמו`,
   ];
 
-  // STRONG LOSERS - Very negative history, expected to lose
-  const strongLoserTemplates: ForecastTemplate[] = [
-    { text: `{name} עם ממוצע {avgProfit}₪. קשה`, minGames: 3 },
-    { text: `{name} הפסיד {totalProfit}₪ עד היום`, minGames: 5 },
-    { text: `{name} - {winPercent}% הצלחה בלבד`, minGames: 5 },
-    { text: `{name} צפוי לתרום לקופה`, minGames: 3 },
-    { text: `{name} ב-{gamesPlayed} משחקים לא מצא את הקצב`, minGames: 5 },
-    { text: `{name} - הסטטיסטיקה לא חברה שלו`, minGames: 3 },
-    { text: `{name} יצטרך נס`, minGames: 2 },
-    { text: `{name} עם היסטוריה לא קלה`, minGames: 3 },
+  const slightWinnerSentences = [
+    `📊 {name} צפוי לרווח צנוע - לא רקטה אבל בפלוס! (ממוצע: {avgProfit}₪)`,
+    `⚖️ {name} קרוב לאיזון עם נטייה לטוב. {winPercent}% נצחונות תומכים`,
+    `🎲 {name} עם יתרון קל - {gamesPlayed} משחקים מראים מגמה חיובית`,
+    `✌️ {name} צפוי לסיים בפלוס קטן - לא עשיר אבל מרוצה`,
+    `🌤️ {name} תחת שמיים בהירים - רווח קטן צפוי לפי הנתונים`,
+    `📈 {name} עם עלייה צנועה - ממוצע של {avgProfit}₪ מצביע על פלוס`,
+    `🎯 {name} בכיוון טוב - לא מרהיב אבל חיובי`,
+    `💚 {name} בירוק קל - {winPercent}% הצלחה נותנת תקווה`,
   ];
 
-  // SURPRISE TEMPLATES - When prediction goes AGAINST history
-  const surpriseWinTemplates: ForecastTemplate[] = [
-    { text: `הפתעה! {name} בדרך כלל מפסיד, אבל הלילה יש תחושה אחרת`, minGames: 3 },
-    { text: `{name} נגד הסטטיסטיקה - הלילה יכול להפוך`, minGames: 3 },
-    { text: `{name} שובר את התבנית?`, minGames: 2 },
-    { text: `{name} - אולי זה הלילה של המפנה`, minGames: 3 },
-    { text: `{name} מוכן להפתיע`, minGames: 2 },
+  const neutralSentences = [
+    `⚖️ {name} על הקצה! יכול ללכת לכל כיוון עם ממוצע של {avgProfit}₪`,
+    `🎭 {name} הוא הקלף הפראי! {winPercent}% נצחונות = 50-50 לכל כיוון`,
+    `🤷 {name} בדיוק באמצע - {gamesPlayed} משחקים לא מספרים לאן זה הולך`,
+    `☁️ {name} בערפל - התחזית לא ברורה עם ממוצע קרוב לאפס`,
+    `🔮 {name} קשה לקרוא! הנתונים ({avgProfit}₪ ממוצע) לא מכריעים`,
+    `🎲 {name} מסובב את הגלגל - יכול לנחות על כל מספר`,
+    `⚡ {name} בין שמיים וארץ - {winPercent}% הצלחה זה בדיוק אמצע`,
+    `🌊 {name} גולש על הגל - לאן הים יוביל? תלוי במזל`,
+    `🎪 {name} על החבל הדק - איזון מושלם, אי אפשר לחזות`,
   ];
 
-  const surpriseLossTemplates: ForecastTemplate[] = [
-    { text: `{name} בדרך כלל מנצח, אבל הלילה נראה אחרת`, minGames: 3 },
-    { text: `{name} - גם אלופים נופלים לפעמים`, minGames: 3 },
-    { text: `{name} עלול להיתקע הלילה`, minGames: 2 },
-    { text: `{name} - המזל עשוי להתהפך`, minGames: 3 },
-    { text: `{name} בזהירות הלילה`, minGames: 2 },
+  const slightLoserSentences = [
+    `📉 {name} עם נטייה להפסד קטן - {avgProfit}₪ ממוצע לא משקר`,
+    `🌧️ {name} תחת ענן קל - {lossPercent}% הפסדים מרמזים על לילה בינוני`,
+    `💭 {name} במינוס קל צפוי - {gamesPlayed} משחקים מראים מגמה`,
+    `🎲 {name} עם רוח נגדית קלה - ממוצע של {avgProfit}₪ לא מבטיח`,
+    `📊 {name} צפוי להפסד צנוע - לא דרמטי אבל כואב`,
+    `⛅ {name} תחת עננים - {winPercent}% נצחונות לא מספיק`,
+    `🎭 {name} עם מסכה עצובה - הפסד קטן באופק`,
+    `💨 {name} נגד הרוח - ממוצע של {avgProfit}₪ לא לטובתו`,
   ];
 
-  // Get appropriate template for player
-  const getTemplate = (
-    pool: ForecastTemplate[], 
-    usedTemplates: Set<string>, 
-    gamesPlayed: number
-  ): string => {
-    // Filter by minimum games required
-    const eligible = pool.filter(t => (t.minGames || 0) <= gamesPlayed);
-    // Filter out already used templates
-    const available = eligible.filter(t => !usedTemplates.has(t.text));
-    // Use eligible if no available (all used)
-    const finalPool = available.length > 0 ? available : eligible.length > 0 ? eligible : pool;
-    return finalPool[Math.floor(Math.random() * finalPool.length)].text;
+  const moderateLoserSentences = [
+    `📉 {name} צפוי להפסד! ממוצע של {avgProfit}₪ ב-{gamesPlayed} משחקים לא מבטיח`,
+    `🌧️ {name} תחת סערה! {lossPercent}% הפסדים בהיסטוריה - הלילה לא שונה`,
+    `💸 {name} יתרום לקופה! עם רקורד כזה ({totalProfit}₪), הכסף זורם החוצה`,
+    `😕 {name} בכיוון הלא נכון - {gamesPlayed} משחקים של הוכחות`,
+    `🎢 {name} בירידה! ממוצע של {avgProfit}₪ לא משאיר הרבה תקווה`,
+    `🌪️ {name} נסחף! {winPercent}% נצחונות לא מספיקים הלילה`,
+    `💔 {name} והפוקר - סיפור מורכב. הלילה עוד פרק עצוב`,
+    `📊 {name} עם הנתונים נגדו - {lossPercent}% הפסדים מדברים`,
+    `🎭 {name} בתפקיד המפסיד - ממוצע {avgProfit}₪ לא יציל`,
+    `⛈️ {name} בסערה! {gamesPlayed} משחקים של היסטוריה לא טובה`,
+  ];
+
+  const bigLoserSentences = [
+    `💸 {name} יממן את כולם הלילה! ממוצע של {avgProfit}₪ מספר הכל`,
+    `🏧 {name} כמו כספומט! {totalProfit}₪ הפסד כולל וזה לא נגמר`,
+    `📉 {name} בנפילה חופשית! {lossPercent}% הפסדים - מסלול ידוע`,
+    `💔 {name} והפוקר - טרגדיה קלאסית. הלילה עוד פרק`,
+    `🌪️ {name} בעין הסערה! עם ממוצע של {avgProfit}₪, הארנק רועד`,
+    `😓 {name} יחפור עמוק! {gamesPlayed} משחקים של כאב והלילה עוד אחד`,
+    `🎰 {name} משחק נגד עצמו! {winPercent}% נצחונות זה כמעט אפס`,
+    `💰 {name} המשקיע הגרוע! {totalProfit}₪ הפסד כולל וממשיך`,
+    `🎭 {name} בתפקיד הקורבן - ממוצע של {avgProfit}₪ לא ישנה`,
+    `📊 {name} עם הסטטיסטיקה נגדו - {lossPercent}% הפסדים מחכים`,
+    `🌧️ {name} תחת מבול! {gamesPlayed} משחקים ורק {winPercent}% הצלחה`,
+    `⚠️ {name} בסכנה! ההיסטוריה ({avgProfit}₪ ממוצע) לא משקרת`,
+  ];
+
+  // Helper to fill in template with stats
+  const fillTemplate = (template: string, name: string, stats: PlayerStats): string => {
+    return template
+      .replace(/{name}/g, name)
+      .replace(/{avgProfit}/g, String(Math.round(stats.avgProfit)))
+      .replace(/{winPercent}/g, String(Math.round(stats.winPercentage)))
+      .replace(/{lossPercent}/g, String(Math.round(100 - stats.winPercentage)))
+      .replace(/{gamesPlayed}/g, String(stats.gamesPlayed))
+      .replace(/{totalProfit}/g, String(Math.round(stats.totalProfit)))
+      .replace(/{streak}/g, String(Math.abs(stats.currentStreak)));
   };
 
-  // Fill template with actual values
-  const fillTemplate = (template: string, name: string, stats?: PlayerStats): string => {
-    let result = template.replace(/{name}/g, name);
-    if (stats) {
-      result = result
-        .replace(/{avgProfit}/g, String(Math.round(Math.abs(stats.avgProfit))))
-        .replace(/{winPercent}/g, String(Math.round(stats.winPercentage)))
-        .replace(/{gamesPlayed}/g, String(stats.gamesPlayed))
-        .replace(/{totalProfit}/g, String(Math.round(Math.abs(stats.totalProfit))));
-    }
-    return result;
-  };
-
-  // Generate forecasts for all selected players (balanced zero-sum)
-  const generateForecasts = () => {
-    const usedTemplates = new Set<string>();
-    const MAX_SURPRISE_RATIO = 0.35; // Up to 35% can be surprises (not forced!)
+  // Pick random sentence from pool, avoiding already used ones
+  const pickUniqueSentence = (pool: string[], usedSentences: Set<string>, name: string, stats?: PlayerStats): string => {
+    const availablePool = pool.filter(s => !usedSentences.has(s));
+    const selectedPool = availablePool.length > 0 ? availablePool : pool;
+    const template = selectedPool[Math.floor(Math.random() * selectedPool.length)];
     
-    // Step 1: Analyze all players
-    const playerAnalysis = Array.from(selectedIds).map(playerId => {
+    if (stats) {
+      return fillTemplate(template, name, stats);
+    }
+    return template.replace(/{name}/g, name);
+  };
+
+  // Generate forecasts for all selected players (balanced to sum to zero)
+  const generateForecasts = () => {
+    const usedSentences = new Set<string>();
+    const SURPRISE_RATE = 0.40; // 40% chance of surprise prediction
+    
+    // Step 1: Get initial raw expected profits
+    const rawForecasts = Array.from(selectedIds).map(playerId => {
       const player = players.find(p => p.id === playerId);
       if (!player) return null;
       
       const stats = getStatsForPlayer(playerId);
-      const gamesPlayed = stats?.gamesPlayed || 0;
-      const avgProfit = stats?.avgProfit || 0;
+      let rawExpected = 0;
+      let isSurprise = false;
+      let historyDirection: 'winner' | 'loser' | 'neutral' = 'neutral';
       
-      // Determine historical tendency
-      let tendency: 'strong_winner' | 'moderate_winner' | 'neutral' | 'moderate_loser' | 'strong_loser' | 'new' = 'new';
-      if (gamesPlayed === 0) {
-        tendency = 'new';
-      } else if (avgProfit > 25) {
-        tendency = 'strong_winner';
-      } else if (avgProfit > 8) {
-        tendency = 'moderate_winner';
-      } else if (avgProfit >= -8) {
-        tendency = 'neutral';
-      } else if (avgProfit >= -25) {
-        tendency = 'moderate_loser';
-      } else {
-        tendency = 'strong_loser';
+      if (stats && stats.gamesPlayed > 0) {
+        rawExpected = stats.avgProfit;
+        // Determine historical direction
+        if (stats.avgProfit > 10) historyDirection = 'winner';
+        else if (stats.avgProfit < -10) historyDirection = 'loser';
+        
+        // 40% chance for surprise (flip the prediction)
+        if (Math.random() < SURPRISE_RATE && historyDirection !== 'neutral') {
+          isSurprise = true;
+          // Flip the expected value
+          rawExpected = -rawExpected * (0.5 + Math.random() * 0.5); // 50-100% of flipped value
+        } else {
+          // Regular prediction - adjust based on streak
+          if (stats.currentStreak >= 2) rawExpected *= 1.2;
+          if (stats.currentStreak <= -2) rawExpected *= 0.8;
+        }
       }
       
       return {
         player,
         stats,
-        gamesPlayed,
-        avgProfit,
-        tendency,
-        rawExpected: gamesPlayed > 0 ? avgProfit : 0
+        rawExpected: Math.round(rawExpected),
+        gamesPlayed: stats?.gamesPlayed || 0,
+        isSurprise,
+        historyDirection
       };
-    }).filter(Boolean) as {
-      player: Player;
-      stats: PlayerStats | undefined;
+    }).filter(Boolean) as { 
+      player: Player; 
+      stats: PlayerStats | undefined; 
+      rawExpected: number; 
       gamesPlayed: number;
-      avgProfit: number;
-      tendency: 'strong_winner' | 'moderate_winner' | 'neutral' | 'moderate_loser' | 'strong_loser' | 'new';
-      rawExpected: number;
+      isSurprise: boolean;
+      historyDirection: 'winner' | 'loser' | 'neutral';
     }[];
-
-    // Step 2: Decide which players get surprises (UP TO max ratio, not forced)
-    const eligibleForSurprise = playerAnalysis.filter(p => 
-      p.tendency === 'strong_winner' || 
-      p.tendency === 'strong_loser' ||
-      p.tendency === 'moderate_winner' ||
-      p.tendency === 'moderate_loser'
-    );
     
-    const maxSurprises = Math.floor(playerAnalysis.length * MAX_SURPRISE_RATIO);
-    const actualSurprises = Math.min(
-      Math.floor(Math.random() * (maxSurprises + 1)), // 0 to maxSurprises (inclusive)
-      eligibleForSurprise.length
-    );
+    // Step 2: Calculate total imbalance
+    const totalRaw = rawForecasts.reduce((sum, f) => sum + f.rawExpected, 0);
     
-    // Randomly select which players get surprised
-    const surprisePlayerIds = new Set<string>();
-    const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
-    shuffled.slice(0, actualSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
-
-    // Step 3: Calculate expected values with surprises applied
-    const withExpected = playerAnalysis.map(p => {
-      const isSurprise = surprisePlayerIds.has(p.player.id);
-      let expectedValue = p.rawExpected;
+    // Step 3: Distribute imbalance proportionally to balance to zero
+    const totalAbsolute = rawForecasts.reduce((sum, f) => sum + Math.abs(f.rawExpected) + 10, 0);
+    
+    const balancedForecasts = rawForecasts.map(f => {
+      const weight = (Math.abs(f.rawExpected) + 10) / totalAbsolute;
+      const adjustment = -totalRaw * weight;
+      const balancedExpected = Math.round(f.rawExpected + adjustment);
       
-      if (isSurprise) {
-        // Flip the expected value with some randomness
-        const flipFactor = 0.6 + Math.random() * 0.4; // 60-100% flip
-        expectedValue = -expectedValue * flipFactor;
+      // Generate unique sentence
+      let sentence: string;
+      
+      if (!f.stats || f.stats.gamesPlayed === 0) {
+        // New player
+        sentence = pickUniqueSentence(newPlayerSentences, usedSentences, f.player.name);
+      } else if (f.isSurprise) {
+        // Surprise prediction!
+        if (f.historyDirection === 'loser' && balancedExpected > 0) {
+          // Historical loser predicted to win
+          sentence = pickUniqueSentence(surpriseWinSentences, usedSentences, f.player.name, f.stats);
+        } else if (f.historyDirection === 'winner' && balancedExpected < 0) {
+          // Historical winner predicted to lose
+          sentence = pickUniqueSentence(surpriseLossSentences, usedSentences, f.player.name, f.stats);
+        } else {
+          // Fallback to regular
+          sentence = pickUniqueSentence(
+            balancedExpected > 0 ? goodWinnerSentences : moderateLoserSentences,
+            usedSentences, f.player.name, f.stats
+          );
+        }
       } else {
-        // Add some variance to non-surprise predictions
-        const variance = (Math.random() - 0.5) * 15;
-        expectedValue = expectedValue + variance;
+        // Regular prediction based on expected value
+        let pool: string[];
+        if (balancedExpected > 40) pool = bigWinnerSentences;
+        else if (balancedExpected > 15) pool = goodWinnerSentences;
+        else if (balancedExpected > 5) pool = slightWinnerSentences;
+        else if (balancedExpected >= -5) pool = neutralSentences;
+        else if (balancedExpected >= -15) pool = slightLoserSentences;
+        else if (balancedExpected >= -40) pool = moderateLoserSentences;
+        else pool = bigLoserSentences;
+        
+        sentence = pickUniqueSentence(pool, usedSentences, f.player.name, f.stats);
       }
       
-      // Apply streak adjustments (mild)
-      if (p.stats && p.stats.currentStreak >= 2) expectedValue *= 1.1;
-      if (p.stats && p.stats.currentStreak <= -2) expectedValue *= 0.9;
-      
-      return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
-    });
-
-    // Step 4: Balance to zero-sum
-    const totalExpected = withExpected.reduce((sum, p) => sum + p.expectedValue, 0);
-    const totalWeight = withExpected.reduce((sum, p) => sum + Math.abs(p.expectedValue) + 10, 0);
-    
-    const balanced = withExpected.map(p => {
-      const weight = (Math.abs(p.expectedValue) + 10) / totalWeight;
-      const adjustment = -totalExpected * weight;
-      const balancedExpected = Math.round(p.expectedValue + adjustment);
-      
-      // Pick appropriate template
-      let template: string;
-      let category: 'new' | 'winner' | 'loser' | 'neutral' | 'surprise';
-      
-      if (p.gamesPlayed === 0) {
-        template = getTemplate(newPlayerTemplates, usedTemplates, 0);
-        category = 'new';
-      } else if (p.isSurprise) {
-        // Surprise: use opposite templates
-        if (balancedExpected > 0 && (p.tendency === 'moderate_loser' || p.tendency === 'strong_loser')) {
-          template = getTemplate(surpriseWinTemplates, usedTemplates, p.gamesPlayed);
-        } else if (balancedExpected < 0 && (p.tendency === 'moderate_winner' || p.tendency === 'strong_winner')) {
-          template = getTemplate(surpriseLossTemplates, usedTemplates, p.gamesPlayed);
-        } else {
-          // Fallback
-          template = balancedExpected > 0 
-            ? getTemplate(moderateWinnerTemplates, usedTemplates, p.gamesPlayed)
-            : getTemplate(moderateLoserTemplates, usedTemplates, p.gamesPlayed);
-        }
-        category = 'surprise';
-      } else {
-        // Regular prediction based on balanced expected value
-        if (balancedExpected > 30) {
-          template = getTemplate(strongWinnerTemplates, usedTemplates, p.gamesPlayed);
-          category = 'winner';
-        } else if (balancedExpected > 10) {
-          template = getTemplate(moderateWinnerTemplates, usedTemplates, p.gamesPlayed);
-          category = 'winner';
-        } else if (balancedExpected >= -10) {
-          template = getTemplate(neutralTemplates, usedTemplates, p.gamesPlayed);
-          category = 'neutral';
-        } else if (balancedExpected >= -30) {
-          template = getTemplate(moderateLoserTemplates, usedTemplates, p.gamesPlayed);
-          category = 'loser';
-        } else {
-          template = getTemplate(strongLoserTemplates, usedTemplates, p.gamesPlayed);
-          category = 'loser';
-        }
-      }
-      
-      usedTemplates.add(template);
-      const sentence = fillTemplate(template, p.player.name, p.stats);
+      // Mark template as used
+      usedSentences.add(sentence);
       
       return {
-        player: p.player,
+        player: f.player,
         expected: balancedExpected,
         sentence,
-        gamesPlayed: p.gamesPlayed,
-        isSurprise: p.isSurprise,
-        category
+        gamesPlayed: f.gamesPlayed,
+        isSurprise: f.isSurprise
       };
     });
 
     // Sort by expected profit (winners first)
-    return balanced.sort((a, b) => b.expected - a.expected);
+    return balancedForecasts.sort((a, b) => b.expected - a.expected);
   };
 
-  // Share forecast as screenshot to WhatsApp
-  const shareForecast = async () => {
-    if (!forecastRef.current || isSharing) return;
+  // Share forecast to WhatsApp
+  const shareForecast = () => {
+    const forecasts = generateForecasts();
+    const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
     
-    setIsSharing(true);
+    let message = `🔮 *תחזית פוקר - ${today}*\n\n`;
     
-    try {
-      // Capture the forecast section as an image
-      const canvas = await html2canvas(forecastRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2, // Higher quality
-        useCORS: true,
-        logging: false,
-      });
-      
-      // Convert to blob
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-      });
-      
-      const file = new File([blob], 'poker-forecast.png', { type: 'image/png' });
-      
-      // Try native share first (works on mobile)
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'תחזית פוקר',
-        });
-      } else {
-        // Fallback: download the image and open WhatsApp
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'poker-forecast.png';
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        // Then open WhatsApp
-        const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
-        const text = `🔮 תחזית פוקר - ${today}\n\n(התמונה הורדה - צרף אותה להודעה)`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-      }
-    } catch (error) {
-      console.error('Error sharing forecast:', error);
-      alert('לא הצלחנו לשתף. נסה שוב.');
-    } finally {
-      setIsSharing(false);
-    }
+    forecasts.forEach((f) => {
+      const emoji = f.isSurprise ? '🎲' : (f.expected > 20 ? '🟢' : f.expected < -20 ? '🔴' : '⚪');
+      const profitStr = f.expected >= 0 ? `+₪${f.expected}` : `-₪${Math.abs(f.expected)}`;
+      message += `${emoji} *${f.player.name}*: ${profitStr}\n`;
+      message += `   ${f.sentence}\n\n`;
+    });
+
+    message += `\n🃏 בהצלחה לכולם!`;
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleShowForecast = () => {
@@ -454,8 +417,6 @@ const NewGameScreen = () => {
       setError('Select at least 2 players');
       return;
     }
-    // Generate and cache forecasts when modal opens
-    setCachedForecasts(generateForecasts());
     setShowForecast(true);
   };
 
@@ -788,151 +749,74 @@ const NewGameScreen = () => {
       )}
 
       {/* Forecast Modal */}
-      {showForecast && cachedForecasts && (
-        <div className="modal-overlay" onClick={() => { setShowForecast(false); setCachedForecasts(null); }}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'auto', maxWidth: '400px' }}>
-            {/* Screenshotable content */}
-            <div ref={forecastRef} style={{ padding: '1rem', background: '#1a1a2e', borderRadius: '12px' }}>
-              {/* Header */}
-              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>🔮</div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: 'var(--text)' }}>
-                  תחזית הלילה
-                </h3>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
-                </div>
-              </div>
-
-              {/* Player forecasts */}
-              <div style={{ marginBottom: '0.75rem' }}>
-                {cachedForecasts.map((forecast, index) => {
-                  const { player, expected, sentence, gamesPlayed, isSurprise, category } = forecast;
-                  
-                  // Clean, simple color scheme
-                  const getRowStyle = () => {
-                    if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.12)', border: '#a855f7' }; // Purple
-                    if (expected > 15) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' }; // Green
-                    if (expected < -15) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' }; // Red
-                    return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b' }; // Gray
-                  };
-                  
-                  const style = getRowStyle();
-                  
-                  return (
-                    <div 
-                      key={player.id}
-                      style={{
-                        padding: '0.65rem 0.75rem',
-                        marginBottom: '0.4rem',
-                        borderRadius: '8px',
-                        background: style.bg,
-                        borderRight: `3px solid ${style.border}`,
-                      }}
-                    >
-                      {/* Name and amount row */}
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        marginBottom: '0.3rem'
+      {showForecast && (
+        <div className="modal-overlay" onClick={() => setShowForecast(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflow: 'auto' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🔮 Tonight's Forecast</h3>
+              <button className="modal-close" onClick={() => setShowForecast(false)}>×</button>
+            </div>
+            
+            <div style={{ marginBottom: '1rem' }}>
+              {generateForecasts().map((forecast, index) => {
+                const { player, expected, sentence, gamesPlayed, isSurprise } = forecast;
+                const isWinner = expected > 20;
+                const isLoser = expected < -20;
+                
+                return (
+                  <div 
+                    key={player.id}
+                    style={{
+                      padding: '0.75rem',
+                      marginBottom: '0.5rem',
+                      borderRadius: '10px',
+                      background: isSurprise
+                        ? 'rgba(139, 92, 246, 0.15)'
+                        : isWinner 
+                          ? 'rgba(34, 197, 94, 0.1)' 
+                          : isLoser 
+                            ? 'rgba(239, 68, 68, 0.1)' 
+                            : 'rgba(100, 100, 100, 0.1)',
+                      borderLeft: `4px solid ${isSurprise ? '#8B5CF6' : isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text-muted)'}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ fontWeight: '600', fontSize: '1rem' }}>
+                        {index === 0 && expected > 0 && '👑 '}
+                        {isSurprise && '🎲 '}
+                        {player.name}
+                      </span>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        fontSize: '1rem',
+                        color: isSurprise ? '#8B5CF6' : isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text)'
                       }}>
-                        <span style={{ 
-                          fontWeight: '600', 
-                          fontSize: '0.95rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.3rem'
-                        }}>
-                          {index === 0 && expected > 0 && <span>👑</span>}
-                          {isSurprise && <span style={{ fontSize: '0.75rem' }}>⚡</span>}
-                          {player.name}
-                        </span>
-                        <span style={{ 
-                          fontWeight: '700', 
-                          fontSize: '0.95rem',
-                          color: expected > 0 ? '#22c55e' : expected < 0 ? '#ef4444' : 'var(--text)',
-                          fontFamily: 'monospace'
-                        }}>
-                          {expected >= 0 ? '+' : ''}₪{expected}
-                        </span>
-                      </div>
-                      
-                      {/* Sentence */}
-                      <div style={{ 
-                        fontSize: '0.8rem', 
-                        color: 'var(--text-muted)',
-                        lineHeight: '1.4'
-                      }}>
-                        {sentence}
-                      </div>
-                      
-                      {/* Games count - subtle */}
-                      {gamesPlayed > 0 && (
-                        <div style={{ 
-                          fontSize: '0.65rem', 
-                          color: 'var(--text-muted)', 
-                          marginTop: '0.2rem',
-                          opacity: 0.6 
-                        }}>
-                          {gamesPlayed} משחקים
-                        </div>
-                      )}
+                        {expected >= 0 ? '+' : ''}₪{expected}
+                      </span>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Legend - simple and clear */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                gap: '1rem',
-                fontSize: '0.65rem',
-                color: 'var(--text-muted)',
-                paddingTop: '0.5rem',
-                borderTop: '1px solid var(--border)'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#22c55e' }}></span>
-                  רווח
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#ef4444' }}></span>
-                  הפסד
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#a855f7' }}></span>
-                  ⚡ הפתעה
-                </span>
-              </div>
-
-              {/* Footer */}
-              <div style={{ 
-                textAlign: 'center', 
-                marginTop: '0.75rem', 
-                fontSize: '0.6rem', 
-                color: 'var(--text-muted)',
-                opacity: 0.5
-              }}>
-                Poker Manager 🎲 • מבוסס על נתונים היסטוריים
-              </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      {sentence}
+                    </div>
+                    {gamesPlayed > 0 && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', opacity: 0.7 }}>
+                        מבוסס על {gamesPlayed} משחק{gamesPlayed > 1 ? 'ים' : ''}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Action buttons - outside screenshot area */}
-            <div className="actions" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => { setShowForecast(false); setCachedForecasts(null); }}
-              >
-                סגור
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1rem' }}>
+              ⚠️ התחזית מבוססת על היסטוריה ומזל - התוצאות עשויות להפתיע! 🎲
+            </p>
+
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setShowForecast(false)}>
+                Close
               </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={shareForecast}
-                disabled={isSharing}
-              >
-                {isSharing ? '📸 מצלם...' : '📤 שתף'}
+              <button className="btn btn-primary" onClick={shareForecast}>
+                📤 Share to WhatsApp
               </button>
             </div>
           </div>

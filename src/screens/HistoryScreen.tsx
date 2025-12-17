@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { GameWithDetails } from '../types';
 import { getAllGames, getGamePlayers, getSettings, deleteGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
+import { usePermissions } from '../App';
 
 const HistoryScreen = () => {
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
   const [games, setGames] = useState<GameWithDetails[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  
+  const canDeleteGames = hasPermission('game:delete');
 
   useEffect(() => {
     loadGames();
@@ -125,15 +129,17 @@ const HistoryScreen = () => {
                 >
                   📊 פרטים מלאים
                 </button>
-                <button 
-                  className="btn btn-sm btn-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteConfirm(game.id);
-                  }}
-                >
-                  🗑️
-                </button>
+                {canDeleteGames && (
+                  <button 
+                    className="btn btn-sm btn-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirm(game.id);
+                    }}
+                  >
+                    🗑️
+                  </button>
+                )}
               </div>
             </div>
           );
