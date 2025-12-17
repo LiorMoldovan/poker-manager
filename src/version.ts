@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.6.0';
+export const APP_VERSION = '3.6.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.6.1',
+    date: '2024-12-17',
+    changes: [
+      'Import reads player types from Excel (קבוע/אורח/מזדמן column)',
+      '11 Permanent, 5 Guests, 24 Occasional players'
+    ]
+  },
   {
     version: '3.6.0',
     date: '2024-12-17',
