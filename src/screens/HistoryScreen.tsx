@@ -72,6 +72,7 @@ const HistoryScreen = () => {
                       weekday: 'short',
                       month: 'short',
                       day: 'numeric',
+                      year: 'numeric',
                     })}
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
