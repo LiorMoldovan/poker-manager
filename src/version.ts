@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.4';
+export const APP_VERSION = '4.5.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.5',
+    date: '2024-12-17',
+    changes: [
+      'Forecast: Gender-aware sentences in Hebrew!',
+      'Correct male/female forms (הוא/היא, שלו/שלה, etc.)',
+      'Automatic detection of female names (מור, נועה, etc.)',
+      'All forecast sentences updated with proper grammar'
+    ]
+  },
   {
     version: '4.5.4',
     date: '2025-12-17',
