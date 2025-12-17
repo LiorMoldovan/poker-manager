@@ -16,6 +16,9 @@ const StatisticsScreen = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [minGames, setMinGames] = useState<number>(0);
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
+  const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
+  const [showMinGames, setShowMinGames] = useState(false); // Collapsed by default
+  const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -317,9 +320,20 @@ const StatisticsScreen = () => {
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
-                📅 TIME PERIOD
-              </span>
+              <button
+                onClick={() => setShowTimePeriod(!showTimePeriod)}
+                style={{ 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+                  marginBottom: showTimePeriod ? '0.5rem' : 0
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                  📅 TIME PERIOD {timePeriod !== 'all' ? `(${timePeriod === 'year' ? selectedYear : timePeriod.toUpperCase() + ' ' + selectedYear})` : '(הכל)'}
+                </span>
+                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
+              </button>
+              {showTimePeriod && (
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
                   onClick={() => setTimePeriod('all')}
@@ -415,6 +429,7 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
               )}
+              )}
             </div>
 
             {/* Minimum Games Filter */}
@@ -423,9 +438,20 @@ const StatisticsScreen = () => {
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>
-                🎮 MIN GAMES
-              </span>
+              <button
+                onClick={() => setShowMinGames(!showMinGames)}
+                style={{ 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+                  marginBottom: showMinGames ? '0.5rem' : 0
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                  🎮 MIN GAMES ({minGames === 0 ? 'הכל' : `${minGames}+`})
+                </span>
+                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showMinGames ? '▲' : '▼'}</span>
+              </button>
+              {showMinGames && (
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 {[0, 5, 10, 20, 50].map(num => (
                   <button
@@ -447,6 +473,7 @@ const StatisticsScreen = () => {
                   </button>
                 ))}
               </div>
+              )}
             </div>
 
             {/* Player Type Filter (Multi-select) */}
@@ -455,10 +482,22 @@ const StatisticsScreen = () => {
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <button
+                onClick={() => setShowPlayerType(!showPlayerType)}
+                style={{ 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+                  marginBottom: showPlayerType ? '0.5rem' : 0
+                }}
+              >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  PLAYER TYPE
+                  PLAYER TYPE ({selectedTypes.size === 3 ? 'הכל' : Array.from(selectedTypes).map(t => t === 'permanent' ? 'קבוע' : t === 'permanent_guest' ? 'אורח' : 'מזדמן').join(', ')})
                 </span>
+                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showPlayerType ? '▲' : '▼'}</span>
+              </button>
+              {showPlayerType && (
+              <>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <button
                   onClick={selectAllTypes}
                   style={{
@@ -524,6 +563,8 @@ const StatisticsScreen = () => {
                   {selectedTypes.has('guest') && '✓ '}👤 מזדמן ({guestStats.length})
                 </button>
               </div>
+              </>
+              )}
             </div>
 
             <button 
