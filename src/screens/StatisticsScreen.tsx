@@ -619,7 +619,8 @@ const StatisticsScreen = () => {
                 </span>
               </div>
                 <button
-                onClick={() => setFilterActiveOnly(!filterActiveOnly)}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFilterActiveOnly(!filterActiveOnly); }}
                   style={{
                   position: 'relative',
                   width: '36px',
@@ -653,7 +654,8 @@ const StatisticsScreen = () => {
               borderBottom: '1px solid var(--border)'
             }}>
               <button
-                onClick={() => setShowTimePeriod(!showTimePeriod)}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
                 style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
@@ -670,7 +672,7 @@ const StatisticsScreen = () => {
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setTimePeriod('all'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('all'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -687,7 +689,7 @@ const StatisticsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setTimePeriod('year'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('year'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -704,7 +706,7 @@ const StatisticsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setTimePeriod('h1'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h1'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -721,7 +723,7 @@ const StatisticsScreen = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setTimePeriod('h2'); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h2'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -776,7 +778,8 @@ const StatisticsScreen = () => {
               borderBottom: '1px solid var(--border)'
             }}>
               <button
-                onClick={() => setShowPlayerType(!showPlayerType)}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerType(!showPlayerType); }}
                 style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
@@ -792,7 +795,8 @@ const StatisticsScreen = () => {
               <>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <button
-                  onClick={selectAllTypes}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllTypes(); }}
                   style={{
                     padding: '0.2rem 0.4rem',
                     fontSize: '0.65rem',
@@ -808,7 +812,8 @@ const StatisticsScreen = () => {
               </div>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => toggleType('permanent')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('permanent'); }}
                   style={{
                     flex: 1,
                     minWidth: '60px',
@@ -824,7 +829,8 @@ const StatisticsScreen = () => {
                   {selectedTypes.has('permanent') && '✓ '}⭐ קבוע ({permanentStats.length})
                 </button>
                 <button
-                  onClick={() => toggleType('permanent_guest')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('permanent_guest'); }}
                   style={{
                     flex: 1,
                     minWidth: '60px',
@@ -840,7 +846,8 @@ const StatisticsScreen = () => {
                   {selectedTypes.has('permanent_guest') && '✓ '}🏠 אורח ({permanentGuestStats.length})
                 </button>
                 <button
-                  onClick={() => toggleType('guest')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('guest'); }}
                   style={{
                     flex: 1,
                     minWidth: '60px',
@@ -861,7 +868,8 @@ const StatisticsScreen = () => {
             </div>
 
             <button 
-              onClick={() => setShowPlayerFilter(!showPlayerFilter)}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerFilter(!showPlayerFilter); }}
               style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
@@ -886,7 +894,8 @@ const StatisticsScreen = () => {
               <>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
               <button
-                onClick={toggleAllPlayers}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleAllPlayers(); }}
                 style={{
                   padding: '0.25rem 0.5rem',
                   fontSize: '0.7rem',
@@ -906,8 +915,9 @@ const StatisticsScreen = () => {
                 const isGuest = getPlayerType(player.playerId) === 'guest';
                 return (
                   <button
+                    type="button"
                     key={player.playerId}
-                    onClick={() => togglePlayer(player.playerId)}
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePlayer(player.playerId); }}
                     style={{
                       padding: '0.4rem 0.65rem',
                       borderRadius: '16px',

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.6';
+export const APP_VERSION = '4.5.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.7',
+    date: '2025-12-17',
+    changes: [
+      'Fixed: Filter buttons (H1/H2/Year/etc) no longer trigger game popups',
+      'Added type=button and preventDefault to ALL filter buttons',
+      'Comprehensive fix for all filter interactions in Statistics page'
+    ]
+  },
   {
     version: '4.5.6',
     date: '2025-12-17',
