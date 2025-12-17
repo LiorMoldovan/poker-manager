@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.3';
+export const APP_VERSION = '4.5.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.4',
+    date: '2025-12-17',
+    changes: [
+      'Individual player view: All stat boxes now clickable (Games, Wins, Losses, Best Win, etc.)',
+      'W/L tiles now navigate directly to game details (simpler flow)',
+      'Stat box clicks open records-style modal with game list',
+      'Clickable stats show ❯ indicator',
+      'Aligned UX with records view pattern'
+    ]
+  },
   {
     version: '4.5.3',
     date: '2024-12-17',

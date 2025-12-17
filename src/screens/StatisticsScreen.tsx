@@ -43,18 +43,13 @@ const StatisticsScreen = () => {
     recordType: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for record details
-  const [playerGameDetails, setPlayerGameDetails] = useState<{
-    playerName: string;
-    playerId: string;
-    game: { date: string; profit: number; gameId: string };
-  } | null>(null); // Modal for individual game details in player view
   const [playerAllGames, setPlayerAllGames] = useState<{
     playerName: string;
     playerId: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for all player games
 
-  // Show all games for a player
+  // Show all games for a player (for table row click)
   const showPlayerGames = (player: PlayerStats) => {
     const allGames = getAllGames().filter(g => g.status === 'completed');
     const allGamePlayers = getAllGamePlayers();
@@ -73,6 +68,11 @@ const StatisticsScreen = () => {
       playerId: player.playerId,
       games: playerGames
     });
+  };
+
+  // Show stat details for individual player view (uses recordDetails modal)
+  const showPlayerStatDetails = (player: PlayerStats, statType: string, title: string) => {
+    showRecordDetails(title, player, statType);
   };
 
   // Get available years from games
@@ -399,7 +399,10 @@ const StatisticsScreen = () => {
     let filteredGames = playerGames;
 
     // Filter based on record type
-    if (recordType === 'wins') {
+    if (recordType === 'allGames') {
+      // Show all games (no filtering needed)
+      filteredGames = playerGames;
+    } else if (recordType === 'wins') {
       filteredGames = playerGames.filter(g => g.profit > 0);
     } else if (recordType === 'losses') {
       filteredGames = playerGames.filter(g => g.profit < 0);
@@ -1309,7 +1312,7 @@ const StatisticsScreen = () => {
                       <div 
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
-                          onClick={() => setPlayerGameDetails({ playerName: player.playerName, playerId: player.playerId, game })}
+                          onClick={() => navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName } } })}
                         >
                           <div 
                         style={{
@@ -1346,9 +1349,13 @@ const StatisticsScreen = () => {
 
               {/* Main Stats Row 1 */}
               <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => showPlayerStatDetails(player, 'allGames', `🎮 All Games`)}
+                >
                   <div className="stat-value">{player.gamesPlayed}</div>
-                  <div className="stat-label">Games</div>
+                  <div className="stat-label">Games ❯</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)' }}>
@@ -1356,33 +1363,49 @@ const StatisticsScreen = () => {
                   </div>
                   <div className="stat-label">Win Rate</div>
                 </div>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.winCount > 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.winCount > 0 && showPlayerStatDetails(player, 'wins', `🏆 Wins`)}
+                >
                   <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.winCount}
                   </div>
-                  <div className="stat-label">Wins</div>
+                  <div className="stat-label">{player.winCount > 0 ? 'Wins ❯' : 'Wins'}</div>
                 </div>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.lossCount > 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.lossCount > 0 && showPlayerStatDetails(player, 'losses', `📉 Losses`)}
+                >
                   <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.lossCount}
                   </div>
-                  <div className="stat-label">Losses</div>
+                  <div className="stat-label">{player.lossCount > 0 ? 'Losses ❯' : 'Losses'}</div>
                 </div>
               </div>
 
               {/* Main Stats Row 2 */}
               <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.biggestWin > 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.biggestWin > 0 && showPlayerStatDetails(player, 'biggestWin', `🏆 Best Win`)}
+                >
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
                     {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}
                   </div>
-                  <div className="stat-label">Best Win</div>
+                  <div className="stat-label">{player.biggestWin > 0 ? 'Best Win ❯' : 'Best Win'}</div>
                 </div>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.biggestLoss < 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.biggestLoss < 0 && showPlayerStatDetails(player, 'biggestLoss', `📉 Worst Loss`)}
+                >
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
                     {player.biggestLoss < 0 ? `₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}
                   </div>
-                  <div className="stat-label">Worst Loss</div>
+                  <div className="stat-label">{player.biggestLoss < 0 ? 'Worst Loss ❯' : 'Worst Loss'}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -1410,17 +1433,25 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
                   <div className="stat-label">Total Buyins</div>
                 </div>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.longestWinStreak > 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.longestWinStreak > 0 && showPlayerStatDetails(player, 'longestWinStreak', `🔥 Best Win Streak`)}
+                >
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.longestWinStreak > 0 ? player.longestWinStreak : '-'}
                   </div>
-                  <div className="stat-label">Best Streak</div>
+                  <div className="stat-label">{player.longestWinStreak > 0 ? 'Best Streak ❯' : 'Best Streak'}</div>
                 </div>
-                <div className="stat-card">
+                <div 
+                  className="stat-card" 
+                  style={{ cursor: player.longestLossStreak > 0 ? 'pointer' : 'default' }}
+                  onClick={() => player.longestLossStreak > 0 && showPlayerStatDetails(player, 'longestLossStreak', `❄️ Worst Loss Streak`)}
+                >
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.longestLossStreak > 0 ? player.longestLossStreak : '-'}
                   </div>
-                  <div className="stat-label">Worst Streak</div>
+                  <div className="stat-label">{player.longestLossStreak > 0 ? 'Worst Streak ❯' : 'Worst Streak'}</div>
                 </div>
               </div>
             </div>
@@ -1542,123 +1573,6 @@ const StatisticsScreen = () => {
                 אין נתונים להצגה
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Player Game Details Modal */}
-      {playerGameDetails && (
-        <div 
-          className="modal-overlay" 
-          onClick={() => setPlayerGameDetails(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem'
-          }}
-        >
-          <div 
-            className="modal"
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--card)',
-              borderRadius: '12px',
-              padding: '1.5rem',
-              maxWidth: '320px',
-              width: '100%'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>🎮 Game Details</h3>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{playerGameDetails.playerName}</div>
-              </div>
-              <button 
-                onClick={() => setPlayerGameDetails(null)}
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  fontSize: '1.5rem', 
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  padding: 0,
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={{ 
-              padding: '1rem',
-              background: 'var(--surface)',
-              borderRadius: '8px',
-              borderRight: `4px solid ${playerGameDetails.game.profit > 0 ? 'var(--success)' : playerGameDetails.game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
-              marginBottom: '1rem'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>📅 Date</span>
-                <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                  {new Date(playerGameDetails.game.date).toLocaleDateString('en-GB', { 
-                    day: '2-digit', 
-                    month: '2-digit',
-                    year: 'numeric'
-                  })}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>💰 Result</span>
-                <span style={{ 
-                  fontSize: '1.1rem', 
-                  fontWeight: '700',
-                  color: playerGameDetails.game.profit > 0 ? 'var(--success)' : playerGameDetails.game.profit < 0 ? 'var(--danger)' : 'var(--text)'
-                }}>
-                  {playerGameDetails.game.profit > 0 ? '+' : ''}{formatCurrency(playerGameDetails.game.profit)}
-                </span>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => {
-                const savedPlayerInfo = {
-                  playerId: playerGameDetails.playerId,
-                  playerName: playerGameDetails.playerName
-                };
-                setPlayerGameDetails(null);
-                navigate(`/game/${playerGameDetails.game.gameId}`, { 
-                  state: { 
-                    from: 'individual', 
-                    viewMode: 'individual',
-                    playerInfo: savedPlayerInfo
-                  } 
-                });
-              }}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                background: 'var(--primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '0.9rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              📊 View Full Game Details ❯
-            </button>
           </div>
         </div>
       )}
