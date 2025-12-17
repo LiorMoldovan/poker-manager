@@ -1370,7 +1370,7 @@ const StatisticsScreen = () => {
                   key={idx}
                   onClick={() => {
                     setRecordDetails(null);
-                    navigate(`/game/${game.gameId}`);
+                    navigate(`/game/${game.gameId}`, { state: { from: 'records' } });
                   }}
                   style={{
                     display: 'flex',

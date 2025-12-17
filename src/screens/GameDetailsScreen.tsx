@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
@@ -8,6 +8,8 @@ import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from
 const GameDetailsScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cameFromRecords = (location.state as { from?: string })?.from === 'records';
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -165,9 +167,9 @@ const GameDetailsScreen = () => {
     <div className="fade-in">
       <button 
         className="btn btn-sm btn-secondary mb-2"
-        onClick={() => navigate('/history')}
+        onClick={() => cameFromRecords ? navigate('/statistics') : navigate('/history')}
       >
-        ← Back to History
+        ← {cameFromRecords ? 'Back to Records' : 'Back to History'}
       </button>
       
       {/* Content to be captured for screenshot */}
@@ -291,8 +293,8 @@ const GameDetailsScreen = () => {
 
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-        <button className="btn btn-secondary btn-lg" onClick={() => navigate('/history')}>
-          📜 History
+        <button className="btn btn-secondary btn-lg" onClick={() => cameFromRecords ? navigate('/statistics') : navigate('/history')}>
+          {cameFromRecords ? '📊 Records' : '📜 History'}
         </button>
         <button 
           className="btn btn-primary btn-lg" 

@@ -249,16 +249,36 @@ const NewGameScreen = () => {
       insights.push({ priority: 45, text: `📊 ${Math.round(stats.totalProfit)}₪ כולל מ-${stats.gamesPlayed} משחקים` });
     }
     
-    // DEFAULT - basic recent summary
+    // DEFAULT - multiple variations for basic summary
     if (gamesCount >= 3) {
       insights.push({ priority: 30, text: `${recentWins}/${gamesCount} נצחונות לאחרונה, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪` });
+      insights.push({ priority: 28, text: `ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב-${gamesCount} משחקים אחרונים` });
+      insights.push({ priority: 26, text: `${recentWins} נצחונות מתוך ${gamesCount} אחרונים (${recentWinPct}%)` });
     } else {
       insights.push({ priority: 20, text: `${gamesCount} משחקים אחרונים: ${recentProfit >= 0 ? '+' : ''}${recentProfit}₪` });
     }
     
-    // Pick the highest priority insight
+    // RANDOM SELECTION from top candidates (not just the highest!)
+    // Sort by priority, then pick randomly from top tier with weighted probability
     insights.sort((a, b) => b.priority - a.priority);
-    return insights[0]?.text || '';
+    
+    if (insights.length === 0) return '';
+    if (insights.length === 1) return insights[0].text;
+    
+    // Get top tier (within 20 points of highest priority)
+    const topPriority = insights[0].priority;
+    const topTier = insights.filter(i => i.priority >= topPriority - 20);
+    
+    // Weighted random selection - higher priority = more likely but not guaranteed
+    const totalWeight = topTier.reduce((sum, i) => sum + i.priority, 0);
+    let random = Math.random() * totalWeight;
+    
+    for (const insight of topTier) {
+      random -= insight.priority;
+      if (random <= 0) return insight.text;
+    }
+    
+    return topTier[Math.floor(Math.random() * topTier.length)].text;
   };
   
   const analyzeRecent = (stats: PlayerStats): RecentAnalysis => {
@@ -300,7 +320,7 @@ const NewGameScreen = () => {
     isSurprise: boolean
   ): string => {
     
-    // Hot streak sentences
+    // Hot streak sentences - many options for variety
     if (trend === 'hot') {
       const sentences = [
         `${name} בוער! מי מעז להתמודד איתו?`,
@@ -308,6 +328,11 @@ const NewGameScreen = () => {
         `מי עוצר את ${name}? אף אחד כרגע`,
         `${name} בא לקחת הכל הלילה`,
         `זהירות: ${name} במצב רצח`,
+        `${name} לא מפסיק לנצח. מה קורה פה?`,
+        `${name} בטירוף! הכסף פשוט נדבק אליו`,
+        `אין מה לעשות - ${name} פשוט חם`,
+        `${name} שובר שיאים. מי הבא בתור?`,
+        `הכוכבים לצד ${name} הלילה`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -320,6 +345,11 @@ const NewGameScreen = () => {
         `${name} צריך נס קטן הלילה`,
         `כולם אוהבים קאמבק - ${name} מחכה לשלו`,
         `${name} יודע שהמזל חייב להשתנות`,
+        `${name} עובר ימים קשים. הלילה יהיה שונה?`,
+        `${name} בחושך, מחפש את האור`,
+        `הקלפים לא מחבבים את ${name} לאחרונה`,
+        `${name} צריך לשבור את הרצף הרע`,
+        `מתי ${name} יתעורר? אולי הלילה`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -332,6 +362,11 @@ const NewGameScreen = () => {
         `מומנטום חיובי ל${name}`,
         `${name} פיצח משהו לאחרונה`,
         `עין על ${name} - הוא מתחמם`,
+        `${name} מתעורר לחיים`,
+        `הרוח משתנה לטובת ${name}`,
+        `${name} בדרך למעלה`,
+        `${name} מראה סימני שיפור`,
+        `משהו טוב קורה ל${name} לאחרונה`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -344,6 +379,11 @@ const NewGameScreen = () => {
         `ימים יותר טובים היו ל${name}`,
         `${name} מחפש את עצמו מחדש`,
         `${name} צריך ערב טוב כדי לחזור`,
+        `${name} בירידה קלה`,
+        `${name} לא במיטבו לאחרונה`,
+        `${name} צריך לעצור את המגמה`,
+        `הרוח נגד ${name} לאחרונה`,
+        `${name} מאבד קצת את הקסם`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -356,7 +396,10 @@ const NewGameScreen = () => {
           `⚡ משהו אומר ש${name} יפתיע הלילה`,
           `⚡ ${name} לא הולך לפי התסריט`,
           `⚡ קאמבק באוויר ל${name}`,
-          `⚡ ${name} מגיע עם משהו לה prove`,
+          `⚡ ${name} מגיע עם משהו להוכיח`,
+          `⚡ אל תמעיטו ב${name} הלילה`,
+          `⚡ ${name} עשוי להפתיע את כולם`,
+          `⚡ תחושת בטן: ${name} יעשה בום`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       } else {
@@ -366,12 +409,15 @@ const NewGameScreen = () => {
           `⚡ ביטחון יתר? ${name} צריך להיזהר`,
           `⚡ לא הכל ורוד ל${name} הלילה`,
           `⚡ ${name} עלול להיתקל בהפתעה`,
+          `⚡ משהו לא מסתדר ל${name} הערב`,
+          `⚡ ${name} בסכנה - יש משהו באוויר`,
+          `⚡ נבואה: ${name} לא ינצח הפעם`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       }
     }
     
-    // Regular predictions - fun and dramatic
+    // Regular predictions - fun and dramatic with MANY options
     switch (expectedOutcome) {
       case 'big_win':
         const bigWinSentences = [
@@ -380,6 +426,11 @@ const NewGameScreen = () => {
           `${name} הוא הסיבה שכולם מפחדים`,
           `מי ינסה לעצור את ${name}? בהצלחה`,
           `${name} - לא משחק, שולט`,
+          `${name} הוא המלך של הערב`,
+          `כולם מפחדים מ${name} - ובצדק`,
+          `${name} בא לקחת הכל הביתה`,
+          `${name} - הסיכויים לצידו בגדול`,
+          `אם הייתי מהמר, הייתי שם על ${name}`,
         ];
         return bigWinSentences[Math.floor(Math.random() * bigWinSentences.length)];
         
@@ -390,6 +441,11 @@ const NewGameScreen = () => {
           `${name} - מועמד רציני לרווח`,
           `${name} לא בא להשתתף, בא לנצח`,
           `${name} מריח כסף באוויר`,
+          `${name} נראה חזק הערב`,
+          `${name} יודע מה הוא עושה`,
+          `${name} בא מוכן`,
+          `${name} - שחקן רציני לכל דבר`,
+          `יש ל${name} סיכוי טוב`,
         ];
         return winSentences[Math.floor(Math.random() * winSentences.length)];
         
@@ -400,6 +456,11 @@ const NewGameScreen = () => {
           `${name} בכיוון הנכון`,
           `${name} - לא מפחיד, אבל לא פרייר`,
           `${name} צפוי לערב בסדר`,
+          `${name} - יתרון קל בלבד`,
+          `${name} יכול לסיים ברווח קטן`,
+          `${name} עם סיכויים סבירים`,
+          `${name} - לא המועמד הראשי, אבל בהחלט בתמונה`,
+          `${name} בא עם אופטימיות זהירה`,
         ];
         return slightWinSentences[Math.floor(Math.random() * slightWinSentences.length)];
         
@@ -410,6 +471,11 @@ const NewGameScreen = () => {
           `50-50 ל${name}. מי יודע?`,
           `${name} הוא חידה`,
           `${name} - תלוי במזל ובמצב רוח`,
+          `${name} בלתי צפוי לחלוטין`,
+          `${name} - יכול להיות הכל או כלום`,
+          `${name} על קו האפס. לאיזה צד ייפול?`,
+          `${name} - סימן שאלה גדול`,
+          `מי יודע מה יעשה ${name} הלילה`,
         ];
         return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
         
@@ -420,6 +486,11 @@ const NewGameScreen = () => {
           `${name} עם נטייה קלה למינוס`,
           `${name} יצטרך להילחם על כל שקל`,
           `${name} - ערב מאתגר צפוי`,
+          `${name} מתחיל מאחור`,
+          `${name} לא בעמדה הכי טובה`,
+          `${name} יצטרך לעבוד קשה`,
+          `${name} - הסיכויים קצת נגדו`,
+          `${name} בא עם חיסרון קל`,
         ];
         return slightLossSentences[Math.floor(Math.random() * slightLossSentences.length)];
         
@@ -430,6 +501,11 @@ const NewGameScreen = () => {
           `${name} - אולי כדאי לשחק שמרני`,
           `${name} בגרסה פחות טובה שלו`,
           `${name} - מתפלל לשינוי מזל`,
+          `${name} בא מאחור`,
+          `${name} לא בתמונה הערב`,
+          `${name} יצטרך הרבה מזל`,
+          `${name} - הסיכויים לא לצידו`,
+          `${name} בא עם רוח נגדית`,
         ];
         return lossSentences[Math.floor(Math.random() * lossSentences.length)];
         
@@ -440,6 +516,11 @@ const NewGameScreen = () => {
           `${name} - תודה על התרומה מראש`,
           `${name} בא לבלות, לא לנצח`,
           `${name} - לפחות יש חברים טובים`,
+          `${name} - הכי חשוב זה לשחק`,
+          `${name} מחלק כסף לכולם`,
+          `${name} - הלב במקום הנכון`,
+          `${name} בא לתת, לא לקחת`,
+          `${name} - תמיד אפשר לסמוך עליו שיפסיד`,
         ];
         return bigLossSentences[Math.floor(Math.random() * bigLossSentences.length)];
     }
@@ -447,12 +528,18 @@ const NewGameScreen = () => {
     return `${name} - נראה מה יקרה`;
   };
 
-  // NEW PLAYERS - No history
+  // NEW PLAYERS - No history - many options
   const newPlayerSentences = [
     `{name} - שחקן חדש, אין נתונים. הכל פתוח!`,
     `אין לנו היסטוריה על {name}. הלילה נגלה מה הוא שווה`,
-    `{name} מתחיל מאפס - בלי יתרון, בלי חיסרון. טאבולה ראסה`,
+    `{name} מתחיל מאפס - בלי יתרון, בלי חיסרון`,
     `{name} נכנס בלי תיק עבר. יכול להיות הכל`,
+    `{name} - סוס אפל. אין לנו מושג`,
+    `{name} חדש במשחק. בהצלחה!`,
+    `{name} - דף חלק. הלילה נתחיל לכתוב`,
+    `מי זה בכלל {name}? נגלה בקרוב`,
+    `{name} - שחקן מסתורי. אין נתונים`,
+    `{name} מצטרף למשחק. נראה מה יביא`,
   ];
 
 
@@ -561,10 +648,13 @@ const NewGameScreen = () => {
       
       if (isSurprise) {
         // Flip the expected value based on recent contradicting trend
-        expectedValue = -expectedValue * (0.5 + Math.random() * 0.3);
+        expectedValue = -expectedValue * (0.4 + Math.random() * 0.5);
       } else {
-        // Add small variance
-        expectedValue = expectedValue + (Math.random() - 0.5) * 10;
+        // Add SIGNIFICANT variance to make each forecast unique
+        // Base variance ±20, plus random multiplier 0.7-1.3
+        const variance = (Math.random() - 0.5) * 40;
+        const multiplier = 0.7 + Math.random() * 0.6;
+        expectedValue = (expectedValue * multiplier) + variance;
       }
       
       return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
