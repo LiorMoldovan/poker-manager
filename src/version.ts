@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.7.1';
+export const APP_VERSION = '3.7.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.7.2',
+    date: '2024-12-17',
+    changes: [
+      'Removed hardcoded Dec 6 game auto-import',
+      'Buyin King only shows with real buyin data'
+    ]
+  },
   {
     version: '3.7.1',
     date: '2024-12-17',

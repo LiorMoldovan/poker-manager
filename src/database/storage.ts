@@ -97,9 +97,6 @@ export const initializeStorage = (): void => {
     setItem(STORAGE_KEYS.GAME_PLAYERS, []);
   }
   
-  // Import historical games if not already imported
-  importDec6GameIfNeeded();
-  
   // Check for automatic Friday backup
   checkAndAutoBackup();
 };
@@ -516,33 +513,6 @@ export const importHistoricalGame = (
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   
   return newGame;
-};
-
-// Check if Dec 6 game needs to be imported
-export const importDec6GameIfNeeded = (): void => {
-  const games = getAllGames();
-  
-  // Check if Dec 6 game already exists
-  const dec6Exists = games.some(g => g.date.includes('2024-12-06'));
-  if (dec6Exists) {
-    return; // Already imported
-  }
-  
-  // Dec 6, 2024 game data
-  // Chip values: White=50, Red=100, Blue=200, Green=500, Black=1000, Yellow=5000
-  const dec6Data = [
-    { playerName: 'אייל', rebuys: 2.5, chipCounts: { '1': 14, '2': 14, '3': 11, '4': 25, '5': 11, '6': 6 }, finalValue: 57800, profit: 98.4 },
-    { playerName: 'ליאור', rebuys: 2, chipCounts: { '1': 1, '2': 7, '3': 7, '4': 12, '5': 24, '6': 7 }, finalValue: 67150, profit: 141.5 },
-    { playerName: 'ארז', rebuys: 3, chipCounts: { '1': 9, '2': 0, '3': 9, '4': 1, '5': 2, '6': 13 }, finalValue: 69750, profit: 119.3 },
-    { playerName: 'ליכטר', rebuys: 6, chipCounts: { '1': 7, '2': 1, '3': 11, '4': 10, '5': 3, '6': 2 }, finalValue: 20650, profit: -118.1 },
-    { playerName: 'תומר', rebuys: 3, chipCounts: { '1': 49, '2': 13, '3': 10, '4': 0, '5': 3, '6': 9 }, finalValue: 53750, profit: 71.3 },
-    { playerName: 'אסף', rebuys: 3, chipCounts: { '1': 7, '2': 3, '3': 0, '4': 0, '5': 4, '6': 0 }, finalValue: 4650, profit: -76.1 },
-    { playerName: 'סגל', rebuys: 8, chipCounts: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }, finalValue: 0, profit: -240.0 },
-    { playerName: 'אורן', rebuys: 2, chipCounts: { '1': 13, '2': 11, '3': 2, '4': 2, '5': 3, '6': 3 }, finalValue: 21150, profit: 3.5 },
-  ];
-  
-  importHistoricalGame('2024-12-06T22:00:00.000Z', dec6Data);
-  console.log('Dec 6, 2024 game imported successfully!');
 };
 
 // ==================== BACKUP & RESTORE ====================
