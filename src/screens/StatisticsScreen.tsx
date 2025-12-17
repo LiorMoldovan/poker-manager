@@ -498,9 +498,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: selectedTypes.has('permanent_guest') ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: selectedTypes.has('permanent_guest') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('permanent_guest') ? 'var(--primary)' : 'var(--text-muted)',
+                    border: selectedTypes.has('permanent_guest') ? '2px solid var(--text-muted)' : '1px solid var(--border)',
+                    background: selectedTypes.has('permanent_guest') ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('permanent_guest') ? 'var(--text)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >

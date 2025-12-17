@@ -641,9 +641,9 @@ const NewGameScreen = () => {
                     minWidth: '80px',
                     padding: '0.5rem',
                     borderRadius: '8px',
-                    border: newPlayerType === 'permanent_guest' ? '2px solid var(--primary)' : '2px solid var(--border)',
-                    background: newPlayerType === 'permanent_guest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: newPlayerType === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: newPlayerType === 'permanent_guest' ? '2px solid var(--text-muted)' : '2px solid var(--border)',
+                    background: newPlayerType === 'permanent_guest' ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
+                    color: newPlayerType === 'permanent_guest' ? 'var(--text)' : 'var(--text-muted)',
                     cursor: 'pointer',
                     fontWeight: '600',
                     fontSize: '0.75rem'
