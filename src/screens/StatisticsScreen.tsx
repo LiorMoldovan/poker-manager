@@ -14,10 +14,9 @@ const StatisticsScreen = () => {
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [minGames, setMinGames] = useState<number>(0);
+  const [filterActiveOnly, setFilterActiveOnly] = useState(false); // Filter players with > 33% of avg games
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
-  const [showMinGames, setShowMinGames] = useState(false); // Collapsed by default
   const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
 
   // Get available years from games
@@ -84,10 +83,20 @@ const StatisticsScreen = () => {
     return player?.type || 'permanent';
   }, [players]);
 
-  // Memoize filtered stats to prevent infinite loops
+  // Calculate average games played across ALL players (for active filter)
+  const avgGamesPlayed = useMemo(() => {
+    if (stats.length === 0) return 0;
+    const totalGames = stats.reduce((sum, s) => sum + s.gamesPlayed, 0);
+    return totalGames / stats.length;
+  }, [stats]);
+
+  // Minimum games threshold = 33% of average
+  const activeThreshold = useMemo(() => Math.ceil(avgGamesPlayed * 0.33), [avgGamesPlayed]);
+
+  // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
-    stats.filter(s => s.gamesPlayed >= minGames),
-    [stats, minGames]
+    filterActiveOnly ? stats.filter(s => s.gamesPlayed >= activeThreshold) : stats,
+    [stats, filterActiveOnly, activeThreshold]
   );
 
   // Separate stats by player type (after minGames filter) - memoized
@@ -168,12 +177,12 @@ const StatisticsScreen = () => {
     [selectedTypes]
   );
 
-  // Update selected players when types or minGames change
+  // Update selected players when types or active filter changes
   useEffect(() => {
     if (availableStats.length > 0) {
       setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
-  }, [selectedTypesKey, minGames, stats.length]);
+  }, [selectedTypesKey, filterActiveOnly, stats.length]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -432,48 +441,32 @@ const StatisticsScreen = () => {
               )}
             </div>
 
-            {/* Minimum Games Filter */}
+            {/* Active Players Filter */}
             <div style={{ 
               marginBottom: '0.75rem',
               paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)'
             }}>
               <button
-                onClick={() => setShowMinGames(!showMinGames)}
+                onClick={() => setFilterActiveOnly(!filterActiveOnly)}
                 style={{ 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
-                  marginBottom: showMinGames ? '0.5rem' : 0
+                  width: '100%', 
+                  padding: '0.5rem 0.75rem',
+                  background: filterActiveOnly ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                  border: filterActiveOnly ? '2px solid var(--primary)' : '1px solid var(--border)',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  color: 'var(--text)'
                 }}
               >
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  🎮 MIN GAMES ({minGames === 0 ? 'הכל' : `${minGames}+`})
+                <span style={{ fontSize: '0.75rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '600' }}>
+                  🎮 {filterActiveOnly ? '✓ ' : ''}שחקנים פעילים בלבד
                 </span>
-                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showMinGames ? '▲' : '▼'}</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                  ({activeThreshold}+ משחקים)
+                </span>
               </button>
-              {showMinGames && (
-              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                {[0, 5, 10, 20, 50].map(num => (
-                  <button
-                    key={num}
-                    onClick={() => setMinGames(num)}
-                    style={{
-                      flex: 1,
-                      minWidth: '40px',
-                      padding: '0.4rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '6px',
-                      border: minGames === num ? '2px solid var(--primary)' : '1px solid var(--border)',
-                      background: minGames === num ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                      color: minGames === num ? 'var(--primary)' : 'var(--text-muted)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {num === 0 ? 'הכל' : `${num}+`}
-                  </button>
-                ))}
-              </div>
-              )}
             </div>
 
             {/* Player Type Filter (Multi-select) */}
