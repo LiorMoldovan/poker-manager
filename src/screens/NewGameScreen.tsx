@@ -219,17 +219,24 @@ const NewGameScreen = () => {
       }
     }
     
-    // === INACTIVE PLAYERS (haven't played in a while) ===
+    // === INACTIVE PLAYERS (haven't played in a while) - SARCASTIC! ===
     else {
-      // Time since last game
-      if (monthsAgo >= 6) {
-        insights.push({ priority: 90, text: `⏰ לא שיחק כבר ${monthsAgo} חודשים! חזרה מסקרנת - נראה אם הוא עדיין זוכר לשחק` });
-        insights.push({ priority: 88, text: `⏰ חצי שנה מאז המשחק האחרון - הרבה חלודה לנער` });
+      // Time since last game - with cynicism!
+      if (monthsAgo >= 12) {
+        insights.push({ priority: 95, text: `👻 נעלם לשנה שלמה! חשבנו שעבר דירה או משהו. מתברר שסתם שכח אותנו` });
+        insights.push({ priority: 93, text: `⏰ שנה בלי משחק?! מה קרה, מצאת קבוצה יותר טובה? (ספוילר: אין)` });
+        insights.push({ priority: 91, text: `👻 ${monthsAgo} חודשים! כבר הספקנו למחוק אותו מהוואטסאפ ולהוסיף מחדש` });
+      } else if (monthsAgo >= 6) {
+        insights.push({ priority: 90, text: `👻 נעלם ל-${monthsAgo} חודשים - בטח היה עסוק בלהפסיד במקומות אחרים` });
+        insights.push({ priority: 88, text: `⏰ ${monthsAgo} חודשים בלי ביקור! מה, הארנק היה צריך זמן להתאושש?` });
+        insights.push({ priority: 86, text: `👻 חצי שנה מאז שראינו את הפרצוף שלו - נקווה שלפחות הביא כסף` });
       } else if (monthsAgo >= 3) {
-        insights.push({ priority: 85, text: `⏰ ${monthsAgo} חודשים מאז המשחק האחרון - סקרנים לראות באיזה מצב הוא חוזר` });
-        insights.push({ priority: 83, text: `⏰ הפסקה של ${monthsAgo} חודשים. יחזור חזק או חלוד?` });
+        insights.push({ priority: 85, text: `⏰ ${monthsAgo} חודשים בהיעדרות - בטח חיכה שנשכח כמה הוא מפסיד` });
+        insights.push({ priority: 83, text: `⏰ היעדרות של ${monthsAgo} חודשים. נקווה שהתאמן ולא רק בנטפליקס` });
+        insights.push({ priority: 81, text: `👻 ${monthsAgo} חודשים! כבר התחלנו לחלק את הכיסא שלו לאחרים` });
       } else {
-        insights.push({ priority: 75, text: `⏰ לא שיחק חודשיים - זמן לבדוק אם הוא עדיין בכושר` });
+        insights.push({ priority: 75, text: `⏰ חודשיים בלי משחק - מספיק זמן לשכוח הכל` });
+        insights.push({ priority: 73, text: `⏰ לא היה פה חודשיים. מה קרה, פחדת מאיתנו?` });
       }
     }
     
@@ -363,14 +370,43 @@ const NewGameScreen = () => {
     const { trend, isActive, daysSinceLastGame } = recent;
     const monthsAway = Math.floor(daysSinceLastGame / 30);
     
-    // INACTIVE PLAYERS - returning after long break
+    // INACTIVE PLAYERS - returning after long break (SARCASTIC!)
+    if (!isActive && monthsAway >= 12) {
+      // Year+ absence - maximum sarcasm
+      const yearAbsenceSentences = [
+        `${name} חוזר אחרי שנה שלמה?! חשבנו שהיגרת או משהו. איפה היית, במחנה אימונים לפוקר? (ספוילר: זה לא עזר)`,
+        `תראו מי מכבד אותנו! ${name} נעלם לשנה וחוזר כאילו כלום לא קרה. נקווה שהבאת פיצויים`,
+        `${name} בחזרה אחרי שנה! כבר הספקנו למחוק אותו מאנשי הקשר ולהוסיף מחדש. פעמיים`,
+        `שנה שלמה בלי ${name}! מה קרה, הלכת לחפש קבוצה שמפסידה יותר ממך? לא מצאת, נכון?`,
+        `${name} נזכר שאנחנו קיימים אחרי שנה! הארנקים שלנו שמחים לראות אותך חזרה - הם התגעגעו לכסף שלך`,
+      ];
+      return yearAbsenceSentences[Math.floor(Math.random() * yearAbsenceSentences.length)];
+    }
+    
+    if (!isActive && monthsAway >= 6) {
+      // Very long absence - extra sarcastic
+      const veryLongAbsenceSentences = [
+        `אוי, ${name} נזכר שאנחנו קיימים! ${monthsAway} חודשים בלי ביקור, מה קרה - נגמר לך הכסף לבזבז במקומות אחרים?`,
+        `${name} חוזר אחרי ${monthsAway} חודשים! חשבנו שעברת לקזינו יותר יוקרתי. מתברר שלא`,
+        `וואו, ${name} מכבד אותנו בנוכחותו אחרי ${monthsAway} חודשים! קיווינו שלמדת לשחק בינתיים, אבל כנראה שלא`,
+        `${name} נעלם ל-${monthsAway} חודשים וחוזר כאילו כלום לא קרה. נקווה שלפחות זכרת איך מחזיקים קלפים`,
+        `אורח נדיר: ${name} לא ראינו אותך ${monthsAway} חודשים! מה, היית עסוק בלהפסיד כסף במקומות אחרים?`,
+        `${name} חוזר מההיעלמות הגדולה! ${monthsAway} חודשים בלי פוקר - בטח החלודה עבה כמו ספר טלפונים`,
+        `תראו מי פה! ${name} נזכר אחרי ${monthsAway} חודשים שיש לו חברים. טוב שבאת, הארנקים שלנו התגעגעו`,
+      ];
+      return veryLongAbsenceSentences[Math.floor(Math.random() * veryLongAbsenceSentences.length)];
+    }
+    
     if (!isActive && monthsAway >= 3) {
+      // Medium absence - moderately sarcastic
       const returningSentences = [
-        `${name} חוזר אחרי ${monthsAway} חודשים של היעדרות - מסקרן לראות אם השהות הרחק מהשולחן עשתה לו טוב או שהוא חלוד לגמרי`,
-        `${name} לא נגע בקלפים ${monthsAway} חודשים. יש כאלה שחוזרים רעננים, ויש כאלה ששוכחים הכל. באיזה צד הוא?`,
-        `חזרה גדולה ל${name} אחרי הפסקה ארוכה. האם הוא יפתיע את כולם או שהחלודה תנצח?`,
-        `${name} חוזר למשחק אחרי תקופה ארוכה - הכל יכול לקרות כשמישהו חוזר מחופשה כזו`,
-        `אורח מפתיע: ${name} לא היה כאן הרבה זמן. נראה מה הוא זוכר`,
+        `${name} מתעורר אחרי ${monthsAway} חודשים של שינה. נקווה שהחלומות שלו על נצחונות לא יישארו חלומות`,
+        `${name} חוזר אחרי ${monthsAway} חודשים - מספיק זמן לשכוח איך משחקים, לא מספיק זמן ללמוד`,
+        `${name} לא נגע בקלפים ${monthsAway} חודשים. מה קרה, הבנק סגר לך את הקו?`,
+        `הנה ${name} חוזר אחרי היעדרות של ${monthsAway} חודשים! בטח התגעגענו לכסף שלו`,
+        `${name} נעלם ל-${monthsAway} חודשים וחוזר. יש כאלה שחוזרים חזקים, ויש כאלה שפשוט חוזרים`,
+        `אחרי ${monthsAway} חודשים, ${name} מחליט להראות פנים. נקווה שהוא מביא ארנק מלא ולא רק תירוצים`,
+        `${name} בחזרה אחרי ${monthsAway} חודשים! השאלה היחידה - האם הוא למד משהו או שהוא עדיין אותו שחקן?`,
       ];
       return returningSentences[Math.floor(Math.random() * returningSentences.length)];
     }

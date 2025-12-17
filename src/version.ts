@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.2';
+export const APP_VERSION = '4.5.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.3',
+    date: '2024-12-17',
+    changes: [
+      'Forecast: Sarcastic/cynical sentences for long absences!',
+      'Different levels: 3+ months, 6+ months, year+ absence',
+      'Highlights also sarcastic for inactive players',
+      'More humor and personality in returning player messages'
+    ]
+  },
   {
     version: '4.5.2',
     date: '2025-12-17',
