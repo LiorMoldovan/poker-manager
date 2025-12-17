@@ -124,14 +124,18 @@ const StatisticsScreen = () => {
 
   // Select/Deselect all players
   const toggleAllPlayers = useCallback(() => {
-    if (selectedPlayers.size === availableStats.length) {
-      // If all selected, keep only the first one
+    if (selectedPlayers.size === availableStats.length && availableStats.length > 0) {
+      // If all selected - deselect all (keep only first for stats to work)
       setSelectedPlayers(new Set([availableStats[0]?.playerId].filter(Boolean)));
+    } else if (selectedPlayers.size === 1 && availableStats.length > 0 && 
+               selectedPlayers.has(availableStats[0]?.playerId)) {
+      // If only first one is selected (after clear) - select all
+      setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     } else {
-      // Select all available
+      // Otherwise - select all available
       setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
-  }, [selectedPlayers.size, availableStats]);
+  }, [selectedPlayers, availableStats]);
 
   // Toggle player type in filter
   const toggleType = useCallback((type: PlayerType) => {

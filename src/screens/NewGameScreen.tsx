@@ -40,11 +40,28 @@ const NewGameScreen = () => {
     setSelectedIds(newSelected);
   };
 
+  // Get all currently visible player IDs (permanent always visible + expanded sections)
+  const getVisiblePlayerIds = (): string[] => {
+    const visible = [...permanentPlayers.map(p => p.id)];
+    if (showPermanentGuests) {
+      visible.push(...permanentGuestPlayers.map(p => p.id));
+    }
+    if (showGuests) {
+      visible.push(...guestPlayers.map(p => p.id));
+    }
+    return visible;
+  };
+
   const selectAll = () => {
-    if (selectedIds.size === players.length) {
+    const visibleIds = getVisiblePlayerIds();
+    const allVisibleSelected = visibleIds.every(id => selectedIds.has(id));
+    
+    if (allVisibleSelected && selectedIds.size > 0) {
+      // All visible are selected - clear all
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(players.map(p => p.id)));
+      // Select all visible
+      setSelectedIds(new Set(visibleIds));
     }
   };
 
@@ -427,7 +444,7 @@ const NewGameScreen = () => {
         </div>
         {players.length > 0 && (
           <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}>
-            {selectedIds.size === players.length ? 'Deselect All' : 'Select All'}
+            {selectedIds.size > 0 && getVisiblePlayerIds().every(id => selectedIds.has(id)) ? 'Deselect All' : 'Select All'}
           </button>
         )}
       </div>
