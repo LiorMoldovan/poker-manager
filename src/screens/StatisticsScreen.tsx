@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
@@ -8,9 +8,12 @@ type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
 
 const StatisticsScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialViewMode = (location.state as { viewMode?: 'table' | 'records' | 'individual' })?.viewMode || 'table';
+  
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
@@ -1394,7 +1397,7 @@ const StatisticsScreen = () => {
                   key={idx}
                   onClick={() => {
                     setRecordDetails(null);
-                    navigate(`/game/${game.gameId}`, { state: { from: 'records' } });
+                    navigate(`/game/${game.gameId}`, { state: { from: 'records', viewMode: 'records' } });
                   }}
                   style={{
                     display: 'flex',
