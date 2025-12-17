@@ -259,100 +259,121 @@ const NewGameScreen = () => {
   // Generate forecasts for all selected players (balanced to sum to zero)
   const generateForecasts = () => {
     const usedSentences = new Set<string>();
-    const SURPRISE_RATE = 0.40; // 40% chance of surprise prediction
     
-    // Step 1: Get initial raw expected profits
-    const rawForecasts = Array.from(selectedIds).map(playerId => {
+    // Step 1: Analyze all players
+    const playerAnalysis = Array.from(selectedIds).map(playerId => {
       const player = players.find(p => p.id === playerId);
       if (!player) return null;
       
       const stats = getStatsForPlayer(playerId);
-      let rawExpected = 0;
-      let isSurprise = false;
-      let historyDirection: 'winner' | 'loser' | 'neutral' = 'neutral';
+      const gamesPlayed = stats?.gamesPlayed || 0;
+      const avgProfit = stats?.avgProfit || 0;
       
-      if (stats && stats.gamesPlayed > 0) {
-        rawExpected = stats.avgProfit;
-        // Determine historical direction
-        if (stats.avgProfit > 10) historyDirection = 'winner';
-        else if (stats.avgProfit < -10) historyDirection = 'loser';
-        
-        // 40% chance for surprise (flip the prediction)
-        if (Math.random() < SURPRISE_RATE && historyDirection !== 'neutral') {
-          isSurprise = true;
-          // Flip the expected value
-          rawExpected = -rawExpected * (0.5 + Math.random() * 0.5); // 50-100% of flipped value
-        } else {
-          // Regular prediction - adjust based on streak
-          if (stats.currentStreak >= 2) rawExpected *= 1.2;
-          if (stats.currentStreak <= -2) rawExpected *= 0.8;
-        }
+      // Determine historical tendency
+      let tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new' = 'new';
+      if (gamesPlayed === 0) {
+        tendency = 'new';
+      } else if (avgProfit > 20) {
+        tendency = 'strong_winner';
+      } else if (avgProfit > 5) {
+        tendency = 'winner';
+      } else if (avgProfit >= -5) {
+        tendency = 'neutral';
+      } else if (avgProfit >= -20) {
+        tendency = 'loser';
+      } else {
+        tendency = 'strong_loser';
       }
       
       return {
         player,
         stats,
-        rawExpected: Math.round(rawExpected),
-        gamesPlayed: stats?.gamesPlayed || 0,
-        isSurprise,
-        historyDirection
+        gamesPlayed,
+        avgProfit,
+        tendency,
+        rawExpected: gamesPlayed > 0 ? avgProfit : 0
       };
-    }).filter(Boolean) as { 
-      player: Player; 
-      stats: PlayerStats | undefined; 
-      rawExpected: number; 
+    }).filter(Boolean) as {
+      player: Player;
+      stats: PlayerStats | undefined;
       gamesPlayed: number;
-      isSurprise: boolean;
-      historyDirection: 'winner' | 'loser' | 'neutral';
+      avgProfit: number;
+      tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new';
+      rawExpected: number;
     }[];
+
+    // Step 2: Smart surprise selection - UP TO 30% (not forced!)
+    // Only apply to players with strong historical patterns
+    const eligibleForSurprise = playerAnalysis.filter(p => 
+      p.gamesPlayed >= 5 && (p.tendency === 'strong_winner' || p.tendency === 'strong_loser')
+    );
     
-    // Step 2: Calculate total imbalance
-    const totalRaw = rawForecasts.reduce((sum, f) => sum + f.rawExpected, 0);
+    const maxSurprises = Math.min(
+      Math.ceil(playerAnalysis.length * 0.30), // Max 30%
+      eligibleForSurprise.length
+    );
     
-    // Step 3: Distribute imbalance proportionally to balance to zero
-    const totalAbsolute = rawForecasts.reduce((sum, f) => sum + Math.abs(f.rawExpected) + 10, 0);
+    // Random number of surprises (0 to max)
+    const numSurprises = Math.floor(Math.random() * (maxSurprises + 1));
     
-    const balancedForecasts = rawForecasts.map(f => {
-      const weight = (Math.abs(f.rawExpected) + 10) / totalAbsolute;
-      const adjustment = -totalRaw * weight;
-      const balancedExpected = Math.round(f.rawExpected + adjustment);
+    // Randomly pick which players get surprised
+    const surprisePlayerIds = new Set<string>();
+    const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
+    shuffled.slice(0, numSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
+
+    // Step 3: Calculate expected values
+    const withExpected = playerAnalysis.map(p => {
+      const isSurprise = surprisePlayerIds.has(p.player.id);
+      let expectedValue = p.rawExpected;
       
-      // Generate unique sentence
+      if (isSurprise) {
+        // Flip the expected value
+        expectedValue = -expectedValue * (0.6 + Math.random() * 0.4);
+      } else {
+        // Add some variance
+        expectedValue = expectedValue + (Math.random() - 0.5) * 15;
+        
+        // Streak adjustments
+        if (p.stats && p.stats.currentStreak >= 2) expectedValue *= 1.15;
+        if (p.stats && p.stats.currentStreak <= -2) expectedValue *= 0.85;
+      }
+      
+      return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
+    });
+
+    // Step 4: Balance to zero-sum
+    const totalExpected = withExpected.reduce((sum, p) => sum + p.expectedValue, 0);
+    const totalWeight = withExpected.reduce((sum, p) => sum + Math.abs(p.expectedValue) + 10, 0);
+    
+    const balanced = withExpected.map(f => {
+      const weight = (Math.abs(f.expectedValue) + 10) / totalWeight;
+      const adjustment = -totalExpected * weight;
+      const balancedExpected = Math.round(f.expectedValue + adjustment);
+      
+      // Pick sentence based on category
       let sentence: string;
       
-      if (!f.stats || f.stats.gamesPlayed === 0) {
-        // New player
+      if (f.gamesPlayed === 0) {
         sentence = pickUniqueSentence(newPlayerSentences, usedSentences, f.player.name);
       } else if (f.isSurprise) {
-        // Surprise prediction!
-        if (f.historyDirection === 'loser' && balancedExpected > 0) {
-          // Historical loser predicted to win
+        if (f.tendency === 'strong_loser' || f.tendency === 'loser') {
           sentence = pickUniqueSentence(surpriseWinSentences, usedSentences, f.player.name, f.stats);
-        } else if (f.historyDirection === 'winner' && balancedExpected < 0) {
-          // Historical winner predicted to lose
-          sentence = pickUniqueSentence(surpriseLossSentences, usedSentences, f.player.name, f.stats);
         } else {
-          // Fallback to regular
-          sentence = pickUniqueSentence(
-            balancedExpected > 0 ? goodWinnerSentences : moderateLoserSentences,
-            usedSentences, f.player.name, f.stats
-          );
+          sentence = pickUniqueSentence(surpriseLossSentences, usedSentences, f.player.name, f.stats);
         }
       } else {
-        // Regular prediction based on expected value
         let pool: string[];
-        if (balancedExpected > 40) pool = bigWinnerSentences;
+        if (balancedExpected > 35) pool = bigWinnerSentences;
         else if (balancedExpected > 15) pool = goodWinnerSentences;
-        else if (balancedExpected > 5) pool = slightWinnerSentences;
-        else if (balancedExpected >= -5) pool = neutralSentences;
+        else if (balancedExpected > 3) pool = slightWinnerSentences;
+        else if (balancedExpected >= -3) pool = neutralSentences;
         else if (balancedExpected >= -15) pool = slightLoserSentences;
-        else if (balancedExpected >= -40) pool = moderateLoserSentences;
+        else if (balancedExpected >= -35) pool = moderateLoserSentences;
         else pool = bigLoserSentences;
         
         sentence = pickUniqueSentence(pool, usedSentences, f.player.name, f.stats);
       }
       
-      // Mark template as used
       usedSentences.add(sentence);
       
       return {
@@ -364,27 +385,48 @@ const NewGameScreen = () => {
       };
     });
 
-    // Sort by expected profit (winners first)
-    return balancedForecasts.sort((a, b) => b.expected - a.expected);
+    return balanced.sort((a, b) => b.expected - a.expected);
   };
 
-  // Share forecast to WhatsApp
-  const shareForecast = () => {
-    const forecasts = generateForecasts();
-    const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+  // Share forecast as screenshot to WhatsApp
+  const shareForecast = async () => {
+    if (!forecastRef.current || isSharing) return;
     
-    let message = `🔮 *תחזית פוקר - ${today}*\n\n`;
+    setIsSharing(true);
     
-    forecasts.forEach((f) => {
-      const emoji = f.isSurprise ? '🎲' : (f.expected > 20 ? '🟢' : f.expected < -20 ? '🔴' : '⚪');
-      const profitStr = f.expected >= 0 ? `+₪${f.expected}` : `-₪${Math.abs(f.expected)}`;
-      message += `${emoji} *${f.player.name}*: ${profitStr}\n`;
-      message += `   ${f.sentence}\n\n`;
-    });
-
-    message += `\n🃏 בהצלחה לכולם!`;
-
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    try {
+      const canvas = await html2canvas(forecastRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+      });
+      
+      const file = new File([blob], 'poker-forecast.png', { type: 'image/png' });
+      
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'תחזית פוקר' });
+      } else {
+        // Fallback: download + WhatsApp
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'poker-forecast.png';
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+        window.open(`https://wa.me/?text=${encodeURIComponent(`🔮 תחזית פוקר - ${today}\n\n(התמונה הורדה - צרף אותה)`)}`, '_blank');
+      }
+    } catch (error) {
+      console.error('Error sharing forecast:', error);
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const handleShowForecast = () => {
@@ -392,6 +434,8 @@ const NewGameScreen = () => {
       setError('Select at least 2 players');
       return;
     }
+    // Generate and cache forecasts when modal opens
+    setCachedForecasts(generateForecasts());
     setShowForecast(true);
   };
 
@@ -724,74 +768,153 @@ const NewGameScreen = () => {
       )}
 
       {/* Forecast Modal */}
-      {showForecast && (
-        <div className="modal-overlay" onClick={() => setShowForecast(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '80vh', overflow: 'auto' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">🔮 Tonight's Forecast</h3>
-              <button className="modal-close" onClick={() => setShowForecast(false)}>×</button>
-            </div>
-            
-            <div style={{ marginBottom: '1rem' }}>
-              {generateForecasts().map((forecast, index) => {
-                const { player, expected, sentence, gamesPlayed, isSurprise } = forecast;
-                const isWinner = expected > 20;
-                const isLoser = expected < -20;
-                
-                return (
-                  <div 
-                    key={player.id}
-                    style={{
-                      padding: '0.75rem',
-                      marginBottom: '0.5rem',
-                      borderRadius: '10px',
-                      background: isSurprise
-                        ? 'rgba(139, 92, 246, 0.15)'
-                        : isWinner 
-                          ? 'rgba(34, 197, 94, 0.1)' 
-                          : isLoser 
-                            ? 'rgba(239, 68, 68, 0.1)' 
-                            : 'rgba(100, 100, 100, 0.1)',
-                      borderLeft: `4px solid ${isSurprise ? '#8B5CF6' : isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text-muted)'}`
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: '600', fontSize: '1rem' }}>
-                        {index === 0 && expected > 0 && '👑 '}
-                        {isSurprise && '🎲 '}
-                        {player.name}
-                      </span>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        fontSize: '1rem',
-                        color: isSurprise ? '#8B5CF6' : isWinner ? 'var(--success)' : isLoser ? 'var(--danger)' : 'var(--text)'
+      {showForecast && cachedForecasts && (
+        <div className="modal-overlay" onClick={() => { setShowForecast(false); setCachedForecasts(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'auto', maxWidth: '420px' }}>
+            {/* Screenshotable content */}
+            <div ref={forecastRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
+              {/* Header */}
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🔮</div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
+                  תחזית הלילה
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </div>
+              </div>
+
+              {/* Player forecasts */}
+              <div style={{ marginBottom: '1rem' }}>
+                {cachedForecasts.map((forecast, index) => {
+                  const { player, expected, sentence, gamesPlayed, isSurprise } = forecast;
+                  
+                  // Simple, clear colors
+                  const getStyle = () => {
+                    if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
+                    if (expected > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
+                    if (expected < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
+                    return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
+                  };
+                  
+                  const style = getStyle();
+                  
+                  return (
+                    <div 
+                      key={player.id}
+                      style={{
+                        padding: '0.75rem 0.85rem',
+                        marginBottom: '0.5rem',
+                        borderRadius: '10px',
+                        background: style.bg,
+                        borderRight: `4px solid ${style.border}`,
+                      }}
+                    >
+                      {/* Name and amount */}
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: '0.35rem'
                       }}>
-                        {expected >= 0 ? '+' : ''}₪{expected}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      {sentence}
-                    </div>
-                    {gamesPlayed > 0 && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', opacity: 0.7 }}>
-                        מבוסס על {gamesPlayed} משחק{gamesPlayed > 1 ? 'ים' : ''}
+                        <span style={{ 
+                          fontWeight: '700', 
+                          fontSize: '1rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
+                        }}>
+                          {index === 0 && expected > 0 && <span>👑</span>}
+                          {isSurprise && <span>⚡</span>}
+                          {player.name}
+                        </span>
+                        <span style={{ 
+                          fontWeight: '700', 
+                          fontSize: '1.05rem',
+                          color: style.text,
+                          fontFamily: 'system-ui'
+                        }}>
+                          {expected >= 0 ? '+' : ''}₪{expected}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      
+                      {/* Sentence */}
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: 'var(--text-muted)',
+                        lineHeight: '1.5',
+                        direction: 'rtl'
+                      }}>
+                        {sentence}
+                      </div>
+                      
+                      {/* Games count */}
+                      {gamesPlayed > 0 && (
+                        <div style={{ 
+                          fontSize: '0.7rem', 
+                          color: 'var(--text-muted)', 
+                          marginTop: '0.3rem',
+                          opacity: 0.6,
+                          direction: 'rtl'
+                        }}>
+                          {gamesPlayed} משחקים בהיסטוריה
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                gap: '1.25rem',
+                fontSize: '0.7rem',
+                color: 'var(--text-muted)',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#22c55e' }}></span>
+                  רווח צפוי
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#ef4444' }}></span>
+                  הפסד צפוי
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#a855f7' }}></span>
+                  ⚡ הפתעה
+                </span>
+              </div>
+
+              {/* Footer */}
+              <div style={{ 
+                textAlign: 'center', 
+                marginTop: '0.75rem', 
+                fontSize: '0.65rem', 
+                color: 'var(--text-muted)',
+                opacity: 0.5
+              }}>
+                Poker Manager 🎲 • מבוסס על היסטוריה + קצת מזל
+              </div>
             </div>
 
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '1rem' }}>
-              ⚠️ התחזית מבוססת על היסטוריה ומזל - התוצאות עשויות להפתיע! 🎲
-            </p>
-
-            <div className="actions">
-              <button className="btn btn-secondary" onClick={() => setShowForecast(false)}>
-                Close
+            {/* Action buttons - outside screenshot */}
+            <div className="actions" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => { setShowForecast(false); setCachedForecasts(null); }}
+              >
+                סגור
               </button>
-              <button className="btn btn-primary" onClick={shareForecast}>
-                📤 Share to WhatsApp
+              <button 
+                className="btn btn-primary" 
+                onClick={shareForecast}
+                disabled={isSharing}
+              >
+                {isSharing ? '📸...' : '📤 שתף'}
               </button>
             </div>
           </div>
