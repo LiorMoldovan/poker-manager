@@ -17,7 +17,8 @@ const GameDetailsScreen = () => {
   } | null;
   const cameFromRecords = locationState?.from === 'records';
   const cameFromIndividual = locationState?.from === 'individual';
-  const cameFromStatistics = cameFromRecords || cameFromIndividual;
+  const cameFromTable = locationState?.from === 'statistics';
+  const cameFromStatistics = cameFromRecords || cameFromIndividual || cameFromTable;
   const savedViewMode = locationState?.viewMode;
   const savedRecordInfo = locationState?.recordInfo;
   const savedPlayerInfo = locationState?.playerInfo;
@@ -192,7 +193,7 @@ const GameDetailsScreen = () => {
           }
         }}
       >
-        ← {cameFromRecords ? 'Back to Records' : cameFromIndividual ? 'Back to Player Stats' : 'Back to History'}
+        ← {cameFromRecords ? 'Back to Records' : cameFromStatistics ? 'Back to Statistics' : 'Back to History'}
       </button>
       
       {/* Content to be captured for screenshot */}
@@ -329,7 +330,7 @@ const GameDetailsScreen = () => {
             navigate('/history');
           }
         }}>
-          {cameFromRecords ? '📊 Records' : cameFromIndividual ? '👤 Player Stats' : '📜 History'}
+          {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : '📜 History'}
         </button>
         <button 
           className="btn btn-primary btn-lg" 

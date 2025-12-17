@@ -48,6 +48,32 @@ const StatisticsScreen = () => {
     playerId: string;
     game: { date: string; profit: number; gameId: string };
   } | null>(null); // Modal for individual game details in player view
+  const [playerAllGames, setPlayerAllGames] = useState<{
+    playerName: string;
+    playerId: string;
+    games: Array<{ date: string; profit: number; gameId: string }>;
+  } | null>(null); // Modal for all player games
+
+  // Show all games for a player
+  const showPlayerGames = (player: PlayerStats) => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    
+    const playerGames = allGamePlayers
+      .filter(gp => gp.playerId === player.playerId)
+      .map(gp => {
+        const game = allGames.find(g => g.id === gp.gameId);
+        return game ? { date: game.date, profit: gp.profit, gameId: game.id } : null;
+      })
+      .filter((g): g is { date: string; profit: number; gameId: string } => g !== null)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    setPlayerAllGames({
+      playerName: player.playerName,
+      playerId: player.playerId,
+      games: playerGames
+    });
+  };
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -631,7 +657,8 @@ const StatisticsScreen = () => {
               <>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
-                  onClick={() => setTimePeriod('all')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setTimePeriod('all'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -647,7 +674,8 @@ const StatisticsScreen = () => {
                   הכל
                 </button>
                 <button
-                  onClick={() => setTimePeriod('year')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setTimePeriod('year'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -663,7 +691,8 @@ const StatisticsScreen = () => {
                   שנה
                 </button>
                 <button
-                  onClick={() => setTimePeriod('h1')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setTimePeriod('h1'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -679,7 +708,8 @@ const StatisticsScreen = () => {
                   H1
                 </button>
                 <button
-                  onClick={() => setTimePeriod('h2')}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setTimePeriod('h2'); }}
                   style={{
                     flex: 1,
                     minWidth: '50px',
@@ -1201,7 +1231,13 @@ const StatisticsScreen = () => {
                 </thead>
                 <tbody>
                   {sortedStats.map((player, index) => (
-                    <tr key={player.playerId}>
+                    <tr 
+                      key={player.playerId}
+                      onClick={() => showPlayerGames(player)}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = ''}
+                    >
                       <td style={{ padding: '0.4rem 0.25rem', whiteSpace: 'nowrap' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}>
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
@@ -1623,6 +1659,127 @@ const StatisticsScreen = () => {
             >
               📊 View Full Game Details ❯
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Player All Games Modal */}
+      {playerAllGames && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setPlayerAllGames(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              borderRadius: '12px',
+              padding: '1rem',
+              maxWidth: '400px',
+              width: '100%',
+              maxHeight: '70vh',
+              overflow: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>🎮 Game History</h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{playerAllGames.playerName}</div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setPlayerAllGames(null)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  fontSize: '1.5rem', 
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+              {playerAllGames.games.length} משחקים
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {playerAllGames.games.slice(0, 20).map((game, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => {
+                    const savedPlayerInfo = {
+                      playerId: playerAllGames.playerId,
+                      playerName: playerAllGames.playerName
+                    };
+                    setPlayerAllGames(null);
+                    navigate(`/game/${game.gameId}`, { 
+                      state: { 
+                        from: 'statistics', 
+                        viewMode: viewMode
+                      } 
+                    });
+                  }}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '0.5rem 0.75rem',
+                    background: 'var(--surface)',
+                    borderRadius: '6px',
+                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+                      {new Date(game.date).toLocaleDateString('en-GB', { 
+                        day: '2-digit', 
+                        month: '2-digit',
+                        year: 'numeric'
+                      })}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+                  </div>
+                  <span style={{ 
+                    fontWeight: '600',
+                    color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text)'
+                  }}>
+                    {game.profit > 0 ? '+' : ''}{formatCurrency(game.profit)}
+                  </span>
+                </div>
+              ))}
+              {playerAllGames.games.length > 20 && (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '0.5rem', fontSize: '0.75rem' }}>
+                  + {playerAllGames.games.length - 20} more games
+                </div>
+              )}
+            </div>
+            
+            {playerAllGames.games.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                אין נתונים להצגה
+              </div>
+            )}
           </div>
         </div>
       )}

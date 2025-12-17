@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.5.1';
+export const APP_VERSION = '4.5.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.5.2',
+    date: '2025-12-17',
+    changes: [
+      'Fixed: Filter buttons (H1/H2/Year) no longer trigger unwanted popups',
+      'Table view: Click on any player row to see their game history',
+      'Player game history modal shows all games with navigation to full details'
+    ]
+  },
   {
     version: '4.5.1',
     date: '2025-12-17',
