@@ -12,7 +12,11 @@ const StatisticsScreen = () => {
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('year'); // Default to current year
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
+    // Default to current half year
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    return currentMonth <= 6 ? 'h1' : 'h2';
+  });
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [filterActiveOnly, setFilterActiveOnly] = useState(false); // Filter players with > 33% of avg games
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default

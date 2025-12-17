@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.9.3';
+export const APP_VERSION = '3.9.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.9.4',
+    date: '2024-12-17',
+    changes: [
+      'Statistics defaults to current half year (H1 Jan-Jun, H2 Jul-Dec)',
+      'Automatically selects the relevant half based on current date'
+    ]
+  },
   {
     version: '3.9.3',
     date: '2024-12-17',
