@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
-import { getPlayerStats, getAllPlayers, getAllGames, getGamePlayers } from '../database/storage';
+import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
@@ -305,7 +305,7 @@ const StatisticsScreen = () => {
   // Show record details modal
   const showRecordDetails = (title: string, player: PlayerStats, recordType: string) => {
     const allGames = getAllGames().filter(g => g.status === 'completed');
-    const allGamePlayers = getGamePlayers();
+    const allGamePlayers = getAllGamePlayers();
     
     // Get all games for this player
     const playerGames = allGamePlayers
@@ -398,14 +398,19 @@ const StatisticsScreen = () => {
         {canShowDetails && (
           <span
             style={{ 
-              fontSize: '0.7rem', 
+              fontSize: '0.55rem', 
               cursor: 'pointer',
-              opacity: 0.7
+              background: 'var(--primary)',
+              color: 'white',
+              padding: '0.15rem 0.3rem',
+              borderRadius: '4px',
+              fontWeight: '600',
+              marginLeft: '0.2rem'
             }}
             onClick={() => showRecordDetails(recordTitle, players[0], recordType)}
             title="לחץ לפרטים"
           >
-            🔍
+            פרטים ❯
           </span>
         )}
         {isExpanded && hasTies && (

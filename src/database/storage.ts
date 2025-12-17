@@ -248,6 +248,10 @@ export const getGamePlayers = (gameId: string): GamePlayer[] => {
   return getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId === gameId);
 };
 
+export const getAllGamePlayers = (): GamePlayer[] => {
+  return getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+};
+
 export const updateGamePlayerRebuys = (gamePlayerId: string, rebuys: number): void => {
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
   const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
