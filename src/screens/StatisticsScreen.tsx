@@ -309,43 +309,40 @@ const StatisticsScreen = () => {
     const hasTies = players.length > 1;
     
     return (
-      <div style={style}>
-        <div 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.3rem',
-            cursor: hasTies ? 'pointer' : 'default'
-          }}
-          onClick={() => hasTies && toggleRecordExpand(recordKey)}
-        >
-          <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
-          {hasTies && (
-            <span style={{ 
-              fontSize: '0.65rem', 
+      <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
+        {hasTies && (
+          <span 
+            style={{ 
+              fontSize: '0.6rem', 
               background: 'var(--primary)', 
               color: 'white',
-              padding: '0.1rem 0.3rem',
-              borderRadius: '8px',
-              fontWeight: '600'
-            }}>
-              +{players.length - 1} {isExpanded ? '▲' : '▼'}
-            </span>
-          )}
-        </div>
+              padding: '0.1rem 0.25rem',
+              borderRadius: '6px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+            onClick={() => toggleRecordExpand(recordKey)}
+          >
+            +{players.length - 1} {isExpanded ? '▲' : '▼'}
+          </span>
+        )}
         {renderValue(players[0])}
         {isExpanded && hasTies && (
           <div style={{ 
-            marginTop: '0.3rem', 
-            paddingTop: '0.3rem', 
+            width: '100%',
+            marginTop: '0.2rem', 
+            paddingTop: '0.2rem', 
             borderTop: '1px dashed var(--border)',
-            fontSize: '0.8rem'
+            fontSize: '0.75rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.3rem'
           }}>
             {players.slice(1).map(p => (
-              <div key={p.playerId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.1rem 0' }}>
-                <span>{p.playerName}</span>
-                {renderValue(p)}
-              </div>
+              <span key={p.playerId} style={{ fontWeight: '500' }}>
+                {p.playerName}{p !== players[players.length - 1] ? ',' : ''}
+              </span>
             ))}
           </div>
         )}
