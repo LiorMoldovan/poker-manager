@@ -117,7 +117,7 @@ const LiveGameScreen = () => {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title">Live Game</h1>
-        <p className="page-subtitle">Track rebuys during the game</p>
+        <p className="page-subtitle">Track buyins during the game</p>
       </div>
 
       <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
@@ -126,7 +126,7 @@ const LiveGameScreen = () => {
           <div className="summary-value">₪{cleanNumber(totalPot)}</div>
         </div>
         <div>
-          <div className="summary-title">Total Rebuys</div>
+          <div className="summary-title">Total Buyins</div>
           <div className="summary-value">{cleanNumber(totalRebuys)}</div>
         </div>
       </div>
@@ -152,7 +152,7 @@ const LiveGameScreen = () => {
                   className="btn btn-primary btn-sm"
                   onClick={() => handleRebuy(player, 1)}
                 >
-                  +1 Rebuy
+                  +1 Buyin
                 </button>
                 <button 
                   className="btn btn-secondary btn-sm"
@@ -179,7 +179,7 @@ const LiveGameScreen = () => {
             {actions.slice(0, 5).map((action, index) => (
               <div key={index} className="list-item">
                 <span>
-                  {action.playerName} {action.amount === 0.5 ? '+0.5 rebuy' : 'rebought'}
+                  {action.playerName} {action.amount === 0.5 ? '+0.5 buyin' : '+1 buyin'}
                 </span>
                 <span className="text-muted">
                   {new Date(action.timestamp).toLocaleTimeString()}

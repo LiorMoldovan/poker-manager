@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.6.7';
+export const APP_VERSION = '3.7.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.7.0',
+    date: '2024-12-17',
+    changes: [
+      'Terminology: Changed "Rebuy" to "Buyin" across the app',
+      'Buyin = total purchases (initial + additional)',
+      'Updated: Settings, Live Game, Summary, Statistics, Sharing'
+    ]
+  },
   {
     version: '3.6.4',
     date: '2024-12-17',

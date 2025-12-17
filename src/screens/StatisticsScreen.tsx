@@ -747,7 +747,7 @@ const StatisticsScreen = () => {
                   )}
                   {records.rebuyKing.totalRebuys > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎰 Rebuy King</span>
+                      <span style={{ color: 'var(--text-muted)' }}>🎰 Buyin King</span>
                       <span style={{ fontWeight: '600' }}>{records.rebuyKing.playerName} ({records.rebuyKing.totalRebuys} total)</span>
                     </div>
                   )}
@@ -968,7 +968,7 @@ const StatisticsScreen = () => {
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
-                  <div className="stat-label">Total Rebuys</div>
+                  <div className="stat-label">Total Buyins</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>

@@ -57,7 +57,7 @@ export const generateGameSummary = (
     const chipsText = chipValues ? `${chips}k` : '';
     
     summary += `${LTR}│ ${medal} ${player.playerName}\n`;
-    summary += `${LTR}│    ${profitText} • ${chipsText} chips • ${player.rebuys} rebuys\n`;
+    summary += `${LTR}│    ${profitText} • ${chipsText} chips • ${player.rebuys} buyins\n`;
   });
   
   summary += `└──────────────────────┘\n`;

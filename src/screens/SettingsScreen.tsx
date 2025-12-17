@@ -337,7 +337,7 @@ const SettingsScreen = () => {
           <h2 className="card-title mb-2">💰 Game Settings</h2>
           
           <div className="input-group">
-            <label className="label">Rebuy Value (₪)</label>
+            <label className="label">Buyin Value (₪)</label>
             <input
               type="number"
               className="input"
@@ -348,7 +348,7 @@ const SettingsScreen = () => {
           </div>
 
           <div className="input-group">
-            <label className="label">Chips per Rebuy</label>
+            <label className="label">Chips per Buyin</label>
             <input
               type="number"
               className="input"
@@ -357,7 +357,7 @@ const SettingsScreen = () => {
               min="1"
             />
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Each rebuy of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
+              Each buyin of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
               <br />
               Value per 1000 chips: ₪{((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000).toFixed(1)}
             </p>
