@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 
+// Default location options
+const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
+
 const NewGameScreen = () => {
   const navigate = useNavigate();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -15,6 +18,8 @@ const NewGameScreen = () => {
   const [showGuests, setShowGuests] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
+  const [gameLocation, setGameLocation] = useState<string>('');
+  const [customLocation, setCustomLocation] = useState<string>('');
 
   useEffect(() => {
     loadPlayers();
@@ -98,7 +103,9 @@ const NewGameScreen = () => {
       return;
     }
     
-    const game = createGame(Array.from(selectedIds));
+    // Use custom location if "other" is selected, otherwise use selected location
+    const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
+    const game = createGame(Array.from(selectedIds), location || undefined);
     navigate(`/live-game/${game.id}`);
   };
 
@@ -566,6 +573,62 @@ const NewGameScreen = () => {
           )}
         </div>
       )}
+
+      {/* Location Selector */}
+      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📍 מיקום:</span>
+          {LOCATION_OPTIONS.map(loc => (
+            <button
+              key={loc}
+              onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}
+              style={{
+                padding: '0.3rem 0.5rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                border: gameLocation === loc ? '2px solid var(--primary)' : '1px solid var(--border)',
+                background: gameLocation === loc ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                color: gameLocation === loc ? 'var(--primary)' : 'var(--text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              {loc}
+            </button>
+          ))}
+          <button
+            onClick={() => setGameLocation(gameLocation === 'other' ? '' : 'other')}
+            style={{
+              padding: '0.3rem 0.5rem',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              border: gameLocation === 'other' ? '2px solid var(--primary)' : '1px solid var(--border)',
+              background: gameLocation === 'other' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+              color: gameLocation === 'other' ? 'var(--primary)' : 'var(--text-muted)',
+              cursor: 'pointer'
+            }}
+          >
+            אחר...
+          </button>
+        </div>
+        {gameLocation === 'other' && (
+          <input
+            type="text"
+            value={customLocation}
+            onChange={(e) => setCustomLocation(e.target.value)}
+            placeholder="הזן מיקום..."
+            style={{
+              marginTop: '0.4rem',
+              width: '100%',
+              padding: '0.4rem',
+              borderRadius: '6px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              fontSize: '0.8rem'
+            }}
+          />
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
         <button 

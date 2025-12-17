@@ -12,6 +12,7 @@ export interface Game {
   date: string;
   status: 'live' | 'chip_entry' | 'completed';
   createdAt: string;
+  location?: string; // Optional game location (e.g., host name)
   chipGap?: number; // Gap in money value (positive = extra chips, negative = missing chips)
   chipGapPerPlayer?: number; // How much each player's profit was adjusted
 }

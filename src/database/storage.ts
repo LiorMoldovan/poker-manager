@@ -174,7 +174,7 @@ export const getGame = (id: string): Game | undefined => {
   return getAllGames().find(g => g.id === id);
 };
 
-export const createGame = (playerIds: string[]): Game => {
+export const createGame = (playerIds: string[], location?: string): Game => {
   const games = getAllGames();
   const players = getAllPlayers();
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
@@ -184,6 +184,7 @@ export const createGame = (playerIds: string[]): Game => {
     date: new Date().toISOString(),
     status: 'live',
     createdAt: new Date().toISOString(),
+    ...(location && { location }), // Only add location if provided
   };
   
   // Create GamePlayer entries
