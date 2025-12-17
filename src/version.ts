@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.9.5';
+export const APP_VERSION = '3.9.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.9.6',
+    date: '2024-12-17',
+    changes: [
+      'History: Show ALL players sorted by profit (highest first)',
+      'History: Added "פרטים מלאים" button for game details',
+      'History: Shows total buyins instead of pot for new games',
+      'Smaller badges to fit all players in view'
+    ]
+  },
   {
     version: '3.9.5',
     date: '2024-12-17',

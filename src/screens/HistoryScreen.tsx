@@ -21,8 +21,11 @@ const HistoryScreen = () => {
       .filter(g => g.status === 'completed')
       .map(game => {
         const players = getGamePlayers(game.id);
-        const totalPot = players.reduce((sum, p) => sum + p.rebuys * settings.rebuyValue, 0);
-        return { ...game, players, totalPot };
+        // Sort players by profit (highest to lowest)
+        const sortedPlayers = [...players].sort((a, b) => b.profit - a.profit);
+        const totalBuyins = players.reduce((sum, p) => sum + p.rebuys, 0);
+        const totalPot = totalBuyins * settings.rebuyValue;
+        return { ...game, players: sortedPlayers, totalPot, totalBuyins };
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
@@ -65,7 +68,7 @@ const HistoryScreen = () => {
               style={{ cursor: 'pointer' }}
               onClick={() => navigate(`/game/${game.id}`)}
             >
-              <div className="card-header">
+                <div className="card-header">
                 <div>
                   <div style={{ fontWeight: '600' }}>
                     {new Date(game.date).toLocaleDateString('en-US', {
@@ -76,7 +79,7 @@ const HistoryScreen = () => {
                     })}
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                    {game.players.length} players • ₪{cleanNumber(game.totalPot)} pot
+                    {game.players.length} players • {(game as any).totalBuyins > 0 ? `${(game as any).totalBuyins} buyins` : `₪${cleanNumber(game.totalPot)} pot`}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -91,29 +94,47 @@ const HistoryScreen = () => {
                 </div>
               </div>
               
-              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-                {game.players.slice(0, 4).map(p => (
+              {/* All players sorted by profit */}
+              <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                {game.players.map(p => (
                   <span 
                     key={p.id}
                     className={`badge ${p.profit > 0 ? 'badge-success' : p.profit < 0 ? 'badge-danger' : ''}`}
+                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem' }}
                   >
                     {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{cleanNumber(p.profit)}
                   </span>
                 ))}
-                {game.players.length > 4 && (
-                  <span className="badge">+{game.players.length - 4} more</span>
-                )}
               </div>
 
-              <button 
-                className="btn btn-sm btn-danger mt-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteConfirm(game.id);
-                }}
-              >
-                🗑️ Delete
-              </button>
+              {/* Actions row */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
+                <button 
+                  className="btn btn-sm"
+                  style={{ 
+                    background: 'var(--primary)', 
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/game/${game.id}`);
+                  }}
+                >
+                  📊 פרטים מלאים
+                </button>
+                <button 
+                  className="btn btn-sm btn-danger"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirm(game.id);
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           );
         })
