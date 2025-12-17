@@ -18,7 +18,7 @@ const StatisticsScreen = () => {
     return currentMonth <= 6 ? 'h1' : 'h2';
   });
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [filterActiveOnly, setFilterActiveOnly] = useState(false); // Filter players with > 33% of avg games
+  const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
   const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
@@ -327,6 +327,52 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
+            {/* Active Players Filter - Toggle Switch (FIRST) */}
+            <div style={{ 
+              marginBottom: '0.75rem',
+              paddingBottom: '0.75rem',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
+                <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
+                  פעילים בלבד
+                </span>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  ({activeThreshold}+)
+                </span>
+              </div>
+              <button
+                onClick={() => setFilterActiveOnly(!filterActiveOnly)}
+                style={{ 
+                  position: 'relative',
+                  width: '36px',
+                  height: '20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: filterActiveOnly ? 'var(--primary)' : 'var(--border)',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s ease',
+                  padding: 0
+                }}
+              >
+                <span style={{
+                  position: 'absolute',
+                  top: '2px',
+                  left: filterActiveOnly ? '18px' : '2px',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  transition: 'left 0.2s ease'
+                }} />
+              </button>
+            </div>
+
             {/* Time Period Filter */}
             <div style={{ 
               marginBottom: '0.75rem',
@@ -444,52 +490,6 @@ const StatisticsScreen = () => {
               )}
               </>
               )}
-            </div>
-
-            {/* Active Players Filter - Toggle Switch */}
-            <div style={{ 
-              marginBottom: '0.75rem',
-              paddingBottom: '0.75rem',
-              borderBottom: '1px solid var(--border)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
-                <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
-                  פעילים בלבד
-                </span>
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                  ({activeThreshold}+)
-                </span>
-              </div>
-              <button
-                onClick={() => setFilterActiveOnly(!filterActiveOnly)}
-                style={{ 
-                  position: 'relative',
-                  width: '36px',
-                  height: '20px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: filterActiveOnly ? 'var(--primary)' : 'var(--border)',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s ease',
-                  padding: 0
-                }}
-              >
-                <span style={{
-                  position: 'absolute',
-                  top: '2px',
-                  left: filterActiveOnly ? '18px' : '2px',
-                  width: '16px',
-                  height: '16px',
-                  borderRadius: '50%',
-                  background: 'white',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                  transition: 'left 0.2s ease'
-                }} />
-              </button>
             </div>
 
             {/* Player Type Filter (Multi-select) */}
