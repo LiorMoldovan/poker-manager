@@ -697,7 +697,7 @@ const StatisticsScreen = () => {
               {/* Average Performance Records */}
               {(records.highestAvgProfit || records.lowestAvgProfit) && (
                 <div className="card">
-                  <h2 className="card-title mb-2">📊 Average Performance (3+ games)</h2>
+                  <h2 className="card-title mb-2">📊 Average Performance</h2>
                   <div className="grid grid-2">
                     {records.highestAvgProfit && (
                       <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
