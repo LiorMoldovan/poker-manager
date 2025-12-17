@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '3.4.2';
+export const APP_VERSION = '3.4.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '3.4.3',
+    date: '2024-12-16',
+    changes: [
+      'UI: Unified selection colors across all screens',
+      'All selected/active buttons now use consistent green'
+    ]
+  },
   {
     version: '3.4.2',
     date: '2024-12-16',

@@ -344,9 +344,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'year' ? '2px solid #F59E0B' : '1px solid var(--border)',
-                    background: timePeriod === 'year' ? 'rgba(245, 158, 11, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'year' ? '#F59E0B' : 'var(--text-muted)',
+                    border: timePeriod === 'year' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'year' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'year' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -360,9 +360,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'h1' ? '2px solid #3B82F6' : '1px solid var(--border)',
-                    background: timePeriod === 'h1' ? 'rgba(59, 130, 246, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'h1' ? '#3B82F6' : 'var(--text-muted)',
+                    border: timePeriod === 'h1' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'h1' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h1' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -376,9 +376,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === 'h2' ? '2px solid #EC4899' : '1px solid var(--border)',
-                    background: timePeriod === 'h2' ? 'rgba(236, 72, 153, 0.15)' : 'var(--surface)',
-                    color: timePeriod === 'h2' ? '#EC4899' : 'var(--text-muted)',
+                    border: timePeriod === 'h2' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'h2' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h2' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -436,9 +436,9 @@ const StatisticsScreen = () => {
                       padding: '0.4rem',
                       fontSize: '0.7rem',
                       borderRadius: '6px',
-                      border: minGames === num ? '2px solid #06B6D4' : '1px solid var(--border)',
-                      background: minGames === num ? 'rgba(6, 182, 212, 0.15)' : 'var(--surface)',
-                      color: minGames === num ? '#06B6D4' : 'var(--text-muted)',
+                      border: minGames === num ? '2px solid var(--primary)' : '1px solid var(--border)',
+                      background: minGames === num ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                      color: minGames === num ? 'var(--primary)' : 'var(--text-muted)',
                       cursor: 'pointer'
                     }}
                   >
@@ -498,9 +498,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: selectedTypes.has('permanent_guest') ? '2px solid #8B5CF6' : '1px solid var(--border)',
-                    background: selectedTypes.has('permanent_guest') ? 'rgba(139, 92, 246, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('permanent_guest') ? '#8B5CF6' : 'var(--text-muted)',
+                    border: selectedTypes.has('permanent_guest') ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: selectedTypes.has('permanent_guest') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('permanent_guest') ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
@@ -514,9 +514,9 @@ const StatisticsScreen = () => {
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: selectedTypes.has('guest') ? '2px solid #6B7280' : '1px solid var(--border)',
-                    background: selectedTypes.has('guest') ? 'rgba(100, 100, 100, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('guest') ? 'var(--text)' : 'var(--text-muted)',
+                    border: selectedTypes.has('guest') ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: selectedTypes.has('guest') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: selectedTypes.has('guest') ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >

@@ -434,8 +434,8 @@ const SettingsScreen = () => {
                       fontSize: '0.7rem', 
                       padding: '0.15rem 0.4rem', 
                       borderRadius: '4px',
-                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : player.type === 'permanent_guest' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(100, 100, 100, 0.15)',
-                      color: player.type === 'permanent' ? 'var(--primary)' : player.type === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
+                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : player.type === 'permanent_guest' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(100, 100, 100, 0.15)',
+                      color: player.type === 'permanent' ? 'var(--primary)' : player.type === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)'
                     }}>
                       {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '⭐ אורח קבוע' : '👤 אורח'}
                     </span>
@@ -722,9 +722,9 @@ const SettingsScreen = () => {
                     minWidth: '70px',
                     fontSize: '0.8rem',
                     padding: '0.5rem',
-                    background: newPlayerType === 'permanent_guest' ? 'rgba(139, 92, 246, 0.2)' : 'var(--surface)',
-                    border: newPlayerType === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
-                    color: newPlayerType === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
+                    background: newPlayerType === 'permanent_guest' ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface)',
+                    border: newPlayerType === 'permanent_guest' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    color: newPlayerType === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)'
                   }}
                   onClick={() => setNewPlayerType('permanent_guest')}
                 >
@@ -805,9 +805,9 @@ const SettingsScreen = () => {
                     minWidth: '70px',
                     fontSize: '0.8rem',
                     padding: '0.5rem',
-                    background: editPlayerType === 'permanent_guest' ? 'rgba(139, 92, 246, 0.2)' : 'var(--surface)',
-                    border: editPlayerType === 'permanent_guest' ? '2px solid #8B5CF6' : '1px solid var(--border)',
-                    color: editPlayerType === 'permanent_guest' ? '#8B5CF6' : 'var(--text-muted)'
+                    background: editPlayerType === 'permanent_guest' ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface)',
+                    border: editPlayerType === 'permanent_guest' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    color: editPlayerType === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)'
                   }}
                   onClick={() => setEditPlayerType('permanent_guest')}
                 >
