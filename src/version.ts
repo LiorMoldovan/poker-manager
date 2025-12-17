@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.1.1';
+export const APP_VERSION = '4.1.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.1.2',
+    date: '2024-12-17',
+    changes: [
+      'Fixed: אורח filter button now highlights green like others'
+    ]
+  },
   {
     version: '4.1.1',
     date: '2024-12-17',
