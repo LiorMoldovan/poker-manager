@@ -15,6 +15,7 @@ const StatisticsScreen = () => {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [minGames, setMinGames] = useState<number>(0);
+  const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -525,55 +526,73 @@ const StatisticsScreen = () => {
               </div>
             </div>
 
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: '0.5rem'
-            }}>
+            <button 
+              onClick={() => setShowPlayerFilter(!showPlayerFilter)}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                width: '100%',
+                padding: 0,
+                marginBottom: showPlayerFilter ? '0.5rem' : 0,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text)'
+              }}
+            >
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
                 FILTER PLAYERS ({selectedPlayers.size}/{availableStats.length})
               </span>
-              <button
-                onClick={toggleAllPlayers}
-                style={{
-                  padding: '0.25rem 0.5rem',
-                  fontSize: '0.7rem',
-                  borderRadius: '4px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer'
-                }}
-              >
-                {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-              {availableStats.map(player => {
-                const isSelected = selectedPlayers.has(player.playerId);
-                const isGuest = getPlayerType(player.playerId) === 'guest';
-                return (
+              <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+                {showPlayerFilter ? '▲' : '▼'}
+              </span>
+            </button>
+            {showPlayerFilter && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                   <button
-                    key={player.playerId}
-                    onClick={() => togglePlayer(player.playerId)}
+                    onClick={toggleAllPlayers}
                     style={{
-                      padding: '0.4rem 0.65rem',
-                      borderRadius: '16px',
-                      border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
-                      background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem',
-                      fontWeight: '600',
-                      color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
-                      transition: 'all 0.15s ease'
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer'
                     }}
                   >
-                    {isSelected && '✓ '}{isGuest && '👤 '}{player.playerName}
+                    {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
                   </button>
-                );
-              })}
-            </div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {availableStats.map(player => {
+                    const isSelected = selectedPlayers.has(player.playerId);
+                    const isGuest = getPlayerType(player.playerId) === 'guest';
+                    return (
+                      <button
+                        key={player.playerId}
+                        onClick={() => togglePlayer(player.playerId)}
+                        style={{
+                          padding: '0.4rem 0.65rem',
+                          borderRadius: '16px',
+                          border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
+                          background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          fontWeight: '600',
+                          color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {isSelected && '✓ '}{isGuest && '👤 '}{player.playerName}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
           {/* RECORDS VIEW */}
