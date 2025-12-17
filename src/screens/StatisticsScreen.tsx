@@ -735,13 +735,13 @@ const StatisticsScreen = () => {
                   </div>
                   {records.sharpshooter && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎯 Best Win Rate (3+ games)</span>
+                      <span style={{ color: 'var(--text-muted)' }}>🎯 Best Win Rate</span>
                       <span style={{ fontWeight: '600', color: 'var(--success)' }}>{records.sharpshooter.playerName} ({records.sharpshooter.winPercentage.toFixed(0)}%)</span>
                     </div>
                   )}
                   {records.worstWinRate && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎲 Worst Win Rate (3+ games)</span>
+                      <span style={{ color: 'var(--text-muted)' }}>🎲 Worst Win Rate</span>
                       <span style={{ fontWeight: '600', color: 'var(--danger)' }}>{records.worstWinRate.playerName} ({records.worstWinRate.winPercentage.toFixed(0)}%)</span>
                     </div>
                   )}
