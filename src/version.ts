@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.2.2';
+export const APP_VERSION = '4.2.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.2.3',
+    date: '2024-12-17',
+    changes: [
+      'Fixed: Records drill-down now shows actual game data',
+      'UI: Changed icon to clearer "פרטים ❯" button',
+      'Added getAllGamePlayers function for record details'
+    ]
+  },
   {
     version: '4.2.2',
     date: '2024-12-17',
