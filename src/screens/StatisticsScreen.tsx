@@ -412,30 +412,29 @@ const StatisticsScreen = () => {
               </div>
               {/* Year Selector - only show when not "all" */}
               {timePeriod !== 'all' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>שנה:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                     style={{
-                      flex: 1,
-                      padding: '0.35rem',
-                      fontSize: '0.8rem',
-                      borderRadius: '6px',
+                      padding: '0.25rem 0.4rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '4px',
                       border: '1px solid var(--border)',
                       background: 'var(--surface)',
                       color: 'var(--text)',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      minWidth: '60px'
                     }}
                   >
                     {getAvailableYears().map(year => (
                       <option key={year} value={year}>{year}</option>
                     ))}
                   </select>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {timePeriod === 'h1' && `ינו-יוני ${selectedYear}`}
-                    {timePeriod === 'h2' && `יולי-דצמ ${selectedYear}`}
-                    {timePeriod === 'year' && `${selectedYear}`}
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
+                    {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
                   </span>
                 </div>
               )}
@@ -443,31 +442,49 @@ const StatisticsScreen = () => {
               )}
             </div>
 
-            {/* Active Players Filter */}
+            {/* Active Players Filter - Toggle Switch */}
             <div style={{ 
               marginBottom: '0.75rem',
               paddingBottom: '0.75rem',
-              borderBottom: '1px solid var(--border)'
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
+                <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
+                  פעילים בלבד
+                </span>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  ({activeThreshold}+)
+                </span>
+              </div>
               <button
                 onClick={() => setFilterActiveOnly(!filterActiveOnly)}
                 style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  width: '100%', 
-                  padding: '0.5rem 0.75rem',
-                  background: filterActiveOnly ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                  border: filterActiveOnly ? '2px solid var(--primary)' : '1px solid var(--border)',
-                  borderRadius: '8px',
+                  position: 'relative',
+                  width: '36px',
+                  height: '20px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: filterActiveOnly ? 'var(--primary)' : 'var(--border)',
                   cursor: 'pointer',
-                  color: 'var(--text)'
+                  transition: 'background 0.2s ease',
+                  padding: 0
                 }}
               >
-                <span style={{ fontSize: '0.75rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '600' }}>
-                  🎮 {filterActiveOnly ? '✓ ' : ''}שחקנים פעילים בלבד
-                </span>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                  ({activeThreshold}+ משחקים)
-                </span>
+                <span style={{
+                  position: 'absolute',
+                  top: '2px',
+                  left: filterActiveOnly ? '18px' : '2px',
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  background: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  transition: 'left 0.2s ease'
+                }} />
               </button>
             </div>
 
