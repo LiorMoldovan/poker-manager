@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
+import { usePermissions } from '../App';
 
 // Default location options
 const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
 
 const NewGameScreen = () => {
   const navigate = useNavigate();
+  const { role } = usePermissions();
+  const isAdmin = role === 'admin';
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddPlayer, setShowAddPlayer] = useState(false);
@@ -1027,19 +1030,21 @@ const NewGameScreen = () => {
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        <button 
-          className="btn btn-secondary"
-          onClick={handleShowForecast}
-          disabled={selectedIds.size < 2}
-          style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem' }}
-        >
-          🔮 Forecast
-        </button>
+        {isAdmin && (
+          <button 
+            className="btn btn-secondary"
+            onClick={handleShowForecast}
+            disabled={selectedIds.size < 2}
+            style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem' }}
+          >
+            🔮 Forecast
+          </button>
+        )}
         <button 
           className="btn btn-primary"
           onClick={handleStartGame}
           disabled={selectedIds.size < 2}
-          style={{ padding: '0.6rem', flex: '2', fontSize: '0.9rem' }}
+          style={{ padding: '0.6rem', flex: isAdmin ? '2' : '1', fontSize: '0.9rem' }}
         >
           🎰 Start Game ({selectedIds.size})
         </button>
