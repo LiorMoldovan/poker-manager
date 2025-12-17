@@ -504,7 +504,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {selectedTypes.has('permanent_guest') && '✓ '}👥 אורחים ({permanentGuestStats.length})
+                  {selectedTypes.has('permanent_guest') && '✓ '}🏠 אורח ({permanentGuestStats.length})
                 </button>
                 <button
                   onClick={() => toggleType('guest')}
@@ -520,7 +520,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {selectedTypes.has('guest') && '✓ '}👤 מזדמנים ({guestStats.length})
+                  {selectedTypes.has('guest') && '✓ '}👤 מזדמן ({guestStats.length})
                 </button>
               </div>
             </div>

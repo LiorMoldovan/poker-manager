@@ -513,7 +513,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              👥 אורחים ({permanentGuestPlayers.length})
+              🏠 אורח ({permanentGuestPlayers.length})
             </span>
             <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
               {showPermanentGuests ? '▲' : '▼'}
@@ -551,7 +551,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              👤 מזדמנים ({guestPlayers.length})
+              👤 מזדמן ({guestPlayers.length})
             </span>
             <span style={{ fontSize: '1.2rem', color: 'var(--text-muted)' }}>
               {showGuests ? '▲' : '▼'}
@@ -649,7 +649,7 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  👥 אורחים
+                  🏠 אורח
                 </button>
                 <button
                   type="button"
@@ -667,13 +667,13 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  👤 מזדמנים
+                  👤 מזדמן
                 </button>
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                 {newPlayerType === 'permanent' && 'רשימה ראשית - חברי הקבוצה הקבועים'}
-                {newPlayerType === 'permanent_guest' && 'אורחים קבועים שמגיעים לעתים קרובות'}
-                {newPlayerType === 'guest' && 'שחקנים מזדמנים שמגיעים לפעמים'}
+                {newPlayerType === 'permanent_guest' && 'אורח קבוע שמגיע לעתים קרובות'}
+                {newPlayerType === 'guest' && 'שחקן מזדמן שמגיע לפעמים'}
               </p>
             </div>
 

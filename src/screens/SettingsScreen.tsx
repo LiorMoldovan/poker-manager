@@ -452,7 +452,7 @@ const SettingsScreen = () => {
                       background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : player.type === 'permanent_guest' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(100, 100, 100, 0.15)',
                       color: player.type === 'permanent' ? 'var(--primary)' : player.type === 'permanent_guest' ? 'var(--primary)' : 'var(--text-muted)'
                     }}>
-                      {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '👥 אורחים' : '👤 מזדמנים'}
+                      {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '🏠 אורח' : '👤 מזדמן'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.35rem' }}>
@@ -743,7 +743,7 @@ const SettingsScreen = () => {
                   }}
                   onClick={() => setNewPlayerType('permanent_guest')}
                 >
-                  👥 אורחים
+                  🏠 אורח
                 </button>
                 <button
                   className="btn"
@@ -758,7 +758,7 @@ const SettingsScreen = () => {
                   }}
                   onClick={() => setNewPlayerType('guest')}
                 >
-                  👤 מזדמנים
+                  👤 מזדמן
                 </button>
               </div>
             </div>
@@ -826,7 +826,7 @@ const SettingsScreen = () => {
                   }}
                   onClick={() => setEditPlayerType('permanent_guest')}
                 >
-                  👥 אורחים
+                  🏠 אורח
                 </button>
                 <button
                   className="btn"
@@ -841,7 +841,7 @@ const SettingsScreen = () => {
                   }}
                   onClick={() => setEditPlayerType('guest')}
                 >
-                  👤 מזדמנים
+                  👤 מזדמן
                 </button>
               </div>
             </div>
