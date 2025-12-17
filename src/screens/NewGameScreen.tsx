@@ -576,16 +576,16 @@ const NewGameScreen = () => {
 
       {/* Location Selector */}
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📍 מיקום:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📍</span>
           {LOCATION_OPTIONS.map(loc => (
             <button
               key={loc}
               onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}
               style={{
-                padding: '0.3rem 0.5rem',
+                padding: '0.25rem 0.4rem',
                 borderRadius: '6px',
-                fontSize: '0.75rem',
+                fontSize: '0.7rem',
                 border: gameLocation === loc ? '2px solid var(--primary)' : '1px solid var(--border)',
                 background: gameLocation === loc ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
                 color: gameLocation === loc ? 'var(--primary)' : 'var(--text-muted)',
@@ -598,16 +598,16 @@ const NewGameScreen = () => {
           <button
             onClick={() => setGameLocation(gameLocation === 'other' ? '' : 'other')}
             style={{
-              padding: '0.3rem 0.5rem',
+              padding: '0.25rem 0.4rem',
               borderRadius: '6px',
-              fontSize: '0.75rem',
+              fontSize: '0.7rem',
               border: gameLocation === 'other' ? '2px solid var(--primary)' : '1px solid var(--border)',
               background: gameLocation === 'other' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
               color: gameLocation === 'other' ? 'var(--primary)' : 'var(--text-muted)',
               cursor: 'pointer'
             }}
           >
-            אחר...
+            אחר
           </button>
         </div>
         {gameLocation === 'other' && (
