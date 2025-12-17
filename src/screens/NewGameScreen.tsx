@@ -420,15 +420,15 @@ const NewGameScreen = () => {
     setShowForecast(true);
   };
 
-  // Render player tile - compact version
+  // Render player tile - balanced size
   const renderPlayerTile = (player: Player) => (
     <div
       key={player.id}
       onClick={() => togglePlayer(player.id)}
       style={{
-        padding: '0.4rem 0.35rem',
-        borderRadius: '8px',
-        fontSize: '0.85rem',
+        padding: '0.5rem 0.4rem',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
         fontWeight: '600',
         cursor: 'pointer',
         border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
@@ -460,7 +460,7 @@ const NewGameScreen = () => {
       )}
 
       {/* Permanent Players */}
-      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.5rem' }}>
+      <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
         {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '0.75rem' }}>
             <div style={{ fontSize: '1.5rem' }}>👥</div>
@@ -471,8 +471,8 @@ const NewGameScreen = () => {
             {permanentPlayers.length > 0 && (
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))',
-                gap: '0.4rem'
+                gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+                gap: '0.5rem'
               }}>
                 {permanentPlayers.map(renderPlayerTile)}
               </div>
@@ -484,8 +484,8 @@ const NewGameScreen = () => {
           onClick={() => setShowAddPlayer(true)}
           style={{
             width: '100%',
-            marginTop: permanentPlayers.length > 0 ? '0.5rem' : '0',
-            padding: '0.35rem',
+            marginTop: permanentPlayers.length > 0 ? '0.6rem' : '0',
+            padding: '0.4rem',
             border: '2px dashed var(--border)',
             borderRadius: '6px',
             background: 'transparent',
@@ -500,7 +500,7 @@ const NewGameScreen = () => {
 
       {/* Guests Section */}
       {permanentGuestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.5rem' }}>
+        <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
           <button
             onClick={() => setShowPermanentGuests(!showPermanentGuests)}
             style={{
@@ -515,7 +515,7 @@ const NewGameScreen = () => {
               color: 'var(--text)'
             }}
           >
-            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
               🏠 אורח ({permanentGuestPlayers.length})
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
@@ -526,8 +526,8 @@ const NewGameScreen = () => {
           {showPermanentGuests && (
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))',
-              gap: '0.4rem',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+              gap: '0.5rem',
               marginTop: '0.5rem'
             }}>
               {permanentGuestPlayers.map(renderPlayerTile)}
@@ -538,7 +538,7 @@ const NewGameScreen = () => {
 
       {/* Occasional Players Section */}
       {guestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.5rem' }}>
+        <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
           <button
             onClick={() => setShowGuests(!showGuests)}
             style={{
@@ -553,7 +553,7 @@ const NewGameScreen = () => {
               color: 'var(--text)'
             }}
           >
-            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
               👤 מזדמן ({guestPlayers.length})
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
@@ -564,8 +564,8 @@ const NewGameScreen = () => {
           {showGuests && (
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(85px, 1fr))',
-              gap: '0.4rem',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+              gap: '0.5rem',
               marginTop: '0.5rem'
             }}>
               {guestPlayers.map(renderPlayerTile)}
@@ -575,7 +575,7 @@ const NewGameScreen = () => {
       )}
 
       {/* Location Selector */}
-      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.5rem' }}>
+      <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>📍 מיקום:</span>
           {LOCATION_OPTIONS.map(loc => (
