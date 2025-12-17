@@ -40,28 +40,21 @@ const NewGameScreen = () => {
     setSelectedIds(newSelected);
   };
 
-  // Get all currently visible player IDs (permanent always visible + expanded sections)
-  const getVisiblePlayerIds = (): string[] => {
-    const visible = [...permanentPlayers.map(p => p.id)];
-    if (showPermanentGuests) {
-      visible.push(...permanentGuestPlayers.map(p => p.id));
-    }
-    if (showGuests) {
-      visible.push(...guestPlayers.map(p => p.id));
-    }
-    return visible;
-  };
-
+  // Select/Deselect only permanent players
   const selectAll = () => {
-    const visibleIds = getVisiblePlayerIds();
-    const allVisibleSelected = visibleIds.every(id => selectedIds.has(id));
+    const permanentIds = permanentPlayers.map(p => p.id);
+    const allPermanentSelected = permanentIds.every(id => selectedIds.has(id));
     
-    if (allVisibleSelected && selectedIds.size > 0) {
-      // All visible are selected - clear all
-      setSelectedIds(new Set());
+    if (allPermanentSelected && permanentIds.length > 0) {
+      // All permanent are selected - deselect them (keep other selections)
+      const newSet = new Set(selectedIds);
+      permanentIds.forEach(id => newSet.delete(id));
+      setSelectedIds(newSet);
     } else {
-      // Select all visible
-      setSelectedIds(new Set(visibleIds));
+      // Select all permanent (add to existing selections)
+      const newSet = new Set(selectedIds);
+      permanentIds.forEach(id => newSet.add(id));
+      setSelectedIds(newSet);
     }
   };
 
@@ -442,9 +435,9 @@ const NewGameScreen = () => {
           <h1 className="page-title" style={{ fontSize: '1.5rem', marginBottom: '0.1rem' }}>New Game</h1>
           <p className="page-subtitle" style={{ fontSize: '0.8rem' }}>Select players</p>
         </div>
-        {players.length > 0 && (
+        {permanentPlayers.length > 0 && (
           <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}>
-            {selectedIds.size > 0 && getVisiblePlayerIds().every(id => selectedIds.has(id)) ? 'Deselect All' : 'Select All'}
+            {permanentPlayers.every(p => selectedIds.has(p.id)) ? 'Deselect All' : 'Select All'}
           </button>
         )}
       </div>
