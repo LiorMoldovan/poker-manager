@@ -424,15 +424,16 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       }
     }
     
-    // Last 10 game results (most recent first) with dates
+    // Last 6 game results (most recent first) with dates and gameId
     const lastGameResults = sortedPlayerGames
-      .slice(-10)
+      .slice(-6)
       .reverse()
       .map(pg => {
         const game = sortedGames.find(g => g.id === pg.gameId);
         return {
           profit: pg.profit,
-          date: game ? game.date || game.createdAt : ''
+          date: game ? game.date || game.createdAt : '',
+          gameId: pg.gameId
         };
       });
     

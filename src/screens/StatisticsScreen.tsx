@@ -12,13 +12,16 @@ const StatisticsScreen = () => {
   const locationState = location.state as { 
     viewMode?: 'table' | 'records' | 'individual';
     recordInfo?: { title: string; playerId: string; recordType: string };
+    playerInfo?: { playerId: string; playerName: string };
   } | null;
   const initialViewMode = locationState?.viewMode || 'table';
   const savedRecordInfo = locationState?.recordInfo;
+  const savedPlayerInfo = locationState?.playerInfo;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
+  const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
@@ -40,6 +43,11 @@ const StatisticsScreen = () => {
     recordType: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for record details
+  const [playerGameDetails, setPlayerGameDetails] = useState<{
+    playerName: string;
+    playerId: string;
+    game: { date: string; profit: number; gameId: string };
+  } | null>(null); // Modal for individual game details in player view
 
   // Get available years from games
   const getAvailableYears = (): number[] => {
@@ -95,6 +103,26 @@ const StatisticsScreen = () => {
       window.history.replaceState({}, document.title);
     }
   }, [savedRecordInfo, stats]);
+
+  // Scroll to selected player when coming back from individual game view
+  useEffect(() => {
+    if (savedPlayerInfo && viewMode === 'individual' && stats.length > 0) {
+      // Small delay to ensure the cards are rendered
+      setTimeout(() => {
+        const playerCard = document.getElementById(`player-card-${savedPlayerInfo.playerId}`);
+        if (playerCard) {
+          playerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Add a brief highlight effect
+          playerCard.style.boxShadow = '0 0 0 3px var(--primary)';
+          setTimeout(() => {
+            playerCard.style.boxShadow = '';
+          }, 2000);
+        }
+        // Clear the location state to prevent re-triggering
+        window.history.replaceState({}, document.title);
+      }, 100);
+    }
+  }, [savedPlayerInfo, viewMode, stats]);
 
   const loadStats = () => {
     const dateFilter = getDateFilter();
@@ -194,7 +222,7 @@ const StatisticsScreen = () => {
         if (newSet.size > 1) {
           newSet.delete(type);
         }
-      } else {
+    } else {
         newSet.add(type);
       }
       return newSet;
@@ -535,9 +563,9 @@ const StatisticsScreen = () => {
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
             {/* Active Players Filter - Toggle Switch (FIRST) */}
-            <div style={{ 
-              marginBottom: '0.75rem',
-              paddingBottom: '0.75rem',
+              <div style={{ 
+                marginBottom: '0.75rem',
+                paddingBottom: '0.75rem',
               borderBottom: '1px solid var(--border)',
               display: 'flex',
               justifyContent: 'space-between',
@@ -552,16 +580,16 @@ const StatisticsScreen = () => {
                   ({activeThreshold}+)
                 </span>
               </div>
-              <button
+                <button
                 onClick={() => setFilterActiveOnly(!filterActiveOnly)}
-                style={{ 
+                  style={{
                   position: 'relative',
                   width: '36px',
                   height: '20px',
                   borderRadius: '10px',
-                  border: 'none',
+                    border: 'none',
                   background: filterActiveOnly ? 'var(--primary)' : 'var(--border)',
-                  cursor: 'pointer',
+                    cursor: 'pointer',
                   transition: 'background 0.2s ease',
                   padding: 0
                 }}
@@ -572,12 +600,12 @@ const StatisticsScreen = () => {
                   left: filterActiveOnly ? '18px' : '2px',
                   width: '16px',
                   height: '16px',
-                  borderRadius: '50%',
-                  background: 'white',
+                    borderRadius: '50%',
+                    background: 'white',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-                  transition: 'left 0.2s ease'
-                }} />
-              </button>
+                    transition: 'left 0.2s ease'
+                  }} />
+                </button>
             </div>
 
             {/* Time Period Filter */}
@@ -693,8 +721,8 @@ const StatisticsScreen = () => {
                     {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
                     {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
                   </span>
-                </div>
-              )}
+              </div>
+            )}
               </>
               )}
             </div>
@@ -793,9 +821,9 @@ const StatisticsScreen = () => {
             <button 
               onClick={() => setShowPlayerFilter(!showPlayerFilter)}
               style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
                 width: '100%',
                 padding: 0,
                 marginBottom: showPlayerFilter ? '0.5rem' : 0,
@@ -815,46 +843,46 @@ const StatisticsScreen = () => {
             {showPlayerFilter && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
+              <button
+                onClick={toggleAllPlayers}
+                style={{
+                  padding: '0.25rem 0.5rem',
+                  fontSize: '0.7rem',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer'
+                }}
+              >
+                {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {availableStats.map(player => {
+                const isSelected = selectedPlayers.has(player.playerId);
+                const isGuest = getPlayerType(player.playerId) === 'guest';
+                return (
                   <button
-                    onClick={toggleAllPlayers}
+                    key={player.playerId}
+                    onClick={() => togglePlayer(player.playerId)}
                     style={{
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.7rem',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer'
+                      padding: '0.4rem 0.65rem',
+                      borderRadius: '16px',
+                      border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
+                      background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
+                      transition: 'all 0.15s ease'
                     }}
                   >
-                    {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
+                    {isSelected && '✓ '}{isGuest && '👤 '}{player.playerName}
                   </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {availableStats.map(player => {
-                    const isSelected = selectedPlayers.has(player.playerId);
-                    const isGuest = getPlayerType(player.playerId) === 'guest';
-                    return (
-                      <button
-                        key={player.playerId}
-                        onClick={() => togglePlayer(player.playerId)}
-                        style={{
-                          padding: '0.4rem 0.65rem',
-                          borderRadius: '16px',
-                          border: isSelected ? '2px solid var(--primary)' : '2px solid var(--border)',
-                          background: isSelected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: '600',
-                          color: isSelected ? 'var(--primary)' : 'var(--text-muted)',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {isSelected && '✓ '}{isGuest && '👤 '}{player.playerName}
-                      </button>
-                    );
-                  })}
-                </div>
+                );
+              })}
+            </div>
               </>
             )}
           </div>
@@ -1118,7 +1146,7 @@ const StatisticsScreen = () => {
                         'all',
                         '🎰 כל המשחקים'
                       )}
-                    </div>
+                  </div>
                   )}
                 </div>
               </div>
@@ -1202,7 +1230,7 @@ const StatisticsScreen = () => {
 
           {/* INDIVIDUAL VIEW */}
           {viewMode === 'individual' && sortedStats.map((player, index) => (
-            <div key={player.playerId} className="card">
+            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease' }}>
               <div className="card-header">
                 <h3 className="card-title">
                   {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
@@ -1236,30 +1264,37 @@ const StatisticsScreen = () => {
               {/* Last 6 Games */}
               {player.lastGameResults && player.lastGameResults.length > 0 && (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastGameResults.length} games</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastGameResults.length} games (click for details)</div>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
                     {player.lastGameResults.map((game, i) => {
                       const gameDate = new Date(game.date);
                       const dateStr = gameDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
                       return (
-                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div 
+                        key={i}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                          onClick={() => setPlayerGameDetails({ playerName: player.playerName, playerId: player.playerId, game })}
+                        >
                           <div 
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '6px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.9rem',
-                              fontWeight: '700',
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.9rem',
+                          fontWeight: '700',
                               background: game.profit > 0 ? 'rgba(34, 197, 94, 0.2)' : game.profit < 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(156, 163, 175, 0.2)',
                               color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text-muted)',
-                              border: `1px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`
+                              border: `1px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+                              transition: 'transform 0.1s ease'
                             }}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                           >
                             {game.profit > 0 ? 'W' : game.profit < 0 ? 'L' : '-'}
-                          </div>
+                      </div>
                           <div style={{ 
                             fontSize: '0.5rem', 
                             color: 'var(--text-muted)', 
@@ -1471,6 +1506,123 @@ const StatisticsScreen = () => {
                 אין נתונים להצגה
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Player Game Details Modal */}
+      {playerGameDetails && (
+        <div 
+          className="modal-overlay" 
+          onClick={() => setPlayerGameDetails(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+        >
+          <div 
+            className="modal"
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--card)',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              maxWidth: '320px',
+              width: '100%'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>🎮 Game Details</h3>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{playerGameDetails.playerName}</div>
+              </div>
+              <button 
+                onClick={() => setPlayerGameDetails(null)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  fontSize: '1.5rem', 
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  padding: 0,
+                  lineHeight: 1
+                }}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div style={{ 
+              padding: '1rem',
+              background: 'var(--surface)',
+              borderRadius: '8px',
+              borderRight: `4px solid ${playerGameDetails.game.profit > 0 ? 'var(--success)' : playerGameDetails.game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+              marginBottom: '1rem'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>📅 Date</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+                  {new Date(playerGameDetails.game.date).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: '2-digit',
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>💰 Result</span>
+                <span style={{ 
+                  fontSize: '1.1rem', 
+                  fontWeight: '700',
+                  color: playerGameDetails.game.profit > 0 ? 'var(--success)' : playerGameDetails.game.profit < 0 ? 'var(--danger)' : 'var(--text)'
+                }}>
+                  {playerGameDetails.game.profit > 0 ? '+' : ''}{formatCurrency(playerGameDetails.game.profit)}
+                </span>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => {
+                const savedPlayerInfo = {
+                  playerId: playerGameDetails.playerId,
+                  playerName: playerGameDetails.playerName
+                };
+                setPlayerGameDetails(null);
+                navigate(`/game/${playerGameDetails.game.gameId}`, { 
+                  state: { 
+                    from: 'individual', 
+                    viewMode: 'individual',
+                    playerInfo: savedPlayerInfo
+                  } 
+                });
+              }}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                background: 'var(--primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              📊 View Full Game Details ❯
+            </button>
           </div>
         </div>
       )}

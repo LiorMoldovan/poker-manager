@@ -13,10 +13,14 @@ const GameDetailsScreen = () => {
     from?: string; 
     viewMode?: string;
     recordInfo?: { title: string; playerId: string; recordType: string };
+    playerInfo?: { playerId: string; playerName: string };
   } | null;
   const cameFromRecords = locationState?.from === 'records';
+  const cameFromIndividual = locationState?.from === 'individual';
+  const cameFromStatistics = cameFromRecords || cameFromIndividual;
   const savedViewMode = locationState?.viewMode;
   const savedRecordInfo = locationState?.recordInfo;
+  const savedPlayerInfo = locationState?.playerInfo;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -174,9 +178,21 @@ const GameDetailsScreen = () => {
     <div className="fade-in">
       <button 
         className="btn btn-sm btn-secondary mb-2"
-        onClick={() => cameFromRecords ? navigate('/statistics', { state: { viewMode: savedViewMode, recordInfo: savedRecordInfo } }) : navigate('/history')}
+        onClick={() => {
+          if (cameFromStatistics) {
+            navigate('/statistics', { 
+              state: { 
+                viewMode: savedViewMode, 
+                recordInfo: savedRecordInfo,
+                playerInfo: savedPlayerInfo
+              } 
+            });
+          } else {
+            navigate('/history');
+          }
+        }}
       >
-        ← {cameFromRecords ? 'Back to Records' : 'Back to History'}
+        ← {cameFromRecords ? 'Back to Records' : cameFromIndividual ? 'Back to Player Stats' : 'Back to History'}
       </button>
       
       {/* Content to be captured for screenshot */}
@@ -300,8 +316,20 @@ const GameDetailsScreen = () => {
 
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-        <button className="btn btn-secondary btn-lg" onClick={() => cameFromRecords ? navigate('/statistics', { state: { viewMode: savedViewMode, recordInfo: savedRecordInfo } }) : navigate('/history')}>
-          {cameFromRecords ? '📊 Records' : '📜 History'}
+        <button className="btn btn-secondary btn-lg" onClick={() => {
+          if (cameFromStatistics) {
+            navigate('/statistics', { 
+              state: { 
+                viewMode: savedViewMode, 
+                recordInfo: savedRecordInfo,
+                playerInfo: savedPlayerInfo
+              } 
+            });
+          } else {
+            navigate('/history');
+          }
+        }}>
+          {cameFromRecords ? '📊 Records' : cameFromIndividual ? '👤 Player Stats' : '📜 History'}
         </button>
         <button 
           className="btn btn-primary btn-lg" 
