@@ -172,15 +172,22 @@ const StatisticsScreen = () => {
     return player?.type || 'permanent';
   }, [players]);
 
-  // Calculate average games played across ALL players (for active filter)
-  const avgGamesPlayed = useMemo(() => {
-    if (stats.length === 0) return 0;
-    const totalGames = stats.reduce((sum, s) => sum + s.gamesPlayed, 0);
-    return totalGames / stats.length;
-  }, [stats]);
+  // Calculate total games in the selected period (for active filter)
+  const totalGamesInPeriod = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const games = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    return games.length;
+  }, [timePeriod, selectedYear]);
 
-  // Minimum games threshold = 33% of average
-  const activeThreshold = useMemo(() => Math.ceil(avgGamesPlayed * 0.33), [avgGamesPlayed]);
+  // Minimum games threshold = 33% of total games in period
+  const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
 
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
@@ -620,7 +627,7 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: '1.1rem' }}>
-                  מעל 33% מממוצע המשחקים בתקופה
+                  מינימום {activeThreshold} הופעות מתוך {totalGamesInPeriod} משחקים
                 </span>
               </div>
                 <button

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.0';
+export const APP_VERSION = '4.6.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.1',
+    date: '2025-12-17',
+    changes: [
+      'Simplified active players formula: 33% of total games in period',
+      'Shows "מינימום X הופעות מתוך Y משחקים" (minimum appearances)'
+    ]
+  },
   {
     version: '4.6.0',
     date: '2024-12-17',
