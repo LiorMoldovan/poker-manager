@@ -19,6 +19,7 @@ const StatisticsScreen = () => {
   const savedPlayerInfo = locationState?.playerInfo;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
+  const [allTimeStats, setAllTimeStats] = useState<PlayerStats[]>([]); // For records - always all-time
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
   const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
@@ -153,8 +154,10 @@ const StatisticsScreen = () => {
   const loadStats = () => {
     const dateFilter = getDateFilter();
     const playerStats = getPlayerStats(dateFilter);
+    const allTimePlayerStats = getPlayerStats(); // No date filter for records
     const allPlayers = getAllPlayers();
     setStats(playerStats);
+    setAllTimeStats(allTimePlayerStats);
     setPlayers(allPlayers);
     // By default, select only permanent players
     const permanentPlayerIds = allPlayers
@@ -286,6 +289,11 @@ const StatisticsScreen = () => {
     [availableStats, selectedPlayers]
   );
 
+  // All-time filtered stats for records (same player filters, but no time period filter)
+  const allTimeFilteredStats = useMemo(() => 
+    allTimeStats.filter(s => selectedPlayers.has(s.playerId)),
+    [allTimeStats, selectedPlayers]
+  );
 
   const sortedStats = [...filteredStats].sort((a, b) => {
     switch (sortBy) {
@@ -322,15 +330,16 @@ const StatisticsScreen = () => {
   };
 
   const getRecords = () => {
-    if (filteredStats.length === 0) return null;
+    // Use all-time stats for records (not filtered by time period)
+    if (allTimeFilteredStats.length === 0) return null;
     
-    const leaders = findTied(filteredStats, s => s.totalProfit, true);
-    const biggestLosers = findTied(filteredStats, s => s.totalProfit, false);
-    const biggestWinPlayers = findTied(filteredStats, s => s.biggestWin, true);
-    const biggestLossPlayers = findTied(filteredStats, s => s.biggestLoss, false);
-    const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
+    const leaders = findTied(allTimeFilteredStats, s => s.totalProfit, true);
+    const biggestLosers = findTied(allTimeFilteredStats, s => s.totalProfit, false);
+    const biggestWinPlayers = findTied(allTimeFilteredStats, s => s.biggestWin, true);
+    const biggestLossPlayers = findTied(allTimeFilteredStats, s => s.biggestLoss, false);
+    const rebuyKings = findTied(allTimeFilteredStats, s => s.totalRebuys, true);
     
-    const qualifiedForWinRate = filteredStats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForWinRate = allTimeFilteredStats.filter(s => s.gamesPlayed >= 3);
     const sharpshooters = qualifiedForWinRate.length > 0 
       ? findTied(qualifiedForWinRate, s => s.winPercentage, true)
       : [];
@@ -338,22 +347,22 @@ const StatisticsScreen = () => {
       ? findTied(qualifiedForWinRate, s => s.winPercentage, false)
       : [];
     
-    const onFirePlayers = findTied(filteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
-    const iceColdPlayers = findTied(filteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
-    const mostDedicatedPlayers = findTied(filteredStats, s => s.gamesPlayed, true);
-    const longestWinStreakPlayers = findTied(filteredStats, s => s.longestWinStreak, true);
-    const longestLossStreakPlayers = findTied(filteredStats, s => s.longestLossStreak, true);
+    const onFirePlayers = findTied(allTimeFilteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
+    const iceColdPlayers = findTied(allTimeFilteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
+    const mostDedicatedPlayers = findTied(allTimeFilteredStats, s => s.gamesPlayed, true);
+    const longestWinStreakPlayers = findTied(allTimeFilteredStats, s => s.longestWinStreak, true);
+    const longestLossStreakPlayers = findTied(allTimeFilteredStats, s => s.longestLossStreak, true);
     
     // Additional records
-    const qualifiedForAvg = filteredStats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForAvg = allTimeFilteredStats.filter(s => s.gamesPlayed >= 3);
     const highestAvgProfits = qualifiedForAvg.length > 0
       ? findTied(qualifiedForAvg, s => s.avgProfit, true)
       : [];
     const lowestAvgProfits = qualifiedForAvg.length > 0
       ? findTied(qualifiedForAvg, s => s.avgProfit, false)
       : [];
-    const mostWinsPlayers = findTied(filteredStats, s => s.winCount, true);
-    const mostLossesPlayers = findTied(filteredStats, s => s.lossCount, true);
+    const mostWinsPlayers = findTied(allTimeFilteredStats, s => s.winCount, true);
+    const mostLossesPlayers = findTied(allTimeFilteredStats, s => s.lossCount, true);
     
     return {
       leaders,
@@ -954,6 +963,20 @@ const StatisticsScreen = () => {
           {/* RECORDS VIEW */}
           {viewMode === 'records' && records && (
             <>
+              {/* All-Time Notice */}
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '0.5rem', 
+                marginBottom: '0.5rem',
+                background: 'rgba(16, 185, 129, 0.1)',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                color: 'var(--primary)',
+                fontWeight: '500'
+              }}>
+                🏆 שיאים מכל הזמנים (All-Time Records)
+              </div>
+              
               {/* Current Streaks */}
               <div className="card">
                 <h2 className="card-title mb-2">🔥 Current Streaks</h2>
