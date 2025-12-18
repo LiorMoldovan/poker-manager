@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { GamePlayer, Settlement, SkippedTransfer } from '../types';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
+import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 
 const GameSummaryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -18,6 +19,9 @@ const GameSummaryScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
+  const [forecasts, setForecasts] = useState<GameForecast[]>([]);
+  const [forecastComment, setForecastComment] = useState<string | null>(null);
+  const [isLoadingComment, setIsLoadingComment] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +47,7 @@ const GameSummaryScreen = () => {
     }
   }, [gameId]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!gameId) {
       setGameNotFound(true);
       setIsLoading(false);
@@ -65,7 +69,8 @@ const GameSummaryScreen = () => {
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
     setRebuyValue(settings.rebuyValue);
-    setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
+    const sortedPlayers = gamePlayers.sort((a, b) => b.profit - a.profit);
+    setPlayers(sortedPlayers);
     
     const { settlements: settl, smallTransfers: small } = calculateSettlement(
       gamePlayers, 
@@ -73,6 +78,25 @@ const GameSummaryScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    
+    // Load forecasts if available
+    if (game.forecasts && game.forecasts.length > 0) {
+      setForecasts(game.forecasts);
+      
+      // Generate AI comment about forecast accuracy
+      if (getGeminiApiKey()) {
+        setIsLoadingComment(true);
+        try {
+          const comment = await generateForecastComparison(game.forecasts, sortedPlayers);
+          setForecastComment(comment);
+        } catch (err) {
+          console.error('Error generating forecast comment:', err);
+        } finally {
+          setIsLoadingComment(false);
+        }
+      }
+    }
+    
     setIsLoading(false);
   };
 
@@ -300,6 +324,115 @@ const GameSummaryScreen = () => {
             opacity: 0.7
           }}>
             Poker Manager 🎲
+          </div>
+        </div>
+      )}
+
+      {/* Forecast vs Actual Comparison */}
+      {forecasts.length > 0 && (
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <h2 className="card-title mb-2">🎯 Forecast vs Reality</h2>
+          
+          <div style={{ overflowX: 'auto' }}>
+            <table className="results-table" style={{ fontSize: '0.85rem' }}>
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th style={{ textAlign: 'center' }}>Forecast</th>
+                  <th style={{ textAlign: 'center' }}>Actual</th>
+                  <th style={{ textAlign: 'center' }}>Diff</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecasts
+                  .sort((a, b) => b.expectedProfit - a.expectedProfit)
+                  .map((forecast) => {
+                    const actual = players.find(p => p.playerName === forecast.playerName);
+                    const actualProfit = actual?.profit || 0;
+                    const diff = actualProfit - forecast.expectedProfit;
+                    const wasCorrect = (forecast.expectedProfit >= 0 && actualProfit >= 0) || 
+                                       (forecast.expectedProfit < 0 && actualProfit < 0);
+                    
+                    return (
+                      <tr key={forecast.playerName}>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {wasCorrect ? '✓' : '✗'} {forecast.playerName}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
+                        }}>
+                          {forecast.expectedProfit >= 0 ? '+' : ''}{cleanNumber(forecast.expectedProfit)}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                          fontWeight: '600'
+                        }}>
+                          {actualProfit >= 0 ? '+' : ''}{cleanNumber(actualProfit)}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          color: Math.abs(diff) <= 50 ? 'var(--success)' : 
+                                 Math.abs(diff) <= 100 ? 'var(--warning)' : 'var(--danger)',
+                          fontSize: '0.8rem'
+                        }}>
+                          {diff >= 0 ? '+' : ''}{cleanNumber(diff)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* AI Comment */}
+          {isLoadingComment && (
+            <div style={{ 
+              marginTop: '0.75rem', 
+              padding: '0.75rem', 
+              background: 'rgba(168, 85, 247, 0.1)',
+              borderRadius: '8px',
+              textAlign: 'center',
+              fontSize: '0.85rem',
+              color: '#a855f7'
+            }}>
+              🤖 מנתח את התחזית...
+            </div>
+          )}
+          
+          {forecastComment && !isLoadingComment && (
+            <div style={{ 
+              marginTop: '0.75rem', 
+              padding: '0.75rem', 
+              background: 'rgba(168, 85, 247, 0.1)',
+              borderRadius: '8px',
+              borderRight: '4px solid #a855f7',
+              fontSize: '0.9rem',
+              color: 'var(--text)',
+              direction: 'rtl',
+              fontStyle: 'italic'
+            }}>
+              🤖 {forecastComment}
+            </div>
+          )}
+          
+          {/* Accuracy stats */}
+          <div style={{ 
+            marginTop: '0.75rem',
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '1rem',
+            fontSize: '0.8rem',
+            color: 'var(--text-muted)'
+          }}>
+            <span>
+              ✓ Direction: {forecasts.filter(f => {
+                const actual = players.find(p => p.playerName === f.playerName);
+                const actualProfit = actual?.profit || 0;
+                return (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
+              }).length}/{forecasts.length}
+            </span>
           </div>
         </div>
       )}

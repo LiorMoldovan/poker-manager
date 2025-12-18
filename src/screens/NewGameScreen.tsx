@@ -123,7 +123,25 @@ const NewGameScreen = () => {
     
     // Use custom location if "other" is selected, otherwise use selected location
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
-    const game = createGame(Array.from(selectedIds), location || undefined);
+    
+    // Prepare forecasts to save with the game
+    let forecastsToSave: { playerName: string; expectedProfit: number; sentence?: string }[] | undefined;
+    
+    if (aiForecasts && aiForecasts.length > 0) {
+      forecastsToSave = aiForecasts.map(f => ({
+        playerName: f.name,
+        expectedProfit: f.expectedProfit,
+        sentence: f.sentence
+      }));
+    } else if (cachedForecasts && cachedForecasts.length > 0) {
+      forecastsToSave = cachedForecasts.map(f => ({
+        playerName: f.player.name,
+        expectedProfit: f.expected,
+        sentence: f.sentence
+      }));
+    }
+    
+    const game = createGame(Array.from(selectedIds), location || undefined, forecastsToSave);
     navigate(`/live-game/${game.id}`);
   };
 

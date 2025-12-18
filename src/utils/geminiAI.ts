@@ -433,3 +433,74 @@ const getWorkingConfig = (): { version: string; model: string } => {
   
   return API_CONFIGS[0]; // Default to first
 };
+
+/**
+ * Generate a short comment comparing forecast to actual results
+ */
+export const generateForecastComparison = async (
+  forecasts: { playerName: string; expectedProfit: number }[],
+  actualResults: { playerName: string; profit: number }[]
+): Promise<string> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  // Build comparison data
+  const comparisons = forecasts.map(f => {
+    const actual = actualResults.find(a => a.playerName === f.playerName);
+    const actualProfit = actual?.profit || 0;
+    const diff = actualProfit - f.expectedProfit;
+    const wasCorrectDirection = (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
+    
+    return {
+      name: f.playerName,
+      forecast: f.expectedProfit,
+      actual: actualProfit,
+      diff,
+      wasCorrectDirection
+    };
+  });
+
+  // Calculate accuracy metrics
+  const correctDirections = comparisons.filter(c => c.wasCorrectDirection).length;
+  const accuracy = Math.round((correctDirections / comparisons.length) * 100);
+  
+  // Find biggest surprises
+  const sortedByDiff = [...comparisons].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  const biggestSurprise = sortedByDiff[0];
+
+  const prompt = `אתה מנחה פוקר ישראלי עם חוש הומור. כתוב משפט קצר וחד (עד 15 מילים) בעברית על הצלחת התחזית.
+
+נתונים:
+- דיוק כיוון (רווח/הפסד): ${accuracy}%
+- תוצאות: ${comparisons.map(c => `${c.name}: תחזית ${c.forecast >= 0 ? '+' : ''}${c.forecast}, בפועל ${c.actual >= 0 ? '+' : ''}${c.actual}`).join('; ')}
+- הפתעה הגדולה: ${biggestSurprise.name} (תחזית ${biggestSurprise.forecast >= 0 ? '+' : ''}${biggestSurprise.forecast}, בפועל ${biggestSurprise.actual >= 0 ? '+' : ''}${biggestSurprise.actual})
+
+כתוב רק את המשפט, בלי מירכאות. היה יצירתי וקצר!`;
+
+  const config = getWorkingConfig();
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/${config.version}/models/${config.model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 100,
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.error?.message || `API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  
+  return text.trim() || `דיוק התחזית: ${accuracy}%`;
+};

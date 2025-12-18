@@ -32,6 +32,12 @@ export interface Player {
   type: PlayerType;
 }
 
+export interface GameForecast {
+  playerName: string;
+  expectedProfit: number;
+  sentence?: string;
+}
+
 export interface Game {
   id: string;
   date: string;
@@ -40,6 +46,7 @@ export interface Game {
   location?: string; // Optional game location (e.g., host name)
   chipGap?: number; // Gap in money value (positive = extra chips, negative = missing chips)
   chipGapPerPlayer?: number; // How much each player's profit was adjusted
+  forecasts?: GameForecast[]; // Forecasts made before the game started
 }
 
 export interface GamePlayer {
