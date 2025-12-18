@@ -6,17 +6,17 @@
 
 // API versions and models to try
 const API_CONFIGS = [
-  // v1beta with various models
+  // Latest flash models (most likely to work)
+  { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
+  { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
   { version: 'v1beta', model: 'gemini-1.5-flash' },
+  { version: 'v1beta', model: 'gemini-1.5-pro-latest' },
   { version: 'v1beta', model: 'gemini-1.5-pro' },
   { version: 'v1beta', model: 'gemini-pro' },
-  // v1 with various models
+  // v1 versions
+  { version: 'v1', model: 'gemini-1.5-flash-latest' },
   { version: 'v1', model: 'gemini-1.5-flash' },
-  { version: 'v1', model: 'gemini-1.5-pro' },
   { version: 'v1', model: 'gemini-pro' },
-  // Older models
-  { version: 'v1beta', model: 'models/gemini-pro' },
-  { version: 'v1', model: 'models/gemini-pro' },
 ];
 
 // Store API key in localStorage
@@ -269,23 +269,39 @@ const listAvailableModels = async (apiKey: string): Promise<string[]> => {
  * Test if the API key is valid - tries multiple configs
  */
 export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
-  console.log('🔑 Testing Gemini API key...');
-  console.log('Key format check:', apiKey.startsWith('AIza') ? '✅ Starts with AIza' : '⚠️ Unusual format');
+  console.log('═══════════════════════════════════════');
+  console.log('🔑 GEMINI API KEY TEST');
+  console.log('═══════════════════════════════════════');
+  console.log('Key length:', apiKey.length);
+  console.log('Key prefix:', apiKey.substring(0, 10) + '...');
+  console.log('Format check:', apiKey.startsWith('AIza') ? '✅ Correct (AIza...)' : '⚠️ Unusual format!');
+  console.log('');
   
   // First, list available models
+  console.log('📋 STEP 1: Listing available models...');
   const availableModels = await listAvailableModels(apiKey);
   
   if (availableModels.length > 0) {
-    console.log('✅ API key has access to models. Now testing generateContent...');
-  } else {
-    console.log('⚠️ Could not list models. This might mean:');
-    console.log('   1. API key is invalid');
-    console.log('   2. Generative Language API not enabled in Google Cloud Console');
-    console.log('   3. API key has IP or referrer restrictions');
+    console.log(`✅ Found ${availableModels.length} models! Key is valid.`);
     console.log('');
-    console.log('💡 Try creating a NEW key at: https://aistudio.google.com/app/apikey');
-    console.log('   Make sure to use "Create API key in new project" option');
+  } else {
+    console.log('');
+    console.log('❌ CANNOT LIST MODELS - Key may be invalid or restricted');
+    console.log('');
+    console.log('🔧 POSSIBLE CAUSES:');
+    console.log('   1. API key is invalid or expired');
+    console.log('   2. Key was created in Google Cloud Console (need AI Studio key)');
+    console.log('   3. Generative Language API not enabled');
+    console.log('   4. API key has IP/referrer restrictions');
+    console.log('');
+    console.log('💡 SOLUTION: Create a NEW key at Google AI Studio:');
+    console.log('   https://aistudio.google.com/app/apikey');
+    console.log('   → Click "Create API key"');
+    console.log('   → Select "Create API key in new project"');
+    console.log('');
   }
+  
+  console.log('🧪 STEP 2: Testing generateContent with each model...');
   
   // Try all configs
   for (const config of API_CONFIGS) {
