@@ -13,10 +13,14 @@ const StatisticsScreen = () => {
     viewMode?: 'table' | 'records' | 'individual';
     recordInfo?: { title: string; playerId: string; recordType: string };
     playerInfo?: { playerId: string; playerName: string };
+    timePeriod?: TimePeriod;
+    selectedYear?: number;
   } | null;
   const initialViewMode = locationState?.viewMode || 'table';
   const savedRecordInfo = locationState?.recordInfo;
   const savedPlayerInfo = locationState?.playerInfo;
+  const savedTimePeriod = locationState?.timePeriod;
+  const savedSelectedYear = locationState?.selectedYear;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -26,11 +30,12 @@ const StatisticsScreen = () => {
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
-    // Default to current half year
+    // Restore from navigation state if available, otherwise default to current half year
+    if (savedTimePeriod) return savedTimePeriod;
     const currentMonth = new Date().getMonth() + 1; // 1-12
     return currentMonth <= 6 ? 'h1' : 'h2';
   });
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedYear, setSelectedYear] = useState<number>(savedSelectedYear || new Date().getFullYear());
   const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
@@ -117,9 +122,11 @@ const StatisticsScreen = () => {
     loadStats();
   }, [timePeriod, selectedYear]);
 
-  // Restore record details modal when coming back from game details
+  // Restore record details modal when coming back from game details - only once on mount
+  const hasRestoredRecordRef = React.useRef(false);
   useEffect(() => {
-    if (savedRecordInfo && stats.length > 0) {
+    if (savedRecordInfo && stats.length > 0 && !hasRestoredRecordRef.current) {
+      hasRestoredRecordRef.current = true;
       const player = stats.find(s => s.playerId === savedRecordInfo.playerId);
       if (player) {
         // Restore the modal with the saved record info
@@ -1361,7 +1368,7 @@ const StatisticsScreen = () => {
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
-                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName } } });
+                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear } });
                             window.scrollTo(0, 0);
                           }}
                         >
@@ -1582,7 +1589,9 @@ const StatisticsScreen = () => {
                         from: viewMode === 'individual' ? 'individual' : 'records', 
                         viewMode: viewMode,
                         recordInfo: savedRecordInfo,
-                        playerInfo: viewMode === 'individual' ? { playerId: recordDetails.playerId, playerName: recordDetails.playerName } : undefined
+                        playerInfo: viewMode === 'individual' ? { playerId: recordDetails.playerId, playerName: recordDetails.playerName } : undefined,
+                        timePeriod,
+                        selectedYear
                       } 
                     });
                     // Scroll to top after navigation
@@ -1700,7 +1709,9 @@ const StatisticsScreen = () => {
                     navigate(`/game/${game.gameId}`, { 
                       state: { 
                         from: 'statistics', 
-                        viewMode: viewMode
+                        viewMode: viewMode,
+                        timePeriod,
+                        selectedYear
                       } 
                     });
                     window.scrollTo(0, 0);

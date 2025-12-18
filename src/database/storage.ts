@@ -726,7 +726,7 @@ export const createGameEndBackup = (): void => {
 };
 
 // Import historical data from Excel (pre-generated JSON) - FULL REPLACE
-export const importHistoricalData = async (): Promise<{ success: boolean; message: string; stats?: { games: number; players: number } }> => {
+export const importHistoricalData = async (): Promise<{ success: boolean; message: string; stats?: { games: number; players: number }; preparedAt?: string }> => {
   try {
     // Create backup before import
     createBackup('manual');
@@ -743,16 +743,23 @@ export const importHistoricalData = async (): Promise<{ success: boolean; messag
     const players: Player[] = JSON.parse(importData.poker_players);
     const games: Game[] = JSON.parse(importData.poker_games);
     const gamePlayers: GamePlayer[] = JSON.parse(importData.poker_game_players);
+    const preparedAt: string | undefined = importData.prepared_at;
     
     // FULL REPLACE - clear existing and replace with import data
     localStorage.setItem(STORAGE_KEYS.PLAYERS, JSON.stringify(players));
     localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(games));
     localStorage.setItem(STORAGE_KEYS.GAME_PLAYERS, JSON.stringify(gamePlayers));
     
+    // Format prepared date for display
+    const dateStr = preparedAt 
+      ? ` (file from ${new Date(preparedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })})`
+      : '';
+    
     return {
       success: true,
-      message: `Replaced with ${games.length} games and ${players.length} players from Excel`,
-      stats: { games: games.length, players: players.length }
+      message: `Replaced with ${games.length} games and ${players.length} players from Excel${dateStr}`,
+      stats: { games: games.length, players: players.length },
+      preparedAt
     };
   } catch (error) {
     console.error('Import error:', error);

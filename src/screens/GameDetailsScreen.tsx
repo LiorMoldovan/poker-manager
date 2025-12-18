@@ -14,6 +14,8 @@ const GameDetailsScreen = () => {
     viewMode?: string;
     recordInfo?: { title: string; playerId: string; recordType: string };
     playerInfo?: { playerId: string; playerName: string };
+    timePeriod?: string;
+    selectedYear?: number;
   } | null;
   const cameFromRecords = locationState?.from === 'records';
   const cameFromIndividual = locationState?.from === 'individual';
@@ -22,6 +24,8 @@ const GameDetailsScreen = () => {
   const savedViewMode = locationState?.viewMode;
   const savedRecordInfo = locationState?.recordInfo;
   const savedPlayerInfo = locationState?.playerInfo;
+  const savedTimePeriod = locationState?.timePeriod;
+  const savedSelectedYear = locationState?.selectedYear;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -188,7 +192,9 @@ const GameDetailsScreen = () => {
               state: { 
                 viewMode: savedViewMode, 
                 recordInfo: savedRecordInfo,
-                playerInfo: savedPlayerInfo
+                playerInfo: savedPlayerInfo,
+                timePeriod: savedTimePeriod,
+                selectedYear: savedSelectedYear
               } 
             });
           } else {
@@ -326,7 +332,9 @@ const GameDetailsScreen = () => {
               state: { 
                 viewMode: savedViewMode, 
                 recordInfo: savedRecordInfo,
-                playerInfo: savedPlayerInfo
+                playerInfo: savedPlayerInfo,
+                timePeriod: savedTimePeriod,
+                selectedYear: savedSelectedYear
               } 
             });
           } else {
