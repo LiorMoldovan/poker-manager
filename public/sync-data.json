@@ -43,7 +43,13 @@
       "type": "permanent"
     },
     {
-      "id": "p10",
+      "id": "p9",
+      "name": "אסף",
+      "createdAt": "2025-12-18T18:15:46.489Z",
+      "type": "permanent"
+    },
+    {
+      "id": "5c6c9fd8-b8c1-4500-9020-cb04ad83af22",
       "name": "פאבל",
       "createdAt": "2025-12-18T18:15:46.489Z",
       "type": "permanent"
@@ -1585,6 +1591,50 @@
       "date": "2025-12-18T18:21:33.403Z",
       "status": "live",
       "createdAt": "2025-12-18T18:21:33.403Z"
+    },
+    {
+      "id": "mjbt3xgwq9833ylkp",
+      "date": "2025-12-18T19:01:34.640Z",
+      "status": "completed",
+      "createdAt": "2025-12-18T19:01:34.640Z",
+      "location": "סגל",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 169.1,
+          "sentence": "ליאור, עם רצף נצחונות לוהט של 3 משחקים, נראה כמו אריה שנכנס לטרף. הנתונים מראים שהוא שולט בשולחן, במיוחד מול אורן ותומר, אז צפו לפאר ישר מהמצ'טה."
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": -75.2,
+          "sentence": "אורן, אחרי שבוע של יובש, מרגיש כמו עציץ ללא מים. למרות שהממוצע שלו צנוע, הדינמיקה מול ליאור ואייל לא מרשימה, אז אולי כדאי לשמור על פרופיל נמוך הערב."
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 21.5,
+          "sentence": "אייל, עם ממוצע יציב כמו פילוסוף של פיצוציה, מוכיח שהוא יודע לשרוד. למרות שהפסד אחרון קצת העכיר את התמונה, ההיסטוריה מול אורן מבטיחה, אז אולי דווקא הלילה תהיה לו הפתעה."
+        },
+        {
+          "playerName": "אסף מוזס",
+          "expectedProfit": -25.4,
+          "sentence": "אסף מוזס, שהיה בחופשת סקי פוקר, חוזר לזירה. עם ניסיון דל ורצף הפסדים, הוא כמו נמר שרק מתחיל ללמוד לצוד. נראה מה יביא איתו הקיפאון הממושך."
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -125.8,
+          "sentence": "סגל, אחרי רצף הפסדים שמרגיש כמו סרט אימה, נמצא בנקודה קריטית. ההיסטוריה מול אורן ואייל לא מזהיבה, אז הוא יצטרך להתעורר ולשנות את תסריט ההפסדים."
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": -77.9,
+          "sentence": "תומר, עם ממוצע הפסד שיכול לגרום לו לרכוש בית קפה, נראה כמו נושא דגל המפסידים. למרות שהפסיד מעט לליאור, התמונה הכללית פחות מעודדת, אז אולי כדאי להתפלל לנס."
+        },
+        {
+          "playerName": "ספי",
+          "expectedProfit": 113.7,
+          "sentence": "ספי, הקאמבק המטורף של הערב! אחרי שנעלם מהנוף של הפוקר, הוא חוזר עם 100% הצלחה. זה כמו לראות אגדה שמתעוררת לחיים, אז מי שמעז – הרווח שלו."
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17387,8 +17437,127 @@
       "chipCounts": {},
       "finalValue": 0,
       "profit": 0
+    },
+    {
+      "id": "mjbt3xgwnoabrijfuk",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 5,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -150.00000000000003
+    },
+    {
+      "id": "mjbt3xgwkr9q093n3w",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 40,
+        "2": 19,
+        "3": 6,
+        "4": 4,
+        "5": 3,
+        "6": 3
+      },
+      "finalValue": 75.3,
+      "profit": -44.70000000000002
+    },
+    {
+      "id": "mjbt3xgwvlgrfqmwkem",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 52,
+        "2": 26,
+        "3": 28,
+        "4": 35,
+        "5": 10,
+        "6": 17
+      },
+      "finalValue": 369.90000000000003,
+      "profit": 339.90000000000003
+    },
+    {
+      "id": "mjbt3xgwe5hbxwpxtm",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "10049f06-364a-4796-9598-0c96a2b0faf8",
+      "playerName": "אסף מוזס",
+      "rebuys": 6,
+      "chipCounts": {
+        "1": 8,
+        "2": 3,
+        "3": 0,
+        "4": 4,
+        "5": 22,
+        "6": 5
+      },
+      "finalValue": 149.1,
+      "profit": -30.900000000000023
+    },
+    {
+      "id": "mjbt3xgwyw7ujobdff",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30.000000000000018
+    },
+    {
+      "id": "mjbt3xgwd75yii4vjh",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -120.00000000000001
+    },
+    {
+      "id": "mjbt3xgwjr18yzsukho",
+      "gameId": "mjbt3xgwq9833ylkp",
+      "playerId": "49d82f27-fc9c-4e94-b4f6-35b538b42855",
+      "playerName": "ספי",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 0,
+        "2": 2,
+        "3": 16,
+        "4": 7,
+        "5": 15,
+        "6": 6
+      },
+      "finalValue": 155.70000000000002,
+      "profit": 35.7
     }
   ],
-  "lastUpdated": "2025-12-18T18:35:51.312Z",
+  "lastUpdated": "2025-12-18T23:43:45.328Z",
   "updatedBy": "admin"
 }
