@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.2';
+export const APP_VERSION = '4.6.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,12 +13,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.6.2',
-    date: '2025-12-17',
+    version: '4.6.3',
+    date: '2025-12-18',
     changes: [
-      'Records now show ALL-TIME data regardless of time period filter',
-      'Added "שיאים מכל הזמנים" banner in Records view',
-      'Table/Individual views still respect time period filter'
+      'Fixed: Renamed "All-Time Leaders" to "מובילים" (reflects selected period)',
+      'Records now correctly show data for the selected time period'
     ]
   },
   {

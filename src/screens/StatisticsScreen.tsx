@@ -19,7 +19,6 @@ const StatisticsScreen = () => {
   const savedPlayerInfo = locationState?.playerInfo;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
-  const [allTimeStats, setAllTimeStats] = useState<PlayerStats[]>([]); // For records - always all-time
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
   const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
@@ -154,10 +153,8 @@ const StatisticsScreen = () => {
   const loadStats = () => {
     const dateFilter = getDateFilter();
     const playerStats = getPlayerStats(dateFilter);
-    const allTimePlayerStats = getPlayerStats(); // No date filter for records
     const allPlayers = getAllPlayers();
     setStats(playerStats);
-    setAllTimeStats(allTimePlayerStats);
     setPlayers(allPlayers);
     // By default, select only permanent players
     const permanentPlayerIds = allPlayers
@@ -289,12 +286,6 @@ const StatisticsScreen = () => {
     [availableStats, selectedPlayers]
   );
 
-  // All-time filtered stats for records (same player filters, but no time period filter)
-  const allTimeFilteredStats = useMemo(() => 
-    allTimeStats.filter(s => selectedPlayers.has(s.playerId)),
-    [allTimeStats, selectedPlayers]
-  );
-
   const sortedStats = [...filteredStats].sort((a, b) => {
     switch (sortBy) {
       case 'profit':
@@ -330,16 +321,15 @@ const StatisticsScreen = () => {
   };
 
   const getRecords = () => {
-    // Use all-time stats for records (not filtered by time period)
-    if (allTimeFilteredStats.length === 0) return null;
+    if (filteredStats.length === 0) return null;
     
-    const leaders = findTied(allTimeFilteredStats, s => s.totalProfit, true);
-    const biggestLosers = findTied(allTimeFilteredStats, s => s.totalProfit, false);
-    const biggestWinPlayers = findTied(allTimeFilteredStats, s => s.biggestWin, true);
-    const biggestLossPlayers = findTied(allTimeFilteredStats, s => s.biggestLoss, false);
-    const rebuyKings = findTied(allTimeFilteredStats, s => s.totalRebuys, true);
+    const leaders = findTied(filteredStats, s => s.totalProfit, true);
+    const biggestLosers = findTied(filteredStats, s => s.totalProfit, false);
+    const biggestWinPlayers = findTied(filteredStats, s => s.biggestWin, true);
+    const biggestLossPlayers = findTied(filteredStats, s => s.biggestLoss, false);
+    const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
     
-    const qualifiedForWinRate = allTimeFilteredStats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForWinRate = filteredStats.filter(s => s.gamesPlayed >= 3);
     const sharpshooters = qualifiedForWinRate.length > 0 
       ? findTied(qualifiedForWinRate, s => s.winPercentage, true)
       : [];
@@ -347,22 +337,22 @@ const StatisticsScreen = () => {
       ? findTied(qualifiedForWinRate, s => s.winPercentage, false)
       : [];
     
-    const onFirePlayers = findTied(allTimeFilteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
-    const iceColdPlayers = findTied(allTimeFilteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
-    const mostDedicatedPlayers = findTied(allTimeFilteredStats, s => s.gamesPlayed, true);
-    const longestWinStreakPlayers = findTied(allTimeFilteredStats, s => s.longestWinStreak, true);
-    const longestLossStreakPlayers = findTied(allTimeFilteredStats, s => s.longestLossStreak, true);
+    const onFirePlayers = findTied(filteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
+    const iceColdPlayers = findTied(filteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
+    const mostDedicatedPlayers = findTied(filteredStats, s => s.gamesPlayed, true);
+    const longestWinStreakPlayers = findTied(filteredStats, s => s.longestWinStreak, true);
+    const longestLossStreakPlayers = findTied(filteredStats, s => s.longestLossStreak, true);
     
     // Additional records
-    const qualifiedForAvg = allTimeFilteredStats.filter(s => s.gamesPlayed >= 3);
+    const qualifiedForAvg = filteredStats.filter(s => s.gamesPlayed >= 3);
     const highestAvgProfits = qualifiedForAvg.length > 0
       ? findTied(qualifiedForAvg, s => s.avgProfit, true)
       : [];
     const lowestAvgProfits = qualifiedForAvg.length > 0
       ? findTied(qualifiedForAvg, s => s.avgProfit, false)
       : [];
-    const mostWinsPlayers = findTied(allTimeFilteredStats, s => s.winCount, true);
-    const mostLossesPlayers = findTied(allTimeFilteredStats, s => s.lossCount, true);
+    const mostWinsPlayers = findTied(filteredStats, s => s.winCount, true);
+    const mostLossesPlayers = findTied(filteredStats, s => s.lossCount, true);
     
     return {
       leaders,
@@ -1028,11 +1018,11 @@ const StatisticsScreen = () => {
 
               {/* All-Time Leaders */}
               <div className="card">
-                <h2 className="card-title mb-2">👑 All-Time Leaders</h2>
+                <h2 className="card-title mb-2">👑 מובילים</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 All-Time Leader</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 מוביל</span>
                       {renderRecord(
                         'leader',
                         records.leaders,
@@ -1046,7 +1036,7 @@ const StatisticsScreen = () => {
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 מפסיד</span>
                       {renderRecord(
                         'biggestLoser',
                         records.biggestLosers,
