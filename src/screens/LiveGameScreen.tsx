@@ -125,17 +125,32 @@ const LiveGameScreen = () => {
       // Get available voices
       const voices = window.speechSynthesis.getVoices();
       
+      // Log available English voices for debugging
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      console.log('Available English voices:', englishVoices.map(v => `${v.name} (${v.lang})`));
+      
       // Find a good Hebrew voice
       const hebrewVoice = voices.find(v => v.lang.startsWith('he')) || null;
       
-      // Find a good English voice - prefer Google or "enhanced" voices
-      const englishVoice = voices.find(v => 
-        v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Enhanced') || v.name.includes('Premium'))
-      ) || voices.find(v => 
-        v.lang === 'en-GB' // British often sounds clearer
-      ) || voices.find(v => 
-        v.lang.startsWith('en')
-      ) || null;
+      // Find a good English voice - prioritize female voices (usually clearer)
+      const englishVoice = 
+        // Try Samantha (iOS/Mac - very natural)
+        voices.find(v => v.name.includes('Samantha')) ||
+        // Try Google US English female
+        voices.find(v => v.name.includes('Google US English') && !v.name.includes('Male')) ||
+        // Try any female voice
+        voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Susan') || v.name.includes('Karen'))) ||
+        // Try Microsoft voices (Windows)
+        voices.find(v => v.name.includes('Microsoft Zira') || v.name.includes('Microsoft Susan')) ||
+        // Fallback to any US English
+        voices.find(v => v.lang === 'en-US') ||
+        // Any English
+        voices.find(v => v.lang.startsWith('en')) ||
+        null;
+      
+      if (englishVoice) {
+        console.log('Selected English voice:', englishVoice.name);
+      }
       
       // First: Say the name in Hebrew
       const nameUtterance = new SpeechSynthesisUtterance(hebrewName);
@@ -145,12 +160,12 @@ const LiveGameScreen = () => {
       nameUtterance.pitch = 1;
       nameUtterance.volume = 1;
       
-      // Second: Say the action in English with better voice
+      // Second: Say the action in English with natural female voice
       const actionUtterance = new SpeechSynthesisUtterance(englishAction);
-      actionUtterance.lang = 'en-GB'; // British English often sounds better
+      actionUtterance.lang = 'en-US';
       if (englishVoice) actionUtterance.voice = englishVoice;
-      actionUtterance.rate = 0.9; // Slightly slower for clarity
-      actionUtterance.pitch = 1.1; // Slightly higher pitch
+      actionUtterance.rate = 0.95; // Natural pace
+      actionUtterance.pitch = 1.0; // Natural pitch
       actionUtterance.volume = 1;
       
       // Queue both utterances

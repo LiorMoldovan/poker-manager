@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.9.1';
+export const APP_VERSION = '4.9.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.9.2',
+    date: '2025-12-18',
+    changes: [
+      'Voice: Improved English voice - prefers female voices 🎙️',
+      'Tries Samantha, Zira, Susan, Karen voices',
+      'Console logs available voices for debugging',
+      'Natural pace and pitch settings'
+    ]
+  },
   {
     version: '4.9.1',
     date: '2025-12-18',
