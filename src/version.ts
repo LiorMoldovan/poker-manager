@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.34';
+export const APP_VERSION = '4.6.35';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.35',
+    date: '2025-12-18',
+    changes: [
+      'Player Stats: Arrow (❯) now grey to match Records view'
+    ]
+  },
   {
     version: '4.6.34',
     date: '2025-12-18',

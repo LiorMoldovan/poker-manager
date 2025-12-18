@@ -1518,7 +1518,7 @@ const StatisticsScreen = () => {
                   onClick={() => showPlayerStatDetails(player, 'allGames', `🎮 All Games`)}
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎮 Games</div>
-                  <div className="stat-value">{player.gamesPlayed} ❯</div>
+                  <div className="stat-value">{player.gamesPlayed} <span style={{ color: 'var(--text-muted)' }}>❯</span></div>
                 </div>
                 <div className="stat-card" style={{ background: player.winPercentage >= 50 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.winPercentage >= 50 ? '📈' : '📉'} Win Rate</div>
@@ -1533,7 +1533,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Wins</div>
                   <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.winCount}{player.winCount > 0 ? ' ❯' : ''}
+                    {player.winCount}{player.winCount > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
                 <div 
@@ -1543,7 +1543,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Losses</div>
                   <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.lossCount}{player.lossCount > 0 ? ' ❯' : ''}
+                    {player.lossCount}{player.lossCount > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
@@ -1557,7 +1557,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💰 Biggest Win</div>
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
-                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 ? ' ❯' : ''}
+                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
                 <div 
@@ -1567,7 +1567,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💸 Biggest Loss</div>
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
-                    {player.biggestLoss < 0 ? `-₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 ? ' ❯' : ''}
+                    {player.biggestLoss < 0 ? `-₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
@@ -1581,7 +1581,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Longest Win Streak</div>
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.longestWinStreak > 0 ? `${player.longestWinStreak} wins` : '-'}{player.longestWinStreak > 0 ? ' ❯' : ''}
+                    {player.longestWinStreak > 0 ? `${player.longestWinStreak} wins` : '-'}{player.longestWinStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
                 <div 
@@ -1591,7 +1591,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Longest Loss Streak</div>
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.longestLossStreak > 0 ? `${player.longestLossStreak} losses` : '-'}{player.longestLossStreak > 0 ? ' ❯' : ''}
+                    {player.longestLossStreak > 0 ? `${player.longestLossStreak} losses` : '-'}{player.longestLossStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
