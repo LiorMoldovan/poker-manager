@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import html2canvas from 'html2canvas';
 import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
@@ -53,6 +54,59 @@ const StatisticsScreen = () => {
     playerId: string;
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for all player games
+  const [isSharing, setIsSharing] = useState(false);
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // Share table as screenshot to WhatsApp
+  const handleShareTable = async () => {
+    if (!tableRef.current) return;
+    
+    setIsSharing(true);
+    try {
+      const canvas = await html2canvas(tableRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsSharing(false);
+          return;
+        }
+        
+        const file = new File([blob], 'poker-statistics.png', { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Poker Statistics',
+            });
+          } catch (err) {
+            // User cancelled or share failed - download instead
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'poker-statistics.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          // Fallback: download the image
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'poker-statistics.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharing(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing:', error);
+      setIsSharing(false);
+    }
+  };
 
   // Show all games for a player (for table row click)
   const showPlayerGames = (player: PlayerStats) => {
@@ -1272,54 +1326,85 @@ const StatisticsScreen = () => {
 
           {/* TABLE VIEW */}
           {viewMode === 'table' && (
-            <div className="card" style={{ padding: '0.5rem' }}>
-              <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
-                    <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
-                    <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
-                    <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
-                    <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
-                    <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedStats.map((player, index) => (
-                    <tr 
-                      key={player.playerId}
-                      onClick={() => showPlayerGames(player)}
-                      style={{ cursor: 'pointer' }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = ''}
-                    >
-                      <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>{index + 1}</td>
-                      <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
-                        {player.playerName}
-                        {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
-                          sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
-                        {player.totalProfit >= 0 ? '+' : ''}₪{Math.round(player.totalProfit)}
-                      </td>
-                      <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
-                        {player.avgProfit >= 0 ? '+' : ''}₪{Math.round(player.avgProfit)}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
-                      <td style={{ 
-                        textAlign: 'center',
-                        padding: '0.3rem 0.2rem',
-                        whiteSpace: 'nowrap',
-                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
-                        fontWeight: '600'
-                      }}>
-                        {Math.round(player.winPercentage)}%
-                      </td>
+            <>
+              <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontSize: '0.7rem', 
+                  color: 'var(--text-muted)', 
+                  marginBottom: '0.5rem',
+                  paddingBottom: '0.3rem',
+                  borderBottom: '1px solid var(--border)'
+                }}>
+                  📊 {timePeriod === 'all' ? 'כל הזמנים' : 
+                      timePeriod === 'year' ? `שנת ${selectedYear}` :
+                      timePeriod === 'h1' ? `H1 ${selectedYear} (ינו׳-יוני׳)` :
+                      `H2 ${selectedYear} (יולי׳-דצמ׳)`}
+                  {filterActiveOnly && ' • שחקנים פעילים'}
+                </div>
+                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
+                      <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
+                      <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {sortedStats.map((player, index) => (
+                      <tr 
+                        key={player.playerId}
+                        onClick={() => showPlayerGames(player)}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = ''}
+                      >
+                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>{index + 1}</td>
+                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
+                          {player.playerName}
+                          {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
+                            sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
+                          {player.totalProfit >= 0 ? '+' : ''}₪{Math.round(player.totalProfit)}
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
+                          {player.avgProfit >= 0 ? '+' : ''}₪{Math.round(player.avgProfit)}
+                        </td>
+                        <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          padding: '0.3rem 0.2rem',
+                          whiteSpace: 'nowrap',
+                          color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                          fontWeight: '600'
+                        }}>
+                          {Math.round(player.winPercentage)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                onClick={handleShareTable}
+                disabled={isSharing}
+                className="btn btn-primary"
+                style={{ 
+                  marginTop: '0.75rem', 
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                {isSharing ? '📸 מכין תמונה...' : '📤 שתף לוואטסאפ'}
+              </button>
+            </>
           )}
 
           {/* INDIVIDUAL VIEW */}

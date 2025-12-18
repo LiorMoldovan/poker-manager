@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.11';
+export const APP_VERSION = '4.6.12';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.12',
+    date: '2025-12-18',
+    changes: [
+      'Statistics table: Added share button to send screenshot to WhatsApp',
+      'Screenshot includes period info header for context'
+    ]
+  },
   {
     version: '4.6.11',
     date: '2025-12-18',
