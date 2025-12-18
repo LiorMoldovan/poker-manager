@@ -155,7 +155,7 @@ export const getLocalSyncData = (): SyncData => {
   };
 };
 
-// Full replacement of games (players kept local, auto-created if missing)
+// Full replacement of games (players synced with ID matching for proper stats)
 const replaceGamesWithRemote = (
   remoteData: SyncData
 ): { gamesChanged: number; deletedGames: number; newPlayers: number } => {
@@ -170,30 +170,53 @@ const replaceGamesWithRemote = (
   const deletedGames = localGames.filter(g => !remoteGameIds.has(g.id)).length;
   const gamesChanged = newGamesCount + deletedGames;
   
-  // Auto-create any missing players from remote data (with correct player type)
-  let newPlayers = 0;
-  const localPlayerNames = new Set(localPlayers.map(p => p.name.toLowerCase()));
-  
-  // Build a map of remote players for quick lookup
+  // Build a map of remote players for quick lookup by name
   const remotePlayerMap = new Map(remoteData.players.map(p => [p.name.toLowerCase(), p]));
   
+  // Build a map of local players by name for quick lookup
+  const localPlayerByName = new Map(localPlayers.map(p => [p.name.toLowerCase(), p]));
+  
+  // Sync players: update existing player IDs to match remote, or create new players
+  // This is CRITICAL for stats to work - gamePlayers reference playerId, so local players
+  // must have the same IDs as what's in gamePlayers
+  let newPlayers = 0;
+  const syncedPlayerNames = new Set<string>();
+  
   for (const gp of remoteData.gamePlayers) {
-    if (!localPlayerNames.has(gp.playerName.toLowerCase())) {
-      // Get the player info from remote data (includes correct type)
-      const remotePlayer = remotePlayerMap.get(gp.playerName.toLowerCase());
-      
+    const playerNameLower = gp.playerName.toLowerCase();
+    
+    if (syncedPlayerNames.has(playerNameLower)) {
+      continue; // Already processed this player
+    }
+    syncedPlayerNames.add(playerNameLower);
+    
+    const localPlayer = localPlayerByName.get(playerNameLower);
+    const remotePlayer = remotePlayerMap.get(playerNameLower);
+    
+    if (localPlayer) {
+      // Player exists locally - update their ID to match remote data
+      // This ensures gamePlayers references match
+      if (localPlayer.id !== gp.playerId) {
+        localPlayer.id = gp.playerId;
+      }
+      // Also update type from remote if available
+      if (remotePlayer?.type) {
+        localPlayer.type = remotePlayer.type;
+      }
+    } else {
+      // Player doesn't exist locally - create new
       localPlayers.push({
         id: gp.playerId,
         name: gp.playerName,
         createdAt: remotePlayer?.createdAt || new Date().toISOString(),
-        type: remotePlayer?.type || 'guest' // Use remote type if available
+        type: remotePlayer?.type || 'permanent' // Default to permanent for synced players
       });
-      localPlayerNames.add(gp.playerName.toLowerCase());
+      localPlayerByName.set(playerNameLower, localPlayers[localPlayers.length - 1]);
       newPlayers++;
     }
   }
   
-  // Replace games and gamePlayers (but keep local players)
+  // Save all data
   localStorage.setItem('poker_players', JSON.stringify(localPlayers));
   localStorage.setItem('poker_games', JSON.stringify(remoteData.games));
   localStorage.setItem('poker_game_players', JSON.stringify(remoteData.gamePlayers));

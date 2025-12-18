@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.35';
+export const APP_VERSION = '4.6.36';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.36',
+    date: '2025-12-18',
+    changes: [
+      'CRITICAL FIX: Statistics now works after sync',
+      'Player IDs now correctly matched to game data during sync',
+      'Default players no longer conflict with synced data'
+    ]
+  },
   {
     version: '4.6.35',
     date: '2025-12-18',
