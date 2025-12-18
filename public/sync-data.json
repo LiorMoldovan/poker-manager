@@ -1603,34 +1603,6 @@
       "date": "2025-12-18T18:21:33.403Z",
       "status": "live",
       "createdAt": "2025-12-18T18:21:33.403Z"
-    },
-    {
-      "id": "mjbrpvsdxrztvlumq7h",
-      "date": "2025-12-18T18:22:39.661Z",
-      "status": "completed",
-      "createdAt": "2025-12-18T18:22:39.661Z",
-      "forecasts": [
-        {
-          "playerName": "ליאור",
-          "expectedProfit": 120.5,
-          "sentence": "ליאור, המלך הבלתי מעורער של שולחן הפוקר, ממשיך את רצף הנצחונות המרשים שלו, כשהוא מביס שוב ושוב את אייל ואורן, נראה שהלילה הוא עוד יום שגרתי להגדיל את חשבון הבנק."
-        },
-        {
-          "playerName": "אייל",
-          "expectedProfit": -30,
-          "sentence": "אייל, אולי הלילה יצליח לשבור את רצף ההפסדים? עם ממוצע נמוך מול ליאור, והיסטוריה של תנודתיות, הכל אפשרי, אבל זהירות נדרשת."
-        },
-        {
-          "playerName": "ליכטר",
-          "expectedProfit": -50.5,
-          "sentence": "ליכטר, למרות נצחון אחרון, ההיסטוריה מול ליאור ואייל לא מבשרת טובות; הלילה יהיה מבחן אמיתי ליכולת להתעלות מעל הנתונים."
-        },
-        {
-          "playerName": "אורן",
-          "expectedProfit": -40,
-          "sentence": "אורן, נראה שהלילה הולך להיות עוד מאבק קשה, אחרי רצף הפסדים והפסדים חוזרים מול ליאור, נצטרך לראות תפנית מרשימה כדי לשנות את התמונה."
-        }
-      ]
     }
   ],
   "gamePlayers": [
@@ -17433,76 +17405,8 @@
       "chipCounts": {},
       "finalValue": 0,
       "profit": 0
-    },
-    {
-      "id": "mjbrpvsdq8k3w78i2bg",
-      "gameId": "mjbrpvsdxrztvlumq7h",
-      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
-      "playerName": "ליאור",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 8
-      },
-      "finalValue": 120,
-      "profit": 90
-    },
-    {
-      "id": "mjbrpvsdmtmxlbf28q7",
-      "gameId": "mjbrpvsdxrztvlumq7h",
-      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
-      "playerName": "אייל",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mjbrpvsd9fyw0ip7yg6",
-      "gameId": "mjbrpvsdxrztvlumq7h",
-      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
-      "playerName": "ליכטר",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mjbrpvsdtzinlpwbc9o",
-      "gameId": "mjbrpvsdxrztvlumq7h",
-      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
-      "playerName": "אורן",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T18:24:08.657Z",
+  "lastUpdated": "2025-12-18T18:26:50.482Z",
   "updatedBy": "admin"
 }
