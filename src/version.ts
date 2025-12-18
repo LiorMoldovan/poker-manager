@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.19';
+export const APP_VERSION = '4.6.20';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.20',
+    date: '2025-12-18',
+    changes: [
+      'NEW: GitHub Cloud Sync - games auto-sync to cloud when completed',
+      'Admin can upload data to GitHub, other users auto-download on app open',
+      'Viewer role excluded from sync (stays isolated)',
+      'Sync settings in Backup tab (admin only)'
+    ]
+  },
   {
     version: '4.6.19',
     date: '2025-12-18',
