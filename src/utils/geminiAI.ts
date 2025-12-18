@@ -471,22 +471,34 @@ export const generateForecastComparison = async (
   const missed = comparisons.filter(c => c.accuracyLevel === 'missed').length;
   const total = comparisons.length;
   
+  // Calculate overall score (accurate=2pts, close=1pt, missed=0pts)
+  const score = (accurate * 2 + close * 1);
+  const maxScore = total * 2;
+  const scorePercent = Math.round((score / maxScore) * 100);
+  
+  // Determine rating
+  let rating: string;
+  if (scorePercent >= 80) rating = 'מעולה';
+  else if (scorePercent >= 60) rating = 'טוב';
+  else if (scorePercent >= 40) rating = 'סביר';
+  else rating = 'חלש';
+  
   // Find best and worst predictions
   const sortedByGap = [...comparisons].sort((a, b) => a.gap - b.gap);
   const bestPrediction = sortedByGap[0];
   const worstPrediction = sortedByGap[sortedByGap.length - 1];
 
-  const prompt = `אתה מסכם תחזית פוקר בעברית. כתוב משפט סיכום קצר ורלוונטי (עד 20 מילים) על הצלחת התחזית.
+  const prompt = `אתה מסכם תחזית פוקר בעברית. כתוב משפט סיכום קצר ורלוונטי (עד 25 מילים) על הצלחת התחזית.
 
 נתונים:
+- ציון כולל: ${score}/${maxScore} (${scorePercent}%) - ${rating}
 - מדויק (פער ≤30): ${accurate}/${total}
 - קרוב (פער 31-60): ${close}/${total}  
 - החטאה (פער >60): ${missed}/${total}
 - תחזית מדויקת ביותר: ${bestPrediction.name} (פער ${bestPrediction.gap})
 - תחזית רחוקה ביותר: ${worstPrediction.name} (פער ${worstPrediction.gap})
-- תוצאות: ${comparisons.map(c => `${c.name}: תחזית ${c.forecast >= 0 ? '+' : ''}${c.forecast}, בפועל ${c.actual >= 0 ? '+' : ''}${c.actual}`).join('; ')}
 
-כתוב משפט סיכום ענייני ויפה בעברית. לא להיות מצחיק. התמקד בתובנות משמעותיות. כתוב רק את המשפט.`;
+כתוב משפט סיכום שכולל את הדירוג הכולל ("${rating}") ותובנה על התחזית. לא להיות מצחיק. כתוב רק את המשפט.`;
 
   const config = getWorkingConfig();
   
