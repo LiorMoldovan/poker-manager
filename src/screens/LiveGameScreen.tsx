@@ -296,37 +296,135 @@ const LiveGameScreen = () => {
     }
   };
 
-  // Share forecast screenshot
+  // Share forecast screenshot (splits into multiple images if many players)
   const handleShareForecast = async () => {
-    if (!forecastRef.current || isSharing) return;
+    if (!forecasts || forecasts.length === 0 || isSharing) return;
     
     setIsSharing(true);
+    
     try {
-      const canvas = await html2canvas(forecastRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-        useCORS: true,
-        logging: false,
+      const PLAYERS_PER_PAGE = 5;
+      const files: File[] = [];
+      const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
+      
+      // Sort forecasts by expected profit (highest first)
+      const sortedForecasts = [...forecasts].sort((a, b) => {
+        const aProfit = a.expectedProfit ?? 0;
+        const bProfit = b.expectedProfit ?? 0;
+        return bProfit - aProfit;
       });
       
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-      });
+      // Split into chunks
+      const chunks: typeof forecasts[] = [];
+      for (let i = 0; i < sortedForecasts.length; i += PLAYERS_PER_PAGE) {
+        chunks.push(sortedForecasts.slice(i, i + PLAYERS_PER_PAGE));
+      }
       
-      const file = new File([blob], 'poker-forecast.png', { type: 'image/png' });
-      
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'תחזית פוקר' });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'poker-forecast.png';
-        a.click();
-        URL.revokeObjectURL(url);
+      // Create a screenshot for each chunk
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const pageNum = chunks.length > 1 ? ` (${chunkIndex + 1}/${chunks.length})` : '';
         
-        const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
-        window.open(`https://wa.me/?text=${encodeURIComponent(`🔮 תחזית פוקר - ${today}\n\n(התמונה הורדה - צרף אותה)`)}`, '_blank');
+        // Create temporary container
+        const container = document.createElement('div');
+        container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
+        
+        container.innerHTML = `
+          <div style="text-align: center; margin-bottom: 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.25rem;">🤖</div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
+              תחזית AI${pageNum}
+            </h3>
+            <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            ${chunk.map((forecast, index) => {
+              const isFirst = chunkIndex === 0 && index === 0;
+              const isSurprise = forecast.isSurprise;
+              const expected = forecast.expectedProfit ?? 0;
+              const sentence = forecast.sentence || '';
+              const highlight = forecast.highlight || '';
+              const name = forecast.playerName || '';
+              
+              let bgColor = 'rgba(100, 116, 139, 0.12)';
+              let borderColor = '#64748b';
+              let textColor = '#f1f5f9';
+              
+              if (isSurprise) {
+                bgColor = 'rgba(168, 85, 247, 0.15)';
+                borderColor = '#a855f7';
+                textColor = '#a855f7';
+              } else if (expected > 10) {
+                bgColor = 'rgba(34, 197, 94, 0.12)';
+                borderColor = '#22c55e';
+                textColor = '#22c55e';
+              } else if (expected < -10) {
+                bgColor = 'rgba(239, 68, 68, 0.12)';
+                borderColor = '#ef4444';
+                textColor = '#ef4444';
+              }
+              
+              return `
+                <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: ${bgColor}; border-right: 4px solid ${borderColor};">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                    <span style="font-weight: 700; font-size: 1rem; color: #f1f5f9;">
+                      ${isFirst && expected > 0 ? '👑 ' : ''}${name}${isSurprise ? ' ⚡' : ''}
+                    </span>
+                    <span style="font-weight: 700; font-size: 1.05rem; color: ${textColor};">
+                      ${expected >= 0 ? '+' : '-'}₪${Math.abs(Math.round(expected)).toLocaleString()}
+                    </span>
+                  </div>
+                  ${highlight ? `<div style="font-size: 0.78rem; color: #f1f5f9; opacity: 0.8; margin-bottom: 0.4rem; direction: rtl; line-height: 1.4;">${highlight}</div>` : ''}
+                  <div style="font-size: 0.85rem; color: ${isSurprise ? '#a855f7' : '#94a3b8'}; line-height: 1.45; direction: rtl; font-style: italic;">
+                    ${sentence}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div style="text-align: center; font-size: 0.65rem; color: #94a3b8; opacity: 0.5;">
+            Poker Manager 🎲 + AI
+          </div>
+        `;
+        
+        document.body.appendChild(container);
+        
+        const canvas = await html2canvas(container, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        
+        document.body.removeChild(container);
+        
+        const blob = await new Promise<Blob>((resolve) => {
+          canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        
+        const fileName = chunks.length > 1 
+          ? `poker-forecast-${chunkIndex + 1}.png` 
+          : 'poker-forecast.png';
+        files.push(new File([blob], fileName, { type: 'image/png' }));
+      }
+      
+      // Share all files
+      if (navigator.share && navigator.canShare({ files })) {
+        await navigator.share({ files, title: 'תחזית פוקר' });
+      } else {
+        // Fallback: download all + WhatsApp
+        for (const file of files) {
+          const url = URL.createObjectURL(file);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        
+        const todayShort = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+        window.open(`https://wa.me/?text=${encodeURIComponent(`🔮 תחזית פוקר - ${todayShort}\n\n(${files.length} תמונות הורדו - צרף אותן)`)}`, '_blank');
       }
       
       setShowForecastModal(false);

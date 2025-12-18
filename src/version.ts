@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.11.8',
+    date: '2025-12-18',
+    changes: [
+      'Live Game forecast: Split sharing like New Game 📱',
+      '5 players per screenshot page',
+      'Multiple images shared together for large groups'
+    ]
+  },
+  {
     version: '4.11.6',
     date: '2025-12-18',
     changes: [
