@@ -4,8 +4,8 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// Use the free Gemini Flash model
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
+// Use the free Gemini Pro model
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
