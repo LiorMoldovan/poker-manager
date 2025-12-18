@@ -4,19 +4,18 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// API versions and models to try
+// API versions and models to try (based on actual available models Dec 2024)
 const API_CONFIGS = [
-  // Latest flash models (most likely to work)
-  { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
-  { version: 'v1beta', model: 'gemini-1.5-flash-latest' },
-  { version: 'v1beta', model: 'gemini-1.5-flash' },
-  { version: 'v1beta', model: 'gemini-1.5-pro-latest' },
-  { version: 'v1beta', model: 'gemini-1.5-pro' },
-  { version: 'v1beta', model: 'gemini-pro' },
+  // Stable 2.0 models (most reliable)
+  { version: 'v1beta', model: 'gemini-2.0-flash' },
+  { version: 'v1beta', model: 'gemini-2.0-flash-001' },
+  { version: 'v1beta', model: 'gemini-2.0-flash-lite' },
+  // Latest 2.5 models
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
   // v1 versions
-  { version: 'v1', model: 'gemini-1.5-flash-latest' },
-  { version: 'v1', model: 'gemini-1.5-flash' },
-  { version: 'v1', model: 'gemini-pro' },
+  { version: 'v1', model: 'gemini-2.0-flash' },
+  { version: 'v1', model: 'gemini-2.5-flash' },
 ];
 
 // Store API key in localStorage
@@ -329,6 +328,16 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
       
       const errorData = await response.json().catch(() => ({}));
       const errorMsg = errorData?.error?.message || `Status ${response.status}`;
+      
+      // 429 = rate limited but key is valid! Save config and return success
+      if (response.status === 429) {
+        workingConfig = config;
+        console.log(`⚠️ ${config.version}/${config.model}: Rate limited but KEY IS VALID!`);
+        console.log('   Wait a minute and try the forecast again.');
+        localStorage.setItem('gemini_working_config', JSON.stringify(config));
+        return true; // Key works, just rate limited
+      }
+      
       console.log(`❌ ${config.version}/${config.model}: ${errorMsg}`);
       
     } catch (error) {
