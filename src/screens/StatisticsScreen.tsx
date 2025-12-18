@@ -57,6 +57,15 @@ const StatisticsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // Get formatted timeframe string for display
+  const getTimeframeLabel = () => {
+    if (timePeriod === 'all') return 'All Time';
+    if (timePeriod === 'year') return `${selectedYear}`;
+    if (timePeriod === 'h1') return `H1 ${selectedYear}`;
+    if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    return '';
+  };
+
   // Share table as screenshot to WhatsApp
   const handleShareTable = async () => {
     if (!tableRef.current) return;
@@ -1009,7 +1018,7 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                🏆 Records
+                🏆 Records ({getTimeframeLabel()})
               </div>
               
               {/* Current Streaks */}
