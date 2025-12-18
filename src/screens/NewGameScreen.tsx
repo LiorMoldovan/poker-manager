@@ -843,7 +843,7 @@ const NewGameScreen = () => {
             currentStreak: stats?.currentStreak || 0,
             bestWin: stats?.bestWin || 0,
             worstLoss: stats?.worstLoss || 0,
-            lastGameResults: stats?.lastGameResults || [],
+            gameHistory: stats?.lastGameResults || [], // Full game history
             daysSinceLastGame: daysSince,
             isActive: daysSince <= 60
           };

@@ -1,10 +1,11 @@
 /**
  * Google Gemini AI Integration for Poker Forecasts
- * Free tier: 60 requests/minute
+ * Free tier: 15 requests/minute (gemini-1.5-flash)
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+// Use the free Gemini Flash model
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
@@ -33,7 +34,8 @@ export interface PlayerForecastData {
   currentStreak: number; // positive = wins, negative = losses
   bestWin: number;
   worstLoss: number;
-  lastGameResults: { profit: number; date: string }[];
+  // All game results with dates (most recent first)
+  gameHistory: { profit: number; date: string }[];
   daysSinceLastGame: number;
   isActive: boolean; // played in last 2 months
 }
@@ -47,7 +49,7 @@ export interface ForecastResult {
 }
 
 /**
- * Generate AI-powered forecasts for all players
+ * Generate AI-powered forecasts for selected players only
  */
 export const generateAIForecasts = async (
   players: PlayerForecastData[]
@@ -58,7 +60,7 @@ export const generateAIForecasts = async (
     throw new Error('NO_API_KEY');
   }
 
-  // Build the prompt with ALL player data
+  // Build the prompt with FULL player data
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
       ? `רצף נצחונות: ${p.currentStreak}` 
@@ -66,54 +68,55 @@ export const generateAIForecasts = async (
         ? `רצף הפסדים: ${Math.abs(p.currentStreak)}` 
         : 'ללא רצף';
     
-    const recentGamesText = p.lastGameResults.length > 0
-      ? p.lastGameResults.map(g => `${g.profit >= 0 ? '+' : ''}${g.profit}₪`).join(', ')
-      : 'אין משחקים אחרונים';
+    // Format all game history
+    const gameHistoryText = p.gameHistory.length > 0
+      ? p.gameHistory.map(g => `${g.date}: ${g.profit >= 0 ? '+' : ''}${g.profit}₪`).join(' | ')
+      : 'שחקן חדש - אין היסטוריה';
     
     const activityText = !p.isActive && p.daysSinceLastGame > 60
-      ? `⚠️ לא שיחק ${Math.floor(p.daysSinceLastGame / 30)} חודשים!`
+      ? `⚠️ לא שיחק ${Math.floor(p.daysSinceLastGame / 30)} חודשים! תהיה ציני על זה!`
       : '';
 
     return `
-שחקן ${i + 1}: ${p.name} ${p.isFemale ? '(נקבה)' : '(זכר)'}
-- משחקים: ${p.gamesPlayed}
+שחקן ${i + 1}: ${p.name} ${p.isFemale ? '(נקבה - השתמש בנטיות נקבה!)' : '(זכר)'}
+- סה"כ משחקים: ${p.gamesPlayed}
 - רווח כולל: ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪
 - ממוצע למשחק: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
 - נצחונות: ${p.winCount} (${Math.round(p.winPercentage)}%)
 - הפסדים: ${p.lossCount}
 - ${streakText}
-- נצחון גדול: +${p.bestWin}₪
-- הפסד גדול: -${Math.abs(p.worstLoss)}₪
-- 10 משחקים אחרונים: ${recentGamesText}
+- נצחון הכי גדול: +${p.bestWin}₪
+- הפסד הכי גדול: -${Math.abs(p.worstLoss)}₪
+- היסטוריית משחקים: ${gameHistoryText}
 ${activityText}`;
   }).join('\n---\n');
 
-  const prompt = `אתה מנתח פוקר מקצועי וקצת ציני. אתה צריך לכתוב תחזית למשחק הפוקר הקרוב.
+  const prompt = `אתה מנתח פוקר מקצועי, מצחיק, וקצת ציני. אתה צריך לכתוב תחזית למשחק הפוקר הקרוב.
 
-הנה הנתונים של השחקנים שישתתפו הערב:
+הנה הנתונים המלאים של השחקנים שישתתפו הערב:
 ${playerDataText}
 
-בבקשה צור תחזית לכל שחקן בפורמט JSON הבא:
+צור תחזית לכל שחקן בפורמט JSON הבא:
 [
   {
-    "name": "שם השחקן",
-    "expectedProfit": מספר (הערכת רווח/הפסד צפוי בשקלים, חייב להיות מספר שלם),
-    "highlight": "משפט קצר עם נתונים מעניינים על השחקן (עד 15 מילים)",
-    "sentence": "משפט ארוך, יצירתי, מצחיק או ציני על התחזית לשחקן הזה (30-50 מילים). תהיה דרמטי, סרקסטי לפעמים, ותן ערך אמיתי. אם השחקן לא שיחק הרבה זמן - תהיה ציני על זה!",
-    "isSurprise": true/false (האם זו תחזית מפתיעה שנגד הסטטיסטיקה)
+    "name": "שם השחקן בדיוק כפי שניתן",
+    "expectedProfit": מספר שלם (הערכת רווח/הפסד צפוי בשקלים),
+    "highlight": "משפט קצר עם נתון מעניין ספציפי לשחקן הזה (עד 12 מילים)",
+    "sentence": "משפט ארוך, יצירתי, מצחיק וציני על התחזית (25-40 מילים). תהיה דרמטי!",
+    "isSurprise": true/false (האם זו תחזית מפתיעה נגד הסטטיסטיקה)
   }
 ]
 
-כללים חשובים:
-1. השתמש בעברית תקינה עם נטיות מגדר נכונות (זכר/נקבה לפי הסימון)
-2. סכום כל ה-expectedProfit חייב להיות 0 (משחק סכום אפס!)
-3. תהיה יצירתי, מצחיק, וציני - אבל גם מבוסס על הנתונים
-4. אם שחקן לא שיחק הרבה זמן (יותר מ-3 חודשים) - תהיה סרקסטי על זה
-5. התייחס לרצפים, מגמות, ושינויים בביצועים
-6. כל highlight ו-sentence חייב להיות ייחודי לשחקן
-7. תן הערכות רווח/הפסד ריאליסטיות (בדרך כלל בין -100 ל +100)
+כללים קריטיים:
+1. סכום כל ה-expectedProfit חייב להיות בדיוק 0! (זה משחק סכום אפס)
+2. נטיות מגדר נכונות! לנקבה: חוזרת, שלה, היא, יכולה. לזכר: חוזר, שלו, הוא, יכול
+3. אם שחקן לא שיחק יותר מ-3 חודשים - תהיה מאוד ציני וסרקסטי על זה!
+4. כל highlight ו-sentence חייב להיות שונה לחלוטין בין השחקנים
+5. התבסס על הנתונים האמיתיים - ציין מספרים ספציפיים
+6. תן הערכות רווח ריאליסטיות (בדרך כלל בין -80 ל +80)
+7. תהיה מצחיק ומעניין!
 
-החזר רק את ה-JSON, בלי טקסט נוסף.`;
+החזר רק JSON תקין, בלי טקסט נוסף.`;
 
   try {
     const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
@@ -126,7 +129,7 @@ ${playerDataText}
           parts: [{ text: prompt }]
         }],
         generationConfig: {
-          temperature: 0.9, // More creative
+          temperature: 0.9,
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 2048,
@@ -136,7 +139,7 @@ ${playerDataText}
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Gemini API error:', errorData);
+      console.error('Gemini API error:', response.status, errorData);
       throw new Error(`API_ERROR: ${response.status}`);
     }
 
@@ -146,6 +149,7 @@ ${playerDataText}
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
+      console.error('Empty Gemini response:', data);
       throw new Error('EMPTY_RESPONSE');
     }
 
@@ -162,8 +166,15 @@ ${playerDataText}
     // Validate and ensure zero-sum
     let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
     if (total !== 0 && forecasts.length > 0) {
-      // Adjust the first player to make it zero-sum
-      forecasts[0].expectedProfit -= total;
+      // Distribute the difference across all players
+      const adjustment = Math.round(total / forecasts.length);
+      forecasts.forEach((f, i) => {
+        if (i === 0) {
+          f.expectedProfit -= (total - adjustment * (forecasts.length - 1));
+        } else {
+          f.expectedProfit -= adjustment;
+        }
+      });
     }
 
     return forecasts;
@@ -186,17 +197,24 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
       },
       body: JSON.stringify({
         contents: [{
-          parts: [{ text: 'Say "OK" in one word.' }]
+          parts: [{ text: 'Reply with just: OK' }]
         }],
         generationConfig: {
-          maxOutputTokens: 10,
+          temperature: 0,
+          maxOutputTokens: 5,
         }
       })
     });
 
-    return response.ok;
-  } catch {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API key test failed:', response.status, errorData);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('API key test error:', error);
     return false;
   }
 };
-
