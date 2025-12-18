@@ -770,3 +770,23 @@ export const importHistoricalData = async (): Promise<{ success: boolean; messag
   }
 };
 
+// Get import file metadata (prepared date) without importing
+export const getImportFileInfo = async (): Promise<{ preparedAt: string | null; gamesCount: number; playersCount: number } | null> => {
+  try {
+    const response = await fetch('/import-data.json');
+    if (!response.ok) return null;
+    
+    const importData = await response.json();
+    const games = JSON.parse(importData.poker_games || '[]');
+    const players = JSON.parse(importData.poker_players || '[]');
+    
+    return {
+      preparedAt: importData.prepared_at || null,
+      gamesCount: games.length,
+      playersCount: players.length
+    };
+  } catch {
+    return null;
+  }
+};
+

@@ -20,6 +20,7 @@ import {
   downloadBackup,
   importBackupFromFile,
   importHistoricalData,
+  getImportFileInfo,
   BackupData
 } from '../database/storage';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -51,6 +52,7 @@ const SettingsScreen = () => {
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
   const [importingHistory, setImportingHistory] = useState(false);
+  const [importFileInfo, setImportFileInfo] = useState<{ preparedAt: string | null; gamesCount: number; playersCount: number } | null>(null);
 
   // Permission checks
   const canEditSettings = hasPermission('settings:edit');
@@ -69,6 +71,8 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     loadData();
+    // Load import file info
+    getImportFileInfo().then(info => setImportFileInfo(info));
   }, []);
 
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
@@ -652,7 +656,18 @@ const SettingsScreen = () => {
               📊 Import Excel History
             </p>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Replace all data with 217 games from Excel (Feb 2021 - Dec 2025)
+              Replace all data with {importFileInfo?.gamesCount ?? '...'} games from Excel
+              {importFileInfo?.preparedAt && (
+                <span style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.7rem' }}>
+                  📅 File prepared: {new Date(importFileInfo.preparedAt).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              )}
             </p>
             <button 
               className="btn" 
