@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
@@ -123,7 +123,7 @@ const StatisticsScreen = () => {
   }, [timePeriod, selectedYear]);
 
   // Restore record details modal when coming back from game details - only once on mount
-  const hasRestoredRecordRef = React.useRef(false);
+  const hasRestoredRecordRef = useRef(false);
   useEffect(() => {
     if (savedRecordInfo && stats.length > 0 && !hasRestoredRecordRef.current) {
       hasRestoredRecordRef.current = true;
