@@ -4,8 +4,8 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// Use the free Gemini Pro model
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+// Use Gemini 1.0 Pro (stable, widely available)
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent';
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
@@ -239,10 +239,13 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('API key test failed:', response.status, errorData);
+      console.error('API key test failed:', response.status);
+      console.error('Error details:', JSON.stringify(errorData, null, 2));
       return false;
     }
 
+    const data = await response.json();
+    console.log('API test success:', data);
     return true;
   } catch (error) {
     console.error('API key test error:', error);

@@ -62,6 +62,22 @@ const LiveGameScreen = () => {
     );
   }
 
+  // Text-to-speech for buyin announcements
+  const speak = (text: string) => {
+    if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'he-IL'; // Hebrew
+      utterance.rate = 1.1; // Slightly faster
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const handleRebuy = (player: GamePlayer, amount: number = 1) => {
     const newRebuys = player.rebuys + amount;
     updateGamePlayerRebuys(player.id, newRebuys);
@@ -80,6 +96,10 @@ const LiveGameScreen = () => {
       },
       ...actions,
     ]);
+    
+    // Announce the buyin
+    const buyinText = amount === 1 ? 'ביי אין' : 'חצי ביי אין';
+    speak(`${player.playerName} ${buyinText}`);
   };
 
   const handleUndo = () => {
