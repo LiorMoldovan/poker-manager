@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.36';
+export const APP_VERSION = '4.6.37';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.37',
+    date: '2025-12-18',
+    changes: [
+      'Sync: Page now reloads after cloud sync to show new data',
+      'New games synced from cloud are now immediately visible'
+    ]
+  },
   {
     version: '4.6.36',
     date: '2025-12-18',

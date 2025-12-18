@@ -51,8 +51,10 @@ function App() {
       syncFromCloud().then(result => {
         if (result.success && result.synced && result.gamesChanged && result.gamesChanged > 0) {
           setSyncStatus({ syncing: false, message: `☁️ ${result.message}` });
-          // Auto-hide message after 3 seconds
-          setTimeout(() => setSyncStatus({ syncing: false, message: null }), 3000);
+          // Reload page after showing message to pick up new data
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
         } else {
           setSyncStatus({ syncing: false, message: null });
         }
