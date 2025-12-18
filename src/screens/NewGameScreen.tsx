@@ -123,17 +123,11 @@ const NewGameScreen = () => {
 
   // ============ SMART FORECAST SYSTEM WITH DYNAMIC HIGHLIGHTS ============
   
-  // Female names list for correct Hebrew gender
-  const FEMALE_NAMES = [
-    'מור', 'נועה', 'שירה', 'מיה', 'תמר', 'יעל', 'רוני', 'ליאת', 'עדי', 'שני',
-    'מיכל', 'רונית', 'אורית', 'גלית', 'עינת', 'הילה', 'דנה', 'ליהי', 'טל', 'שירן',
-    'קרן', 'אפרת', 'רחל', 'שרה', 'לאה', 'רבקה', 'מרים', 'חנה', 'דבורה', 'נעמי',
-    'איילת', 'מעיין', 'הדס', 'אלה', 'רותם', 'ים', 'אור', 'שקד', 'ליאור', 'נגה',
-    'עמית', 'גיל', 'אורן', 'ענבר', 'נטע', 'יובל', 'סתיו', 'שחר', 'אגם', 'איה'
-  ];
+  // Female names list for correct Hebrew gender (only מור in this group)
+  const FEMALE_NAMES = ['מור'];
   
   const isFemale = (name: string): boolean => {
-    return FEMALE_NAMES.some(n => name.includes(n) || n.includes(name));
+    return FEMALE_NAMES.some(n => name === n || name.includes(n));
   };
   
   interface RecentAnalysis {
