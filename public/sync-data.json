@@ -22,13 +22,13 @@
       "id": "bce0db4f-e093-42a4-871f-a029f284e3bf",
       "name": "דן מאן",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
       "name": "שגיא אחיין",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "b1ae0113-3ffc-41f5-a732-778d79c46286",
@@ -40,13 +40,13 @@
       "id": "60962591-856f-4697-bc55-cd8fec66e41a",
       "name": "נועם",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "c61774b7-0432-4c83-b69f-a52a56f23469",
       "name": "מאור 2",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
@@ -64,145 +64,145 @@
       "id": "49d82f27-fc9c-4e94-b4f6-35b538b42855",
       "name": "ספי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "e0804cb1-6aaf-4707-a835-1295e86326df",
       "name": "שיפר",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "ec59faa2-e881-459d-9207-8939f22fe60f",
       "name": "גיא לוי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "4eda68b1-a4df-49a6-9683-ea0450973e00",
       "name": "פאשה",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "6ccbcff1-362e-4310-83a8-def1f7277976",
       "name": "אבי קיגל",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "5951d8aa-b389-4fcf-81c9-6dbe13a05114",
       "name": "יגל",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "7757ebae-a185-487f-ace0-86c7f498dbcc",
       "name": "דויד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "2cd7a7ff-2adc-4114-b4e6-9f58974d8058",
       "name": "ליאור ס",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "22407299-64c4-4ab8-8870-115333ef2752",
       "name": "רועי דויד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "213d973b-8146-4c63-b269-d23b71a07182",
       "name": "קובי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "07fb9ed4-2667-46ca-8e4a-14ecb62b3f0a",
       "name": "קרני",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "4de87695-112d-40e0-9271-557f8ce983e5",
       "name": "מאור",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "34c57744-7869-4b00-933b-6729698f2467",
       "name": "אלרד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "667130db-04fc-47a2-91d6-92568b1e4599",
       "name": "יהודה",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "a992c024-c40e-48d1-b03a-4a6e8afe2acc",
       "name": "דן2 (שכן של ליאור)",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "d1cef559-5f2f-44e7-ade3-fb0a9d0c4a71",
       "name": "גיא אשכנזי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "59cfa2a6-c424-44fa-ae31-62807fb74c3d",
       "name": "צחי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "d7a11c55-2cbf-46e4-ad95-7e3627598efb",
       "name": "סער",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "5a6af55f-64d4-4286-a869-4ba801663a9c",
       "name": "אריק",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "3e4369fe-f4c2-4384-9e93-96b2301b7685",
       "name": "זיו",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "3a18cf3d-92d8-406f-9257-1667662b8aa0",
       "name": "אבי אבני",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "09974bfb-cb97-481e-86bb-06a1c05d9d5b",
       "name": "אסף טישלר",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "ff0790db-ba60-47d2-bbcb-3afb8187834c",
       "name": "אורי חבר של אבי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "guest"
     },
     {
       "id": "a5786fa4-97e6-405c-83f8-a6dfd2b41492",
       "name": "מור",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
@@ -226,7 +226,7 @@
       "id": "6a50af0c-9a8a-4041-9ce6-e964635538a9",
       "name": "גלעד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
@@ -17179,6 +17179,6 @@
       "profit": 0
     }
   ],
-  "lastUpdated": "2025-12-18T14:26:33.164Z",
+  "lastUpdated": "2025-12-18T15:21:25.852Z",
   "updatedBy": "admin"
 }
