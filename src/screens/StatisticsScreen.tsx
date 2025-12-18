@@ -1265,16 +1265,16 @@ const StatisticsScreen = () => {
 
           {/* TABLE VIEW */}
           {viewMode === 'table' && (
-            <div className="card" style={{ padding: '0.5rem', overflowX: 'auto' }}>
-              <table style={{ width: '100%', fontSize: '0.8rem', tableLayout: 'auto', borderCollapse: 'collapse' }}>
+            <div className="card" style={{ padding: '0.5rem' }}>
+              <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>#</th>
-                    <th style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>Player</th>
-                    <th style={{ textAlign: 'right', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>Profit</th>
-                    <th style={{ textAlign: 'right', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>Avg</th>
-                    <th style={{ textAlign: 'center', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>G</th>
-                    <th style={{ textAlign: 'center', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>W%</th>
+                    <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
+                    <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
+                    <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
+                    <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
+                    <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
+                    <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1286,22 +1286,22 @@ const StatisticsScreen = () => {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = ''}
                     >
-                      <td style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>{index + 1}</td>
-                      <td style={{ fontWeight: '600', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>{index + 1}</td>
+                      <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {player.playerName}
                         {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                           sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
+                      <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
                         {player.totalProfit >= 0 ? '+' : ''}₪{Math.round(player.totalProfit)}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
+                      <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
                         {player.avgProfit >= 0 ? '+' : ''}₪{Math.round(player.avgProfit)}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
+                      <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
                       <td style={{ 
                         textAlign: 'center',
-                        padding: '0.3rem 0.15rem',
+                        padding: '0.3rem 0.2rem',
                         whiteSpace: 'nowrap',
                         color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
                         fontWeight: '600'
