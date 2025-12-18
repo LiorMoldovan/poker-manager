@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.6';
+export const APP_VERSION = '4.10.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.10.7',
+    date: '2025-12-18',
+    changes: [
+      'Forecast button on Live Game: Admin only 🔐',
+      'Non-admin users won\'t see the forecast generation button',
+      'Game summary works normally if no forecast was generated'
+    ]
+  },
   {
     version: '4.10.6',
     date: '2025-12-18',

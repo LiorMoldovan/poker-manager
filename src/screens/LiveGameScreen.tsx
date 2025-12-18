@@ -5,10 +5,13 @@ import { GamePlayer, GameAction } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getPlayerStats as getAllPlayerStats, getGame, updateGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { generateAIForecasts, getGeminiApiKey, ForecastResult, PlayerForecastData } from '../utils/geminiAI';
+import { usePermissions } from '../App';
 
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const { role } = usePermissions();
+  const isAdmin = role === 'admin';
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [actions, setActions] = useState<GameAction[]>([]);
   const [rebuyValue, setRebuyValue] = useState(50);
@@ -355,19 +358,21 @@ const LiveGameScreen = () => {
         </div>
       </div>
 
-      {/* Generate & Share Forecast Button */}
-      <button 
-        className="btn btn-secondary btn-block"
-        onClick={handleGenerateForecast}
-        style={{ 
-          marginBottom: '1rem',
-          background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
-          border: 'none',
-          color: 'white'
-        }}
-      >
-        🔮 Generate & Share Forecast
-      </button>
+      {/* Generate & Share Forecast Button - Admin Only */}
+      {isAdmin && (
+        <button 
+          className="btn btn-secondary btn-block"
+          onClick={handleGenerateForecast}
+          style={{ 
+            marginBottom: '1rem',
+            background: 'linear-gradient(135deg, #a855f7 0%, #6366f1 100%)',
+            border: 'none',
+            color: 'white'
+          }}
+        >
+          🔮 Generate & Share Forecast
+        </button>
+      )}
 
       <div className="card">
         <div className="card-header">
