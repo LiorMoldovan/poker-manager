@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.11.3';
+export const APP_VERSION = '4.11.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.11.4',
+    date: '2025-12-18',
+    changes: [
+      'Chip Count: Player name shown in numpad header 👤',
+      'Green banner at top of numpad shows current player',
+      'No auto-open on screen entry - you choose the player',
+      'Fixed deployment caching issues'
+    ]
+  },
   {
     version: '4.11.3',
     date: '2025-12-18',
