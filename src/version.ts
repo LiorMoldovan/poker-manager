@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.30';
+export const APP_VERSION = '4.6.32';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.32',
+    date: '2025-12-18',
+    changes: [
+      'Cloud Sync: Full replacement with version tracking',
+      'Sync only happens when cloud data is newer (no redundant syncs)',
+      'Game deletion auto-syncs to cloud (admin only)',
+      'Players NOT synced - auto-created from game data if missing'
+    ]
+  },
   {
     version: '4.6.30',
     date: '2025-12-18',
@@ -1442,6 +1452,32 @@ export const CHANGELOG: ChangelogEntry[] = [
     changes: [
       'Added total chips column to game summary table',
       'Added total rebuy column to game summary table',
+      'Included total chips and rebuys in WhatsApp export message'
+    ]
+  },
+  {
+    version: '1.1.0',
+    date: '2024-12-14',
+    changes: [
+      'Added app versioning system',
+      'Added changelog tracking in Settings',
+      'Version now displayed in Settings screen'
+    ]
+  },
+  {
+    version: '1.0.0',
+    date: '2024-12-01',
+    changes: [
+      'Initial release',
+      'Poker game management',
+      'Player tracking',
+      'Chip calculations',
+      'Game history and statistics'
+    ]
+  }
+];
+
+
       'Included total chips and rebuys in WhatsApp export message'
     ]
   },

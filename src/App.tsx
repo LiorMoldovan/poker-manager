@@ -49,7 +49,7 @@ function App() {
     if (role && role !== 'viewer') {
       setSyncStatus({ syncing: true, message: 'Syncing...' });
       syncFromCloud().then(result => {
-        if (result.success && result.newGames && result.newGames > 0) {
+        if (result.success && result.synced && result.gamesChanged && result.gamesChanged > 0) {
           setSyncStatus({ syncing: false, message: `☁️ ${result.message}` });
           // Auto-hide message after 3 seconds
           setTimeout(() => setSyncStatus({ syncing: false, message: null }), 3000);

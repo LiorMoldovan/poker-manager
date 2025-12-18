@@ -23,7 +23,7 @@ import {
   getImportFileInfo,
   BackupData
 } from '../database/storage';
-import { getGitHubToken, saveGitHubToken, removeGitHubToken, syncToCloud, syncFromCloud, forceSyncFromCloud } from '../database/githubSync';
+import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
@@ -744,7 +744,7 @@ const SettingsScreen = () => {
                 </button>
               </div>
               
-              {/* Manual Sync from Cloud (delta - adds only) */}
+              {/* Manual Sync from Cloud */}
               <button
                 className="btn btn-sm"
                 onClick={() => {
@@ -755,7 +755,11 @@ const SettingsScreen = () => {
                       text: result.success ? `✅ ${result.message}` : `❌ ${result.message}` 
                     });
                     setIsSyncing(false);
-                    setTimeout(() => setSyncMessage(null), 3000);
+                    if (result.synced && result.gamesChanged && result.gamesChanged > 0) {
+                      setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                      setTimeout(() => setSyncMessage(null), 3000);
+                    }
                   });
                 }}
                 disabled={isSyncing}
@@ -766,43 +770,8 @@ const SettingsScreen = () => {
                   border: '1px solid var(--border)'
                 }}
               >
-                {isSyncing ? '⏳ Syncing...' : '⬇️ Sync New Games'}
+                {isSyncing ? '⏳ Syncing...' : '⬇️ Sync from Cloud'}
               </button>
-              
-              {/* Force Full Sync (includes deletions) */}
-              <button
-                className="btn btn-sm"
-                onClick={() => {
-                  if (confirm('⚠️ Force Full Sync will replace your games with cloud data.\n\nThis will remove any games you have locally that were deleted by admin.\n\nContinue?')) {
-                    setIsSyncing(true);
-                    forceSyncFromCloud().then(result => {
-                      setSyncMessage({ 
-                        type: result.success ? 'success' : 'error', 
-                        text: result.success ? `✅ ${result.message}` : `❌ ${result.message}` 
-                      });
-                      setIsSyncing(false);
-                      if (result.success && result.gamesChanged && result.gamesChanged > 0) {
-                        setTimeout(() => window.location.reload(), 1500);
-                      } else {
-                        setTimeout(() => setSyncMessage(null), 3000);
-                      }
-                    });
-                  }
-                }}
-                disabled={isSyncing}
-                style={{ 
-                  width: '100%',
-                  marginTop: '0.5rem',
-                  background: 'linear-gradient(135deg, #EF4444, #DC2626)',
-                  color: 'white',
-                  border: 'none'
-                }}
-              >
-                {isSyncing ? '⏳ Syncing...' : '🔄 Force Full Sync'}
-              </button>
-              <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem', textAlign: 'center' }}>
-                ⚠️ Force sync includes deletions
-              </p>
               
               {/* Sync Message */}
               {syncMessage && (

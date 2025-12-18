@@ -2,16 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GameWithDetails } from '../types';
 import { getAllGames, getGamePlayers, getSettings, deleteGame } from '../database/storage';
+import { syncToCloud } from '../database/githubSync';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 
 const HistoryScreen = () => {
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { role, hasPermission } = usePermissions();
   const [games, setGames] = useState<GameWithDetails[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   
   const canDeleteGames = hasPermission('game:delete');
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     loadGames();
@@ -36,10 +39,22 @@ const HistoryScreen = () => {
     setGames(gamesWithDetails);
   };
 
-  const handleDelete = (gameId: string) => {
+  const handleDelete = async (gameId: string) => {
     deleteGame(gameId);
     setGames(games.filter(g => g.id !== gameId));
     setDeleteConfirm(null);
+    
+    // If admin, sync deletion to cloud
+    if (isAdmin) {
+      setSyncStatus('Syncing deletion...');
+      const result = await syncToCloud();
+      if (result.success) {
+        setSyncStatus('✅ Deletion synced to cloud');
+      } else {
+        setSyncStatus('⚠️ Sync failed');
+      }
+      setTimeout(() => setSyncStatus(null), 2000);
+    }
   };
 
   const getWinner = (game: GameWithDetails) => {
@@ -49,6 +64,24 @@ const HistoryScreen = () => {
 
   return (
     <div className="fade-in">
+      {/* Sync Status Banner */}
+      {syncStatus && (
+        <div style={{
+          background: syncStatus.includes('✅') ? 'linear-gradient(135deg, #10B981, #059669)' : 
+                     syncStatus.includes('⚠️') ? 'linear-gradient(135deg, #F59E0B, #D97706)' :
+                     'linear-gradient(135deg, #3B82F6, #2563EB)',
+          color: 'white',
+          padding: '0.5rem 1rem',
+          borderRadius: '8px',
+          marginBottom: '1rem',
+          textAlign: 'center',
+          fontSize: '0.9rem',
+          fontWeight: '500'
+        }}>
+          {syncStatus}
+        </div>
+      )}
+      
       <div className="page-header">
         <h1 className="page-title">Game History</h1>
         <p className="page-subtitle">{games.length} completed game{games.length !== 1 ? 's' : ''}</p>
