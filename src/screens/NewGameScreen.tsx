@@ -1341,9 +1341,9 @@ const NewGameScreen = () => {
                   </div>
                 </div>
 
-                {/* AI Player forecasts */}
+                {/* AI Player forecasts - sorted by expected profit (highest first) */}
                 <div style={{ marginBottom: '1rem' }}>
-                  {aiForecasts.map((forecast, index) => {
+                  {[...aiForecasts].sort((a, b) => b.expectedProfit - a.expectedProfit).map((forecast, index) => {
                     const { name, expectedProfit, sentence, highlight, isSurprise } = forecast;
                     
                     const getStyle = () => {
@@ -1451,9 +1451,9 @@ const NewGameScreen = () => {
                   </div>
                 </div>
 
-                {/* Player forecasts */}
+                {/* Player forecasts - sorted by expected profit (highest first) */}
                 <div style={{ marginBottom: '1rem' }}>
-                  {cachedForecasts.map((forecast, index) => {
+                  {[...cachedForecasts].sort((a, b) => b.expected - a.expected).map((forecast, index) => {
                     const { player, expected, sentence, highlights, gamesPlayed, isSurprise } = forecast;
                     
                     const getStyle = () => {
