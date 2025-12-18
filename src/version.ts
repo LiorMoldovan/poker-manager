@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.8';
+export const APP_VERSION = '4.6.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.9',
+    date: '2025-12-18',
+    changes: [
+      'Fixed: Time period preserved when navigating from records to game details',
+      'Fixed: Record details modal no longer re-opens when changing filters',
+      'Navigation now preserves all filter settings (period, year)'
+    ]
+  },
   {
     version: '4.6.8',
     date: '2025-12-18',
