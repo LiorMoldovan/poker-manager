@@ -1511,110 +1511,118 @@ const StatisticsScreen = () => {
               )}
 
               {/* Main Stats Row 1 */}
-              <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
+              <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
                 <div 
                   className="stat-card" 
                   style={{ cursor: 'pointer' }}
                   onClick={() => showPlayerStatDetails(player, 'allGames', `🎮 All Games`)}
                 >
-                  <div className="stat-value">{player.gamesPlayed}</div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>Games ❯</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎮 Games</div>
+                  <div className="stat-value">{player.gamesPlayed} ❯</div>
                 </div>
                 <div className="stat-card" style={{ background: player.winPercentage >= 50 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.winPercentage >= 50 ? '📈' : '📉'} Win Rate</div>
                   <div className="stat-value" style={{ color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)' }}>
                     {player.winPercentage.toFixed(0)}%
                   </div>
-                  <div className="stat-label">Win Rate</div>
                 </div>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.winCount > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
                   onClick={() => player.winCount > 0 && showPlayerStatDetails(player, 'wins', `🏆 Wins`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Wins</div>
                   <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.winCount}
+                    {player.winCount}{player.winCount > 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.winCount > 0 ? 'Wins ❯' : 'Wins'}</div>
                 </div>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.lossCount > 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.lossCount > 0 && showPlayerStatDetails(player, 'losses', `📉 Losses`)}
+                  onClick={() => player.lossCount > 0 && showPlayerStatDetails(player, 'losses', `💔 Losses`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Losses</div>
                   <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.lossCount}
+                    {player.lossCount}{player.lossCount > 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.lossCount > 0 ? 'Losses ❯' : 'Losses'}</div>
                 </div>
               </div>
 
               {/* Main Stats Row 2 */}
-              <div className="grid grid-4" style={{ marginBottom: '0.5rem' }}>
+              <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.biggestWin > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
-                  onClick={() => player.biggestWin > 0 && showPlayerStatDetails(player, 'biggestWin', `🏆 Best Win`)}
+                  onClick={() => player.biggestWin > 0 && showPlayerStatDetails(player, 'biggestWin', `💰 Biggest Win`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💰 Biggest Win</div>
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
-                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}
+                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.biggestWin > 0 ? 'Best ❯' : 'Best'}</div>
                 </div>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.biggestLoss < 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.biggestLoss < 0 && showPlayerStatDetails(player, 'biggestLoss', `📉 Worst Loss`)}
+                  onClick={() => player.biggestLoss < 0 && showPlayerStatDetails(player, 'biggestLoss', `💸 Biggest Loss`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💸 Biggest Loss</div>
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
-                    {player.biggestLoss < 0 ? `₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}
+                    {player.biggestLoss < 0 ? `-₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.biggestLoss < 0 ? 'Worst ❯' : 'Worst'}</div>
-                </div>
-                <div className="stat-card" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
-                  <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.avgWin > 0 ? `+₪${cleanNumber(player.avgWin)}` : '-'}
-                  </div>
-                  <div className="stat-label">Avg Win</div>
-                </div>
-                <div className="stat-card" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
-                  <div className="stat-value" style={{ color: player.avgLoss > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.avgLoss > 0 ? `₪${cleanNumber(player.avgLoss)}` : '-'}
-                  </div>
-                  <div className="stat-label">Avg Loss</div>
                 </div>
               </div>
 
-              {/* Additional Stats Row */}
-              <div className="grid grid-4">
-                <div className="stat-card" style={{ background: player.avgProfit >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
-                  <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                    {player.avgProfit >= 0 ? '+' : ''}₪{cleanNumber(player.avgProfit)}
-                  </div>
-                  <div className="stat-label">Avg/Game</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
-                  <div className="stat-label">Total Buyins</div>
-                </div>
+              {/* Streaks Row */}
+              <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.longestWinStreak > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
-                  onClick={() => player.longestWinStreak > 0 && showPlayerStatDetails(player, 'longestWinStreak', `🔥 Best Win Streak`)}
+                  onClick={() => player.longestWinStreak > 0 && showPlayerStatDetails(player, 'longestWinStreak', `🏆 Longest Win Streak`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Longest Win Streak</div>
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.longestWinStreak > 0 ? player.longestWinStreak : '-'}
+                    {player.longestWinStreak > 0 ? `${player.longestWinStreak} wins` : '-'}{player.longestWinStreak > 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.longestWinStreak > 0 ? 'W Streak ❯' : 'W Streak'}</div>
                 </div>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.longestLossStreak > 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.longestLossStreak > 0 && showPlayerStatDetails(player, 'longestLossStreak', `❄️ Worst Loss Streak`)}
+                  onClick={() => player.longestLossStreak > 0 && showPlayerStatDetails(player, 'longestLossStreak', `💔 Longest Loss Streak`)}
                 >
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Longest Loss Streak</div>
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.longestLossStreak > 0 ? player.longestLossStreak : '-'}
+                    {player.longestLossStreak > 0 ? `${player.longestLossStreak} losses` : '-'}{player.longestLossStreak > 0 ? ' ❯' : ''}
                   </div>
-                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.longestLossStreak > 0 ? 'L Streak ❯' : 'L Streak'}</div>
+                </div>
+              </div>
+
+              {/* Averages Row */}
+              <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
+                <div className="stat-card" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📈 Avg Win</div>
+                  <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {player.avgWin > 0 ? `+₪${cleanNumber(player.avgWin)}` : '-'}
+                  </div>
+                </div>
+                <div className="stat-card" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📉 Avg Loss</div>
+                  <div className="stat-value" style={{ color: player.avgLoss > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {player.avgLoss > 0 ? `-₪${cleanNumber(player.avgLoss)}` : '-'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Stats Row */}
+              <div className="grid grid-2">
+                <div className="stat-card" style={{ background: player.avgProfit >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.avgProfit >= 0 ? '📈' : '📉'} Avg/Game</div>
+                  <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                    {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎰 Total Buyins</div>
+                  <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
                 </div>
               </div>
             </div>

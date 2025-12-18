@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.32';
+export const APP_VERSION = '4.6.33';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.33',
+    date: '2025-12-18',
+    changes: [
+      'Player Stats: Aligned with Records design - icons + labels above values',
+      'Added icons: 💰 Biggest Win, 💸 Biggest Loss, 🏆 Win Streak, 💔 Loss Streak',
+      'Changed to 2-column grid layout matching Records view',
+      'Values now show "X wins ❯" / "X losses ❯" format'
+    ]
+  },
   {
     version: '4.6.32',
     date: '2025-12-18',
