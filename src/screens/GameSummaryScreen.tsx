@@ -346,116 +346,107 @@ const GameSummaryScreen = () => {
 
       {/* Forecast vs Actual Comparison - for screenshot */}
       {forecasts.length > 0 && (
-        <div ref={forecastCompareRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
-          <div className="card">
-            <h2 className="card-title mb-2">🎯 Forecast vs Reality</h2>
+        <div ref={forecastCompareRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <h2 className="card-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>🎯 Forecast vs Reality</h2>
             
-            {/* Legend */}
+            {/* Legend - compact */}
             <div style={{ 
-              marginBottom: '0.75rem',
-              padding: '0.5rem',
+              marginBottom: '0.5rem',
+              padding: '0.3rem 0.5rem',
               background: 'rgba(100, 100, 100, 0.1)',
-              borderRadius: '6px',
-              fontSize: '0.75rem',
+              borderRadius: '4px',
+              fontSize: '0.65rem',
               color: 'var(--text-muted)',
               display: 'flex',
               justifyContent: 'center',
-              gap: '1rem',
-              flexWrap: 'wrap'
+              gap: '0.75rem'
             }}>
-              <span><span style={{ color: 'var(--success)' }}>✓</span> Gap ≤30</span>
-              <span><span style={{ color: 'var(--warning)' }}>~</span> Gap 31-60</span>
-              <span><span style={{ color: 'var(--danger)' }}>✗</span> Gap &gt;60</span>
+              <span><span style={{ color: 'var(--success)' }}>✓</span> ≤30</span>
+              <span><span style={{ color: 'var(--warning)' }}>~</span> 31-60</span>
+              <span><span style={{ color: 'var(--danger)' }}>✗</span> &gt;60</span>
             </div>
             
-            <div style={{ overflowX: 'auto' }}>
-              <table className="results-table" style={{ fontSize: '0.85rem' }}>
-                <thead>
-                  <tr>
-                    <th>Player</th>
-                    <th style={{ textAlign: 'center' }}>Forecast</th>
-                    <th style={{ textAlign: 'center' }}>Actual</th>
-                    <th style={{ textAlign: 'center' }}>Gap</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {forecasts
-                    .sort((a, b) => b.expectedProfit - a.expectedProfit)
-                    .map((forecast) => {
-                      const actual = players.find(p => p.playerName === forecast.playerName);
-                      const actualProfit = actual?.profit || 0;
-                      const gap = Math.abs(actualProfit - forecast.expectedProfit);
-                      
-                      // Accuracy indicator based on gap
-                      const getAccuracyIndicator = () => {
-                        if (gap <= 30) return { symbol: '✓', color: 'var(--success)' };
-                        if (gap <= 60) return { symbol: '~', color: 'var(--warning)' };
-                        return { symbol: '✗', color: 'var(--danger)' };
-                      };
-                      const accuracy = getAccuracyIndicator();
-                      
-                      return (
-                        <tr key={forecast.playerName}>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <span style={{ color: accuracy.color }}>{accuracy.symbol}</span> {forecast.playerName}
-                          </td>
-                          <td style={{ 
-                            textAlign: 'center',
-                            color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
-                          }}>
-                            {forecast.expectedProfit >= 0 ? '+' : ''}{cleanNumber(forecast.expectedProfit)}
-                          </td>
-                          <td style={{ 
-                            textAlign: 'center',
-                            color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
-                            fontWeight: '600'
-                          }}>
-                            {actualProfit >= 0 ? '+' : ''}{cleanNumber(actualProfit)}
-                          </td>
-                          <td style={{ 
-                            textAlign: 'center',
-                            color: accuracy.color,
-                            fontSize: '0.8rem'
-                          }}>
-                            {cleanNumber(gap)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+            {/* Compact table - no scroll */}
+            <table style={{ 
+              width: '100%', 
+              fontSize: '0.75rem',
+              borderCollapse: 'collapse'
+            }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '0.3rem 0.2rem', fontSize: '0.7rem' }}>Player</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem' }}>Fcst</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem' }}>Real</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem' }}>Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecasts
+                  .sort((a, b) => b.expectedProfit - a.expectedProfit)
+                  .map((forecast) => {
+                    const actual = players.find(p => p.playerName === forecast.playerName);
+                    const actualProfit = actual?.profit || 0;
+                    const gap = Math.abs(actualProfit - forecast.expectedProfit);
+                    
+                    // Accuracy indicator based on gap
+                    const getAccuracyIndicator = () => {
+                      if (gap <= 30) return { symbol: '✓', color: 'var(--success)' };
+                      if (gap <= 60) return { symbol: '~', color: 'var(--warning)' };
+                      return { symbol: '✗', color: 'var(--danger)' };
+                    };
+                    const accuracy = getAccuracyIndicator();
+                    
+                    return (
+                      <tr key={forecast.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: accuracy.color }}>{accuracy.symbol}</span> {forecast.playerName}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          padding: '0.25rem 0.2rem',
+                          color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
+                        }}>
+                          {forecast.expectedProfit >= 0 ? '+' : ''}{Math.round(forecast.expectedProfit)}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          padding: '0.25rem 0.2rem',
+                          color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                          fontWeight: '600'
+                        }}>
+                          {actualProfit >= 0 ? '+' : ''}{Math.round(actualProfit)}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center',
+                          padding: '0.25rem 0.2rem',
+                          color: accuracy.color
+                        }}>
+                          {Math.round(gap)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+            
+            {/* AI Summary - always show area */}
+            <div style={{ 
+              marginTop: '0.5rem', 
+              padding: '0.5rem', 
+              background: 'rgba(168, 85, 247, 0.1)',
+              borderRadius: '6px',
+              borderRight: '3px solid #a855f7',
+              fontSize: '0.8rem',
+              color: 'var(--text)',
+              direction: 'rtl',
+              textAlign: 'center',
+              minHeight: '2rem'
+            }}>
+              {isLoadingComment && <span style={{ color: '#a855f7' }}>🤖 מסכם...</span>}
+              {forecastComment && !isLoadingComment && <span>🤖 {forecastComment}</span>}
+              {!forecastComment && !isLoadingComment && <span style={{ color: 'var(--text-muted)' }}>🤖 אין סיכום זמין</span>}
             </div>
-            
-            {/* AI Comment - shown if available, or loading */}
-            {isLoadingComment && (
-              <div style={{ 
-                marginTop: '0.75rem', 
-                padding: '0.75rem', 
-                background: 'rgba(168, 85, 247, 0.1)',
-                borderRadius: '8px',
-                textAlign: 'center',
-                fontSize: '0.85rem',
-                color: '#a855f7'
-              }}>
-                🤖 מסכם...
-              </div>
-            )}
-            
-            {forecastComment && !isLoadingComment && (
-              <div style={{ 
-                marginTop: '0.75rem', 
-                padding: '0.75rem', 
-                background: 'rgba(168, 85, 247, 0.1)',
-                borderRadius: '8px',
-                borderRight: '4px solid #a855f7',
-                fontSize: '0.95rem',
-                color: 'var(--text)',
-                direction: 'rtl',
-                textAlign: 'center'
-              }}>
-                🤖 {forecastComment}
-              </div>
-            )}
           </div>
           
           <div style={{ 
