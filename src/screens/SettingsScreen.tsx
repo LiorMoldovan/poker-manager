@@ -19,8 +19,6 @@ import {
   restoreFromBackup,
   downloadBackup,
   importBackupFromFile,
-  importHistoricalData,
-  getImportFileInfo,
   BackupData
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
@@ -52,8 +50,6 @@ const SettingsScreen = () => {
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [importingHistory, setImportingHistory] = useState(false);
-  const [importFileInfo, setImportFileInfo] = useState<{ preparedAt: string | null; gamesCount: number; playersCount: number } | null>(null);
   
   // GitHub sync state
   const [githubToken, setGithubToken] = useState<string>('');
@@ -78,8 +74,6 @@ const SettingsScreen = () => {
 
   useEffect(() => {
     loadData();
-    // Load import file info
-    getImportFileInfo().then(info => setImportFileInfo(info));
   }, []);
 
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
@@ -264,29 +258,6 @@ const SettingsScreen = () => {
     reader.readAsText(file);
     // Reset input
     event.target.value = '';
-  };
-
-  const handleImportHistory = async () => {
-    if (importingHistory) return;
-    
-    if (!confirm('⚠️ WARNING: This will REPLACE all current data with the Excel import (217 games). A backup will be created first. Any games added manually will be lost. Continue?')) {
-      return;
-    }
-    
-    setImportingHistory(true);
-    setBackupMessage({ type: 'success', text: 'Importing historical data...' });
-    
-    const result = await importHistoricalData();
-    
-    setImportingHistory(false);
-    
-    if (result.success) {
-      setBackupMessage({ type: 'success', text: `✅ ${result.message}. Reloading...` });
-      setTimeout(() => window.location.reload(), 2000);
-    } else {
-      setBackupMessage({ type: 'error', text: `❌ ${result.message}` });
-      setTimeout(() => setBackupMessage(null), 5000);
-    }
   };
 
   const formatBackupDate = (dateStr: string) => {
@@ -790,44 +761,6 @@ const SettingsScreen = () => {
             </div>
           )}
 
-          {/* Import Historical Data */}
-          <div style={{ 
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.1))',
-            borderRadius: '8px',
-            padding: '0.75rem',
-            border: '1px dashed rgba(139, 92, 246, 0.3)'
-          }}>
-            <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#8B5CF6', marginBottom: '0.5rem' }}>
-              📊 Import Excel History
-            </p>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-              Replace all data with {importFileInfo?.gamesCount ?? '...'} games from Excel
-              {importFileInfo?.preparedAt && (
-                <span style={{ display: 'block', marginTop: '0.25rem', fontSize: '0.7rem' }}>
-                  📅 File prepared: {new Date(importFileInfo.preparedAt).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
-              )}
-            </p>
-            <button 
-              className="btn" 
-              onClick={handleImportHistory}
-              disabled={importingHistory}
-              style={{ 
-                width: '100%',
-                background: importingHistory ? 'var(--surface)' : 'linear-gradient(135deg, #8B5CF6, #10B981)',
-                color: 'white',
-                border: 'none'
-              }}
-            >
-              {importingHistory ? '⏳ Importing...' : '📥 Import Historical Data'}
-            </button>
-          </div>
         </div>
       )}
 
