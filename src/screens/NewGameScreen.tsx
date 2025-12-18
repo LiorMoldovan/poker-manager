@@ -23,6 +23,8 @@ const NewGameScreen = () => {
   const [showPermanentGuests, setShowPermanentGuests] = useState(false);
   const [showGuests, setShowGuests] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [pendingGameId, setPendingGameId] = useState<string | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
@@ -142,7 +144,27 @@ const NewGameScreen = () => {
     }
     
     const game = createGame(Array.from(selectedIds), location || undefined, forecastsToSave);
-    navigate(`/live-game/${game.id}`);
+    
+    // If we have forecasts, show prompt to share before starting
+    if (forecastsToSave && forecastsToSave.length > 0) {
+      setPendingGameId(game.id);
+      setShowSharePrompt(true);
+    } else {
+      navigate(`/live-game/${game.id}`);
+    }
+  };
+  
+  const handleShareAndStart = async () => {
+    await shareForecast();
+    if (pendingGameId) {
+      navigate(`/live-game/${pendingGameId}`);
+    }
+  };
+  
+  const handleSkipShare = () => {
+    if (pendingGameId) {
+      navigate(`/live-game/${pendingGameId}`);
+    }
   };
 
   // Get stats for a player
@@ -1670,6 +1692,55 @@ const NewGameScreen = () => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* Share Forecast Prompt Modal */}
+      {showSharePrompt && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '320px',
+            width: '100%',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🎲</div>
+            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>המשחק התחיל!</h3>
+            <p style={{ marginBottom: '1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              לשתף את התחזית בקבוצה לפני שמתחילים?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                className="btn btn-secondary"
+                onClick={handleSkipShare}
+                style={{ flex: 1 }}
+              >
+                דלג
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={handleShareAndStart}
+                disabled={isSharing}
+                style={{ flex: 1 }}
+              >
+                {isSharing ? '📸...' : '📤 שתף'}
+              </button>
+            </div>
           </div>
         </div>
       )}

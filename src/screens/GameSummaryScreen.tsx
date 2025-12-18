@@ -24,6 +24,7 @@ const GameSummaryScreen = () => {
   const [isLoadingComment, setIsLoadingComment] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
+  const forecastCompareRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player
   const getTotalChips = (player: GamePlayer): number => {
@@ -156,6 +157,21 @@ const GameSummaryScreen = () => {
           settlementsCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
         });
         files.push(new File([settlementsBlob], 'poker-settlements.png', { type: 'image/png' }));
+      }
+      
+      // Capture the Forecast vs Reality section if it exists
+      if (forecastCompareRef.current && forecasts.length > 0) {
+        const forecastCanvas = await html2canvas(forecastCompareRef.current, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        
+        const forecastBlob = await new Promise<Blob>((resolve) => {
+          forecastCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        files.push(new File([forecastBlob], 'poker-forecast-vs-reality.png', { type: 'image/png' }));
       }
       
       // Try native share first (works on mobile)
@@ -328,111 +344,124 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
-      {/* Forecast vs Actual Comparison */}
+      {/* Forecast vs Actual Comparison - for screenshot */}
       {forecasts.length > 0 && (
-        <div className="card" style={{ marginTop: '1rem' }}>
-          <h2 className="card-title mb-2">🎯 Forecast vs Reality</h2>
-          
-          <div style={{ overflowX: 'auto' }}>
-            <table className="results-table" style={{ fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th style={{ textAlign: 'center' }}>Forecast</th>
-                  <th style={{ textAlign: 'center' }}>Actual</th>
-                  <th style={{ textAlign: 'center' }}>Diff</th>
-                </tr>
-              </thead>
-              <tbody>
-                {forecasts
-                  .sort((a, b) => b.expectedProfit - a.expectedProfit)
-                  .map((forecast) => {
-                    const actual = players.find(p => p.playerName === forecast.playerName);
-                    const actualProfit = actual?.profit || 0;
-                    const diff = actualProfit - forecast.expectedProfit;
-                    const wasCorrect = (forecast.expectedProfit >= 0 && actualProfit >= 0) || 
-                                       (forecast.expectedProfit < 0 && actualProfit < 0);
-                    
-                    return (
-                      <tr key={forecast.playerName}>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          {wasCorrect ? '✓' : '✗'} {forecast.playerName}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'center',
-                          color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
-                        }}>
-                          {forecast.expectedProfit >= 0 ? '+' : ''}{cleanNumber(forecast.expectedProfit)}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'center',
-                          color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
-                          fontWeight: '600'
-                        }}>
-                          {actualProfit >= 0 ? '+' : ''}{cleanNumber(actualProfit)}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'center',
-                          color: Math.abs(diff) <= 50 ? 'var(--success)' : 
-                                 Math.abs(diff) <= 100 ? 'var(--warning)' : 'var(--danger)',
-                          fontSize: '0.8rem'
-                        }}>
-                          {diff >= 0 ? '+' : ''}{cleanNumber(diff)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* AI Comment */}
-          {isLoadingComment && (
+        <div ref={forecastCompareRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card">
+            <h2 className="card-title mb-2">🎯 Forecast vs Reality</h2>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table className="results-table" style={{ fontSize: '0.85rem' }}>
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th style={{ textAlign: 'center' }}>Forecast</th>
+                    <th style={{ textAlign: 'center' }}>Actual</th>
+                    <th style={{ textAlign: 'center' }}>Diff</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecasts
+                    .sort((a, b) => b.expectedProfit - a.expectedProfit)
+                    .map((forecast) => {
+                      const actual = players.find(p => p.playerName === forecast.playerName);
+                      const actualProfit = actual?.profit || 0;
+                      const diff = actualProfit - forecast.expectedProfit;
+                      const wasCorrect = (forecast.expectedProfit >= 0 && actualProfit >= 0) || 
+                                         (forecast.expectedProfit < 0 && actualProfit < 0);
+                      
+                      return (
+                        <tr key={forecast.playerName}>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            {wasCorrect ? '✓' : '✗'} {forecast.playerName}
+                          </td>
+                          <td style={{ 
+                            textAlign: 'center',
+                            color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
+                          }}>
+                            {forecast.expectedProfit >= 0 ? '+' : ''}{cleanNumber(forecast.expectedProfit)}
+                          </td>
+                          <td style={{ 
+                            textAlign: 'center',
+                            color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                            fontWeight: '600'
+                          }}>
+                            {actualProfit >= 0 ? '+' : ''}{cleanNumber(actualProfit)}
+                          </td>
+                          <td style={{ 
+                            textAlign: 'center',
+                            color: Math.abs(diff) <= 50 ? 'var(--success)' : 
+                                   Math.abs(diff) <= 100 ? 'var(--warning)' : 'var(--danger)',
+                            fontSize: '0.8rem'
+                          }}>
+                            {diff >= 0 ? '+' : ''}{cleanNumber(diff)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Accuracy stats */}
             <div style={{ 
-              marginTop: '0.75rem', 
-              padding: '0.75rem', 
-              background: 'rgba(168, 85, 247, 0.1)',
-              borderRadius: '8px',
+              marginTop: '0.75rem',
               textAlign: 'center',
               fontSize: '0.85rem',
-              color: '#a855f7'
+              color: 'var(--text-muted)'
             }}>
-              🤖 מנתח את התחזית...
-            </div>
-          )}
-          
-          {forecastComment && !isLoadingComment && (
-            <div style={{ 
-              marginTop: '0.75rem', 
-              padding: '0.75rem', 
-              background: 'rgba(168, 85, 247, 0.1)',
-              borderRadius: '8px',
-              borderRight: '4px solid #a855f7',
-              fontSize: '0.9rem',
-              color: 'var(--text)',
-              direction: 'rtl',
-              fontStyle: 'italic'
-            }}>
-              🤖 {forecastComment}
-            </div>
-          )}
-          
-          {/* Accuracy stats */}
-          <div style={{ 
-            marginTop: '0.75rem',
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '1rem',
-            fontSize: '0.8rem',
-            color: 'var(--text-muted)'
-          }}>
-            <span>
-              ✓ Direction: {forecasts.filter(f => {
+              Direction Accuracy: {forecasts.filter(f => {
                 const actual = players.find(p => p.playerName === f.playerName);
                 const actualProfit = actual?.profit || 0;
                 return (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
-              }).length}/{forecasts.length}
-            </span>
+              }).length}/{forecasts.length} ({Math.round((forecasts.filter(f => {
+                const actual = players.find(p => p.playerName === f.playerName);
+                const actualProfit = actual?.profit || 0;
+                return (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
+              }).length / forecasts.length) * 100)}%)
+            </div>
+            
+            {/* AI Comment - shown if available, or loading */}
+            {isLoadingComment && (
+              <div style={{ 
+                marginTop: '0.75rem', 
+                padding: '0.75rem', 
+                background: 'rgba(168, 85, 247, 0.1)',
+                borderRadius: '8px',
+                textAlign: 'center',
+                fontSize: '0.85rem',
+                color: '#a855f7'
+              }}>
+                🤖 מנתח...
+              </div>
+            )}
+            
+            {forecastComment && !isLoadingComment && (
+              <div style={{ 
+                marginTop: '0.75rem', 
+                padding: '0.75rem', 
+                background: 'rgba(168, 85, 247, 0.1)',
+                borderRadius: '8px',
+                borderRight: '4px solid #a855f7',
+                fontSize: '0.95rem',
+                color: 'var(--text)',
+                direction: 'rtl',
+                fontStyle: 'italic',
+                textAlign: 'center'
+              }}>
+                🤖 {forecastComment}
+              </div>
+            )}
+          </div>
+          
+          <div style={{ 
+            textAlign: 'center', 
+            marginTop: '1rem', 
+            fontSize: '0.75rem', 
+            color: 'var(--text-muted)',
+            opacity: 0.7
+          }}>
+            Poker Manager 🎲
           </div>
         </div>
       )}

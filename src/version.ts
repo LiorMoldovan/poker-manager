@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.4';
+export const APP_VERSION = '4.10.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.10.5',
+    date: '2025-12-18',
+    changes: [
+      'NEW: Share forecast prompt when starting game 📤',
+      'After clicking Start Game, prompts to share forecast first',
+      'Forecast vs Reality now included in shared screenshots',
+      'AI funny comment about accuracy in the screenshot',
+      'Full flow: Share forecast → Play → Share results with comparison'
+    ]
+  },
   {
     version: '4.10.4',
     date: '2025-12-18',
