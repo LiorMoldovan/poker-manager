@@ -14,6 +14,7 @@ import HistoryScreen from './screens/HistoryScreen';
 import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import GraphsScreen from './screens/GraphsScreen';
 
 // Permission context
 interface PermissionContextType {
@@ -170,6 +171,8 @@ function App() {
             <Route path="/game/:gameId" element={<GameDetailsScreen />} />
             <Route path="/statistics" element={<StatisticsScreen />} />
             <Route path="/settings" element={<SettingsScreen />} />
+            {/* Admin-only graphs page */}
+            {role === 'admin' && <Route path="/graphs" element={<GraphsScreen />} />}
             {/* Catch-all route - redirect unknown URLs to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

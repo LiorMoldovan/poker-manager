@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.41';
+export const APP_VERSION = '4.7.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.7.0',
+    date: '2025-12-18',
+    changes: [
+      'NEW: Graphs feature (Admin only) 📊',
+      'Cumulative Profit Line Chart - visualize profit trends over time',
+      'Head-to-Head Comparison - compare any 2 players side by side',
+      'Leaderboard Race - animated ranking progression with replay',
+      'Player selector for filtering graphs',
+      'Interactive tooltips and legends'
+    ]
+  },
   {
     version: '4.6.41',
     date: '2025-12-18',
