@@ -1486,30 +1486,3 @@ export const CHANGELOG: ChangelogEntry[] = [
     ]
   }
 ];
-
-
-      'Included total chips and rebuys in WhatsApp export message'
-    ]
-  },
-  {
-    version: '1.1.0',
-    date: '2024-12-14',
-    changes: [
-      'Added app versioning system',
-      'Added changelog tracking in Settings',
-      'Version now displayed in Settings screen'
-    ]
-  },
-  {
-    version: '1.0.0',
-    date: '2024-12-01',
-    changes: [
-      'Initial release',
-      'Poker game management',
-      'Player tracking',
-      'Chip calculations',
-      'Game history and statistics'
-    ]
-  }
-];
-
