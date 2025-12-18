@@ -102,7 +102,7 @@ const LiveGameScreen = () => {
   };
 
   // Text-to-speech for buyin announcements
-  const speak = async (text: string) => {
+  const speak = async (hebrewName: string, englishAction: string) => {
     // Play alert sound first
     await playAlertSound();
     
@@ -110,13 +110,23 @@ const LiveGameScreen = () => {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
       
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'he-IL'; // Hebrew
-      utterance.rate = 1.1; // Slightly faster
-      utterance.pitch = 1;
-      utterance.volume = 1;
+      // First: Say the name in Hebrew
+      const nameUtterance = new SpeechSynthesisUtterance(hebrewName);
+      nameUtterance.lang = 'he-IL'; // Hebrew
+      nameUtterance.rate = 1.0;
+      nameUtterance.pitch = 1;
+      nameUtterance.volume = 1;
       
-      window.speechSynthesis.speak(utterance);
+      // Second: Say the action in English
+      const actionUtterance = new SpeechSynthesisUtterance(englishAction);
+      actionUtterance.lang = 'en-US'; // English
+      actionUtterance.rate = 1.0;
+      actionUtterance.pitch = 1;
+      actionUtterance.volume = 1;
+      
+      // Queue both utterances
+      window.speechSynthesis.speak(nameUtterance);
+      window.speechSynthesis.speak(actionUtterance);
     }
   };
 
@@ -139,9 +149,9 @@ const LiveGameScreen = () => {
       ...actions,
     ]);
     
-    // Announce the buyin in natural Hebrew
-    const buyinText = amount === 1 ? 'קנה' : 'קנה חצי';
-    speak(`${player.playerName} ${buyinText}`);
+    // Announce: Hebrew name + English "buyin"
+    const buyinText = amount === 1 ? 'buyin' : 'half buyin';
+    speak(player.playerName, buyinText);
   };
 
   const handleUndo = () => {

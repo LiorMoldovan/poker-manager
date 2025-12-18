@@ -4,15 +4,19 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// Gemini API base URL - model will be added dynamically
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-
-// Models to try (in order of preference)
-const GEMINI_MODELS = [
-  'gemini-pro',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash', 
-  'gemini-1.0-pro'
+// API versions and models to try
+const API_CONFIGS = [
+  // v1beta with various models
+  { version: 'v1beta', model: 'gemini-1.5-flash' },
+  { version: 'v1beta', model: 'gemini-1.5-pro' },
+  { version: 'v1beta', model: 'gemini-pro' },
+  // v1 with various models
+  { version: 'v1', model: 'gemini-1.5-flash' },
+  { version: 'v1', model: 'gemini-1.5-pro' },
+  { version: 'v1', model: 'gemini-pro' },
+  // Older models
+  { version: 'v1beta', model: 'models/gemini-pro' },
+  { version: 'v1', model: 'models/gemini-pro' },
 ];
 
 // Store API key in localStorage
@@ -158,9 +162,10 @@ ${playerDataText}
 החזר רק JSON תקין, בלי שום טקסט נוסף לפני או אחרי.`;
 
   try {
-    const model = getWorkingModel();
-    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
-    console.log(`Using model: ${model}`);
+    const config = getWorkingConfig();
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+    console.log(`Using: ${config.version}/${config.model}`);
     
     const response = await fetch(url, {
       method: 'POST',
@@ -228,63 +233,116 @@ ${playerDataText}
   }
 };
 
-// Store working model name
-let workingModel: string | null = null;
+// Store working config
+let workingConfig: { version: string; model: string } | null = null;
 
 /**
- * Test if the API key is valid - tries multiple models
+ * First, try to list available models to diagnose the issue
+ */
+const listAvailableModels = async (apiKey: string): Promise<string[]> => {
+  const models: string[] = [];
+  
+  for (const version of ['v1beta', 'v1']) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
+      console.log(`📋 Listing models with ${version}...`);
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        const foundModels = data.models?.map((m: {name: string}) => `${version}: ${m.name}`) || [];
+        console.log(`Found ${foundModels.length} models with ${version}:`, foundModels);
+        models.push(...foundModels);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        console.log(`${version} list failed:`, err?.error?.message || response.status);
+      }
+    } catch (e) {
+      console.log(`${version} list error:`, e);
+    }
+  }
+  
+  return models;
+};
+
+/**
+ * Test if the API key is valid - tries multiple configs
  */
 export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
-  console.log('Testing API key with multiple models...');
+  console.log('🔑 Testing Gemini API key...');
+  console.log('Key format check:', apiKey.startsWith('AIza') ? '✅ Starts with AIza' : '⚠️ Unusual format');
   
-  for (const model of GEMINI_MODELS) {
-    console.log(`Trying model: ${model}`);
+  // First, list available models
+  const availableModels = await listAvailableModels(apiKey);
+  
+  if (availableModels.length > 0) {
+    console.log('✅ API key has access to models. Now testing generateContent...');
+  } else {
+    console.log('⚠️ Could not list models. This might mean:');
+    console.log('   1. API key is invalid');
+    console.log('   2. Generative Language API not enabled in Google Cloud Console');
+    console.log('   3. API key has IP or referrer restrictions');
+    console.log('');
+    console.log('💡 Try creating a NEW key at: https://aistudio.google.com/app/apikey');
+    console.log('   Make sure to use "Create API key in new project" option');
+  }
+  
+  // Try all configs
+  for (const config of API_CONFIGS) {
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+    
+    console.log(`\n🧪 Trying ${config.version} / ${config.model}...`);
     
     try {
-      const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ text: 'Reply with just: OK' }]
-          }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 5,
-          }
+          contents: [{ parts: [{ text: 'Say: OK' }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 5 }
         })
       });
 
       if (response.ok) {
-        workingModel = model;
-        console.log(`✅ Model ${model} works!`);
-        localStorage.setItem('gemini_working_model', model);
+        workingConfig = config;
+        console.log(`✅ SUCCESS! ${config.version}/${config.model} works!`);
+        localStorage.setItem('gemini_working_config', JSON.stringify(config));
         return true;
       }
       
       const errorData = await response.json().catch(() => ({}));
-      console.log(`❌ Model ${model} failed:`, response.status, errorData?.error?.message || '');
+      const errorMsg = errorData?.error?.message || `Status ${response.status}`;
+      console.log(`❌ ${config.version}/${config.model}: ${errorMsg}`);
+      
     } catch (error) {
-      console.log(`❌ Model ${model} error:`, error);
+      console.log(`❌ ${config.version}/${config.model} error:`, error);
     }
   }
   
-  console.error('All models failed. API key may be invalid or restricted.');
+  console.error('\n❌ All configurations failed.');
+  console.log('\n💡 TROUBLESHOOTING:');
+  console.log('1. Go to: https://aistudio.google.com/app/apikey');
+  console.log('2. Delete existing API key');
+  console.log('3. Click "Create API key" → "Create API key in new project"');
+  console.log('4. Copy the new key and try again');
+  
   return false;
 };
 
 /**
- * Get the working model name
+ * Get the working config
  */
-const getWorkingModel = (): string => {
-  if (workingModel) return workingModel;
-  const saved = localStorage.getItem('gemini_working_model');
+const getWorkingConfig = (): { version: string; model: string } => {
+  if (workingConfig) return workingConfig;
+  
+  const saved = localStorage.getItem('gemini_working_config');
   if (saved) {
-    workingModel = saved;
-    return saved;
+    try {
+      workingConfig = JSON.parse(saved);
+      return workingConfig!;
+    } catch {}
   }
-  return GEMINI_MODELS[0]; // Default to first
+  
+  return API_CONFIGS[0]; // Default to first
 };
