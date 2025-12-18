@@ -5,17 +5,17 @@
  */
 
 // API versions and models to try (based on actual available models Dec 2024)
+// Ordered by free tier quota (lite models have higher limits)
 const API_CONFIGS = [
-  // Stable 2.0 models (most reliable)
-  { version: 'v1beta', model: 'gemini-2.0-flash' },
-  { version: 'v1beta', model: 'gemini-2.0-flash-001' },
+  // Lite models first (higher free tier limits)
   { version: 'v1beta', model: 'gemini-2.0-flash-lite' },
-  // Latest 2.5 models
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
   { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
-  // v1 versions
+  // Then regular flash models
+  { version: 'v1beta', model: 'gemini-2.0-flash' },
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  // Specific versions as fallback
+  { version: 'v1beta', model: 'gemini-2.0-flash-001' },
   { version: 'v1', model: 'gemini-2.0-flash' },
-  { version: 'v1', model: 'gemini-2.5-flash' },
 ];
 
 // Store API key in localStorage
@@ -160,99 +160,106 @@ ${playerDataText}
 
 החזר רק JSON תקין, בלי שום טקסט נוסף לפני או אחרי.`;
 
-  try {
-    const config = getWorkingConfig();
+  console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
+  
+  // Try each model until one works
+  for (const config of API_CONFIGS) {
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
     const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    console.log('🤖 AI Forecast Request:');
-    console.log('   Model:', config.version + '/' + config.model);
-    console.log('   Players:', players.map(p => p.name).join(', '));
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-          temperature: 0.9,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('❌ Gemini API error:', response.status);
-      console.error('   Error details:', errorData?.error?.message || JSON.stringify(errorData));
-      
-      // If rate limited, throw specific error
-      if (response.status === 429) {
-        throw new Error('RATE_LIMITED: Wait 30 seconds and try again');
-      }
-      throw new Error(`API_ERROR: ${response.status} - ${errorData?.error?.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    console.log('✅ Gemini response received');
+    console.log(`   Trying: ${config.version}/${config.model}...`);
     
-    // Extract the text from Gemini response
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) {
-      console.error('❌ Empty Gemini response:', data);
-      // Check for safety block
-      if (data.candidates?.[0]?.finishReason === 'SAFETY') {
-        throw new Error('Response blocked by safety filter');
-      }
-      throw new Error('EMPTY_RESPONSE');
-    }
-
-    console.log('📝 Raw AI response:', text.substring(0, 200) + '...');
-
-    // Parse JSON from response (handle markdown code blocks)
-    let jsonText = text;
-    if (text.includes('```json')) {
-      jsonText = text.split('```json')[1].split('```')[0];
-    } else if (text.includes('```')) {
-      jsonText = text.split('```')[1].split('```')[0];
-    }
-
-    let forecasts: ForecastResult[];
     try {
-      forecasts = JSON.parse(jsonText.trim());
-      console.log('✅ Parsed', forecasts.length, 'forecasts');
-    } catch (parseError) {
-      console.error('❌ JSON parse error:', parseError);
-      console.error('   JSON text was:', jsonText.substring(0, 500));
-      throw new Error('Failed to parse AI response as JSON');
-    }
-    
-    // Validate and ensure zero-sum
-    let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
-    if (total !== 0 && forecasts.length > 0) {
-      // Distribute the difference across all players
-      const adjustment = Math.round(total / forecasts.length);
-      forecasts.forEach((f, i) => {
-        if (i === 0) {
-          f.expectedProfit -= (total - adjustment * (forecasts.length - 1));
-        } else {
-          f.expectedProfit -= adjustment;
-        }
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.9,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 2048,
+          }
+        })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData?.error?.message || `Status ${response.status}`;
+        console.log(`   ❌ ${config.model}: ${errorMsg}`);
+        
+        // If rate limited or not found, try next model
+        if (response.status === 429 || response.status === 404) {
+          continue; // Try next model
+        }
+        throw new Error(`API_ERROR: ${response.status} - ${errorMsg}`);
+      }
+      
+      // Success! Save this working model
+      console.log(`   ✅ ${config.model} responded!`);
+      localStorage.setItem('gemini_working_config', JSON.stringify(config));
+
+      const data = await response.json();
+      
+      // Extract the text from Gemini response
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!text) {
+        console.error('❌ Empty response from', config.model);
+        if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+          continue; // Try next model
+        }
+        continue; // Try next model
+      }
+
+      console.log('📝 AI response received, parsing...');
+
+      // Parse JSON from response (handle markdown code blocks)
+      let jsonText = text;
+      if (text.includes('```json')) {
+        jsonText = text.split('```json')[1].split('```')[0];
+      } else if (text.includes('```')) {
+        jsonText = text.split('```')[1].split('```')[0];
+      }
+
+      let forecasts: ForecastResult[];
+      try {
+        forecasts = JSON.parse(jsonText.trim());
+        console.log('✅ Parsed', forecasts.length, 'forecasts');
+      } catch (parseError) {
+        console.error('❌ JSON parse error, trying next model');
+        continue; // Try next model
+      }
+      
+      // Validate and ensure zero-sum
+      let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
+      if (total !== 0 && forecasts.length > 0) {
+        const adjustment = Math.round(total / forecasts.length);
+        forecasts.forEach((f, i) => {
+          if (i === 0) {
+            f.expectedProfit -= (total - adjustment * (forecasts.length - 1));
+          } else {
+            f.expectedProfit -= adjustment;
+          }
+        });
+      }
+
+      return forecasts;
+      
+    } catch (fetchError) {
+      console.log(`   ❌ ${config.model} fetch error:`, fetchError);
+      continue; // Try next model
     }
-
-    return forecasts;
-
-  } catch (error) {
-    console.error('Gemini AI error:', error);
-    throw error;
   }
+  
+  // All models failed
+  console.error('❌ All AI models failed');
+  throw new Error('All AI models are rate limited or unavailable. Try again in a few minutes.');
 };
 
 // Store working config
