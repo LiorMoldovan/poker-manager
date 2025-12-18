@@ -788,10 +788,17 @@ const NewGameScreen = () => {
       const isAI = !!aiForecasts;
       const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
       
-      // Split forecasts into chunks
+      // Sort forecasts by expected profit (highest first) to match on-screen display
+      const sortedForecasts = [...forecasts].sort((a: any, b: any) => {
+        const aProfit = a.expectedProfit ?? a.expected ?? 0;
+        const bProfit = b.expectedProfit ?? b.expected ?? 0;
+        return bProfit - aProfit;
+      });
+      
+      // Split sorted forecasts into chunks
       const chunks: typeof forecasts[] = [];
-      for (let i = 0; i < forecasts.length; i += PLAYERS_PER_PAGE) {
-        chunks.push(forecasts.slice(i, i + PLAYERS_PER_PAGE));
+      for (let i = 0; i < sortedForecasts.length; i += PLAYERS_PER_PAGE) {
+        chunks.push(sortedForecasts.slice(i, i + PLAYERS_PER_PAGE));
       }
       
       // Create a screenshot for each chunk
@@ -847,7 +854,7 @@ const NewGameScreen = () => {
                       ${isFirst && expected > 0 ? '👑 ' : ''}${name}${isSurprise ? ' ⚡' : ''}
                     </span>
                     <span style="font-weight: 700; font-size: 1.05rem; color: ${textColor};">
-                      ${expected >= 0 ? '+' : ''}₪${Math.abs(Math.round(expected)).toLocaleString()}
+                      ${expected >= 0 ? '+' : '-'}₪${Math.abs(Math.round(expected)).toLocaleString()}
                     </span>
                   </div>
                   ${highlight ? `<div style="font-size: 0.78rem; color: #f1f5f9; opacity: 0.8; margin-bottom: 0.4rem; direction: rtl; line-height: 1.4;">${highlight}</div>` : ''}
