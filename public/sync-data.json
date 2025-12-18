@@ -1579,34 +1579,6 @@
       "date": "2025-12-18T16:19:15.112Z",
       "status": "completed",
       "createdAt": "2025-12-18T16:19:15.112Z"
-    },
-    {
-      "id": "mjbnceaiyusvhx9s4k",
-      "date": "2025-12-18T16:20:11.994Z",
-      "status": "completed",
-      "createdAt": "2025-12-18T16:20:11.994Z",
-      "forecasts": [
-        {
-          "playerName": "ליאור",
-          "expectedProfit": 75.5,
-          "sentence": "ליאור, המכונה 'החזיר' השולחני, ממשיך לטחון את השולחן כמו דחפור חדש, ורק החלומות הרטובים של יריביו יכולים לעצור אותו."
-        },
-        {
-          "playerName": "חרדון",
-          "expectedProfit": 15.2,
-          "sentence": "חרדון, למרות השם, מנסה לנשוך חזק, ועם רצף נצחונות נוכחי, אולי הוא יצליח לטלטל את העניינים, או לפחות לקבל נשנוש."
-        },
-        {
-          "playerName": "אייל",
-          "expectedProfit": -40.7,
-          "sentence": "אייל, עם סטטיסטיקה שגורמת לרואה חשבון להתעטש, מקווה שהערב יהיה יותר 'אייל' ויותר 'אייל' של הצלחה, ולא רק 'אייל' של עגלה."
-        },
-        {
-          "playerName": "סגל",
-          "expectedProfit": -50,
-          "sentence": "סגל, שחווה ערב קסום עם מינוס, מקווה שימצא את הקסם האבוד של שבבי הפוקר, כי בינתיים, הוא רק מוציא כסף מהכיס."
-        }
-      ]
     }
   ],
   "gamePlayers": [
@@ -17363,76 +17335,8 @@
       },
       "finalValue": 0,
       "profit": -30
-    },
-    {
-      "id": "mjbnceaip5y04n019k",
-      "gameId": "mjbnceaiyusvhx9s4k",
-      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
-      "playerName": "ליאור",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 12
-      },
-      "finalValue": 180,
-      "profit": 120
-    },
-    {
-      "id": "mjbnceaicwcjz4fmfp6",
-      "gameId": "mjbnceaiyusvhx9s4k",
-      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
-      "playerName": "חרדון",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mjbnceaiwviue1qltcj",
-      "gameId": "mjbnceaiyusvhx9s4k",
-      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
-      "playerName": "אייל",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -60
-    },
-    {
-      "id": "mjbnceaing56q4evun9",
-      "gameId": "mjbnceaiyusvhx9s4k",
-      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
-      "playerName": "סגל",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T16:21:20.922Z",
+  "lastUpdated": "2025-12-18T16:28:20.889Z",
   "updatedBy": "admin"
 }
