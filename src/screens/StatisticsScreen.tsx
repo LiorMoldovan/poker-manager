@@ -1578,7 +1578,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.longestLossStreak > 0 ? player.longestLossStreak : '-'}
                   </div>
-                  <div className="stat-label">{player.longestLossStreak > 0 ? 'Worst Streak ❯' : 'Worst Streak'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.longestLossStreak > 0 ? 'L Streak ❯' : 'L Streak'}</div>
                 </div>
               </div>
             </div>
