@@ -1396,22 +1396,24 @@ const StatisticsScreen = () => {
                     ))}
                   </tbody>
                 </table>
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
+                  <button
+                    onClick={handleShareTable}
+                    disabled={isSharing}
+                    className="btn btn-sm btn-secondary"
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem'
+                    }}
+                  >
+                    {isSharing ? '📸...' : '📤 שתף'}
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={handleShareTable}
-                disabled={isSharing}
-                className="btn btn-primary"
-                style={{ 
-                  marginTop: '0.75rem', 
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                {isSharing ? '📸 מכין תמונה...' : '📤 שתף לוואטסאפ'}
-              </button>
             </>
           )}
 
