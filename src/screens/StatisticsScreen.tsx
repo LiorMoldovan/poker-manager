@@ -1018,11 +1018,11 @@ const StatisticsScreen = () => {
 
               {/* All-Time Leaders */}
               <div className="card">
-                <h2 className="card-title mb-2">👑 מובילים</h2>
+                <h2 className="card-title mb-2">👑 Leaders</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 מוביל</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 Top Earner</span>
                       {renderRecord(
                         'leader',
                         records.leaders,
@@ -1036,7 +1036,7 @@ const StatisticsScreen = () => {
                   
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 מפסיד</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</span>
                       {renderRecord(
                         'biggestLoser',
                         records.biggestLosers,
