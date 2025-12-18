@@ -1545,10 +1545,10 @@
       "createdAt": "2025-12-13T00:00:00.000Z"
     },
     {
-      "id": "mjbdhjkhuqps1wcbyqj",
-      "date": "2025-12-18T11:44:15.953Z",
+      "id": "mjbdpyv064x5m37zrbt",
+      "date": "2025-12-18T11:50:49.020Z",
       "status": "completed",
-      "createdAt": "2025-12-18T11:44:15.953Z"
+      "createdAt": "2025-12-18T11:50:49.020Z"
     }
   ],
   "gamePlayers": [
@@ -17093,57 +17093,40 @@
       "profit": -30
     },
     {
-      "id": "mjbdhjkhe8d12lud616",
-      "gameId": "mjbdhjkhuqps1wcbyqj",
+      "id": "mjbdpyv0ipunmrozpkb",
+      "gameId": "mjbdpyv064x5m37zrbt",
       "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
       "playerName": "ליאור",
-      "rebuys": 2,
+      "rebuys": 1,
       "chipCounts": {
         "1": 0,
         "2": 0,
         "3": 0,
         "4": 0,
-        "5": 7,
-        "6": 3
+        "5": 0,
+        "6": 4
       },
-      "finalValue": 66,
-      "profit": 6
+      "finalValue": 60,
+      "profit": 30
     },
     {
-      "id": "mjbdhjkhd50neftdtks",
-      "gameId": "mjbdhjkhuqps1wcbyqj",
+      "id": "mjbdpyv0cbzwzy6aq6p",
+      "gameId": "mjbdpyv064x5m37zrbt",
       "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
       "playerName": "אייל",
       "rebuys": 1,
       "chipCounts": {
         "1": 0,
         "2": 0,
-        "3": 5,
-        "4": 4,
-        "5": 0,
-        "6": 2
-      },
-      "finalValue": 39,
-      "profit": 9
-    },
-    {
-      "id": "mjbdhjkhtt3nd7ekbim",
-      "gameId": "mjbdhjkhuqps1wcbyqj",
-      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
-      "playerName": "חרדון",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
         "3": 0,
         "4": 0,
         "5": 0,
-        "6": 3
+        "6": 0
       },
-      "finalValue": 45,
-      "profit": -15
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T11:49:17.520Z",
+  "lastUpdated": "2025-12-18T11:50:59.223Z",
   "updatedBy": "admin"
 }
