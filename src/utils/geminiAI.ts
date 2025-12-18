@@ -45,8 +45,8 @@ export interface PlayerForecastData {
   currentStreak: number; // positive = wins, negative = losses
   bestWin: number;
   worstLoss: number;
-  // All game results with dates (most recent first)
-  gameHistory: { profit: number; date: string }[];
+  // All game results with dates and game IDs (most recent first)
+  gameHistory: { profit: number; date: string; gameId: string }[];
   daysSinceLastGame: number;
   isActive: boolean; // played in last 2 months
 }
@@ -69,6 +69,47 @@ export const generateAIForecasts = async (
   
   if (!apiKey) {
     throw new Error('NO_API_KEY');
+  }
+
+  // Analyze player dynamics - how players perform when playing together
+  const playerDynamics: string[] = [];
+  
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      const p1 = players[i];
+      const p2 = players[j];
+      
+      // Find games where both players participated
+      const p1GameIds = new Set(p1.gameHistory.map(g => g.gameId));
+      const sharedGames = p2.gameHistory.filter(g => p1GameIds.has(g.gameId));
+      
+      if (sharedGames.length >= 3) {
+        // Calculate each player's performance in shared games
+        const p1SharedGames = p1.gameHistory.filter(g => 
+          sharedGames.some(sg => sg.gameId === g.gameId)
+        );
+        
+        const p1Avg = p1SharedGames.reduce((sum, g) => sum + g.profit, 0) / p1SharedGames.length;
+        const p2Avg = sharedGames.reduce((sum, g) => sum + g.profit, 0) / sharedGames.length;
+        
+        const p1Wins = p1SharedGames.filter(g => g.profit > 0).length;
+        const p2Wins = sharedGames.filter(g => g.profit > 0).length;
+        
+        // Only add interesting dynamics
+        if (Math.abs(p1Avg - p2Avg) > 20 || Math.abs(p1Wins - p2Wins) >= 2) {
+          const winner = p1Avg > p2Avg ? p1.name : p2.name;
+          const loser = p1Avg > p2Avg ? p2.name : p1.name;
+          const winnerAvg = Math.round(Math.max(p1Avg, p2Avg));
+          const loserAvg = Math.round(Math.min(p1Avg, p2Avg));
+          
+          playerDynamics.push(
+            `${winner} vs ${loser}: ב-${sharedGames.length} משחקים משותפים, ` +
+            `${winner} ממוצע ${winnerAvg >= 0 ? '+' : ''}${winnerAvg}₪, ` +
+            `${loser} ממוצע ${loserAvg >= 0 ? '+' : ''}${loserAvg}₪`
+          );
+        }
+      }
+    }
   }
 
   // Build the prompt with FULL player data
@@ -118,6 +159,12 @@ ${gameHistoryText}`;
 🎯 הנתונים המלאים של השחקנים שישתתפו הערב:
 ${playerDataText}
 
+${playerDynamics.length > 0 ? `
+========================================
+
+🤝 דינמיקות בין שחקנים (ביצועים במשחקים משותפים):
+${playerDynamics.join('\n')}
+` : ''}
 ========================================
 
 📝 צור תחזית לכל שחקן בפורמט JSON הבא:
@@ -159,15 +206,22 @@ ${playerDataText}
    - שינוי מגמה (מנצח שהתחיל להפסיד או להיפך)? חשוב!
    - רצפים ארוכים? ציין
 
-7. הערכות רווח ריאליסטיות לפי ההיסטוריה של כל שחקן:
+7. דינמיקות בין שחקנים - חשוב מאוד!
+   - אם יש מידע על משחקים משותפים, השתמש בו!
+   - "כשהוא משחק נגד X, הוא תמיד מפסיד..."
+   - "הפעם Y מגיע - וזו בשורה רעה עבור Z..."
+   - צור מתח ודרמה בין השחקנים!
+   - תייחס לקבוצה הספציפית הזו, לא רק לפרטים
+
+8. הערכות רווח ריאליסטיות לפי ההיסטוריה של כל שחקן:
    - התבסס על הטווח ההיסטורי של השחקן (בין ההפסד הגדול לנצחון הגדול שלו)
    - שחקן עם ממוצע גבוה יכול לקבל תחזית גבוהה יותר
    - שחקן עם תנודתיות גבוהה (הפסדים ונצחונות גדולים) - הערכה יכולה להיות קיצונית יותר
    - שחקן עם תנודתיות נמוכה - הערכה צריכה להיות מתונה יותר
 
-8. כל שחקן צריך highlight ו-sentence ייחודיים לחלוטין!
+9. כל שחקן צריך highlight ו-sentence ייחודיים לחלוטין!
 
-9. גיוון וחידוש:
+10. גיוון וחידוש:
    - גם אם אותם שחקנים חוזרים - תן תחזית שונה לגמרי כל פעם!
    - שנה את הסגנון, הטון, המשפטים, והזווית
    - לפעמים תהיה אופטימי, לפעמים ציני, לפעמים דרמטי

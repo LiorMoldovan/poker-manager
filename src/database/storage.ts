@@ -424,9 +424,10 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       // Break-even (profit === 0): skip and continue checking previous games
     }
     
-    // Last 6 game results (most recent first) with dates and gameId
+    // Last 15 game results (most recent first) with dates and gameId
+    // More games = better player dynamics analysis
     const lastGameResults = sortedPlayerGames
-      .slice(-6)
+      .slice(-15)
       .reverse()
       .map(pg => {
         const game = sortedGames.find(g => g.id === pg.gameId);
