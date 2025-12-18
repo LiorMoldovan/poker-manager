@@ -4,8 +4,16 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// Use Gemini 1.0 Pro (stable, widely available)
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent';
+// Gemini API base URL - model will be added dynamically
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// Models to try (in order of preference)
+const GEMINI_MODELS = [
+  'gemini-pro',
+  'gemini-1.5-pro',
+  'gemini-1.5-flash', 
+  'gemini-1.0-pro'
+];
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
@@ -150,7 +158,11 @@ ${playerDataText}
 החזר רק JSON תקין, בלי שום טקסט נוסף לפני או אחרי.`;
 
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const model = getWorkingModel();
+    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
+    console.log(`Using model: ${model}`);
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -216,39 +228,63 @@ ${playerDataText}
   }
 };
 
+// Store working model name
+let workingModel: string | null = null;
+
 /**
- * Test if the API key is valid
+ * Test if the API key is valid - tries multiple models
  */
 export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
-  try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: 'Reply with just: OK' }]
-        }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 5,
-        }
-      })
-    });
+  console.log('Testing API key with multiple models...');
+  
+  for (const model of GEMINI_MODELS) {
+    console.log(`Trying model: ${model}`);
+    
+    try {
+      const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: 'Reply with just: OK' }]
+          }],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 5,
+          }
+        })
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        workingModel = model;
+        console.log(`✅ Model ${model} works!`);
+        localStorage.setItem('gemini_working_model', model);
+        return true;
+      }
+      
       const errorData = await response.json().catch(() => ({}));
-      console.error('API key test failed:', response.status);
-      console.error('Error details:', JSON.stringify(errorData, null, 2));
-      return false;
+      console.log(`❌ Model ${model} failed:`, response.status, errorData?.error?.message || '');
+    } catch (error) {
+      console.log(`❌ Model ${model} error:`, error);
     }
-
-    const data = await response.json();
-    console.log('API test success:', data);
-    return true;
-  } catch (error) {
-    console.error('API key test error:', error);
-    return false;
   }
+  
+  console.error('All models failed. API key may be invalid or restricted.');
+  return false;
+};
+
+/**
+ * Get the working model name
+ */
+const getWorkingModel = (): string => {
+  if (workingModel) return workingModel;
+  const saved = localStorage.getItem('gemini_working_model');
+  if (saved) {
+    workingModel = saved;
+    return saved;
+  }
+  return GEMINI_MODELS[0]; // Default to first
 };

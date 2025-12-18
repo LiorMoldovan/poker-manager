@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.8.7';
+export const APP_VERSION = '4.8.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,11 +13,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.8.8',
+    date: '2025-12-18',
+    changes: [
+      'Voice: Changed to natural Hebrew - "קנה" / "קנה חצי"',
+      'Sounds better than English "buyin" transliteration'
+    ]
+  },
+  {
     version: '4.8.7',
     date: '2025-12-18',
     changes: [
       'NEW: Voice announcement for buyins! 🔊',
-      'Says player name + "ביי אין" or "חצי ביי אין" in Hebrew',
+      'Says player name + action in Hebrew',
       'Helps prevent mistakes during the game'
     ]
   },

@@ -97,8 +97,8 @@ const LiveGameScreen = () => {
       ...actions,
     ]);
     
-    // Announce the buyin
-    const buyinText = amount === 1 ? 'ביי אין' : 'חצי ביי אין';
+    // Announce the buyin in natural Hebrew
+    const buyinText = amount === 1 ? 'קנה' : 'קנה חצי';
     speak(`${player.playerName} ${buyinText}`);
   };
 
