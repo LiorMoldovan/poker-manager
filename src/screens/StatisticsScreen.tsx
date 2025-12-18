@@ -1405,6 +1405,24 @@ const StatisticsScreen = () => {
           )}
 
           {/* INDIVIDUAL VIEW */}
+          {viewMode === 'individual' && (
+            <>
+              {/* Timeframe Header */}
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '0.5rem', 
+                marginBottom: '0.5rem',
+                background: 'rgba(16, 185, 129, 0.1)',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                color: 'var(--primary)',
+                fontWeight: '500'
+              }}>
+                👤 Player Stats ({getTimeframeLabel()})
+              </div>
+            </>
+          )}
+
           {viewMode === 'individual' && sortedStats.map((player, index) => (
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease' }}>
               <div className="card-header">
@@ -1421,19 +1439,24 @@ const StatisticsScreen = () => {
               {/* Current Streak Badge */}
               {player.currentStreak !== 0 && (
                 <div style={{ 
-                  display: 'inline-block',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
                   marginBottom: '0.75rem',
-                  padding: '0.35rem 0.75rem',
-                  borderRadius: '20px',
+                  padding: '0.4rem 0.75rem',
+                  borderRadius: '8px',
                   fontSize: '0.8rem',
                   fontWeight: '600',
                   background: player.currentStreak > 0 
-                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.3), rgba(22, 163, 74, 0.2))' 
-                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.3), rgba(220, 38, 38, 0.2))',
-                  color: player.currentStreak > 0 ? '#22c55e' : '#ef4444',
-                  border: `1px solid ${player.currentStreak > 0 ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+                    ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.1))' 
+                    : 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1))',
+                  color: player.currentStreak > 0 ? '#f97316' : '#ef4444',
+                  border: `1px solid ${player.currentStreak > 0 ? 'rgba(249, 115, 22, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
                 }}>
-                  {player.currentStreak > 0 ? '🔥' : '❄️'} {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'wins' : 'losses'} in a row
+                  <span>{player.currentStreak > 0 ? '🔥' : '❄️'}</span>
+                  <span style={{ color: player.currentStreak > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                    {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'Wins' : 'Losses'}
+                  </span>
                 </div>
               )}
 
