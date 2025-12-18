@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.11.0';
+export const APP_VERSION = '4.11.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.11.1',
+    date: '2025-12-18',
+    changes: [
+      'Chip Count: User-controlled flow 🎰',
+      'No auto-select on screen entry - you choose the player',
+      'Numpad opens when YOU select a player',
+      'Auto-advances through chip colors after each confirm',
+      'After last chip OR Done button → back to player selection',
+      'You choose the next player yourself'
+    ]
+  },
   {
     version: '4.11.0',
     date: '2025-12-18',
@@ -22,18 +34,6 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Legend added above comparison table',
       'AI summary: Relevant insights (not jokes)',
       'Forecast button: Admin only on Live Game screen'
-    ]
-  },
-  {
-    version: '4.10.9',
-    date: '2025-12-18',
-    changes: [
-      'Chip Count: Auto-advance numpad flow 🎰',
-      'Numpad auto-opens when selecting a player',
-      'After entering a chip count, auto-advances to next chip color',
-      'After last chip, player auto-marks as Done',
-      'Progress dots show which chip you\'re on',
-      'Manual Done button still works for early exit'
     ]
   },
   {

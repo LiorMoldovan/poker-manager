@@ -252,39 +252,17 @@ const ChipEntryScreen = () => {
     });
     setChipCounts(initialCounts);
     
-    // Select first player by default and auto-open numpad
-    if (gamePlayers.length > 0) {
-      setSelectedPlayerId(gamePlayers[0].id);
-      // Auto-open numpad for first chip
-      if (chips.length > 0) {
-        setNumpadPlayerId(gamePlayers[0].id);
-        setNumpadChipIndex(0);
-        setNumpadOpen(true);
-      }
-    }
+    // Don't auto-select any player - let user choose
+    setSelectedPlayerId(null);
     setIsLoading(false);
   };
 
-  // Mark player as done and move to next (with auto-open numpad option)
-  const markPlayerDone = (playerId: string, autoOpenNext: boolean = false) => {
+  // Mark player as done and return to player selection
+  const markPlayerDone = (playerId: string) => {
     setCompletedPlayers(prev => new Set([...prev, playerId]));
-    // Find next uncompleted player
-    const currentIndex = players.findIndex(p => p.id === playerId);
-    const nextPlayer = players.find((p, i) => i > currentIndex && !completedPlayers.has(p.id));
-    const targetPlayer = nextPlayer || players.find(p => p.id !== playerId && !completedPlayers.has(p.id));
-    
-    if (targetPlayer) {
-      setSelectedPlayerId(targetPlayer.id);
-      // Auto-open numpad for first chip of next player if requested
-      if (autoOpenNext && chipValues.length > 0) {
-        setNumpadPlayerId(targetPlayer.id);
-        setNumpadChipIndex(0);
-        setNumpadOpen(true);
-      }
-    } else {
-      setSelectedPlayerId(null);
-      setNumpadOpen(false);
-    }
+    // Close numpad and deselect player - user chooses next
+    setNumpadOpen(false);
+    setSelectedPlayerId(null);
   };
 
   // Undo player completion
@@ -351,7 +329,7 @@ const ChipEntryScreen = () => {
     setNumpadOpen(true);
   };
 
-  // Handle numpad confirm with auto-advance
+  // Handle numpad confirm with auto-advance through chips
   const handleNumpadConfirm = (value: number) => {
     const currentChip = chipValues[numpadChipIndex];
     if (numpadPlayerId && currentChip) {
@@ -359,8 +337,8 @@ const ChipEntryScreen = () => {
       
       // Check if this was the last chip
       if (numpadChipIndex >= chipValues.length - 1) {
-        // Last chip - mark player as done and auto-open numpad for next player
-        markPlayerDone(numpadPlayerId, true);
+        // Last chip - mark player as done and return to player selection
+        markPlayerDone(numpadPlayerId);
       } else {
         // Advance to next chip (numpad stays open)
         setNumpadChipIndex(numpadChipIndex + 1);
