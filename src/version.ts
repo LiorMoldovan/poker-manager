@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.9';
+export const APP_VERSION = '4.11.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.11.0',
+    date: '2025-12-18',
+    changes: [
+      'Forecast comparison: New gap-based accuracy 🎯',
+      '✓ = Gap ≤30 (accurate), ~ = Gap 31-60 (close), ✗ = Gap >60 (missed)',
+      'Gap column shows absolute distance only (no +/-)',
+      'Legend added above comparison table',
+      'AI summary: Relevant insights (not jokes)',
+      'Forecast button: Admin only on Live Game screen'
+    ]
+  },
   {
     version: '4.10.9',
     date: '2025-12-18',
