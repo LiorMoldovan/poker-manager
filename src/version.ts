@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.8.8';
+export const APP_VERSION = '4.8.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.8.9',
+    date: '2024-12-18',
+    changes: [
+      'AI Forecast: Auto-detects working Gemini model',
+      'Tries: gemini-pro, gemini-1.5-pro, gemini-1.5-flash, gemini-1.0-pro',
+      'Saves working model for future use',
+      'Better error logging in console'
+    ]
+  },
   {
     version: '4.8.8',
     date: '2025-12-18',
