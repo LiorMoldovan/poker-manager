@@ -22,6 +22,18 @@ const LiveGameScreen = () => {
     }
   }, [gameId]);
 
+  // Pre-load voices (they may not be immediately available)
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      // Trigger voice loading
+      window.speechSynthesis.getVoices();
+      // Some browsers need this event to load voices
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
+
   const loadData = () => {
     if (!gameId) {
       setGameNotFound(true);
@@ -110,18 +122,35 @@ const LiveGameScreen = () => {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
       
+      // Get available voices
+      const voices = window.speechSynthesis.getVoices();
+      
+      // Find a good Hebrew voice
+      const hebrewVoice = voices.find(v => v.lang.startsWith('he')) || null;
+      
+      // Find a good English voice - prefer Google or "enhanced" voices
+      const englishVoice = voices.find(v => 
+        v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Enhanced') || v.name.includes('Premium'))
+      ) || voices.find(v => 
+        v.lang === 'en-GB' // British often sounds clearer
+      ) || voices.find(v => 
+        v.lang.startsWith('en')
+      ) || null;
+      
       // First: Say the name in Hebrew
       const nameUtterance = new SpeechSynthesisUtterance(hebrewName);
-      nameUtterance.lang = 'he-IL'; // Hebrew
+      nameUtterance.lang = 'he-IL';
+      if (hebrewVoice) nameUtterance.voice = hebrewVoice;
       nameUtterance.rate = 1.0;
       nameUtterance.pitch = 1;
       nameUtterance.volume = 1;
       
-      // Second: Say the action in English
+      // Second: Say the action in English with better voice
       const actionUtterance = new SpeechSynthesisUtterance(englishAction);
-      actionUtterance.lang = 'en-US'; // English
-      actionUtterance.rate = 1.0;
-      actionUtterance.pitch = 1;
+      actionUtterance.lang = 'en-GB'; // British English often sounds better
+      if (englishVoice) actionUtterance.voice = englishVoice;
+      actionUtterance.rate = 0.9; // Slightly slower for clarity
+      actionUtterance.pitch = 1.1; // Slightly higher pitch
       actionUtterance.volume = 1;
       
       // Queue both utterances
