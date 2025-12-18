@@ -568,6 +568,9 @@ const StatisticsScreen = () => {
             </span>
           )}
           {renderValue(players[0])}
+          {canShowDetails && (
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+          )}
         </div>
         {isExpanded && hasTies && (
           <div style={{ 
@@ -589,6 +592,9 @@ const StatisticsScreen = () => {
                 onClick={canShowDetails ? () => showRecordDetails(recordTitle!, p, recordType!) : undefined}
               >
                 <span style={{ fontWeight: '500' }}>{p.playerName}</span>
+                {canShowDetails && (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
+                )}
               </div>
             ))}
           </div>
