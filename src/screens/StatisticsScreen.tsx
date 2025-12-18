@@ -544,56 +544,37 @@ const StatisticsScreen = () => {
     const canShowDetails = recordType && recordTitle;
     
     return (
-      <div style={{ ...style, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'nowrap' }}>
-          <span style={{ fontWeight: '700', whiteSpace: 'nowrap' }}>{players[0].playerName}</span>
+      <div style={{ ...style }}>
+        <div 
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.3rem',
+            cursor: canShowDetails ? 'pointer' : 'default'
+          }}
+          onClick={canShowDetails ? () => showRecordDetails(recordTitle, players[0], recordType) : undefined}
+        >
+          <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
           {hasTies && (
             <span 
               style={{ 
-                fontSize: '0.55rem', 
-                background: 'var(--primary)', 
-                color: 'white',
-                padding: '0.1rem 0.2rem',
-                borderRadius: '4px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
+                fontSize: '0.6rem', 
+                color: 'var(--text-muted)',
+                cursor: 'pointer'
               }}
-              onClick={() => toggleRecordExpand(recordKey)}
+              onClick={(e) => { e.stopPropagation(); toggleRecordExpand(recordKey); }}
             >
-              +{players.length - 1}
+              (+{players.length - 1})
             </span>
           )}
           {renderValue(players[0])}
-          {canShowDetails && (
-            <span
-              style={{ 
-                fontSize: '0.5rem', 
-                cursor: 'pointer',
-                background: 'var(--primary)',
-                color: 'white',
-                padding: '0.1rem 0.2rem',
-                borderRadius: '4px',
-                fontWeight: '600',
-                whiteSpace: 'nowrap'
-              }}
-              onClick={() => showRecordDetails(recordTitle, players[0], recordType)}
-              title="לחץ לפרטים"
-            >
-              ❯
-            </span>
-          )}
         </div>
         {isExpanded && hasTies && (
           <div style={{ 
-            width: '100%',
-            marginTop: '0.3rem', 
-            paddingTop: '0.3rem', 
+            marginTop: '0.25rem', 
+            paddingTop: '0.25rem', 
             borderTop: '1px dashed var(--border)',
-            fontSize: '0.75rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.25rem'
+            fontSize: '0.8rem'
           }}>
             {players.slice(1).map(p => (
               <div 
@@ -602,26 +583,12 @@ const StatisticsScreen = () => {
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '0.3rem',
-                  padding: '0.2rem 0'
+                  padding: '0.15rem 0',
+                  cursor: canShowDetails ? 'pointer' : 'default'
                 }}
+                onClick={canShowDetails ? () => showRecordDetails(recordTitle!, p, recordType!) : undefined}
               >
                 <span style={{ fontWeight: '500' }}>{p.playerName}</span>
-                {canShowDetails && (
-                  <span
-                    style={{ 
-                      fontSize: '0.5rem', 
-                      cursor: 'pointer',
-                      background: 'var(--primary)',
-                      color: 'white',
-                      padding: '0.1rem 0.2rem',
-                      borderRadius: '4px',
-                      fontWeight: '600'
-                    }}
-                    onClick={() => showRecordDetails(recordTitle!, p, recordType!)}
-                  >
-                    ❯
-                  </span>
-                )}
               </div>
             ))}
           </div>
@@ -1515,7 +1482,7 @@ const StatisticsScreen = () => {
                   onClick={() => showPlayerStatDetails(player, 'allGames', `🎮 All Games`)}
                 >
                   <div className="stat-value">{player.gamesPlayed}</div>
-                  <div className="stat-label">Games ❯</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>Games ❯</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)' }}>
@@ -1531,7 +1498,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.winCount}
                   </div>
-                  <div className="stat-label">{player.winCount > 0 ? 'Wins ❯' : 'Wins'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.winCount > 0 ? 'Wins ❯' : 'Wins'}</div>
                 </div>
                 <div 
                   className="stat-card" 
@@ -1541,7 +1508,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.lossCount}
                   </div>
-                  <div className="stat-label">{player.lossCount > 0 ? 'Losses ❯' : 'Losses'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.lossCount > 0 ? 'Losses ❯' : 'Losses'}</div>
                 </div>
               </div>
 
@@ -1555,7 +1522,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
                     {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}
                   </div>
-                  <div className="stat-label">{player.biggestWin > 0 ? 'Best Win ❯' : 'Best Win'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.biggestWin > 0 ? 'Best ❯' : 'Best'}</div>
                 </div>
                 <div 
                   className="stat-card" 
@@ -1565,7 +1532,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
                     {player.biggestLoss < 0 ? `₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}
                   </div>
-                  <div className="stat-label">{player.biggestLoss < 0 ? 'Worst Loss ❯' : 'Worst Loss'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.biggestLoss < 0 ? 'Worst ❯' : 'Worst'}</div>
                 </div>
                 <div className="stat-card">
                   <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -1601,7 +1568,7 @@ const StatisticsScreen = () => {
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.longestWinStreak > 0 ? player.longestWinStreak : '-'}
                   </div>
-                  <div className="stat-label">{player.longestWinStreak > 0 ? 'Best Streak ❯' : 'Best Streak'}</div>
+                  <div className="stat-label" style={{ whiteSpace: 'nowrap' }}>{player.longestWinStreak > 0 ? 'W Streak ❯' : 'W Streak'}</div>
                 </div>
                 <div 
                   className="stat-card" 

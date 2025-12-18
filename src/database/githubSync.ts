@@ -135,87 +135,45 @@ export const getLocalSyncData = (): SyncData => {
   };
 };
 
-// Merge remote data with local data (only adds new items)
-export const mergeWithLocalData = (
+// Replace local data with remote data (full sync - admin is master)
+export const replaceWithRemoteData = (
   remoteData: SyncData
-): { newGames: number; newPlayers: number } => {
-  // Get current local data
-  const localPlayers: Player[] = JSON.parse(localStorage.getItem('poker_players') || '[]');
+): { gamesChanged: number; playersChanged: number; deletedGames: number } => {
+  // Get current local data for comparison
   const localGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
-  const localGamePlayers: GamePlayer[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+  const localPlayers: Player[] = JSON.parse(localStorage.getItem('poker_players') || '[]');
   
-  // Create sets for quick lookup
-  const localPlayerIds = new Set(localPlayers.map(p => p.id));
-  const localPlayerNames = new Set(localPlayers.map(p => p.name.toLowerCase()));
+  // Calculate what changed
+  const remoteGameIds = new Set(remoteData.games.map(g => g.id));
   const localGameIds = new Set(localGames.map(g => g.id));
-  const localGamePlayerIds = new Set(localGamePlayers.map(gp => gp.id));
   
-  let newPlayersCount = 0;
-  let newGamesCount = 0;
+  // Count new games (in remote but not in local)
+  const newGames = remoteData.games.filter(g => !localGameIds.has(g.id)).length;
+  // Count deleted games (in local but not in remote)
+  const deletedGames = localGames.filter(g => !remoteGameIds.has(g.id)).length;
+  const gamesChanged = newGames + deletedGames;
   
-  // Player ID mapping (remote ID -> local ID) for players that exist by name
-  const playerIdMap = new Map<string, string>();
+  // Count player changes
+  const remotePlayerIds = new Set(remoteData.players.map(p => p.id));
+  const localPlayerIds = new Set(localPlayers.map(p => p.id));
+  const newPlayersAdded = remoteData.players.filter(p => !localPlayerIds.has(p.id)).length;
+  const deletedPlayers = localPlayers.filter(p => !remotePlayerIds.has(p.id)).length;
+  const playersChanged = newPlayersAdded + deletedPlayers;
   
-  // First pass: map existing players by name and add new ones
-  for (const remotePlayer of remoteData.players) {
-    if (localPlayerIds.has(remotePlayer.id)) {
-      // Player exists with same ID
-      playerIdMap.set(remotePlayer.id, remotePlayer.id);
-    } else if (localPlayerNames.has(remotePlayer.name.toLowerCase())) {
-      // Player exists with different ID - find local ID by name
-      const localPlayer = localPlayers.find(
-        p => p.name.toLowerCase() === remotePlayer.name.toLowerCase()
-      );
-      if (localPlayer) {
-        playerIdMap.set(remotePlayer.id, localPlayer.id);
-      }
-    } else {
-      // New player - add them
-      localPlayers.push(remotePlayer);
-      localPlayerIds.add(remotePlayer.id);
-      localPlayerNames.add(remotePlayer.name.toLowerCase());
-      playerIdMap.set(remotePlayer.id, remotePlayer.id);
-      newPlayersCount++;
-    }
-  }
+  // Full replacement - admin is the source of truth
+  localStorage.setItem('poker_players', JSON.stringify(remoteData.players));
+  localStorage.setItem('poker_games', JSON.stringify(remoteData.games));
+  localStorage.setItem('poker_game_players', JSON.stringify(remoteData.gamePlayers));
   
-  // Add new games
-  for (const remoteGame of remoteData.games) {
-    if (!localGameIds.has(remoteGame.id)) {
-      localGames.push(remoteGame);
-      localGameIds.add(remoteGame.id);
-      newGamesCount++;
-    }
-  }
-  
-  // Add new game players (with mapped player IDs)
-  for (const remoteGamePlayer of remoteData.gamePlayers) {
-    if (!localGamePlayerIds.has(remoteGamePlayer.id)) {
-      // Map the player ID if needed
-      const mappedPlayerId = playerIdMap.get(remoteGamePlayer.playerId) || remoteGamePlayer.playerId;
-      
-      localGamePlayers.push({
-        ...remoteGamePlayer,
-        playerId: mappedPlayerId,
-      });
-      localGamePlayerIds.add(remoteGamePlayer.id);
-    }
-  }
-  
-  // Save merged data
-  localStorage.setItem('poker_players', JSON.stringify(localPlayers));
-  localStorage.setItem('poker_games', JSON.stringify(localGames));
-  localStorage.setItem('poker_game_players', JSON.stringify(localGamePlayers));
-  
-  return { newGames: newGamesCount, newPlayers: newPlayersCount };
+  return { gamesChanged, playersChanged, deletedGames };
 };
 
-// Full sync process for non-admin users (download and merge)
+// Full sync process for all users (download and replace - admin is master)
 export const syncFromCloud = async (): Promise<{
   success: boolean;
   message: string;
-  newGames?: number;
-  newPlayers?: number;
+  gamesChanged?: number;
+  playersChanged?: number;
 }> => {
   try {
     const remoteData = await fetchFromGitHub();
@@ -224,17 +182,32 @@ export const syncFromCloud = async (): Promise<{
       return { success: true, message: 'No cloud data available yet' };
     }
     
-    const { newGames, newPlayers } = mergeWithLocalData(remoteData);
+    const { gamesChanged, playersChanged, deletedGames } = replaceWithRemoteData(remoteData);
     
-    if (newGames === 0 && newPlayers === 0) {
+    if (gamesChanged === 0 && playersChanged === 0) {
       return { success: true, message: 'Already up to date' };
     }
     
+    // Build descriptive message
+    let message = 'Synced: ';
+    const parts: string[] = [];
+    if (gamesChanged > 0) {
+      if (deletedGames > 0) {
+        parts.push(`${gamesChanged} game${gamesChanged !== 1 ? 's' : ''} updated`);
+      } else {
+        parts.push(`${gamesChanged} new game${gamesChanged !== 1 ? 's' : ''}`);
+      }
+    }
+    if (playersChanged > 0) {
+      parts.push(`${playersChanged} player${playersChanged !== 1 ? 's' : ''} updated`);
+    }
+    message += parts.join(', ');
+    
     return {
       success: true,
-      message: `Synced ${newGames} new game${newGames !== 1 ? 's' : ''}${newPlayers > 0 ? ` and ${newPlayers} new player${newPlayers !== 1 ? 's' : ''}` : ''}`,
-      newGames,
-      newPlayers,
+      message,
+      gamesChanged,
+      playersChanged,
     };
   } catch (error) {
     console.error('Sync error:', error);
