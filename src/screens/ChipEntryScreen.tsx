@@ -18,6 +18,7 @@ import { usePermissions } from '../App';
 // Numpad Modal Component with auto-advance
 interface NumpadModalProps {
   isOpen: boolean;
+  playerName: string;
   chipColor: string;
   chipDisplayColor: string;
   currentValue: number;
@@ -33,6 +34,7 @@ interface NumpadModalProps {
 
 const NumpadModal = ({ 
   isOpen, 
+  playerName,
   chipColor, 
   chipDisplayColor, 
   currentValue, 
@@ -72,7 +74,24 @@ const NumpadModal = ({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
-        <div className="modal-header">
+        {/* Player name header */}
+        <div style={{
+          background: 'var(--primary)',
+          margin: '-1.5rem -1.5rem 1rem -1.5rem',
+          padding: '0.75rem 1.5rem',
+          borderRadius: '16px 16px 0 0',
+          textAlign: 'center'
+        }}>
+          <span style={{ 
+            color: 'white', 
+            fontWeight: '700', 
+            fontSize: '1.1rem'
+          }}>
+            {playerName}
+          </span>
+        </div>
+        
+        <div className="modal-header" style={{ marginBottom: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div 
               style={{ 
@@ -782,6 +801,7 @@ const ChipEntryScreen = () => {
       {/* Numpad Modal */}
       <NumpadModal
         isOpen={numpadOpen}
+        playerName={players.find(p => p.id === numpadPlayerId)?.playerName || ''}
         chipColor={numpadChip?.color || ''}
         chipDisplayColor={numpadChip?.displayColor || '#3B82F6'}
         currentValue={numpadPlayerId && numpadChip ? (chipCounts[numpadPlayerId]?.[numpadChip.id] || 0) : 0}
