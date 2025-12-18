@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.9.2';
+export const APP_VERSION = '4.9.3';
 
 export interface ChangelogEntry {
   version: string;
