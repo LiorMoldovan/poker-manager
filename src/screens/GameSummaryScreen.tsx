@@ -350,6 +350,24 @@ const GameSummaryScreen = () => {
           <div className="card">
             <h2 className="card-title mb-2">🎯 Forecast vs Reality</h2>
             
+            {/* Legend */}
+            <div style={{ 
+              marginBottom: '0.75rem',
+              padding: '0.5rem',
+              background: 'rgba(100, 100, 100, 0.1)',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              <span><span style={{ color: 'var(--success)' }}>✓</span> Gap ≤30</span>
+              <span><span style={{ color: 'var(--warning)' }}>~</span> Gap 31-60</span>
+              <span><span style={{ color: 'var(--danger)' }}>✗</span> Gap &gt;60</span>
+            </div>
+            
             <div style={{ overflowX: 'auto' }}>
               <table className="results-table" style={{ fontSize: '0.85rem' }}>
                 <thead>
@@ -357,7 +375,7 @@ const GameSummaryScreen = () => {
                     <th>Player</th>
                     <th style={{ textAlign: 'center' }}>Forecast</th>
                     <th style={{ textAlign: 'center' }}>Actual</th>
-                    <th style={{ textAlign: 'center' }}>Diff</th>
+                    <th style={{ textAlign: 'center' }}>Gap</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -366,14 +384,20 @@ const GameSummaryScreen = () => {
                     .map((forecast) => {
                       const actual = players.find(p => p.playerName === forecast.playerName);
                       const actualProfit = actual?.profit || 0;
-                      const diff = actualProfit - forecast.expectedProfit;
-                      const wasCorrect = (forecast.expectedProfit >= 0 && actualProfit >= 0) || 
-                                         (forecast.expectedProfit < 0 && actualProfit < 0);
+                      const gap = Math.abs(actualProfit - forecast.expectedProfit);
+                      
+                      // Accuracy indicator based on gap
+                      const getAccuracyIndicator = () => {
+                        if (gap <= 30) return { symbol: '✓', color: 'var(--success)' };
+                        if (gap <= 60) return { symbol: '~', color: 'var(--warning)' };
+                        return { symbol: '✗', color: 'var(--danger)' };
+                      };
+                      const accuracy = getAccuracyIndicator();
                       
                       return (
                         <tr key={forecast.playerName}>
                           <td style={{ whiteSpace: 'nowrap' }}>
-                            {wasCorrect ? '✓' : '✗'} {forecast.playerName}
+                            <span style={{ color: accuracy.color }}>{accuracy.symbol}</span> {forecast.playerName}
                           </td>
                           <td style={{ 
                             textAlign: 'center',
@@ -390,35 +414,16 @@ const GameSummaryScreen = () => {
                           </td>
                           <td style={{ 
                             textAlign: 'center',
-                            color: Math.abs(diff) <= 50 ? 'var(--success)' : 
-                                   Math.abs(diff) <= 100 ? 'var(--warning)' : 'var(--danger)',
+                            color: accuracy.color,
                             fontSize: '0.8rem'
                           }}>
-                            {diff >= 0 ? '+' : ''}{cleanNumber(diff)}
+                            {cleanNumber(gap)}
                           </td>
                         </tr>
                       );
                     })}
                 </tbody>
               </table>
-            </div>
-            
-            {/* Accuracy stats */}
-            <div style={{ 
-              marginTop: '0.75rem',
-              textAlign: 'center',
-              fontSize: '0.85rem',
-              color: 'var(--text-muted)'
-            }}>
-              Direction Accuracy: {forecasts.filter(f => {
-                const actual = players.find(p => p.playerName === f.playerName);
-                const actualProfit = actual?.profit || 0;
-                return (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
-              }).length}/{forecasts.length} ({Math.round((forecasts.filter(f => {
-                const actual = players.find(p => p.playerName === f.playerName);
-                const actualProfit = actual?.profit || 0;
-                return (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
-              }).length / forecasts.length) * 100)}%)
             </div>
             
             {/* AI Comment - shown if available, or loading */}
@@ -432,7 +437,7 @@ const GameSummaryScreen = () => {
                 fontSize: '0.85rem',
                 color: '#a855f7'
               }}>
-                🤖 מנתח...
+                🤖 מסכם...
               </div>
             )}
             
@@ -446,7 +451,6 @@ const GameSummaryScreen = () => {
                 fontSize: '0.95rem',
                 color: 'var(--text)',
                 direction: 'rtl',
-                fontStyle: 'italic',
                 textAlign: 'center'
               }}>
                 🤖 {forecastComment}

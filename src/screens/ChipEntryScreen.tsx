@@ -187,18 +187,24 @@ const ChipEntryScreen = () => {
     setIsLoading(false);
   };
 
-  // Mark player as done and move to next
-  const markPlayerDone = (playerId: string) => {
+  // Mark player as done and move to next (with auto-open numpad option)
+  const markPlayerDone = (playerId: string, autoOpenNext: boolean = false) => {
     setCompletedPlayers(prev => new Set([...prev, playerId]));
     // Find next uncompleted player
     const currentIndex = players.findIndex(p => p.id === playerId);
     const nextPlayer = players.find((p, i) => i > currentIndex && !completedPlayers.has(p.id));
-    if (nextPlayer) {
-      setSelectedPlayerId(nextPlayer.id);
+    const targetPlayer = nextPlayer || players.find(p => p.id !== playerId && !completedPlayers.has(p.id));
+    
+    if (targetPlayer) {
+      setSelectedPlayerId(targetPlayer.id);
+      // Auto-open numpad for first chip of next player if requested
+      if (autoOpenNext && chipValues.length > 0) {
+        setNumpadPlayerId(targetPlayer.id);
+        setNumpadChipIndex(0);
+        setNumpadOpen(true);
+      }
     } else {
-      // Try from beginning
-      const firstUncompleted = players.find(p => p.id !== playerId && !completedPlayers.has(p.id));
-      setSelectedPlayerId(firstUncompleted?.id || null);
+      setSelectedPlayerId(null);
     }
   };
 
