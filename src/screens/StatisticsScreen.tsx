@@ -110,7 +110,15 @@ const StatisticsScreen = () => {
 
   // Show all games for a player (for table row click)
   const showPlayerGames = (player: PlayerStats) => {
-    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
     const allGamePlayers = getAllGamePlayers();
     
     const playerGames = allGamePlayers

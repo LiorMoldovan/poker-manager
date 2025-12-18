@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.12';
+export const APP_VERSION = '4.6.13';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.13',
+    date: '2025-12-18',
+    changes: [
+      'Fixed: Player games list now respects time period filter',
+      'Clicking player name shows only games from selected period'
+    ]
+  },
   {
     version: '4.6.12',
     date: '2025-12-18',
