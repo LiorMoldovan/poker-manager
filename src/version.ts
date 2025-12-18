@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.11.2';
+export const APP_VERSION = '4.11.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.11.3',
+    date: '2025-12-18',
+    changes: [
+      'AI Forecast: Final polished prompt 🎯',
+      'Guidelines not strict rules - AI uses common sense',
+      'Sentence 25-35 words - players will love to read & share',
+      'Milestones, streaks, trend changes, volatility analysis',
+      'Unique story for each player - unforgettable forecasts!'
+    ]
+  },
   {
     version: '4.11.2',
     date: '2025-12-18',

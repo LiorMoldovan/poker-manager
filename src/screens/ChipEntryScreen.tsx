@@ -254,6 +254,7 @@ const ChipEntryScreen = () => {
     
     // Don't auto-select any player - let user choose
     setSelectedPlayerId(null);
+    setNumpadOpen(false);  // Ensure numpad is closed
     setIsLoading(false);
   };
 
