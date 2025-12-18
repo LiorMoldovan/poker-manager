@@ -31,10 +31,16 @@ const NewGameScreen = () => {
   const [aiForecasts, setAiForecasts] = useState<ForecastResult[] | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const forecastRef = useRef<HTMLDivElement>(null);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadPlayers();
+    // Cleanup timer on unmount
+    return () => {
+      if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+    };
   }, []);
 
   const loadPlayers = () => {
@@ -953,11 +959,32 @@ const NewGameScreen = () => {
         
         if (err.message === 'NO_API_KEY') {
           setAiError('No API key configured. Using static forecasts.');
+          setCachedForecasts(generateForecasts());
+        } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
+          // Start countdown timer for rate limit
+          setAiError('⏳ Rate limit reached. Retry countdown starting...');
+          setRetryCountdown(60); // Start 60 second countdown
+          
+          // Clear any existing timer
+          if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+          
+          // Start countdown
+          retryTimerRef.current = setInterval(() => {
+            setRetryCountdown(prev => {
+              if (prev === null || prev <= 1) {
+                if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+                setAiError('✅ Ready to retry! Click the forecast button again.');
+                return null;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          
+          // Don't fallback to static - let user retry
         } else {
           setAiError(`AI error: ${err.message}. Using static forecasts.`);
+          setCachedForecasts(generateForecasts());
         }
-        // Fallback to static forecasts
-        setCachedForecasts(generateForecasts());
       }
     } else {
       // Use static forecasts
@@ -1309,18 +1336,48 @@ const NewGameScreen = () => {
               </div>
             )}
             
-            {/* AI Error message */}
+            {/* AI Error message with countdown */}
             {aiError && (
               <div style={{ 
                 padding: '0.75rem', 
                 margin: '0.75rem',
                 borderRadius: '8px', 
-                background: 'rgba(234, 179, 8, 0.1)', 
-                borderLeft: '4px solid #EAB308',
+                background: retryCountdown ? 'rgba(59, 130, 246, 0.1)' : 'rgba(234, 179, 8, 0.1)', 
+                borderLeft: `4px solid ${retryCountdown ? '#3B82F6' : '#EAB308'}`,
                 fontSize: '0.85rem',
-                color: '#EAB308'
+                color: retryCountdown ? '#3B82F6' : '#EAB308'
               }}>
-                ⚠️ {aiError}
+                {retryCountdown ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                      ⏳ {retryCountdown}s
+                    </div>
+                    <div>Rate limit - waiting to retry...</div>
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <button
+                        onClick={() => { 
+                          setShowForecast(false); 
+                          setAiError(null);
+                          setRetryCountdown(null);
+                          if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+                        }}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          fontSize: '0.8rem',
+                          background: 'transparent',
+                          border: '1px solid #3B82F6',
+                          borderRadius: '6px',
+                          color: '#3B82F6',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Use Static Forecast Instead
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>⚠️ {aiError}</>
+                )}
               </div>
             )}
             

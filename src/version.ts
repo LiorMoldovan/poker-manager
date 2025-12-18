@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.0';
+export const APP_VERSION = '4.10.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.10.1',
+    date: '2025-12-18',
+    changes: [
+      'AI Forecast: Rate limit countdown timer ⏳',
+      'Shows 60-second countdown when rate limited',
+      'Option to use static forecast while waiting',
+      'Notifies when ready to retry'
+    ]
+  },
   {
     version: '4.10.0',
     date: '2025-12-18',
