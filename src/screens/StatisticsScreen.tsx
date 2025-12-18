@@ -1400,14 +1400,18 @@ const StatisticsScreen = () => {
                   <button
                     onClick={handleShareTable}
                     disabled={isSharing}
-                    className="btn btn-sm btn-secondary"
                     style={{ 
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '0.3rem',
                       fontSize: '0.75rem',
-                      padding: '0.4rem 0.8rem'
+                      padding: '0.4rem 0.8rem',
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
                     }}
                   >
                     {isSharing ? '📸...' : '📤 שתף'}
