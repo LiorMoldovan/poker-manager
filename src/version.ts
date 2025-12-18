@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.9.3';
+export const APP_VERSION = '4.9.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.9.4',
+    date: '2025-12-18',
+    changes: [
+      'UI: Aligned medal positions across all tables 🏅',
+      'Medals now appear AFTER player name everywhere',
+      'Game Summary, Game Details, WhatsApp sharing - all consistent'
+    ]
+  },
   {
     version: '4.9.2',
     date: '2025-12-18',

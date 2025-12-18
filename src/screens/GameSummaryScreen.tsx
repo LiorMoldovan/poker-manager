@@ -204,11 +204,10 @@ const GameSummaryScreen = () => {
                 {players.map((player, index) => (
                   <tr key={player.id}>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {index === 0 && player.profit > 0 && '🥇'}
-                      {index === 1 && player.profit > 0 && '🥈'}
-                      {index === 2 && player.profit > 0 && '🥉'}
-                      {index > 2 || player.profit <= 0 ? '' : ' '}
                       {player.playerName}
+                      {index === 0 && player.profit > 0 && ' 🥇'}
+                      {index === 1 && player.profit > 0 && ' 🥈'}
+                      {index === 2 && player.profit > 0 && ' 🥉'}
                     </td>
                     <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
                       {(getTotalChips(player) / 1000).toFixed(0)}k

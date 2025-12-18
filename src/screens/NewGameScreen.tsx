@@ -828,7 +828,7 @@ const NewGameScreen = () => {
         // Prepare player data for AI
         const selectedPlayers = players.filter(p => selectedIds.has(p.id));
         const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
-          const stats = getStatsByPlayerId(player.id);
+          const stats = getStatsForPlayer(player.id);
           const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
           
           return {

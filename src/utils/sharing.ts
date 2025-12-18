@@ -43,11 +43,11 @@ export const generateGameSummary = (
   summary += `┌──────────────────────┐\n`;
   
   sortedPlayers.forEach((player, index) => {
-    // Medal for top 3
-    let medal = '  ';
-    if (index === 0 && player.profit > 0) medal = '🥇';
-    else if (index === 1 && player.profit > 0) medal = '🥈';
-    else if (index === 2 && player.profit > 0) medal = '🥉';
+    // Medal for top 3 (after player name)
+    let medal = '';
+    if (index === 0 && player.profit > 0) medal = ' 🥇';
+    else if (index === 1 && player.profit > 0) medal = ' 🥈';
+    else if (index === 2 && player.profit > 0) medal = ' 🥉';
     
     const profitText = player.profit >= 0 
       ? `+₪${cleanNumber(player.profit)}` 
@@ -56,7 +56,7 @@ export const generateGameSummary = (
     const chips = chipValues ? Math.round(getTotalChipsForPlayer(player, chipValues) / 1000) : 0;
     const chipsText = chipValues ? `${chips}k` : '';
     
-    summary += `${LTR}│ ${medal} ${player.playerName}\n`;
+    summary += `${LTR}│ ${player.playerName}${medal}\n`;
     summary += `${LTR}│    ${profitText} • ${chipsText} chips • ${player.rebuys} buyins\n`;
   });
   

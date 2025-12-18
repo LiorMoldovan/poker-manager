@@ -239,11 +239,10 @@ const GameDetailsScreen = () => {
               {players.map((player, index) => (
                 <tr key={player.id}>
                   <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {index === 0 && player.profit > 0 && '🥇'}
-                    {index === 1 && player.profit > 0 && '🥈'}
-                    {index === 2 && player.profit > 0 && '🥉'}
-                    {index > 2 || player.profit <= 0 ? '' : ' '}
                     {player.playerName}
+                    {index === 0 && player.profit > 0 && ' 🥇'}
+                    {index === 1 && player.profit > 0 && ' 🥈'}
+                    {index === 2 && player.profit > 0 && ' 🥉'}
                   </td>
                   <td style={{ textAlign: 'center' }} className="text-muted">
                     {formatChips(getTotalChips(player))}
