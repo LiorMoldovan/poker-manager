@@ -437,7 +437,7 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
     // Last 15 game results (most recent first) with dates and gameId
     // More games = better player dynamics analysis
     const lastGameResults = sortedPlayerGames
-      .slice(-15)
+      .slice(-6)
       .reverse()
       .map(pg => {
         const game = sortedGames.find(g => g.id === pg.gameId);
