@@ -444,38 +444,49 @@ export const generateForecastComparison = async (
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  // Build comparison data
+  // Build comparison data with gap-based accuracy
   const comparisons = forecasts.map(f => {
     const actual = actualResults.find(a => a.playerName === f.playerName);
     const actualProfit = actual?.profit || 0;
-    const diff = actualProfit - f.expectedProfit;
-    const wasCorrectDirection = (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
+    const gap = Math.abs(actualProfit - f.expectedProfit);
+    
+    // Accuracy based on gap: ≤30 = accurate, 31-60 = close, >60 = missed
+    let accuracyLevel: 'accurate' | 'close' | 'missed';
+    if (gap <= 30) accuracyLevel = 'accurate';
+    else if (gap <= 60) accuracyLevel = 'close';
+    else accuracyLevel = 'missed';
     
     return {
       name: f.playerName,
       forecast: f.expectedProfit,
       actual: actualProfit,
-      diff,
-      wasCorrectDirection
+      gap,
+      accuracyLevel
     };
   });
 
-  // Calculate accuracy metrics
-  const correctDirections = comparisons.filter(c => c.wasCorrectDirection).length;
-  const accuracy = Math.round((correctDirections / comparisons.length) * 100);
+  // Count accuracy levels
+  const accurate = comparisons.filter(c => c.accuracyLevel === 'accurate').length;
+  const close = comparisons.filter(c => c.accuracyLevel === 'close').length;
+  const missed = comparisons.filter(c => c.accuracyLevel === 'missed').length;
+  const total = comparisons.length;
   
-  // Find biggest surprises
-  const sortedByDiff = [...comparisons].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-  const biggestSurprise = sortedByDiff[0];
+  // Find best and worst predictions
+  const sortedByGap = [...comparisons].sort((a, b) => a.gap - b.gap);
+  const bestPrediction = sortedByGap[0];
+  const worstPrediction = sortedByGap[sortedByGap.length - 1];
 
-  const prompt = `אתה מנחה פוקר ישראלי עם חוש הומור. כתוב משפט קצר וחד (עד 15 מילים) בעברית על הצלחת התחזית.
+  const prompt = `אתה מסכם תחזית פוקר בעברית. כתוב משפט סיכום קצר ורלוונטי (עד 20 מילים) על הצלחת התחזית.
 
 נתונים:
-- דיוק כיוון (רווח/הפסד): ${accuracy}%
+- מדויק (פער ≤30): ${accurate}/${total}
+- קרוב (פער 31-60): ${close}/${total}  
+- החטאה (פער >60): ${missed}/${total}
+- תחזית מדויקת ביותר: ${bestPrediction.name} (פער ${bestPrediction.gap})
+- תחזית רחוקה ביותר: ${worstPrediction.name} (פער ${worstPrediction.gap})
 - תוצאות: ${comparisons.map(c => `${c.name}: תחזית ${c.forecast >= 0 ? '+' : ''}${c.forecast}, בפועל ${c.actual >= 0 ? '+' : ''}${c.actual}`).join('; ')}
-- הפתעה הגדולה: ${biggestSurprise.name} (תחזית ${biggestSurprise.forecast >= 0 ? '+' : ''}${biggestSurprise.forecast}, בפועל ${biggestSurprise.actual >= 0 ? '+' : ''}${biggestSurprise.actual})
 
-כתוב רק את המשפט, בלי מירכאות. היה יצירתי וקצר!`;
+כתוב משפט סיכום ענייני ויפה בעברית. לא להיות מצחיק. התמקד בתובנות משמעותיות. כתוב רק את המשפט.`;
 
   const config = getWorkingConfig();
   
@@ -487,7 +498,7 @@ export const generateForecastComparison = async (
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.9,
+          temperature: 0.7,
           maxOutputTokens: 100,
         }
       })
@@ -502,5 +513,5 @@ export const generateForecastComparison = async (
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   
-  return text.trim() || `דיוק התחזית: ${accuracy}%`;
+  return text.trim() || `${accurate} מדויקים, ${close} קרובים, ${missed} החטאות מתוך ${total} תחזיות`;
 };

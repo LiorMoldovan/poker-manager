@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.8';
+export const APP_VERSION = '4.10.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.10.9',
+    date: '2025-12-18',
+    changes: [
+      'Chip Count: Auto-advance numpad flow 🎰',
+      'Numpad auto-opens when selecting a player',
+      'After entering a chip count, auto-advances to next chip color',
+      'After last chip, player auto-marks as Done',
+      'Progress dots show which chip you\'re on',
+      'Manual Done button still works for early exit'
+    ]
+  },
   {
     version: '4.10.8',
     date: '2025-12-18',

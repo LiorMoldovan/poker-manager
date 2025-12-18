@@ -15,7 +15,7 @@ import { syncToCloud } from '../database/githubSync';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 
-// Numpad Modal Component
+// Numpad Modal Component with auto-advance
 interface NumpadModalProps {
   isOpen: boolean;
   chipColor: string;
@@ -23,16 +23,34 @@ interface NumpadModalProps {
   currentValue: number;
   onConfirm: (value: number) => void;
   onClose: () => void;
+  // Auto-advance props
+  chipIndex: number;
+  totalChips: number;
+  nextChipColor?: string;
+  nextChipDisplayColor?: string;
+  isLastChip: boolean;
 }
 
-const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConfirm, onClose }: NumpadModalProps) => {
+const NumpadModal = ({ 
+  isOpen, 
+  chipColor, 
+  chipDisplayColor, 
+  currentValue, 
+  onConfirm, 
+  onClose,
+  chipIndex,
+  totalChips,
+  nextChipColor,
+  nextChipDisplayColor,
+  isLastChip
+}: NumpadModalProps) => {
   const [value, setValue] = useState(currentValue.toString());
   
   useEffect(() => {
     if (isOpen) {
       setValue(currentValue.toString());
     }
-  }, [isOpen, currentValue]);
+  }, [isOpen, currentValue, chipColor]); // Reset when chip changes
 
   if (!isOpen) return null;
 
@@ -48,7 +66,7 @@ const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConf
 
   const handleConfirm = () => {
     onConfirm(parseInt(value) || 0);
-    onClose();
+    // Don't close - parent handles advancing to next chip
   };
 
   return (
@@ -68,6 +86,27 @@ const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConf
             <h3 className="modal-title">{chipColor} Chips</h3>
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        
+        {/* Progress indicator */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '0.35rem', 
+          marginBottom: '0.75rem' 
+        }}>
+          {Array.from({ length: totalChips }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: i < chipIndex ? 'var(--success)' : i === chipIndex ? 'var(--primary)' : 'var(--border)',
+                transition: 'background 0.2s ease'
+              }}
+            />
+          ))}
         </div>
         
         <div style={{ 
@@ -109,8 +148,36 @@ const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConf
           ))}
         </div>
         
-        <button className="btn btn-primary btn-block" onClick={handleConfirm}>
-          ✓ Confirm
+        {/* Confirm button - shows what's next */}
+        <button 
+          className="btn btn-primary btn-block" 
+          onClick={handleConfirm}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem'
+          }}
+        >
+          {isLastChip ? (
+            <>✓ Done with Player</>
+          ) : (
+            <>
+              Next →
+              {nextChipDisplayColor && (
+                <div 
+                  style={{ 
+                    width: '16px', 
+                    height: '16px', 
+                    borderRadius: '50%', 
+                    backgroundColor: nextChipDisplayColor,
+                    border: nextChipDisplayColor === '#FFFFFF' || nextChipDisplayColor === '#EAB308' ? '2px solid #888' : 'none'
+                  }} 
+                />
+              )}
+              {nextChipColor}
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -130,10 +197,10 @@ const ChipEntryScreen = () => {
   const [gameNotFound, setGameNotFound] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   
-  // Numpad state
+  // Numpad state - track by chip index for auto-advance
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadPlayerId, setNumpadPlayerId] = useState('');
-  const [numpadChip, setNumpadChip] = useState<ChipValue | null>(null);
+  const [numpadChipIndex, setNumpadChipIndex] = useState(0);
   
   // Player selector state
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -141,6 +208,10 @@ const ChipEntryScreen = () => {
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
+
+  // Get current numpad chip based on index
+  const numpadChip = chipValues[numpadChipIndex] || null;
+  const nextChip = chipValues[numpadChipIndex + 1] || null;
 
   useEffect(() => {
     if (gameId) {
@@ -180,9 +251,16 @@ const ChipEntryScreen = () => {
       });
     });
     setChipCounts(initialCounts);
-    // Select first player by default
+    
+    // Select first player by default and auto-open numpad
     if (gamePlayers.length > 0) {
       setSelectedPlayerId(gamePlayers[0].id);
+      // Auto-open numpad for first chip
+      if (chips.length > 0) {
+        setNumpadPlayerId(gamePlayers[0].id);
+        setNumpadChipIndex(0);
+        setNumpadOpen(true);
+      }
     }
     setIsLoading(false);
   };
@@ -205,6 +283,7 @@ const ChipEntryScreen = () => {
       }
     } else {
       setSelectedPlayerId(null);
+      setNumpadOpen(false);
     }
   };
 
@@ -216,6 +295,17 @@ const ChipEntryScreen = () => {
       return newSet;
     });
     setSelectedPlayerId(playerId);
+  };
+
+  // Select a player and auto-open numpad for first chip
+  const selectPlayer = (playerId: string) => {
+    setSelectedPlayerId(playerId);
+    // Auto-open numpad for first chip
+    if (chipValues.length > 0) {
+      setNumpadPlayerId(playerId);
+      setNumpadChipIndex(0);
+      setNumpadOpen(true);
+    }
   };
 
   const selectedPlayer = players.find(p => p.id === selectedPlayerId);
@@ -254,17 +344,27 @@ const ChipEntryScreen = () => {
     }));
   };
 
-  // Open numpad for a specific chip
-  const openNumpad = (playerId: string, chip: ChipValue) => {
+  // Open numpad for a specific chip by index
+  const openNumpad = (playerId: string, chipIndex: number) => {
     setNumpadPlayerId(playerId);
-    setNumpadChip(chip);
+    setNumpadChipIndex(chipIndex);
     setNumpadOpen(true);
   };
 
-  // Handle numpad confirm
+  // Handle numpad confirm with auto-advance
   const handleNumpadConfirm = (value: number) => {
-    if (numpadPlayerId && numpadChip) {
-      updateChipCount(numpadPlayerId, numpadChip.id, value);
+    const currentChip = chipValues[numpadChipIndex];
+    if (numpadPlayerId && currentChip) {
+      updateChipCount(numpadPlayerId, currentChip.id, value);
+      
+      // Check if this was the last chip
+      if (numpadChipIndex >= chipValues.length - 1) {
+        // Last chip - mark player as done and auto-open numpad for next player
+        markPlayerDone(numpadPlayerId, true);
+      } else {
+        // Advance to next chip (numpad stays open)
+        setNumpadChipIndex(numpadChipIndex + 1);
+      }
     }
   };
 
@@ -489,7 +589,7 @@ const ChipEntryScreen = () => {
             return (
               <button
                 key={player.id}
-                onClick={() => isCompleted ? undoPlayerCompletion(player.id) : setSelectedPlayerId(player.id)}
+                onClick={() => isCompleted ? undoPlayerCompletion(player.id) : selectPlayer(player.id)}
                 style={{
                   padding: '0.5rem 0.75rem',
                   borderRadius: '20px',
@@ -541,14 +641,14 @@ const ChipEntryScreen = () => {
 
           {/* Chip Grid */}
           <div className="chip-grid">
-            {chipValues.map(chip => (
+            {chipValues.map((chip, chipIndex) => (
               <div key={chip.id} className="chip-entry-card" style={{ 
                 borderLeft: `4px solid ${chip.displayColor}`,
                 background: chip.displayColor === '#FFFFFF' ? 'rgba(255,255,255,0.1)' : `${chip.displayColor}15`
               }}>
                 <div 
                   className="chip-entry-header"
-                  onClick={() => openNumpad(selectedPlayer.id, chip)}
+                  onClick={() => openNumpad(selectedPlayer.id, chipIndex)}
                   style={{ cursor: 'pointer' }}
                 >
                   <div 
@@ -572,7 +672,7 @@ const ChipEntryScreen = () => {
                     className="chip-count-input"
                     value={chipCounts[selectedPlayer.id]?.[chip.id] || 0}
                     onChange={e => updateChipCount(selectedPlayer.id, chip.id, parseInt(e.target.value) || 0)}
-                    onClick={() => openNumpad(selectedPlayer.id, chip)}
+                    onClick={() => openNumpad(selectedPlayer.id, chipIndex)}
                     readOnly
                     style={{ cursor: 'pointer' }}
                     min="0"
@@ -708,6 +808,11 @@ const ChipEntryScreen = () => {
         currentValue={numpadPlayerId && numpadChip ? (chipCounts[numpadPlayerId]?.[numpadChip.id] || 0) : 0}
         onConfirm={handleNumpadConfirm}
         onClose={() => setNumpadOpen(false)}
+        chipIndex={numpadChipIndex}
+        totalChips={chipValues.length}
+        nextChipColor={nextChip?.color}
+        nextChipDisplayColor={nextChip?.displayColor}
+        isLastChip={numpadChipIndex >= chipValues.length - 1}
       />
     </div>
   );
@@ -720,4 +825,3 @@ const getProfitColor = (profit: number): string => {
 };
 
 export default ChipEntryScreen;
-
