@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.8.0';
+export const APP_VERSION = '4.8.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.8.1',
+    date: '2025-12-18',
+    changes: [
+      'Screenshot: 2-column layout - Results and Settlements side by side',
+      'More compact screenshot for sharing with many players',
+      'Smaller fonts and tighter spacing in screenshot'
+    ]
+  },
   {
     version: '4.8.0',
     date: '2024-12-18',

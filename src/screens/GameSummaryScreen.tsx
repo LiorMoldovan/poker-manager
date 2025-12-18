@@ -155,119 +155,129 @@ const GameSummaryScreen = () => {
     <div className="fade-in">
       {/* Content to be captured for screenshot */}
       <div ref={summaryRef} style={{ padding: '1rem', background: '#1a1a2e' }}>
-        <div className="page-header">
-          <h1 className="page-title">🃏 Poker Night</h1>
-          <p className="page-subtitle">
+        <div className="page-header" style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
+          <h1 className="page-title" style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>🃏 Poker Night</h1>
+          <p className="page-subtitle" style={{ fontSize: '0.85rem', margin: 0 }}>
             {new Date(gameDate).toLocaleDateString('en-US', { 
               weekday: 'long', 
               month: 'short', 
-              day: 'numeric' 
+              day: 'numeric',
+              year: 'numeric'
             })}
           </p>
         </div>
 
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>Results</h2>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Total Buyins: <span style={{ color: 'var(--text)', fontWeight: '600' }}>{players.reduce((sum, p) => sum + p.rebuys, 0)}</span>
+        {/* Two-column layout for Results and Settlements */}
+        <div style={{ display: 'grid', gridTemplateColumns: settlements.length > 0 ? '1fr 1fr' : '1fr', gap: '0.75rem', alignItems: 'start' }}>
+          {/* Results Table */}
+          <div className="card" style={{ margin: 0, padding: '0.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0, fontSize: '0.9rem' }}>📊 Results</h2>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                Buyins: <span style={{ color: 'var(--text)', fontWeight: '600' }}>{players.reduce((sum, p) => sum + p.rebuys, 0)}</span>
+              </div>
             </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ fontSize: '0.9rem' }}>
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Chips</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Buyins</th>
-                  <th style={{ textAlign: 'right' }}>+/-</th>
-                </tr>
-              </thead>
-              <tbody>
-                {players.map((player, index) => (
-                  <tr key={player.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {index === 0 && player.profit > 0 && '🥇'}
-                      {index === 1 && player.profit > 0 && '🥈'}
-                      {index === 2 && player.profit > 0 && '🥉'}
-                      {index > 2 || player.profit <= 0 ? '' : ' '}
-                      {player.playerName}
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
-                      {(getTotalChips(player) / 1000).toFixed(0)}k
-                    </td>
-                    <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }} className="text-muted">
-                      {player.rebuys}
-                    </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
-                      {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
-                    </td>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ fontSize: '0.75rem', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '0.3rem 0.25rem' }}>Player</th>
+                    <th style={{ textAlign: 'center', padding: '0.3rem 0.15rem' }}>Chips</th>
+                    <th style={{ textAlign: 'center', padding: '0.3rem 0.15rem' }}>Buy</th>
+                    <th style={{ textAlign: 'right', padding: '0.3rem 0.25rem' }}>+/-</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {players.map((player, index) => (
+                    <tr key={player.id}>
+                      <td style={{ whiteSpace: 'nowrap', padding: '0.3rem 0.25rem' }}>
+                        {index === 0 && player.profit > 0 && '🥇'}
+                        {index === 1 && player.profit > 0 && '🥈'}
+                        {index === 2 && player.profit > 0 && '🥉'}
+                        {index > 2 || player.profit <= 0 ? '' : ' '}
+                        {player.playerName}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.3rem 0.15rem' }} className="text-muted">
+                        {(getTotalChips(player) / 1000).toFixed(0)}k
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.3rem 0.15rem' }} className="text-muted">
+                        {player.rebuys}
+                      </td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap', padding: '0.3rem 0.25rem' }} className={getProfitColor(player.profit)}>
+                        {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {chipGap !== null && chipGap !== 0 && (
+              <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                background: 'rgba(245, 158, 11, 0.1)', 
+                borderRadius: '6px',
+                borderLeft: '2px solid var(--warning)',
+                fontSize: '0.7rem'
+              }}>
+                <div style={{ color: 'var(--warning)', fontWeight: '600' }}>
+                  ⚠️ Adjustment: {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))}/player
+                </div>
+              </div>
+            )}
           </div>
-          
-          {chipGap !== null && chipGap !== 0 && (
-            <div style={{ 
-              marginTop: '1rem', 
-              padding: '0.75rem', 
-              background: 'rgba(245, 158, 11, 0.1)', 
-              borderRadius: '8px',
-              borderLeft: '3px solid var(--warning)'
-            }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--warning)', fontWeight: '600' }}>
-                ⚠️ Chip Count Adjustment
-              </div>
-              <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                {chipGap > 0 ? (
-                  <>Counted ₪{cleanNumber(chipGap)} more than expected (extra chips)</>
-                ) : (
-                  <>Counted ₪{cleanNumber(Math.abs(chipGap))} less than expected (missing chips)</>
-                )}
-              </div>
-              <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player to balance
-              </div>
+
+          {/* Settlements Table */}
+          {settlements.length > 0 && (
+            <div className="card" style={{ margin: 0, padding: '0.75rem' }}>
+              <h2 className="card-title" style={{ margin: 0, marginBottom: '0.5rem', fontSize: '0.9rem' }}>💸 Settlements</h2>
+              {settlements.map((s, index) => (
+                <div key={index} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.3rem', 
+                  padding: '0.3rem 0',
+                  fontSize: '0.75rem',
+                  borderBottom: index < settlements.length - 1 ? '1px solid var(--border)' : 'none'
+                }}>
+                  <span style={{ flex: 1 }}>{s.from}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>→</span>
+                  <span style={{ flex: 1 }}>{s.to}</span>
+                  <span style={{ fontWeight: '600', color: 'var(--success)' }}>{formatCurrency(s.amount)}</span>
+                </div>
+              ))}
+              
+              {skippedTransfers.length > 0 && (
+                <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border)' }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                    💡 Below ₪{cleanNumber(getSettings().minTransfer)} (optional)
+                  </div>
+                  {skippedTransfers.map((s, index) => (
+                    <div key={index} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.3rem', 
+                      padding: '0.2rem 0',
+                      fontSize: '0.7rem',
+                      opacity: 0.7
+                    }}>
+                      <span style={{ flex: 1 }}>{s.from}</span>
+                      <span style={{ color: 'var(--text-muted)' }}>→</span>
+                      <span style={{ flex: 1 }}>{s.to}</span>
+                      <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {settlements.length > 0 && (
-          <div className="card">
-            <h2 className="card-title mb-2">💸 Settlements</h2>
-            {settlements.map((s, index) => (
-              <div key={index} className="settlement-row">
-                <span>{s.from}</span>
-                <span className="settlement-arrow">➜</span>
-                <span>{s.to}</span>
-                <span className="settlement-amount">{formatCurrency(s.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {skippedTransfers.length > 0 && (
-          <div className="card">
-            <h2 className="card-title mb-2">💡 Small Amounts</h2>
-            <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-              Payments below ₪{cleanNumber(getSettings().minTransfer)} are not mandatory
-            </p>
-            {skippedTransfers.map((s, index) => (
-              <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
-                <span>{s.from}</span>
-                <span className="settlement-arrow">➜</span>
-                <span>{s.to}</span>
-                <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
         
         <div style={{ 
           textAlign: 'center', 
-          marginTop: '1rem', 
-          fontSize: '0.75rem', 
+          marginTop: '0.75rem', 
+          fontSize: '0.65rem', 
           color: 'var(--text-muted)',
           opacity: 0.7
         }}>
