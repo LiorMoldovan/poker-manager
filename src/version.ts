@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.8.2';
+export const APP_VERSION = '4.8.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.8.3',
+    date: '2025-12-18',
+    changes: [
+      'Screenshot: Reverted to original vertical layout on screen',
+      'Share now sends 2 separate images (Results + Settlements)',
+      'Both images sent in one click via native share'
+    ]
+  },
   {
     version: '4.8.2',
     date: '2024-12-18',
