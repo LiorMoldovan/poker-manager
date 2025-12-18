@@ -1573,12 +1573,6 @@
       "date": "2025-12-18T16:06:47.601Z",
       "status": "live",
       "createdAt": "2025-12-18T16:06:47.601Z"
-    },
-    {
-      "id": "mjbnb6eghg3xqwgkr3e",
-      "date": "2025-12-18T16:19:15.112Z",
-      "status": "completed",
-      "createdAt": "2025-12-18T16:19:15.112Z"
     }
   ],
   "gamePlayers": [
@@ -17301,42 +17295,8 @@
       "chipCounts": {},
       "finalValue": 0,
       "profit": 0
-    },
-    {
-      "id": "mjbnb6eglf5dvxil8e",
-      "gameId": "mjbnb6eghg3xqwgkr3e",
-      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
-      "playerName": "ליאור",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 4
-      },
-      "finalValue": 60,
-      "profit": 30
-    },
-    {
-      "id": "mjbnb6egkoiz6tubar",
-      "gameId": "mjbnb6eghg3xqwgkr3e",
-      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
-      "playerName": "אייל",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T16:28:20.889Z",
+  "lastUpdated": "2025-12-18T16:28:23.628Z",
   "updatedBy": "admin"
 }
