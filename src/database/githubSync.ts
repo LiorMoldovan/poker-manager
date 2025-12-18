@@ -78,9 +78,19 @@ export const fetchFromGitHub = async (): Promise<SyncData | null> => {
     
     const fileInfo = await response.json();
     
-    // Decode base64 content
-    const content = atob(fileInfo.content);
+    // Decode base64 content (GitHub returns with newlines, need to remove them)
+    // Also properly handle UTF-8 characters (Hebrew names)
+    const base64Clean = fileInfo.content.replace(/\n/g, '');
+    const binaryString = atob(base64Clean);
+    // Convert binary string to UTF-8
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const content = new TextDecoder('utf-8').decode(bytes);
     const data = JSON.parse(content);
+    
+    console.log('Fetched from GitHub:', data.lastUpdated, 'games:', data.games?.length);
     return data as SyncData;
   } catch (error) {
     console.error('Error fetching from GitHub:', error);
@@ -244,18 +254,25 @@ export const syncFromCloud = async (): Promise<{
     const remoteData = await fetchFromGitHub();
     
     if (!remoteData) {
+      console.log('No remote data available');
       return { success: true, message: 'No cloud data available yet', synced: false };
     }
     
     // Check if we already have this version
     const lastSyncedVersion = getLastSyncedVersion();
+    console.log('Sync check - local version:', lastSyncedVersion, 'remote version:', remoteData.lastUpdated);
+    console.log('Remote has', remoteData.games?.length, 'games');
+    
     if (lastSyncedVersion === remoteData.lastUpdated) {
-      console.log('Already synced to latest version:', lastSyncedVersion);
+      console.log('Already synced to latest version');
       return { success: true, message: 'Already up to date', synced: false };
     }
     
+    console.log('New version available - syncing...');
+    
     // New version available - do full replacement
     const { gamesChanged, deletedGames, newPlayers } = replaceGamesWithRemote(remoteData);
+    console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers);
     
     // Save the synced version
     saveLastSyncedVersion(remoteData.lastUpdated);
