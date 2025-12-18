@@ -13,12 +13,6 @@
       "type": "permanent"
     },
     {
-      "id": "p3",
-      "name": "ארז",
-      "createdAt": "2025-12-18T18:15:46.489Z",
-      "type": "permanent"
-    },
-    {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
       "name": "אורן",
       "createdAt": "2025-12-18T18:15:46.489Z",
@@ -56,7 +50,7 @@
     },
     {
       "id": "p10",
-      "name": "פבל",
+      "name": "פאבל",
       "createdAt": "2025-12-18T18:15:46.489Z",
       "type": "permanent"
     },
@@ -77,12 +71,6 @@
       "name": "קובי",
       "createdAt": "2025-12-18T09:24:22.578Z",
       "type": "guest"
-    },
-    {
-      "id": "5c6c9fd8-b8c1-4500-9020-cb04ad83af22",
-      "name": "פאבל",
-      "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent"
     },
     {
       "id": "e0804cb1-6aaf-4707-a835-1295e86326df",
@@ -1603,6 +1591,34 @@
       "date": "2025-12-18T18:21:33.403Z",
       "status": "live",
       "createdAt": "2025-12-18T18:21:33.403Z"
+    },
+    {
+      "id": "mjbs2plslmvjp0iur08",
+      "date": "2025-12-18T18:32:38.176Z",
+      "status": "completed",
+      "createdAt": "2025-12-18T18:32:38.176Z",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 130.5,
+          "sentence": "ליאור, המכונה 'המכונה הירוקה', ממשיך את המסע המדהים שלו עם ממוצע רווח מרשים של 68₪ למשחק, ועם רצף של 3 ניצחונות, נראה שהוא בדרך להכפיל את הרווח הכולל שלו לפני סוף השנה."
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -50.2,
+          "sentence": "ליכטר, שחווה מעט ירידות בנתונים האחרונים, יצטרך למצוא את דרכו חזרה אל השולחן, אולי זו ההזדמנות להפוך את המגמה השלילית מול יריבים מוכרים."
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -25.1,
+          "sentence": "סגל, שרצף ההפסדים שלו ממשיך להעמיק, מחפש את ה'קליק' שיחזיר אותו למסלול הניצחונות, אולי דווקא במשחק הערב מול שחקנים שהוא מכיר היטב."
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": -55.2,
+          "sentence": "אייל, עם ניסיון של 205 משחקים, מוכיח עקביות מפתיעה של ממוצע זעום, אבל הניצחונות הגדולים שלו מרמזים על פוטנציאל להפתעות, במיוחד מול יריבים פחות יציבים."
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17405,8 +17421,76 @@
       "chipCounts": {},
       "finalValue": 0,
       "profit": 0
+    },
+    {
+      "id": "mjbs2plsvxeifsfp37",
+      "gameId": "mjbs2plslmvjp0iur08",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 8
+      },
+      "finalValue": 120,
+      "profit": 90
+    },
+    {
+      "id": "mjbs2plscovlnnhre5v",
+      "gameId": "mjbs2plslmvjp0iur08",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjbs2pls4gjo06pg0oc",
+      "gameId": "mjbs2plslmvjp0iur08",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjbs2pls898mds4v1p",
+      "gameId": "mjbs2plslmvjp0iur08",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T18:26:50.482Z",
+  "lastUpdated": "2025-12-18T18:33:10.698Z",
   "updatedBy": "admin"
 }
