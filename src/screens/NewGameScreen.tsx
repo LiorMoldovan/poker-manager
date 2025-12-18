@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
+import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 
 // Default location options
@@ -1209,7 +1210,7 @@ const NewGameScreen = () => {
                           color: style.text,
                           fontFamily: 'system-ui'
                         }}>
-                          {expected >= 0 ? '+' : ''}₪{expected}
+                          {expected >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expected))}
                         </span>
                       </div>
                       

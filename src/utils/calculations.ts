@@ -97,14 +97,14 @@ export const calculateSettlement = (
   return { settlements, smallTransfers };
 };
 
-// Clean up floating-point artifacts (e.g., 30.000000001 -> 30)
+// Clean up floating-point artifacts and add thousand separators (e.g., 30.000000001 -> 30, 1234 -> 1,234)
 export const cleanNumber = (num: number): string => {
   const rounded = Math.round(num * 100) / 100;
-  // Convert to string and remove unnecessary trailing zeros
+  // Use toLocaleString for thousand separators
   if (rounded % 1 === 0) {
-    return rounded.toString();
+    return Math.round(rounded).toLocaleString('en-US');
   }
-  return rounded.toFixed(2).replace(/\.?0+$/, '');
+  return rounded.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 };
 
 export const formatCurrency = (amount: number): string => {

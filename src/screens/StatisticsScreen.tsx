@@ -1377,10 +1377,10 @@ const StatisticsScreen = () => {
                             sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
-                          {player.totalProfit >= 0 ? '+' : ''}₪{Math.round(player.totalProfit)}
+                          {player.totalProfit >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(player.totalProfit))}
                         </td>
                         <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
-                          {player.avgProfit >= 0 ? '+' : ''}₪{Math.round(player.avgProfit)}
+                          {player.avgProfit >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(player.avgProfit))}
                         </td>
                         <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
                         <td style={{ 
