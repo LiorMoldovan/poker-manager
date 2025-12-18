@@ -43,18 +43,6 @@
       "type": "permanent"
     },
     {
-      "id": "p9",
-      "name": "אסף",
-      "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
-    },
-    {
-      "id": "p10",
-      "name": "פבל",
-      "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
-    },
-    {
       "id": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
       "name": "מלמד",
       "createdAt": "2025-12-18T17:00:27.639Z",
@@ -17309,6 +17297,6 @@
       "profit": 0
     }
   ],
-  "lastUpdated": "2025-12-18T17:30:45.727Z",
+  "lastUpdated": "2025-12-18T17:32:20.107Z",
   "updatedBy": "admin"
 }
