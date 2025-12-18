@@ -58,10 +58,15 @@ const saveLastSyncedVersion = (version: string): void => {
 // Fetch current data from GitHub (no auth needed for public repo)
 export const fetchFromGitHub = async (): Promise<SyncData | null> => {
   try {
-    // Use raw.githubusercontent.com for direct file access (with cache busting)
-    const url = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_FILE_PATH}?t=${Date.now()}`;
+    // Use GitHub API to avoid CDN caching issues
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
     
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'Cache-Control': 'no-cache',
+      },
+    });
     
     if (!response.ok) {
       if (response.status === 404) {
@@ -71,7 +76,11 @@ export const fetchFromGitHub = async (): Promise<SyncData | null> => {
       throw new Error(`GitHub fetch failed: ${response.status}`);
     }
     
-    const data = await response.json();
+    const fileInfo = await response.json();
+    
+    // Decode base64 content
+    const content = atob(fileInfo.content);
+    const data = JSON.parse(content);
     return data as SyncData;
   } catch (error) {
     console.error('Error fetching from GitHub:', error);

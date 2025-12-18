@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.37';
+export const APP_VERSION = '4.6.38';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.38',
+    date: '2025-12-18',
+    changes: [
+      'Fix: Sync now uses GitHub API instead of raw CDN (fixes caching issue)',
+      'Deletions now properly sync to all devices'
+    ]
+  },
   {
     version: '4.6.37',
     date: '2025-12-18',
