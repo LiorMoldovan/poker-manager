@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.24';
+export const APP_VERSION = '4.6.25';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.25',
+    date: '2025-12-18',
+    changes: [
+      'Records header: Changed to English only "🏆 Records"',
+      'Current Streaks: Compact display "3W" / "4L" instead of long text',
+      'Fixed text wrapping in streak cards'
+    ]
+  },
   {
     version: '4.6.24',
     date: '2025-12-18',

@@ -1009,7 +1009,7 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                🏆 שיאים מכל הזמנים (All-Time Records)
+                🏆 Records
               </div>
               
               {/* Current Streaks */}
@@ -1017,45 +1017,43 @@ const StatisticsScreen = () => {
                 <h2 className="card-title mb-2">🔥 Current Streaks</h2>
                 <div className="grid grid-2">
                   <div style={{ 
-                    padding: '1rem', 
+                    padding: '0.75rem', 
                     background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.1))',
                     borderRadius: '12px',
-                    textAlign: 'center',
                     border: '1px solid rgba(249, 115, 22, 0.3)'
                   }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🔥 On Fire</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>🔥 On Fire</div>
                     {records.onFirePlayers.length > 0 ? (
                       renderRecord(
                         'onFire',
                         records.onFirePlayers,
-                        (p) => <div style={{ fontSize: '0.9rem', color: 'var(--success)' }}>{p.currentStreak} wins in a row!</div>,
-                        { fontSize: '1.25rem', color: '#f97316' },
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--success)', whiteSpace: 'nowrap' }}>{p.currentStreak}W</span>,
+                        { fontSize: '1rem', color: '#f97316' },
                         'currentWinStreak',
                         '🔥 רצף נצחונות נוכחי'
                       )
                     ) : (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active win streak</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</div>
                     )}
                   </div>
                   <div style={{ 
-                    padding: '1rem', 
+                    padding: '0.75rem', 
                     background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.1))',
                     borderRadius: '12px',
-                    textAlign: 'center',
                     border: '1px solid rgba(239, 68, 68, 0.3)'
                   }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>❄️ Cold Streak</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>❄️ Cold Streak</div>
                     {records.iceColdPlayers.length > 0 ? (
                       renderRecord(
                         'iceCold',
                         records.iceColdPlayers,
-                        (p) => <div style={{ fontSize: '0.9rem', color: 'var(--danger)' }}>{Math.abs(p.currentStreak)} losses in a row</div>,
-                        { fontSize: '1.25rem', color: '#ef4444' },
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{Math.abs(p.currentStreak)}L</span>,
+                        { fontSize: '1rem', color: '#ef4444' },
                         'currentLossStreak',
                         '❄️ רצף הפסדים נוכחי'
                       )
                     ) : (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active loss streak</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</div>
                     )}
                   </div>
                 </div>
