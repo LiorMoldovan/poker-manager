@@ -170,16 +170,23 @@ const replaceGamesWithRemote = (
   const deletedGames = localGames.filter(g => !remoteGameIds.has(g.id)).length;
   const gamesChanged = newGamesCount + deletedGames;
   
-  // Auto-create any missing players from game data
+  // Auto-create any missing players from remote data (with correct player type)
   let newPlayers = 0;
   const localPlayerNames = new Set(localPlayers.map(p => p.name.toLowerCase()));
+  
+  // Build a map of remote players for quick lookup
+  const remotePlayerMap = new Map(remoteData.players.map(p => [p.name.toLowerCase(), p]));
+  
   for (const gp of remoteData.gamePlayers) {
     if (!localPlayerNames.has(gp.playerName.toLowerCase())) {
+      // Get the player info from remote data (includes correct type)
+      const remotePlayer = remotePlayerMap.get(gp.playerName.toLowerCase());
+      
       localPlayers.push({
         id: gp.playerId,
         name: gp.playerName,
-        createdAt: new Date().toISOString(),
-        type: 'guest'
+        createdAt: remotePlayer?.createdAt || new Date().toISOString(),
+        type: remotePlayer?.type || 'guest' // Use remote type if available
       });
       localPlayerNames.add(gp.playerName.toLowerCase());
       newPlayers++;
