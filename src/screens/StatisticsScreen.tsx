@@ -1036,7 +1036,7 @@ const StatisticsScreen = () => {
                       renderRecord(
                         'onFire',
                         records.onFirePlayers,
-                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--success)', whiteSpace: 'nowrap' }}>{p.currentStreak}W</span>,
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--success)', whiteSpace: 'nowrap' }}>{p.currentStreak} Wins</span>,
                         { fontSize: '1rem', color: '#f97316' },
                         'currentWinStreak',
                         '🔥 רצף נצחונות נוכחי'
@@ -1056,7 +1056,7 @@ const StatisticsScreen = () => {
                       renderRecord(
                         'iceCold',
                         records.iceColdPlayers,
-                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{Math.abs(p.currentStreak)}L</span>,
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{Math.abs(p.currentStreak)} Losses</span>,
                         { fontSize: '1rem', color: '#ef4444' },
                         'currentLossStreak',
                         '❄️ רצף הפסדים נוכחי'
