@@ -164,7 +164,9 @@ ${playerDataText}
     const config = getWorkingConfig();
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
     const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    console.log(`Using: ${config.version}/${config.model}`);
+    console.log('🤖 AI Forecast Request:');
+    console.log('   Model:', config.version + '/' + config.model);
+    console.log('   Players:', players.map(p => p.name).join(', '));
     
     const response = await fetch(url, {
       method: 'POST',
@@ -186,19 +188,32 @@ ${playerDataText}
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Gemini API error:', response.status, errorData);
-      throw new Error(`API_ERROR: ${response.status}`);
+      console.error('❌ Gemini API error:', response.status);
+      console.error('   Error details:', errorData?.error?.message || JSON.stringify(errorData));
+      
+      // If rate limited, throw specific error
+      if (response.status === 429) {
+        throw new Error('RATE_LIMITED: Wait 30 seconds and try again');
+      }
+      throw new Error(`API_ERROR: ${response.status} - ${errorData?.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
+    console.log('✅ Gemini response received');
     
     // Extract the text from Gemini response
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
-      console.error('Empty Gemini response:', data);
+      console.error('❌ Empty Gemini response:', data);
+      // Check for safety block
+      if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        throw new Error('Response blocked by safety filter');
+      }
       throw new Error('EMPTY_RESPONSE');
     }
+
+    console.log('📝 Raw AI response:', text.substring(0, 200) + '...');
 
     // Parse JSON from response (handle markdown code blocks)
     let jsonText = text;
@@ -208,7 +223,15 @@ ${playerDataText}
       jsonText = text.split('```')[1].split('```')[0];
     }
 
-    const forecasts: ForecastResult[] = JSON.parse(jsonText.trim());
+    let forecasts: ForecastResult[];
+    try {
+      forecasts = JSON.parse(jsonText.trim());
+      console.log('✅ Parsed', forecasts.length, 'forecasts');
+    } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError);
+      console.error('   JSON text was:', jsonText.substring(0, 500));
+      throw new Error('Failed to parse AI response as JSON');
+    }
     
     // Validate and ensure zero-sum
     let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
