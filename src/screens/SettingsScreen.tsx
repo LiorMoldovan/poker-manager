@@ -22,6 +22,7 @@ import {
   BackupData
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
+import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey } from '../utils/geminiAI';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
@@ -56,6 +57,12 @@ const SettingsScreen = () => {
   const [showToken, setShowToken] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Gemini AI state
+  const [geminiKey, setGeminiKey] = useState<string>('');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [geminiMessage, setGeminiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
 
   // Permission checks
   const canEditSettings = hasPermission('settings:edit');
@@ -100,6 +107,9 @@ const SettingsScreen = () => {
     // Load GitHub token if admin
     const savedToken = getGitHubToken();
     if (savedToken) setGithubToken(savedToken);
+    // Load Gemini API key
+    const savedGeminiKey = getGeminiApiKey();
+    if (savedGeminiKey) setGeminiKey(savedGeminiKey);
   };
 
   const handleSettingsChange = (key: keyof Settings, value: number) => {
@@ -756,6 +766,119 @@ const SettingsScreen = () => {
                   textAlign: 'center'
                 }}>
                   {syncMessage.text}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Gemini AI for Forecast - Admin Only */}
+          {role === 'admin' && (
+            <div style={{ 
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.1))',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+              marginBottom: '1rem'
+            }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#A855F7', marginBottom: '0.5rem' }}>
+                🤖 AI Forecast (Gemini)
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Use Google Gemini AI to generate creative, personalized forecasts. 
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: '#A855F7', marginLeft: '0.25rem' }}
+                >
+                  Get free API key →
+                </a>
+              </p>
+              
+              {/* API Key Input */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  Gemini API Key
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type={showGeminiKey ? 'text' : 'password'}
+                    value={geminiKey}
+                    onChange={(e) => setGeminiKey(e.target.value)}
+                    placeholder="AIza..."
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      fontSize: '0.8rem'
+                    }}
+                  />
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    style={{ padding: '0.5rem' }}
+                  >
+                    {showGeminiKey ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setGeminiApiKey(geminiKey);
+                    setGeminiMessage({ type: 'success', text: 'API key saved!' });
+                    setTimeout(() => setGeminiMessage(null), 2000);
+                  }}
+                  disabled={!geminiKey}
+                  style={{ 
+                    flex: 1,
+                    background: geminiKey ? '#A855F7' : 'var(--surface)',
+                    color: geminiKey ? 'white' : 'var(--text-muted)'
+                  }}
+                >
+                  💾 Save Key
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    setIsTestingGemini(true);
+                    const isValid = await testGeminiApiKey(geminiKey);
+                    setGeminiMessage({ 
+                      type: isValid ? 'success' : 'error', 
+                      text: isValid ? '✅ API key works!' : '❌ Invalid API key' 
+                    });
+                    setIsTestingGemini(false);
+                    setTimeout(() => setGeminiMessage(null), 3000);
+                  }}
+                  disabled={!geminiKey || isTestingGemini}
+                  style={{ 
+                    flex: 1,
+                    background: geminiKey ? 'linear-gradient(135deg, #A855F7, #EC4899)' : 'var(--surface)',
+                    color: geminiKey ? 'white' : 'var(--text-muted)'
+                  }}
+                >
+                  {isTestingGemini ? '⏳ Testing...' : '🧪 Test Key'}
+                </button>
+              </div>
+              
+              {/* Gemini Message */}
+              {geminiMessage && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  borderRadius: '6px',
+                  background: geminiMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  color: geminiMessage.type === 'success' ? '#10B981' : '#EF4444',
+                  fontSize: '0.8rem',
+                  textAlign: 'center'
+                }}>
+                  {geminiMessage.text}
                 </div>
               )}
             </div>

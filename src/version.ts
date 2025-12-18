@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.7.0';
+export const APP_VERSION = '4.8.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.8.0',
+    date: '2024-12-18',
+    changes: [
+      'NEW: AI-Powered Forecasts! 🤖',
+      'Uses Google Gemini AI for creative, personalized predictions',
+      'AI receives ALL player data: stats, streaks, recent games, history',
+      'Dynamic, unique forecasts every time',
+      'Sarcastic comments for inactive players',
+      'Free to use - just add your Gemini API key in Settings',
+      'Fallback to static forecasts if no API key'
+    ]
+  },
   {
     version: '4.7.0',
     date: '2025-12-18',

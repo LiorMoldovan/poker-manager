@@ -5,6 +5,7 @@ import { Player, PlayerType, PlayerStats } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
+import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult } from '../utils/geminiAI';
 
 // Default location options
 const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
@@ -27,6 +28,9 @@ const NewGameScreen = () => {
   const [customLocation, setCustomLocation] = useState<string>('');
   const [isSharing, setIsSharing] = useState(false);
   const [cachedForecasts, setCachedForecasts] = useState<ReturnType<typeof generateForecasts> | null>(null);
+  const [aiForecasts, setAiForecasts] = useState<ForecastResult[] | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const forecastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -804,14 +808,67 @@ const NewGameScreen = () => {
     }
   };
 
-  const handleShowForecast = () => {
+  const handleShowForecast = async () => {
     if (selectedIds.size < 2) {
       setError('Select at least 2 players');
       return;
     }
-    // Generate and cache forecasts when modal opens
-    setCachedForecasts(generateForecasts());
-    setShowForecast(true);
+    
+    // Check if AI is available
+    const hasAIKey = !!getGeminiApiKey();
+    
+    if (hasAIKey) {
+      // Use AI forecasts
+      setShowForecast(true);
+      setIsLoadingAI(true);
+      setAiError(null);
+      setAiForecasts(null);
+      
+      try {
+        // Prepare player data for AI
+        const selectedPlayers = players.filter(p => selectedIds.has(p.id));
+        const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
+          const stats = getStatsByPlayerId(player.id);
+          const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
+          
+          return {
+            name: player.name,
+            isFemale: isFemale(player.name),
+            gamesPlayed: stats?.gamesPlayed || 0,
+            totalProfit: stats?.totalProfit || 0,
+            avgProfit: stats?.avgProfit || 0,
+            winCount: stats?.winCount || 0,
+            lossCount: stats?.lossCount || 0,
+            winPercentage: stats?.winPercentage || 0,
+            currentStreak: stats?.currentStreak || 0,
+            bestWin: stats?.bestWin || 0,
+            worstLoss: stats?.worstLoss || 0,
+            lastGameResults: stats?.lastGameResults || [],
+            daysSinceLastGame: daysSince,
+            isActive: daysSince <= 60
+          };
+        });
+        
+        const forecasts = await generateAIForecasts(playerData);
+        setAiForecasts(forecasts);
+        setIsLoadingAI(false);
+      } catch (err: any) {
+        console.error('AI forecast error:', err);
+        setIsLoadingAI(false);
+        
+        if (err.message === 'NO_API_KEY') {
+          setAiError('No API key configured. Using static forecasts.');
+        } else {
+          setAiError(`AI error: ${err.message}. Using static forecasts.`);
+        }
+        // Fallback to static forecasts
+        setCachedForecasts(generateForecasts());
+      }
+    } else {
+      // Use static forecasts
+      setCachedForecasts(generateForecasts());
+      setShowForecast(true);
+    }
   };
 
   // Render player tile - balanced size
@@ -1144,158 +1201,298 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Forecast Modal */}
-      {showForecast && cachedForecasts && (
-        <div className="modal-overlay" onClick={() => { setShowForecast(false); setCachedForecasts(null); }}>
+      {/* Forecast Modal - AI or Static */}
+      {showForecast && (
+        <div className="modal-overlay" onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'auto', maxWidth: '420px' }}>
-            {/* Screenshotable content */}
-            <div ref={forecastRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
-              {/* Header */}
-              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🔮</div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
-                  תחזית הלילה
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {/* Loading state for AI */}
+            {isLoadingAI && (
+              <div style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🤖</div>
+                <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>AI מנתח נתונים...</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>יוצר תחזית מותאמת אישית</p>
+              </div>
+            )}
+            
+            {/* AI Error message */}
+            {aiError && (
+              <div style={{ 
+                padding: '0.75rem', 
+                margin: '0.75rem',
+                borderRadius: '8px', 
+                background: 'rgba(234, 179, 8, 0.1)', 
+                borderLeft: '4px solid #EAB308',
+                fontSize: '0.85rem',
+                color: '#EAB308'
+              }}>
+                ⚠️ {aiError}
+              </div>
+            )}
+            
+            {/* AI Forecasts */}
+            {aiForecasts && !isLoadingAI && (
+              <div ref={forecastRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
+                {/* Header with AI badge */}
+                <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🤖</div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
+                    תחזית AI
+                  </h3>
+                  <div style={{ fontSize: '0.75rem', color: '#A855F7', marginTop: '0.25rem' }}>
+                    Powered by Gemini ✨
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </div>
+                </div>
+
+                {/* AI Player forecasts */}
+                <div style={{ marginBottom: '1rem' }}>
+                  {aiForecasts.map((forecast, index) => {
+                    const { name, expectedProfit, sentence, highlight, isSurprise } = forecast;
+                    
+                    const getStyle = () => {
+                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
+                      if (expectedProfit > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
+                      if (expectedProfit < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
+                      return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
+                    };
+                    
+                    const style = getStyle();
+                    
+                    return (
+                      <div 
+                        key={name}
+                        style={{
+                          padding: '0.75rem 0.85rem',
+                          marginBottom: '0.5rem',
+                          borderRadius: '10px',
+                          background: style.bg,
+                          borderRight: `4px solid ${style.border}`,
+                        }}
+                      >
+                        {/* Name and amount */}
+                        <div style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '0.4rem'
+                        }}>
+                          <span style={{ 
+                            fontWeight: '700', 
+                            fontSize: '1rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}>
+                            {index === 0 && expectedProfit > 0 && <span>👑</span>}
+                            {name}
+                            {isSurprise && <span>⚡</span>}
+                          </span>
+                          <span style={{ 
+                            fontWeight: '700', 
+                            fontSize: '1.05rem',
+                            color: style.text,
+                            fontFamily: 'system-ui'
+                          }}>
+                            {expectedProfit >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expectedProfit))}
+                          </span>
+                        </div>
+                        
+                        {/* AI Highlight */}
+                        {highlight && (
+                          <div style={{ 
+                            fontSize: '0.78rem', 
+                            color: 'var(--text)',
+                            opacity: 0.8,
+                            marginBottom: '0.4rem',
+                            direction: 'rtl',
+                            fontFamily: 'system-ui',
+                            lineHeight: '1.4'
+                          }}>
+                            {highlight}
+                          </div>
+                        )}
+                        
+                        {/* AI Creative sentence */}
+                        <div style={{ 
+                          fontSize: '0.85rem', 
+                          color: isSurprise ? '#a855f7' : 'var(--text-muted)',
+                          lineHeight: '1.45',
+                          direction: 'rtl',
+                          fontStyle: 'italic'
+                        }}>
+                          {sentence}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div style={{ 
+                  textAlign: 'center', 
+                  marginTop: '0.75rem', 
+                  fontSize: '0.65rem', 
+                  color: 'var(--text-muted)',
+                  opacity: 0.5
+                }}>
+                  Poker Manager 🎲 + AI
                 </div>
               </div>
+            )}
 
-              {/* Player forecasts */}
-              <div style={{ marginBottom: '1rem' }}>
-                {cachedForecasts.map((forecast, index) => {
-                  const { player, expected, sentence, highlights, gamesPlayed, isSurprise } = forecast;
-                  
-                  // Simple, clear colors
-                  const getStyle = () => {
-                    if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
-                    if (expected > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
-                    if (expected < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
-                    return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
-                  };
-                  
-                  const style = getStyle();
-                  
-                  return (
-                    <div 
-                      key={player.id}
-                      style={{
-                        padding: '0.75rem 0.85rem',
-                        marginBottom: '0.5rem',
-                        borderRadius: '10px',
-                        background: style.bg,
-                        borderRight: `4px solid ${style.border}`,
-                      }}
-                    >
-                      {/* Name and amount */}
-                      <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        marginBottom: '0.4rem'
-                      }}>
-                        <span style={{ 
-                          fontWeight: '700', 
-                          fontSize: '1rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.3rem'
-                        }}>
-                          {index === 0 && expected > 0 && <span>👑</span>}
-                          {player.name}
-                        </span>
-                        <span style={{ 
-                          fontWeight: '700', 
-                          fontSize: '1.05rem',
-                          color: style.text,
-                          fontFamily: 'system-ui'
-                        }}>
-                          {expected >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expected))}
-                        </span>
-                      </div>
-                      
-                      {/* Dynamic personalized highlight */}
-                      {gamesPlayed > 0 && highlights && (
+            {/* Static Forecasts (fallback) */}
+            {cachedForecasts && !aiForecasts && !isLoadingAI && (
+              <div ref={forecastRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🔮</div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
+                    תחזית הלילה
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </div>
+                </div>
+
+                {/* Player forecasts */}
+                <div style={{ marginBottom: '1rem' }}>
+                  {cachedForecasts.map((forecast, index) => {
+                    const { player, expected, sentence, highlights, gamesPlayed, isSurprise } = forecast;
+                    
+                    const getStyle = () => {
+                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
+                      if (expected > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
+                      if (expected < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
+                      return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
+                    };
+                    
+                    const style = getStyle();
+                    
+                    return (
+                      <div 
+                        key={player.id}
+                        style={{
+                          padding: '0.75rem 0.85rem',
+                          marginBottom: '0.5rem',
+                          borderRadius: '10px',
+                          background: style.bg,
+                          borderRight: `4px solid ${style.border}`,
+                        }}
+                      >
+                        {/* Name and amount */}
                         <div style={{ 
-                          fontSize: '0.78rem', 
-                          color: 'var(--text)',
-                          opacity: 0.8,
-                          marginBottom: '0.4rem',
-                          direction: 'rtl',
-                          fontFamily: 'system-ui',
-                          lineHeight: '1.4'
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          marginBottom: '0.4rem'
                         }}>
-                          {highlights}
+                          <span style={{ 
+                            fontWeight: '700', 
+                            fontSize: '1rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}>
+                            {index === 0 && expected > 0 && <span>👑</span>}
+                            {player.name}
+                          </span>
+                          <span style={{ 
+                            fontWeight: '700', 
+                            fontSize: '1.05rem',
+                            color: style.text,
+                            fontFamily: 'system-ui'
+                          }}>
+                            {expected >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expected))}
+                          </span>
                         </div>
-                      )}
-                      
-                      {/* Creative forecast sentence */}
-                      <div style={{ 
-                        fontSize: '0.85rem', 
-                        color: isSurprise ? '#a855f7' : 'var(--text-muted)',
-                        lineHeight: '1.45',
-                        direction: 'rtl',
-                        fontStyle: 'italic'
-                      }}>
-                        {sentence}
+                        
+                        {/* Dynamic personalized highlight */}
+                        {gamesPlayed > 0 && highlights && (
+                          <div style={{ 
+                            fontSize: '0.78rem', 
+                            color: 'var(--text)',
+                            opacity: 0.8,
+                            marginBottom: '0.4rem',
+                            direction: 'rtl',
+                            fontFamily: 'system-ui',
+                            lineHeight: '1.4'
+                          }}>
+                            {highlights}
+                          </div>
+                        )}
+                        
+                        {/* Creative forecast sentence */}
+                        <div style={{ 
+                          fontSize: '0.85rem', 
+                          color: isSurprise ? '#a855f7' : 'var(--text-muted)',
+                          lineHeight: '1.45',
+                          direction: 'rtl',
+                          fontStyle: 'italic'
+                        }}>
+                          {sentence}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* Legend */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'center',
-                gap: '1.25rem',
-                fontSize: '0.7rem',
-                color: 'var(--text-muted)',
-                paddingTop: '0.75rem',
-                borderTop: '1px solid rgba(255,255,255,0.1)'
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#22c55e' }}></span>
-                  רווח צפוי
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#ef4444' }}></span>
-                  הפסד צפוי
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#a855f7' }}></span>
-                  ⚡ הפתעה
-                </span>
-              </div>
+                {/* Legend */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center',
+                  gap: '1.25rem',
+                  fontSize: '0.7rem',
+                  color: 'var(--text-muted)',
+                  paddingTop: '0.75rem',
+                  borderTop: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#22c55e' }}></span>
+                    רווח צפוי
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#ef4444' }}></span>
+                    הפסד צפוי
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#a855f7' }}></span>
+                    ⚡ הפתעה
+                  </span>
+                </div>
 
-              {/* Footer */}
-              <div style={{ 
-                textAlign: 'center', 
-                marginTop: '0.75rem', 
-                fontSize: '0.65rem', 
-                color: 'var(--text-muted)',
-                opacity: 0.5
-              }}>
-                Poker Manager 🎲
+                {/* Footer */}
+                <div style={{ 
+                  textAlign: 'center', 
+                  marginTop: '0.75rem', 
+                  fontSize: '0.65rem', 
+                  color: 'var(--text-muted)',
+                  opacity: 0.5
+                }}>
+                  Poker Manager 🎲
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Action buttons - outside screenshot */}
-            <div className="actions" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => { setShowForecast(false); setCachedForecasts(null); }}
-              >
-                סגור
-              </button>
-              <button 
-                className="btn btn-primary" 
-                onClick={shareForecast}
-                disabled={isSharing}
-              >
-                {isSharing ? '📸...' : '📤 שתף'}
-              </button>
-            </div>
+            {(aiForecasts || cachedForecasts) && !isLoadingAI && (
+              <div className="actions" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}
+                >
+                  סגור
+                </button>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={shareForecast}
+                  disabled={isSharing}
+                >
+                  {isSharing ? '📸...' : '📤 שתף'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
