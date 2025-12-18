@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.8.9';
+export const APP_VERSION = '4.8.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.8.10',
+    date: '2025-12-18',
+    changes: [
+      'Voice: Added alert chime before announcement 🔔',
+      'Pleasant ding-dong sound to get attention',
+      'Then speaks the player name + action'
+    ]
+  },
   {
     version: '4.8.9',
     date: '2024-12-18',

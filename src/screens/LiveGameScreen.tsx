@@ -62,8 +62,50 @@ const LiveGameScreen = () => {
     );
   }
 
+  // Play alert beep sound
+  const playAlertSound = (): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Create a pleasant chime sound (two tones)
+        const playTone = (frequency: number, startTime: number, duration: number) => {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.frequency.value = frequency;
+          oscillator.type = 'sine';
+          
+          // Fade in and out for a pleasant sound
+          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+          gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + startTime + 0.05);
+          gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+          
+          oscillator.start(audioContext.currentTime + startTime);
+          oscillator.stop(audioContext.currentTime + startTime + duration);
+        };
+        
+        // Play two ascending tones (ding-dong)
+        playTone(880, 0, 0.15);      // A5
+        playTone(1175, 0.12, 0.2);   // D6
+        
+        // Resolve after the sound finishes
+        setTimeout(resolve, 350);
+      } catch (e) {
+        console.log('Could not play alert sound:', e);
+        resolve();
+      }
+    });
+  };
+
   // Text-to-speech for buyin announcements
-  const speak = (text: string) => {
+  const speak = async (text: string) => {
+    // Play alert sound first
+    await playAlertSound();
+    
     if ('speechSynthesis' in window) {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
