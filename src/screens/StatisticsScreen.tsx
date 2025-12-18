@@ -301,9 +301,9 @@ const StatisticsScreen = () => {
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
-    if (index === 0) return '🥇 ';
-    if (index === 1) return '🥈 ';
-    if (index === 2) return '🥉 ';
+    if (index === 0) return ' 🥇';
+    if (index === 1) return ' 🥈';
+    if (index === 2) return ' 🥉';
     return '';
   };
 
@@ -1272,8 +1272,9 @@ const StatisticsScreen = () => {
                     <th style={{ padding: '0.4rem 0.25rem', width: '30px' }}>#</th>
                     <th style={{ padding: '0.4rem 0.25rem' }}>Player</th>
                     <th style={{ textAlign: 'right', padding: '0.4rem 0.25rem' }}>Profit</th>
-                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '45px' }}>Games</th>
-                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '45px' }}>Win%</th>
+                    <th style={{ textAlign: 'right', padding: '0.4rem 0.25rem' }}>Avg</th>
+                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '40px' }}>Games</th>
+                    <th style={{ textAlign: 'center', padding: '0.4rem 0.25rem', width: '40px' }}>Win%</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1285,15 +1286,17 @@ const StatisticsScreen = () => {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = ''}
                     >
-                      <td style={{ padding: '0.4rem 0.25rem', whiteSpace: 'nowrap' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}>
-                          {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
-                            sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}{index + 1}
-                        </span>
+                      <td style={{ padding: '0.4rem 0.25rem' }}>{index + 1}</td>
+                      <td style={{ fontWeight: '600', padding: '0.4rem 0.25rem' }}>
+                        {player.playerName}
+                        {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
+                          sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                       </td>
-                      <td style={{ fontWeight: '600', padding: '0.4rem 0.25rem' }}>{player.playerName}</td>
                       <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.4rem 0.25rem' }} className={getProfitColor(player.totalProfit)}>
-                        {player.totalProfit >= 0 ? '+' : ''}₪{cleanNumber(player.totalProfit)}
+                        {player.totalProfit >= 0 ? '+' : ''}₪{Math.round(player.totalProfit)}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '0.4rem 0.25rem' }} className={getProfitColor(player.avgProfit)}>
+                        {player.avgProfit >= 0 ? '+' : ''}₪{Math.round(player.avgProfit)}
                       </td>
                       <td style={{ textAlign: 'center', padding: '0.4rem 0.25rem' }}>{player.gamesPlayed}</td>
                       <td style={{ 
@@ -1302,7 +1305,7 @@ const StatisticsScreen = () => {
                         color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
                         fontWeight: '600'
                       }}>
-                        {player.winPercentage.toFixed(0)}%
+                        {Math.round(player.winPercentage)}%
                       </td>
                     </tr>
                   ))}
@@ -1316,9 +1319,9 @@ const StatisticsScreen = () => {
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease' }}>
               <div className="card-header">
                 <h3 className="card-title">
+                  {player.playerName}
                   {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                     sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
-                  {player.playerName}
                 </h3>
                 <span className={getProfitColor(player.totalProfit)} style={{ fontSize: '1.25rem', fontWeight: '700' }}>
                   {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}

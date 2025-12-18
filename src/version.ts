@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.3';
+export const APP_VERSION = '4.6.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.4',
+    date: '2025-12-18',
+    changes: [
+      'Statistics table: Added Average (Avg) column',
+      'Statistics table: Removed decimal points - whole numbers only',
+      'Statistics table: Medals (🥇🥈🥉) now appear after player name'
+    ]
+  },
   {
     version: '4.6.3',
     date: '2025-12-18',
