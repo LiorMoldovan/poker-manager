@@ -544,43 +544,46 @@ const StatisticsScreen = () => {
     const canShowDetails = recordType && recordTitle;
     
     return (
-      <div style={{ ...style, display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-        <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
-        {hasTies && (
-          <span 
-            style={{ 
-              fontSize: '0.6rem', 
-              background: 'var(--primary)', 
-              color: 'white',
-              padding: '0.1rem 0.25rem',
-              borderRadius: '6px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-            onClick={() => toggleRecordExpand(recordKey)}
-          >
-            +{players.length - 1} {isExpanded ? '▲' : '▼'}
-          </span>
-        )}
-        {renderValue(players[0])}
-        {canShowDetails && (
-          <span
-            style={{ 
-              fontSize: '0.55rem', 
-              cursor: 'pointer',
-              background: 'var(--primary)',
-              color: 'white',
-              padding: '0.15rem 0.3rem',
-              borderRadius: '4px',
-              fontWeight: '600',
-              marginLeft: '0.2rem'
-            }}
-            onClick={() => showRecordDetails(recordTitle, players[0], recordType)}
-            title="לחץ לפרטים"
-          >
-            פרטים ❯
-          </span>
-        )}
+      <div style={{ ...style, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'nowrap' }}>
+          <span style={{ fontWeight: '700', whiteSpace: 'nowrap' }}>{players[0].playerName}</span>
+          {hasTies && (
+            <span 
+              style={{ 
+                fontSize: '0.55rem', 
+                background: 'var(--primary)', 
+                color: 'white',
+                padding: '0.1rem 0.2rem',
+                borderRadius: '4px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+              onClick={() => toggleRecordExpand(recordKey)}
+            >
+              +{players.length - 1}
+            </span>
+          )}
+          {renderValue(players[0])}
+          {canShowDetails && (
+            <span
+              style={{ 
+                fontSize: '0.5rem', 
+                cursor: 'pointer',
+                background: 'var(--primary)',
+                color: 'white',
+                padding: '0.1rem 0.2rem',
+                borderRadius: '4px',
+                fontWeight: '600',
+                whiteSpace: 'nowrap'
+              }}
+              onClick={() => showRecordDetails(recordTitle, players[0], recordType)}
+              title="לחץ לפרטים"
+            >
+              ❯
+            </span>
+          )}
+        </div>
         {isExpanded && hasTies && (
           <div style={{ 
             width: '100%',
@@ -610,13 +613,13 @@ const StatisticsScreen = () => {
                       cursor: 'pointer',
                       background: 'var(--primary)',
                       color: 'white',
-                      padding: '0.1rem 0.25rem',
+                      padding: '0.1rem 0.2rem',
                       borderRadius: '4px',
                       fontWeight: '600'
                     }}
                     onClick={() => showRecordDetails(recordTitle!, p, recordType!)}
                   >
-                    פרטים ❯
+                    ❯
                   </span>
                 )}
               </div>
