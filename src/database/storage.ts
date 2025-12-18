@@ -231,6 +231,15 @@ export const updateGameChipGap = (gameId: string, chipGap: number, chipGapPerPla
   }
 };
 
+export const updateGame = (gameId: string, updates: Partial<Game>): void => {
+  const games = getAllGames();
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    games[gameIndex] = { ...games[gameIndex], ...updates };
+    setItem(STORAGE_KEYS.GAMES, games);
+  }
+};
+
 export const deleteGame = (id: string): void => {
   const games = getAllGames().filter(g => g.id !== id);
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId !== id);

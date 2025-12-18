@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.10.5';
+export const APP_VERSION = '4.10.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.10.6',
+    date: '2025-12-18',
+    changes: [
+      'NEW: Generate & Share Forecast from Live Game page 🔮',
+      'Purple button at top of rebuy screen to generate AI forecast',
+      'Can generate forecast anytime during the game',
+      'Forecast is saved to game for later comparison',
+      'Share directly to WhatsApp from the modal'
+    ]
+  },
   {
     version: '4.10.5',
     date: '2025-12-18',
