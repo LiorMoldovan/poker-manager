@@ -23,6 +23,7 @@ import {
   getImportFileInfo,
   BackupData
 } from '../database/storage';
+import { getGitHubToken, saveGitHubToken, removeGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
@@ -53,6 +54,12 @@ const SettingsScreen = () => {
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
   const [importingHistory, setImportingHistory] = useState(false);
   const [importFileInfo, setImportFileInfo] = useState<{ preparedAt: string | null; gamesCount: number; playersCount: number } | null>(null);
+  
+  // GitHub sync state
+  const [githubToken, setGithubToken] = useState<string>('');
+  const [showToken, setShowToken] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Permission checks
   const canEditSettings = hasPermission('settings:edit');
@@ -96,6 +103,9 @@ const SettingsScreen = () => {
     setPlayers(sortPlayersByType(getAllPlayers()));
     setBackups(getBackups());
     setLastBackup(getLastBackupDate());
+    // Load GitHub token if admin
+    const savedToken = getGitHubToken();
+    if (savedToken) setGithubToken(savedToken);
   };
 
   const handleSettingsChange = (key: keyof Settings, value: number) => {
@@ -412,7 +422,7 @@ const SettingsScreen = () => {
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Each buyin of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
               <br />
-              Value per 1000 chips: ₪{((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000).toFixed(1)}
+              Value per 1000 chips: ₪{Math.round((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000)}
             </p>
           </div>
 
@@ -644,6 +654,137 @@ const SettingsScreen = () => {
               </label>
             </div>
           </div>
+
+          {/* GitHub Cloud Sync - Admin Only */}
+          {role === 'admin' && (
+            <div style={{ 
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              marginBottom: '1rem'
+            }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#3B82F6', marginBottom: '0.5rem' }}>
+                ☁️ Cloud Sync (Admin)
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Games sync automatically after completion. Other players receive updates on app open.
+              </p>
+              
+              {/* Token Input */}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                  GitHub Token
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_..."
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      fontSize: '0.8rem'
+                    }}
+                  />
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => setShowToken(!showToken)}
+                    style={{ padding: '0.5rem' }}
+                  >
+                    {showToken ? '🙈' : '👁️'}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    saveGitHubToken(githubToken);
+                    setSyncMessage({ type: 'success', text: 'Token saved!' });
+                    setTimeout(() => setSyncMessage(null), 2000);
+                  }}
+                  disabled={!githubToken}
+                  style={{ 
+                    flex: 1,
+                    background: githubToken ? 'var(--primary)' : 'var(--surface)',
+                    color: githubToken ? 'white' : 'var(--text-muted)'
+                  }}
+                >
+                  💾 Save Token
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setIsSyncing(true);
+                    syncToCloud().then(result => {
+                      setSyncMessage({ 
+                        type: result.success ? 'success' : 'error', 
+                        text: result.success ? '✅ Uploaded to cloud!' : `❌ ${result.message}` 
+                      });
+                      setIsSyncing(false);
+                      setTimeout(() => setSyncMessage(null), 3000);
+                    });
+                  }}
+                  disabled={!githubToken || isSyncing}
+                  style={{ 
+                    flex: 1,
+                    background: githubToken ? 'linear-gradient(135deg, #3B82F6, #10B981)' : 'var(--surface)',
+                    color: githubToken ? 'white' : 'var(--text-muted)'
+                  }}
+                >
+                  {isSyncing ? '⏳ Uploading...' : '☁️ Upload Now'}
+                </button>
+              </div>
+              
+              {/* Manual Sync from Cloud */}
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  setIsSyncing(true);
+                  syncFromCloud().then(result => {
+                    setSyncMessage({ 
+                      type: result.success ? 'success' : 'error', 
+                      text: result.success ? `✅ ${result.message}` : `❌ ${result.message}` 
+                    });
+                    setIsSyncing(false);
+                    setTimeout(() => setSyncMessage(null), 3000);
+                  });
+                }}
+                disabled={isSyncing}
+                style={{ 
+                  width: '100%',
+                  marginTop: '0.5rem',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)'
+                }}
+              >
+                {isSyncing ? '⏳ Syncing...' : '⬇️ Sync from Cloud'}
+              </button>
+              
+              {/* Sync Message */}
+              {syncMessage && (
+                <div style={{
+                  marginTop: '0.5rem',
+                  padding: '0.5rem',
+                  borderRadius: '6px',
+                  background: syncMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  color: syncMessage.type === 'success' ? '#10B981' : '#EF4444',
+                  fontSize: '0.8rem',
+                  textAlign: 'center'
+                }}>
+                  {syncMessage.text}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Import Historical Data */}
           <div style={{ 

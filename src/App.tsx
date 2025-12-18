@@ -1,6 +1,7 @@
 import { useEffect, useState, createContext, useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { initializeStorage } from './database/storage';
+import { syncFromCloud } from './database/githubSync';
 import { PermissionRole } from './types';
 import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
 import Navigation from './components/Navigation';
@@ -31,6 +32,7 @@ function App() {
   const location = useLocation();
   const [role, setRole] = useState<PermissionRole | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ syncing: boolean; message: string | null }>({ syncing: false, message: null });
 
   useEffect(() => {
     initializeStorage();
@@ -41,6 +43,24 @@ function App() {
       setRole(savedRole);
     }
   }, []);
+
+  // Sync from cloud when role is set (admin or member only)
+  useEffect(() => {
+    if (role && role !== 'viewer') {
+      setSyncStatus({ syncing: true, message: 'Syncing...' });
+      syncFromCloud().then(result => {
+        if (result.success && result.newGames && result.newGames > 0) {
+          setSyncStatus({ syncing: false, message: `☁️ ${result.message}` });
+          // Auto-hide message after 3 seconds
+          setTimeout(() => setSyncStatus({ syncing: false, message: null }), 3000);
+        } else {
+          setSyncStatus({ syncing: false, message: null });
+        }
+      }).catch(() => {
+        setSyncStatus({ syncing: false, message: null });
+      });
+    }
+  }, [role]);
 
   const handleUnlock = (pin: string) => {
     const userRole = getRoleFromPin(pin);
@@ -111,10 +131,34 @@ function App() {
     location.pathname.startsWith(path)
   );
 
+  // Sync status banner component
+  const SyncBanner = () => {
+    if (!syncStatus.message) return null;
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: syncStatus.syncing ? 'var(--primary)' : 'linear-gradient(135deg, #10B981, #059669)',
+        color: 'white',
+        padding: '0.5rem 1rem',
+        textAlign: 'center',
+        fontSize: '0.85rem',
+        fontWeight: '500',
+        zIndex: 1000,
+        animation: 'fadeIn 0.3s ease',
+      }}>
+        {syncStatus.syncing ? '⏳ ' : ''}{syncStatus.message}
+      </div>
+    );
+  };
+
   return (
     <PermissionContext.Provider value={permissionValue}>
       <div className="app-container">
-        <main className="main-content">
+        <SyncBanner />
+        <main className="main-content" style={{ paddingTop: syncStatus.message ? '2.5rem' : undefined }}>
           <Routes>
             <Route path="/" element={<NewGameScreen />} />
             <Route path="/live-game/:gameId" element={<LiveGameScreen />} />

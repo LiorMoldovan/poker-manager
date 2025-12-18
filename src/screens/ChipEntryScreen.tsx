@@ -11,7 +11,9 @@ import {
   updateGameChipGap,
   createGameEndBackup
 } from '../database/storage';
+import { syncToCloud } from '../database/githubSync';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
+import { usePermissions } from '../App';
 
 // Numpad Modal Component
 interface NumpadModalProps {
@@ -118,6 +120,7 @@ const NumpadModal = ({ isOpen, chipColor, chipDisplayColor, currentValue, onConf
 const ChipEntryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const { role } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
@@ -125,6 +128,7 @@ const ChipEntryScreen = () => {
   const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   
   // Numpad state
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -343,8 +347,46 @@ const ChipEntryScreen = () => {
     // Create auto backup after game ends
     createGameEndBackup();
     
-    navigate(`/game-summary/${gameId}`);
+    // Upload to GitHub if admin
+    if (role === 'admin') {
+      setUploadStatus('Syncing to cloud...');
+      syncToCloud().then(result => {
+        if (result.success) {
+          setUploadStatus('✅ Synced!');
+        } else {
+          setUploadStatus('⚠️ Sync failed');
+          console.error('Sync failed:', result.message);
+        }
+        // Navigate after a short delay to show status
+        setTimeout(() => navigate(`/game-summary/${gameId}`), 1000);
+      });
+    } else {
+      navigate(`/game-summary/${gameId}`);
+    }
   };
+
+  // Upload status overlay
+  if (uploadStatus) {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.9)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
+          {uploadStatus.includes('Syncing') ? '☁️' : uploadStatus.includes('✅') ? '✅' : '⚠️'}
+        </div>
+        <div style={{ fontSize: '1.2rem', color: 'white', fontWeight: '600' }}>
+          {uploadStatus}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in" style={{ paddingBottom: '115px' }}>
