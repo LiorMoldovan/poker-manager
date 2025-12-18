@@ -64,7 +64,6 @@ export const fetchFromGitHub = async (): Promise<SyncData | null> => {
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/vnd.github.v3+json',
-        'Cache-Control': 'no-cache',
       },
     });
     

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.6.39';
+export const APP_VERSION = '4.6.40';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.6.40',
+    date: '2025-12-18',
+    changes: [
+      'Fix: CORS error when fetching from GitHub API',
+      'Removed Cache-Control header that was blocked'
+    ]
+  },
   {
     version: '4.6.39',
     date: '2025-12-18',
