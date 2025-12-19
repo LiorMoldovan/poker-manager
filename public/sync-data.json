@@ -1635,6 +1635,49 @@
           "sentence": "ספי, הקאמבק המטורף של הערב! אחרי שנעלם מהנוף של הפוקר, הוא חוזר עם 100% הצלחה. זה כמו לראות אגדה שמתעוררת לחיים, אז מי שמעז – הרווח שלו."
         }
       ]
+    },
+    {
+      "id": "mjcsateox60p5x8h02g",
+      "date": "2025-12-19T11:26:42.528Z",
+      "status": "completed",
+      "createdAt": "2025-12-19T11:26:42.528Z",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 125.19999999999999,
+          "sentence": "ליאור, אגדת הפוקר הבלתי מעורערת, ממשיך להדהים עם ממוצע מדהים של 67₪ למשחק. היריבים יודעים שכשהוא על השולחן, הסיפור כבר כתוב, רק השאלה מתי יגיע הפוט הגדול הבא."
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 62.2,
+          "sentence": "אייל, נמצא ברצף נצחונות מפתיע, אך הממוצע הכללי שלו עדיין לא משקף את הפוטנציאל. האם הערב הוא יוכיח שהניצחון האחרון הוא רק ההתחלה, או שזה רק נרגע לפני הסערה?"
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -63,
+          "sentence": "סגל, אתה יודע, לפעמים הדרך לתהילה עוברת דרך טיולים במדבר. 5 הפסדים ברצף זה לא בדיחה, אבל אולי זה רק מקרב אותך לפריצת הדרך שתחזיר אותך למסלול."
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -48.8,
+          "sentence": "ליכטר, שש שנים מאז המשחק האחרון? זו כבר לא הפסקה, זו אבולוציה! נראה שאנחנו חוזרים לשולחן עם תקוות גדולות, אבל הנתונים אומרים 'בזהירות'."
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": -48.8,
+          "sentence": "פיליפ, החיוך שלך נעלם מאז ה-13.12, והכיסאות סביבך מקבלים יותר יותר צ'יפים. האם תצליח להפוך את המגמה השלילית הזו, או שנראה עוד 'פיליפ-פלוס'?"
+        },
+        {
+          "playerName": "אסף",
+          "expectedProfit": 22,
+          "sentence": "אסף, ברוך הבא לשדה הקרב! אתה הטאבלת הריקה, הפוטנציאל הבלתי מוגבל. אנחנו לא יודעים אם תהיה אגדה או אפיזודה חולפת, אבל אנחנו נרגשים לראות מה תביא איתך."
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": -48.8,
+          "sentence": "אורן, נראה שהכסף זורם לך מהידיים כמו חול, במיוחד בשבועות האחרונים. 2 הפסדים רצופים זה לא הסוף, אבל צריך להתחיל לבנות קירות לפני שהבית יקרוס."
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17556,8 +17599,127 @@
       },
       "finalValue": 155.70000000000002,
       "profit": 35.7
+    },
+    {
+      "id": "mjcsateoime78tc8wg",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 26,
+        "2": 1,
+        "3": 3,
+        "4": 0,
+        "5": 3,
+        "6": 15
+      },
+      "finalValue": 240,
+      "profit": 180
+    },
+    {
+      "id": "mjcsateoa2hba2y880u",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjcsateooyfdcfzcfd9",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjcsateplys8e8a5jkb",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjcsatept8c003bgmom",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjcsatepauo9oltuqn",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "p9",
+      "playerName": "אסף",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjcsatep0afo5k12pg4a",
+      "gameId": "mjcsateox60p5x8h02g",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-18T23:43:45.328Z",
+  "lastUpdated": "2025-12-19T11:27:55.459Z",
   "updatedBy": "admin"
 }
