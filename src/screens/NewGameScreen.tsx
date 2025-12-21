@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { Player, PlayerType, PlayerStats } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats } from '../database/storage';
+import { Player, PlayerType, PlayerStats, GameForecast } from '../types';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult } from '../utils/geminiAI';
@@ -34,6 +34,12 @@ const NewGameScreen = () => {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
+  const [showMismatchDialog, setShowMismatchDialog] = useState(false);
+  const [mismatchInfo, setMismatchInfo] = useState<{
+    addedPlayers: string[];
+    removedPlayers: string[];
+    pendingDate: string;
+  } | null>(null);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -123,35 +129,79 @@ const NewGameScreen = () => {
       return;
     }
     
-    // Use custom location if "other" is selected, otherwise use selected location
-    const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
+    // Check if there's a pending forecast
+    const { matches, pending, addedPlayers, removedPlayers } = checkForecastMatch(Array.from(selectedIds));
     
-    // Prepare forecasts to save with the game
-    let forecastsToSave: { playerName: string; expectedProfit: number; sentence?: string }[] | undefined;
-    
-    if (aiForecasts && aiForecasts.length > 0) {
-      forecastsToSave = aiForecasts.map(f => ({
-        playerName: f.name,
-        expectedProfit: f.expectedProfit,
-        sentence: f.sentence
-      }));
-    } else if (cachedForecasts && cachedForecasts.length > 0) {
-      forecastsToSave = cachedForecasts.map(f => ({
-        playerName: f.player.name,
-        expectedProfit: f.expected,
-        sentence: f.sentence
-      }));
-    }
-    
-    const game = createGame(Array.from(selectedIds), location || undefined, forecastsToSave);
-    
-    // If we have forecasts, show prompt to share before starting
-    if (forecastsToSave && forecastsToSave.length > 0) {
-      setPendingGameId(game.id);
-      setShowSharePrompt(true);
+    if (pending) {
+      if (matches) {
+        // 100% match - auto-link and proceed
+        startGameWithForecast(pending.forecasts);
+      } else {
+        // Mismatch - show dialog
+        const addedNames = addedPlayers.map(id => players.find(p => p.id === id)?.name || id);
+        const removedNames = removedPlayers.map(id => {
+          // Find name from pending forecast
+          const forecast = pending.forecasts.find(f => {
+            const player = players.find(p => p.name === f.playerName);
+            return player?.id === id;
+          });
+          return forecast?.playerName || id;
+        });
+        
+        setMismatchInfo({
+          addedPlayers: addedNames,
+          removedPlayers: removedNames,
+          pendingDate: new Date(pending.createdAt).toLocaleDateString('he-IL', { 
+            weekday: 'short', 
+            day: 'numeric', 
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        });
+        setShowMismatchDialog(true);
+      }
     } else {
-      navigate(`/live-game/${game.id}`);
+      // No pending forecast - just start game
+      startGameWithForecast(undefined);
     }
+  };
+  
+  // Start game with optional forecast
+  const startGameWithForecast = (forecasts?: GameForecast[]) => {
+    const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
+    const game = createGame(Array.from(selectedIds), location || undefined, forecasts);
+    
+    // Link pending forecast to this game and clear it
+    if (forecasts) {
+      linkForecastToGame(game.id);
+      clearPendingForecast();
+    }
+    
+    navigate(`/live-game/${game.id}`);
+  };
+  
+  // Handle mismatch: Generate new forecast
+  const handleUpdateForecast = () => {
+    setShowMismatchDialog(false);
+    clearPendingForecast();
+    handleShowForecast(); // Generate new forecast for current players
+  };
+  
+  // Handle mismatch: Keep old forecast (only compare matching players)
+  const handleKeepOldForecast = () => {
+    setShowMismatchDialog(false);
+    const pending = getPendingForecast();
+    if (pending) {
+      startGameWithForecast(pending.forecasts);
+    }
+  };
+  
+  // Handle mismatch: Start without forecast
+  const handleStartWithoutForecast = () => {
+    setShowMismatchDialog(false);
+    clearPendingForecast();
+    startGameWithForecast(undefined);
   };
   
   const handleShareAndStart = async () => {
@@ -1000,6 +1050,16 @@ const NewGameScreen = () => {
         const forecasts = await generateAIForecasts(playerData);
         setAiForecasts(forecasts);
         setIsLoadingAI(false);
+        
+        // Save to pending forecast storage
+        const forecastsToSave: GameForecast[] = forecasts.map(f => ({
+          playerName: f.name,
+          expectedProfit: f.expectedProfit,
+          highlight: f.highlight,
+          sentence: f.sentence,
+          isSurprise: f.isSurprise
+        }));
+        savePendingForecast(Array.from(selectedIds), forecastsToSave);
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
@@ -1035,8 +1095,17 @@ const NewGameScreen = () => {
       }
     } else {
       // Use static forecasts
-      setCachedForecasts(generateForecasts());
+      const staticForecasts = generateForecasts();
+      setCachedForecasts(staticForecasts);
       setShowForecast(true);
+      
+      // Save to pending forecast storage
+      const forecastsToSave: GameForecast[] = staticForecasts.map(f => ({
+        playerName: f.player.name,
+        expectedProfit: f.expected,
+        sentence: f.sentence
+      }));
+      savePendingForecast(Array.from(selectedIds), forecastsToSave);
     }
   };
 
@@ -1692,6 +1761,93 @@ const NewGameScreen = () => {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* Forecast Mismatch Dialog */}
+      {showMismatchDialog && mismatchInfo && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '380px',
+            width: '100%',
+            textAlign: 'center',
+            direction: 'rtl'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⚠️</div>
+            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>השחקנים השתנו</h3>
+            <p style={{ marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              קיימת תחזית מ-{mismatchInfo.pendingDate} עם שחקנים שונים
+            </p>
+            
+            {/* Changes summary */}
+            <div style={{ 
+              background: 'var(--surface)', 
+              borderRadius: '10px', 
+              padding: '0.75rem',
+              marginBottom: '1rem',
+              fontSize: '0.85rem',
+              textAlign: 'right'
+            }}>
+              {mismatchInfo.removedPlayers.length > 0 && (
+                <div style={{ marginBottom: '0.5rem', color: '#ef4444' }}>
+                  <strong>ביטלו:</strong> {mismatchInfo.removedPlayers.join(', ')}
+                </div>
+              )}
+              {mismatchInfo.addedPlayers.length > 0 && (
+                <div style={{ color: '#22c55e' }}>
+                  <strong>הצטרפו:</strong> {mismatchInfo.addedPlayers.join(', ')}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              <button 
+                className="btn btn-primary"
+                onClick={handleUpdateForecast}
+                style={{ width: '100%' }}
+              >
+                🤖 צור תחזית חדשה
+              </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={handleKeepOldForecast}
+                style={{ width: '100%' }}
+              >
+                📊 המשך עם התחזית הקיימת
+                <div style={{ fontSize: '0.7rem', opacity: 0.7, marginTop: '0.2rem' }}>
+                  (רק שחקנים שבשניהם יושוו)
+                </div>
+              </button>
+              <button 
+                onClick={handleStartWithoutForecast}
+                style={{ 
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  padding: '0.5rem'
+                }}
+              >
+                התחל ללא תחזית
+              </button>
+            </div>
           </div>
         </div>
       )}

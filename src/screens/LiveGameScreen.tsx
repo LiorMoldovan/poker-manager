@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import html2canvas from 'html2canvas';
 import { GamePlayer, GameAction } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getPlayerStats as getAllPlayerStats, getGame, updateGame } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
-import { generateAIForecasts, getGeminiApiKey, ForecastResult, PlayerForecastData } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 
 const LiveGameScreen = () => {

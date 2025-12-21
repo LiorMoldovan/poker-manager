@@ -1,4 +1,4 @@
-import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats } from '../types';
+import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast } from '../types';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'poker_settings',
   BACKUPS: 'poker_backups',
   LAST_BACKUP_DATE: 'poker_last_backup_date',
+  PENDING_FORECAST: 'poker_pending_forecast',
 };
 
 // Generate unique ID
@@ -734,5 +735,150 @@ export const checkAndAutoBackup = (): boolean => {
 export const createGameEndBackup = (): void => {
   createBackup('auto', 'game-end');
   console.log('Auto backup created after game end!');
+};
+
+// ========== Pending Forecast Management ==========
+
+// Get pending forecast (if exists)
+export const getPendingForecast = (): PendingForecast | null => {
+  return getItem<PendingForecast | null>(STORAGE_KEYS.PENDING_FORECAST, null);
+};
+
+// Save pending forecast
+export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[]): PendingForecast => {
+  const pendingForecast: PendingForecast = {
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+    playerIds,
+    forecasts,
+  };
+  setItem(STORAGE_KEYS.PENDING_FORECAST, pendingForecast);
+  return pendingForecast;
+};
+
+// Link pending forecast to a game
+export const linkForecastToGame = (gameId: string): void => {
+  const pending = getPendingForecast();
+  if (pending) {
+    pending.linkedGameId = gameId;
+    setItem(STORAGE_KEYS.PENDING_FORECAST, pending);
+    
+    // Also store forecasts in the game record
+    const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+    const gameIndex = games.findIndex(g => g.id === gameId);
+    if (gameIndex !== -1) {
+      games[gameIndex].forecasts = pending.forecasts;
+      setItem(STORAGE_KEYS.GAMES, games);
+    }
+  }
+};
+
+// Clear pending forecast
+export const clearPendingForecast = (): void => {
+  localStorage.removeItem(STORAGE_KEYS.PENDING_FORECAST);
+};
+
+// Check if pending forecast matches current players (100% match)
+export const checkForecastMatch = (currentPlayerIds: string[]): { 
+  matches: boolean; 
+  pending: PendingForecast | null;
+  addedPlayers: string[];
+  removedPlayers: string[];
+} => {
+  const pending = getPendingForecast();
+  
+  if (!pending) {
+    return { matches: false, pending: null, addedPlayers: [], removedPlayers: [] };
+  }
+  
+  const pendingSet = new Set(pending.playerIds);
+  const currentSet = new Set(currentPlayerIds);
+  
+  // Find players added (in current but not in pending)
+  const addedPlayers = currentPlayerIds.filter(id => !pendingSet.has(id));
+  
+  // Find players removed (in pending but not in current)
+  const removedPlayers = pending.playerIds.filter(id => !currentSet.has(id));
+  
+  const matches = addedPlayers.length === 0 && removedPlayers.length === 0;
+  
+  return { matches, pending, addedPlayers, removedPlayers };
+};
+
+// Get forecast comparison for a completed game
+export const getForecastComparison = (gameId: string): {
+  hasComparison: boolean;
+  comparisons: Array<{
+    playerName: string;
+    forecast: number;
+    actual: number;
+    gap: number;
+    accuracyPercent: number;
+  }>;
+  overallAccuracy: number;
+  missingFromGame: string[];  // Forecasted but didn't play
+  missingFromForecast: string[];  // Played but wasn't forecasted
+} | null => {
+  const game = getGame(gameId);
+  if (!game || !game.forecasts || game.forecasts.length === 0) {
+    return null;
+  }
+  
+  const gamePlayers = getGamePlayers(gameId);
+  if (gamePlayers.length === 0) {
+    return null;
+  }
+  
+  const comparisons: Array<{
+    playerName: string;
+    forecast: number;
+    actual: number;
+    gap: number;
+    accuracyPercent: number;
+  }> = [];
+  
+  const forecastNames = new Set(game.forecasts.map(f => f.playerName));
+  const gamePlayerNames = new Set(gamePlayers.map(p => p.playerName));
+  
+  // Players who were forecasted but didn't play
+  const missingFromGame = game.forecasts
+    .filter(f => !gamePlayerNames.has(f.playerName))
+    .map(f => f.playerName);
+  
+  // Players who played but weren't forecasted
+  const missingFromForecast = gamePlayers
+    .filter(p => !forecastNames.has(p.playerName))
+    .map(p => p.playerName);
+  
+  // Calculate comparisons for matching players
+  for (const forecast of game.forecasts) {
+    const gamePlayer = gamePlayers.find(p => p.playerName === forecast.playerName);
+    if (gamePlayer) {
+      const gap = Math.abs(forecast.expectedProfit - gamePlayer.profit);
+      // Calculate accuracy: 100% if exact, decreases by 1% per 5₪ gap
+      const accuracyPercent = Math.max(0, 100 - (gap / 5));
+      
+      comparisons.push({
+        playerName: forecast.playerName,
+        forecast: forecast.expectedProfit,
+        actual: gamePlayer.profit,
+        gap,
+        accuracyPercent,
+      });
+    }
+  }
+  
+  // Calculate overall accuracy
+  const overallAccuracy = comparisons.length > 0
+    ? comparisons.reduce((sum, c) => sum + c.accuracyPercent, 0) / comparisons.length
+    : 0;
+  
+  return {
+    hasComparison: true,
+    comparisons,
+    overallAccuracy,
+    missingFromGame,
+    missingFromForecast,
+  };
 };
 

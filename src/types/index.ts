@@ -35,7 +35,17 @@ export interface Player {
 export interface GameForecast {
   playerName: string;
   expectedProfit: number;
+  highlight?: string;
   sentence?: string;
+  isSurprise?: boolean;
+}
+
+export interface PendingForecast {
+  id: string;
+  createdAt: string;
+  playerIds: string[];  // Selected player IDs at time of forecast
+  forecasts: GameForecast[];
+  linkedGameId?: string;  // Set when game starts
 }
 
 export interface Game {

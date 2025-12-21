@@ -768,7 +768,7 @@ const StatisticsScreen = () => {
                   </span>
                 </div>
                 <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: '1.1rem' }}>
-                  מינימום {activeThreshold} הופעות מתוך {totalGamesInPeriod} משחקים
+                  מינימום השתתפויות נדרשות: {activeThreshold}/{totalGamesInPeriod}
                 </span>
               </div>
                 <button
