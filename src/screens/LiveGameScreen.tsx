@@ -145,6 +145,7 @@ const LiveGameScreen = () => {
     // Quick rebuy messages (< 5 min since last)
     const quickMessages = [
       'חזרת מהר',
+      'אני לא רוצה לראות אותך שוב כל כך מהר',
     ];
     
     // Messages by REBUY number (not total)
