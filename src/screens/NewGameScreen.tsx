@@ -1563,7 +1563,7 @@ const NewGameScreen = () => {
                             color: style.text,
                             fontFamily: 'system-ui'
                           }}>
-                            {expectedProfit >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expectedProfit))}
+                            {expectedProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(expectedProfit))}
                           </span>
                         </div>
                         
@@ -1672,7 +1672,7 @@ const NewGameScreen = () => {
                             color: style.text,
                             fontFamily: 'system-ui'
                           }}>
-                            {expected >= 0 ? '+' : ''}₪{cleanNumber(Math.abs(expected))}
+                            {expected >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(expected))}
                           </span>
                         </div>
                         
