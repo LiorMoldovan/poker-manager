@@ -356,6 +356,7 @@ const StatisticsScreen = () => {
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
 
   // Calculate previous rankings (before the last game in period) for movement indicator
+  // This must use the SAME filters as the current view (player type, active filter)
   const previousRankings = useMemo(() => {
     const dateFilter = getDateFilter();
     const allGames = getAllGames().filter(g => {
@@ -373,19 +374,40 @@ const StatisticsScreen = () => {
     const lastGameId = allGames[0].id;
     const allGamePlayers = getAllGamePlayers();
     
-    // Calculate profits excluding the last game
-    const profitMap = new Map<string, number>();
+    // Calculate stats excluding the last game (same as current but without last game)
+    const playerStatsMap = new Map<string, { profit: number; games: number }>();
+    
     for (const gp of allGamePlayers) {
       if (gp.gameId === lastGameId) continue; // Skip last game
       const game = allGames.find(g => g.id === gp.gameId);
       if (!game) continue;
-      const current = profitMap.get(gp.playerId) || 0;
-      profitMap.set(gp.playerId, current + gp.profit);
+      
+      const current = playerStatsMap.get(gp.playerId) || { profit: 0, games: 0 };
+      playerStatsMap.set(gp.playerId, {
+        profit: current.profit + gp.profit,
+        games: current.games + 1
+      });
     }
     
+    // Calculate previous active threshold (games - 1 since we exclude last game)
+    const prevTotalGames = allGames.length - 1;
+    const prevActiveThreshold = Math.ceil(prevTotalGames * 0.33);
+    
+    // Filter by same criteria as current view
+    const filteredPrevStats = [...playerStatsMap.entries()]
+      .filter(([playerId, data]) => {
+        // Apply player type filter
+        const playerType = getPlayerType(playerId);
+        if (!selectedTypes.has(playerType)) return false;
+        
+        // Apply active filter if enabled
+        if (filterActiveOnly && data.games < prevActiveThreshold) return false;
+        
+        return true;
+      });
+    
     // Sort by profit to get rankings
-    const sorted = [...profitMap.entries()]
-      .sort((a, b) => b[1] - a[1]);
+    const sorted = filteredPrevStats.sort((a, b) => b[1].profit - a[1].profit);
     
     const rankMap = new Map<string, number>();
     sorted.forEach(([playerId], index) => {
@@ -393,7 +415,7 @@ const StatisticsScreen = () => {
     });
     
     return rankMap;
-  }, [timePeriod, selectedYear, stats]);
+  }, [timePeriod, selectedYear, stats, selectedTypes, filterActiveOnly, getPlayerType]);
 
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
@@ -1496,9 +1518,9 @@ const StatisticsScreen = () => {
                               color: movement > 0 ? 'var(--success)' : 'var(--danger)'
                             }}>
                               {movement > 0 ? '↑' : '↓'}{Math.abs(movement) > 1 ? Math.abs(movement) : ''}
-                            </span>
+                        </span>
                           )}
-                        </td>
+                      </td>
                         <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
                           {player.playerName}
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
@@ -1617,12 +1639,12 @@ const StatisticsScreen = () => {
                           fontSize: '0.65rem'
                         }}>
                           {new Date(record.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
                 <button
                   onClick={handleShareTop20}
