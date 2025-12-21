@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.6';
+export const APP_VERSION = '4.16.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.7',
+    date: '2025-12-21',
+    changes: [
+      'Sound: Changed to "ching-ching" coin sound (like cash register)',
+      'Display: Rebuy counter now shows 1.5, 2.5, etc properly!',
+      'Voice: Now says "קנה אחד" for 1 buyin'
+    ]
+  },
   {
     version: '4.16.6',
     date: '2025-12-21',

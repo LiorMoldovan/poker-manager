@@ -80,82 +80,55 @@ const LiveGameScreen = () => {
     );
   }
 
-  // Cash drawer opening sound - mechanical slide + click
+  // Ching-ching coin sound - like a cash register
   const playCashSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        // Create noise for mechanical sliding sound
-        const createNoise = (duration: number, startTime: number, volume: number) => {
-          const bufferSize = audioContext.sampleRate * duration;
-          const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-          const data = buffer.getChannelData(0);
-          
-          for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * 0.5;
-          }
-          
-          const noise = audioContext.createBufferSource();
-          noise.buffer = buffer;
-          
-          // Low-pass filter for rumble effect
-          const filter = audioContext.createBiquadFilter();
-          filter.type = 'lowpass';
-          filter.frequency.value = 400;
-          
-          const gainNode = audioContext.createGain();
-          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.02);
-          gainNode.gain.linearRampToValueAtTime(volume * 0.7, audioContext.currentTime + startTime + duration * 0.8);
-          gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
-          
-          noise.connect(filter);
-          filter.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          
-          noise.start(audioContext.currentTime + startTime);
-          noise.stop(audioContext.currentTime + startTime + duration);
-        };
-        
-        // Mechanical click sound
-        const playClick = (freq: number, startTime: number, duration: number, volume: number) => {
+        // Create a metallic "ching" sound
+        const playChing = (startTime: number, frequency: number, volume: number) => {
+          // Main bell tone
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
           
           oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
           
-          oscillator.frequency.value = freq;
-          oscillator.type = 'square';
+          oscillator.frequency.value = frequency;
+          oscillator.type = 'sine';
           
-          gainNode.gain.setValueAtTime(volume, audioContext.currentTime + startTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
+          // Quick attack, longer decay for bell sound
+          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.01);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + 0.3);
           
           oscillator.start(audioContext.currentTime + startTime);
-          oscillator.stop(audioContext.currentTime + startTime + duration);
+          oscillator.stop(audioContext.currentTime + startTime + 0.35);
+          
+          // Add harmonics for metallic sound
+          const harmonic = audioContext.createOscillator();
+          const harmonicGain = audioContext.createGain();
+          
+          harmonic.connect(harmonicGain);
+          harmonicGain.connect(audioContext.destination);
+          
+          harmonic.frequency.value = frequency * 2.5; // Higher harmonic
+          harmonic.type = 'sine';
+          
+          harmonicGain.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+          harmonicGain.gain.linearRampToValueAtTime(volume * 0.4, audioContext.currentTime + startTime + 0.01);
+          harmonicGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + 0.2);
+          
+          harmonic.start(audioContext.currentTime + startTime);
+          harmonic.stop(audioContext.currentTime + startTime + 0.25);
         };
         
-        // Random variant of drawer opening
-        const variant = Math.floor(Math.random() * 3);
+        // Play "ching-ching" - two bell sounds
+        playChing(0, 2000, 0.3);      // First ching - higher
+        playChing(0.12, 2400, 0.35);  // Second ching - even higher
         
-        if (variant === 0) {
-          // Drawer slide + click
-          createNoise(0.15, 0, 0.4);      // Drawer sliding
-          playClick(200, 0.14, 0.05, 0.5); // Drawer hits stop
-          playClick(150, 0.16, 0.03, 0.3); // Secondary click
-        } else if (variant === 1) {
-          // Quick drawer pop
-          playClick(180, 0, 0.02, 0.4);   // Button click
-          createNoise(0.12, 0.02, 0.35);  // Drawer slides
-          playClick(220, 0.13, 0.04, 0.45); // Stop click
-        } else {
-          // Smooth drawer
-          createNoise(0.18, 0, 0.35);     // Longer slide
-          playClick(170, 0.17, 0.04, 0.4); // Soft stop
-        }
-        
-        setTimeout(resolve, 250);
+        setTimeout(resolve, 350);
       } catch (e) {
         console.log('Could not play cash sound:', e);
         resolve();
@@ -293,7 +266,14 @@ const LiveGameScreen = () => {
       
       // "קנה" with niqqud for correct pronunciation (kana, not kne)
       // Using "קָנָה" to force proper vowels
-      const buyAction = isHalfBuyin ? 'קָנָה חצי' : 'קָנָה';
+      // For half buyin: "קנה חצי", for 1 buyin: "קנה אחד", for more: just "קנה"
+      let buyAction: string;
+      if (isHalfBuyin) {
+        buyAction = 'קָנָה חצי';
+      } else {
+        // Always say "one" in Hebrew for 1 buyin
+        buyAction = 'קָנָה אחד';
+      }
       
       const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
       const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
@@ -405,7 +385,7 @@ const LiveGameScreen = () => {
               </div>
             </div>
             <div className="player-rebuys">
-              <span className="rebuy-count">{cleanNumber(player.rebuys)}</span>
+              <span className="rebuy-count">{player.rebuys % 1 === 0.5 ? player.rebuys.toFixed(1) : player.rebuys}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <button 
                   className="btn btn-primary btn-sm"
