@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.12.2';
+export const APP_VERSION = '4.13.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.13.0',
+    date: '2025-12-21',
+    changes: [
+      '🔮 NEW: Forecast flow redesigned!',
+      'Forecast now only in New Game (before game starts)',
+      'Pending forecast saved and linked to game',
+      'Mismatch dialog when players change',
+      'Option to update forecast or keep existing',
+      'Forecast comparison shows at game end',
+      'Removed forecast from Live Game (Rebuy page)'
+    ]
+  },
   {
     version: '4.11.9',
     date: '2025-12-18',
