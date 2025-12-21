@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.14.3',
+    date: '2025-12-21',
+    changes: [
+      'Graphs: Removed tooltip completely for cleaner chart experience'
+    ]
+  },
+  {
     version: '4.14.2',
     date: '2025-12-21',
     changes: [

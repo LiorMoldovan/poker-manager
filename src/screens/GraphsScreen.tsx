@@ -58,8 +58,6 @@ const GraphsScreen = () => {
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
   const [showTimePeriod, setShowTimePeriod] = useState(false);
   
-  // Selected point for showing details below graph
-  const [selectedPoint, setSelectedPoint] = useState<CumulativeDataPoint | null>(null);
   
   // Time period filter
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
@@ -318,17 +316,6 @@ const GraphsScreen = () => {
     return '';
   };
 
-  // Handle chart click to select a data point
-  const handleChartClick = (data: any) => {
-    if (data && data.activePayload && data.activePayload.length > 0) {
-      const gameIndex = data.activeLabel;
-      const point = cumulativeData.find(d => d.gameIndex === gameIndex);
-      if (point) {
-        setSelectedPoint(point);
-      }
-    }
-  };
-
   // Custom Legend component with colored names
   const CustomLegend = () => (
     <div style={{ 
@@ -362,76 +349,6 @@ const GraphsScreen = () => {
       ))}
     </div>
   );
-
-  // Selected point details panel (shown below the graph)
-  const SelectedPointDetails = () => {
-    if (!selectedPoint) return null;
-    
-    // Get player values and sort by cumulative profit
-    const playerValues = sortedPlayerIds.map(playerId => {
-      const playerName = getPlayerName(playerId);
-      return {
-        playerId,
-        playerName,
-        value: selectedPoint[playerName] as number,
-        color: getPlayerColor(playerId),
-      };
-    }).sort((a, b) => b.value - a.value);
-
-    return (
-      <div style={{
-        background: 'var(--surface)',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        marginTop: '0.5rem',
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: '0.5rem',
-        }}>
-          <span style={{ fontWeight: '600', color: 'var(--text)', fontSize: '0.8rem' }}>
-            Game {selectedPoint.gameIndex} • {selectedPoint.date}
-          </span>
-          <button
-            onClick={() => setSelectedPoint(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              padding: '0',
-            }}
-          >
-            ✕
-          </button>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {playerValues.map(({ playerId, playerName, value, color }) => (
-            <div key={playerId} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.3rem',
-              padding: '0.25rem 0.5rem',
-              background: `${color}15`,
-              borderRadius: '12px',
-              fontSize: '0.75rem',
-            }}>
-              <span style={{ color, fontWeight: '600' }}>{playerName}</span>
-              <span style={{ 
-                fontWeight: '700',
-                color: value >= 0 ? 'var(--success)' : 'var(--danger)'
-              }}>
-                {value >= 0 ? '+' : ''}₪{cleanNumber(value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="fade-in">
@@ -672,7 +589,7 @@ const GraphsScreen = () => {
             textAlign: 'center',
             marginBottom: '0.5rem' 
           }}>
-            {getTimeframeLabel()} • {filteredGames.length} games • Tap chart to see details
+            {getTimeframeLabel()} • {filteredGames.length} games
           </div>
           <div style={{ 
             width: '100%', 
@@ -683,7 +600,6 @@ const GraphsScreen = () => {
               <LineChart 
                 data={cumulativeData} 
                 margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
-                onClick={handleChartClick}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
                 <XAxis 
@@ -708,14 +624,13 @@ const GraphsScreen = () => {
                     stroke={getPlayerColor(playerId)}
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
+                    activeDot={false}
                   />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
           <CustomLegend />
-          <SelectedPointDetails />
         </div>
       )}
 
