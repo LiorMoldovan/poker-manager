@@ -246,40 +246,76 @@ const GraphsScreen = () => {
       biggestLoss: Math.min(0, ...player2Games.map(g => g.profit)),
     };
 
-    // Cumulative data for shared games only
-    const cumulativeComparison: Array<{
-      gameIndex: number;
-      date: string;
-      [key: string]: string | number;
-    }> = [];
+    // Direct battles - who outperformed whom in each shared game
+    let player1Wins = 0;
+    let player2Wins = 0;
+    let ties = 0;
     
-    let p1Cumulative = 0;
-    let p2Cumulative = 0;
-    let gameIdx = 0;
+    // Recent form - last 5 shared games
+    const recentGames: Array<{ date: string; p1Profit: number; p2Profit: number; winner: string }> = [];
+    
+    // Session distribution buckets
+    const p1Distribution = { bigWin: 0, smallWin: 0, smallLoss: 0, bigLoss: 0 };
+    const p2Distribution = { bigWin: 0, smallWin: 0, smallLoss: 0, bigLoss: 0 };
+    
+    // For volatility calculation
+    const p1Profits: number[] = [];
+    const p2Profits: number[] = [];
 
-    filteredGames
-      .filter(g => sharedGameIds.has(g.id))
-      .forEach(game => {
-        gameIdx++;
-        const p1Game = player1Games.find(g => g.gameId === game.id);
-        const p2Game = player2Games.find(g => g.gameId === game.id);
+    const sharedGamesOrdered = filteredGames.filter(g => sharedGameIds.has(g.id));
+    
+    sharedGamesOrdered.forEach(game => {
+      const p1Game = player1Games.find(g => g.gameId === game.id);
+      const p2Game = player2Games.find(g => g.gameId === game.id);
+      
+      if (p1Game && p2Game) {
+        p1Profits.push(p1Game.profit);
+        p2Profits.push(p2Game.profit);
         
-        if (p1Game) p1Cumulative += p1Game.profit;
-        if (p2Game) p2Cumulative += p2Game.profit;
-
+        // Direct battle
+        if (p1Game.profit > p2Game.profit) player1Wins++;
+        else if (p2Game.profit > p1Game.profit) player2Wins++;
+        else ties++;
+        
+        // Session distribution (big = >200, small = <=200)
+        const threshold = 200;
+        if (p1Game.profit > threshold) p1Distribution.bigWin++;
+        else if (p1Game.profit > 0) p1Distribution.smallWin++;
+        else if (p1Game.profit >= -threshold) p1Distribution.smallLoss++;
+        else p1Distribution.bigLoss++;
+        
+        if (p2Game.profit > threshold) p2Distribution.bigWin++;
+        else if (p2Game.profit > 0) p2Distribution.smallWin++;
+        else if (p2Game.profit >= -threshold) p2Distribution.smallLoss++;
+        else p2Distribution.bigLoss++;
+        
+        // Recent games
         const dateStr = new Date(game.date).toLocaleDateString('en-GB', { 
           day: '2-digit', 
-          month: '2-digit', 
-          year: '2-digit' 
+          month: '2-digit' 
         });
-
-        cumulativeComparison.push({
-          gameIndex: gameIdx,
+        recentGames.push({
           date: dateStr,
-          [player1Stats.playerName]: p1Cumulative,
-          [player2Stats.playerName]: p2Cumulative,
+          p1Profit: p1Game.profit,
+          p2Profit: p2Game.profit,
+          winner: p1Game.profit > p2Game.profit ? 'p1' : p2Game.profit > p1Game.profit ? 'p2' : 'tie'
         });
-      });
+      }
+    });
+    
+    // Calculate volatility (standard deviation)
+    const calcStdDev = (arr: number[]) => {
+      if (arr.length === 0) return 0;
+      const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+      const variance = arr.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / arr.length;
+      return Math.sqrt(variance);
+    };
+    
+    const p1Volatility = calcStdDev(p1Profits);
+    const p2Volatility = calcStdDev(p2Profits);
+    
+    // Last 5 games only
+    const last5Games = recentGames.slice(-5);
 
     return {
       player1Stats,
@@ -288,7 +324,11 @@ const GraphsScreen = () => {
       totalGamesInPeriod: filteredGames.length,
       player1TotalGames,
       player2TotalGames,
-      cumulativeComparison,
+      // New H2H insights
+      directBattles: { player1Wins, player2Wins, ties },
+      recentForm: last5Games,
+      distribution: { p1: p1Distribution, p2: p2Distribution },
+      volatility: { p1: p1Volatility, p2: p2Volatility },
     };
   }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
 
@@ -1058,6 +1098,364 @@ const GraphsScreen = () => {
               <span style={{ fontWeight: '700', color: '#3B82F6' }}>
                 {headToHeadData.player2Stats.playerName}
               </span>
+            </div>
+          </div>
+
+          {/* 🏆 DIRECT BATTLES */}
+          <div className="card">
+            <h2 className="card-title mb-2">🏆 Direct Battles</h2>
+            <div style={{ 
+              fontSize: '0.7rem', 
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+              marginBottom: '0.75rem' 
+            }}>
+              Who outperformed the other in shared games?
+            </div>
+            
+            {/* Battle bar visualization */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              gap: '0.5rem',
+              marginBottom: '0.75rem',
+            }}>
+              <span style={{ fontWeight: '700', color: '#10B981', minWidth: '30px', textAlign: 'right' }}>
+                {headToHeadData.directBattles.player1Wins}
+              </span>
+              <div style={{ 
+                flex: 1, 
+                height: '24px', 
+                background: 'var(--surface)',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                display: 'flex',
+              }}>
+                {headToHeadData.sharedGamesCount > 0 && (
+                  <>
+                    <div style={{ 
+                      width: `${(headToHeadData.directBattles.player1Wins / headToHeadData.sharedGamesCount) * 100}%`,
+                      background: '#10B981',
+                      transition: 'width 0.3s ease',
+                    }} />
+                    <div style={{ 
+                      width: `${(headToHeadData.directBattles.ties / headToHeadData.sharedGamesCount) * 100}%`,
+                      background: 'var(--text-muted)',
+                      transition: 'width 0.3s ease',
+                    }} />
+                    <div style={{ 
+                      width: `${(headToHeadData.directBattles.player2Wins / headToHeadData.sharedGamesCount) * 100}%`,
+                      background: '#3B82F6',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </>
+                )}
+              </div>
+              <span style={{ fontWeight: '700', color: '#3B82F6', minWidth: '30px' }}>
+                {headToHeadData.directBattles.player2Wins}
+              </span>
+            </div>
+            
+            {/* Battle stats */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-around',
+              padding: '0.5rem',
+              background: 'var(--surface)',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: '#10B981', fontWeight: '700', fontSize: '1.1rem' }}>
+                  {headToHeadData.sharedGamesCount > 0 
+                    ? Math.round((headToHeadData.directBattles.player1Wins / headToHeadData.sharedGamesCount) * 100) 
+                    : 0}%
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+                  {headToHeadData.directBattles.ties} Ties
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+                  ({headToHeadData.sharedGamesCount > 0 
+                    ? Math.round((headToHeadData.directBattles.ties / headToHeadData.sharedGamesCount) * 100) 
+                    : 0}%)
+                </div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: '#3B82F6', fontWeight: '700', fontSize: '1.1rem' }}>
+                  {headToHeadData.sharedGamesCount > 0 
+                    ? Math.round((headToHeadData.directBattles.player2Wins / headToHeadData.sharedGamesCount) * 100) 
+                    : 0}%
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 🔥 RECENT FORM */}
+          {headToHeadData.recentForm.length > 0 && (
+            <div className="card">
+              <h2 className="card-title mb-2">🔥 Recent Form</h2>
+              <div style={{ 
+                fontSize: '0.7rem', 
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginBottom: '0.75rem' 
+              }}>
+                Last {headToHeadData.recentForm.length} shared games
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {headToHeadData.recentForm.map((game, idx) => (
+                  <div key={idx} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    padding: '0.4rem 0.5rem',
+                    background: 'var(--surface)',
+                    borderRadius: '8px',
+                  }}>
+                    <div style={{ 
+                      flex: 1, 
+                      textAlign: 'right',
+                      fontWeight: '600',
+                      fontSize: '0.85rem',
+                      color: game.p1Profit >= 0 ? 'var(--success)' : 'var(--danger)',
+                    }}>
+                      {game.p1Profit >= 0 ? '+' : ''}₪{cleanNumber(game.p1Profit)}
+                    </div>
+                    <div style={{ 
+                      padding: '0.15rem 0.5rem',
+                      margin: '0 0.5rem',
+                      fontSize: '0.65rem',
+                      color: 'var(--text-muted)',
+                      background: game.winner === 'p1' ? 'rgba(16, 185, 129, 0.2)' 
+                        : game.winner === 'p2' ? 'rgba(59, 130, 246, 0.2)' 
+                        : 'var(--border)',
+                      borderRadius: '4px',
+                      minWidth: '55px',
+                      textAlign: 'center',
+                    }}>
+                      {game.date}
+                    </div>
+                    <div style={{ 
+                      flex: 1, 
+                      textAlign: 'left',
+                      fontWeight: '600',
+                      fontSize: '0.85rem',
+                      color: game.p2Profit >= 0 ? 'var(--success)' : 'var(--danger)',
+                    }}>
+                      {game.p2Profit >= 0 ? '+' : ''}₪{cleanNumber(game.p2Profit)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Recent form summary */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                marginTop: '0.75rem',
+                padding: '0.5rem',
+                borderTop: '1px solid var(--border)',
+                fontSize: '0.75rem',
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#10B981', fontWeight: '700' }}>
+                    {headToHeadData.recentForm.filter(g => g.winner === 'p1').length} wins
+                  </div>
+                </div>
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Last {headToHeadData.recentForm.length}
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: '#3B82F6', fontWeight: '700' }}>
+                    {headToHeadData.recentForm.filter(g => g.winner === 'p2').length} wins
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 📊 SESSION DISTRIBUTION & VOLATILITY */}
+          <div className="card">
+            <h2 className="card-title mb-2">📊 Play Style Comparison</h2>
+            
+            {/* Session Distribution */}
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ 
+                fontSize: '0.7rem', 
+                color: 'var(--text-muted)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+              }}>
+                Session Results Distribution
+              </div>
+              
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {/* Player 1 distribution */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: '600', marginBottom: '0.25rem', textAlign: 'center' }}>
+                    {headToHeadData.player1Stats.playerName}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Win</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.bigWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#10B981',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.bigWin}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Win</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.smallWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#6EE7B7',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.smallWin}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Loss</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.smallLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#FCA5A5',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.smallLoss}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Loss</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p1.bigLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#EF4444',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p1.bigLoss}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Player 2 distribution */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.65rem', color: '#3B82F6', fontWeight: '600', marginBottom: '0.25rem', textAlign: 'center' }}>
+                    {headToHeadData.player2Stats.playerName}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Win</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.bigWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#3B82F6',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.bigWin}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Win</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.smallWin / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#93C5FD',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.smallWin}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Loss</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.smallLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#FCA5A5',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.smallLoss}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', width: '45px' }}>Big Loss</span>
+                      <div style={{ flex: 1, height: '12px', background: 'var(--surface)', borderRadius: '6px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${headToHeadData.sharedGamesCount > 0 ? (headToHeadData.distribution.p2.bigLoss / headToHeadData.sharedGamesCount) * 100 : 0}%`,
+                          height: '100%',
+                          background: '#EF4444',
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.65rem', fontWeight: '600', minWidth: '18px' }}>{headToHeadData.distribution.p2.bigLoss}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Volatility Comparison */}
+            <div style={{ 
+              padding: '0.5rem',
+              background: 'var(--surface)',
+              borderRadius: '8px',
+            }}>
+              <div style={{ 
+                fontSize: '0.7rem', 
+                color: 'var(--text-muted)',
+                marginBottom: '0.5rem',
+                fontWeight: '600',
+                textAlign: 'center',
+              }}>
+                🎲 Volatility (Consistency)
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    fontSize: '1rem', 
+                    fontWeight: '700',
+                    color: headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? '#10B981' : 'var(--text)',
+                  }}>
+                    ₪{cleanNumber(headToHeadData.volatility.p1)}
+                  </div>
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                    {headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? '🎯 More Consistent' : '🎲 More Volatile'}
+                  </div>
+                </div>
+                <div style={{ 
+                  width: '1px', 
+                  background: 'var(--border)',
+                  margin: '0 0.5rem',
+                }} />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ 
+                    fontSize: '1rem', 
+                    fontWeight: '700',
+                    color: headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? '#3B82F6' : 'var(--text)',
+                  }}>
+                    ₪{cleanNumber(headToHeadData.volatility.p2)}
+                  </div>
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                    {headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? '🎯 More Consistent' : '🎲 More Volatile'}
+                  </div>
+                </div>
+              </div>
+              <div style={{ 
+                fontSize: '0.55rem', 
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginTop: '0.4rem',
+              }}>
+                Lower = more consistent results (standard deviation)
+              </div>
             </div>
           </div>
 

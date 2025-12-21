@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.3';
+export const APP_VERSION = '4.16.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.4',
+    date: '2025-12-21',
+    changes: [
+      'H2H: 🏆 Direct Battles - who outperforms whom more often',
+      'H2H: 🔥 Recent Form - last 5 shared games results',
+      'H2H: 📊 Play Style - session distribution (big/small wins/losses)',
+      'H2H: 🎲 Volatility comparison - who is more consistent'
+    ]
+  },
   {
     version: '4.16.3',
     date: '2025-12-21',
