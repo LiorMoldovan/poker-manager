@@ -159,15 +159,25 @@ export const uploadToGitHub = async (
 };
 
 // Get current local data for sync
+// IMPORTANT: Only includes COMPLETED games to prevent test/incomplete games from being synced
 export const getLocalSyncData = (): SyncData => {
-  const players = JSON.parse(localStorage.getItem('poker_players') || '[]');
-  const games = JSON.parse(localStorage.getItem('poker_games') || '[]');
-  const gamePlayers = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+  const players: Player[] = JSON.parse(localStorage.getItem('poker_players') || '[]');
+  const allGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
+  const allGamePlayers: GamePlayer[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+  
+  // Filter to only completed games
+  const completedGames = allGames.filter(g => g.status === 'completed');
+  const completedGameIds = new Set(completedGames.map(g => g.id));
+  
+  // Only include gamePlayers for completed games
+  const completedGamePlayers = allGamePlayers.filter(gp => completedGameIds.has(gp.gameId));
+  
+  console.log(`Sync data: ${completedGames.length} completed games (${allGames.length - completedGames.length} incomplete games excluded)`);
   
   return {
     players,
-    games,
-    gamePlayers,
+    games: completedGames,
+    gamePlayers: completedGamePlayers,
     lastUpdated: new Date().toISOString(),
     updatedBy: 'admin',
   };

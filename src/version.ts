@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.15.0';
+export const APP_VERSION = '4.15.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.15.1',
+    date: '2025-12-21',
+    changes: [
+      'Sync Protection: Only COMPLETED games are uploaded to cloud',
+      'Incomplete/live games stay local and won\'t be synced',
+      'Removed 7 stale incomplete games from cloud data'
+    ]
+  },
   {
     version: '4.15.0',
     date: '2025-12-21',
