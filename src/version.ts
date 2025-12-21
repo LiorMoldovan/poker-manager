@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.0';
+export const APP_VERSION = '4.16.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.1',
+    date: '2025-12-21',
+    changes: [
+      'NEW: Monthly Profit bar chart in Graphs 📊',
+      'Shows profit/loss per month with green/red bars',
+      'Includes Best Month, Worst Month, and Average stats'
+    ]
+  },
   {
     version: '4.16.0',
     date: '2025-12-21',
