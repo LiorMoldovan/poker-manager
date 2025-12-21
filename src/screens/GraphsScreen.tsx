@@ -1490,6 +1490,24 @@ const GraphsScreen = () => {
                 Session Results Distribution
               </div>
               
+              {/* Legend */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                gap: '0.75rem', 
+                marginBottom: '0.5rem',
+                padding: '0.35rem',
+                background: 'var(--surface)',
+                borderRadius: '6px',
+                fontSize: '0.55rem',
+                color: 'var(--text-muted)',
+              }}>
+                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;₪200</span>
+                <span><span style={{ color: '#6EE7B7' }}>■</span> Win ₪1-200</span>
+                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss ₪1-200</span>
+                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;₪200</span>
+              </div>
+              
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 {/* Player 1 distribution */}
                 <div style={{ flex: 1 }}>
