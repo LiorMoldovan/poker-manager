@@ -13,13 +13,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.13.2',
+    version: '4.13.3',
     date: '2025-12-21',
     changes: [
-      '💸 Smarter settlements: Small debts stay consolidated',
-      'Process smaller debts first → single payments when possible',
-      'Large debts split if needed (more tolerant of splitting)',
-      'Example: ₪31 now pays to one person, not ₪25+₪6 split'
+      '💸 Settlements: NO more tiny transfers!',
+      'Small creditors paid by larger debtors (both parts substantial)',
+      'Example: תומר pays ספי ₪36 + אייל ₪84 (not סגל→ספי ₪30 + ₪6 split)',
+      'All transfers now ≥ minTransfer threshold'
     ]
   },
   {

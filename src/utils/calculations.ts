@@ -22,9 +22,10 @@ export const calculateSettlement = (
   players: GamePlayer[],
   minTransfer: number
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
-  // Optimized settlement algorithm that minimizes split payments
-  // Key insight: Process SMALLER debts first so they can be paid in full to a single creditor
-  // Larger debts are more tolerant of being split
+  // Optimized settlement algorithm that AVOIDS small transfers
+  // Key insight: When splitting is needed, ensure BOTH parts are >= minTransfer
+  // Strategy: For small creditors, use a larger debtor who can pay them fully
+  // with a substantial remainder for the main creditor
   
   const balances = players
     .filter(p => Math.abs(p.profit) > 0.001) // Filter out zero balances
@@ -55,52 +56,64 @@ export const calculateSettlement = (
     }
   }
 
-  // Step 2: Assign smaller debts first to avoid splitting them
-  // Sort debtors by SMALLEST debt first - protect small debts from being split
-  let creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
-  let debtors = balances.filter(b => b.balance < -0.001)
-    .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance)); // Smallest first!
+  // Step 2: Process creditors from SMALLEST to LARGEST
+  // For small creditors, find a larger debtor who can pay them completely
+  // This avoids creating small "leftover" payments
+  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => a.balance - b.balance);
+  const debtors = balances.filter(b => b.balance < -0.001);
 
-  for (const debtor of debtors) {
-    if (Math.abs(debtor.balance) < 0.001) continue;
-    
-    // Find a creditor who can accept this entire debt (no split needed)
-    const suitableCreditor = creditors.find(c => c.balance >= Math.abs(debtor.balance) - 0.001);
-    
-    if (suitableCreditor) {
-      const amount = Math.abs(debtor.balance);
-      allTransfers.push({ from: debtor.name, to: suitableCreditor.name, amount });
-      suitableCreditor.balance -= amount;
-      debtor.balance = 0;
+  for (const creditor of creditors) {
+    while (creditor.balance > 0.001) {
+      // FIRST PRIORITY: Find a debtor who can pay the FULL remaining creditor amount
+      // AND whose remainder after paying would also be >= minTransfer (avoiding small splits)
+      const goodSplitDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .filter(d => Math.abs(d.balance) >= creditor.balance + minTransfer) // Can pay full + substantial remainder
+        .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance))[0]; // Smallest that qualifies
+      
+      if (goodSplitDebtor) {
+        const amount = creditor.balance;
+        allTransfers.push({ from: goodSplitDebtor.name, to: creditor.name, amount });
+        goodSplitDebtor.balance += amount; // Reduce debt (balance is negative)
+        creditor.balance = 0;
+        continue;
+      }
+      
+      // SECOND PRIORITY: Find a debtor whose ENTIRE debt fits within creditor's remaining need
+      // (No split needed for this debtor - they pay their full amount)
+      const perfectFitDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .filter(d => Math.abs(d.balance) <= creditor.balance + 0.001)
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))[0]; // Largest that fits
+      
+      if (perfectFitDebtor) {
+        const amount = Math.abs(perfectFitDebtor.balance);
+        allTransfers.push({ from: perfectFitDebtor.name, to: creditor.name, amount });
+        creditor.balance -= amount;
+        perfectFitDebtor.balance = 0;
+        continue;
+      }
+      
+      // FALLBACK: No ideal option - use standard greedy matching
+      // This may create small transfers, but we tried to avoid them
+      const anyDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .sort((a, b) => a.balance - b.balance)[0]; // Largest debt first
+      
+      if (anyDebtor) {
+        const amount = Math.min(creditor.balance, Math.abs(anyDebtor.balance));
+        if (amount > 0.001) {
+          allTransfers.push({ from: anyDebtor.name, to: creditor.name, amount });
+          creditor.balance -= amount;
+          anyDebtor.balance += amount;
+        }
+      } else {
+        break; // No more debtors
+      }
     }
   }
 
-  // Step 3: Handle remaining balances (these require splits - process largest debts)
-  // Re-filter and sort: largest debts first (they're more tolerant of splitting)
-  debtors = balances.filter(d => d.balance < -0.001).sort((a, b) => a.balance - b.balance);
-  creditors = balances.filter(c => c.balance > 0.001).sort((a, b) => b.balance - a.balance);
-  
-  let creditorIdx = 0;
-  let debtorIdx = 0;
-
-  while (creditorIdx < creditors.length && debtorIdx < debtors.length) {
-    const creditor = creditors[creditorIdx];
-    const debtor = debtors[debtorIdx];
-
-    const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
-
-    if (amount > 0.001) {
-      allTransfers.push({ from: debtor.name, to: creditor.name, amount });
-    }
-
-    creditor.balance -= amount;
-    debtor.balance += amount;
-
-    if (creditor.balance <= 0.001) creditorIdx++;
-    if (debtor.balance >= -0.001) debtorIdx++;
-  }
-
-  // Separate into regular settlements and small transfers (no duplicates)
+  // Separate into regular settlements and small transfers
   const settlements = allTransfers.filter(t => t.amount >= minTransfer);
   const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
 
