@@ -80,52 +80,82 @@ const LiveGameScreen = () => {
     );
   }
 
-  // Cash register sound variations - all money/register related
+  // Cash drawer opening sound - mechanical slide + click
   const playCashSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        const playTone = (frequency: number, startTime: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.4) => {
+        // Create noise for mechanical sliding sound
+        const createNoise = (duration: number, startTime: number, volume: number) => {
+          const bufferSize = audioContext.sampleRate * duration;
+          const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+          const data = buffer.getChannelData(0);
+          
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * 0.5;
+          }
+          
+          const noise = audioContext.createBufferSource();
+          noise.buffer = buffer;
+          
+          // Low-pass filter for rumble effect
+          const filter = audioContext.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.value = 400;
+          
+          const gainNode = audioContext.createGain();
+          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.02);
+          gainNode.gain.linearRampToValueAtTime(volume * 0.7, audioContext.currentTime + startTime + duration * 0.8);
+          gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+          
+          noise.connect(filter);
+          filter.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          noise.start(audioContext.currentTime + startTime);
+          noise.stop(audioContext.currentTime + startTime + duration);
+        };
+        
+        // Mechanical click sound
+        const playClick = (freq: number, startTime: number, duration: number, volume: number) => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
           
           oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
           
-          oscillator.frequency.value = frequency;
-          oscillator.type = type;
+          oscillator.frequency.value = freq;
+          oscillator.type = 'square';
           
-          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.01);
+          gainNode.gain.setValueAtTime(volume, audioContext.currentTime + startTime);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
           
           oscillator.start(audioContext.currentTime + startTime);
           oscillator.stop(audioContext.currentTime + startTime + duration);
         };
         
-        // Random cash register sound variant
+        // Random variant of drawer opening
         const variant = Math.floor(Math.random() * 3);
         
         if (variant === 0) {
-          // Classic ka-ching (drawer opening + bell)
-          playTone(1200, 0, 0.06, 'square', 0.3);      // Drawer click
-          playTone(2800, 0.07, 0.15, 'triangle', 0.5); // Bell ring
-          playTone(3500, 0.08, 0.12, 'sine', 0.3);     // High overtone
+          // Drawer slide + click
+          createNoise(0.15, 0, 0.4);      // Drawer sliding
+          playClick(200, 0.14, 0.05, 0.5); // Drawer hits stop
+          playClick(150, 0.16, 0.03, 0.3); // Secondary click
         } else if (variant === 1) {
-          // Coins sound (multiple metallic clinks)
-          playTone(3800, 0, 0.04, 'triangle', 0.35);
-          playTone(4200, 0.05, 0.04, 'triangle', 0.3);
-          playTone(3600, 0.10, 0.04, 'triangle', 0.35);
-          playTone(4000, 0.15, 0.05, 'sine', 0.25);
+          // Quick drawer pop
+          playClick(180, 0, 0.02, 0.4);   // Button click
+          createNoise(0.12, 0.02, 0.35);  // Drawer slides
+          playClick(220, 0.13, 0.04, 0.45); // Stop click
         } else {
-          // Cash register bell (ding-ding)
-          playTone(2200, 0, 0.12, 'sine', 0.5);
-          playTone(2750, 0.02, 0.10, 'triangle', 0.3);
-          playTone(2200, 0.18, 0.10, 'sine', 0.4);
+          // Smooth drawer
+          createNoise(0.18, 0, 0.35);     // Longer slide
+          playClick(170, 0.17, 0.04, 0.4); // Soft stop
         }
         
-        setTimeout(resolve, 280);
+        setTimeout(resolve, 250);
       } catch (e) {
         console.log('Could not play cash sound:', e);
         resolve();
@@ -227,7 +257,7 @@ const LiveGameScreen = () => {
 
   // Text-to-speech for buyin announcements - ALL HEBREW
   const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean) => {
-    // Play cash register sound first
+    // Play cash drawer opening sound first
     await playCashSound();
     
     if ('speechSynthesis' in window) {
@@ -235,20 +265,20 @@ const LiveGameScreen = () => {
       
       // Get available voices and prefer Hebrew male voice
       const voices = window.speechSynthesis.getVoices();
-      // Try to find a male Hebrew voice (usually has "male" in name or is default)
       const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('male')) 
         || voices.find(v => v.lang.startsWith('he'))
         || null;
       
-      // Build the full Hebrew message
-      // Use "קָנָה" with niqqud for better pronunciation (sounds like "kana")
-      const buyAction = isHalfBuyin ? 'קנה חצי' : 'קנה';
+      // Check if total has half (0.5) - use tolerance for floating point
+      const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
+      const whole = Math.floor(totalBuyins);
       
-      // Format total: show as "אחד וחצי" for 1.5, "שניים וחצי" for 2.5, etc.
+      // Hebrew numbers for speech
+      const hebrewNumbers = ['אפס', 'אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+      
+      // Format total in Hebrew
       let totalText: string;
-      if (totalBuyins % 1 === 0.5) {
-        const whole = Math.floor(totalBuyins);
-        const hebrewNumbers = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+      if (hasHalf) {
         if (whole === 0) {
           totalText = 'חצי';
         } else if (whole <= 10) {
@@ -257,17 +287,25 @@ const LiveGameScreen = () => {
           totalText = `${whole} וחצי`;
         }
       } else {
-        totalText = String(totalBuyins);
+        if (whole <= 10) {
+          totalText = hebrewNumbers[whole];
+        } else {
+          totalText = String(whole);
+        }
       }
       
+      // Use phonetic spelling for better pronunciation
+      // "נכנס" (entered/joined) instead of "קנה" which TTS struggles with
+      const buyAction = isHalfBuyin ? 'נכנס בחצי' : 'נכנס';
+      
       const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
-      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
+      const fullMessage = `${playerName} ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
       
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
       if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.95; // Slightly slower for clarity
-      utterance.pitch = 0.9; // Slightly lower for male sound
+      utterance.rate = 0.9;  // Slower for clarity
+      utterance.pitch = 0.85; // Lower for male sound
       utterance.volume = 1;
       
       window.speechSynthesis.speak(utterance);
