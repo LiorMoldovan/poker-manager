@@ -171,8 +171,8 @@ function App() {
             <Route path="/game/:gameId" element={<GameDetailsScreen />} />
             <Route path="/statistics" element={<StatisticsScreen />} />
             <Route path="/settings" element={<SettingsScreen />} />
-            {/* Admin-only graphs page */}
-            {role === 'admin' && <Route path="/graphs" element={<GraphsScreen />} />}
+            {/* Graphs page - admin and member only */}
+            {(role === 'admin' || role === 'member') && <Route path="/graphs" element={<GraphsScreen />} />}
             {/* Catch-all route - redirect unknown URLs to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

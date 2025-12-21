@@ -4,7 +4,7 @@ import { usePermissions } from '../App';
 const Navigation = () => {
   const { role, hasPermission } = usePermissions();
   const canCreateGame = hasPermission('game:create');
-  const isAdmin = role === 'admin';
+  const canViewGraphs = role === 'admin' || role === 'member';
 
   return (
     <nav className="bottom-nav">
@@ -22,7 +22,7 @@ const Navigation = () => {
         <span className="nav-icon">📈</span>
         <span>Statistics</span>
       </NavLink>
-      {isAdmin && (
+      {canViewGraphs && (
         <NavLink to="/graphs" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <span className="nav-icon">📊</span>
           <span>Graphs</span>
