@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.13.5';
+export const APP_VERSION = '4.14.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.14.0',
+    date: '2025-12-21',
+    changes: [
+      '🔄 NEW: Resume interrupted games!',
+      'If app closes mid-game, see "המשך משחק" banner on home',
+      'Auto-save chip counts during entry (no data loss!)',
+      'Option to abandon incomplete game if needed',
+      'Works for both Live Game and Chip Entry stages'
+    ]
+  },
   {
     version: '4.13.3',
     date: '2025-12-21',

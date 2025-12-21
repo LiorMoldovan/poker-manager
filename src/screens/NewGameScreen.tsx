@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { Player, PlayerType, PlayerStats, GameForecast } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame } from '../database/storage';
+import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult } from '../utils/geminiAI';
@@ -40,16 +40,49 @@ const NewGameScreen = () => {
     removedPlayers: string[];
     pendingDate: string;
   } | null>(null);
+  const [activeGame, setActiveGame] = useState<Game | null>(null);
+  const [activeGamePlayers, setActiveGamePlayers] = useState<string[]>([]);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadPlayers();
+    checkForActiveGame();
     // Cleanup timer on unmount
     return () => {
       if (retryTimerRef.current) clearInterval(retryTimerRef.current);
     };
   }, []);
+
+  const checkForActiveGame = () => {
+    const active = getActiveGame();
+    if (active) {
+      setActiveGame(active);
+      const gamePlayers = getGamePlayers(active.id);
+      setActiveGamePlayers(gamePlayers.map(gp => gp.playerName));
+    } else {
+      setActiveGame(null);
+      setActiveGamePlayers([]);
+    }
+  };
+
+  const handleResumeGame = () => {
+    if (!activeGame) return;
+    if (activeGame.status === 'live') {
+      navigate(`/live-game/${activeGame.id}`);
+    } else if (activeGame.status === 'chip_entry') {
+      navigate(`/chip-entry/${activeGame.id}`);
+    }
+  };
+
+  const handleAbandonGame = () => {
+    if (!activeGame) return;
+    deleteGame(activeGame.id);
+    setActiveGame(null);
+    setActiveGamePlayers([]);
+    setShowAbandonConfirm(false);
+  };
 
   const loadPlayers = () => {
     setPlayers(getAllPlayers());
@@ -1133,6 +1166,77 @@ const NewGameScreen = () => {
 
   return (
     <div className="fade-in">
+      {/* Resume Active Game Banner */}
+      {activeGame && (
+        <div style={{
+          background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+          borderRadius: '12px',
+          padding: '1rem',
+          marginBottom: '1rem',
+          boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: '700', color: 'white', fontSize: '1rem' }}>
+                משחק פעיל נמצא!
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem' }}>
+                {activeGame.status === 'live' ? 'שלב: משחק חי (buyins)' : 'שלב: ספירת צ\'יפים'}
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.75rem', marginBottom: '0.75rem' }}>
+            <div style={{ marginBottom: '0.25rem' }}>
+              📅 {new Date(activeGame.createdAt).toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div>
+              👥 {activeGamePlayers.slice(0, 4).join(', ')}{activeGamePlayers.length > 4 ? ` +${activeGamePlayers.length - 4}` : ''}
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={handleResumeGame}
+              style={{
+                flex: 2,
+                background: 'white',
+                color: '#D97706',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.6rem 1rem',
+                fontWeight: '700',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              ▶️ המשך משחק
+            </button>
+            <button
+              onClick={() => setShowAbandonConfirm(true)}
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: '8px',
+                padding: '0.6rem',
+                fontWeight: '600',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              🗑️ בטל
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>New Game</h1>
         {permanentPlayers.length > 0 && (
@@ -1895,6 +1999,54 @@ const NewGameScreen = () => {
                 style={{ flex: 1 }}
               >
                 {isSharing ? '📸...' : '📤 שתף'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Abandon Game Confirmation Modal */}
+      {showAbandonConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '320px',
+            width: '100%',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🗑️</div>
+            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>לבטל את המשחק?</h3>
+            <p style={{ marginBottom: '1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              כל הנתונים של המשחק הזה יימחקו לצמיתות.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setShowAbandonConfirm(false)}
+                style={{ flex: 1 }}
+              >
+                חזור
+              </button>
+              <button 
+                className="btn btn-danger"
+                onClick={handleAbandonGame}
+                style={{ flex: 1 }}
+              >
+                🗑️ בטל משחק
               </button>
             </div>
           </div>

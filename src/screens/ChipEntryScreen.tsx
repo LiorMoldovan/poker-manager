@@ -241,6 +241,24 @@ const ChipEntryScreen = () => {
     }
   }, [gameId]);
 
+  // Auto-save chip counts to localStorage whenever they change (debounced)
+  useEffect(() => {
+    if (isLoading || Object.keys(chipCounts).length === 0) return;
+    
+    // Debounce: save after 500ms of no changes
+    const saveTimeout = setTimeout(() => {
+      players.forEach(player => {
+        const playerChips = chipCounts[player.id] || {};
+        // Only save if there are any non-zero chip counts
+        if (Object.values(playerChips).some(v => v > 0)) {
+          updateGamePlayerChips(player.id, playerChips);
+        }
+      });
+    }, 500);
+
+    return () => clearTimeout(saveTimeout);
+  }, [chipCounts, players, isLoading]);
+
   const loadData = () => {
     if (!gameId) {
       setGameNotFound(true);

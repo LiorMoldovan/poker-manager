@@ -175,6 +175,15 @@ export const getGame = (id: string): Game | undefined => {
   return getAllGames().find(g => g.id === id);
 };
 
+// Get active game (live or chip_entry status) - returns the most recent one if multiple exist
+export const getActiveGame = (): Game | undefined => {
+  const games = getAllGames();
+  const activeGames = games.filter(g => g.status === 'live' || g.status === 'chip_entry');
+  if (activeGames.length === 0) return undefined;
+  // Return the most recent one (by createdAt)
+  return activeGames.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+};
+
 export const createGame = (playerIds: string[], location?: string, forecasts?: { playerName: string; expectedProfit: number; sentence?: string }[]): Game => {
   const games = getAllGames();
   const players = getAllPlayers();
