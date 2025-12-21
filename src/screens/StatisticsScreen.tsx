@@ -355,6 +355,46 @@ const StatisticsScreen = () => {
   // Minimum games threshold = 33% of total games in period
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
 
+  // Calculate previous rankings (before the last game in period) for movement indicator
+  const previousRankings = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    if (allGames.length < 2) return new Map<string, number>();
+    
+    // Get the last game ID to exclude
+    const lastGameId = allGames[0].id;
+    const allGamePlayers = getAllGamePlayers();
+    
+    // Calculate profits excluding the last game
+    const profitMap = new Map<string, number>();
+    for (const gp of allGamePlayers) {
+      if (gp.gameId === lastGameId) continue; // Skip last game
+      const game = allGames.find(g => g.id === gp.gameId);
+      if (!game) continue;
+      const current = profitMap.get(gp.playerId) || 0;
+      profitMap.set(gp.playerId, current + gp.profit);
+    }
+    
+    // Sort by profit to get rankings
+    const sorted = [...profitMap.entries()]
+      .sort((a, b) => b[1] - a[1]);
+    
+    const rankMap = new Map<string, number>();
+    sorted.forEach(([playerId], index) => {
+      rankMap.set(playerId, index + 1);
+    });
+    
+    return rankMap;
+  }, [timePeriod, selectedYear, stats]);
+
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
     filterActiveOnly ? stats.filter(s => s.gamesPlayed >= activeThreshold) : stats,
@@ -762,7 +802,7 @@ const StatisticsScreen = () => {
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
                   <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
                     שחקנים פעילים בלבד
-                  </span>
+                </span>
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                     ({activeThreshold}+ משחקים)
                   </span>
@@ -1423,18 +1463,23 @@ const StatisticsScreen = () => {
                   {filterActiveOnly && ' • שחקנים פעילים'}
                 </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
+                <thead>
+                  <tr>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
                       <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
                       <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
                       <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
                       <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedStats.map((player, index) => (
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedStats.map((player, index) => {
+                    const currentRank = index + 1;
+                    const prevRank = previousRankings.get(player.playerId);
+                    const movement = prevRank ? prevRank - currentRank : 0; // positive = moved up
+                    
+                    return (
                       <tr 
                         key={player.playerId}
                         onClick={() => showPlayerGames(player)}
@@ -1442,33 +1487,45 @@ const StatisticsScreen = () => {
                         onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = ''}
                       >
-                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>{index + 1}</td>
+                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px' }}>
+                          {currentRank}
+                          {movement !== 0 && (
+                            <span style={{ 
+                              fontSize: '0.6rem', 
+                              marginLeft: '2px',
+                              color: movement > 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {movement > 0 ? '↑' : '↓'}{Math.abs(movement) > 1 ? Math.abs(movement) : ''}
+                            </span>
+                          )}
+                        </td>
                         <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
                           {player.playerName}
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                             sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
-                        </td>
+                      </td>
                         <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
                           {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
-                        </td>
+                      </td>
                         <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
                           {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
                         </td>
                         <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
-                        <td style={{ 
-                          textAlign: 'center',
+                      <td style={{ 
+                        textAlign: 'center',
                           padding: '0.3rem 0.2rem',
                           whiteSpace: 'nowrap',
-                          color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
-                          fontWeight: '600'
-                        }}>
+                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                        fontWeight: '600'
+                      }}>
                           {Math.round(player.winPercentage)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
                 <button
                   onClick={handleShareTable}
@@ -1810,8 +1867,8 @@ const StatisticsScreen = () => {
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎰 Total Buyins</div>
                   <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
                 </div>
-              </div>
-            </div>
+                  </div>
+                </div>
           ))}
 
           </>
@@ -1853,7 +1910,7 @@ const StatisticsScreen = () => {
               <div>
                 <h3 style={{ margin: 0, fontSize: '1rem' }}>{recordDetails.title}</h3>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{recordDetails.playerName}</div>
-              </div>
+                  </div>
               <button 
                 onClick={() => setRecordDetails(null)}
                 style={{ 
@@ -1866,11 +1923,11 @@ const StatisticsScreen = () => {
               >
                 ×
               </button>
-            </div>
+                </div>
             
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               {recordDetails.games.length} משחקים
-            </div>
+              </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {recordDetails.games.map((game, idx) => (
@@ -1926,8 +1983,8 @@ const StatisticsScreen = () => {
                   }}>
                     {game.profit > 0 ? '+' : ''}{formatCurrency(game.profit)}
                   </span>
-                </div>
-              ))}
+            </div>
+          ))}
             </div>
             
             {recordDetails.games.length === 0 && (
