@@ -144,8 +144,8 @@ const LiveGameScreen = () => {
     
     // Quick rebuy messages (< 5 min since last)
     const quickMessages = [
-      'חזר מהר',
-      'עוד אחד',
+      'חזרת מהר',
+      'אני לא רוצה לראות אותך שוב כל כך מהר',
     ];
     
     // Messages by REBUY number (not total)
@@ -154,10 +154,10 @@ const LiveGameScreen = () => {
         // First rebuy - encouraging
         'הכל יהיה בסדר',
         'עכשיו מתחילים ברצינות',
-        'בוא נהפוך את זה',
+        'לא נורא אני מאמין שהערב ישתפר',
         'עוד הזדמנות',
         'הפעם זה יעבוד',
-        'קדימה, יאללה',
+        'תזכור שזה על כסף אמיתי',
       ],
       2: [
         // Second rebuy - still positive
