@@ -65,6 +65,7 @@ const GraphsScreen = () => {
     return currentMonth <= 6 ? 'h1' : 'h2';
   });
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
   
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
@@ -131,12 +132,16 @@ const GraphsScreen = () => {
           return gameDate >= new Date(year, 6, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
         case 'year':
           return gameDate >= new Date(year, 0, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
+        case 'month':
+          const monthIndex = selectedMonth - 1;
+          const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+          return gameDate >= new Date(year, monthIndex, 1) && gameDate <= new Date(year, monthIndex, lastDay, 23, 59, 59);
         case 'all':
         default:
           return true;
       }
     });
-  }, [allGames, timePeriod, selectedYear]);
+  }, [allGames, timePeriod, selectedYear, selectedMonth]);
 
   const getPlayerName = useCallback((playerId: string): string => {
     const player = players.find(p => p.id === playerId);
@@ -287,6 +292,37 @@ const GraphsScreen = () => {
     };
   }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
 
+  // Monthly profit data - aggregates all selected players' profits by month
+  const monthlyData = useMemo(() => {
+    const monthlyTotals: Record<string, { month: string; profit: number; games: number; sortKey: string }> = {};
+    
+    // Hebrew month names
+    const hebrewMonths = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
+    
+    filteredGames.forEach(game => {
+      const gameDate = new Date(game.date);
+      const monthKey = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = `${hebrewMonths[gameDate.getMonth()]} ${gameDate.getFullYear().toString().slice(-2)}`;
+      
+      if (!monthlyTotals[monthKey]) {
+        monthlyTotals[monthKey] = { month: monthLabel, profit: 0, games: 0, sortKey: monthKey };
+      }
+      
+      // Sum up profits from selected players only
+      selectedPlayers.forEach(playerId => {
+        const gp = gamePlayers.find(g => g.gameId === game.id && g.playerId === playerId);
+        if (gp) {
+          monthlyTotals[monthKey].profit += gp.profit;
+        }
+      });
+      
+      monthlyTotals[monthKey].games++;
+    });
+    
+    // Sort by date and return array
+    return Object.values(monthlyTotals).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  }, [filteredGames, gamePlayers, selectedPlayers]);
+
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
     setSelectedPlayers(prev => {
@@ -325,6 +361,10 @@ const GraphsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'month') {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
+    }
     return '';
   };
 
@@ -408,14 +448,14 @@ const GraphsScreen = () => {
         {showTimePeriod && (
           <>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-              {(['all', 'year', 'h1', 'h2'] as TimePeriod[]).map(period => (
+              {(['all', 'year', 'h1', 'h2', 'month'] as TimePeriod[]).map(period => (
                 <button
                   key={period}
                   type="button"
                   onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod(period); }}
                   style={{
                     flex: 1,
-                    minWidth: '50px',
+                    minWidth: '45px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
@@ -425,12 +465,12 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {period === 'all' ? 'הכל' : period === 'year' ? 'שנה' : period.toUpperCase()}
+                  {period === 'all' ? 'הכל' : period === 'year' ? 'שנה' : period === 'month' ? 'חודש' : period.toUpperCase()}
                 </button>
               ))}
             </div>
             {timePeriod !== 'all' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
                 <select
                   value={selectedYear}
@@ -450,6 +490,42 @@ const GraphsScreen = () => {
                     <option key={year} value={year}>{year}</option>
                   ))}
                 </select>
+                {timePeriod === 'month' && (
+                  <>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      style={{
+                        padding: '0.25rem 0.4rem',
+                        fontSize: '0.7rem',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                        minWidth: '70px'
+                      }}
+                    >
+                      {[
+                        { value: 1, label: 'ינואר' },
+                        { value: 2, label: 'פברואר' },
+                        { value: 3, label: 'מרץ' },
+                        { value: 4, label: 'אפריל' },
+                        { value: 5, label: 'מאי' },
+                        { value: 6, label: 'יוני' },
+                        { value: 7, label: 'יולי' },
+                        { value: 8, label: 'אוגוסט' },
+                        { value: 9, label: 'ספטמבר' },
+                        { value: 10, label: 'אוקטובר' },
+                        { value: 11, label: 'נובמבר' },
+                        { value: 12, label: 'דצמבר' },
+                      ].map(month => (
+                        <option key={month.value} value={month.value}>{month.label}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
                 <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                   {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
                   {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
@@ -460,8 +536,8 @@ const GraphsScreen = () => {
         )}
       </div>
 
-      {/* Player Selector (for Cumulative view) */}
-      {viewMode === 'cumulative' && (
+      {/* Player Selector (for Cumulative and Monthly views) */}
+      {(viewMode === 'cumulative' || viewMode === 'monthly') && (
         <div className="card" style={{ padding: '0.75rem' }}>
           <button
             type="button"

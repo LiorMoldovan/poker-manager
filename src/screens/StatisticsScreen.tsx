@@ -68,6 +68,10 @@ const StatisticsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'month') {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
+    }
     return '';
   };
 
@@ -359,7 +363,7 @@ const StatisticsScreen = () => {
       return true;
     });
     return games.length;
-  }, [timePeriod, selectedYear]);
+  }, [timePeriod, selectedYear, selectedMonth]);
 
   // Minimum games threshold = 33% of total games in period
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
@@ -424,7 +428,7 @@ const StatisticsScreen = () => {
     });
     
     return rankMap;
-  }, [timePeriod, selectedYear, stats, selectedTypes, filterActiveOnly, getPlayerType]);
+  }, [timePeriod, selectedYear, selectedMonth, stats, selectedTypes, filterActiveOnly, getPlayerType]);
 
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
@@ -962,10 +966,27 @@ const StatisticsScreen = () => {
                 >
                   H2
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('month'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'month' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'month' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'month' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  חודש
+                </button>
               </div>
               {/* Year Selector - only show when not "all" */}
               {timePeriod !== 'all' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
                   <select
                     value={selectedYear}
@@ -985,6 +1006,42 @@ const StatisticsScreen = () => {
                       <option key={year} value={year}>{year}</option>
                     ))}
                   </select>
+                  {timePeriod === 'month' && (
+                    <>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                        style={{
+                          padding: '0.25rem 0.4rem',
+                          fontSize: '0.7rem',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface)',
+                          color: 'var(--text)',
+                          cursor: 'pointer',
+                          minWidth: '70px'
+                        }}
+                      >
+                        {[
+                          { value: 1, label: 'ינואר' },
+                          { value: 2, label: 'פברואר' },
+                          { value: 3, label: 'מרץ' },
+                          { value: 4, label: 'אפריל' },
+                          { value: 5, label: 'מאי' },
+                          { value: 6, label: 'יוני' },
+                          { value: 7, label: 'יולי' },
+                          { value: 8, label: 'אוגוסט' },
+                          { value: 9, label: 'ספטמבר' },
+                          { value: 10, label: 'אוקטובר' },
+                          { value: 11, label: 'נובמבר' },
+                          { value: 12, label: 'דצמבר' },
+                        ].map(month => (
+                          <option key={month.value} value={month.value}>{month.label}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                     {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
                     {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
@@ -1489,7 +1546,8 @@ const StatisticsScreen = () => {
                   📊 {timePeriod === 'all' ? 'כל הזמנים' : 
                       timePeriod === 'year' ? `שנת ${selectedYear}` :
                       timePeriod === 'h1' ? `H1 ${selectedYear} (ינו׳-יוני׳)` :
-                      `H2 ${selectedYear} (יולי׳-דצמ׳)`}
+                      timePeriod === 'h2' ? `H2 ${selectedYear} (יולי׳-דצמ׳)` :
+                      `${['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][selectedMonth - 1]} ${selectedYear}`}
                   {' • '}{totalGamesInPeriod} משחקים
                   {filterActiveOnly && ' • שחקנים פעילים'}
                 </div>
@@ -1747,7 +1805,7 @@ const StatisticsScreen = () => {
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
-                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear } });
+                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
                             window.scrollTo(0, 0);
                           }}
                         >

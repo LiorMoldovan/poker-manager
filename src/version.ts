@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.15.1';
+export const APP_VERSION = '4.16.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.0',
+    date: '2025-12-21',
+    changes: [
+      'NEW: Month filter in Statistics and Graphs 📅',
+      'Filter data by specific month (in addition to H1/H2/Year)',
+      'Select any month from any year for detailed analysis'
+    ]
+  },
   {
     version: '4.15.1',
     date: '2025-12-21',
