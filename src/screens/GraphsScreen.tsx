@@ -13,7 +13,7 @@ import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/stora
 import { cleanNumber } from '../utils/calculations';
 
 type ViewMode = 'cumulative' | 'headToHead';
-type TimePeriod = 'all' | 'h1' | 'h2' | 'year';
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
 
 // Color palette for players - stable mapping by player ID
 const PLAYER_COLORS = [

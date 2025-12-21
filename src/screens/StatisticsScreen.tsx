@@ -5,7 +5,7 @@ import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
-type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'custom';
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
 
 const StatisticsScreen = () => {
   const navigate = useNavigate();
@@ -16,12 +16,14 @@ const StatisticsScreen = () => {
     playerInfo?: { playerId: string; playerName: string };
     timePeriod?: TimePeriod;
     selectedYear?: number;
+    selectedMonth?: number;
   } | null;
   const initialViewMode = locationState?.viewMode || 'table';
   const savedRecordInfo = locationState?.recordInfo;
   const savedPlayerInfo = locationState?.playerInfo;
   const savedTimePeriod = locationState?.timePeriod;
   const savedSelectedYear = locationState?.selectedYear;
+  const savedSelectedMonth = locationState?.selectedMonth;
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -37,6 +39,7 @@ const StatisticsScreen = () => {
     return currentMonth <= 6 ? 'h1' : 'h2';
   });
   const [selectedYear, setSelectedYear] = useState<number>(savedSelectedYear || new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(savedSelectedMonth || new Date().getMonth() + 1); // 1-12
   const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
@@ -252,7 +255,6 @@ const StatisticsScreen = () => {
 
   // Get date filter based on time period
   const getDateFilter = (): { start?: Date; end?: Date } | undefined => {
-    const now = new Date();
     const year = selectedYear;
     
     switch (timePeriod) {
@@ -271,6 +273,13 @@ const StatisticsScreen = () => {
           start: new Date(year, 0, 1),
           end: new Date(year, 11, 31, 23, 59, 59)
         };
+      case 'month': // Specific month
+        const monthIndex = selectedMonth - 1; // Convert 1-12 to 0-11
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate(); // Get last day of month
+        return {
+          start: new Date(year, monthIndex, 1),
+          end: new Date(year, monthIndex, lastDay, 23, 59, 59)
+        };
       case 'all':
       default:
         return undefined;
@@ -279,7 +288,7 @@ const StatisticsScreen = () => {
 
   useEffect(() => {
     loadStats();
-  }, [timePeriod, selectedYear]);
+  }, [timePeriod, selectedYear, selectedMonth]);
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);
@@ -878,7 +887,7 @@ const StatisticsScreen = () => {
                 }}
               >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  📅 TIME PERIOD {timePeriod !== 'all' ? `(${timePeriod === 'year' ? selectedYear : timePeriod.toUpperCase() + ' ' + selectedYear})` : '(הכל)'}
+                  📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
                 </span>
                 <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
               </button>

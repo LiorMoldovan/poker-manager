@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame } from '../database/storage';
@@ -15,6 +15,9 @@ const LiveGameScreen = () => {
   const [rebuyValue, setRebuyValue] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
+  
+  // Track last rebuy time per player for quick rebuy detection
+  const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (gameId) {
@@ -76,9 +79,6 @@ const LiveGameScreen = () => {
       </div>
     );
   }
-
-  // Track last rebuy time per player for quick rebuy detection
-  const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
 
   // Play cash register / money sound
   const playCashSound = (): Promise<void> => {
