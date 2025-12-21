@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.14.1';
+export const APP_VERSION = '4.14.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,13 +13,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.14.2',
+    date: '2025-12-21',
+    changes: [
+      'Graphs: Fixed tooltip - now shows in a panel below the chart instead of overlaying it',
+      'Graphs: Tap any point on the chart to see detailed values'
+    ]
+  },
+  {
     version: '4.14.1',
     date: '2025-12-21',
     changes: [
       'Graphs: Removed Race chart (wasn\'t useful)',
       'Graphs: Added time period filter (H1/H2/Year/All)',
       'Graphs: Player names in legend match their line colors',
-      'Graphs: Tooltip now appears at top (not on graph)',
       'Graphs: Stable color assignment per player'
     ]
   },

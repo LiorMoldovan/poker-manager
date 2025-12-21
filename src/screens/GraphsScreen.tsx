@@ -5,7 +5,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
@@ -58,6 +57,9 @@ const GraphsScreen = () => {
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
   const [showTimePeriod, setShowTimePeriod] = useState(false);
+  
+  // Selected point for showing details below graph
+  const [selectedPoint, setSelectedPoint] = useState<CumulativeDataPoint | null>(null);
   
   // Time period filter
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
@@ -316,6 +318,17 @@ const GraphsScreen = () => {
     return '';
   };
 
+  // Handle chart click to select a data point
+  const handleChartClick = (data: any) => {
+    if (data && data.activePayload && data.activePayload.length > 0) {
+      const gameIndex = data.activeLabel;
+      const point = cumulativeData.find(d => d.gameIndex === gameIndex);
+      if (point) {
+        setSelectedPoint(point);
+      }
+    }
+  };
+
   // Custom Legend component with colored names
   const CustomLegend = () => (
     <div style={{ 
@@ -350,42 +363,72 @@ const GraphsScreen = () => {
     </div>
   );
 
-  // Custom tooltip - positioned below graph
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
+  // Selected point details panel (shown below the graph)
+  const SelectedPointDetails = () => {
+    if (!selectedPoint) return null;
     
-    const sortedPayload = [...payload].sort((a, b) => (b.value || 0) - (a.value || 0));
-    const dataPoint = cumulativeData.find(d => d.gameIndex === label);
-    
+    // Get player values and sort by cumulative profit
+    const playerValues = sortedPlayerIds.map(playerId => {
+      const playerName = getPlayerName(playerId);
+      return {
+        playerId,
+        playerName,
+        value: selectedPoint[playerName] as number,
+        color: getPlayerColor(playerId),
+      };
+    }).sort((a, b) => b.value - a.value);
+
     return (
       <div style={{
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
+        background: 'var(--surface)',
         borderRadius: '8px',
-        padding: '0.5rem 0.75rem',
-        fontSize: '0.75rem',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        maxWidth: '200px',
+        padding: '0.75rem',
+        marginTop: '0.5rem',
       }}>
-        <div style={{ fontWeight: '600', marginBottom: '0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-          Game {label} • {dataPoint?.date}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '0.5rem',
+        }}>
+          <span style={{ fontWeight: '600', color: 'var(--text)', fontSize: '0.8rem' }}>
+            Game {selectedPoint.gameIndex} • {selectedPoint.date}
+          </span>
+          <button
+            onClick={() => setSelectedPoint(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              padding: '0',
+            }}
+          >
+            ✕
+          </button>
         </div>
-        {sortedPayload.map((entry: any, index: number) => (
-          <div key={index} style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            gap: '0.75rem',
-            padding: '0.1rem 0',
-          }}>
-            <span style={{ color: entry.color, fontWeight: '500' }}>{entry.name}</span>
-            <span style={{ 
-              fontWeight: '600',
-              color: entry.value >= 0 ? 'var(--success)' : 'var(--danger)'
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {playerValues.map(({ playerId, playerName, value, color }) => (
+            <div key={playerId} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              padding: '0.25rem 0.5rem',
+              background: `${color}15`,
+              borderRadius: '12px',
+              fontSize: '0.75rem',
             }}>
-              {entry.value >= 0 ? '+' : ''}₪{cleanNumber(entry.value)}
-            </span>
-          </div>
-        ))}
+              <span style={{ color, fontWeight: '600' }}>{playerName}</span>
+              <span style={{ 
+                fontWeight: '700',
+                color: value >= 0 ? 'var(--success)' : 'var(--danger)'
+              }}>
+                {value >= 0 ? '+' : ''}₪{cleanNumber(value)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -629,7 +672,7 @@ const GraphsScreen = () => {
             textAlign: 'center',
             marginBottom: '0.5rem' 
           }}>
-            {getTimeframeLabel()} • {filteredGames.length} games
+            {getTimeframeLabel()} • {filteredGames.length} games • Tap chart to see details
           </div>
           <div style={{ 
             width: '100%', 
@@ -637,7 +680,11 @@ const GraphsScreen = () => {
             marginLeft: '-10px',
           }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cumulativeData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+              <LineChart 
+                data={cumulativeData} 
+                margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                onClick={handleChartClick}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
                 <XAxis 
                   dataKey="gameIndex" 
@@ -653,11 +700,6 @@ const GraphsScreen = () => {
                   axisLine={false}
                 />
                 <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                <Tooltip 
-                  content={<CustomTooltip />}
-                  position={{ y: 0 }}
-                  wrapperStyle={{ zIndex: 100 }}
-                />
                 {sortedPlayerIds.map((playerId) => (
                   <Line
                     key={playerId}
@@ -666,13 +708,14 @@ const GraphsScreen = () => {
                     stroke={getPlayerColor(playerId)}
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
                   />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
           <CustomLegend />
+          <SelectedPointDetails />
         </div>
       )}
 
@@ -941,11 +984,6 @@ const GraphsScreen = () => {
                       axisLine={false}
                     />
                     <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                    <Tooltip 
-                      content={<CustomTooltip />}
-                      position={{ y: 0 }}
-                      wrapperStyle={{ zIndex: 100 }}
-                    />
                     <Line
                       type="monotone"
                       dataKey={headToHeadData.player1Stats.playerName}
