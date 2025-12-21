@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.5';
+export const APP_VERSION = '4.16.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.6',
+    date: '2025-12-21',
+    changes: [
+      'Fixed: H2H blank screen (restored cumulative comparison chart)',
+      'Profit: Added 🔥 Streaks & Recent Form visualization',
+      'Shows current streak, best/worst streaks, last 5 game results (W/L/T)'
+    ]
+  },
   {
     version: '4.16.5',
     date: '2025-12-21',

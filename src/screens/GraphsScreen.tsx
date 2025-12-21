@@ -190,6 +190,68 @@ const GraphsScreen = () => {
     return data;
   }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName]);
 
+  // Win streak data - for each player, show their current and best streaks
+  const streakData = useMemo(() => {
+    const playerStreaks: Array<{
+      playerId: string;
+      playerName: string;
+      color: string;
+      currentStreak: number;
+      bestWinStreak: number;
+      bestLossStreak: number;
+      last5: ('W' | 'L' | 'T')[];
+    }> = [];
+
+    sortedPlayerIds.forEach(playerId => {
+      const playerGames = filteredGames
+        .map(game => gamePlayers.find(gp => gp.gameId === game.id && gp.playerId === playerId))
+        .filter(Boolean) as GamePlayer[];
+
+      let currentStreak = 0;
+      let bestWinStreak = 0;
+      let bestLossStreak = 0;
+      let tempWinStreak = 0;
+      let tempLossStreak = 0;
+      const results: ('W' | 'L' | 'T')[] = [];
+
+      playerGames.forEach((gp, idx) => {
+        const result = gp.profit > 0 ? 'W' : gp.profit < 0 ? 'L' : 'T';
+        results.push(result);
+
+        if (result === 'W') {
+          tempWinStreak++;
+          tempLossStreak = 0;
+          bestWinStreak = Math.max(bestWinStreak, tempWinStreak);
+        } else if (result === 'L') {
+          tempLossStreak++;
+          tempWinStreak = 0;
+          bestLossStreak = Math.max(bestLossStreak, tempLossStreak);
+        } else {
+          tempWinStreak = 0;
+          tempLossStreak = 0;
+        }
+
+        // Track current streak at the end
+        if (idx === playerGames.length - 1) {
+          if (tempWinStreak > 0) currentStreak = tempWinStreak;
+          else if (tempLossStreak > 0) currentStreak = -tempLossStreak;
+        }
+      });
+
+      playerStreaks.push({
+        playerId,
+        playerName: getPlayerName(playerId),
+        color: getPlayerColor(playerId),
+        currentStreak,
+        bestWinStreak,
+        bestLossStreak,
+        last5: results.slice(-5),
+      });
+    });
+
+    return playerStreaks;
+  }, [filteredGames, gamePlayers, sortedPlayerIds, getPlayerName, getPlayerColor]);
+
   // Head-to-head comparison data
   const headToHeadData = useMemo(() => {
     if (!player1Id || !player2Id) return null;
@@ -317,6 +379,39 @@ const GraphsScreen = () => {
     // Last 5 games only
     const last5Games = recentGames.slice(-5);
 
+    // Cumulative data for shared games (for the chart)
+    const cumulativeComparison: Array<{
+      gameIndex: number;
+      date: string;
+      [key: string]: string | number;
+    }> = [];
+    
+    let p1Cumulative = 0;
+    let p2Cumulative = 0;
+    let gameIdx = 0;
+
+    sharedGamesOrdered.forEach(game => {
+      gameIdx++;
+      const p1Game = player1Games.find(g => g.gameId === game.id);
+      const p2Game = player2Games.find(g => g.gameId === game.id);
+      
+      if (p1Game) p1Cumulative += p1Game.profit;
+      if (p2Game) p2Cumulative += p2Game.profit;
+
+      const dateStr = new Date(game.date).toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: '2-digit' 
+      });
+
+      cumulativeComparison.push({
+        gameIndex: gameIdx,
+        date: dateStr,
+        [player1Stats.playerName]: p1Cumulative,
+        [player2Stats.playerName]: p2Cumulative,
+      });
+    });
+
     return {
       player1Stats,
       player2Stats,
@@ -324,6 +419,7 @@ const GraphsScreen = () => {
       totalGamesInPeriod: filteredGames.length,
       player1TotalGames,
       player2TotalGames,
+      cumulativeComparison,
       // New H2H insights
       directBattles: { player1Wins, player2Wins, ties },
       recentForm: last5Games,
@@ -759,6 +855,107 @@ const GraphsScreen = () => {
             </ResponsiveContainer>
           </div>
           <CustomLegend />
+        </div>
+      )}
+
+      {/* 🔥 STREAKS & FORM */}
+      {viewMode === 'cumulative' && streakData.length > 0 && (
+        <div className="card">
+          <h2 className="card-title mb-2">🔥 Streaks & Recent Form</h2>
+          <div style={{ 
+            fontSize: '0.7rem', 
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            marginBottom: '0.75rem' 
+          }}>
+            Current momentum and best streaks
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {streakData.map(player => (
+              <div key={player.playerId} style={{ 
+                padding: '0.5rem',
+                background: 'var(--surface)',
+                borderRadius: '8px',
+                borderLeft: `3px solid ${player.color}`,
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '0.4rem',
+                }}>
+                  <span style={{ fontWeight: '600', color: player.color, fontSize: '0.85rem' }}>
+                    {player.playerName}
+                  </span>
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}>
+                    {player.currentStreak !== 0 && (
+                      <span style={{ 
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '10px',
+                        fontSize: '0.7rem',
+                        fontWeight: '700',
+                        background: player.currentStreak > 0 
+                          ? 'rgba(16, 185, 129, 0.2)' 
+                          : 'rgba(239, 68, 68, 0.2)',
+                        color: player.currentStreak > 0 ? '#10B981' : '#EF4444',
+                      }}>
+                        {player.currentStreak > 0 ? '🔥' : '❄️'} {Math.abs(player.currentStreak)} game streak
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  {/* Last 5 games */}
+                  <div style={{ display: 'flex', gap: '0.2rem' }}>
+                    {player.last5.map((result, idx) => (
+                      <div key={idx} style={{ 
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.65rem',
+                        fontWeight: '700',
+                        background: result === 'W' ? '#10B981' : result === 'L' ? '#EF4444' : 'var(--border)',
+                        color: result === 'T' ? 'var(--text-muted)' : 'white',
+                      }}>
+                        {result}
+                      </div>
+                    ))}
+                    {player.last5.length === 0 && (
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>No games</span>
+                    )}
+                  </div>
+                  
+                  {/* Best streaks */}
+                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.65rem' }}>
+                    <span style={{ color: '#10B981' }}>
+                      Best: {player.bestWinStreak}W
+                    </span>
+                    <span style={{ color: '#EF4444' }}>
+                      Worst: {player.bestLossStreak}L
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{ 
+            fontSize: '0.6rem', 
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            marginTop: '0.5rem',
+          }}>
+            W = Win (profit &gt; 0) • L = Loss (profit &lt; 0) • T = Tie (break even)
+          </div>
         </div>
       )}
 
