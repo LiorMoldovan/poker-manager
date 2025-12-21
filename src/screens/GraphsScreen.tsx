@@ -277,8 +277,8 @@ const GraphsScreen = () => {
         else if (p2Game.profit > p1Game.profit) player2Wins++;
         else ties++;
         
-        // Session distribution (big = >200, small = <=200)
-        const threshold = 200;
+        // Session distribution (big = >150, small = <=150)
+        const threshold = 150;
         if (p1Game.profit > threshold) p1Distribution.bigWin++;
         else if (p1Game.profit > 0) p1Distribution.smallWin++;
         else if (p1Game.profit >= -threshold) p1Distribution.smallLoss++;
@@ -1502,10 +1502,10 @@ const GraphsScreen = () => {
                 fontSize: '0.55rem',
                 color: 'var(--text-muted)',
               }}>
-                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;₪200</span>
-                <span><span style={{ color: '#6EE7B7' }}>■</span> Win ₪1-200</span>
-                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss ₪1-200</span>
-                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;₪200</span>
+                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;₪150</span>
+                <span><span style={{ color: '#6EE7B7' }}>■</span> Win ₪1-150</span>
+                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss ₪1-150</span>
+                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;₪150</span>
               </div>
               
               <div style={{ display: 'flex', gap: '0.5rem' }}>

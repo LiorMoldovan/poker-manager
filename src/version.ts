@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.13';
+export const APP_VERSION = '4.16.14';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.14',
+    date: '2025-12-21',
+    changes: [
+      'H2H: Changed Big Win/Loss threshold from ₪200 to ₪150'
+    ]
+  },
   {
     version: '4.16.13',
     date: '2025-12-21',
