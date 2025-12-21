@@ -6,19 +6,17 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceLine,
-  BarChart,
-  Bar,
 } from 'recharts';
 import { Player, PlayerType, Game, GamePlayer } from '../types';
-import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats } from '../database/storage';
+import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 
-type ViewMode = 'cumulative' | 'headToHead' | 'leaderboardRace';
+type ViewMode = 'cumulative' | 'headToHead';
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year';
 
-// Color palette for players
+// Color palette for players - stable mapping by player ID
 const PLAYER_COLORS = [
   '#10B981', // Green
   '#3B82F6', // Blue
@@ -41,12 +39,6 @@ interface CumulativeDataPoint {
   [playerName: string]: string | number;
 }
 
-interface RaceDataPoint {
-  gameIndex: number;
-  date: string;
-  [playerName: string]: string | number;
-}
-
 interface HeadToHeadStat {
   playerName: string;
   totalProfit: number;
@@ -61,34 +53,50 @@ interface HeadToHeadStat {
 const GraphsScreen = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('cumulative');
   const [players, setPlayers] = useState<Player[]>([]);
-  const [games, setGames] = useState<Game[]>([]);
+  const [allGames, setAllGames] = useState<Game[]>([]);
   const [gamePlayers, setGamePlayers] = useState<GamePlayer[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
-  const [animationProgress, setAnimationProgress] = useState(100);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [showTimePeriod, setShowTimePeriod] = useState(false);
+  
+  // Time period filter
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
+    const currentMonth = new Date().getMonth() + 1;
+    return currentMonth <= 6 ? 'h1' : 'h2';
+  });
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
   const [player2Id, setPlayer2Id] = useState<string>('');
+
+  // Color mapping - stable by player order in permanent list
+  const playerColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const permanentPlayers = players.filter(p => p.type === 'permanent');
+    permanentPlayers.forEach((player, index) => {
+      map.set(player.id, PLAYER_COLORS[index % PLAYER_COLORS.length]);
+    });
+    return map;
+  }, [players]);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = () => {
-    const allPlayers = getAllPlayers();
-    const allGames = getAllGames()
+    const allPlayersData = getAllPlayers();
+    const allGamesData = getAllGames()
       .filter(g => g.status === 'completed')
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const allGamePlayers = getAllGamePlayers();
+    const allGamePlayersData = getAllGamePlayers();
     
-    setPlayers(allPlayers);
-    setGames(allGames);
-    setGamePlayers(allGamePlayers);
+    setPlayers(allPlayersData);
+    setAllGames(allGamesData);
+    setGamePlayers(allGamePlayersData);
     
     // Default: select all permanent players
-    const permanentPlayerIds = allPlayers
+    const permanentPlayerIds = allPlayersData
       .filter(p => p.type === 'permanent')
       .map(p => p.id);
     setSelectedPlayers(new Set(permanentPlayerIds));
@@ -100,19 +108,44 @@ const GraphsScreen = () => {
     }
   };
 
-  const getPlayerType = useCallback((playerId: string): PlayerType => {
-    const player = players.find(p => p.id === playerId);
-    return player?.type || 'permanent';
-  }, [players]);
+  // Get available years
+  const getAvailableYears = (): number[] => {
+    const years: number[] = [];
+    const now = new Date();
+    for (let y = now.getFullYear(); y >= 2021; y--) {
+      years.push(y);
+    }
+    return years;
+  };
+
+  // Filter games by time period
+  const filteredGames = useMemo(() => {
+    return allGames.filter(game => {
+      const gameDate = new Date(game.date);
+      const year = selectedYear;
+      
+      switch (timePeriod) {
+        case 'h1':
+          return gameDate >= new Date(year, 0, 1) && gameDate <= new Date(year, 5, 30, 23, 59, 59);
+        case 'h2':
+          return gameDate >= new Date(year, 6, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
+        case 'year':
+          return gameDate >= new Date(year, 0, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
+        case 'all':
+        default:
+          return true;
+      }
+    });
+  }, [allGames, timePeriod, selectedYear]);
 
   const getPlayerName = useCallback((playerId: string): string => {
     const player = players.find(p => p.id === playerId);
     return player?.name || 'Unknown';
   }, [players]);
 
-  const getPlayerColor = useCallback((playerId: string, index: number): string => {
-    return PLAYER_COLORS[index % PLAYER_COLORS.length];
-  }, []);
+  const getPlayerColor = useCallback((playerId: string): string => {
+    return playerColorMap.get(playerId) || '#888888';
+  }, [playerColorMap]);
 
   // Calculate cumulative profit data
   const cumulativeData: CumulativeDataPoint[] = useMemo(() => {
@@ -124,7 +157,7 @@ const GraphsScreen = () => {
       playerCumulatives[playerId] = 0;
     });
 
-    games.forEach((game, gameIndex) => {
+    filteredGames.forEach((game, gameIndex) => {
       const gameDate = new Date(game.date);
       const dateStr = gameDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
       
@@ -150,64 +183,15 @@ const GraphsScreen = () => {
     });
 
     return data;
-  }, [games, gamePlayers, selectedPlayers, getPlayerName]);
-
-  // Calculate leaderboard race data (with rankings)
-  const raceData: RaceDataPoint[] = useMemo(() => {
-    const data: RaceDataPoint[] = [];
-    const playerCumulatives: Record<string, number> = {};
-    
-    // Initialize all selected players with 0
-    selectedPlayers.forEach(playerId => {
-      playerCumulatives[playerId] = 0;
-    });
-
-    games.forEach((game, gameIndex) => {
-      const gameDate = new Date(game.date);
-      const dateStr = gameDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
-      
-      // Update cumulative for each selected player
-      selectedPlayers.forEach(playerId => {
-        const gp = gamePlayers.find(
-          g => g.gameId === game.id && g.playerId === playerId
-        );
-        if (gp) {
-          playerCumulatives[playerId] += gp.profit;
-        }
-      });
-
-      // Calculate ranks based on cumulative profit
-      const sortedPlayers = Array.from(selectedPlayers)
-        .map(playerId => ({
-          playerId,
-          cumulative: playerCumulatives[playerId],
-        }))
-        .sort((a, b) => b.cumulative - a.cumulative);
-
-      const dataPoint: RaceDataPoint = {
-        gameIndex: gameIndex + 1,
-        date: dateStr,
-      };
-
-      sortedPlayers.forEach((player, rank) => {
-        const playerName = getPlayerName(player.playerId);
-        // Use rank (lower is better) for the Y axis
-        dataPoint[playerName] = rank + 1;
-      });
-
-      data.push(dataPoint);
-    });
-
-    return data;
-  }, [games, gamePlayers, selectedPlayers, getPlayerName]);
+  }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName]);
 
   // Head-to-head comparison data
   const headToHeadData = useMemo(() => {
     if (!player1Id || !player2Id) return null;
 
-    // Find games where both players participated
+    // Find games where both players participated (filtered by time period)
     const sharedGameIds = new Set<string>();
-    games.forEach(game => {
+    filteredGames.forEach(game => {
       const p1Played = gamePlayers.some(gp => gp.gameId === game.id && gp.playerId === player1Id);
       const p2Played = gamePlayers.some(gp => gp.gameId === game.id && gp.playerId === player2Id);
       if (p1Played && p2Played) {
@@ -259,7 +243,7 @@ const GraphsScreen = () => {
     let p2Cumulative = 0;
     let gameIdx = 0;
 
-    games
+    filteredGames
       .filter(g => sharedGameIds.has(g.id))
       .forEach(game => {
         gameIdx++;
@@ -283,33 +267,13 @@ const GraphsScreen = () => {
         });
       });
 
-    // Bar chart data
-    const comparisonBars = [
-      { 
-        metric: 'Total Profit', 
-        [player1Stats.playerName]: player1Stats.totalProfit,
-        [player2Stats.playerName]: player2Stats.totalProfit,
-      },
-      { 
-        metric: 'Avg/Game', 
-        [player1Stats.playerName]: player1Stats.avgProfit,
-        [player2Stats.playerName]: player2Stats.avgProfit,
-      },
-      { 
-        metric: 'Biggest Win', 
-        [player1Stats.playerName]: player1Stats.biggestWin,
-        [player2Stats.playerName]: player2Stats.biggestWin,
-      },
-    ];
-
     return {
       player1Stats,
       player2Stats,
       sharedGamesCount: sharedGameIds.size,
       cumulativeComparison,
-      comparisonBars,
     };
-  }, [player1Id, player2Id, games, gamePlayers, getPlayerName]);
+  }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -334,35 +298,7 @@ const GraphsScreen = () => {
     setSelectedPlayers(new Set(permanentIds));
   };
 
-  // Start race animation
-  const startRaceAnimation = () => {
-    setIsAnimating(true);
-    setAnimationProgress(0);
-    
-    const duration = 5000; // 5 seconds
-    const steps = 100;
-    const stepDuration = duration / steps;
-    let currentStep = 0;
-
-    const interval = setInterval(() => {
-      currentStep++;
-      setAnimationProgress(currentStep);
-      
-      if (currentStep >= steps) {
-        clearInterval(interval);
-        setIsAnimating(false);
-      }
-    }, stepDuration);
-  };
-
-  // Animated race data
-  const animatedRaceData = useMemo(() => {
-    if (!isAnimating && animationProgress === 100) return raceData;
-    const endIndex = Math.ceil((animationProgress / 100) * raceData.length);
-    return raceData.slice(0, endIndex);
-  }, [raceData, animationProgress, isAnimating]);
-
-  // Get sorted players for current view
+  // Get sorted players for current view - sorted by name
   const sortedPlayerIds = useMemo(() => {
     return Array.from(selectedPlayers).sort((a, b) => {
       const aName = getPlayerName(a);
@@ -371,68 +307,83 @@ const GraphsScreen = () => {
     });
   }, [selectedPlayers, getPlayerName]);
 
-  // Custom tooltip for cumulative chart
-  const CumulativeTooltip = ({ active, payload, label }: any) => {
+  // Get timeframe label
+  const getTimeframeLabel = () => {
+    if (timePeriod === 'all') return 'All Time';
+    if (timePeriod === 'year') return `${selectedYear}`;
+    if (timePeriod === 'h1') return `H1 ${selectedYear}`;
+    if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    return '';
+  };
+
+  // Custom Legend component with colored names
+  const CustomLegend = () => (
+    <div style={{ 
+      display: 'flex', 
+      flexWrap: 'wrap', 
+      justifyContent: 'center',
+      gap: '0.5rem',
+      padding: '0.5rem 0',
+      marginTop: '0.5rem',
+    }}>
+      {sortedPlayerIds.map(playerId => (
+        <div key={playerId} style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '0.25rem',
+          fontSize: '0.7rem',
+        }}>
+          <div style={{ 
+            width: '8px', 
+            height: '8px', 
+            borderRadius: '50%', 
+            background: getPlayerColor(playerId) 
+          }} />
+          <span style={{ 
+            color: getPlayerColor(playerId), 
+            fontWeight: '600' 
+          }}>
+            {getPlayerName(playerId)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Custom tooltip - positioned below graph
+  const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     
     const sortedPayload = [...payload].sort((a, b) => (b.value || 0) - (a.value || 0));
+    const dataPoint = cumulativeData.find(d => d.gameIndex === label);
     
     return (
       <div style={{
         background: 'var(--card)',
         border: '1px solid var(--border)',
         borderRadius: '8px',
-        padding: '0.75rem',
-        fontSize: '0.8rem',
+        padding: '0.5rem 0.75rem',
+        fontSize: '0.75rem',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        maxWidth: '200px',
       }}>
-        <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>
-          Game {label}
+        <div style={{ fontWeight: '600', marginBottom: '0.35rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+          Game {label} • {dataPoint?.date}
         </div>
         {sortedPayload.map((entry: any, index: number) => (
           <div key={index} style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
-            gap: '1rem',
-            padding: '0.15rem 0',
+            gap: '0.75rem',
+            padding: '0.1rem 0',
           }}>
-            <span style={{ color: entry.color }}>{entry.name}</span>
+            <span style={{ color: entry.color, fontWeight: '500' }}>{entry.name}</span>
             <span style={{ 
               fontWeight: '600',
               color: entry.value >= 0 ? 'var(--success)' : 'var(--danger)'
             }}>
               {entry.value >= 0 ? '+' : ''}₪{cleanNumber(entry.value)}
             </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // Custom tooltip for race chart
-  const RaceTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload?.length) return null;
-    
-    const sortedPayload = [...payload].sort((a, b) => (a.value || 0) - (b.value || 0));
-    
-    return (
-      <div style={{
-        background: 'var(--card)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        padding: '0.75rem',
-        fontSize: '0.8rem',
-      }}>
-        <div style={{ fontWeight: '600', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>
-          Game {label}
-        </div>
-        {sortedPayload.map((entry: any, index: number) => (
-          <div key={index} style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            gap: '1rem',
-            padding: '0.15rem 0',
-          }}>
-            <span style={{ color: entry.color }}>#{entry.value} {entry.name}</span>
           </div>
         ))}
       </div>
@@ -448,33 +399,97 @@ const GraphsScreen = () => {
 
       {/* View Mode Toggle */}
       <div className="card" style={{ padding: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
             className={`btn btn-sm ${viewMode === 'cumulative' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('cumulative')}
-            style={{ flex: 1, minWidth: '80px' }}
+            style={{ flex: 1 }}
           >
             📈 Profit
           </button>
           <button 
             className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('headToHead')}
-            style={{ flex: 1, minWidth: '80px' }}
+            style={{ flex: 1 }}
           >
-            🆚 H2H
-          </button>
-          <button 
-            className={`btn btn-sm ${viewMode === 'leaderboardRace' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('leaderboardRace')}
-            style={{ flex: 1, minWidth: '80px' }}
-          >
-            🏁 Race
+            🆚 Head-to-Head
           </button>
         </div>
       </div>
 
-      {/* Player Selector (for Cumulative and Race views) */}
-      {(viewMode === 'cumulative' || viewMode === 'leaderboardRace') && (
+      {/* Time Period Filter */}
+      <div className="card" style={{ padding: '0.75rem' }}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
+          style={{ 
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+            marginBottom: showTimePeriod ? '0.5rem' : 0
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+            📅 TIME PERIOD ({getTimeframeLabel()})
+          </span>
+          <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
+        </button>
+        {showTimePeriod && (
+          <>
+            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              {(['all', 'year', 'h1', 'h2'] as TimePeriod[]).map(period => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod(period); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === period ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === period ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === period ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {period === 'all' ? 'הכל' : period === 'year' ? 'שנה' : period.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {timePeriod !== 'all' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  style={{
+                    padding: '0.25rem 0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                    minWidth: '60px'
+                  }}
+                >
+                  {getAvailableYears().map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
+                  {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Player Selector (for Cumulative view) */}
+      {viewMode === 'cumulative' && (
         <div className="card" style={{ padding: '0.75rem' }}>
           <button
             type="button"
@@ -516,14 +531,15 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  Permanent Only
+                  Select All
                 </button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                 {players
                   .filter(p => p.type === 'permanent')
-                  .map((player, index) => {
+                  .map((player) => {
                     const isSelected = selectedPlayers.has(player.id);
+                    const color = getPlayerColor(player.id);
                     return (
                       <button
                         type="button"
@@ -533,15 +549,15 @@ const GraphsScreen = () => {
                           padding: '0.4rem 0.65rem',
                           borderRadius: '16px',
                           border: isSelected 
-                            ? `2px solid ${getPlayerColor(player.id, index)}` 
+                            ? `2px solid ${color}` 
                             : '2px solid var(--border)',
                           background: isSelected 
-                            ? `${getPlayerColor(player.id, index)}22` 
+                            ? `${color}22` 
                             : 'var(--surface)',
                           cursor: 'pointer',
                           fontSize: '0.8rem',
                           fontWeight: '600',
-                          color: isSelected ? getPlayerColor(player.id, index) : 'var(--text-muted)',
+                          color: isSelected ? color : 'var(--text-muted)',
                           transition: 'all 0.15s ease'
                         }}
                       >
@@ -608,8 +624,16 @@ const GraphsScreen = () => {
         <div className="card">
           <h2 className="card-title mb-2">📈 Cumulative Profit Over Time</h2>
           <div style={{ 
+            fontSize: '0.7rem', 
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            marginBottom: '0.5rem' 
+          }}>
+            {getTimeframeLabel()} • {filteredGames.length} games
+          </div>
+          <div style={{ 
             width: '100%', 
-            height: '350px',
+            height: '320px',
             marginLeft: '-10px',
           }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -629,103 +653,26 @@ const GraphsScreen = () => {
                   axisLine={false}
                 />
                 <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                <Tooltip content={<CumulativeTooltip />} />
-                <Legend 
-                  wrapperStyle={{ fontSize: '0.7rem', paddingTop: '10px' }}
-                  iconType="circle"
-                  iconSize={8}
+                <Tooltip 
+                  content={<CustomTooltip />}
+                  position={{ y: 0 }}
+                  wrapperStyle={{ zIndex: 100 }}
                 />
-                {sortedPlayerIds.map((playerId, index) => (
+                {sortedPlayerIds.map((playerId) => (
                   <Line
                     key={playerId}
                     type="monotone"
                     dataKey={getPlayerName(playerId)}
-                    stroke={getPlayerColor(playerId, index)}
+                    stroke={getPlayerColor(playerId)}
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 4 }}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
                   />
                 ))}
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ 
-            textAlign: 'center', 
-            fontSize: '0.7rem', 
-            color: 'var(--text-muted)',
-            marginTop: '0.5rem' 
-          }}>
-            {games.length} games • X-axis: Game # • Y-axis: Cumulative Profit
-          </div>
-        </div>
-      )}
-
-      {/* LEADERBOARD RACE CHART */}
-      {viewMode === 'leaderboardRace' && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>🏁 Leaderboard Race</h2>
-            <button
-              onClick={startRaceAnimation}
-              disabled={isAnimating}
-              className="btn btn-sm btn-primary"
-              style={{ opacity: isAnimating ? 0.5 : 1 }}
-            >
-              {isAnimating ? '🏃 Racing...' : '▶️ Replay'}
-            </button>
-          </div>
-          <div style={{ 
-            width: '100%', 
-            height: '350px',
-            marginLeft: '-10px',
-          }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={animatedRaceData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-                <XAxis 
-                  dataKey="gameIndex" 
-                  stroke="var(--text-muted)" 
-                  fontSize={10}
-                  tickLine={false}
-                />
-                <YAxis 
-                  stroke="var(--text-muted)" 
-                  fontSize={10}
-                  reversed
-                  domain={[1, selectedPlayers.size]}
-                  ticks={Array.from({ length: selectedPlayers.size }, (_, i) => i + 1)}
-                  tickFormatter={(value) => `#${value}`}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip content={<RaceTooltip />} />
-                <Legend 
-                  wrapperStyle={{ fontSize: '0.7rem', paddingTop: '10px' }}
-                  iconType="circle"
-                  iconSize={8}
-                />
-                {sortedPlayerIds.map((playerId, index) => (
-                  <Line
-                    key={playerId}
-                    type="stepAfter"
-                    dataKey={getPlayerName(playerId)}
-                    stroke={getPlayerColor(playerId, index)}
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{ 
-            textAlign: 'center', 
-            fontSize: '0.7rem', 
-            color: 'var(--text-muted)',
-            marginTop: '0.5rem' 
-          }}>
-            Lower is better • #1 = Leader • Based on cumulative profit ranking
-          </div>
+          <CustomLegend />
         </div>
       )}
 
@@ -741,7 +688,7 @@ const GraphsScreen = () => {
               marginBottom: '0.75rem',
               textAlign: 'center' 
             }}>
-              Based on {headToHeadData.sharedGamesCount} shared games
+              {getTimeframeLabel()} • {headToHeadData.sharedGamesCount} shared games
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -971,7 +918,7 @@ const GraphsScreen = () => {
               <h2 className="card-title mb-2">📈 Cumulative Comparison</h2>
               <div style={{ 
                 width: '100%', 
-                height: '300px',
+                height: '280px',
                 marginLeft: '-10px',
               }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -994,11 +941,10 @@ const GraphsScreen = () => {
                       axisLine={false}
                     />
                     <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                    <Tooltip content={<CumulativeTooltip />} />
-                    <Legend 
-                      wrapperStyle={{ fontSize: '0.8rem', paddingTop: '10px' }}
-                      iconType="circle"
-                      iconSize={8}
+                    <Tooltip 
+                      content={<CustomTooltip />}
+                      position={{ y: 0 }}
+                      wrapperStyle={{ zIndex: 100 }}
                     />
                     <Line
                       type="monotone"
@@ -1019,11 +965,32 @@ const GraphsScreen = () => {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+              {/* Custom Legend for H2H */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center',
+                gap: '1.5rem',
+                padding: '0.5rem 0',
+                marginTop: '0.5rem',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10B981' }} />
+                  <span style={{ color: '#10B981', fontWeight: '600', fontSize: '0.8rem' }}>
+                    {headToHeadData.player1Stats.playerName}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3B82F6' }} />
+                  <span style={{ color: '#3B82F6', fontWeight: '600', fontSize: '0.8rem' }}>
+                    {headToHeadData.player2Stats.playerName}
+                  </span>
+                </div>
+              </div>
               <div style={{ 
                 textAlign: 'center', 
-                fontSize: '0.7rem', 
+                fontSize: '0.65rem', 
                 color: 'var(--text-muted)',
-                marginTop: '0.5rem' 
+                marginTop: '0.25rem' 
               }}>
                 Only includes games where both players participated
               </div>
@@ -1033,12 +1000,12 @@ const GraphsScreen = () => {
       )}
 
       {/* Empty State */}
-      {games.length === 0 && (
+      {filteredGames.length === 0 && (
         <div className="card">
           <div className="empty-state">
             <div className="empty-icon">📊</div>
-            <p>No data yet</p>
-            <p className="text-muted">Complete some games to see graphs</p>
+            <p>No data for this period</p>
+            <p className="text-muted">Try a different time filter</p>
           </div>
         </div>
       )}
@@ -1047,4 +1014,3 @@ const GraphsScreen = () => {
 };
 
 export default GraphsScreen;
-
