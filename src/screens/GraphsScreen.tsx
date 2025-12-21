@@ -189,6 +189,15 @@ const GraphsScreen = () => {
   const headToHeadData = useMemo(() => {
     if (!player1Id || !player2Id) return null;
 
+    // Count total games each player played in the filtered period
+    const filteredGameIds = new Set(filteredGames.map(g => g.id));
+    const player1TotalGames = gamePlayers.filter(
+      gp => gp.playerId === player1Id && filteredGameIds.has(gp.gameId)
+    ).length;
+    const player2TotalGames = gamePlayers.filter(
+      gp => gp.playerId === player2Id && filteredGameIds.has(gp.gameId)
+    ).length;
+
     // Find games where both players participated (filtered by time period)
     const sharedGameIds = new Set<string>();
     filteredGames.forEach(game => {
@@ -271,6 +280,9 @@ const GraphsScreen = () => {
       player1Stats,
       player2Stats,
       sharedGamesCount: sharedGameIds.size,
+      totalGamesInPeriod: filteredGames.length,
+      player1TotalGames,
+      player2TotalGames,
       cumulativeComparison,
     };
   }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
@@ -646,7 +658,7 @@ const GraphsScreen = () => {
               marginBottom: '0.75rem',
               textAlign: 'center' 
             }}>
-              {getTimeframeLabel()} • {headToHeadData.sharedGamesCount} shared games
+              {getTimeframeLabel()} • {headToHeadData.sharedGamesCount} shared games (out of {headToHeadData.totalGamesInPeriod})
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

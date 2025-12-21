@@ -43,12 +43,6 @@
       "type": "permanent"
     },
     {
-      "id": "p9",
-      "name": "אסף",
-      "createdAt": "2025-12-18T18:15:46.489Z",
-      "type": "permanent"
-    },
-    {
       "id": "5c6c9fd8-b8c1-4500-9020-cb04ad83af22",
       "name": "פאבל",
       "createdAt": "2025-12-18T18:15:46.489Z",
@@ -17558,6 +17552,6 @@
       "profit": 35.7
     }
   ],
-  "lastUpdated": "2025-12-19T11:28:22.016Z",
+  "lastUpdated": "2025-12-21T16:10:34.677Z",
   "updatedBy": "admin"
 }
