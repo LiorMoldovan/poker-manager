@@ -167,72 +167,69 @@ const LiveGameScreen = () => {
   const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
     // Quick rebuy messages (< 10 min since last)
     const quickMessages = [
-      'זה היה מהיר!',
-      'עוד פעם? רק עכשיו קנית!',
-      'לא נותנים לך לנשום!',
-      'הקלפים רודפים אותך!',
-      'קצב מטורף!',
-      'בלי רחמים עליך הלילה!',
+      'מהר חזרת',
+      'עוד פעם',
+      'לא הספקת לנשום',
+      'וואו מהיר',
     ];
     
     const messages: Record<number, string[]> = {
       1: [
-        'יאללה, בהצלחה!',
-        'שהקלפים יהיו איתך!',
-        'משחק חדש, מזל חדש!',
-        'בוא ננצח!',
-        'הלילה שלך!',
+        'בהצלחה',
+        'בוא ננצח',
+        'הלילה שלך',
+        'בוא נעשה כסף',
+        'שהמזל יהיה איתך',
       ],
       2: [
-        'עוד הזדמנות!',
-        'זה יהיה בסדר!',
-        'הקלפים ישתפרו!',
-        'זה רק ההתחלה!',
-        'עכשיו באמת מתחילים!',
+        'זה יסתדר',
+        'שים לב',
+        'הפעם יעבוד',
+        'לא נורא',
+        'יהיה בסדר',
       ],
       3: [
-        'עדיין סביר לגמרי!',
-        'שלישית הקסם!',
-        'לא מוותרים!',
-        'עכשיו זה ברצינות!',
-        'בוא ננצח את הלילה הזה!',
+        'פעם שלישית גלידה',
+        'עדיין בסדר',
+        'לא מוותרים',
+        'עכשיו ברצינות',
+        'בוא נהפוך את זה',
       ],
       4: [
-        'מתחיל להיות יקר...',
-        'ארנק עמוק יש לך!',
-        'ערב משמעותי!',
-        'אתה בטוח?',
-        'שים לב לעצמך!',
+        'אוי ואוי',
+        'מתחיל להיות יקר',
+        'ארנק עמוק',
+        'בטוח שכדאי',
+        'ערב יקר',
       ],
       5: [
-        'וואו, חמש פעמים!',
-        'לא כל יום רואים כזה דבר!',
-        'התמדה יוצאת דופן!',
-        'בוא נקווה שזה האחרון!',
-        'ערב לזכור!',
+        'וואלה, חמש',
+        'לא רואים את זה כל יום',
+        'אתה רציני',
+        'כבוד על ההתמדה',
+        'אין מילים',
       ],
     };
     
     // Messages for 6-9 buyins (dramatic)
     const highMessages = [
-      'שיא אישי מתקרב!',
-      'מחר יום חדש!',
-      'זה כבר היסטוריה!',
-      'אין דרך חזרה!',
-      'סיפור לספר!',
-      'וואלה, כבוד!',
-      'עד הסוף!',
-      'מטורף!',
+      'היסטוריה',
+      'מטורף',
+      'אין דרך חזרה',
+      'שיא אישי',
+      'אגדה חיה',
+      'וואו',
+      'תתחיל להירגע',
+      'אתה מגזים',
     ];
     
     // Messages for 10+ buyins (final)
     const finalMessages = [
-      'זה האחרון שאני מאשר!',
-      'מספיק להיום!',
-      'אני כבר לא אחראי!',
-      'הגעת למקסימום!',
-      'בבקשה תעצור!',
-      'נגמר הכסף הקטן!',
+      'זה האחרון',
+      'מספיק',
+      'לא עוד',
+      'נגמר',
+      'עצור',
     ];
     
     let message: string;
@@ -294,18 +291,18 @@ const LiveGameScreen = () => {
         }
       }
       
-      // Use phonetic spelling for better pronunciation
-      // "נכנס" (entered/joined) instead of "קנה" which TTS struggles with
-      const buyAction = isHalfBuyin ? 'נכנס בחצי' : 'נכנס';
+      // "קנה" with niqqud for correct pronunciation (kana, not kne)
+      // Using "קָנָה" to force proper vowels
+      const buyAction = isHalfBuyin ? 'קָנָה חצי' : 'קָנָה';
       
       const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
-      const fullMessage = `${playerName} ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
+      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
       
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
       if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.9;  // Slower for clarity
-      utterance.pitch = 0.85; // Lower for male sound
+      utterance.rate = 0.85;  // Slower for clarity
+      utterance.pitch = 0.9;  // Slightly lower for male sound
       utterance.volume = 1;
       
       window.speechSynthesis.speak(utterance);
