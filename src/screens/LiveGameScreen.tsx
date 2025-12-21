@@ -136,90 +136,89 @@ const LiveGameScreen = () => {
     });
   };
 
-  // Creative messages for each buyin level
+  // Creative messages for each REBUY (not total buyins)
+  // rebuyNumber = totalBuyins - 1 (since everyone starts with 1 buyin)
   const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
-    // Quick rebuy messages (< 10 min since last)
+    // Calculate rebuy number (first rebuy = 1, not 2)
+    const rebuyNumber = Math.max(1, totalBuyins - 1);
+    
+    // Quick rebuy messages (< 10 min since last) - short and punchy
     const quickMessages = [
-      'מהר חזרת',
-      'עוד פעם',
-      'לא הספקת לנשום',
-      'וואו מהיר',
+      'שוב',
+      'מהר',
+      'רצף',
     ];
     
+    // Messages by REBUY number (not total)
     const messages: Record<number, string[]> = {
       1: [
+        // First rebuy - encouraging
         'בהצלחה',
-        'בוא ננצח',
-        'הלילה שלך',
-        'בוא נעשה כסף',
-        'שהמזל יהיה איתך',
+        'יאללה',
+        'קדימה',
+        'הפעם',
       ],
       2: [
-        'זה יסתדר',
-        'שים לב',
-        'הפעם יעבוד',
-        'לא נורא',
+        // Second rebuy - still positive
         'יהיה בסדר',
+        'לא נורא',
+        'קורה',
+        'בוא',
       ],
       3: [
-        'פעם שלישית גלידה',
+        // Third rebuy - starting concern
+        'אוקיי',
+        'פעם שלישית',
+        'נו טוב',
         'עדיין בסדר',
-        'לא מוותרים',
-        'עכשיו ברצינות',
-        'בוא נהפוך את זה',
       ],
       4: [
-        'אוי ואוי',
-        'מתחיל להיות יקר',
-        'ארנק עמוק',
-        'בטוח שכדאי',
-        'ערב יקר',
+        // Fourth rebuy - concern
+        'הממ',
+        'יקר',
+        'בטוח',
+        'וואו',
       ],
       5: [
-        'וואלה, חמש',
-        'לא רואים את זה כל יום',
-        'אתה רציני',
-        'כבוד על ההתמדה',
-        'אין מילים',
+        // Fifth rebuy - serious
+        'חמש',
+        'הרבה',
+        'רציני',
+        'אוף',
       ],
     };
     
-    // Messages for 6-9 buyins (dramatic)
+    // Messages for 6-8 rebuys
     const highMessages = [
-      'היסטוריה',
+      'שיא',
       'מטורף',
-      'אין דרך חזרה',
-      'שיא אישי',
-      'אגדה חיה',
-      'וואו',
-      'תתחיל להירגע',
-      'אתה מגזים',
+      'נו באמת',
+      'אגדה',
     ];
     
-    // Messages for 10+ buyins (final)
+    // Messages for 9+ rebuys
     const finalMessages = [
-      'זה האחרון',
       'מספיק',
-      'לא עוד',
       'נגמר',
       'עצור',
+      'דיי',
     ];
     
     let message: string;
     
-    if (totalBuyins >= 10) {
+    if (rebuyNumber >= 9) {
       message = finalMessages[Math.floor(Math.random() * finalMessages.length)];
-    } else if (totalBuyins >= 6) {
+    } else if (rebuyNumber >= 6) {
       message = highMessages[Math.floor(Math.random() * highMessages.length)];
     } else {
-      const levelMessages = messages[totalBuyins] || messages[5];
+      const levelMessages = messages[rebuyNumber] || messages[5];
       message = levelMessages[Math.floor(Math.random() * levelMessages.length)];
     }
     
-    // Add quick rebuy prefix if applicable
-    if (isQuickRebuy && totalBuyins > 1) {
+    // Add quick rebuy prefix if applicable (only for 2nd rebuy onwards)
+    if (isQuickRebuy && rebuyNumber > 1) {
       const quickMsg = quickMessages[Math.floor(Math.random() * quickMessages.length)];
-      message = `${quickMsg} ${message}`;
+      message = `${quickMsg}, ${message}`;
     }
     
     return message;
