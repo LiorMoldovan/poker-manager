@@ -22,7 +22,10 @@ export const calculateSettlement = (
   players: GamePlayer[],
   minTransfer: number
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
-  // Use optimized minimum transactions algorithm
+  // Optimized settlement algorithm that minimizes split payments
+  // Key insight: Process SMALLER debts first so they can be paid in full to a single creditor
+  // Larger debts are more tolerant of being split
+  
   const balances = players
     .filter(p => Math.abs(p.profit) > 0.001) // Filter out zero balances
     .map(p => ({ name: p.playerName, balance: p.profit }));
@@ -52,10 +55,31 @@ export const calculateSettlement = (
     }
   }
 
-  // Step 2: Greedy matching for remaining balances
-  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
-  const debtors = balances.filter(b => b.balance < -0.001).sort((a, b) => a.balance - b.balance);
+  // Step 2: Assign smaller debts first to avoid splitting them
+  // Sort debtors by SMALLEST debt first - protect small debts from being split
+  let creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
+  let debtors = balances.filter(b => b.balance < -0.001)
+    .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance)); // Smallest first!
 
+  for (const debtor of debtors) {
+    if (Math.abs(debtor.balance) < 0.001) continue;
+    
+    // Find a creditor who can accept this entire debt (no split needed)
+    const suitableCreditor = creditors.find(c => c.balance >= Math.abs(debtor.balance) - 0.001);
+    
+    if (suitableCreditor) {
+      const amount = Math.abs(debtor.balance);
+      allTransfers.push({ from: debtor.name, to: suitableCreditor.name, amount });
+      suitableCreditor.balance -= amount;
+      debtor.balance = 0;
+    }
+  }
+
+  // Step 3: Handle remaining balances (these require splits - process largest debts)
+  // Re-filter and sort: largest debts first (they're more tolerant of splitting)
+  debtors = balances.filter(d => d.balance < -0.001).sort((a, b) => a.balance - b.balance);
+  creditors = balances.filter(c => c.balance > 0.001).sort((a, b) => b.balance - a.balance);
+  
   let creditorIdx = 0;
   let debtorIdx = 0;
 

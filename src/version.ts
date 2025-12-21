@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.13.1';
+export const APP_VERSION = '4.13.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.13.2',
+    date: '2025-12-21',
+    changes: [
+      '💸 Smarter settlements: Small debts stay consolidated',
+      'Process smaller debts first → single payments when possible',
+      'Large debts split if needed (more tolerant of splitting)',
+      'Example: ₪31 now pays to one person, not ₪25+₪6 split'
+    ]
+  },
   {
     version: '4.13.0',
     date: '2025-12-21',
