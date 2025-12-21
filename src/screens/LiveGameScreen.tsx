@@ -142,66 +142,65 @@ const LiveGameScreen = () => {
     // Calculate rebuy number (first rebuy = 1, not 2)
     const rebuyNumber = Math.max(1, totalBuyins - 1);
     
-    // Quick rebuy messages (< 10 min since last) - short and punchy
+    // Quick rebuy messages (< 5 min since last)
     const quickMessages = [
-      'שוב',
-      'מהר',
-      'רצף',
+      'חזר מהר',
+      'עוד אחד',
     ];
     
     // Messages by REBUY number (not total)
     const messages: Record<number, string[]> = {
       1: [
         // First rebuy - encouraging
-        'בהצלחה',
-        'יאללה',
-        'קדימה',
-        'הפעם',
+        'בהצלחה רבה',
+        'יאללה בוא נעשה את זה',
+        'עכשיו מתחילים ברצינות',
+        'הכל יהיה בסדר',
       ],
       2: [
         // Second rebuy - still positive
-        'יהיה בסדר',
-        'לא נורא',
-        'קורה',
-        'בוא',
+        'לא נורא, יהיה בסדר',
+        'זה קורה לכולם',
+        'עדיין בתחילת הדרך',
+        'אל תדאג',
       ],
       3: [
-        // Third rebuy - starting concern
-        'אוקיי',
-        'פעם שלישית',
-        'נו טוב',
-        'עדיין בסדר',
+        // Third rebuy - mild concern
+        'פעם שלישית גלידה',
+        'נו טוב, עכשיו ברצינות',
+        'בוא נשנה את המזל',
+        'שלוש זה המספר',
       ],
       4: [
         // Fourth rebuy - concern
-        'הממ',
-        'יקר',
-        'בטוח',
-        'וואו',
+        'כבר ארבע, שים לב',
+        'מתחיל להיות יקר',
+        'אולי תנוח קצת',
+        'וואלה, ארבע',
       ],
       5: [
         // Fifth rebuy - serious
-        'חמש',
-        'הרבה',
-        'רציני',
-        'אוף',
+        'חמש כבר, רציני',
+        'ערב יקר הולך להיות',
+        'אתה בטוח שכדאי',
+        'חמש זה הרבה',
       ],
     };
     
     // Messages for 6-8 rebuys
     const highMessages = [
-      'שיא',
-      'מטורף',
-      'נו באמת',
-      'אגדה',
+      'שיא אישי בדרך',
+      'נו באמת, מספיק',
+      'אתה שובר שיאים',
+      'זה כבר מוגזם',
     ];
     
     // Messages for 9+ rebuys
     const finalMessages = [
-      'מספיק',
-      'נגמר',
-      'עצור',
-      'דיי',
+      'בבקשה תעצור',
+      'מספיק להיום',
+      'די, נגמר',
+      'לך הביתה',
     ];
     
     let message: string;
