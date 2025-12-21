@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.1';
+export const APP_VERSION = '4.16.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.2',
+    date: '2025-12-21',
+    changes: [
+      'Voice: Fixed half-buyin announcement (says "קנה חצי" properly)',
+      'Voice: 3 cash register sound variations (ka-ching, coins, bell)',
+      'Voice: Better Hebrew pronunciation, male voice preference',
+      'Voice: Shorter, more natural sentences',
+      'Voice: Total buyins spoken in Hebrew (אחד וחצי, שניים וחצי)'
+    ]
+  },
   {
     version: '4.16.1',
     date: '2025-12-21',

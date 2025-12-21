@@ -80,14 +80,13 @@ const LiveGameScreen = () => {
     );
   }
 
-  // Play cash register / money sound
+  // Cash register sound variations - all money/register related
   const playCashSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        // Create cash register "ching-ching" sound
-        const playTone = (frequency: number, startTime: number, duration: number, type: OscillatorType = 'sine') => {
+        const playTone = (frequency: number, startTime: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.4) => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
           
@@ -98,20 +97,35 @@ const LiveGameScreen = () => {
           oscillator.type = type;
           
           gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          gainNode.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + startTime + 0.02);
-          gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.01);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + duration);
           
           oscillator.start(audioContext.currentTime + startTime);
           oscillator.stop(audioContext.currentTime + startTime + duration);
         };
         
-        // Cash register sound: metallic ching-ching
-        playTone(2500, 0, 0.08, 'square');      // First ching (high metallic)
-        playTone(3000, 0.02, 0.06, 'triangle'); // Overtone
-        playTone(2500, 0.15, 0.08, 'square');   // Second ching
-        playTone(3200, 0.17, 0.06, 'triangle'); // Overtone
+        // Random cash register sound variant
+        const variant = Math.floor(Math.random() * 3);
         
-        setTimeout(resolve, 300);
+        if (variant === 0) {
+          // Classic ka-ching (drawer opening + bell)
+          playTone(1200, 0, 0.06, 'square', 0.3);      // Drawer click
+          playTone(2800, 0.07, 0.15, 'triangle', 0.5); // Bell ring
+          playTone(3500, 0.08, 0.12, 'sine', 0.3);     // High overtone
+        } else if (variant === 1) {
+          // Coins sound (multiple metallic clinks)
+          playTone(3800, 0, 0.04, 'triangle', 0.35);
+          playTone(4200, 0.05, 0.04, 'triangle', 0.3);
+          playTone(3600, 0.10, 0.04, 'triangle', 0.35);
+          playTone(4000, 0.15, 0.05, 'sine', 0.25);
+        } else {
+          // Cash register bell (ding-ding)
+          playTone(2200, 0, 0.12, 'sine', 0.5);
+          playTone(2750, 0.02, 0.10, 'triangle', 0.3);
+          playTone(2200, 0.18, 0.10, 'sine', 0.4);
+        }
+        
+        setTimeout(resolve, 280);
       } catch (e) {
         console.log('Could not play cash sound:', e);
         resolve();
@@ -123,95 +137,72 @@ const LiveGameScreen = () => {
   const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
     // Quick rebuy messages (< 10 min since last)
     const quickMessages = [
-      'מהר חזרת!',
-      'לא הספקת להתקרר!',
-      'רגע, עכשיו קנית!',
-      'וואו, זה היה מהיר!',
-      'בלי הפסקה!',
-      'עוד פעם? כבר?',
+      'זה היה מהיר!',
+      'עוד פעם? רק עכשיו קנית!',
+      'לא נותנים לך לנשום!',
+      'הקלפים רודפים אותך!',
+      'קצב מטורף!',
+      'בלי רחמים עליך הלילה!',
     ];
     
     const messages: Record<number, string[]> = {
       1: [
-        'בהצלחה הלילה!',
-        'שהמזל יהיה איתך!',
-        'יאללה, בוא נראה מה יהיה!',
-        'התחלה חדשה!',
-        'בוא נעשה את זה!',
-        'הערב שלך!',
-        'שיהיה בהצלחה!',
+        'יאללה, בהצלחה!',
+        'שהקלפים יהיו איתך!',
+        'משחק חדש, מזל חדש!',
+        'בוא ננצח!',
+        'הלילה שלך!',
       ],
       2: [
-        'עוד סיבוב, עוד סיכוי!',
+        'עוד הזדמנות!',
+        'זה יהיה בסדר!',
         'הקלפים ישתפרו!',
-        'לא נורא, עדיין מוקדם!',
-        'זה חלק מהמשחק!',
-        'עכשיו מתחילים!',
-        'הפעם זה יעבוד!',
-        'מתחממים!',
-        'עוד ניסיון!',
+        'זה רק ההתחלה!',
+        'עכשיו באמת מתחילים!',
       ],
       3: [
-        'שלוש פעמים גישה!',
-        'עדיין בטווח הסביר...',
-        'המזל כבר חייב להשתנות!',
-        'התמדה משתלמת!',
+        'עדיין סביר לגמרי!',
+        'שלישית הקסם!',
         'לא מוותרים!',
-        'שלישית זה קסם!',
-        'עוד קצת סבלנות!',
-        'ממשיכים להילחם!',
+        'עכשיו זה ברצינות!',
+        'בוא ננצח את הלילה הזה!',
       ],
       4: [
-        'מתחילים להתחמם פה...',
-        'אולי כדאי לקחת אוויר?',
-        'הארנק מתחיל להרגיש...',
-        'ערב יקר מתהווה!',
-        'נשימה עמוקה!',
+        'מתחיל להיות יקר...',
+        'ארנק עמוק יש לך!',
+        'ערב משמעותי!',
         'אתה בטוח?',
         'שים לב לעצמך!',
-        'זה מתחיל להיות רציני!',
       ],
       5: [
-        'תזכור, זה רק משחק...',
-        'הערב הזה יהיה בלתי נשכח!',
-        'חמש פעמים, לא מתייאש!',
-        'האמיצים לא מפחדים!',
-        'או שמנצחים גדול או...',
-        'עכשיו זה אישי!',
-        'לא יום רגיל!',
-        'כבוד על ההתמדה!',
+        'וואו, חמש פעמים!',
+        'לא כל יום רואים כזה דבר!',
+        'התמדה יוצאת דופן!',
+        'בוא נקווה שזה האחרון!',
+        'ערב לזכור!',
       ],
     };
     
-    // Messages for 6-9 buyins (dramatic/creative)
+    // Messages for 6-9 buyins (dramatic)
     const highMessages = [
-      'אגדות נולדות ככה!',
-      'או גיבור או... נו, אתה יודע!',
-      'מחר זה יום חדש!',
-      'אתה כותב היסטוריה!',
-      'הלילה הזה יזכר לעד!',
-      'לב אמיץ יש לך!',
-      'זה כבר מעבר לפוקר!',
-      'סיפור לנכדים!',
+      'שיא אישי מתקרב!',
+      'מחר יום חדש!',
+      'זה כבר היסטוריה!',
       'אין דרך חזרה!',
+      'סיפור לספר!',
+      'וואלה, כבוד!',
       'עד הסוף!',
-      'כל הכבוד על האומץ!',
-      'שחקן אמיתי!',
-      'לא כל יום רואים כזה דבר!',
-      'תקרא לגינס!',
-      'וואו, פשוט וואו!',
+      'מטורף!',
     ];
     
-    // Messages for 10+ buyins (final approval)
+    // Messages for 10+ buyins (final)
     const finalMessages = [
-      'זאת הפעם האחרונה שאני מאשר לך!',
-      'רשמית, זה מספיק להיום!',
+      'זה האחרון שאני מאשר!',
+      'מספיק להיום!',
       'אני כבר לא אחראי!',
-      'אתה בעצמך מעכשיו!',
-      'הגעת למקסימום שפוי!',
-      'אחרי זה, אין לי מה להגיד!',
-      'תעצור כאן, בבקשה!',
-      'האחרון שאני מכריז עליו!',
+      'הגעת למקסימום!',
+      'בבקשה תעצור!',
+      'נגמר הכסף הקטן!',
     ];
     
     let message: string;
@@ -235,25 +226,48 @@ const LiveGameScreen = () => {
   };
 
   // Text-to-speech for buyin announcements - ALL HEBREW
-  const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean) => {
+  const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean) => {
     // Play cash register sound first
     await playCashSound();
     
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       
+      // Get available voices and prefer Hebrew male voice
       const voices = window.speechSynthesis.getVoices();
-      const hebrewVoice = voices.find(v => v.lang.startsWith('he')) || null;
+      // Try to find a male Hebrew voice (usually has "male" in name or is default)
+      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('male')) 
+        || voices.find(v => v.lang.startsWith('he'))
+        || null;
       
       // Build the full Hebrew message
-      const creativeMessage = getBuyinMessage(totalBuyins, isQuickRebuy);
-      const fullMessage = `${playerName} קנה. סה"כ ${totalBuyins}. ${creativeMessage}`;
+      // Use "קָנָה" with niqqud for better pronunciation (sounds like "kana")
+      const buyAction = isHalfBuyin ? 'קנה חצי' : 'קנה';
+      
+      // Format total: show as "אחד וחצי" for 1.5, "שניים וחצי" for 2.5, etc.
+      let totalText: string;
+      if (totalBuyins % 1 === 0.5) {
+        const whole = Math.floor(totalBuyins);
+        const hebrewNumbers = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+        if (whole === 0) {
+          totalText = 'חצי';
+        } else if (whole <= 10) {
+          totalText = `${hebrewNumbers[whole]} וחצי`;
+        } else {
+          totalText = `${whole} וחצי`;
+        }
+      } else {
+        totalText = String(totalBuyins);
+      }
+      
+      const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
+      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
       
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
       if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
+      utterance.rate = 0.95; // Slightly slower for clarity
+      utterance.pitch = 0.9; // Slightly lower for male sound
       utterance.volume = 1;
       
       window.speechSynthesis.speak(utterance);
@@ -288,7 +302,8 @@ const LiveGameScreen = () => {
     lastRebuyTimeRef.current.set(player.id, now);
     
     // Announce in Hebrew with creative message
-    speakBuyin(player.playerName, newRebuys, isQuickRebuy);
+    const isHalfBuyin = amount === 0.5;
+    speakBuyin(player.playerName, newRebuys, isQuickRebuy, isHalfBuyin);
   };
 
   const handleUndo = () => {
