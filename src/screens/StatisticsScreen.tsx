@@ -1565,7 +1565,7 @@ const StatisticsScreen = () => {
                   </tbody>
                 </table>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
                 <button
                   onClick={handleShareTop20}
                   disabled={isSharingTop20}
