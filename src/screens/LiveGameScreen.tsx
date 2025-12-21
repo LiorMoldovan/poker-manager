@@ -77,14 +77,17 @@ const LiveGameScreen = () => {
     );
   }
 
-  // Play alert beep sound
-  const playAlertSound = (): Promise<void> => {
+  // Track last rebuy time per player for quick rebuy detection
+  const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
+
+  // Play cash register / money sound
+  const playCashSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        // Create a pleasant chime sound (two tones)
-        const playTone = (frequency: number, startTime: number, duration: number) => {
+        // Create cash register "ching-ching" sound
+        const playTone = (frequency: number, startTime: number, duration: number, type: OscillatorType = 'sine') => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
           
@@ -92,88 +95,168 @@ const LiveGameScreen = () => {
           gainNode.connect(audioContext.destination);
           
           oscillator.frequency.value = frequency;
-          oscillator.type = 'sine';
+          oscillator.type = type;
           
-          // Fade in and out for a pleasant sound
           gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + startTime + 0.05);
+          gainNode.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + startTime + 0.02);
           gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
           
           oscillator.start(audioContext.currentTime + startTime);
           oscillator.stop(audioContext.currentTime + startTime + duration);
         };
         
-        // Play two ascending tones (ding-dong)
-        playTone(880, 0, 0.15);      // A5
-        playTone(1175, 0.12, 0.2);   // D6
+        // Cash register sound: metallic ching-ching
+        playTone(2500, 0, 0.08, 'square');      // First ching (high metallic)
+        playTone(3000, 0.02, 0.06, 'triangle'); // Overtone
+        playTone(2500, 0.15, 0.08, 'square');   // Second ching
+        playTone(3200, 0.17, 0.06, 'triangle'); // Overtone
         
-        // Resolve after the sound finishes
-        setTimeout(resolve, 350);
+        setTimeout(resolve, 300);
       } catch (e) {
-        console.log('Could not play alert sound:', e);
+        console.log('Could not play cash sound:', e);
         resolve();
       }
     });
   };
 
-  // Text-to-speech for buyin announcements
-  const speak = async (hebrewName: string, englishAction: string) => {
-    // Play alert sound first
-    await playAlertSound();
+  // Creative messages for each buyin level
+  const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
+    // Quick rebuy messages (< 10 min since last)
+    const quickMessages = [
+      'מהר חזרת!',
+      'לא הספקת להתקרר!',
+      'רגע, עכשיו קנית!',
+      'וואו, זה היה מהיר!',
+      'בלי הפסקה!',
+      'עוד פעם? כבר?',
+    ];
+    
+    const messages: Record<number, string[]> = {
+      1: [
+        'בהצלחה הלילה!',
+        'שהמזל יהיה איתך!',
+        'יאללה, בוא נראה מה יהיה!',
+        'התחלה חדשה!',
+        'בוא נעשה את זה!',
+        'הערב שלך!',
+        'שיהיה בהצלחה!',
+      ],
+      2: [
+        'עוד סיבוב, עוד סיכוי!',
+        'הקלפים ישתפרו!',
+        'לא נורא, עדיין מוקדם!',
+        'זה חלק מהמשחק!',
+        'עכשיו מתחילים!',
+        'הפעם זה יעבוד!',
+        'מתחממים!',
+        'עוד ניסיון!',
+      ],
+      3: [
+        'שלוש פעמים גישה!',
+        'עדיין בטווח הסביר...',
+        'המזל כבר חייב להשתנות!',
+        'התמדה משתלמת!',
+        'לא מוותרים!',
+        'שלישית זה קסם!',
+        'עוד קצת סבלנות!',
+        'ממשיכים להילחם!',
+      ],
+      4: [
+        'מתחילים להתחמם פה...',
+        'אולי כדאי לקחת אוויר?',
+        'הארנק מתחיל להרגיש...',
+        'ערב יקר מתהווה!',
+        'נשימה עמוקה!',
+        'אתה בטוח?',
+        'שים לב לעצמך!',
+        'זה מתחיל להיות רציני!',
+      ],
+      5: [
+        'תזכור, זה רק משחק...',
+        'הערב הזה יהיה בלתי נשכח!',
+        'חמש פעמים, לא מתייאש!',
+        'האמיצים לא מפחדים!',
+        'או שמנצחים גדול או...',
+        'עכשיו זה אישי!',
+        'לא יום רגיל!',
+        'כבוד על ההתמדה!',
+      ],
+    };
+    
+    // Messages for 6-9 buyins (dramatic/creative)
+    const highMessages = [
+      'אגדות נולדות ככה!',
+      'או גיבור או... נו, אתה יודע!',
+      'מחר זה יום חדש!',
+      'אתה כותב היסטוריה!',
+      'הלילה הזה יזכר לעד!',
+      'לב אמיץ יש לך!',
+      'זה כבר מעבר לפוקר!',
+      'סיפור לנכדים!',
+      'אין דרך חזרה!',
+      'עד הסוף!',
+      'כל הכבוד על האומץ!',
+      'שחקן אמיתי!',
+      'לא כל יום רואים כזה דבר!',
+      'תקרא לגינס!',
+      'וואו, פשוט וואו!',
+    ];
+    
+    // Messages for 10+ buyins (final approval)
+    const finalMessages = [
+      'זאת הפעם האחרונה שאני מאשר לך!',
+      'רשמית, זה מספיק להיום!',
+      'אני כבר לא אחראי!',
+      'אתה בעצמך מעכשיו!',
+      'הגעת למקסימום שפוי!',
+      'אחרי זה, אין לי מה להגיד!',
+      'תעצור כאן, בבקשה!',
+      'האחרון שאני מכריז עליו!',
+    ];
+    
+    let message: string;
+    
+    if (totalBuyins >= 10) {
+      message = finalMessages[Math.floor(Math.random() * finalMessages.length)];
+    } else if (totalBuyins >= 6) {
+      message = highMessages[Math.floor(Math.random() * highMessages.length)];
+    } else {
+      const levelMessages = messages[totalBuyins] || messages[5];
+      message = levelMessages[Math.floor(Math.random() * levelMessages.length)];
+    }
+    
+    // Add quick rebuy prefix if applicable
+    if (isQuickRebuy && totalBuyins > 1) {
+      const quickMsg = quickMessages[Math.floor(Math.random() * quickMessages.length)];
+      message = `${quickMsg} ${message}`;
+    }
+    
+    return message;
+  };
+
+  // Text-to-speech for buyin announcements - ALL HEBREW
+  const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean) => {
+    // Play cash register sound first
+    await playCashSound();
     
     if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
       window.speechSynthesis.cancel();
       
-      // Get available voices
       const voices = window.speechSynthesis.getVoices();
-      
-      // Log available English voices for debugging
-      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
-      console.log('Available English voices:', englishVoices.map(v => `${v.name} (${v.lang})`));
-      
-      // Find a good Hebrew voice
       const hebrewVoice = voices.find(v => v.lang.startsWith('he')) || null;
       
-      // Find a good English voice - prioritize female voices (usually clearer)
-      const englishVoice = 
-        // Try Samantha (iOS/Mac - very natural)
-        voices.find(v => v.name.includes('Samantha')) ||
-        // Try Google US English female
-        voices.find(v => v.name.includes('Google US English') && !v.name.includes('Male')) ||
-        // Try any female voice
-        voices.find(v => v.lang.startsWith('en') && (v.name.includes('Female') || v.name.includes('Zira') || v.name.includes('Susan') || v.name.includes('Karen'))) ||
-        // Try Microsoft voices (Windows)
-        voices.find(v => v.name.includes('Microsoft Zira') || v.name.includes('Microsoft Susan')) ||
-        // Fallback to any US English
-        voices.find(v => v.lang === 'en-US') ||
-        // Any English
-        voices.find(v => v.lang.startsWith('en')) ||
-        null;
+      // Build the full Hebrew message
+      const creativeMessage = getBuyinMessage(totalBuyins, isQuickRebuy);
+      const fullMessage = `${playerName} קנה. סה"כ ${totalBuyins}. ${creativeMessage}`;
       
-      if (englishVoice) {
-        console.log('Selected English voice:', englishVoice.name);
-      }
+      const utterance = new SpeechSynthesisUtterance(fullMessage);
+      utterance.lang = 'he-IL';
+      if (hebrewVoice) utterance.voice = hebrewVoice;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1;
       
-      // First: Say the name in Hebrew
-      const nameUtterance = new SpeechSynthesisUtterance(hebrewName);
-      nameUtterance.lang = 'he-IL';
-      if (hebrewVoice) nameUtterance.voice = hebrewVoice;
-      nameUtterance.rate = 1.0;
-      nameUtterance.pitch = 1;
-      nameUtterance.volume = 1;
-      
-      // Second: Say the action in English with natural female voice
-      const actionUtterance = new SpeechSynthesisUtterance(englishAction);
-      actionUtterance.lang = 'en-US';
-      if (englishVoice) actionUtterance.voice = englishVoice;
-      actionUtterance.rate = 0.95; // Natural pace
-      actionUtterance.pitch = 1.0; // Natural pitch
-      actionUtterance.volume = 1;
-      
-      // Queue both utterances
-      window.speechSynthesis.speak(nameUtterance);
-      window.speechSynthesis.speak(actionUtterance);
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -196,9 +279,16 @@ const LiveGameScreen = () => {
       ...actions,
     ]);
     
-    // Announce: Hebrew name + English "buyin"
-    const buyinText = amount === 1 ? 'buyin' : 'half buyin';
-    speak(player.playerName, buyinText);
+    // Check if this is a quick rebuy (< 10 min since last)
+    const now = Date.now();
+    const lastRebuyTime = lastRebuyTimeRef.current.get(player.id) || 0;
+    const isQuickRebuy = lastRebuyTime > 0 && (now - lastRebuyTime) < 10 * 60 * 1000; // 10 minutes
+    
+    // Update last rebuy time
+    lastRebuyTimeRef.current.set(player.id, now);
+    
+    // Announce in Hebrew with creative message
+    speakBuyin(player.playerName, newRebuys, isQuickRebuy);
   };
 
   const handleUndo = () => {
