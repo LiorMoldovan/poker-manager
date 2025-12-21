@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.11.8';
+export const APP_VERSION = '4.11.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.11.9',
+    date: '2025-12-18',
+    changes: [
+      'NEW: Top 20 Single Night Wins table 🏆',
+      'Shows rank, player, amount, players count, date',
+      'All-time records (no filter restrictions)',
+      'Clickable rows to view game details',
+      'Share button for screenshot'
+    ]
+  },
   {
     version: '4.11.8',
     date: '2025-12-18',

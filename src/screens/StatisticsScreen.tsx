@@ -55,7 +55,9 @@ const StatisticsScreen = () => {
     games: Array<{ date: string; profit: number; gameId: string }>;
   } | null>(null); // Modal for all player games
   const [isSharing, setIsSharing] = useState(false);
+  const [isSharingTop20, setIsSharingTop20] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
+  const top20Ref = useRef<HTMLDivElement>(null);
 
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
@@ -114,6 +116,92 @@ const StatisticsScreen = () => {
     } catch (error) {
       console.error('Error sharing:', error);
       setIsSharing(false);
+    }
+  };
+
+  // Get top 20 single night wins (all-time, all players)
+  const top20Wins = useMemo(() => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    
+    // Create array of all player-game results
+    const allResults: Array<{
+      playerName: string;
+      profit: number;
+      date: string;
+      gameId: string;
+      playersCount: number;
+    }> = [];
+    
+    for (const game of allGames) {
+      const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+      const playersCount = gamePlayers.length;
+      
+      for (const gp of gamePlayers) {
+        if (gp.profit > 0) { // Only wins
+          allResults.push({
+            playerName: gp.playerName,
+            profit: gp.profit,
+            date: game.date,
+            gameId: game.id,
+            playersCount
+          });
+        }
+      }
+    }
+    
+    // Sort by profit descending and take top 20
+    return allResults
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 20);
+  }, [stats]); // Recalculate when stats change
+
+  // Share top 20 table as screenshot
+  const handleShareTop20 = async () => {
+    if (!top20Ref.current) return;
+    
+    setIsSharingTop20(true);
+    try {
+      const canvas = await html2canvas(top20Ref.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsSharingTop20(false);
+          return;
+        }
+        
+        const file = new File([blob], 'poker-top20-wins.png', { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Top 20 Single Night Wins',
+            });
+          } catch (err) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'poker-top20-wins.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'poker-top20-wins.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingTop20(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing top 20:', error);
+      setIsSharingTop20(false);
     }
   };
 
@@ -1399,6 +1487,103 @@ const StatisticsScreen = () => {
                   }}
                 >
                   {isSharing ? '📸...' : '📤 שתף'}
+                </button>
+              </div>
+
+              {/* Top 20 Single Night Wins */}
+              <div ref={top20Ref} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontSize: '0.85rem', 
+                  fontWeight: '600',
+                  color: 'var(--text)',
+                  marginBottom: '0.5rem',
+                  padding: '0.25rem',
+                  background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%)',
+                  borderRadius: '6px'
+                }}>
+                  🏆 Top 20 Single Night Wins
+                </div>
+                <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ textAlign: 'center', padding: '0.25rem', width: '25px' }}>#</th>
+                      <th style={{ textAlign: 'left', padding: '0.25rem' }}>Player</th>
+                      <th style={{ textAlign: 'right', padding: '0.25rem' }}>Amount</th>
+                      <th style={{ textAlign: 'center', padding: '0.25rem' }}>👥</th>
+                      <th style={{ textAlign: 'right', padding: '0.25rem' }}>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {top20Wins.map((record, index) => (
+                      <tr 
+                        key={`${record.gameId}-${record.playerName}`}
+                        onClick={() => navigate(`/game/${record.gameId}`, { 
+                          state: { from: 'statistics', viewMode: 'table' } 
+                        })}
+                        style={{ 
+                          borderBottom: '1px solid rgba(255,255,255,0.03)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <td style={{ 
+                          textAlign: 'center', 
+                          padding: '0.3rem 0.25rem',
+                          color: index < 3 ? 'var(--warning)' : 'var(--text-muted)',
+                          fontWeight: index < 3 ? '700' : '400'
+                        }}>
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                        </td>
+                        <td style={{ padding: '0.3rem 0.25rem', whiteSpace: 'nowrap' }}>
+                          {record.playerName}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'right', 
+                          padding: '0.3rem 0.25rem',
+                          color: 'var(--success)',
+                          fontWeight: '600'
+                        }}>
+                          +{cleanNumber(record.profit)}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'center', 
+                          padding: '0.3rem 0.25rem',
+                          color: 'var(--text-muted)'
+                        }}>
+                          {record.playersCount}
+                        </td>
+                        <td style={{ 
+                          textAlign: 'right', 
+                          padding: '0.3rem 0.25rem',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.65rem'
+                        }}>
+                          {new Date(record.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+                <button
+                  onClick={handleShareTop20}
+                  disabled={isSharingTop20}
+                  style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.75rem',
+                    padding: '0.4rem 0.8rem',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isSharingTop20 ? '📸...' : '📤 שתף'}
                 </button>
               </div>
             </>
