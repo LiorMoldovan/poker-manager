@@ -1419,6 +1419,7 @@ const StatisticsScreen = () => {
                       timePeriod === 'year' ? `שנת ${selectedYear}` :
                       timePeriod === 'h1' ? `H1 ${selectedYear} (ינו׳-יוני׳)` :
                       `H2 ${selectedYear} (יולי׳-דצמ׳)`}
+                  {' • '}{totalGamesInPeriod} משחקים
                   {filterActiveOnly && ' • שחקנים פעילים'}
                 </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>

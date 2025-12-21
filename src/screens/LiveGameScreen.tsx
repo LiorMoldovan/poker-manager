@@ -15,12 +15,6 @@ const LiveGameScreen = () => {
   const [rebuyValue, setRebuyValue] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
-  const [showForecastModal, setShowForecastModal] = useState(false);
-  const [forecasts, setForecasts] = useState<ForecastResult[] | null>(null);
-  const [isLoadingForecast, setIsLoadingForecast] = useState(false);
-  const [forecastError, setForecastError] = useState<string | null>(null);
-  const [isSharing, setIsSharing] = useState(false);
-  const forecastRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (gameId) {
