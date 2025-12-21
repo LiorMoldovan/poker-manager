@@ -190,68 +190,6 @@ const GraphsScreen = () => {
     return data;
   }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName]);
 
-  // Win streak data - for each player, show their current and best streaks
-  const streakData = useMemo(() => {
-    const playerStreaks: Array<{
-      playerId: string;
-      playerName: string;
-      color: string;
-      currentStreak: number;
-      bestWinStreak: number;
-      bestLossStreak: number;
-      last5: ('W' | 'L' | 'T')[];
-    }> = [];
-
-    sortedPlayerIds.forEach(playerId => {
-      const playerGames = filteredGames
-        .map(game => gamePlayers.find(gp => gp.gameId === game.id && gp.playerId === playerId))
-        .filter(Boolean) as GamePlayer[];
-
-      let currentStreak = 0;
-      let bestWinStreak = 0;
-      let bestLossStreak = 0;
-      let tempWinStreak = 0;
-      let tempLossStreak = 0;
-      const results: ('W' | 'L' | 'T')[] = [];
-
-      playerGames.forEach((gp, idx) => {
-        const result = gp.profit > 0 ? 'W' : gp.profit < 0 ? 'L' : 'T';
-        results.push(result);
-
-        if (result === 'W') {
-          tempWinStreak++;
-          tempLossStreak = 0;
-          bestWinStreak = Math.max(bestWinStreak, tempWinStreak);
-        } else if (result === 'L') {
-          tempLossStreak++;
-          tempWinStreak = 0;
-          bestLossStreak = Math.max(bestLossStreak, tempLossStreak);
-        } else {
-          tempWinStreak = 0;
-          tempLossStreak = 0;
-        }
-
-        // Track current streak at the end
-        if (idx === playerGames.length - 1) {
-          if (tempWinStreak > 0) currentStreak = tempWinStreak;
-          else if (tempLossStreak > 0) currentStreak = -tempLossStreak;
-        }
-      });
-
-      playerStreaks.push({
-        playerId,
-        playerName: getPlayerName(playerId),
-        color: getPlayerColor(playerId),
-        currentStreak,
-        bestWinStreak,
-        bestLossStreak,
-        last5: results.slice(-5),
-      });
-    });
-
-    return playerStreaks;
-  }, [filteredGames, gamePlayers, sortedPlayerIds, getPlayerName, getPlayerColor]);
-
   // Head-to-head comparison data
   const headToHeadData = useMemo(() => {
     if (!player1Id || !player2Id) return null;
@@ -490,6 +428,68 @@ const GraphsScreen = () => {
       return aName.localeCompare(bName);
     });
   }, [selectedPlayers, getPlayerName]);
+
+  // Win streak data - for each player, show their current and best streaks
+  const streakData = useMemo(() => {
+    const playerStreaks: Array<{
+      playerId: string;
+      playerName: string;
+      color: string;
+      currentStreak: number;
+      bestWinStreak: number;
+      bestLossStreak: number;
+      last5: ('W' | 'L' | 'T')[];
+    }> = [];
+
+    sortedPlayerIds.forEach(playerId => {
+      const playerGames = filteredGames
+        .map(game => gamePlayers.find(gp => gp.gameId === game.id && gp.playerId === playerId))
+        .filter(Boolean) as GamePlayer[];
+
+      let currentStreak = 0;
+      let bestWinStreak = 0;
+      let bestLossStreak = 0;
+      let tempWinStreak = 0;
+      let tempLossStreak = 0;
+      const results: ('W' | 'L' | 'T')[] = [];
+
+      playerGames.forEach((gp, idx) => {
+        const result = gp.profit > 0 ? 'W' : gp.profit < 0 ? 'L' : 'T';
+        results.push(result);
+
+        if (result === 'W') {
+          tempWinStreak++;
+          tempLossStreak = 0;
+          bestWinStreak = Math.max(bestWinStreak, tempWinStreak);
+        } else if (result === 'L') {
+          tempLossStreak++;
+          tempWinStreak = 0;
+          bestLossStreak = Math.max(bestLossStreak, tempLossStreak);
+        } else {
+          tempWinStreak = 0;
+          tempLossStreak = 0;
+        }
+
+        // Track current streak at the end
+        if (idx === playerGames.length - 1) {
+          if (tempWinStreak > 0) currentStreak = tempWinStreak;
+          else if (tempLossStreak > 0) currentStreak = -tempLossStreak;
+        }
+      });
+
+      playerStreaks.push({
+        playerId,
+        playerName: getPlayerName(playerId),
+        color: getPlayerColor(playerId),
+        currentStreak,
+        bestWinStreak,
+        bestLossStreak,
+        last5: results.slice(-5),
+      });
+    });
+
+    return playerStreaks;
+  }, [filteredGames, gamePlayers, sortedPlayerIds, getPlayerName, getPlayerColor]);
 
   // Get timeframe label
   const getTimeframeLabel = () => {
