@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.9';
+export const APP_VERSION = '4.16.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.10',
+    date: '2025-12-21',
+    changes: [
+      'Voice: Quick rebuy threshold changed from 10 min to 5 min'
+    ]
+  },
   {
     version: '4.16.9',
     date: '2025-12-21',

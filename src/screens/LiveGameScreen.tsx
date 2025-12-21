@@ -310,7 +310,7 @@ const LiveGameScreen = () => {
     // Check if this is a quick rebuy (< 10 min since last)
     const now = Date.now();
     const lastRebuyTime = lastRebuyTimeRef.current.get(player.id) || 0;
-    const isQuickRebuy = lastRebuyTime > 0 && (now - lastRebuyTime) < 10 * 60 * 1000; // 10 minutes
+    const isQuickRebuy = lastRebuyTime > 0 && (now - lastRebuyTime) < 5 * 60 * 1000; // 5 minutes
     
     // Update last rebuy time
     lastRebuyTimeRef.current.set(player.id, now);
