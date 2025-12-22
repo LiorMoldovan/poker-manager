@@ -541,7 +541,7 @@ const GraphsScreen = () => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">📊 Graphs</h1>
+        <h1 className="page-title">Graphs</h1>
         <p className="page-subtitle">Visualize player performance trends</p>
       </div>
 
