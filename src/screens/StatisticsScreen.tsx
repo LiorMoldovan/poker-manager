@@ -1498,30 +1498,30 @@ const StatisticsScreen = () => {
             </>
           )}
 
-          {/* TABLE/INDIVIDUAL Sort Options - Single cycling button */}
+          {/* TABLE/INDIVIDUAL Sort Options - Dropdown */}
           {(viewMode === 'table' || viewMode === 'individual') && (
             <div className="card" style={{ padding: '0.5rem' }}>
-              <button 
-                className="btn btn-sm btn-secondary"
-                onClick={() => {
-                  // Cycle through: profit → games → winRate → profit
-                  if (sortBy === 'profit') setSortBy('games');
-                  else if (sortBy === 'games') setSortBy('winRate');
-                  else setSortBy('profit');
-                }}
-                style={{ 
-                  width: '100%', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  gap: '0.5rem', 
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.85rem'
-                }}
-              >
-                <span>🔄</span>
-                <span>Sort: {sortBy === 'profit' ? '💰 Profit' : sortBy === 'games' ? '🎮 Games' : '📊 Win%'}</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.85rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="profit">💰 Profit</option>
+                  <option value="games">🎮 Games</option>
+                  <option value="winRate">📊 Win %</option>
+                </select>
+              </div>
             </div>
           )}
 

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.19';
+export const APP_VERSION = '4.16.20';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.20',
+    date: '2025-12-22',
+    changes: [
+      'Statistics: Sort option is now a dropdown selector',
+      'Default sort is Profit, can select Games or Win%'
+    ]
+  },
   {
     version: '4.16.19',
     date: '2025-12-22',
