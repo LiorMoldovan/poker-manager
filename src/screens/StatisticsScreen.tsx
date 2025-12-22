@@ -1498,36 +1498,30 @@ const StatisticsScreen = () => {
             </>
           )}
 
-          {/* TABLE/INDIVIDUAL Sort Options */}
+          {/* TABLE/INDIVIDUAL Sort Options - Single cycling button */}
           {(viewMode === 'table' || viewMode === 'individual') && (
-            <div className="card" style={{ padding: '0.75rem' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Sort by</div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  className={`btn btn-sm ${sortBy === 'profit' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setSortBy('profit')}
-                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
-                >
-                  <span>💰</span>
-                  <span style={{ fontSize: '0.7rem' }}>Profit</span>
-                </button>
-                <button 
-                  className={`btn btn-sm ${sortBy === 'games' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setSortBy('games')}
-                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
-                >
-                  <span>🎮</span>
-                  <span style={{ fontSize: '0.7rem' }}>Games</span>
-                </button>
-                <button 
-                  className={`btn btn-sm ${sortBy === 'winRate' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setSortBy('winRate')}
-                  style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', padding: '0.5rem' }}
-                >
-                  <span>📊</span>
-                  <span style={{ fontSize: '0.7rem' }}>Win Rate</span>
-                </button>
-              </div>
+            <div className="card" style={{ padding: '0.5rem' }}>
+              <button 
+                className="btn btn-sm btn-secondary"
+                onClick={() => {
+                  // Cycle through: profit → games → winRate → profit
+                  if (sortBy === 'profit') setSortBy('games');
+                  else if (sortBy === 'games') setSortBy('winRate');
+                  else setSortBy('profit');
+                }}
+                style={{ 
+                  width: '100%', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  gap: '0.5rem', 
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <span>🔄</span>
+                <span>Sort: {sortBy === 'profit' ? '💰 Profit' : sortBy === 'games' ? '🎮 Games' : '📊 Win%'}</span>
+              </button>
             </div>
           )}
 
