@@ -1587,6 +1587,70 @@
           "sentence": "ספי, הקאמבק המטורף של הערב! אחרי שנעלם מהנוף של הפוקר, הוא חוזר עם 100% הצלחה. זה כמו לראות אגדה שמתעוררת לחיים, אז מי שמעז – הרווח שלו."
         }
       ]
+    },
+    {
+      "id": "mjh1lr2stycwrynv4p",
+      "date": "2025-12-22T10:58:13.972Z",
+      "status": "completed",
+      "createdAt": "2025-12-22T10:58:13.972Z",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 118,
+          "highlight": "ממוצע +67₪ ב-168 משחקים, 75% נצחונות.",
+          "sentence": "ליאור, המכונה 'הבנק', ממשיך להפגיז עם ממוצע של 67₪ למשחק. האם הלילה הוא ירחיב את הפער ויכניס עוד כמה שקלים לכיס, או שמא יתקל בסלע?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 56,
+          "highlight": "רצף נצחונות נוכחי, ממוצע +7₪ ב-206 משחקים.",
+          "sentence": "אייל, אחרי שבוע מוצלח עם רצף נצחונות, נמצא בנקודת מפתח. האם ימשיך את המומנטום החיובי או שמא ייפול קורבן ללחץ?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": -14,
+          "highlight": "רצף הפסדים נוכחי (2), ממוצע -17₪ ב-97 משחקים.",
+          "sentence": "אורן, תחת לחץ רציף של שני הפסדים, מחפש נקודת אור. האם יצליח לשבור את הרצף השלילי ולצאת מהבור העמוק?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": 6,
+          "highlight": "לא שיחק 9 ימים, ממוצע -7₪ ב-111 משחקים.",
+          "sentence": "ליכטר חוזר מהפסקה של 9 ימים, כשהוא עם מינוס ממוצע של 7₪. האם החזרה למשחק תהיה מרעננת או שתביא איתה עוד הפסדים?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -34,
+          "highlight": "רצף הפסדים נוכחי (5), ממוצע -5₪ ב-150 משחקים.",
+          "sentence": "סגל, שקוע ברצף הפסדים של 5 משחקים, נאבק על כל שבב. האם יצליח להפוך את המגמה או שפשוט ימשיך לשקוע?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": -64,
+          "highlight": "רצף הפסדים נוכחי (2), ממוצע -43₪ ב-121 משחקים.",
+          "sentence": "תומר, עם רצף הפסדים של שני משחקים וממוצע שלילי עמוק, נמצא במצב קשה. האם יצליח למצוא את הדרך חזרה לפסגה?",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": -114,
+          "highlight": "לא שיחק 9 ימים, רצף הפסדים נוכחי (2), ממוצע -27₪.",
+          "sentence": "פיליפ, שנעדר מהשולחן 9 ימים ומתמודד עם רצף הפסדים, נראה כמו קורבן פוטנציאלי. האם הלילה יפתיע את כולם?",
+          "isSurprise": true
+        },
+        {
+          "playerName": "מלמד",
+          "expectedProfit": 46,
+          "highlight": "לא שיחק 58 ימים, ממוצע +40₪ ב-88 משחקים.",
+          "sentence": "מלמד, שחקן ותיק שנעדר 58 ימים, חוזר עם ממוצע מרשים של 40₪. האם הוא יצליח לשמור על הקצב או שהחלודה תתפוס אותו?",
+          "isSurprise": true
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17248,8 +17312,144 @@
       },
       "finalValue": 155.70000000000002,
       "profit": 35.7
+    },
+    {
+      "id": "mjh1lr2sea7jbjyjkmo",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 23
+      },
+      "finalValue": 345,
+      "profit": 315
+    },
+    {
+      "id": "mjh1lr2s6phs4f7po0a",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjh1lr2s3gck88rhf6e",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mjh1lr2suqz3hcz8ttg",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 1.5,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -45
+    },
+    {
+      "id": "mjh1lr2sz7dcsnvmm1",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjh1lr2s783keqpo71n",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjh1lr2s2cnai12zh6q",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -60
+    },
+    {
+      "id": "mjh1lr2sggdjk70ybm9",
+      "gameId": "mjh1lr2stycwrynv4p",
+      "playerId": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
+      "playerName": "מלמד",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-22T09:38:19.276Z",
+  "lastUpdated": "2025-12-22T11:00:06.414Z",
   "updatedBy": "admin"
 }
