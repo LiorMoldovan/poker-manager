@@ -30,6 +30,7 @@ const StatisticsScreen = () => {
   const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
   const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
+  const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
@@ -1498,30 +1499,43 @@ const StatisticsScreen = () => {
             </>
           )}
 
-          {/* TABLE/INDIVIDUAL Sort Options - Dropdown */}
+          {/* TABLE/INDIVIDUAL Options - Sort dropdown + Table Mode toggle */}
           {(viewMode === 'table' || viewMode === 'individual') && (
-            <div className="card" style={{ padding: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sort:</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
+            <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
+                style={{
+                  padding: '0.35rem 0.5rem',
+                  fontSize: '0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="profit">💰 Profit</option>
+                <option value="games">🎮 Games</option>
+                <option value="winRate">📊 Win%</option>
+              </select>
+              {viewMode === 'table' && (
+                <button
+                  onClick={() => setTableMode(tableMode === 'profit' ? 'gainLoss' : 'profit')}
                   style={{
-                    flex: 1,
-                    padding: '0.5rem 0.75rem',
-                    fontSize: '0.85rem',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
+                    padding: '0.35rem 0.6rem',
+                    fontSize: '0.75rem',
+                    borderRadius: '6px',
+                    border: tableMode === 'gainLoss' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: tableMode === 'gainLoss' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: tableMode === 'gainLoss' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <option value="profit">💰 Profit</option>
-                  <option value="games">🎮 Games</option>
-                  <option value="winRate">📊 Win %</option>
-                </select>
-              </div>
+                  📊 Gain/Loss
+                </button>
+              )}
             </div>
           )}
 
@@ -1550,8 +1564,17 @@ const StatisticsScreen = () => {
                   <tr>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
-                      <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
-                      <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
+                      {tableMode === 'profit' ? (
+                        <>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
+                        </>
+                      ) : (
+                        <>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>Gain</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>Loss</th>
+                        </>
+                      )}
                       <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
                       <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
                   </tr>
@@ -1587,12 +1610,25 @@ const StatisticsScreen = () => {
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                             sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                       </td>
-                        <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
-                          {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
-                      </td>
-                        <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
-                          {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
-                        </td>
+                        {tableMode === 'profit' ? (
+                          <>
+                            <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
+                              {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
+                              {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>
+                              +₪{cleanNumber(player.totalGains)}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>
+                              -₪{cleanNumber(player.totalLosses)}
+                            </td>
+                          </>
+                        )}
                         <td style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{player.gamesPlayed}</td>
                       <td style={{ 
                         textAlign: 'center',

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.20';
+export const APP_VERSION = '4.16.21';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.16.21',
+    date: '2025-12-22',
+    changes: [
+      'Statistics: Compact sort dropdown + Gain/Loss toggle button',
+      'Gain/Loss mode shows Total Gain and Total Loss columns',
+      'Replaces Profit and Avg columns when enabled'
+    ]
+  },
   {
     version: '4.16.20',
     date: '2025-12-22',
