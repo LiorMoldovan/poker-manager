@@ -127,58 +127,6 @@ const StatisticsScreen = () => {
     }
   };
 
-  // Get top 20 single night wins (filtered by period and player types)
-  const top20Wins = useMemo(() => {
-    const dateFilter = getDateFilter();
-    const allGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
-      if (dateFilter.start && gameDate < dateFilter.start) return false;
-      if (dateFilter.end && gameDate > dateFilter.end) return false;
-      return true;
-    });
-    const allGamePlayers = getAllGamePlayers();
-    
-    // Get player IDs that match selected types
-    const validPlayerIds = new Set(
-      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
-    );
-    
-    // Create array of all player-game results
-    const allResults: Array<{
-      playerName: string;
-      profit: number;
-      date: string;
-      gameId: string;
-      playersCount: number;
-    }> = [];
-    
-    for (const game of allGames) {
-      const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
-      const playersCount = gamePlayers.length;
-      
-      for (const gp of gamePlayers) {
-        // Filter by player type
-        if (!validPlayerIds.has(gp.playerId)) continue;
-        
-        if (gp.profit > 0) { // Only wins
-          allResults.push({
-            playerName: gp.playerName,
-            profit: gp.profit,
-            date: game.date,
-            gameId: game.id,
-            playersCount
-          });
-        }
-      }
-    }
-    
-    // Sort by profit descending and take top 20
-    return allResults
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 20);
-  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]); // Recalculate when filters change
 
   // Share top 20 table as screenshot
   const handleShareTop20 = async () => {
@@ -306,6 +254,59 @@ const StatisticsScreen = () => {
         return undefined;
     }
   };
+
+  // Get top 20 single night wins (filtered by period and player types)
+  const top20Wins = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    const allGamePlayers = getAllGamePlayers();
+    
+    // Get player IDs that match selected types
+    const validPlayerIds = new Set(
+      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
+    );
+    
+    // Create array of all player-game results
+    const allResults: Array<{
+      playerName: string;
+      profit: number;
+      date: string;
+      gameId: string;
+      playersCount: number;
+    }> = [];
+    
+    for (const game of allGames) {
+      const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+      const playersCount = gamePlayers.length;
+      
+      for (const gp of gamePlayers) {
+        // Filter by player type
+        if (!validPlayerIds.has(gp.playerId)) continue;
+        
+        if (gp.profit > 0) { // Only wins
+          allResults.push({
+            playerName: gp.playerName,
+            profit: gp.profit,
+            date: game.date,
+            gameId: game.id,
+            playersCount
+          });
+        }
+      }
+    }
+    
+    // Sort by profit descending and take top 20
+    return allResults
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 20);
+  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]);
 
   useEffect(() => {
     loadStats();
