@@ -127,10 +127,23 @@ const StatisticsScreen = () => {
     }
   };
 
-  // Get top 20 single night wins (all-time, all players)
+  // Get top 20 single night wins (filtered by period and player types)
   const top20Wins = useMemo(() => {
-    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
     const allGamePlayers = getAllGamePlayers();
+    
+    // Get player IDs that match selected types
+    const validPlayerIds = new Set(
+      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
+    );
     
     // Create array of all player-game results
     const allResults: Array<{
@@ -146,6 +159,9 @@ const StatisticsScreen = () => {
       const playersCount = gamePlayers.length;
       
       for (const gp of gamePlayers) {
+        // Filter by player type
+        if (!validPlayerIds.has(gp.playerId)) continue;
+        
         if (gp.profit > 0) { // Only wins
           allResults.push({
             playerName: gp.playerName,
@@ -162,7 +178,7 @@ const StatisticsScreen = () => {
     return allResults
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
-  }, [stats]); // Recalculate when stats change
+  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]); // Recalculate when filters change
 
   // Share top 20 table as screenshot
   const handleShareTop20 = async () => {
@@ -1680,6 +1696,13 @@ const StatisticsScreen = () => {
                   borderRadius: '6px'
                 }}>
                   🏆 Top 20 Single Night Wins
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400', marginTop: '0.15rem' }}>
+                    {timePeriod === 'all' ? 'All Time' : 
+                     timePeriod === 'year' ? `${selectedYear}` :
+                     timePeriod === 'h1' ? `H1 ${selectedYear}` :
+                     timePeriod === 'h2' ? `H2 ${selectedYear}` :
+                     `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][selectedMonth - 1]} ${selectedYear}`}
+                  </div>
                 </div>
                 <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                   <thead>
