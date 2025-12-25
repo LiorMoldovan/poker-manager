@@ -168,40 +168,43 @@ export const generateAIForecasts = async (
   const allTimeRecordsText = allTimeRecords.join('\n');
   
   // ========== CALCULATE MILESTONES ==========
+  // NOTE: All milestones are ALL-TIME (since the group started playing)
   const milestones: string[] = [];
   
-  // 1. Leaderboard passing opportunities
+  // 1. Leaderboard passing opportunities (ALL-TIME rankings)
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
     const chaser = sortedByTotalProfit[i];
     const leader = sortedByTotalProfit[i - 1];
     const gap = leader.totalProfit - chaser.totalProfit;
+    const chaserRank = i + 1;
+    const leaderRank = i;
     
     // If gap is achievable in one night (less than 250₪)
     if (gap > 0 && gap <= 250) {
-      milestones.push(`📈 LEADERBOARD: If ${chaser.name} wins +${gap}₪ or more, they'll PASS ${leader.name} in all-time profit!`);
+      milestones.push(`📈 LEADERBOARD (ALL-TIME): ${chaser.name} is currently #${chaserRank} with ${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪ total. If they win +${gap}₪ tonight, they'll PASS ${leader.name} (#${leaderRank}, ${leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit}₪) and move up to #${leaderRank}!`);
     }
   }
   
-  // 2. Round number milestones (500, 1000, 1500, 2000, etc.)
+  // 2. Round number milestones (500, 1000, 1500, 2000, etc.) - ALL-TIME totals
   const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
   players.forEach(p => {
     for (const milestone of roundNumbers) {
       const distanceToMilestone = milestone - p.totalProfit;
       // If they're close to crossing UP a milestone
       if (distanceToMilestone > 0 && distanceToMilestone <= 200) {
-        milestones.push(`🎯 MILESTONE: ${p.name} is only ${distanceToMilestone}₪ away from crossing +${milestone}₪ all-time profit!`);
+        milestones.push(`🎯 MILESTONE (ALL-TIME TOTAL): ${p.name} is at ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪ total (all games ever). Only ${distanceToMilestone}₪ more tonight to cross the +${milestone}₪ all-time milestone!`);
         break; // Only show closest milestone
       }
       // If they're close to dropping BELOW a milestone (negative)
       const distanceToNegMilestone = p.totalProfit - (-milestone);
       if (p.totalProfit < 0 && distanceToNegMilestone > 0 && distanceToNegMilestone <= 200) {
-        milestones.push(`⚠️ DANGER ZONE: ${p.name} is only ${distanceToNegMilestone}₪ away from dropping to -${milestone}₪ all-time!`);
+        milestones.push(`⚠️ DANGER ZONE (ALL-TIME TOTAL): ${p.name} is at ${p.totalProfit}₪ total (all games ever). If they lose ${distanceToNegMilestone}₪ tonight, they'll drop to -${milestone}₪ all-time!`);
         break;
       }
     }
   });
   
-  // 3. Streak records that could be broken/tied
+  // 3. Streak records that could be broken/tied (CURRENT STREAK)
   const groupWinStreakRecord = Math.max(...players.map(p => p.currentStreak), 0);
   const groupLoseStreakRecord = Math.min(...players.map(p => p.currentStreak), 0);
   
@@ -209,33 +212,34 @@ export const generateAIForecasts = async (
     // Someone on a hot streak could tie/break record
     if (p.currentStreak >= 3 && p.currentStreak >= groupWinStreakRecord) {
       if (p.currentStreak === groupWinStreakRecord) {
-        milestones.push(`🔥 STREAK RECORD: If ${p.name} wins tonight, they'll BREAK the group winning streak record (currently ${groupWinStreakRecord} games)!`);
+        milestones.push(`🔥 STREAK RECORD: ${p.name} is currently on a ${p.currentStreak}-game WINNING streak (this is the group record!). If they win tonight, they'll set a NEW all-time group record of ${p.currentStreak + 1} consecutive wins!`);
       }
     }
     // Someone on a cold streak could tie/break negative record
     if (p.currentStreak <= -3 && p.currentStreak <= groupLoseStreakRecord) {
       if (p.currentStreak === groupLoseStreakRecord) {
-        milestones.push(`❄️ STREAK RECORD: If ${p.name} loses tonight, they'll set a new group LOSING streak record (currently ${Math.abs(groupLoseStreakRecord)} games)!`);
+        milestones.push(`❄️ STREAK RECORD: ${p.name} is currently on a ${Math.abs(p.currentStreak)}-game LOSING streak (tied for worst in group history!). If they lose tonight, they'll set a NEW unfortunate record of ${Math.abs(p.currentStreak) + 1} consecutive losses!`);
       }
     }
   });
   
   // 4. Could someone break the biggest single-night win record?
   const biggestWinRecord = Math.max(...players.map(p => p.bestWin));
+  const recordHolder = players.find(p => p.bestWin === biggestWinRecord);
   players.forEach(p => {
     // If someone's on a hot streak and their best isn't the record
     if (p.currentStreak >= 2 && p.bestWin < biggestWinRecord) {
       const gap = biggestWinRecord - p.bestWin;
       if (gap <= 150) {
-        milestones.push(`💰 WIN RECORD: ${p.name}'s best is +${p.bestWin}₪. If they win +${biggestWinRecord + 1}₪ tonight, they'll break the group record!`);
+        milestones.push(`💰 SINGLE-NIGHT WIN RECORD: The group record for biggest win in one night is +${biggestWinRecord}₪ (held by ${recordHolder?.name || 'unknown'}). ${p.name}'s personal best is +${p.bestWin}₪. If they win +${biggestWinRecord + 1}₪ tonight, they'll set a new group record!`);
       }
     }
   });
   
-  // 5. Revenge/comeback opportunities
+  // 5. Revenge/comeback opportunities (ALL-TIME context)
   players.forEach(p => {
     if (p.currentStreak <= -2 && p.totalProfit > 0) {
-      milestones.push(`💪 COMEBACK: ${p.name} is on a ${Math.abs(p.currentStreak)}-game losing streak but still +${p.totalProfit}₪ overall. Time for revenge?`);
+      milestones.push(`💪 COMEBACK OPPORTUNITY: ${p.name} is on a ${Math.abs(p.currentStreak)}-game losing streak, but their ALL-TIME total is still +${p.totalProfit}₪ (positive overall!). A win tonight would snap the streak.`);
     }
   });
   
@@ -319,10 +323,17 @@ ${playerDynamics.length > 0 ? `
 ${playerDynamics.join('\n')}` : ''}
 ${milestonesText ? `
 🎯 TONIGHT'S MILESTONES & RECORDS AT STAKE:
+(Note: All totals below are ALL-TIME - from when the group started playing poker together)
 ${milestonesText}
 
-⭐ USE THESE MILESTONES IN YOUR SENTENCES! They make forecasts much more exciting!
-   Example: "אם ליאור ינצח הלילה ב-80₪ או יותר, הוא יעקוף את סגל בטבלה!"` : ''}
+⭐ USE THESE MILESTONES IN YOUR SENTENCES! They make forecasts exciting!
+⚠️ ALWAYS BE CLEAR about what the number means:
+   - Say "בסך הכל" or "כולל" when mentioning all-time totals
+   - Say "בטבלת כל הזמנים" when mentioning leaderboard positions
+   - Say "שיא הקבוצה" when mentioning group records
+   
+   ❌ WRONG: "אייל צריך עוד שקל להגיע ל-1500" (unclear - 1500 of what?)
+   ✅ RIGHT: "אייל עומד על +1499₪ בסך הכל. עוד שקל אחד הלילה והוא יעבור את רף ה-1500₪ כולל!"` : ''}
 
 ═══════════════════════════════════════
 
@@ -403,15 +414,20 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 
 💡 EXAMPLES OF QUALITY (HEBREW OUTPUT):
 
-✅ MILESTONE EXAMPLE: "ליאור צריך רק +85₪ הלילה כדי לעקוף את סגל ולהפוך למוביל הטבלה! עם 3 נצחונות רצופים, המומנטום לצידו."
+⚠️ IMPORTANT: When mentioning milestones, ALWAYS specify the context clearly!
+- "כולל" or "בסך הכל" = all-time total
+- "בטבלת כל הזמנים" = all-time leaderboard
+- "שיא הקבוצה" = group record
 
-✅ STREAK RECORD: "אם אייל ינצח הלילה, הוא ישבור את שיא הנצחונות הרצופים של הקבוצה! 5 משחקים ברצף והוא עדיין רעב."
+✅ LEADERBOARD: "ליאור עומד על +920₪ בסך הכל. עוד 85₪ הלילה והוא יעקוף את סגל (+1005₪) ויעלה למקום השני בטבלה כל הזמנים!"
 
-✅ ROUND NUMBER: "מור נמצאת רק 65₪ מ-+1000₪ כולל! הלילה היא יכולה לחגוג אלף ראשון - האם הלחץ יעבוד לטובתה?"
+✅ ROUND NUMBER: "מור כרגע ב-+935₪ כולל מאז שהתחלנו לשחק. עוד 65₪ הלילה והיא תשבור את רף האלף שקל!"
 
-✅ DANGER ZONE: "אביב רחוק משחק אחד בלבד מהשוואת שיא ההפסדים הרצופים של הקבוצה (5). האם הוא יקטע את הרצף?"
+✅ STREAK RECORD: "אייל ב-4 נצחונות רצופים - שוויון לשיא הקבוצה. נצחון הלילה יכתוב אותו בספרי ההיסטוריה עם 5 ברצף!"
 
-✅ REVENGE: "סגל ב-3 הפסדים רצופים אבל עדיין +450₪ כולל. הפניקס הזה תמיד חוזר - השאלה רק מתי."
+✅ DANGER ZONE: "אביב ב-4 הפסדים רצופים, שוויון לשיא השלילי של הקבוצה. הפסד נוסף יהפוך אותו לבעל הרצף הגרוע בהיסטוריה שלנו."
+
+✅ COMEBACK: "סגל אמנם ב-3 הפסדים רצופים, אבל בסך הכל הוא עדיין +450₪ כולל. הפניקס הזה תמיד חוזר."
 
 ═══════════════════════════════════════
 

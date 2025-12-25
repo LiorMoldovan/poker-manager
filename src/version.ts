@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.18.1';
+export const APP_VERSION = '4.18.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.18.2',
+    date: '2025-12-25',
+    changes: [
+      '📊 Clearer milestone descriptions with explicit context!',
+      'All milestones now specify "ALL-TIME" or "בסך הכל"',
+      'Leaderboard shows current rank and exact amounts',
+      'Examples show correct vs incorrect milestone phrasing',
+      'AI instructed to always clarify what numbers mean'
+    ]
+  },
   {
     version: '4.18.1',
     date: '2025-12-25',
