@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.31.1';
+export const APP_VERSION = '4.31.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.31.2',
+    date: '2025-12-25',
+    changes: [
+      '🧪 COMPREHENSIVE TEST SUITE: 25 tests across 8 categories!',
+      'NEW: Duplicate prevention tests (record chase, streaks)',
+      'NEW: Data integrity tests (zero values, rankings, negative profits)',
+      'NEW: Forecast accuracy tests (year vs all-time, streak validation)',
+      'All tests pass - milestone logic verified and working correctly'
+    ]
+  },
   {
     version: '4.31.1',
     date: '2025-12-25',

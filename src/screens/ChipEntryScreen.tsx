@@ -34,10 +34,7 @@ interface NumpadModalProps {
 
 const NumpadModal = ({ 
   isOpen, 
-<<<<<<< Updated upstream
   playerName,
-=======
->>>>>>> Stashed changes
   chipColor, 
   chipDisplayColor, 
   currentValue, 
@@ -222,11 +219,7 @@ const ChipEntryScreen = () => {
   // Numpad state - track by chip index for auto-advance
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadPlayerId, setNumpadPlayerId] = useState('');
-<<<<<<< Updated upstream
-  const [numpadChipIndex, setNumpadChipIndex] = useState(0);
-=======
   const [numpadChipIndex, setNumpadChipIndex] = useState(0); // Track chip by index for auto-advance
->>>>>>> Stashed changes
   
   // Player selector state
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -295,23 +288,10 @@ const ChipEntryScreen = () => {
       });
     });
     setChipCounts(initialCounts);
-<<<<<<< Updated upstream
     
     // Don't auto-select any player - let user choose
     setSelectedPlayerId(null);
     setNumpadOpen(false);  // Ensure numpad is closed
-=======
-    // Select first player by default and auto-open numpad
-    if (gamePlayers.length > 0) {
-      setSelectedPlayerId(gamePlayers[0].id);
-      // Auto-open numpad for first chip
-      if (chips.length > 0) {
-        setNumpadPlayerId(gamePlayers[0].id);
-        setNumpadChipIndex(0);
-        setNumpadOpen(true);
-      }
-    }
->>>>>>> Stashed changes
     setIsLoading(false);
   };
 
