@@ -929,44 +929,60 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
    - Only mention the number if it adds value to your point
    
 3. BUT if you DO mention a profit number → it MUST match expectedProfit exactly!
-   ❌ expectedProfit: 120, sentence says "+80₪" ← WRONG!
-   ✅ expectedProfit: 120, sentence says "+120₪" ← CORRECT!
-   ✅ expectedProfit: 120, sentence talks about streaks without mentioning profit ← ALSO FINE!
+
+4. 🚨 CRITICAL: EVERY NUMBER NEEDS CONTEXT! 🚨
+   When you mention ANY number (profit, average, milestone, position), you MUST specify:
+   - WHICH TABLE: "בטבלה הכללית" (all-time) / "בטבלת ${new Date().getFullYear()}" (year) / "החודש" (month)
+   - WHAT TIMEFRAME: "כולל מאז שהתחלנו" / "השנה" / "ב-5 משחקים אחרונים"
+   
+   ❌ WRONG - NO CONTEXT:
+   - "ממוצע של -7₪" ← -7 where? all-time? this year? last 5 games?
+   - "שואף לחצות את רף ה-2000₪" ← 2000 in which table?
+   - "500₪ רווח" ← 500 total? this year? this month?
+   
+   ✅ CORRECT - WITH CONTEXT:
+   - "ממוצע של -7₪ למשחק בטבלה הכללית (כל הזמנים)"
+   - "שואף לחצות את רף ה-2000₪ בטבלה הכללית של כל הזמנים"
+   - "500₪ רווח בטבלת שנת 2025"
+   - "ממוצע של +67₪ למשחק ב-10 המשחקים האחרונים"
 
 ═══════════════════════════════════════
 
-💡 EXAMPLES OF QUALITY (WITH CORRECT CORRELATION):
+💡 EXAMPLES OF QUALITY (WITH FULL CONTEXT):
 
-⚠️ IMPORTANT: When mentioning milestones, ALWAYS specify the context clearly!
-- "כולל" or "בסך הכל" = all-time total
-- "בטבלת כל הזמנים" = all-time leaderboard
-- "שיא הקבוצה" = group record
+⚠️ EVERY NUMBER MUST HAVE CONTEXT! Use these phrases:
+- "בטבלה הכללית (כל הזמנים)" = all-time leaderboard
+- "בטבלת שנת 2025" = this year's table
+- "החודש" = this month
+- "ב-X משחקים אחרונים" = last X games
+- "ממוצע היסטורי" = historical average
+- "מאז שהתחלנו לשחק" = since we started playing
 
-📊 CORRECT EXAMPLES:
+📊 CORRECT EXAMPLES (EVERY NUMBER HAS CONTEXT!):
 
-✅ BEST - Focus on interesting story (no need to repeat number):
-   expectedProfit: +130 → "ליאור ב-4 נצחונות רצופים, קרוב לשיא הקבוצה. המומנטום לצידו והוא מריח דם!"
-   expectedProfit: +80 → "מור עומדת לעקוף את סגל בטבלה. 85₪ הפרש - הלילה יכריע!"
-   expectedProfit: -60 → "אביב ב-3 הפסדים רצופים. צריך לשבור את הרצף לפני שזה הופך לשיא שלילי."
-   expectedProfit: -120 → "סגל נגד הפורום הכי קשה שלו. ההיסטוריה לא לצידו הלילה."
+✅ GOOD - Milestone with full context:
+   "ליאור עומד על +1920₪ בטבלה הכללית של כל הזמנים. עוד 80₪ הלילה והוא יחצה את רף ה-2000₪ בטבלה הכללית!"
 
-✅ WITH number (only if it adds value):
-   expectedProfit: +100 → "ליאור צריך רק +100₪ כדי לחצות את רף ה-2000₪ כולל!"
-   expectedProfit: -80 → "אביב עלול להפסיד -80₪ ולרדת למקום האחרון."
+✅ GOOD - Average with timeframe:
+   "חרדון עם ממוצע של +67₪ למשחק בטבלה הכללית (מתוך 45 משחקים). הלילה הוא שואף להגיע ל-500₪ רווח בטבלת שנת 2025."
 
-❌ WRONG - NUMBER MISMATCH:
-   expectedProfit: +100 but sentence says "+70₪" ← FORBIDDEN!
-   
+✅ GOOD - Negative with context:
+   "ליכטר במקום 5 בטבלה הכללית עם ממוצע של -7₪ למשחק (כל הזמנים). מחפש שיפור לאחר תקופה קשה."
+
+✅ GOOD - Year table reference:
+   "מור מובילה את טבלת שנת 2025 עם +380₪. הלילה היא נלחמת לשמור על המקום הראשון בטבלה השנתית."
+
+✅ GOOD - Story without numbers:
+   "ליאור ברצף חם של 4 נצחונות. המומנטום לצידו והוא מוכן לעוד לילה מנצח!"
+
+❌ WRONG - NO CONTEXT:
+   "שואף לחצות את רף ה-2000₪" ← חסר: "בטבלה הכללית"
+   "ממוצע של -7₪" ← חסר: "בטבלה הכללית (כל הזמנים)" או "ב-10 משחקים אחרונים"
+   "500₪ רווח לשנה" ← לא ברור, צריך: "בטבלת שנת 2025"
+   "85₪ הפרש" ← חסר: "בטבלה הכללית" או באיזו טבלה
+
 ❌ WRONG - TONE MISMATCH:
    expectedProfit: +100 with "לילה קשה צפוי" ← FORBIDDEN!
-
-📍 MILESTONE EXAMPLES (with clear context):
-
-✅ LEADERBOARD: "ליאור עומד על +920₪ בסך הכל. עוד 85₪ הלילה והוא יעקוף את סגל ויעלה למקום השני!"
-
-✅ ROUND NUMBER: "מור כרגע ב-+935₪ כולל. עוד 65₪ הלילה והיא תשבור את רף האלף שקל!"
-
-✅ STREAK: "אייל ב-4 נצחונות רצופים - שוויון לשיא. נצחון הלילה יכתוב אותו בהיסטוריה!"
 
 ═══════════════════════════════════════
 

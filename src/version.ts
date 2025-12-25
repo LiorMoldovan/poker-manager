@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.21.0';
+export const APP_VERSION = '4.21.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.21.1',
+    date: '2025-12-25',
+    changes: [
+      '🚨 EVERY number in forecast must have context!',
+      'Must specify: בטבלה הכללית / בטבלת 2025 / החודש',
+      'Examples: "2000₪ בטבלה הכללית", "ממוצע -7₪ (כל הזמנים)"',
+      'Forbidden: vague references like "רף ה-2000₪" without table',
+      'AI prompt now has strict rules with wrong/right examples',
+      'Fixes: Lior 2000₪, Erez 500₪, Lichter -7₪ context issues'
+    ]
+  },
   {
     version: '4.21.0',
     date: '2025-12-25',
