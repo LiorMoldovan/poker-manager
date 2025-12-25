@@ -814,33 +814,33 @@ const StatisticsScreen = () => {
       ) : (
         <>
           {/* View Mode Toggle */}
-          <div className="card" style={{ padding: '0.75rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="card" style={{ padding: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button 
                 className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('table')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
               >
                 📊 Table
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('records')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
               >
                 🏆 Records
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('individual')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
               >
                 👤 Players
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'insights' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('insights')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
               >
                 🎯 Insights
               </button>
@@ -849,8 +849,7 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
-            {/* Active Players Filter - Toggle Switch (only for table and records views) */}
-            {(viewMode === 'table' || viewMode === 'records') && (
+            {/* Active Players Filter - Toggle Switch */}
               <div style={{ 
                 marginBottom: '0.75rem',
                 paddingBottom: '0.75rem',
@@ -901,7 +900,6 @@ const StatisticsScreen = () => {
                   }} />
                 </button>
             </div>
-            )}
 
             {/* Time Period Filter */}
             <div style={{ 
@@ -1526,8 +1524,8 @@ const StatisticsScreen = () => {
             </>
           )}
 
-          {/* TABLE/INDIVIDUAL Options - Sort dropdown + Table Mode toggle */}
-          {(viewMode === 'table' || viewMode === 'individual' || viewMode === 'insights') && (
+          {/* TABLE Options - Sort dropdown + Table Mode toggle */}
+          {viewMode === 'table' && (
             <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <select
                 value={sortBy}
