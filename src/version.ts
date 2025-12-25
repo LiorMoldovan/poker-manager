@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.23.0';
+export const APP_VERSION = '4.23.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.23.1',
+    date: '2025-12-25',
+    changes: [
+      '🎯 Tomer fix: Be kind but NEVER invent positive facts!',
+      'Removed "optimistic" instruction that caused false data',
+      'Milestones: 7-10 interesting ones only (not forced 10)',
+      'Removed boring filler milestones (player stats, year summaries)',
+      'Only show milestones with priority 50+ (truly interesting)',
+      'Priority threshold ensures quality over quantity'
+    ]
+  },
   {
     version: '4.23.0',
     date: '2025-12-25',

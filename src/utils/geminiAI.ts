@@ -303,7 +303,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
         emoji: '💪',
         title: `הזדמנות לקאמבק!`,
         description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים, אבל בטבלה הכללית של כל הזמנים הוא עדיין ברווח של +${Math.round(p.totalProfit)}₪. נצחון הלילה ישבור את הרצף השלילי ויחזיר אותו למסלול הנצחונות!`,
-        priority: 55
+        priority: 65
       });
     }
   });
@@ -323,74 +323,23 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   });
   
-  // 14. PLAYER STATS (always accurate - fill up to 10)
-  // Add stats for players who don't have other milestones yet
-  const playersInMilestones = new Set(milestones.map(m => {
-    // Extract player name from title or description
-    for (const p of players) {
-      if (m.title.includes(p.name) || m.description.includes(p.name)) {
-        return p.name;
-      }
-    }
-    return null;
-  }).filter(Boolean));
-  
-  players.forEach(p => {
-    // If player has games and isn't featured in other milestones, add their stats
-    if (p.gamesPlayed >= 5) {
-      const avgProfit = Math.round(p.totalProfit / p.gamesPlayed);
-      const rank = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
-      
-      if (p.totalProfit > 0) {
-        milestones.push({
-          emoji: '📊',
-          title: `סטטיסטיקה: ${p.name}`,
-          description: `${p.name} במקום ${rank} בטבלה הכללית עם ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪ רווח כולל מ-${p.gamesPlayed} משחקים. ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק ו-${Math.round(p.winPercentage)}% נצחונות.`,
-          priority: 40 + rank
-        });
-      } else {
-        milestones.push({
-          emoji: '📊',
-          title: `סטטיסטיקה: ${p.name}`,
-          description: `${p.name} במקום ${rank} בטבלה הכללית עם ${Math.round(p.totalProfit)}₪ מ-${p.gamesPlayed} משחקים. ממוצע של ${avgProfit}₪ למשחק ו-${Math.round(p.winPercentage)}% נצחונות.`,
-          priority: 35 + rank
-        });
-      }
-    }
-  });
-  
-  // 15. BEST/WORST SINGLE GAME (factual)
-  players.forEach(p => {
-    if (p.bestWin >= 150) {
-      milestones.push({
-        emoji: '🏆',
-        title: `שיא אישי: ${p.name}`,
-        description: `השיא האישי של ${p.name} הוא נצחון של +${Math.round(p.bestWin)}₪ בלילה אחד. האם הלילה הוא ישבור את השיא שלו?`,
-        priority: 50
-      });
-    }
-  });
-  
-  // 16. YEAR PERFORMANCE SUMMARY
-  playerPeriodStats.forEach(p => {
-    if (p.yearGames >= 3) {
-      const yearRank = sortedByYearProfit.findIndex(sp => sp.name === p.name) + 1;
-      milestones.push({
-        emoji: '📅',
-        title: `ביצועי ${currentYear}: ${p.name}`,
-        description: `${p.name} שיחק ${p.yearGames} משחקים בשנת ${currentYear} עם רווח של ${p.yearProfit >= 0 ? '+' : ''}${Math.round(p.yearProfit)}₪. מיקום ${yearRank} בטבלה השנתית.`,
-        priority: 45
-      });
-    }
-  });
-  
-  // Sort by priority and return exactly 10 (or fewer if not enough)
+  // Sort by priority and return 7-10 most interesting milestones
+  // Don't force to 10 - only show truly interesting ones
   milestones.sort((a, b) => b.priority - a.priority);
   
+  // Take top 10 but filter out low-priority ones (below 50)
+  const topMilestones = milestones.filter(m => m.priority >= 50).slice(0, 10);
+  
+  // If we have less than 7, take some lower priority ones
+  if (topMilestones.length < 7) {
+    const remaining = milestones.filter(m => m.priority < 50).slice(0, 7 - topMilestones.length);
+    topMilestones.push(...remaining);
+  }
+  
   // Clean up any decimal numbers in descriptions
-  const cleanMilestones = milestones.slice(0, 10).map(m => ({
+  const cleanMilestones = topMilestones.slice(0, 10).map(m => ({
     ...m,
-    description: m.description.replace(/(\d+)\.(\d+)/g, (match, whole) => Math.round(parseFloat(match)).toString())
+    description: m.description.replace(/(\d+)\.(\d+)/g, (match) => Math.round(parseFloat(match)).toString())
   }));
   
   return cleanMilestones;
@@ -999,7 +948,11 @@ ${recentGameExamples}
 
 🎭 SPECIAL PLAYER HANDLING:
 
-• **תומר (Tomer)**: Be GENTLE and OPTIMISTIC with him! Even if his stats aren't great, find something encouraging. Focus on potential, recent improvements, or highlight when he beat strong players. Never mock him - keep him hopeful!
+• **תומר (Tomer)**: Be KIND with your wording, but NEVER invent positive facts! 
+  - If his stats are negative, you MUST still report them accurately
+  - Don't say "רווח של +X" if his actual profit is negative!
+  - You can be encouraging about REAL things like: "מחפש לשבור את הרצף" or "הלילה הזדמנות לשיפור"
+  - NEVER make up positive numbers or fake achievements!
 
 ═══════════════════════════════════════
 
