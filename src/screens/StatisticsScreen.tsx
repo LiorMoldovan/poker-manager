@@ -2042,95 +2042,200 @@ const StatisticsScreen = () => {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {(() => {
-                // Generate milestones based on filtered data
-                const milestones: Array<{ emoji: string; title: string; description: string }> = [];
+                // Generate diverse milestones based on filtered data
+                const milestones: Array<{ emoji: string; title: string; description: string; priority: number }> = [];
                 
                 // Sort by profit for rankings
                 const rankedStats = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
+                const periodLabel = getTimeframeLabel();
+                const currentYear = new Date().getFullYear();
+                const currentMonth = new Date().getMonth();
+                const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+                const currentHalf = currentMonth < 6 ? 1 : 2;
                 
-                // Leaderboard battles (close gaps)
-                for (let i = 1; i < rankedStats.length; i++) {
+                // 1. CHAMPION TITLE - Who's leading?
+                if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
+                  const leader = rankedStats[0];
+                  const secondPlace = rankedStats[1];
+                  const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
+                  if (gap > 0 && gap <= 100) {
+                    milestones.push({
+                      emoji: '👑',
+                      title: `אלוף ${periodLabel}?`,
+                      description: `${leader.playerName} מוביל את הטבלה עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} צריך רק ${gap}₪ כדי לעקוף ולהפוך לאלוף!`,
+                      priority: 95
+                    });
+                  } else if (leader.gamesPlayed >= 10) {
+                    milestones.push({
+                      emoji: '🏆',
+                      title: `מוביל ${periodLabel}!`,
+                      description: `${leader.playerName} מוביל את טבלת ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
+                      priority: 70
+                    });
+                  }
+                }
+                
+                // 2. LONGEST LOSING STREAK - drama!
+                const worstStreaker = rankedStats.filter(p => p.currentStreak <= -3).sort((a, b) => a.currentStreak - b.currentStreak)[0];
+                if (worstStreaker) {
+                  milestones.push({
+                    emoji: '❄️',
+                    title: `סגל ברצף הפסדים - הכי ארוך!`,
+                    description: `${worstStreaker.playerName} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים! הלילה הזדמנות לשבור את הרצף השלילי.`,
+                    priority: 88
+                  });
+                }
+                
+                // 3. HOT STREAK - fire!
+                const hotStreaker = rankedStats.filter(p => p.currentStreak >= 3).sort((a, b) => b.currentStreak - a.currentStreak)[0];
+                if (hotStreaker) {
+                  milestones.push({
+                    emoji: '🔥',
+                    title: `${hotStreaker.playerName} על גל!`,
+                    description: `${hotStreaker.currentStreak} נצחונות רצופים! ${hotStreaker.playerName} נמצא בתקופה הכי חזקה שלו. האם הרצף ימשיך?`,
+                    priority: 90
+                  });
+                }
+                
+                // 4. LEADERBOARD BATTLES (show max 2 most interesting)
+                let leaderboardBattleCount = 0;
+                for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
                   const chaser = rankedStats[i];
                   const leader = rankedStats[i - 1];
                   const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                  if (gap > 0 && gap <= 200) {
+                  if (gap > 0 && gap <= 150) {
+                    const isTopBattle = i <= 2;
                     milestones.push({
-                      emoji: '📈',
-                      title: `מרדף על מקום ${i}!`,
-                      description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד.`
+                      emoji: isTopBattle ? '📈' : '🎯',
+                      title: isTopBattle ? `מרדף על ${i === 1 ? 'הפסגה' : 'מקום ' + i}!` : `${chaser.playerName} רודף`,
+                      description: `${chaser.playerName} במקום ${i + 1} עם ${formatCurrency(chaser.totalProfit)}. ${leader.playerName} לפניו עם הפרש של ${gap}₪ בלבד. נצחון טוב יכול להפוך את הדירוג!`,
+                      priority: 85 - i * 3
                     });
+                    leaderboardBattleCount++;
                   }
                 }
                 
-                // Round number milestones
+                // 5. ROUND NUMBER MILESTONE - show ONE best
                 const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
+                const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
                 rankedStats.forEach(p => {
-                  for (const milestone of roundNumbers) {
-                    const distance = Math.round(milestone - p.totalProfit);
-                    if (distance > 0 && distance <= 150) {
-                      milestones.push({
-                        emoji: '🎯',
-                        title: `יעד עגול!`,
-                        description: `${p.playerName} צריך ${distance}₪ להגיע ל-${milestone}₪ ב${getTimeframeLabel()}.`
-                      });
+                  for (const m of roundNumbers) {
+                    const dist = Math.round(m - p.totalProfit);
+                    if (dist > 0 && dist <= 120) {
+                      roundCandidates.push({ player: p, milestone: m, distance: dist });
                       break;
                     }
                   }
                 });
+                if (roundCandidates.length > 0) {
+                  const best = roundCandidates.sort((a, b) => a.distance - b.distance)[0];
+                  milestones.push({
+                    emoji: '🎯',
+                    title: `יעד עגול!`,
+                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה!`,
+                    priority: 75
+                  });
+                }
                 
-                // Win streaks
-                rankedStats.forEach(p => {
-                  if (p.currentStreak >= 3) {
-                    milestones.push({
-                      emoji: '🔥',
-                      title: `רצף נצחונות!`,
-                      description: `${p.playerName} ברצף של ${p.currentStreak} נצחונות רצופים.`
-                    });
-                  }
-                });
-                
-                // Lose streaks
-                rankedStats.forEach(p => {
-                  if (p.currentStreak <= -3) {
-                    milestones.push({
-                      emoji: '❄️',
-                      title: `רצף הפסדים`,
-                      description: `${p.playerName} ברצף של ${Math.abs(p.currentStreak)} הפסדים. נצחון ישבור את הרצף!`
-                    });
-                  }
-                });
-                
-                // Games milestones
-                const gamesMilestones = [25, 50, 75, 100, 150, 200];
-                rankedStats.forEach(p => {
-                  for (const gm of gamesMilestones) {
-                    if (p.gamesPlayed === gm - 1) {
-                      milestones.push({
-                        emoji: '🎮',
-                        title: `יובל משחקים!`,
-                        description: `${p.playerName} עומד לשחק את המשחק ה-${gm} שלו.`
-                      });
-                      break;
-                    }
-                  }
-                });
-                
-                // Close battles
+                // 6. EXACT TIE - very dramatic!
                 for (let i = 0; i < rankedStats.length; i++) {
-                  for (let j = i + 1; j < Math.min(i + 2, rankedStats.length); j++) {
-                    const gap = Math.round(Math.abs(rankedStats[i].totalProfit - rankedStats[j].totalProfit));
-                    if (gap <= 30 && gap > 0) {
+                  for (let j = i + 1; j < rankedStats.length; j++) {
+                    if (Math.round(rankedStats[i].totalProfit) === Math.round(rankedStats[j].totalProfit) && rankedStats[i].totalProfit !== 0) {
                       milestones.push({
-                        emoji: '⚔️',
-                        title: `קרב צמוד!`,
-                        description: `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} בהפרש של ${gap}₪ בלבד!`
+                        emoji: '🤝',
+                        title: `תיקו מושלם!`,
+                        description: `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} נמצאים בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}! המשחק הבא יקבע מי יעלה.`,
+                        priority: 92
                       });
                     }
                   }
                 }
+                
+                // 7. GAMES MILESTONE - ONE player closest
+                const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
+                const gameMilestonePlayer = rankedStats.find(p => gamesMilestones.includes(p.gamesPlayed + 1));
+                if (gameMilestonePlayer) {
+                  const nextMilestone = gameMilestonePlayer.gamesPlayed + 1;
+                  const avgProfit = gameMilestonePlayer.gamesPlayed > 0 ? Math.round(gameMilestonePlayer.totalProfit / gameMilestonePlayer.gamesPlayed) : 0;
+                  milestones.push({
+                    emoji: '🎮',
+                    title: `יובל משחקים ל-${gameMilestonePlayer.playerName}!`,
+                    description: `המשחק הבא יהיה המשחק ה-${nextMilestone} של ${gameMilestonePlayer.playerName}! עד כה עם ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק.`,
+                    priority: 65
+                  });
+                }
+                
+                // 8. RECOVERY TO POSITIVE
+                const recoveryCandidate = rankedStats
+                  .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
+                  .sort((a, b) => b.totalProfit - a.totalProfit)[0];
+                if (recoveryCandidate) {
+                  milestones.push({
+                    emoji: '🔄',
+                    title: `חזרה לפלוס!`,
+                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪. נצחון של ${Math.abs(Math.round(recoveryCandidate.totalProfit))}₪ או יותר יחזיר אותו לרווח חיובי!`,
+                    priority: 72
+                  });
+                }
+                
+                // 9. PLAYER OF THE PERIOD - close race
+                if (rankedStats.length >= 2 && rankedStats[0].gamesPlayed >= 3 && rankedStats[1].gamesPlayed >= 3) {
+                  const first = rankedStats[0];
+                  const second = rankedStats[1];
+                  const gap = Math.round(first.totalProfit - second.totalProfit);
+                  if (gap > 0 && gap <= 80) {
+                    milestones.push({
+                      emoji: '🏅',
+                      title: `מרדף על תואר "שחקן ${periodLabel}"!`,
+                      description: `${first.playerName} מוביל עם ${formatCurrency(first.totalProfit)}, ו-${second.playerName} רודף עם הפרש של ${gap}₪ בלבד. קרב צמוד על התואר!`,
+                      priority: 78
+                    });
+                  }
+                }
+                
+                // 10. BIGGEST WIN RECORD - show current record holder
+                const bestWinRecord = rankedStats.reduce((max, p) => p.biggestWin > max.biggestWin ? p : max, rankedStats[0]);
+                if (bestWinRecord && bestWinRecord.biggestWin >= 200) {
+                  milestones.push({
+                    emoji: '💰',
+                    title: `שיא הנצחון הגדול!`,
+                    description: `${bestWinRecord.playerName} מחזיק בשיא הנצחון הגדול ב${periodLabel} עם +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד. האם מישהו ישבור את השיא?`,
+                    priority: 60
+                  });
+                }
+                
+                // 11. CONSISTENCY KING - best win rate with enough games
+                const consistencyKing = rankedStats
+                  .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 60)
+                  .sort((a, b) => b.winPercentage - a.winPercentage)[0];
+                if (consistencyKing) {
+                  milestones.push({
+                    emoji: '🎯',
+                    title: `מלך העקביות!`,
+                    description: `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
+                    priority: 55
+                  });
+                }
+                
+                // 12. COMEBACK KING - someone who went from negative to positive
+                const comebackKing = rankedStats
+                  .filter(p => p.totalProfit > 0 && p.biggestLoss >= 100 && p.gamesPlayed >= 5)
+                  .sort((a, b) => b.biggestLoss - a.biggestLoss)[0];
+                if (comebackKing) {
+                  milestones.push({
+                    emoji: '💪',
+                    title: `קאמבק קינג!`,
+                    description: `${comebackKing.playerName} הפסיד פעם ${Math.round(comebackKing.biggestLoss)}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
+                    priority: 58
+                  });
+                }
+                
+                // Sort by priority and show top 8
+                milestones.sort((a, b) => b.priority - a.priority);
+                const topMilestones = milestones.slice(0, 8);
                 
                 // Show milestones or empty state
-                if (milestones.length === 0) {
+                if (topMilestones.length === 0) {
                   return (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
                       אין מיילסטונים מיוחדים בתקופה הנבחרת
@@ -2138,7 +2243,7 @@ const StatisticsScreen = () => {
                   );
                 }
                 
-                return milestones.slice(0, 8).map((m, idx) => (
+                return topMilestones.map((m, idx) => (
                   <div 
                     key={idx}
                     style={{
@@ -2169,69 +2274,67 @@ const StatisticsScreen = () => {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {sortedStats.slice(0, 10).map((player, idx) => {
-                // Calculate player profile
+                // Calculate player profile data
                 const avgProfit = player.avgProfit;
                 const winRate = player.winPercentage;
                 const gamesPlayed = player.gamesPlayed;
                 const bestWin = player.biggestWin;
                 const worstLoss = player.biggestLoss;
                 const volatility = bestWin + Math.abs(worstLoss);
-                const consistency = gamesPlayed > 5 ? Math.abs(winRate - 50) : 0;
+                const periodLabel = getTimeframeLabel();
                 
                 // Determine playing style
-                let style = '';
                 let styleEmoji = '';
+                let styleName = '';
                 if (volatility >= 400) {
-                  style = 'אגרסיבי - משחק גדול';
+                  styleName = 'אגרסיבי';
                   styleEmoji = '🎢';
                 } else if (volatility <= 200) {
-                  style = 'שמרני - משחק בטוח';
+                  styleName = 'שמרני';
                   styleEmoji = '🛡️';
                 } else {
-                  style = 'מאוזן';
+                  styleName = 'מאוזן';
                   styleEmoji = '⚖️';
                 }
                 
-                // Determine strength
-                let strength = '';
-                if (winRate >= 60) strength = 'אחוז נצחונות גבוה';
-                else if (avgProfit > 50) strength = 'ממוצע רווח גבוה';
-                else if (player.currentStreak >= 2) strength = 'מומנטום חיובי';
-                else if (gamesPlayed >= 30) strength = 'ניסיון רב';
-                else strength = 'מתפתח';
+                // Generate narrative sentences (2-3 sentences per player)
+                const sentences: string[] = [];
                 
-                // Determine weakness
-                let weakness = '';
-                if (winRate < 40) weakness = 'אחוז נצחונות נמוך';
-                else if (avgProfit < -30) weakness = 'ממוצע הפסד גבוה';
-                else if (player.currentStreak <= -2) weakness = 'ברצף הפסדים';
-                else if (Math.abs(worstLoss) > bestWin * 1.5) weakness = 'הפסדים גדולים';
-                else weakness = 'אין חולשות בולטות';
-                
-                // Generate insight
-                let insight = '';
-                if (avgProfit > 0 && winRate >= 50) {
-                  insight = `שחקן רווחי עם ${Math.round(winRate)}% נצחונות. ממוצע של ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪ למשחק.`;
-                } else if (avgProfit < 0 && winRate < 50) {
-                  insight = `צריך שיפור - רק ${Math.round(winRate)}% נצחונות עם ממוצע של ${Math.round(avgProfit)}₪ למשחק.`;
+                // Sentence 1: Overall performance narrative
+                if (avgProfit > 0 && winRate >= 55) {
+                  sentences.push(`📈 שחקן רווחי עם ${Math.round(winRate)}% נצחונות. ממוצע של +${Math.round(avgProfit)}₪ למשחק מציב אותו כאחד השחקנים המשתלמים בקבוצה.`);
                 } else if (avgProfit > 0 && winRate < 50) {
-                  insight = `למרות ${Math.round(winRate)}% נצחונות, מרוויח בממוצע ${Math.round(avgProfit)}₪. מנצל טוב נצחונות.`;
+                  sentences.push(`💡 למרות רק ${Math.round(winRate)}% נצחונות, ${player.playerName} עדיין ברווח של +${Math.round(avgProfit)}₪ למשחק. כשהוא מנצח, הוא מנצח גדול.`);
+                } else if (avgProfit < 0 && winRate >= 50) {
+                  sentences.push(`🎯 ${Math.round(winRate)}% נצחונות אבל עדיין בהפסד של ${Math.round(avgProfit)}₪ למשחק. צריך למקסם את הנצחונות הקיימים.`);
+                } else if (avgProfit < 0 && winRate < 45) {
+                  sentences.push(`📊 רק ${Math.round(winRate)}% נצחונות עם ממוצע של ${Math.round(avgProfit)}₪ למשחק. תקופה מאתגרת שדורשת התאמות.`);
                 } else {
-                  insight = `${Math.round(winRate)}% נצחונות אבל עדיין בהפסד. צריך למקסם נצחונות.`;
+                  sentences.push(`⚖️ ממוצע של ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪ למשחק עם ${Math.round(winRate)}% נצחונות. ביצועים סטנדרטיים.`);
                 }
                 
-                // Suggestion
-                let suggestion = '';
-                if (player.currentStreak <= -2) {
-                  suggestion = '💡 נצחון הבא ישבור את הרצף השלילי!';
-                } else if (winRate < 45 && gamesPlayed >= 10) {
-                  suggestion = '💡 שקול משחק יותר שמרני בשלבים מוקדמים';
-                } else if (avgProfit > 0 && player.currentStreak >= 2) {
-                  suggestion = '💡 תקופה חזקה - שמור על הקו!';
-                } else if (volatility >= 400) {
-                  suggestion = '💡 משחק תנודתי - ניהול סיכונים חשוב';
-                } else {
-                  suggestion = '💡 המשך לשחק את המשחק שלך';
+                // Sentence 2: Streak or momentum narrative
+                if (player.currentStreak >= 3) {
+                  sentences.push(`🔥 ברצף חם של ${player.currentStreak} נצחונות רצופים! התקופה הטובה ביותר שלו, שמומנטום ממשיך להאיץ.`);
+                } else if (player.currentStreak >= 2) {
+                  sentences.push(`📈 מומנטום חיובי עם ${player.currentStreak} נצחונות ברצף. נראה שהוא מצא את קצב המשחק הנכון.`);
+                } else if (player.currentStreak <= -3) {
+                  sentences.push(`❄️ ברצף קשה של ${Math.abs(player.currentStreak)} הפסדים. נצחון אחד ישבור את הרצף ויחזיר את הביטחון.`);
+                } else if (player.currentStreak <= -2) {
+                  sentences.push(`⏸️ שני הפסדים אחרונים. הזדמנות לקאמבק במשחק הבא.`);
+                } else if (volatility >= 400 && gamesPlayed >= 5) {
+                  sentences.push(`🎢 שחקן תנודתי: הנצחון הגדול שלו +${Math.round(bestWin)}₪, ההפסד הגדול ${Math.round(worstLoss)}₪. לילות דרמטיים מובטחים.`);
+                } else if (volatility <= 180 && gamesPlayed >= 5) {
+                  sentences.push(`🛡️ שחקן יציב ושמרני. ללא תנודות קיצוניות, מעדיף משחק בטוח על סיכונים.`);
+                }
+                
+                // Sentence 3: Suggestion/tip narrative (only for certain cases)
+                if (gamesPlayed >= 10 && winRate < 45 && avgProfit < 0) {
+                  sentences.push(`💡 עם ${gamesPlayed} משחקים וניסיון מצטבר, אולי כדאי לשקול גישה שמרנית יותר בשלבים מוקדמים.`);
+                } else if (avgProfit > 30 && player.currentStreak >= 2) {
+                  sentences.push(`💪 תקופה חזקה! שמור על הקו והמשך לשחק את המשחק שלך.`);
+                } else if (gamesPlayed <= 5) {
+                  sentences.push(`🌱 שחקן חדש יחסית עם ${gamesPlayed} משחקים. עוד מוקדם להסיק מסקנות ארוכות טווח.`);
                 }
                 
                 return (
@@ -2264,35 +2367,28 @@ const StatisticsScreen = () => {
                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       <span>🎮 {player.gamesPlayed} משחקים</span>
                       <span>🎯 {Math.round(winRate)}% נצחונות</span>
-                      <span>{styleEmoji} {style}</span>
+                      <span>{styleEmoji} {styleName}</span>
                     </div>
                     
-                    {/* Profile Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                      <div style={{ padding: '0.5rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--success)', marginBottom: '0.2rem' }}>💪 חוזק</div>
-                        <div style={{ fontSize: '0.8rem' }}>{strength}</div>
-                      </div>
-                      <div style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginBottom: '0.2rem' }}>⚠️ חולשה</div>
-                        <div style={{ fontSize: '0.8rem' }}>{weakness}</div>
-                      </div>
-                    </div>
-                    
-                    {/* Insight */}
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.5rem', lineHeight: '1.4' }}>
-                      📊 {insight}
-                    </div>
-                    
-                    {/* Suggestion */}
+                    {/* Narrative Sentences */}
                     <div style={{ 
-                      fontSize: '0.8rem', 
-                      color: 'var(--primary)', 
-                      padding: '0.5rem',
-                      background: 'rgba(147, 51, 234, 0.1)',
-                      borderRadius: '6px'
+                      fontSize: '0.85rem', 
+                      color: 'var(--text)', 
+                      lineHeight: '1.6',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem'
                     }}>
-                      {suggestion}
+                      {sentences.map((sentence, sIdx) => (
+                        <div key={sIdx} style={{ 
+                          padding: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? '0.5rem' : '0',
+                          background: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
+                          borderRadius: '6px',
+                          color: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? 'var(--primary)' : 'inherit'
+                        }}>
+                          {sentence}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );

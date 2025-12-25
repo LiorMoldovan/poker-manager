@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.31.4';
+export const APP_VERSION = '4.32.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.32.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 INSIGHTS REDESIGN: Milestones now have creative variety!',
+      'NEW: Champion title battles, recovery stories, consistency kings',
+      'NEW: Biggest win records, comeback kings, player of the period',
+      'Milestones sorted by priority - most interesting shown first',
+      '👤 PLAYER PROFILES: Replaced split boxes with flowing narrative',
+      'Each player gets 2-3 natural sentences describing their performance',
+      'Narrative includes stats, streaks, playing style, and suggestions',
+      'Much cleaner and more readable player summaries'
+    ]
+  },
   {
     version: '4.31.4',
     date: '2025-12-25',
