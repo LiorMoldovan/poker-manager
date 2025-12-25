@@ -1859,7 +1859,7 @@ const StatisticsScreen = () => {
                 <div style={{ marginBottom: '0.75rem' }}>
                   <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {Math.min(6, player.lastGameResults.length)} games (latest on right, click for details)</div>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
-                    {player.lastGameResults.slice(-6).reverse().map((game, i) => {
+                    {player.lastGameResults.slice(0, 6).reverse().map((game, i) => {
                       const gameDate = new Date(game.date);
                       const dateStr = gameDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
                       return (
