@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.30.0';
+export const APP_VERSION = '4.31.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.31.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 NEW: Insights tab in Statistics page!',
+      'Shows potential milestones based on selected filters',
+      'Player profiles with playing style analysis',
+      'Strengths, weaknesses, and personalized suggestions',
+      'Stats-driven insights: volatility, consistency, trends',
+      'All filters (period, player type) apply to insights'
+    ]
+  },
   {
     version: '4.30.0',
     date: '2025-12-25',

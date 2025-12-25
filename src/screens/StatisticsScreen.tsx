@@ -6,12 +6,13 @@ import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers } from '.
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
+type ViewMode = 'table' | 'records' | 'individual' | 'insights';
 
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as { 
-    viewMode?: 'table' | 'records' | 'individual';
+    viewMode?: ViewMode;
     recordInfo?: { title: string; playerId: string; recordType: string };
     playerInfo?: { playerId: string; playerName: string };
     timePeriod?: TimePeriod;
@@ -27,7 +28,7 @@ const StatisticsScreen = () => {
   
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [viewMode, setViewMode] = useState<'table' | 'records' | 'individual'>(initialViewMode);
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
@@ -836,6 +837,13 @@ const StatisticsScreen = () => {
               >
                 👤 Players
               </button>
+              <button 
+                className={`btn btn-sm ${viewMode === 'insights' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setViewMode('insights')}
+                style={{ flex: 1 }}
+              >
+                🎯 Insights
+              </button>
             </div>
           </div>
 
@@ -1517,7 +1525,7 @@ const StatisticsScreen = () => {
           )}
 
           {/* TABLE/INDIVIDUAL Options - Sort dropdown + Table Mode toggle */}
-          {(viewMode === 'table' || viewMode === 'individual') && (
+          {(viewMode === 'table' || viewMode === 'individual' || viewMode === 'insights') && (
             <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
               <select
                 value={sortBy}
@@ -2015,6 +2023,283 @@ const StatisticsScreen = () => {
           ))}
 
           </>
+      )}
+
+      {/* Insights View */}
+      {viewMode === 'insights' && (
+        <>
+          {/* Timeframe Header */}
+          <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+              🎯 Insights & Milestones - {getTimeframeLabel()}
+            </span>
+          </div>
+
+          {/* Milestones Section */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🏆 Potential Milestones
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {(() => {
+                // Generate milestones based on filtered data
+                const milestones: Array<{ emoji: string; title: string; description: string }> = [];
+                
+                // Sort by profit for rankings
+                const rankedStats = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
+                
+                // Leaderboard battles (close gaps)
+                for (let i = 1; i < rankedStats.length; i++) {
+                  const chaser = rankedStats[i];
+                  const leader = rankedStats[i - 1];
+                  const gap = Math.round(leader.totalProfit - chaser.totalProfit);
+                  if (gap > 0 && gap <= 200) {
+                    milestones.push({
+                      emoji: '📈',
+                      title: `מרדף על מקום ${i}!`,
+                      description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד.`
+                    });
+                  }
+                }
+                
+                // Round number milestones
+                const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
+                rankedStats.forEach(p => {
+                  for (const milestone of roundNumbers) {
+                    const distance = Math.round(milestone - p.totalProfit);
+                    if (distance > 0 && distance <= 150) {
+                      milestones.push({
+                        emoji: '🎯',
+                        title: `יעד עגול!`,
+                        description: `${p.playerName} צריך ${distance}₪ להגיע ל-${milestone}₪ ב${getTimeframeLabel()}.`
+                      });
+                      break;
+                    }
+                  }
+                });
+                
+                // Win streaks
+                rankedStats.forEach(p => {
+                  if (p.currentStreak >= 3) {
+                    milestones.push({
+                      emoji: '🔥',
+                      title: `רצף נצחונות!`,
+                      description: `${p.playerName} ברצף של ${p.currentStreak} נצחונות רצופים.`
+                    });
+                  }
+                });
+                
+                // Lose streaks
+                rankedStats.forEach(p => {
+                  if (p.currentStreak <= -3) {
+                    milestones.push({
+                      emoji: '❄️',
+                      title: `רצף הפסדים`,
+                      description: `${p.playerName} ברצף של ${Math.abs(p.currentStreak)} הפסדים. נצחון ישבור את הרצף!`
+                    });
+                  }
+                });
+                
+                // Games milestones
+                const gamesMilestones = [25, 50, 75, 100, 150, 200];
+                rankedStats.forEach(p => {
+                  for (const gm of gamesMilestones) {
+                    if (p.gamesPlayed === gm - 1) {
+                      milestones.push({
+                        emoji: '🎮',
+                        title: `יובל משחקים!`,
+                        description: `${p.playerName} עומד לשחק את המשחק ה-${gm} שלו.`
+                      });
+                      break;
+                    }
+                  }
+                });
+                
+                // Close battles
+                for (let i = 0; i < rankedStats.length; i++) {
+                  for (let j = i + 1; j < Math.min(i + 2, rankedStats.length); j++) {
+                    const gap = Math.round(Math.abs(rankedStats[i].totalProfit - rankedStats[j].totalProfit));
+                    if (gap <= 30 && gap > 0) {
+                      milestones.push({
+                        emoji: '⚔️',
+                        title: `קרב צמוד!`,
+                        description: `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} בהפרש של ${gap}₪ בלבד!`
+                      });
+                    }
+                  }
+                }
+                
+                // Show milestones or empty state
+                if (milestones.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                      אין מיילסטונים מיוחדים בתקופה הנבחרת
+                    </div>
+                  );
+                }
+                
+                return milestones.slice(0, 8).map((m, idx) => (
+                  <div 
+                    key={idx}
+                    style={{
+                      padding: '0.75rem',
+                      background: 'var(--surface)',
+                      borderRadius: '8px',
+                      borderRight: '4px solid var(--primary)',
+                      direction: 'rtl'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                      <span style={{ fontSize: '1.1rem' }}>{m.emoji}</span>
+                      <span style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--primary)' }}>{m.title}</span>
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text)', paddingRight: '1.6rem' }}>
+                      {m.description}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+
+          {/* Player Profiles Section */}
+          <div className="card" style={{ padding: '1rem' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              👤 Player Profiles - {getTimeframeLabel()}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {sortedStats.slice(0, 10).map((player, idx) => {
+                // Calculate player profile
+                const avgProfit = player.avgProfit;
+                const winRate = player.winPercentage;
+                const gamesPlayed = player.gamesPlayed;
+                const bestWin = player.biggestWin;
+                const worstLoss = player.biggestLoss;
+                const volatility = bestWin + Math.abs(worstLoss);
+                const consistency = gamesPlayed > 5 ? Math.abs(winRate - 50) : 0;
+                
+                // Determine playing style
+                let style = '';
+                let styleEmoji = '';
+                if (volatility >= 400) {
+                  style = 'אגרסיבי - משחק גדול';
+                  styleEmoji = '🎢';
+                } else if (volatility <= 200) {
+                  style = 'שמרני - משחק בטוח';
+                  styleEmoji = '🛡️';
+                } else {
+                  style = 'מאוזן';
+                  styleEmoji = '⚖️';
+                }
+                
+                // Determine strength
+                let strength = '';
+                if (winRate >= 60) strength = 'אחוז נצחונות גבוה';
+                else if (avgProfit > 50) strength = 'ממוצע רווח גבוה';
+                else if (player.currentStreak >= 2) strength = 'מומנטום חיובי';
+                else if (gamesPlayed >= 30) strength = 'ניסיון רב';
+                else strength = 'מתפתח';
+                
+                // Determine weakness
+                let weakness = '';
+                if (winRate < 40) weakness = 'אחוז נצחונות נמוך';
+                else if (avgProfit < -30) weakness = 'ממוצע הפסד גבוה';
+                else if (player.currentStreak <= -2) weakness = 'ברצף הפסדים';
+                else if (Math.abs(worstLoss) > bestWin * 1.5) weakness = 'הפסדים גדולים';
+                else weakness = 'אין חולשות בולטות';
+                
+                // Generate insight
+                let insight = '';
+                if (avgProfit > 0 && winRate >= 50) {
+                  insight = `שחקן רווחי עם ${Math.round(winRate)}% נצחונות. ממוצע של ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪ למשחק.`;
+                } else if (avgProfit < 0 && winRate < 50) {
+                  insight = `צריך שיפור - רק ${Math.round(winRate)}% נצחונות עם ממוצע של ${Math.round(avgProfit)}₪ למשחק.`;
+                } else if (avgProfit > 0 && winRate < 50) {
+                  insight = `למרות ${Math.round(winRate)}% נצחונות, מרוויח בממוצע ${Math.round(avgProfit)}₪. מנצל טוב נצחונות.`;
+                } else {
+                  insight = `${Math.round(winRate)}% נצחונות אבל עדיין בהפסד. צריך למקסם נצחונות.`;
+                }
+                
+                // Suggestion
+                let suggestion = '';
+                if (player.currentStreak <= -2) {
+                  suggestion = '💡 נצחון הבא ישבור את הרצף השלילי!';
+                } else if (winRate < 45 && gamesPlayed >= 10) {
+                  suggestion = '💡 שקול משחק יותר שמרני בשלבים מוקדמים';
+                } else if (avgProfit > 0 && player.currentStreak >= 2) {
+                  suggestion = '💡 תקופה חזקה - שמור על הקו!';
+                } else if (volatility >= 400) {
+                  suggestion = '💡 משחק תנודתי - ניהול סיכונים חשוב';
+                } else {
+                  suggestion = '💡 המשך לשחק את המשחק שלך';
+                }
+                
+                return (
+                  <div 
+                    key={player.playerId}
+                    style={{
+                      padding: '1rem',
+                      background: 'var(--surface)',
+                      borderRadius: '10px',
+                      borderRight: `4px solid ${player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'}`,
+                      direction: 'rtl'
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '1rem', fontWeight: '700' }}>#{idx + 1}</span>
+                        <span style={{ fontSize: '1rem', fontWeight: '600' }}>{player.playerName}</span>
+                      </div>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        fontSize: '1rem',
+                        color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'
+                      }}>
+                        {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
+                      </span>
+                    </div>
+                    
+                    {/* Stats Row */}
+                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <span>🎮 {player.gamesPlayed} משחקים</span>
+                      <span>🎯 {Math.round(winRate)}% נצחונות</span>
+                      <span>{styleEmoji} {style}</span>
+                    </div>
+                    
+                    {/* Profile Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <div style={{ padding: '0.5rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--success)', marginBottom: '0.2rem' }}>💪 חוזק</div>
+                        <div style={{ fontSize: '0.8rem' }}>{strength}</div>
+                      </div>
+                      <div style={{ padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginBottom: '0.2rem' }}>⚠️ חולשה</div>
+                        <div style={{ fontSize: '0.8rem' }}>{weakness}</div>
+                      </div>
+                    </div>
+                    
+                    {/* Insight */}
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.5rem', lineHeight: '1.4' }}>
+                      📊 {insight}
+                    </div>
+                    
+                    {/* Suggestion */}
+                    <div style={{ 
+                      fontSize: '0.8rem', 
+                      color: 'var(--primary)', 
+                      padding: '0.5rem',
+                      background: 'rgba(147, 51, 234, 0.1)',
+                      borderRadius: '6px'
+                    }}>
+                      {suggestion}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Record Details Modal */}
