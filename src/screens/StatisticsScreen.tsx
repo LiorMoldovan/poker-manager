@@ -1857,9 +1857,9 @@ const StatisticsScreen = () => {
               {/* Last 6 Games */}
               {player.lastGameResults && player.lastGameResults.length > 0 && (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {player.lastGameResults.length} games (latest on right, click for details)</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {Math.min(6, player.lastGameResults.length)} games (latest on right, click for details)</div>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
-                    {player.lastGameResults.slice().reverse().map((game, i) => {
+                    {player.lastGameResults.slice(-6).reverse().map((game, i) => {
                       const gameDate = new Date(game.date);
                       const dateStr = gameDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' });
                       return (
@@ -2084,6 +2084,8 @@ const StatisticsScreen = () => {
                       description: `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
                       priority: 98
                     });
+                    // Mark the leader battle to avoid duplication
+                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
                   } else if ((timePeriod === 'h1' || timePeriod === 'h2') && isEndOfHalf && leader.gamesPlayed >= 3) {
                     // Half-year end special
                     const halfName = timePeriod === 'h1' ? 'H1' : 'H2';
@@ -2093,14 +2095,18 @@ const StatisticsScreen = () => {
                       description: `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}! עם סיום החצי מתקרב, האם מישהו יצליח לעקוף אותו?`,
                       priority: 96
                     });
+                    // Mark the leader battle to avoid duplication
+                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
                   } else if (gap > 0 && gap <= 150) {
-                    // Close race
+                    // Close race for 1st place
                     milestones.push({
                       emoji: '👑',
                       title: `קרב על הכתר!`,
                       description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪. האם הוא יצליח לעקוף?`,
                       priority: 95
                     });
+                    // Mark this battle to avoid showing it again in leaderboard battles
+                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
                   } else if (leader.gamesPlayed >= 5) {
                     // Big lead - celebrate but still ask the question
                     milestones.push({
@@ -2110,6 +2116,8 @@ const StatisticsScreen = () => {
                       priority: 80
                     });
                   }
+                  // Mark leader as featured for individual milestones
+                  featuredPlayers.add(leader.playerId);
                 }
                 
                 // 2. LONGEST LOSING STREAK - drama!
@@ -2219,18 +2227,22 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 9. PLAYER OF THE PERIOD - only show for third place and below (to avoid duplication with champion)
+                // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured in leaderboard battles)
                 if (rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
                   const second = rankedStats[1];
                   const third = rankedStats[2];
-                  const gap = Math.round(second.totalProfit - third.totalProfit);
-                  if (gap > 0 && gap <= 150) {
-                    milestones.push({
-                      emoji: '🥈',
-                      title: `מרדף על מקום 2!`,
-                      description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
-                      priority: 78
-                    });
+                  // Skip if this battle was already featured
+                  if (!isBattleFeatured(second.playerId, third.playerId)) {
+                    const gap = Math.round(second.totalProfit - third.totalProfit);
+                    if (gap > 0 && gap <= 150) {
+                      milestones.push({
+                        emoji: '🥈',
+                        title: `מרדף על מקום 2!`,
+                        description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
+                        priority: 78
+                      });
+                      markBattle(second.playerId, third.playerId);
+                    }
                   }
                 }
                 
@@ -2345,10 +2357,13 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 18. CLOSE BATTLE (any two adjacent players very close)
+                // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured)
                 for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
                   const p1 = rankedStats[i];
                   const p2 = rankedStats[i + 1];
+                  // Skip if this battle was already featured
+                  if (isBattleFeatured(p1.playerId, p2.playerId)) continue;
+                  
                   const gap = Math.abs(p1.totalProfit - p2.totalProfit);
                   if (gap <= 30 && gap > 0) {
                     milestones.push({
@@ -2357,6 +2372,7 @@ const StatisticsScreen = () => {
                       description: `${p1.playerName} ו-${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד! המשחק הבא יקבע מי יהיה מעל.`,
                       priority: 82
                     });
+                    markBattle(p1.playerId, p2.playerId);
                     break; // Only show one close battle
                   }
                 }
