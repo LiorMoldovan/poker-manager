@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.8';
+export const APP_VERSION = '4.37.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.9',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Player Insights now shows ALL players (was limited to 10)',
+      'ליכטר and any other players beyond 10 will now appear'
+    ]
+  },
   {
     version: '4.37.8',
     date: '2025-12-25',

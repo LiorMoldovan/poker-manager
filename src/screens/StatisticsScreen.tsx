@@ -2446,7 +2446,7 @@ const StatisticsScreen = () => {
               👤 Player Profiles - {getTimeframeLabel()}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {sortedStats.slice(0, 10).map((player, idx) => {
+              {sortedStats.map((player, idx) => {
                 // ========== COMPREHENSIVE PLAYER ANALYSIS ==========
                 const gamesPlayed = player.gamesPlayed;
                 const winRate = player.winPercentage;
