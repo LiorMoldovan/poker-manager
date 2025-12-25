@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.21.1';
+export const APP_VERSION = '4.22.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.22.0',
+    date: '2025-12-25',
+    changes: [
+      '📸 Milestones: Split into multiple screenshots (5 per page)',
+      '🎯 More accurate milestones - no false record claims!',
+      'Removed "שיא קבוצתי" claims (only current player data)',
+      'Added player stats (rank, total, avg, win%) as fallback',
+      'Added year performance summaries for each player',
+      'Added personal best records (factual)',
+      'Guaranteed 10 milestones with accurate data'
+    ]
+  },
   {
     version: '4.21.1',
     date: '2025-12-25',

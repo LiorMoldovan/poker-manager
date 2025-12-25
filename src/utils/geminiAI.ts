@@ -120,25 +120,26 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   const sortedByTotalProfit = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
   const sortedByYearProfit = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
   
-  // 1. STREAK RECORDS (highest priority)
-  const maxWinStreak = Math.max(...players.map(p => p.currentStreak), 0);
-  const maxLoseStreak = Math.min(...players.map(p => p.currentStreak), 0);
-  
+  // 1. WINNING STREAKS (show any streak of 3+)
   players.forEach(p => {
-    if (p.currentStreak >= 3 && p.currentStreak >= maxWinStreak) {
+    if (p.currentStreak >= 3) {
       milestones.push({
         emoji: '🔥',
-        title: `שיא נצחונות רצופים בסכנה!`,
-        description: `${p.name} נמצא כרגע ברצף של ${p.currentStreak} נצחונות רצופים - זה שיא הקבוצה! אם הוא ינצח הלילה, הוא ישבור את השיא ויגיע ל-${p.currentStreak + 1} נצחונות ברצף.`,
-        priority: 95
+        title: `${p.name} ברצף נצחונות חם!`,
+        description: `${p.name} נמצא כרגע ברצף של ${p.currentStreak} נצחונות רצופים. נצחון נוסף הלילה יאריך את הרצף ל-${p.currentStreak + 1} משחקים!`,
+        priority: 85 + p.currentStreak * 2
       });
     }
-    if (p.currentStreak <= -3 && p.currentStreak <= maxLoseStreak) {
+  });
+  
+  // 2. LOSING STREAKS (show any streak of 3+)
+  players.forEach(p => {
+    if (p.currentStreak <= -3) {
       milestones.push({
         emoji: '❄️',
-        title: `שיא הפסדים רצופים בסכנה!`,
-        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים - השוויון לשיא השלילי של הקבוצה. הפסד נוסף הלילה יהפוך אותו לבעל הרצף השלילי הארוך ביותר בהיסטוריה שלנו.`,
-        priority: 90
+        title: `${p.name} ברצף הפסדים`,
+        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים. נצחון הלילה ישבור את הרצף השלילי ויחזיר אותו למסלול!`,
+        priority: 80 + Math.abs(p.currentStreak) * 2
       });
     }
   });
@@ -319,6 +320,67 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
           priority: 62
         });
       }
+    }
+  });
+  
+  // 14. PLAYER STATS (always accurate - fill up to 10)
+  // Add stats for players who don't have other milestones yet
+  const playersInMilestones = new Set(milestones.map(m => {
+    // Extract player name from title or description
+    for (const p of players) {
+      if (m.title.includes(p.name) || m.description.includes(p.name)) {
+        return p.name;
+      }
+    }
+    return null;
+  }).filter(Boolean));
+  
+  players.forEach(p => {
+    // If player has games and isn't featured in other milestones, add their stats
+    if (p.gamesPlayed >= 5) {
+      const avgProfit = Math.round(p.totalProfit / p.gamesPlayed);
+      const rank = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
+      
+      if (p.totalProfit > 0) {
+        milestones.push({
+          emoji: '📊',
+          title: `סטטיסטיקה: ${p.name}`,
+          description: `${p.name} במקום ${rank} בטבלה הכללית עם ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪ רווח כולל מ-${p.gamesPlayed} משחקים. ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק ו-${Math.round(p.winPercentage)}% נצחונות.`,
+          priority: 40 + rank
+        });
+      } else {
+        milestones.push({
+          emoji: '📊',
+          title: `סטטיסטיקה: ${p.name}`,
+          description: `${p.name} במקום ${rank} בטבלה הכללית עם ${Math.round(p.totalProfit)}₪ מ-${p.gamesPlayed} משחקים. ממוצע של ${avgProfit}₪ למשחק ו-${Math.round(p.winPercentage)}% נצחונות.`,
+          priority: 35 + rank
+        });
+      }
+    }
+  });
+  
+  // 15. BEST/WORST SINGLE GAME (factual)
+  players.forEach(p => {
+    if (p.bestWin >= 150) {
+      milestones.push({
+        emoji: '🏆',
+        title: `שיא אישי: ${p.name}`,
+        description: `השיא האישי של ${p.name} הוא נצחון של +${Math.round(p.bestWin)}₪ בלילה אחד. האם הלילה הוא ישבור את השיא שלו?`,
+        priority: 50
+      });
+    }
+  });
+  
+  // 16. YEAR PERFORMANCE SUMMARY
+  playerPeriodStats.forEach(p => {
+    if (p.yearGames >= 3) {
+      const yearRank = sortedByYearProfit.findIndex(sp => sp.name === p.name) + 1;
+      milestones.push({
+        emoji: '📅',
+        title: `ביצועי ${currentYear}: ${p.name}`,
+        description: `${p.name} שיחק ${p.yearGames} משחקים בשנת ${currentYear} עם רווח של ${p.yearProfit >= 0 ? '+' : ''}${Math.round(p.yearProfit)}₪. מיקום ${yearRank} בטבלה השנתית.`,
+        priority: 45
+      });
     }
   });
   

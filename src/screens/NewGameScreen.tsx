@@ -295,35 +295,94 @@ const NewGameScreen = () => {
   };
   
   const shareMilestones = async () => {
-    if (!milestonesRef.current) return;
+    if (milestonesData.length === 0) return;
     
     setIsSharingMilestones(true);
     try {
-      const canvas = await html2canvas(milestonesRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-        logging: false,
-        useCORS: true,
-      });
+      const MILESTONES_PER_PAGE = 5;
+      const files: File[] = [];
+      const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
       
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-      });
+      // Split milestones into chunks of 5
+      const chunks: typeof milestonesData[] = [];
+      for (let i = 0; i < milestonesData.length; i += MILESTONES_PER_PAGE) {
+        chunks.push(milestonesData.slice(i, i + MILESTONES_PER_PAGE));
+      }
       
-      const file = new File([blob], `milestones-${new Date().toISOString().split('T')[0]}.png`, { type: 'image/png' });
+      // Create a screenshot for each chunk
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const pageNum = chunks.length > 1 ? ` (${chunkIndex + 1}/${chunks.length})` : '';
+        
+        // Create temporary container for this chunk
+        const container = document.createElement('div');
+        container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif; direction: rtl;';
+        
+        // Build milestones HTML
+        const milestonesHTML = chunk.map(m => `
+          <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: rgba(243, 156, 18, 0.1); border-right: 4px solid #f39c12; text-align: right;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-direction: row-reverse; justify-content: flex-start;">
+              <span style="font-size: 1.2rem;">${m.emoji}</span>
+              <span style="font-weight: 600; font-size: 0.95rem; color: #f39c12;">${m.title}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: #f1f5f9; line-height: 1.4; padding-left: 1.7rem;">${m.description}</div>
+          </div>
+        `).join('');
+        
+        container.innerHTML = `
+          <div style="text-align: center; margin-bottom: 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.25rem;">🎯</div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
+              מיילסטונים להלילה${pageNum}
+            </h3>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            ${milestonesHTML}
+          </div>
+          <div style="text-align: center; font-size: 0.7rem; color: #64748b; padding: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+            נתונים מבוססים על כל ההיסטוריה 📊
+          </div>
+        `;
+        
+        document.body.appendChild(container);
+        
+        const canvas = await html2canvas(container, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          logging: false,
+          useCORS: true,
+        });
+        
+        document.body.removeChild(container);
+        
+        const blob = await new Promise<Blob>((resolve) => {
+          canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        
+        const fileName = chunks.length > 1 
+          ? `milestones-${chunkIndex + 1}-${new Date().toISOString().split('T')[0]}.png`
+          : `milestones-${new Date().toISOString().split('T')[0]}.png`;
+        
+        files.push(new File([blob], fileName, { type: 'image/png' }));
+      }
       
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+      // Share all files
+      if (navigator.share && navigator.canShare?.({ files })) {
         await navigator.share({
-          files: [file],
+          files,
           title: '🎯 מיילסטונים להלילה',
         });
       } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `milestones-${new Date().toISOString().split('T')[0]}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // Fallback: download files
+        for (const file of files) {
+          const url = URL.createObjectURL(file);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
     } catch (err) {
       console.error('Error sharing milestones:', err);
