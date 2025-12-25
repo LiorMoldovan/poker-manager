@@ -2466,7 +2466,8 @@ const StatisticsScreen = () => {
                 
                 // ========== REBUY DATA: Only valid for 2026+ ==========
                 // Rebuy tracking was added in late 2025, so only use it for 2026+ data
-                const isRebuyDataValid = selectedYear >= 2026;
+                // Also disable for "All Time" view since it includes pre-2026 data
+                const isRebuyDataValid = timePeriod !== 'all' && selectedYear >= 2026;
                 const avgRebuys = isRebuyDataValid ? (player.avgRebuysPerGame || 0) : 0;
                 
                 // Calculate advanced metrics
@@ -2996,8 +2997,8 @@ const StatisticsScreen = () => {
               {playerAllGames.games.length} משחקים
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {playerAllGames.games.slice(0, 20).map((game, idx) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '60vh', overflowY: 'auto' }}>
+              {playerAllGames.games.map((game, idx) => (
                 <div 
                   key={idx}
                   onClick={() => {

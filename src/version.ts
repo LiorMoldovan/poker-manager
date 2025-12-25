@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.9';
+export const APP_VERSION = '4.37.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.10',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Player games modal now shows ALL games (was limited to 20)',
+      '🐛 FIX: Rebuy data correctly hidden for "All Time" view (mixed pre-2026 data)',
+      'Added scrollable container for player games modal',
+      'Comprehensive regression testing completed'
+    ]
+  },
   {
     version: '4.37.9',
     date: '2025-12-25',
