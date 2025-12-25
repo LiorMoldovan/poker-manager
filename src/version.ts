@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.23.1';
+export const APP_VERSION = '4.24.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.24.0',
+    date: '2025-12-25',
+    changes: [
+      '🎨 MAJOR: Mandatory sentence variety - no more boring repetition!',
+      'BANNED: "במקום ה-X הכללי" as sentence opener',
+      'Each player MUST start with a different style (name+verb, question, stat, metaphor, etc.)',
+      '7 distinct opening patterns enforced in prompt',
+      'Examples rewritten to show variety (rivalry, milestone, comeback, metaphor)',
+      'AI must read all sentences aloud before submitting to check similarity'
+    ]
+  },
   {
     version: '4.23.1',
     date: '2025-12-25',

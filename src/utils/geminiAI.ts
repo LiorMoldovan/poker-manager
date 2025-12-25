@@ -942,14 +942,48 @@ ${recentGameExamples}
 
 ═══════════════════════════════════════
 
-🚫 ABSOLUTELY NO REPETITION:
+🚫🚫🚫 CRITICAL: VARIETY IS MANDATORY! 🚫🚫🚫
 
-Each player MUST have a COMPLETELY DIFFERENT:
-- Sentence structure (don't start multiple sentences the same way)
-- Narrative angle (streaks, rivalries, milestones, comebacks, consistency, volatility - use DIFFERENT angles)
-- Writing style (dramatic for one, analytical for another, philosophical for a third)
+❌ FORBIDDEN PATTERNS - NEVER USE THESE MORE THAN ONCE:
+- "במקום ה-X הכללי..." (BANNED as a sentence opener!)
+- "מוביל/מובילה את הטבלה..." 
+- "עם ממוצע של..."
+- "רצף נצחונות/הפסדים של..."
+- Starting sentences the same way!
 
-If you find yourself writing similar sentences, STOP and rewrite with a fresh angle!
+🎨 EACH PLAYER MUST START WITH A DIFFERENT STYLE:
+
+Player 1: START WITH THEIR NAME + action verb
+   → "ליאור שורף את הטבלה..." / "חרדון טס על כנפי רצף..."
+   
+Player 2: START WITH A DRAMATIC QUESTION  
+   → "האם הלילה הוא ישבור את הרצף?" / "מי יעצור אותו?"
+   
+Player 3: START WITH A STAT/NUMBER + context
+   → "45 משחקים, 67₪ ממוצע, מקום ראשון." / "3 נצחונות רצופים."
+   
+Player 4: START WITH "הלילה" or time reference
+   → "הלילה הוא מחפש..." / "אחרי הפסד כואב..."
+   
+Player 5: START WITH A METAPHOR or imagery
+   → "הרכבת יוצאת מהתחנה..." / "הפניקס קם מהאפר..."
+   
+Player 6: START WITH "אם" (if) - conditional/milestone
+   → "אם ייקח הלילה 100₪..." / "עוד נצחון אחד ו..."
+   
+Player 7: START WITH rivalry/comparison
+   → "הקרב נגד X נמשך..." / "בעוד X עולה, הוא..."
+
+🎭 EACH SENTENCE NEEDS A UNIQUE ANGLE:
+- One about STREAK (winning/losing)
+- One about RIVALRY (vs specific player)
+- One about MILESTONE (passing someone/reaching number)
+- One about COMEBACK story
+- One about CONSISTENCY/reliability
+- One about VOLATILITY (big swings)
+- One about FORM vs LEGACY conflict
+
+📝 BEFORE SUBMITTING: Read all sentences aloud. If ANY two sound similar → REWRITE!
 
 ═══════════════════════════════════════
 
@@ -1002,22 +1036,28 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 - "ממוצע היסטורי" = historical average
 - "מאז שהתחלנו לשחק" = since we started playing
 
-📊 CORRECT EXAMPLES (EVERY NUMBER HAS CONTEXT!):
+📊 VARIETY EXAMPLES - EACH SENTENCE STARTS DIFFERENTLY:
 
-✅ GOOD - Milestone with full context:
-   "ליאור עומד על +1920₪ בטבלה הכללית של כל הזמנים. עוד 80₪ הלילה והוא יחצה את רף ה-2000₪ בטבלה הכללית!"
+✅ PLAYER 1 - Start with NAME + action verb:
+   "ליאור שורף את הטבלה! 4 נצחונות רצופים בטבלה הכללית, ממוצע של +67₪ למשחק, והוא לא מראה סימני האטה."
 
-✅ GOOD - Average with timeframe:
-   "חרדון עם ממוצע של +67₪ למשחק בטבלה הכללית (מתוך 45 משחקים). הלילה הוא שואף להגיע ל-500₪ רווח בטבלת שנת 2025."
+✅ PLAYER 2 - Start with QUESTION:
+   "האם חרדון יצליח לשבור את קללת דצמבר? 3 הפסדים רצופים בטבלת 2025, אבל ההיסטוריה שלו מדברת אחרת."
 
-✅ GOOD - Negative with context:
-   "ליכטר במקום 5 בטבלה הכללית עם ממוצע של -7₪ למשחק (כל הזמנים). מחפש שיפור לאחר תקופה קשה."
+✅ PLAYER 3 - Start with STAT/NUMBER:
+   "+1806₪ בטבלת 2025. דן מאן על גל, וצריך רק 200₪ הלילה כדי לחצות את רף ה-2000₪ השנתי!"
 
-✅ GOOD - Year table reference:
-   "מור מובילה את טבלת שנת 2025 עם +380₪. הלילה היא נלחמת לשמור על המקום הראשון בטבלה השנתית."
+✅ PLAYER 4 - Start with "הלילה" or time:
+   "הלילה תומר מחפש לשבור רצף של 3 הפסדים. אחרי -120₪ במשחק האחרון, זה הזמן לתפנית."
 
-✅ GOOD - Story without numbers:
-   "ליאור ברצף חם של 4 נצחונות. המומנטום לצידו והוא מוכן לעוד לילה מנצח!"
+✅ PLAYER 5 - Start with METAPHOR:
+   "הפניקס קם מהאפר! אחרי חודש קשה, ליכטר חוזר עם 2 נצחונות רצופים בטבלה הכללית."
+
+✅ PLAYER 6 - Start with "אם" (conditional):
+   "אם סגל יקח הלילה +95₪, הוא יעקוף את אייל ויעלה למקום 3 בטבלה הכללית של כל הזמנים!"
+
+✅ PLAYER 7 - Start with RIVALRY:
+   "הקרב נגד ליאור נמשך! אייל צריך נצחון גדול הלילה כדי לסגור את הפער של 150₪ בטבלת 2025."
 
 ❌ WRONG - NO CONTEXT:
    "שואף לחצות את רף ה-2000₪" ← חסר: "בטבלה הכללית"
