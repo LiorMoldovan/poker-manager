@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.25.0';
+export const APP_VERSION = '4.26.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.26.0',
+    date: '2025-12-25',
+    changes: [
+      '🐛 CRITICAL: Game history was limited to 6 games - now includes ALL games!',
+      'This was causing wrong year profit calculations (missing games)',
+      'Comprehensive test suite added (14 tests)',
+      'Date parsing improved to handle slashes, dots, and ISO formats',
+      'Added verifyForecastData() function for data inspection',
+      'Run window.testMilestones() in console to verify'
+    ]
+  },
   {
     version: '4.25.0',
     date: '2025-12-25',

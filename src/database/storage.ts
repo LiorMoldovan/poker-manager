@@ -444,10 +444,10 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       // Break-even (profit === 0): skip and continue checking previous games
     }
     
-    // Last 15 game results (most recent first) with dates and gameId
-    // More games = better player dynamics analysis
+    // ALL game results (most recent first) with dates and gameId
+    // We need ALL games for accurate year/month/period calculations!
     const lastGameResults = sortedPlayerGames
-      .slice(-6)
+      .slice() // Take ALL games, not just last 6!
       .reverse()
       .map(pg => {
         const game = sortedGames.find(g => g.id === pg.gameId);
@@ -889,5 +889,75 @@ export const getForecastComparison = (gameId: string): {
     missingFromGame,
     missingFromForecast,
   };
+};
+
+// ========== Storage Usage Monitoring ==========
+
+export interface StorageUsage {
+  used: number;           // bytes used
+  limit: number;          // estimated limit (5MB)
+  percent: number;        // percentage used
+  breakdown: Record<string, number>;  // bytes per key
+  status: 'safe' | 'warning' | 'critical';
+  gamesCount: number;
+  estimatedGamesRemaining: number;
+}
+
+const STORAGE_LIMIT = 5 * 1024 * 1024; // 5MB in bytes
+const WARNING_THRESHOLD = 70;  // Show warning at 70%
+const CRITICAL_THRESHOLD = 90; // Critical at 90%
+
+export const getStorageUsage = (): StorageUsage => {
+  const breakdown: Record<string, number> = {};
+  let totalUsed = 0;
+
+  // Calculate size of each poker-related key
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('poker_') || key === 'github_token' || key === 'gemini_api_key') {
+      const value = localStorage.getItem(key) || '';
+      // localStorage uses UTF-16, so each character is 2 bytes
+      const size = (key.length + value.length) * 2;
+      breakdown[key] = size;
+      totalUsed += size;
+    }
+  }
+
+  const percent = (totalUsed / STORAGE_LIMIT) * 100;
+  const gamesCount = getAllGames().length;
+  
+  // Estimate average bytes per game (including gamePlayers and backup overhead)
+  const avgBytesPerGame = gamesCount > 0 ? totalUsed / gamesCount : 3500; // ~3.5KB default estimate
+  const remainingBytes = STORAGE_LIMIT - totalUsed;
+  const estimatedGamesRemaining = Math.max(0, Math.floor(remainingBytes / avgBytesPerGame));
+
+  let status: 'safe' | 'warning' | 'critical' = 'safe';
+  if (percent >= CRITICAL_THRESHOLD) {
+    status = 'critical';
+  } else if (percent >= WARNING_THRESHOLD) {
+    status = 'warning';
+  }
+
+  return {
+    used: totalUsed,
+    limit: STORAGE_LIMIT,
+    percent,
+    breakdown,
+    status,
+    gamesCount,
+    estimatedGamesRemaining,
+  };
+};
+
+// Check if storage write might fail
+export const canWriteToStorage = (additionalBytes: number = 10000): boolean => {
+  const usage = getStorageUsage();
+  return (usage.used + additionalBytes) < STORAGE_LIMIT;
+};
+
+// Get human-readable storage size
+export const formatStorageSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 };
 

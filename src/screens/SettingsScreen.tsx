@@ -19,7 +19,10 @@ import {
   restoreFromBackup,
   downloadBackup,
   importBackupFromFile,
-  BackupData
+  BackupData,
+  getStorageUsage,
+  formatStorageSize,
+  StorageUsage
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey } from '../utils/geminiAI';
@@ -46,6 +49,7 @@ const SettingsScreen = () => {
   const [showFullChangelog, setShowFullChangelog] = useState(false);
   const [backups, setBackups] = useState<BackupData[]>([]);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null);
   const [backupMessage, setBackupMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -104,6 +108,7 @@ const SettingsScreen = () => {
     setPlayers(sortPlayersByType(getAllPlayers()));
     setBackups(getBackups());
     setLastBackup(getLastBackupDate());
+    setStorageUsage(getStorageUsage());
     // Load GitHub token if admin
     const savedToken = getGitHubToken();
     if (savedToken) setGithubToken(savedToken);
@@ -227,6 +232,7 @@ const SettingsScreen = () => {
     createBackup('manual');
     setBackups(getBackups());
     setLastBackup(getLastBackupDate());
+    setStorageUsage(getStorageUsage()); // Update storage info after backup
     setBackupMessage({ type: 'success', text: 'Backup created successfully!' });
     setTimeout(() => setBackupMessage(null), 3000);
   };
@@ -566,6 +572,90 @@ const SettingsScreen = () => {
               <p style={{ color: backupMessage.type === 'success' ? 'var(--success)' : 'var(--danger)', margin: 0 }}>
                 {backupMessage.text}
               </p>
+            </div>
+          )}
+
+          {/* Storage Usage Info */}
+          {storageUsage && (
+            <div style={{ 
+              background: storageUsage.status === 'critical' 
+                ? 'rgba(239, 68, 68, 0.1)' 
+                : storageUsage.status === 'warning' 
+                  ? 'rgba(245, 158, 11, 0.1)' 
+                  : 'var(--surface)',
+              borderRadius: '8px', 
+              padding: '0.75rem',
+              marginBottom: '1rem',
+              borderLeft: storageUsage.status === 'critical' 
+                ? '4px solid var(--danger)' 
+                : storageUsage.status === 'warning' 
+                  ? '4px solid var(--warning)' 
+                  : '4px solid var(--primary)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {storageUsage.status === 'critical' ? '🚨' : storageUsage.status === 'warning' ? '⚠️' : '💾'} Storage Usage
+                </span>
+                <span style={{ 
+                  fontSize: '0.85rem', 
+                  fontWeight: '600',
+                  color: storageUsage.status === 'critical' 
+                    ? 'var(--danger)' 
+                    : storageUsage.status === 'warning' 
+                      ? 'var(--warning)' 
+                      : 'var(--success)'
+                }}>
+                  {storageUsage.percent.toFixed(1)}%
+                </span>
+              </div>
+              
+              {/* Progress bar */}
+              <div style={{ 
+                width: '100%', 
+                height: '8px', 
+                background: 'var(--border)', 
+                borderRadius: '4px',
+                overflow: 'hidden',
+                marginBottom: '0.5rem'
+              }}>
+                <div style={{ 
+                  width: `${Math.min(storageUsage.percent, 100)}%`,
+                  height: '100%',
+                  background: storageUsage.status === 'critical' 
+                    ? 'var(--danger)' 
+                    : storageUsage.status === 'warning' 
+                      ? 'var(--warning)' 
+                      : 'var(--primary)',
+                  borderRadius: '4px',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <span>{formatStorageSize(storageUsage.used)} / {formatStorageSize(storageUsage.limit)}</span>
+                <span>{storageUsage.gamesCount} games stored</span>
+              </div>
+              
+              {storageUsage.status !== 'safe' && (
+                <div style={{ 
+                  marginTop: '0.5rem', 
+                  padding: '0.5rem',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem'
+                }}>
+                  {storageUsage.status === 'critical' ? (
+                    <span style={{ color: 'var(--danger)' }}>
+                      ⚠️ Storage almost full! Download a backup and clear old data to continue.
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--warning)' }}>
+                      💡 ~{storageUsage.estimatedGamesRemaining} games remaining before storage is full. 
+                      Consider downloading a backup.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
