@@ -341,7 +341,7 @@ const SettingsScreen = () => {
               key={tab.id}
               className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab(tab.id)}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
             >
               {tab.label}
             </button>
@@ -354,7 +354,7 @@ const SettingsScreen = () => {
                 key={tab.id}
                 className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveTab(tab.id)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
               >
                 {tab.label}
               </button>

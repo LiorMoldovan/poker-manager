@@ -819,28 +819,28 @@ const StatisticsScreen = () => {
               <button 
                 className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('table')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
               >
                 📊 Table
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('records')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
               >
                 🏆 Records
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('individual')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
               >
                 👤 Players
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'insights' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('insights')}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
               >
                 🎯 Insights
               </button>

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.6';
+export const APP_VERSION = '4.37.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.7',
+    date: '2025-12-25',
+    changes: [
+      'UI: Fixed menu cards to fit container properly with minWidth:0 and consistent sizing'
+    ]
+  },
   {
     version: '4.37.6',
     date: '2025-12-25',

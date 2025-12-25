@@ -551,14 +551,14 @@ const GraphsScreen = () => {
           <button 
             className={`btn btn-sm ${viewMode === 'cumulative' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('cumulative')}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             📈 Profit
           </button>
           <button 
             className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('headToHead')}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             🆚 Head-to-Head
           </button>
