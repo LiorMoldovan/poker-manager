@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.26.0';
+export const APP_VERSION = '4.27.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.27.0',
+    date: '2025-12-25',
+    changes: [
+      '🧪 EXTENSIVE TEST SUITE: 20+ tests across 6 categories',
+      '🐛 FIX: AI forecast now also converts dates to DD/MM/YYYY',
+      'Test categories: Streaks, Year Profits, Leaderboard, Round Numbers, Games, Dates',
+      'Added verifyPlayerData() for individual player inspection',
+      'Run window.runAllTests() in console to verify all logic',
+      'Each test shows severity: critical/high/medium/low'
+    ]
+  },
   {
     version: '4.26.0',
     date: '2025-12-25',

@@ -574,8 +574,8 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
   const backups = getBackups();
   backups.unshift(backup); // Add to beginning (newest first)
   
-  // Keep only last 4 backups
-  while (backups.length > 4) {
+  // Keep only the latest backup (1 backup max)
+  while (backups.length > 1) {
     backups.pop();
   }
   
