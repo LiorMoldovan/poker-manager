@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.31.0';
+export const APP_VERSION = '4.31.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.31.1',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Duplicate milestones removed!',
+      'Record-breaking milestones now show only 1 candidate (the best one)',
+      'Fixed: Players with 0 wins no longer appear in record chase',
+      'Section 11 and 19 now complement each other (no overlap)',
+      'Cleaner milestone list with no repetition'
+    ]
+  },
   {
     version: '4.31.0',
     date: '2025-12-25',

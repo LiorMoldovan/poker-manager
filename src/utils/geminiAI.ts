@@ -302,19 +302,22 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
   
-  // 11. BIGGEST WIN RECORD
+  // 11. BIGGEST WIN RECORD - Only show the BEST candidate (one player)
   const biggestWin = Math.max(...players.map(p => p.bestWin));
   const recordHolder = players.find(p => p.bestWin === biggestWin);
-  players.forEach(p => {
-    if (p.currentStreak >= 2 && p.bestWin < biggestWin && biggestWin - p.bestWin <= 100) {
-      milestones.push({
-        emoji: '💰',
-        title: 'שיא הנצחון הגדול ביותר בלילה אחד!',
-        description: `שיא הקבוצה לנצחון הגדול ביותר בלילה אחד הוא +${Math.round(biggestWin)}₪, שהושג על ידי ${recordHolder?.name}. ${p.name} נמצא ברצף חם של ${p.currentStreak} נצחונות - אם הוא ינצח גדול הלילה (מעל +${Math.round(biggestWin)}₪), הוא ישבור את השיא!`,
-        priority: 78
-      });
-    }
-  });
+  // Find the best candidate: on a streak, closest to record, has actual wins
+  const bigWinCandidates = players
+    .filter(p => p.currentStreak >= 2 && p.bestWin > 0 && p.bestWin < biggestWin && biggestWin - p.bestWin <= 100)
+    .sort((a, b) => b.currentStreak - a.currentStreak); // Best streak first
+  if (bigWinCandidates.length > 0) {
+    const bestCandidate = bigWinCandidates[0];
+    milestones.push({
+      emoji: '💰',
+      title: 'שיא הנצחון הגדול ביותר בלילה אחד!',
+      description: `שיא הקבוצה לנצחון הגדול ביותר בלילה אחד הוא +${Math.round(biggestWin)}₪, שהושג על ידי ${recordHolder?.name}. ${bestCandidate.name} נמצא ברצף חם של ${bestCandidate.currentStreak} נצחונות - אם הוא ינצח גדול הלילה (מעל +${Math.round(biggestWin)}₪), הוא ישבור את השיא!`,
+      priority: 78
+    });
+  }
   
   // 12. COMEBACK OPPORTUNITIES
   players.forEach(p => {
@@ -516,19 +519,22 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
 
   // ========== NEW: ALL-TIME RECORDS ==========
   
-  // 19. APPROACHING ALL-TIME BEST WIN RECORD
+  // 19. APPROACHING ALL-TIME BEST WIN RECORD - Only ONE candidate (with lower streak requirement than section 11)
   const allTimeBestWin = Math.max(...players.map(p => p.bestWin));
   const bestWinHolder = players.find(p => p.bestWin === allTimeBestWin);
-  players.forEach(p => {
-    if (p !== bestWinHolder && p.currentStreak >= 1 && allTimeBestWin - p.bestWin <= 150) {
-      milestones.push({
-        emoji: '🎰',
-        title: 'מרדף על שיא הנצחון הגדול!',
-        description: `שיא הקבוצה לנצחון הגדול ביותר הוא +${Math.round(allTimeBestWin)}₪ (${bestWinHolder?.name}). השיא האישי של ${p.name} הוא +${Math.round(p.bestWin)}₪. נצחון גדול הלילה יכול לשבור את השיא!`,
-        priority: 72
-      });
-    }
-  });
+  // Find candidates NOT covered by section 11 (streak = 1 only, since section 11 covers streak >= 2)
+  const recordChasers = players
+    .filter(p => p !== bestWinHolder && p.currentStreak === 1 && p.bestWin > 0 && allTimeBestWin - p.bestWin <= 150)
+    .sort((a, b) => b.bestWin - a.bestWin); // Closest to record first
+  if (recordChasers.length > 0) {
+    const topChaser = recordChasers[0];
+    milestones.push({
+      emoji: '🎰',
+      title: 'מרדף על שיא הנצחון הגדול!',
+      description: `שיא הקבוצה לנצחון הגדול ביותר הוא +${Math.round(allTimeBestWin)}₪ (${bestWinHolder?.name}). השיא האישי של ${topChaser.name} הוא +${Math.round(topChaser.bestWin)}₪. נצחון גדול הלילה יכול לשבור את השיא!`,
+      priority: 72
+    });
+  }
 
   // 20. LONGEST WIN STREAK RECORD
   const allTimeLongestWinStreak = Math.max(...players.map(p => p.currentStreak > 0 ? p.currentStreak : 0));
