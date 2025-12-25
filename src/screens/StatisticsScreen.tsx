@@ -2274,67 +2274,272 @@ const StatisticsScreen = () => {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {sortedStats.slice(0, 10).map((player, idx) => {
-                // Calculate player profile data
-                const avgProfit = player.avgProfit;
-                const winRate = player.winPercentage;
+                // ========== COMPREHENSIVE PLAYER ANALYSIS ==========
                 const gamesPlayed = player.gamesPlayed;
+                const winRate = player.winPercentage;
+                const avgProfit = player.avgProfit;
+                const avgWin = player.avgWin || 0;
+                const avgLoss = player.avgLoss || 0;
+                const avgRebuys = player.avgRebuysPerGame || 0;
                 const bestWin = player.biggestWin;
                 const worstLoss = player.biggestLoss;
-                const volatility = bestWin + Math.abs(worstLoss);
+                const totalProfit = player.totalProfit;
+                const winCount = player.winCount;
+                const lossCount = player.lossCount;
+                const currentStreak = player.currentStreak;
+                const longestWinStreak = player.longestWinStreak || 0;
+                const longestLossStreak = player.longestLossStreak || 0;
+                const lastGames = player.lastGameResults || [];
                 const periodLabel = getTimeframeLabel();
                 
-                // Determine playing style
+                // Calculate advanced metrics
+                const winLossRatio = avgWin > 0 && avgLoss > 0 ? avgWin / avgLoss : 1;
+                const volatilityScore = bestWin + Math.abs(worstLoss);
+                const consistencyScore = winRate >= 45 && winRate <= 55 ? 100 - Math.abs(50 - winRate) * 2 : Math.abs(50 - winRate);
+                const riskScore = avgRebuys * 30 + (volatilityScore / 10); // Higher = more risk-taking
+                const efficiencyScore = avgProfit > 0 ? (avgWin / (avgWin + avgLoss)) * 100 : 0;
+                
+                // Recent form analysis (last 3-6 games)
+                const recentGames = lastGames.slice(0, Math.min(6, lastGames.length));
+                const recentWins = recentGames.filter(g => g.profit > 0).length;
+                const recentProfit = recentGames.reduce((sum, g) => sum + g.profit, 0);
+                const isRecentlyHot = recentGames.length >= 3 && recentWins >= Math.ceil(recentGames.length * 0.66);
+                const isRecentlyCold = recentGames.length >= 3 && recentWins <= Math.floor(recentGames.length * 0.33);
+                
+                // ========== PLAYER STYLE CLASSIFICATION (Multi-factor) ==========
                 let styleEmoji = '';
                 let styleName = '';
-                if (volatility >= 400) {
-                  styleName = 'אגרסיבי';
+                
+                // Classification based on multiple factors
+                if (gamesPlayed < 3) {
+                  styleName = 'חדש';
+                  styleEmoji = '🌱';
+                } else if (avgRebuys >= 2.5 && volatilityScore >= 350) {
+                  styleName = 'מהמר';
+                  styleEmoji = '🎰';
+                } else if (winRate >= 60 && avgProfit > 30 && avgRebuys <= 2) {
+                  styleName = 'כריש';
+                  styleEmoji = '🦈';
+                } else if (volatilityScore >= 450 || (bestWin >= 250 && worstLoss >= 200)) {
+                  styleName = 'רכבת הרים';
                   styleEmoji = '🎢';
-                } else if (volatility <= 200) {
-                  styleName = 'שמרני';
+                } else if (avgRebuys <= 1.3 && volatilityScore <= 250) {
+                  styleName = 'שמרן';
                   styleEmoji = '🛡️';
+                } else if (winRate >= 55 && avgProfit > 20) {
+                  styleName = 'יעיל';
+                  styleEmoji = '🎯';
+                } else if (winLossRatio >= 1.3 && winRate >= 45) {
+                  styleName = 'מנצל הזדמנויות';
+                  styleEmoji = '🦅';
+                } else if (avgRebuys >= 2 && winRate < 45) {
+                  styleName = 'לוחם';
+                  styleEmoji = '⚔️';
+                } else if (winRate >= 50 && avgProfit < 0) {
+                  styleName = 'לא ממוקד';
+                  styleEmoji = '🎲';
                 } else {
                   styleName = 'מאוזן';
                   styleEmoji = '⚖️';
                 }
                 
-                // Generate narrative sentences (2-3 sentences per player)
+                // ========== GENERATE UNIQUE NARRATIVE (Massive variety) ==========
                 const sentences: string[] = [];
+                const usedAngles = new Set<string>();
                 
-                // Sentence 1: Overall performance narrative
-                if (avgProfit > 0 && winRate >= 55) {
-                  sentences.push(`📈 שחקן רווחי עם ${Math.round(winRate)}% נצחונות. ממוצע של +${Math.round(avgProfit)}₪ למשחק מציב אותו כאחד השחקנים המשתלמים בקבוצה.`);
+                // Helper to pick random from array and track usage
+                const pickRandom = <T,>(arr: T[], angle: string): T | null => {
+                  if (usedAngles.has(angle) || arr.length === 0) return null;
+                  usedAngles.add(angle);
+                  return arr[Math.floor(Math.random() * arr.length)];
+                };
+                
+                // ===== SENTENCE POOLS BY CATEGORY =====
+                
+                // PROFITABLE + HIGH WIN RATE (The Champions)
+                const championSentences = [
+                  `📈 ${winCount} נצחונות מתוך ${gamesPlayed} משחקים (${Math.round(winRate)}%) עם ממוצע +${Math.round(avgProfit)}₪. הנוסחה עובדת.`,
+                  `🏆 שחקן מוביל עם ${Math.round(winRate)}% נצחונות. כשהוא מנצח, הוא מרוויח בממוצע +${Math.round(avgWin)}₪.`,
+                  `💰 רווח כולל של ${formatCurrency(totalProfit)} ב-${gamesPlayed} משחקים. אחד הרווחיים בקבוצה.`,
+                  `🎯 יחס נצחון-הפסד מרשים: +${Math.round(avgWin)}₪ בממוצע כשמנצח, רק -${Math.round(avgLoss)}₪ כשמפסיד.`,
+                  `⭐ ${Math.round(winRate)}% נצחונות זה לא מזל - זו שיטה. ממוצע +${Math.round(avgProfit)}₪ מדבר בעד עצמו.`,
+                ];
+                
+                // PROFITABLE + LOW WIN RATE (The Big Winners)
+                const bigWinnerSentences = [
+                  `💎 רק ${Math.round(winRate)}% נצחונות, אבל כשהוא מנצח - בגדול! ממוצע נצחון +${Math.round(avgWin)}₪.`,
+                  `🎰 פחות נצחונות (${winCount}), יותר איכות. הנצחון הגדול: +${Math.round(bestWin)}₪.`,
+                  `🦅 צד את הרגעים הנכונים. ${Math.round(winRate)}% נצחונות אבל ברווח כולל של ${formatCurrency(totalProfit)}.`,
+                  `💡 יחס הנצחון/הפסד שלו ${winLossRatio.toFixed(1)} - כשמנצח, מנצח גדול.`,
+                  `🎯 לא צריך הרבה נצחונות כשממוצע הנצחון הוא +${Math.round(avgWin)}₪.`,
+                ];
+                
+                // LOSING + HIGH WIN RATE (The Unlucky)
+                const unluckySentences = [
+                  `🎲 ${Math.round(winRate)}% נצחונות אבל עדיין בהפסד. הנצחונות קטנים (+${Math.round(avgWin)}₪), ההפסדים גדולים (-${Math.round(avgLoss)}₪).`,
+                  `📊 מנצח ב-${winCount} מתוך ${gamesPlayed} משחקים, אבל ההפסדים בולעים את הרווחים.`,
+                  `⚠️ יחס נצחון/הפסד לא טוב: מרוויח +${Math.round(avgWin)}₪ בממוצע, מפסיד -${Math.round(avgLoss)}₪.`,
+                  `🔍 הבעיה לא באחוז הנצחונות (${Math.round(winRate)}%) - הבעיה בגודל ההפסדים.`,
+                  `💡 ${winCount} נצחונות לא מספיקים כש-${lossCount} הפסדים גדולים יותר.`,
+                ];
+                
+                // LOSING + LOW WIN RATE (The Strugglers)
+                const struggleSentences = [
+                  `📉 ${lossCount} הפסדים מתוך ${gamesPlayed} משחקים. תקופה מאתגרת שדורשת סבלנות.`,
+                  `⏸️ רק ${Math.round(winRate)}% נצחונות. כל שחקן עובר תקופות כאלה.`,
+                  `🔄 הממוצע (${Math.round(avgProfit)}₪) לא משקף את הפוטנציאל. זמן לאיפוס.`,
+                  `💪 ${gamesPlayed} משחקים של ניסיון. ההשקעה תשתלם בסוף.`,
+                  `🎯 ההפסד הגדול (-${Math.round(worstLoss)}₪) משך את הממוצע למטה. בלעדיו התמונה שונה.`,
+                ];
+                
+                // HOT STREAK sentences
+                const hotStreakSentences = [
+                  `🔥 ${currentStreak} נצחונות ברצף! המומנטום עובד בעדו.`,
+                  `⚡ רצף חם של ${currentStreak} נצחונות. הביטחון בשיא.`,
+                  `🌟 ${currentStreak} נצחונות רצופים - התקופה הכי טובה שלו.`,
+                  `🚀 ברצף של ${currentStreak} נצחונות. קשה לעצור אותו עכשיו.`,
+                  `💫 ${currentStreak} ברצף! כולם רוצים לשבת לידו.`,
+                ];
+                
+                // COLD STREAK sentences
+                const coldStreakSentences = [
+                  `❄️ ${Math.abs(currentStreak)} הפסדים ברצף. נצחון אחד ישבור את הקרח.`,
+                  `⏳ רצף של ${Math.abs(currentStreak)} הפסדים. הסטטיסטיקה לטובתו - זה חייב להסתובב.`,
+                  `💪 ${Math.abs(currentStreak)} הפסדים? הקאמבק הבא יהיה מתוק יותר.`,
+                  `🔄 ברצף שלילי של ${Math.abs(currentStreak)}. זמן לשינוי מזל.`,
+                  `🎯 ${Math.abs(currentStreak)} הפסדים לא משנים את הפוטנציאל. הנצחון הבא קרוב.`,
+                ];
+                
+                // HIGH REBUYS (Risk-takers)
+                const highRebuySentences = [
+                  `🎰 ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק. לא מפחד להיכנס עמוק.`,
+                  `💵 ${avgRebuys.toFixed(1)} רכישות בממוצע - סגנון אגרסיבי שדורש כיסים עמוקים.`,
+                  `⚔️ נכנס למשחק עם ${avgRebuys.toFixed(1)} רכישות בממוצע. לוחם עד הסוף.`,
+                  `🔥 לא מוותר בקלות - ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק.`,
+                  `💪 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על התמדה ונחישות.`,
+                ];
+                
+                // LOW REBUYS (Conservative)
+                const lowRebuySentences = [
+                  `🛡️ רק ${avgRebuys.toFixed(1)} רכישות בממוצע. יודע מתי לעצור.`,
+                  `💡 ${avgRebuys.toFixed(1)} רכישות למשחק - גישה שמרנית וחכמה.`,
+                  `🎯 שומר על משמעת עם ${avgRebuys.toFixed(1)} רכישות בממוצע.`,
+                  `⚖️ ממוצע ${avgRebuys.toFixed(1)} רכישות - לא נסחף, לא מתייאש.`,
+                  `🧠 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על שליטה עצמית.`,
+                ];
+                
+                // VOLATILE (Big swings)
+                const volatileSentences = [
+                  `🎢 תנודות קיצוניות: מ-+${Math.round(bestWin)}₪ ועד -${Math.round(worstLoss)}₪. לילות דרמטיים.`,
+                  `⚡ הפער בין הטוב (+${Math.round(bestWin)}₪) לרע (-${Math.round(worstLoss)}₪) הוא ${Math.round(bestWin + worstLoss)}₪!`,
+                  `🌊 גלים גבוהים: נצחון ממוצע +${Math.round(avgWin)}₪, הפסד ממוצע -${Math.round(avgLoss)}₪.`,
+                  `🎭 שני פנים: יכול לקחת +${Math.round(bestWin)}₪ או להפסיד -${Math.round(worstLoss)}₪.`,
+                  `💥 משחק עוצמתי - הממוצעים לא מספרים את כל הסיפור.`,
+                ];
+                
+                // CONSISTENT (Stable)
+                const consistentSentences = [
+                  `📊 תוצאות יציבות ללא קפיצות קיצוניות. אפשר לחזות אותו.`,
+                  `⚖️ ממוצע נצחון +${Math.round(avgWin)}₪, ממוצע הפסד -${Math.round(avgLoss)}₪. מאוזן.`,
+                  `🎯 עקביות מרשימה - הטוב והרע באותו גודל בערך.`,
+                  `🛡️ לא גבוה מדי, לא נמוך מדי. סגנון בטוח ויציב.`,
+                  `📈 הגרף שלו חלק יחסית - ללא הפתעות גדולות.`,
+                ];
+                
+                // RECENT FORM sentences
+                const recentHotSentences = [
+                  `📈 ${recentWins} מתוך ${recentGames.length} משחקים אחרונים ברווח. פורם עולה!`,
+                  `🔥 ${recentWins} נצחונות ב-${recentGames.length} משחקים אחרונים. תפוס אותו עכשיו!`,
+                  `⬆️ מגמה חיובית - ${recentWins}/${recentGames.length} משחקים אחרונים ברווח.`,
+                  `💪 ${recentWins} נצחונות לאחרונה מתוך ${recentGames.length}. בכושר מעולה.`,
+                ];
+                
+                const recentColdSentences = [
+                  `📉 רק ${recentWins} מתוך ${recentGames.length} משחקים אחרונים ברווח. תקופה קשה.`,
+                  `⬇️ ${recentGames.length - recentWins} הפסדים ב-${recentGames.length} משחקים אחרונים.`,
+                  `⏸️ רק ${recentWins}/${recentGames.length} נצחונות לאחרונה. ממתין לשינוי.`,
+                  `🔄 ${recentGames.length - recentWins} הפסדים אחרונים. הגלגל יסתובב.`,
+                ];
+                
+                // RECORDS & MILESTONES
+                const recordSentences = [
+                  `🏆 שיא הנצחון שלו: +${Math.round(bestWin)}₪ בלילה אחד!`,
+                  `📊 הנצחון הגדול (+${Math.round(bestWin)}₪) שווה ${Math.round(bestWin / (avgWin || 1))} נצחונות ממוצעים.`,
+                  `💪 רצף הנצחונות הארוך שלו: ${longestWinStreak} ברצף.`,
+                  `📈 ${gamesPlayed} משחקים של ניסיון עם רווח כולל של ${formatCurrency(totalProfit)}.`,
+                ];
+                
+                // NEWCOMER sentences
+                const newcomerSentences = [
+                  `🌱 ${gamesPlayed} משחקים בלבד - עוד מוקדם לדעת לאן זה הולך.`,
+                  `👋 שחקן חדש יחסית. הנתונים עדיין לא מייצגים.`,
+                  `🎲 רק ${gamesPlayed} משחקים. הסטטיסטיקה תתייצב עם הזמן.`,
+                  `📊 מדגם קטן של ${gamesPlayed} משחקים. עוד הכל פתוח.`,
+                ];
+                
+                // ===== BUILD NARRATIVE BASED ON PLAYER PROFILE =====
+                
+                // Sentence 1: Main performance angle
+                if (gamesPlayed < 5) {
+                  const s = pickRandom(newcomerSentences, 'newcomer');
+                  if (s) sentences.push(s);
+                } else if (avgProfit > 20 && winRate >= 55) {
+                  const s = pickRandom(championSentences, 'champion');
+                  if (s) sentences.push(s);
                 } else if (avgProfit > 0 && winRate < 50) {
-                  sentences.push(`💡 למרות רק ${Math.round(winRate)}% נצחונות, ${player.playerName} עדיין ברווח של +${Math.round(avgProfit)}₪ למשחק. כשהוא מנצח, הוא מנצח גדול.`);
+                  const s = pickRandom(bigWinnerSentences, 'bigwinner');
+                  if (s) sentences.push(s);
                 } else if (avgProfit < 0 && winRate >= 50) {
-                  sentences.push(`🎯 ${Math.round(winRate)}% נצחונות אבל עדיין בהפסד של ${Math.round(avgProfit)}₪ למשחק. צריך למקסם את הנצחונות הקיימים.`);
-                } else if (avgProfit < 0 && winRate < 45) {
-                  sentences.push(`📊 רק ${Math.round(winRate)}% נצחונות עם ממוצע של ${Math.round(avgProfit)}₪ למשחק. תקופה מאתגרת שדורשת התאמות.`);
+                  const s = pickRandom(unluckySentences, 'unlucky');
+                  if (s) sentences.push(s);
+                } else if (avgProfit < -10 && winRate < 45) {
+                  const s = pickRandom(struggleSentences, 'struggle');
+                  if (s) sentences.push(s);
                 } else {
-                  sentences.push(`⚖️ ממוצע של ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪ למשחק עם ${Math.round(winRate)}% נצחונות. ביצועים סטנדרטיים.`);
+                  // Fallback to a neutral performance sentence
+                  sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
                 }
                 
-                // Sentence 2: Streak or momentum narrative
-                if (player.currentStreak >= 3) {
-                  sentences.push(`🔥 ברצף חם של ${player.currentStreak} נצחונות רצופים! התקופה הטובה ביותר שלו, שמומנטום ממשיך להאיץ.`);
-                } else if (player.currentStreak >= 2) {
-                  sentences.push(`📈 מומנטום חיובי עם ${player.currentStreak} נצחונות ברצף. נראה שהוא מצא את קצב המשחק הנכון.`);
-                } else if (player.currentStreak <= -3) {
-                  sentences.push(`❄️ ברצף קשה של ${Math.abs(player.currentStreak)} הפסדים. נצחון אחד ישבור את הרצף ויחזיר את הביטחון.`);
-                } else if (player.currentStreak <= -2) {
-                  sentences.push(`⏸️ שני הפסדים אחרונים. הזדמנות לקאמבק במשחק הבא.`);
-                } else if (volatility >= 400 && gamesPlayed >= 5) {
-                  sentences.push(`🎢 שחקן תנודתי: הנצחון הגדול שלו +${Math.round(bestWin)}₪, ההפסד הגדול ${Math.round(worstLoss)}₪. לילות דרמטיים מובטחים.`);
-                } else if (volatility <= 180 && gamesPlayed >= 5) {
-                  sentences.push(`🛡️ שחקן יציב ושמרני. ללא תנודות קיצוניות, מעדיף משחק בטוח על סיכונים.`);
+                // Sentence 2: Streak/momentum or style angle
+                if (currentStreak >= 3) {
+                  const s = pickRandom(hotStreakSentences, 'hotstreak');
+                  if (s) sentences.push(s);
+                } else if (currentStreak <= -3) {
+                  const s = pickRandom(coldStreakSentences, 'coldstreak');
+                  if (s) sentences.push(s);
+                } else if (avgRebuys >= 2.2 && gamesPlayed >= 5) {
+                  const s = pickRandom(highRebuySentences, 'highrebuy');
+                  if (s) sentences.push(s);
+                } else if (avgRebuys <= 1.4 && avgRebuys > 0 && gamesPlayed >= 5) {
+                  const s = pickRandom(lowRebuySentences, 'lowrebuy');
+                  if (s) sentences.push(s);
+                } else if (volatilityScore >= 400 && gamesPlayed >= 5) {
+                  const s = pickRandom(volatileSentences, 'volatile');
+                  if (s) sentences.push(s);
+                } else if (volatilityScore <= 200 && gamesPlayed >= 5) {
+                  const s = pickRandom(consistentSentences, 'consistent');
+                  if (s) sentences.push(s);
+                } else if (isRecentlyHot && recentGames.length >= 3) {
+                  const s = pickRandom(recentHotSentences, 'recenthot');
+                  if (s) sentences.push(s);
+                } else if (isRecentlyCold && recentGames.length >= 3) {
+                  const s = pickRandom(recentColdSentences, 'recentcold');
+                  if (s) sentences.push(s);
                 }
                 
-                // Sentence 3: Suggestion/tip narrative (only for certain cases)
-                if (gamesPlayed >= 10 && winRate < 45 && avgProfit < 0) {
-                  sentences.push(`💡 עם ${gamesPlayed} משחקים וניסיון מצטבר, אולי כדאי לשקול גישה שמרנית יותר בשלבים מוקדמים.`);
-                } else if (avgProfit > 30 && player.currentStreak >= 2) {
-                  sentences.push(`💪 תקופה חזקה! שמור על הקו והמשך לשחק את המשחק שלך.`);
-                } else if (gamesPlayed <= 5) {
-                  sentences.push(`🌱 שחקן חדש יחסית עם ${gamesPlayed} משחקים. עוד מוקדם להסיק מסקנות ארוכות טווח.`);
+                // Sentence 3: Additional insight (record, comparison, or tip)
+                if (sentences.length < 3 && gamesPlayed >= 5) {
+                  // Try to add a third sentence for variety
+                  if (bestWin >= 200 && !usedAngles.has('record')) {
+                    const s = pickRandom(recordSentences, 'record');
+                    if (s) sentences.push(s);
+                  } else if (isRecentlyHot && !usedAngles.has('recenthot')) {
+                    const s = pickRandom(recentHotSentences, 'recenthot');
+                    if (s) sentences.push(s);
+                  } else if (isRecentlyCold && !usedAngles.has('recentcold')) {
+                    const s = pickRandom(recentColdSentences, 'recentcold');
+                    if (s) sentences.push(s);
+                  }
                 }
                 
                 return (
@@ -2364,9 +2569,10 @@ const StatisticsScreen = () => {
                     </div>
                     
                     {/* Stats Row */}
-                    <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      <span>🎮 {player.gamesPlayed} משחקים</span>
-                      <span>🎯 {Math.round(winRate)}% נצחונות</span>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                      <span>🎮 {gamesPlayed} משחקים</span>
+                      <span>🎯 {Math.round(winRate)}%</span>
+                      {avgRebuys > 0 && <span>💵 {avgRebuys.toFixed(1)} רכישות</span>}
                       <span>{styleEmoji} {styleName}</span>
                     </div>
                     
@@ -2377,15 +2583,10 @@ const StatisticsScreen = () => {
                       lineHeight: '1.6',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.5rem'
+                      gap: '0.4rem'
                     }}>
                       {sentences.map((sentence, sIdx) => (
-                        <div key={sIdx} style={{ 
-                          padding: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? '0.5rem' : '0',
-                          background: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? 'rgba(147, 51, 234, 0.1)' : 'transparent',
-                          borderRadius: '6px',
-                          color: sIdx === sentences.length - 1 && sentence.startsWith('💡') ? 'var(--primary)' : 'inherit'
-                        }}>
+                        <div key={sIdx}>
                           {sentence}
                         </div>
                       ))}

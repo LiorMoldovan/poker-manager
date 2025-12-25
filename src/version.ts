@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.32.0';
+export const APP_VERSION = '4.33.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.33.0',
+    date: '2025-12-25',
+    changes: [
+      '🎨 PLAYER STYLES: Completely rewritten multi-factor classification!',
+      'NEW STYLES: כריש, מהמר, רכבת הרים, שמרן, יעיל, מנצל הזדמנויות, לוחם',
+      'Classification uses: win rate, avg profit, rebuys, volatility, win/loss ratio',
+      '📝 NARRATIVE VARIETY: 60+ unique sentences in 12 categories!',
+      'Categories: Champions, Big Winners, Unlucky, Strugglers, Streaks, Rebuys, etc.',
+      'Each player gets different sentences - no more repetitive feedback',
+      'Sentences include actual data: rebuys, exact profits, streaks, recent form',
+      'Random selection from pools ensures variety on each view'
+    ]
+  },
   {
     version: '4.32.0',
     date: '2025-12-25',
