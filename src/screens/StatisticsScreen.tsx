@@ -2219,10 +2219,11 @@ const StatisticsScreen = () => {
                   .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
                   .sort((a, b) => b.totalProfit - a.totalProfit)[0];
                 if (recoveryCandidate) {
+                  const absProfit = Math.abs(Math.round(recoveryCandidate.totalProfit));
                   milestones.push({
                     emoji: '🔄',
                     title: `חזרה לפלוס!`,
-                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪ ב${periodLabel}. נצחון של ${Math.abs(Math.round(recoveryCandidate.totalProfit))}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
+                    description: `${recoveryCandidate.playerName} נמצא ב-${absProfit}₪ ב${periodLabel}. נצחון של ${absProfit}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
                     priority: 72
                   });
                 }
@@ -2310,7 +2311,7 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '📉',
                     title: `במאבק על שיפור`,
-                    description: `${biggestLoser.playerName} ב-${Math.round(biggestLoser.totalProfit)}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
+                    description: `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
                     priority: 50
                   });
                 }
@@ -2329,15 +2330,16 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 16. TOTAL GROUP GAMES - approaching milestone
-                const totalGroupGames = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
-                const groupMilestones = [100, 200, 300, 500, 750, 1000];
-                for (const gm of groupMilestones) {
-                  if (totalGroupGames >= gm - 10 && totalGroupGames < gm) {
+                // 16. TOTAL PLAYER PARTICIPATIONS - approaching milestone
+                // Note: This counts total player-game participations, not unique games
+                const totalParticipations = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                const participationMilestones = [100, 200, 300, 500, 750, 1000];
+                for (const pm of participationMilestones) {
+                  if (totalParticipations >= pm - 15 && totalParticipations < pm) {
                     milestones.push({
                       emoji: '🎊',
-                      title: `הקבוצה מתקרבת ל-${gm} משחקים!`,
-                      description: `ב${periodLabel} שוחקו ${totalGroupGames} משחקים. עוד ${gm - totalGroupGames} משחקים למיילסטון משמעותי!`,
+                      title: `${pm} השתתפויות בקבוצה!`,
+                      description: `הקבוצה צברה ${totalParticipations} השתתפויות במשחקים ב${periodLabel}. עוד ${pm - totalParticipations} להשגת יעד ${pm}!`,
                       priority: 45
                     });
                     break;
