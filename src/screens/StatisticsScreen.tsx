@@ -2254,6 +2254,117 @@ const StatisticsScreen = () => {
                   });
                 }
                 
+                // 13. WIN RATE MILESTONE - approaching 60%
+                const winRateCandidate = rankedStats
+                  .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 55 && p.winPercentage < 60)
+                  .sort((a, b) => b.winPercentage - a.winPercentage)[0];
+                if (winRateCandidate) {
+                  const winsNeeded = Math.ceil(0.6 * (winRateCandidate.gamesPlayed + 1)) - winRateCandidate.winCount;
+                  if (winsNeeded === 1) {
+                    milestones.push({
+                      emoji: '🎯',
+                      title: `יעד 60% נצחונות!`,
+                      description: `${winRateCandidate.playerName} נמצא על ${Math.round(winRateCandidate.winPercentage)}% נצחונות. נצחון נוסף יעביר אותו מעל רף ה-60%!`,
+                      priority: 65
+                    });
+                  }
+                }
+                
+                // 14. BIGGEST LOSER - who's struggling the most
+                const biggestLoser = rankedStats
+                  .filter(p => p.totalProfit < 0 && p.gamesPlayed >= 5)
+                  .sort((a, b) => a.totalProfit - b.totalProfit)[0];
+                if (biggestLoser && biggestLoser.totalProfit < -200) {
+                  milestones.push({
+                    emoji: '📉',
+                    title: `במאבק על שיפור`,
+                    description: `${biggestLoser.playerName} ב-${Math.round(biggestLoser.totalProfit)}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
+                    priority: 50
+                  });
+                }
+                
+                // 15. VOLATILITY KING - biggest swings
+                const volatilityKing = rankedStats
+                  .filter(p => p.gamesPlayed >= 5)
+                  .map(p => ({ ...p, volatility: p.biggestWin + Math.abs(p.biggestLoss) }))
+                  .sort((a, b) => b.volatility - a.volatility)[0];
+                if (volatilityKing && volatilityKing.volatility >= 400) {
+                  milestones.push({
+                    emoji: '🎢',
+                    title: `מלך התנודות!`,
+                    description: `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד -${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
+                    priority: 52
+                  });
+                }
+                
+                // 16. TOTAL GROUP GAMES - approaching milestone
+                const totalGroupGames = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                const groupMilestones = [100, 200, 300, 500, 750, 1000];
+                for (const gm of groupMilestones) {
+                  if (totalGroupGames >= gm - 10 && totalGroupGames < gm) {
+                    milestones.push({
+                      emoji: '🎊',
+                      title: `הקבוצה מתקרבת ל-${gm} משחקים!`,
+                      description: `ב${periodLabel} שוחקו ${totalGroupGames} משחקים. עוד ${gm - totalGroupGames} משחקים למיילסטון משמעותי!`,
+                      priority: 45
+                    });
+                    break;
+                  }
+                }
+                
+                // 17. LONGEST WIN STREAK RECORD HOLDER
+                const longestStreakHolder = rankedStats
+                  .filter(p => (p.longestWinStreak || 0) >= 4)
+                  .sort((a, b) => (b.longestWinStreak || 0) - (a.longestWinStreak || 0))[0];
+                if (longestStreakHolder) {
+                  milestones.push({
+                    emoji: '⚡',
+                    title: `שיא רצף נצחונות!`,
+                    description: `${longestStreakHolder.playerName} מחזיק בשיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}. האם מישהו ישבור את השיא?`,
+                    priority: 48
+                  });
+                }
+                
+                // 18. CLOSE BATTLE (any two adjacent players very close)
+                for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
+                  const p1 = rankedStats[i];
+                  const p2 = rankedStats[i + 1];
+                  const gap = Math.abs(p1.totalProfit - p2.totalProfit);
+                  if (gap <= 30 && gap > 0) {
+                    milestones.push({
+                      emoji: '⚔️',
+                      title: `קרב צמוד!`,
+                      description: `${p1.playerName} ו-${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד! המשחק הבא יקבע מי יהיה מעל.`,
+                      priority: 82
+                    });
+                    break; // Only show one close battle
+                  }
+                }
+                
+                // 19. MOST GAMES PLAYED
+                const mostGamesPlayer = rankedStats.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
+                if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= 15) {
+                  milestones.push({
+                    emoji: '🎮',
+                    title: `שחקן הברזל!`,
+                    description: `${mostGamesPlayer.playerName} שיחק ${mostGamesPlayer.gamesPlayed} משחקים ב${periodLabel} - הכי הרבה בקבוצה!`,
+                    priority: 40
+                  });
+                }
+                
+                // 20. BEST AVERAGE PROFIT (min 5 games)
+                const bestAvgPlayer = rankedStats
+                  .filter(p => p.gamesPlayed >= 5)
+                  .sort((a, b) => b.avgProfit - a.avgProfit)[0];
+                if (bestAvgPlayer && bestAvgPlayer.avgProfit >= 30) {
+                  milestones.push({
+                    emoji: '📊',
+                    title: `הממוצע הגבוה ביותר!`,
+                    description: `${bestAvgPlayer.playerName} עם ממוצע +${Math.round(bestAvgPlayer.avgProfit)}₪ למשחק ב${periodLabel}. יעילות מרשימה!`,
+                    priority: 42
+                  });
+                }
+                
                 // Sort by priority and show top 8
                 milestones.sort((a, b) => b.priority - a.priority);
                 const topMilestones = milestones.slice(0, 8);

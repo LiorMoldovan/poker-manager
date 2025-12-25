@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.35.0';
+export const APP_VERSION = '4.36.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.36.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 MILESTONE VARIETY: Added 8 more milestone types! (Now 20 total)',
+      'NEW: Win rate milestone (approaching 60%)',
+      'NEW: Biggest loser (struggling player)',
+      'NEW: Volatility king (biggest swings)',
+      'NEW: Group total games milestone',
+      'NEW: Longest win streak record holder',
+      'NEW: Close battle (30₪ or less gap)',
+      'NEW: Iron player (most games played)',
+      'NEW: Best average profit',
+      'All 20 milestones sorted by priority, top 8 shown'
+    ]
+  },
   {
     version: '4.35.0',
     date: '2025-12-25',
