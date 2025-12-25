@@ -5,7 +5,7 @@ import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult } from '../utils/geminiAI';
+import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem } from '../utils/geminiAI';
 
 // Default location options
 const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
@@ -43,7 +43,11 @@ const NewGameScreen = () => {
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [activeGamePlayers, setActiveGamePlayers] = useState<string[]>([]);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
+  const [showMilestones, setShowMilestones] = useState(false);
+  const [milestonesData, setMilestonesData] = useState<MilestoneItem[]>([]);
+  const [isSharingMilestones, setIsSharingMilestones] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
+  const milestonesRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -247,6 +251,84 @@ const NewGameScreen = () => {
   const handleSkipShare = () => {
     if (pendingGameId) {
       navigate(`/live-game/${pendingGameId}`);
+    }
+  };
+
+  // ============ MILESTONES FEATURE ============
+  const handleShowMilestones = () => {
+    if (selectedIds.size < 2) {
+      setError('Select at least 2 players');
+      return;
+    }
+    
+    // Prepare player data
+    const selectedPlayers = players.filter(p => selectedIds.has(p.id));
+    const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
+      const stats = getStatsForPlayer(player.id);
+      const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
+      
+      return {
+        name: player.name,
+        isFemale: player.name === 'מור',
+        gamesPlayed: stats?.gamesPlayed || 0,
+        totalProfit: stats?.totalProfit || 0,
+        avgProfit: stats?.avgProfit || 0,
+        winCount: stats?.winCount || 0,
+        lossCount: stats?.lossCount || 0,
+        winPercentage: stats?.winPercentage || 0,
+        currentStreak: stats?.currentStreak || 0,
+        bestWin: stats?.bestWin || 0,
+        worstLoss: stats?.worstLoss || 0,
+        gameHistory: (stats?.lastGameResults || []).map(g => ({
+          profit: g.profit,
+          date: new Date(g.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          gameId: g.gameId
+        })),
+        daysSinceLastGame: daysSince,
+        isActive: daysSince <= 60
+      };
+    });
+    
+    const milestones = generateMilestones(playerData);
+    setMilestonesData(milestones);
+    setShowMilestones(true);
+  };
+  
+  const shareMilestones = async () => {
+    if (!milestonesRef.current) return;
+    
+    setIsSharingMilestones(true);
+    try {
+      const canvas = await html2canvas(milestonesRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+      
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+      });
+      
+      const file = new File([blob], `milestones-${new Date().toISOString().split('T')[0]}.png`, { type: 'image/png' });
+      
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: '🎯 מיילסטונים להלילה',
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `milestones-${new Date().toISOString().split('T')[0]}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Error sharing milestones:', err);
+    } finally {
+      setIsSharingMilestones(false);
     }
   };
 
@@ -1425,14 +1507,31 @@ const NewGameScreen = () => {
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
         {isAdmin && (
-          <button 
-            className="btn btn-secondary"
-            onClick={handleShowForecast}
-            disabled={selectedIds.size < 2}
-            style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem' }}
-          >
-            🔮 Forecast
-          </button>
+          <>
+            <button 
+              className="btn btn-secondary"
+              onClick={handleShowForecast}
+              disabled={selectedIds.size < 2}
+              style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem' }}
+            >
+              🔮 Forecast
+            </button>
+            <button 
+              className="btn"
+              onClick={handleShowMilestones}
+              disabled={selectedIds.size < 2}
+              style={{ 
+                padding: '0.6rem', 
+                flex: '1', 
+                fontSize: '0.85rem',
+                background: 'linear-gradient(135deg, #f39c12, #e67e22)',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              🎯 Milestones
+            </button>
+          </>
         )}
         <button 
           className="btn btn-primary"
@@ -1952,6 +2051,118 @@ const NewGameScreen = () => {
                 התחל ללא תחזית
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Milestones Modal */}
+      {showMilestones && (
+        <div className="modal-overlay" onClick={() => setShowMilestones(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'auto', maxWidth: '420px' }}>
+            {milestonesData.length === 0 ? (
+              <div style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤷</div>
+                <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>אין מיילסטונים מעניינים</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>נסה לבחור יותר שחקנים</p>
+              </div>
+            ) : (
+              <div ref={milestonesRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
+                {/* Header */}
+                <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🎯</div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
+                    מיילסטונים להלילה
+                  </h3>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                    {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#f39c12', marginTop: '0.25rem' }}>
+                    {milestonesData.length} נקודות מעניינות ✨
+                  </div>
+                </div>
+
+                {/* Milestones List */}
+                <div style={{ marginBottom: '1rem' }}>
+                  {milestonesData.map((milestone, index) => (
+                    <div 
+                      key={index}
+                      style={{
+                        padding: '0.75rem 0.85rem',
+                        marginBottom: '0.5rem',
+                        borderRadius: '10px',
+                        background: 'rgba(243, 156, 18, 0.1)',
+                        borderRight: '4px solid #f39c12',
+                      }}
+                    >
+                      {/* Emoji and Title */}
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem',
+                        marginBottom: '0.35rem'
+                      }}>
+                        <span style={{ fontSize: '1.2rem' }}>{milestone.emoji}</span>
+                        <span style={{ 
+                          fontWeight: '600', 
+                          fontSize: '0.95rem',
+                          color: '#f39c12'
+                        }}>
+                          {milestone.title}
+                        </span>
+                      </div>
+                      
+                      {/* Description */}
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: 'var(--text)',
+                        lineHeight: '1.4',
+                        paddingRight: '1.7rem'
+                      }}>
+                        {milestone.description}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Legend */}
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontSize: '0.7rem', 
+                  color: 'var(--text-muted)',
+                  padding: '0.5rem',
+                  borderTop: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  נתונים מבוססים על כל ההיסטוריה 📊
+                </div>
+              </div>
+            )}
+            
+            {/* Action buttons */}
+            {milestonesData.length > 0 && (
+              <div style={{ padding: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className="btn"
+                  onClick={() => setShowMilestones(false)}
+                  style={{ flex: 1, padding: '0.6rem', background: 'var(--surface)', color: 'var(--text)' }}
+                >
+                  סגור
+                </button>
+                <button
+                  className="btn"
+                  onClick={shareMilestones}
+                  disabled={isSharingMilestones}
+                  style={{ 
+                    flex: 2, 
+                    padding: '0.6rem',
+                    background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                    color: 'white',
+                    border: 'none'
+                  }}
+                >
+                  {isSharingMilestones ? '⏳ מעבד...' : '📤 שתף לוואטסאפ'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

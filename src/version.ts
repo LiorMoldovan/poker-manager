@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.19.1';
+export const APP_VERSION = '4.20.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.20.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 NEW: Dedicated Milestones Button!',
+      'Orange "Milestones" button next to Forecast',
+      'Shows top 7-10 most interesting highlights for tonight',
+      'Share to WhatsApp as screenshot',
+      'Includes: streaks, leaderboard races, close battles, records',
+      'Round numbers, win rates, comebacks, and more!',
+      'All milestones ranked by "interestingness"'
+    ]
+  },
   {
     version: '4.19.1',
     date: '2025-12-25',

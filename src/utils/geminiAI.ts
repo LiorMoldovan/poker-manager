@@ -59,6 +59,269 @@ export interface ForecastResult {
   isSurprise: boolean;
 }
 
+export interface MilestoneItem {
+  emoji: string;
+  title: string;
+  description: string;
+  priority: number; // Higher = more interesting
+}
+
+/**
+ * Generate top milestones for tonight's game
+ * Returns the most interesting 7-10 milestones
+ */
+export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem[] => {
+  const milestones: MilestoneItem[] = [];
+  
+  // Helper: Parse date from game history
+  const parseGameDate = (dateStr: string): Date => {
+    const parts = dateStr.split('/');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+  
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentHalf = currentMonth < 6 ? 1 : 2;
+  const halfStartMonth = currentHalf === 1 ? 0 : 6;
+  const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+  const halfName = currentHalf === 1 ? 'H1' : 'H2';
+  
+  // Calculate period stats
+  const playerPeriodStats = players.map(p => {
+    const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+    const thisHalfGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear && d.getMonth() >= halfStartMonth && d.getMonth() < halfStartMonth + 6;
+    });
+    const thisMonthGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+    
+    return {
+      ...p,
+      yearProfit: thisYearGames.reduce((sum, g) => sum + g.profit, 0),
+      yearGames: thisYearGames.length,
+      halfProfit: thisHalfGames.reduce((sum, g) => sum + g.profit, 0),
+      halfGames: thisHalfGames.length,
+      monthProfit: thisMonthGames.reduce((sum, g) => sum + g.profit, 0),
+      monthGames: thisMonthGames.length,
+    };
+  });
+  
+  const sortedByTotalProfit = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
+  const sortedByYearProfit = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
+  
+  // 1. STREAK RECORDS (highest priority)
+  const maxWinStreak = Math.max(...players.map(p => p.currentStreak), 0);
+  const maxLoseStreak = Math.min(...players.map(p => p.currentStreak), 0);
+  
+  players.forEach(p => {
+    if (p.currentStreak >= 3 && p.currentStreak >= maxWinStreak) {
+      milestones.push({
+        emoji: '🔥',
+        title: `${p.name} - רצף נצחונות!`,
+        description: `${p.currentStreak} נצחונות רצופים. נצחון הלילה = שיא קבוצתי חדש!`,
+        priority: 95
+      });
+    }
+    if (p.currentStreak <= -3 && p.currentStreak <= maxLoseStreak) {
+      milestones.push({
+        emoji: '❄️',
+        title: `${p.name} - רצף הפסדים`,
+        description: `${Math.abs(p.currentStreak)} הפסדים רצופים. הפסד נוסף = שיא שלילי חדש!`,
+        priority: 90
+      });
+    }
+  });
+  
+  // 2. LEADERBOARD PASSING (high priority)
+  for (let i = 1; i < sortedByTotalProfit.length; i++) {
+    const chaser = sortedByTotalProfit[i];
+    const leader = sortedByTotalProfit[i - 1];
+    const gap = leader.totalProfit - chaser.totalProfit;
+    if (gap > 0 && gap <= 200) {
+      milestones.push({
+        emoji: '📈',
+        title: `מרדף בטבלה!`,
+        description: `${chaser.name} (${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪) יכול לעקוף את ${leader.name} עם +${gap}₪ הלילה!`,
+        priority: 85 - i * 5
+      });
+    }
+  }
+  
+  // 3. CLOSE BATTLES (high priority)
+  for (let i = 0; i < sortedByTotalProfit.length; i++) {
+    for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
+      const gap = Math.abs(sortedByTotalProfit[i].totalProfit - sortedByTotalProfit[j].totalProfit);
+      if (gap <= 30 && gap > 0) {
+        milestones.push({
+          emoji: '⚔️',
+          title: 'קרב צמוד!',
+          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} רק ${gap}₪ הפרש! הלילה מכריע.`,
+          priority: 88
+        });
+      }
+    }
+  }
+  
+  // 4. EXACT TIES
+  for (let i = 0; i < sortedByTotalProfit.length; i++) {
+    for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
+      if (sortedByTotalProfit[i].totalProfit === sortedByTotalProfit[j].totalProfit && sortedByTotalProfit[i].totalProfit !== 0) {
+        milestones.push({
+          emoji: '🤝',
+          title: 'תיקו מושלם!',
+          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} בדיוק ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${sortedByTotalProfit[i].totalProfit}₪. הלילה שובר!`,
+          priority: 92
+        });
+      }
+    }
+  }
+  
+  // 5. ROUND NUMBER MILESTONES
+  const roundNumbers = [500, 1000, 1500, 2000];
+  players.forEach(p => {
+    for (const milestone of roundNumbers) {
+      const distance = milestone - p.totalProfit;
+      if (distance > 0 && distance <= 150) {
+        milestones.push({
+          emoji: '🎯',
+          title: `${p.name} - יעד בהישג יד`,
+          description: `עומד על ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪. עוד ${distance}₪ = +${milestone}₪ כולל!`,
+          priority: 75 + (milestone / 100)
+        });
+        break;
+      }
+    }
+  });
+  
+  // 6. THIS YEAR LEADERBOARD
+  for (let i = 1; i < Math.min(sortedByYearProfit.length, 4); i++) {
+    const chaser = sortedByYearProfit[i];
+    const leader = sortedByYearProfit[i - 1];
+    const gap = leader.yearProfit - chaser.yearProfit;
+    if (gap > 0 && gap <= 150 && chaser.yearGames >= 2) {
+      milestones.push({
+        emoji: '📅',
+        title: `מרדף ${currentYear}`,
+        description: `${chaser.name} יכול לעקוף את ${leader.name} בטבלת השנה עם +${gap}₪!`,
+        priority: 70
+      });
+    }
+  }
+  
+  // 7. GAMES MILESTONES
+  const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
+  players.forEach(p => {
+    for (const gm of gamesMilestones) {
+      if (p.gamesPlayed === gm - 1) {
+        milestones.push({
+          emoji: '🎮',
+          title: `משחק ${gm} ל-${p.name}!`,
+          description: `הלילה זה המשחק ה-${gm} שלו עם הקבוצה!`,
+          priority: 65 + (gm / 10)
+        });
+        break;
+      }
+    }
+  });
+  
+  // 8. WIN RATE MILESTONES
+  players.filter(p => p.gamesPlayed >= 10).forEach(p => {
+    const winsNeeded60 = Math.ceil(0.6 * (p.gamesPlayed + 1));
+    if (p.winCount === winsNeeded60 - 1 && p.winPercentage < 60) {
+      milestones.push({
+        emoji: '🎯',
+        title: `${p.name} - אחוזי נצחון`,
+        description: `עומד על ${Math.round(p.winPercentage)}%. נצחון הלילה = חציית 60%!`,
+        priority: 60
+      });
+    }
+  });
+  
+  // 9. RECOVERY TO POSITIVE
+  playerPeriodStats.forEach(p => {
+    if (p.yearProfit < 0 && p.yearProfit > -120 && p.yearGames >= 3) {
+      milestones.push({
+        emoji: '🔄',
+        title: `${p.name} - חזרה לפלוס`,
+        description: `${p.yearProfit}₪ ב-${currentYear}. נצחון של +${Math.abs(p.yearProfit)}₪ = חזרה לפלוס השנה!`,
+        priority: 72
+      });
+    }
+  });
+  
+  // 10. PLAYER OF THE MONTH
+  const sortedByMonthProfit = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit);
+  if (sortedByMonthProfit[0]?.monthGames >= 1 && sortedByMonthProfit[1]?.monthGames >= 1) {
+    const leader = sortedByMonthProfit[0];
+    const chaser = sortedByMonthProfit[1];
+    const gap = leader.monthProfit - chaser.monthProfit;
+    if (gap <= 100) {
+      milestones.push({
+        emoji: '🏆',
+        title: `מרדף על שחקן ${monthNames[currentMonth]}`,
+        description: `${leader.name} מוביל עם ${leader.monthProfit >= 0 ? '+' : ''}${leader.monthProfit}₪. ${chaser.name} רק ${gap}₪ אחריו!`,
+        priority: 68
+      });
+    }
+  }
+  
+  // 11. BIGGEST WIN RECORD
+  const biggestWin = Math.max(...players.map(p => p.bestWin));
+  const recordHolder = players.find(p => p.bestWin === biggestWin);
+  players.forEach(p => {
+    if (p.currentStreak >= 2 && p.bestWin < biggestWin && biggestWin - p.bestWin <= 100) {
+      milestones.push({
+        emoji: '💰',
+        title: 'שיא נצחון בלילה',
+        description: `שיא הקבוצה: +${biggestWin}₪ (${recordHolder?.name}). ${p.name} יכול לשבור!`,
+        priority: 78
+      });
+    }
+  });
+  
+  // 12. COMEBACK OPPORTUNITIES
+  players.forEach(p => {
+    if (p.currentStreak <= -2 && p.totalProfit > 100) {
+      milestones.push({
+        emoji: '💪',
+        title: `${p.name} - קאמבק`,
+        description: `${Math.abs(p.currentStreak)} הפסדים רצופים, אבל עדיין +${p.totalProfit}₪ כולל. זמן לנקמה!`,
+        priority: 55
+      });
+    }
+  });
+  
+  // 13. HOT/COLD YEAR
+  playerPeriodStats.forEach(p => {
+    if (p.yearGames >= 5 && p.gamesPlayed >= 10) {
+      const yearAvg = p.yearProfit / p.yearGames;
+      if (yearAvg > p.avgProfit + 40) {
+        milestones.push({
+          emoji: '📈',
+          title: `${p.name} - השנה הכי טובה?`,
+          description: `ממוצע ${currentYear}: +${Math.round(yearAvg)}₪/משחק לעומת +${Math.round(p.avgProfit)}₪ היסטורי!`,
+          priority: 62
+        });
+      }
+    }
+  });
+  
+  // Sort by priority and return top 7-10
+  milestones.sort((a, b) => b.priority - a.priority);
+  return milestones.slice(0, 10);
+};
+
 /**
  * Generate AI-powered forecasts for selected players only
  */
