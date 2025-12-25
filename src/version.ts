@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.34.0';
+export const APP_VERSION = '4.35.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.35.0',
+    date: '2025-12-25',
+    changes: [
+      '🏆 DRAMATIC MILESTONES: End-of-year/half-year special titles!',
+      'NEW: "אלוף שנת 2025?" with dramatic end-of-year messaging',
+      'NEW: "אלוף H2?" for half-year championships',
+      'Exciting questions: "האם מישהו יצליח לעקוף אותו?"',
+      'Restored 150-200₪ gap thresholds for more milestone variety',
+      'NEW: "מרדף על מקום 2!" for podium battles',
+      'All milestones now ask dramatic questions',
+      'Rebuy data still only for 2026+'
+    ]
+  },
   {
     version: '4.34.0',
     date: '2025-12-25',

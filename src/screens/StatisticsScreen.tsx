@@ -2053,27 +2053,48 @@ const StatisticsScreen = () => {
                 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
                 const currentHalf = currentMonth < 6 ? 1 : 2;
                 
-                // 1. CHAMPION TITLE - Who's leading?
-                // Note: Realistic gap for one game is ~80₪ max
+                // 1. CHAMPION TITLE - Dramatic year/half-year milestone
+                const currentMonth = new Date().getMonth();
+                const isEndOfYear = currentMonth === 11; // December
+                const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
+                
                 if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
                   const leader = rankedStats[0];
                   const secondPlace = rankedStats[1];
                   const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
-                  if (gap > 0 && gap <= 80) {
-                    // Close race - passing is realistic in one game
+                  
+                  // Year-end special milestone
+                  if (timePeriod === 'year' && isEndOfYear && leader.gamesPlayed >= 5) {
+                    milestones.push({
+                      emoji: '🏆',
+                      title: `אלוף שנת ${selectedYear}?`,
+                      description: `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
+                      priority: 98
+                    });
+                  } else if ((timePeriod === 'h1' || timePeriod === 'h2') && isEndOfHalf && leader.gamesPlayed >= 3) {
+                    // Half-year end special
+                    const halfName = timePeriod === 'h1' ? 'H1' : 'H2';
+                    milestones.push({
+                      emoji: '🏆',
+                      title: `אלוף ${halfName} ${selectedYear}?`,
+                      description: `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}! עם סיום החצי מתקרב, האם מישהו יצליח לעקוף אותו?`,
+                      priority: 96
+                    });
+                  } else if (gap > 0 && gap <= 150) {
+                    // Close race
                     milestones.push({
                       emoji: '👑',
                       title: `קרב על הכתר!`,
-                      description: `${leader.playerName} מוביל עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪ בלבד - נצחון טוב יכול להפוך את הדירוג!`,
+                      description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪. האם הוא יצליח לעקוף?`,
                       priority: 95
                     });
                   } else if (leader.gamesPlayed >= 5) {
-                    // Big lead - just celebrate the leader, don't claim passing is possible
+                    // Big lead - celebrate but still ask the question
                     milestones.push({
                       emoji: '🏆',
                       title: `מוביל ${periodLabel}!`,
-                      description: `${leader.playerName} מוביל את טבלת ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים.`,
-                      priority: 70
+                      description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
+                      priority: 80
                     });
                   }
                 }
@@ -2100,33 +2121,31 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 4. LEADERBOARD BATTLES (show max 2, only realistic gaps of 80₪ or less)
+                // 4. LEADERBOARD BATTLES (show max 2 most interesting)
                 let leaderboardBattleCount = 0;
                 for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
                   const chaser = rankedStats[i];
                   const leader = rankedStats[i - 1];
                   const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                  // Only show if gap is realistic for one game (80₪ or less)
-                  if (gap > 0 && gap <= 80) {
+                  if (gap > 0 && gap <= 200) {
                     const isTopBattle = i <= 2;
                     milestones.push({
                       emoji: isTopBattle ? '📈' : '🎯',
-                      title: isTopBattle ? `מרדף על מקום ${i}!` : `קרב על מקום ${i}`,
-                      description: `${chaser.playerName} (מקום ${i + 1}) רודף אחרי ${leader.playerName} (מקום ${i}) עם הפרש של ${gap}₪ בלבד.`,
+                      title: `מרדף על מקום ${i}!`,
+                      description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
                       priority: 85 - i * 3
                     });
                     leaderboardBattleCount++;
                   }
                 }
                 
-                // 5. ROUND NUMBER MILESTONE - show ONE best (only if realistic - 80₪ or less)
+                // 5. ROUND NUMBER MILESTONE - show ONE best candidate
                 const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
                 const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
                 rankedStats.forEach(p => {
                   for (const m of roundNumbers) {
                     const dist = Math.round(m - p.totalProfit);
-                    // Only if realistic for one game (80₪ or less)
-                    if (dist > 0 && dist <= 80) {
+                    if (dist > 0 && dist <= 150) {
                       roundCandidates.push({ player: p, milestone: m, distance: dist });
                       break;
                     }
@@ -2137,7 +2156,7 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '🎯',
                     title: `יעד עגול!`,
-                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}!`,
+                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה - האם הוא יגיע אליו?`,
                     priority: 75
                   });
                 }
@@ -2170,31 +2189,29 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 8. RECOVERY TO POSITIVE (only if realistic - gap of 80₪ or less)
+                // 8. RECOVERY TO POSITIVE
                 const recoveryCandidate = rankedStats
-                  .filter(p => p.totalProfit < 0 && p.totalProfit > -80 && p.gamesPlayed >= 3)
+                  .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
                   .sort((a, b) => b.totalProfit - a.totalProfit)[0];
                 if (recoveryCandidate) {
                   milestones.push({
                     emoji: '🔄',
-                    title: `קרוב לפלוס!`,
-                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪. נצחון טוב יחזיר אותו לרווח חיובי!`,
+                    title: `חזרה לפלוס!`,
+                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪ ב${periodLabel}. נצחון של ${Math.abs(Math.round(recoveryCandidate.totalProfit))}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
                     priority: 72
                   });
                 }
                 
-                // 9. PLAYER OF THE PERIOD - close race (only if gap is realistic)
-                // Skip if champion title already covered this (gap <= 80)
-                if (rankedStats.length >= 2 && rankedStats[0].gamesPlayed >= 3 && rankedStats[1].gamesPlayed >= 3) {
-                  const first = rankedStats[0];
+                // 9. PLAYER OF THE PERIOD - only show for third place and below (to avoid duplication with champion)
+                if (rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
                   const second = rankedStats[1];
-                  const gap = Math.round(first.totalProfit - second.totalProfit);
-                  // Only show if gap is realistic (60₪ or less) and wasn't covered by champion title
-                  if (gap > 0 && gap <= 60 && gap > 0) {
+                  const third = rankedStats[2];
+                  const gap = Math.round(second.totalProfit - third.totalProfit);
+                  if (gap > 0 && gap <= 150) {
                     milestones.push({
-                      emoji: '🏅',
-                      title: `קרב צמוד על התואר!`,
-                      description: `${first.playerName} מוביל עם ${formatCurrency(first.totalProfit)}, ${second.playerName} רודף עם הפרש של ${gap}₪ בלבד.`,
+                      emoji: '🥈',
+                      title: `מרדף על מקום 2!`,
+                      description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
                       priority: 78
                     });
                   }
