@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.24.0';
+export const APP_VERSION = '4.24.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.24.1',
+    date: '2025-12-25',
+    changes: [
+      '🔍 DEBUG: Added logging for year profit calculations',
+      'Year table milestones now require 5+ games (was 2)',
+      'Investigating Tomer year profit discrepancy'
+    ]
+  },
   {
     version: '4.24.0',
     date: '2025-12-25',

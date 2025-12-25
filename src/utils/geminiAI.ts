@@ -208,13 +208,22 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   });
   
   // 6. THIS YEAR LEADERBOARD
+  // DEBUG: Log year profit calculations
+  console.log('🔍 DEBUG Year Profits:', sortedByYearProfit.map(p => ({
+    name: p.name,
+    yearProfit: Math.round(p.yearProfit),
+    yearGames: p.yearGames,
+    totalProfit: Math.round(p.totalProfit)
+  })));
+  
   for (let i = 1; i < Math.min(sortedByYearProfit.length, 4); i++) {
     const chaser = sortedByYearProfit[i];
     const leader = sortedByYearProfit[i - 1];
     const gap = Math.round(leader.yearProfit - chaser.yearProfit);
     const chaserRank = i + 1;
     const leaderRank = i;
-    if (gap > 0 && gap <= 150 && chaser.yearGames >= 2) {
+    // Require at least 5 games for both players for year table comparison
+    if (gap > 0 && gap <= 150 && chaser.yearGames >= 5 && leader.yearGames >= 5) {
       milestones.push({
         emoji: '📅',
         title: `מרדף בטבלת ${currentYear}!`,
@@ -775,6 +784,9 @@ export const generateAIForecasts = async (
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
     const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
     const yearGames = thisYearGames.length;
+    
+    // DEBUG: Log year profit calculation
+    console.log(`🔍 ${p.name}: ${yearGames} games in ${currentYear}, Year Profit: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪, Total Profit: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
     
     // Format game history
     const gameHistoryText = p.gameHistory.length > 0
