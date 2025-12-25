@@ -367,7 +367,6 @@ const ChipEntryScreen = () => {
     setNumpadOpen(true);
   };
 
-<<<<<<< Updated upstream
   // Handle numpad confirm with auto-advance through chips
   const handleNumpadConfirm = (value: number) => {
     const currentChip = chipValues[numpadChipIndex];
@@ -382,40 +381,8 @@ const ChipEntryScreen = () => {
         // Advance to next chip (numpad stays open)
         setNumpadChipIndex(numpadChipIndex + 1);
       }
-=======
-  // Select a player and auto-open numpad for first chip
-  const selectPlayer = (playerId: string) => {
-    setSelectedPlayerId(playerId);
-    // Auto-open numpad for first chip
-    if (chipValues.length > 0) {
-      setNumpadPlayerId(playerId);
-      setNumpadChipIndex(0);
-      setNumpadOpen(true);
->>>>>>> Stashed changes
     }
   };
-
-  // Handle numpad confirm with auto-advance
-  const handleNumpadConfirm = (value: number) => {
-    const currentChip = chipValues[numpadChipIndex];
-    if (numpadPlayerId && currentChip) {
-      updateChipCount(numpadPlayerId, currentChip.id, value);
-      
-      // Check if this was the last chip
-      if (numpadChipIndex >= chipValues.length - 1) {
-        // Last chip - mark player as done and close numpad
-        markPlayerDone(numpadPlayerId);
-        setNumpadOpen(false);
-      } else {
-        // Advance to next chip (numpad stays open)
-        setNumpadChipIndex(numpadChipIndex + 1);
-      }
-    }
-  };
-
-  // Get current numpad chip
-  const numpadChip = chipValues[numpadChipIndex] || null;
-  const nextChip = chipValues[numpadChipIndex + 1] || null;
 
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
@@ -875,8 +842,3 @@ const getProfitColor = (profit: number): string => {
 };
 
 export default ChipEntryScreen;
-<<<<<<< Updated upstream
-=======
-
-
->>>>>>> Stashed changes
