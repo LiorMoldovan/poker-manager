@@ -80,57 +80,248 @@ const LiveGameScreen = () => {
     );
   }
 
-  // Ching-ching coin sound - like a cash register
-  const playCashSound = (): Promise<void> => {
+  // Casino rebuy sounds - randomly picks from 20 different sounds
+  const playRebuyCasinoSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         
-        // Create a metallic "ching" sound
-        const playChing = (startTime: number, frequency: number, volume: number) => {
-          // Main bell tone
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          
-          oscillator.frequency.value = frequency;
-          oscillator.type = 'sine';
-          
-          // Quick attack, longer decay for bell sound
-          gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + startTime + 0.01);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + 0.3);
-          
-          oscillator.start(audioContext.currentTime + startTime);
-          oscillator.stop(audioContext.currentTime + startTime + 0.35);
-          
-          // Add harmonics for metallic sound
-          const harmonic = audioContext.createOscillator();
-          const harmonicGain = audioContext.createGain();
-          
-          harmonic.connect(harmonicGain);
-          harmonicGain.connect(audioContext.destination);
-          
-          harmonic.frequency.value = frequency * 2.5; // Higher harmonic
-          harmonic.type = 'sine';
-          
-          harmonicGain.gain.setValueAtTime(0, audioContext.currentTime + startTime);
-          harmonicGain.gain.linearRampToValueAtTime(volume * 0.4, audioContext.currentTime + startTime + 0.01);
-          harmonicGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + startTime + 0.2);
-          
-          harmonic.start(audioContext.currentTime + startTime);
-          harmonic.stop(audioContext.currentTime + startTime + 0.25);
+        // Helper functions
+        const tone = (freq: number, start: number, dur: number, type: OscillatorType = 'sine', vol: number = 0.2) => {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.type = type;
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(vol, audioContext.currentTime + start);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + start + dur);
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          osc.start(audioContext.currentTime + start);
+          osc.stop(audioContext.currentTime + start + dur);
         };
+
+        const noise = (start: number, dur: number, vol: number = 0.15) => {
+          const bufferSize = audioContext.sampleRate * dur;
+          const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.15));
+          }
+          const source = audioContext.createBufferSource();
+          const gainNode = audioContext.createGain();
+          source.buffer = buffer;
+          gainNode.gain.value = vol;
+          source.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          source.start(audioContext.currentTime + start);
+        };
+
+        const metallic = (freq: number, start: number, dur: number, vol: number = 0.2) => {
+          [1, 2.4, 4.5, 6.8].forEach((mult, i) => {
+            tone(freq * mult, start, dur * (1 - i * 0.15), 'sine', vol / (i + 1.5));
+          });
+        };
+
+        const chord = (freqs: number[], start: number, dur: number, type: OscillatorType = 'triangle', vol: number = 0.15) => {
+          freqs.forEach(f => tone(f, start, dur, type, vol));
+        };
+
+        // 20 different casino sounds
+        const sounds = [
+          // 1. Hero Returns - triumphant comeback
+          () => {
+            chord([261, 329], 0, 0.3, 'triangle', 0.15);
+            chord([329, 392], 0.25, 0.3, 'triangle', 0.18);
+            chord([392, 523], 0.5, 0.4, 'triangle', 0.2);
+            chord([523, 659, 784], 0.8, 0.6, 'triangle', 0.25);
+            noise(0.8, 0.1, 0.15);
+            return 1400;
+          },
+          // 2. Second Chance
+          () => {
+            tone(440, 0, 0.2, 'sine', 0.2);
+            tone(554, 0.15, 0.2, 'sine', 0.22);
+            tone(659, 0.3, 0.2, 'sine', 0.24);
+            tone(880, 0.45, 0.4, 'sine', 0.28);
+            metallic(2000, 0.5, 0.2, 0.1);
+            return 900;
+          },
+          // 3. Revenge Mode
+          () => {
+            tone(110, 0, 0.3, 'sawtooth', 0.15);
+            tone(147, 0.1, 0.25, 'sawtooth', 0.15);
+            tone(220, 0.2, 0.3, 'square', 0.12);
+            for (let i = 0; i < 4; i++) tone(440 + i * 110, 0.35 + i * 0.08, 0.2, 'square', 0.12);
+            noise(0.55, 0.15, 0.2);
+            tone(880, 0.65, 0.4, 'sawtooth', 0.18);
+            return 1100;
+          },
+          // 4. Back in Action
+          () => {
+            tone(523, 0, 0.08, 'square', 0.15);
+            tone(659, 0.07, 0.08, 'square', 0.15);
+            tone(784, 0.14, 0.08, 'square', 0.15);
+            tone(1047, 0.21, 0.2, 'triangle', 0.22);
+            noise(0.25, 0.05, 0.1);
+            return 450;
+          },
+          // 5. Monster Pot
+          () => {
+            for (let i = 0; i < 6; i++) tone(200 + i * 50, i * 0.08, 0.15, 'sawtooth', 0.1);
+            chord([523, 659, 784], 0.5, 0.5, 'triangle', 0.2);
+            chord([784, 988, 1175], 0.7, 0.6, 'triangle', 0.22);
+            for (let i = 0; i < 12; i++) {
+              noise(0.5 + i * 0.05, 0.06, 0.12);
+              metallic(2000 + Math.random() * 1500, 0.55 + i * 0.06, 0.08, 0.08);
+            }
+            chord([1047, 1319, 1568], 1.0, 0.7, 'sine', 0.25);
+            return 1700;
+          },
+          // 6. All-In Victory
+          () => {
+            tone(150, 0, 0.3, 'sawtooth', 0.12);
+            noise(0.2, 0.1, 0.2);
+            chord([392, 494, 587], 0.35, 0.3, 'triangle', 0.18);
+            chord([523, 659, 784], 0.55, 0.4, 'triangle', 0.22);
+            chord([784, 988, 1175], 0.8, 0.5, 'triangle', 0.25);
+            for (let i = 0; i < 6; i++) metallic(2500, 0.9 + i * 0.08, 0.1, 0.08);
+            return 1400;
+          },
+          // 7. Knockout
+          () => {
+            tone(80, 0, 0.2, 'sawtooth', 0.2);
+            noise(0.1, 0.15, 0.25);
+            tone(200, 0.2, 0.15, 'square', 0.15);
+            tone(400, 0.3, 0.15, 'square', 0.15);
+            chord([523, 659, 784], 0.45, 0.4, 'triangle', 0.2);
+            for (let i = 0; i < 8; i++) metallic(2000 + i * 200, 0.5 + i * 0.05, 0.08, 0.1);
+            return 1000;
+          },
+          // 8. Ship It!
+          () => {
+            for (let i = 0; i < 15; i++) noise(i * 0.04, 0.05, 0.15 + i * 0.01);
+            for (let i = 0; i < 8; i++) metallic(2000 + Math.random() * 1000, 0.3 + i * 0.06, 0.1, 0.1);
+            tone(600, 0.7, 0.2, 'sine', 0.15);
+            tone(800, 0.8, 0.25, 'sine', 0.18);
+            return 1100;
+          },
+          // 9. Fresh Stack
+          () => {
+            for (let i = 0; i < 8; i++) {
+              const t = i * 0.08;
+              noise(t, 0.04, 0.2);
+              metallic(2200 + i * 100, t + 0.02, 0.08, 0.12);
+            }
+            tone(523, 0.7, 0.2, 'sine', 0.15);
+            return 950;
+          },
+          // 10. Chip Reload
+          () => {
+            for (let i = 0; i < 6; i++) {
+              noise(i * 0.1, 0.03, 0.18);
+              metallic(2400, i * 0.1 + 0.015, 0.06, 0.15);
+            }
+            tone(880, 0.65, 0.15, 'sine', 0.12);
+            tone(1047, 0.75, 0.2, 'sine', 0.15);
+            return 1000;
+          },
+          // 11. Money Drop
+          () => {
+            noise(0, 0.08, 0.3);
+            metallic(2800, 0.02, 0.15, 0.2);
+            noise(0.12, 0.04, 0.15);
+            metallic(2400, 0.15, 0.12, 0.15);
+            noise(0.22, 0.03, 0.1);
+            return 400;
+          },
+          // 12. Buy-In Complete
+          () => {
+            tone(659, 0, 0.1, 'sine', 0.2);
+            tone(784, 0.08, 0.1, 'sine', 0.2);
+            tone(988, 0.16, 0.1, 'sine', 0.22);
+            tone(1175, 0.24, 0.2, 'sine', 0.25);
+            metallic(2000, 0.35, 0.15, 0.1);
+            return 550;
+          },
+          // 13. Vegas Winner
+          () => {
+            const melody = [523, 659, 784, 1047, 784, 659, 784, 1047, 1319];
+            melody.forEach((f, i) => tone(f, i * 0.1, 0.2, 'square', 0.1));
+            for (let i = 0; i < 10; i++) noise(i * 0.08, 0.05, 0.08);
+            chord([1047, 1319, 1568], 0.9, 0.5, 'triangle', 0.2);
+            return 1400;
+          },
+          // 14. Jackpot Hit
+          () => {
+            for (let i = 0; i < 3; i++) {
+              tone(800, i * 0.15, 0.08, 'square', 0.15);
+              tone(1000, i * 0.15 + 0.04, 0.08, 'square', 0.15);
+            }
+            chord([523, 659, 784, 1047], 0.5, 0.6, 'triangle', 0.2);
+            for (let i = 0; i < 20; i++) metallic(2000 + Math.random() * 2000, 0.55 + i * 0.04, 0.06, 0.06);
+            return 1400;
+          },
+          // 15. Lucky Strike
+          () => {
+            metallic(3000, 0, 0.3, 0.2);
+            tone(880, 0.1, 0.2, 'sine', 0.2);
+            tone(1175, 0.2, 0.2, 'sine', 0.22);
+            tone(1397, 0.3, 0.3, 'sine', 0.25);
+            metallic(3500, 0.4, 0.2, 0.15);
+            return 700;
+          },
+          // 16. Table Winner
+          () => {
+            chord([392, 494], 0, 0.2, 'triangle', 0.15);
+            chord([523, 659], 0.18, 0.2, 'triangle', 0.18);
+            chord([659, 784, 988], 0.36, 0.35, 'triangle', 0.22);
+            for (let i = 0; i < 5; i++) noise(0.5 + i * 0.06, 0.05, 0.1);
+            return 850;
+          },
+          // 17. Power Up
+          () => {
+            const notes = [262, 330, 392, 523, 659, 784, 1047];
+            notes.forEach((f, i) => tone(f, i * 0.05, 0.15, 'square', 0.08 + i * 0.02));
+            tone(1047, 0.4, 0.3, 'sine', 0.2);
+            return 750;
+          },
+          // 18. Level Up
+          () => {
+            tone(392, 0, 0.12, 'triangle', 0.2);
+            tone(523, 0.1, 0.12, 'triangle', 0.22);
+            tone(659, 0.2, 0.12, 'triangle', 0.24);
+            tone(784, 0.3, 0.25, 'triangle', 0.28);
+            metallic(2500, 0.4, 0.15, 0.12);
+            return 600;
+          },
+          // 19. Cha-Ching
+          () => {
+            noise(0, 0.05, 0.2);
+            tone(1200, 0.03, 0.08, 'square', 0.2);
+            tone(1500, 0.1, 0.08, 'square', 0.2);
+            tone(2000, 0.18, 0.15, 'sine', 0.25);
+            metallic(2800, 0.25, 0.2, 0.15);
+            return 500;
+          },
+          // 20. Ready to Roll
+          () => {
+            tone(330, 0, 0.1, 'sawtooth', 0.12);
+            tone(440, 0.08, 0.1, 'sawtooth', 0.12);
+            tone(554, 0.16, 0.1, 'sawtooth', 0.14);
+            tone(659, 0.24, 0.15, 'triangle', 0.18);
+            tone(880, 0.35, 0.25, 'triangle', 0.22);
+            noise(0.4, 0.08, 0.1);
+            return 650;
+          },
+        ];
+
+        // Pick a random sound and play it
+        const randomIndex = Math.floor(Math.random() * sounds.length);
+        const duration = sounds[randomIndex]();
         
-        // Play "ching-ching" - two bell sounds
-        playChing(0, 2000, 0.3);      // First ching - higher
-        playChing(0.12, 2400, 0.35);  // Second ching - even higher
-        
-        setTimeout(resolve, 350);
+        setTimeout(resolve, duration);
       } catch (e) {
-        console.log('Could not play cash sound:', e);
+        console.log('Could not play rebuy sound:', e);
         resolve();
       }
     });
@@ -227,8 +418,8 @@ const LiveGameScreen = () => {
 
   // Text-to-speech for buyin announcements - ALL HEBREW
   const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean) => {
-    // Play cash drawer opening sound first
-    await playCashSound();
+    // Play random casino sound first
+    await playRebuyCasinoSound();
     
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
