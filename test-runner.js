@@ -629,14 +629,152 @@ console.log('─'.repeat(50));
   }
 }
 
+// ==================== DUPLICATE PREVENTION TESTS ====================
+
+console.log('\n🔄 DUPLICATE PREVENTION');
+console.log('─'.repeat(50));
+
+// Test 21: Record chase - only best candidate shown
+{
+  const recordHolder = createTestPlayer({
+    name: 'RecordKing',
+    bestWin: 350,
+    currentStreak: 0,
+    gamesPlayed: 50,
+  });
+  
+  const players = [
+    recordHolder,
+    createTestPlayer({ name: 'Chaser1', bestWin: 300, currentStreak: 4, gamesPlayed: 30 }),
+    createTestPlayer({ name: 'Chaser2', bestWin: 280, currentStreak: 3, gamesPlayed: 25 }),
+    createTestPlayer({ name: 'Chaser3', bestWin: 260, currentStreak: 2, gamesPlayed: 20 }),
+  ];
+
+  const { milestones } = generateMilestones(players);
+  
+  // Count milestones about breaking win record (exclude streak milestones)
+  const recordMilestones = milestones.filter(m => 
+    m.title.includes('שיא') && m.title.includes('נצחון') && !m.title.includes('רצף')
+  );
+  
+  if (recordMilestones.length <= 1) {
+    passed++;
+    console.log(`  ✅ Record chase single candidate: PASS (${recordMilestones.length})`);
+  } else {
+    failed++;
+    console.log(`  ❌ Record chase single candidate: FAIL (${recordMilestones.length} found)`);
+  }
+}
+
+// Test 22: Streak milestones - one per player
+{
+  const players = [
+    createTestPlayer({ name: 'Streak3', currentStreak: 3 }),
+    createTestPlayer({ name: 'Streak4', currentStreak: 4 }),
+    createTestPlayer({ name: 'Streak5', currentStreak: 5 }),
+  ];
+
+  const { milestones } = generateMilestones(players);
+  const streakMilestones = milestones.filter(m => m.title.includes('רצף נצחונות'));
+  
+  if (streakMilestones.length === 3) {
+    passed++;
+    console.log('  ✅ One streak per player: PASS');
+  } else {
+    failed++;
+    console.log(`  ❌ One streak per player: FAIL (expected 3, got ${streakMilestones.length})`);
+  }
+}
+
+// ==================== DATA INTEGRITY TESTS ====================
+
+console.log('\n🛡️ DATA INTEGRITY');
+console.log('─'.repeat(50));
+
+// Test 23: Zero bestWin player excluded
+{
+  const players = [
+    createTestPlayer({ name: 'Winner', bestWin: 300, currentStreak: 0 }),
+    createTestPlayer({ name: 'NeverWon', bestWin: 0, currentStreak: 2, winCount: 0 }),
+  ];
+
+  const { milestones } = generateMilestones(players);
+  
+  const hasNeverWonInRecord = milestones.some(m => 
+    m.description.includes('NeverWon') && m.title.includes('שיא')
+  );
+  
+  if (!hasNeverWonInRecord) {
+    passed++;
+    console.log('  ✅ Zero win player excluded: PASS');
+  } else {
+    failed++;
+    console.log('  ❌ Zero win player excluded: FAIL');
+  }
+}
+
+// Test 24: Rankings reflect actual profit order
+{
+  const players = [
+    createTestPlayer({ name: 'TopPlayer', totalProfit: 1000 }),
+    createTestPlayer({ name: 'MidPlayer', totalProfit: 920 }), // 80 gap - will generate passing milestone
+    createTestPlayer({ name: 'LowPlayer', totalProfit: 600 }),
+  ];
+
+  const { milestones } = generateMilestones(players);
+  
+  // Find the leaderboard passing milestone
+  const passingMilestone = milestones.find(m => m.title.includes('מרדף'));
+  
+  // MidPlayer (rank 2) should chase TopPlayer (rank 1), not the other way around
+  const correctOrder = !passingMilestone || 
+    (passingMilestone.description.includes('MidPlayer') && passingMilestone.description.includes('TopPlayer'));
+  
+  if (correctOrder) {
+    passed++;
+    console.log('  ✅ Ranking order correct: PASS');
+  } else {
+    failed++;
+    console.log('  ❌ Ranking order correct: FAIL');
+  }
+}
+
+// Test 25: Year vs All-time distinction
+{
+  const players = [
+    createTestPlayer({
+      name: 'MixedYears',
+      totalProfit: 1000,
+      gameHistory: [
+        { profit: -200, date: makeDate(20, 12, currentYear), gameId: 'g1' },
+        { profit: 1200, date: makeDate(20, 12, lastYear), gameId: 'g2' },
+      ]
+    }),
+  ];
+
+  const { milestones, playerPeriodStats } = generateMilestones(players);
+  const stats = playerPeriodStats[0];
+  
+  // Year profit should be -200, not 1000
+  if (stats.yearProfit === -200) {
+    passed++;
+    console.log(`  ✅ Year vs All-time distinct: PASS (yearProfit=${stats.yearProfit})`);
+  } else {
+    failed++;
+    console.log(`  ❌ Year vs All-time distinct: FAIL (yearProfit=${stats.yearProfit}, expected -200)`);
+  }
+}
+
 // ==================== SUMMARY ====================
+
+const total = passed + failed;
 
 console.log('\n' + '═'.repeat(60));
 console.log('   📊 TEST SUMMARY');
 console.log('═'.repeat(60));
 
-console.log(`\n   ✅ Passed: ${passed}/20`);
-console.log(`   ❌ Failed: ${failed}/20`);
+console.log(`\n   ✅ Passed: ${passed}/${total}`);
+console.log(`   ❌ Failed: ${failed}/${total}`);
 
 if (failed === 0) {
   console.log('\n   🎉 ALL TESTS PASSED! Milestone logic is working correctly.');
