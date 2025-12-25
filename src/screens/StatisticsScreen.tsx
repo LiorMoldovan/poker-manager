@@ -2217,7 +2217,9 @@ const StatisticsScreen = () => {
                 }
                 
                 // 10. BIGGEST WIN RECORD - show current record holder
-                const bestWinRecord = rankedStats.reduce((max, p) => p.biggestWin > max.biggestWin ? p : max, rankedStats[0]);
+                const bestWinRecord = rankedStats.length > 0 
+                  ? rankedStats.reduce((max, p) => p.biggestWin > max.biggestWin ? p : max, rankedStats[0])
+                  : null;
                 if (bestWinRecord && bestWinRecord.biggestWin >= 200) {
                   milestones.push({
                     emoji: '💰',
