@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.17.2';
+export const APP_VERSION = '4.18.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.18.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 NEW: Milestones & Records at Stake!',
+      '📈 Leaderboard passing: "If X wins +80₪, they\'ll pass Y!"',
+      '🔥 Streak records: "One more win = new group record!"',
+      '💰 Round numbers: "Only 65₪ from crossing 1000₪ all-time!"',
+      '⚠️ Danger zones: "Close to dropping below -500₪!"',
+      '💪 Comeback tracking: "3 losses but still +400₪ overall"',
+      'AI now weaves milestones into sentences automatically!'
+    ]
+  },
   {
     version: '4.17.2',
     date: '2025-12-25',

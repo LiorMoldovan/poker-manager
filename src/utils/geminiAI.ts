@@ -166,6 +166,80 @@ export const generateAIForecasts = async (
   }
   
   const allTimeRecordsText = allTimeRecords.join('\n');
+  
+  // ========== CALCULATE MILESTONES ==========
+  const milestones: string[] = [];
+  
+  // 1. Leaderboard passing opportunities
+  for (let i = 1; i < sortedByTotalProfit.length; i++) {
+    const chaser = sortedByTotalProfit[i];
+    const leader = sortedByTotalProfit[i - 1];
+    const gap = leader.totalProfit - chaser.totalProfit;
+    
+    // If gap is achievable in one night (less than 250₪)
+    if (gap > 0 && gap <= 250) {
+      milestones.push(`📈 LEADERBOARD: If ${chaser.name} wins +${gap}₪ or more, they'll PASS ${leader.name} in all-time profit!`);
+    }
+  }
+  
+  // 2. Round number milestones (500, 1000, 1500, 2000, etc.)
+  const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
+  players.forEach(p => {
+    for (const milestone of roundNumbers) {
+      const distanceToMilestone = milestone - p.totalProfit;
+      // If they're close to crossing UP a milestone
+      if (distanceToMilestone > 0 && distanceToMilestone <= 200) {
+        milestones.push(`🎯 MILESTONE: ${p.name} is only ${distanceToMilestone}₪ away from crossing +${milestone}₪ all-time profit!`);
+        break; // Only show closest milestone
+      }
+      // If they're close to dropping BELOW a milestone (negative)
+      const distanceToNegMilestone = p.totalProfit - (-milestone);
+      if (p.totalProfit < 0 && distanceToNegMilestone > 0 && distanceToNegMilestone <= 200) {
+        milestones.push(`⚠️ DANGER ZONE: ${p.name} is only ${distanceToNegMilestone}₪ away from dropping to -${milestone}₪ all-time!`);
+        break;
+      }
+    }
+  });
+  
+  // 3. Streak records that could be broken/tied
+  const groupWinStreakRecord = Math.max(...players.map(p => p.currentStreak), 0);
+  const groupLoseStreakRecord = Math.min(...players.map(p => p.currentStreak), 0);
+  
+  players.forEach(p => {
+    // Someone on a hot streak could tie/break record
+    if (p.currentStreak >= 3 && p.currentStreak >= groupWinStreakRecord) {
+      if (p.currentStreak === groupWinStreakRecord) {
+        milestones.push(`🔥 STREAK RECORD: If ${p.name} wins tonight, they'll BREAK the group winning streak record (currently ${groupWinStreakRecord} games)!`);
+      }
+    }
+    // Someone on a cold streak could tie/break negative record
+    if (p.currentStreak <= -3 && p.currentStreak <= groupLoseStreakRecord) {
+      if (p.currentStreak === groupLoseStreakRecord) {
+        milestones.push(`❄️ STREAK RECORD: If ${p.name} loses tonight, they'll set a new group LOSING streak record (currently ${Math.abs(groupLoseStreakRecord)} games)!`);
+      }
+    }
+  });
+  
+  // 4. Could someone break the biggest single-night win record?
+  const biggestWinRecord = Math.max(...players.map(p => p.bestWin));
+  players.forEach(p => {
+    // If someone's on a hot streak and their best isn't the record
+    if (p.currentStreak >= 2 && p.bestWin < biggestWinRecord) {
+      const gap = biggestWinRecord - p.bestWin;
+      if (gap <= 150) {
+        milestones.push(`💰 WIN RECORD: ${p.name}'s best is +${p.bestWin}₪. If they win +${biggestWinRecord + 1}₪ tonight, they'll break the group record!`);
+      }
+    }
+  });
+  
+  // 5. Revenge/comeback opportunities
+  players.forEach(p => {
+    if (p.currentStreak <= -2 && p.totalProfit > 0) {
+      milestones.push(`💪 COMEBACK: ${p.name} is on a ${Math.abs(p.currentStreak)}-game losing streak but still +${p.totalProfit}₪ overall. Time for revenge?`);
+    }
+  });
+  
+  const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
@@ -243,6 +317,12 @@ ${allTimeRecordsText}
 ${playerDynamics.length > 0 ? `
 🔥 TABLE DYNAMICS & RIVALRIES:
 ${playerDynamics.join('\n')}` : ''}
+${milestonesText ? `
+🎯 TONIGHT'S MILESTONES & RECORDS AT STAKE:
+${milestonesText}
+
+⭐ USE THESE MILESTONES IN YOUR SENTENCES! They make forecasts much more exciting!
+   Example: "אם ליאור ינצח הלילה ב-80₪ או יותר, הוא יעקוף את סגל בטבלה!"` : ''}
 
 ═══════════════════════════════════════
 
@@ -281,9 +361,13 @@ ${recentGameExamples}
 
 3. **The "Nemesis" Angle**: If Player A loses when Player B is present, highlight the rivalry.
 
-4. **Style & Tone**: Witty, slightly cynical, dramatic. Each sentence should be screenshot-worthy for WhatsApp.
+4. **MILESTONES ARE GOLD**: If a player has a milestone opportunity (passing someone, breaking a record, crossing 1000₪), MENTION IT in their sentence! 
+   Example: "אם ליאור יקח הלילה +95₪, הוא יעקוף את סגל ויעלה למקום השני בטבלה!"
+   Example: "עוד נצחון אחד ואייל ישבור את שיא הנצחונות הרצופים של הקבוצה!"
 
-5. **Language**: Output (highlight and sentence) MUST be in HEBREW.
+5. **Style & Tone**: Witty, slightly cynical, dramatic. Each sentence should be screenshot-worthy for WhatsApp.
+
+6. **Language**: Output (highlight and sentence) MUST be in HEBREW.
 
 ═══════════════════════════════════════
 
@@ -319,11 +403,15 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 
 💡 EXAMPLES OF QUALITY (HEBREW OUTPUT):
 
-✅ "מאז ה-12/03, יובל נמצא בצניחה חופשית, אבל אל תשכחו שהוא עדיין מלך הקאמבקים עם שיא של מעבר מהפסד לניצחון הכי גבוה בהיסטוריה. הלילה הוא נלחם על הכבוד."
+✅ MILESTONE EXAMPLE: "ליאור צריך רק +85₪ הלילה כדי לעקוף את סגל ולהפוך למוביל הטבלה! עם 3 נצחונות רצופים, המומנטום לצידו."
 
-✅ "אביב רחוק משחק אחד בלבד מהשוואת שיא ההפסדים הרצופים של הקבוצה (5). הלחץ בשולחן הלילה יכריע - האם הוא ירשום היסטוריה שלילית או יקטע את הרצף?"
+✅ STREAK RECORD: "אם אייל ינצח הלילה, הוא ישבור את שיא הנצחונות הרצופים של הקבוצה! 5 משחקים ברצף והוא עדיין רעב."
 
-✅ "סגל הוא הבנק של הקבוצה - ממוצע +8₪ ב-20 משחקים. לא מרוויח גדול, לא מפסיד גדול. גאונות משעממת או שעמום גאוני?"
+✅ ROUND NUMBER: "מור נמצאת רק 65₪ מ-+1000₪ כולל! הלילה היא יכולה לחגוג אלף ראשון - האם הלחץ יעבוד לטובתה?"
+
+✅ DANGER ZONE: "אביב רחוק משחק אחד בלבד מהשוואת שיא ההפסדים הרצופים של הקבוצה (5). האם הוא יקטע את הרצף?"
+
+✅ REVENGE: "סגל ב-3 הפסדים רצופים אבל עדיין +450₪ כולל. הפניקס הזה תמיד חוזר - השאלה רק מתי."
 
 ═══════════════════════════════════════
 
