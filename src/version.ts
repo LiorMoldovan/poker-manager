@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.0';
+export const APP_VERSION = '4.37.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.1',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Build error - duplicate variable declaration',
+      'Fixed: currentMonth was declared twice in milestones section',
+      'Vercel deployment should now succeed'
+    ]
+  },
   {
     version: '4.37.0',
     date: '2025-12-25',

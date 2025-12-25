@@ -2052,11 +2052,10 @@ const StatisticsScreen = () => {
                 const currentMonth = new Date().getMonth();
                 const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
                 const currentHalf = currentMonth < 6 ? 1 : 2;
-                
-                // 1. CHAMPION TITLE - Dramatic year/half-year milestone
-                const currentMonth = new Date().getMonth();
                 const isEndOfYear = currentMonth === 11; // December
                 const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
+                
+                // 1. CHAMPION TITLE - Dramatic year/half-year milestone
                 
                 if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
                   const leader = rankedStats[0];
