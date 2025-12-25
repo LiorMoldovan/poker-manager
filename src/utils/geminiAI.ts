@@ -903,29 +903,50 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
     "name": "Player Name",
     "expectedProfit": number (REALISTIC based on their historical range!),
     "highlight": "Short data-driven stat in Hebrew (up to 10 words)",
-    "sentence": "Unique analysis in Hebrew (25-40 words) - must include a specific number",
+    "sentence": "Unique analysis in Hebrew (25-40 words) - MUST MATCH expectedProfit tone!",
     "isSurprise": boolean
   }
 ]
 
+🚨 THE SENTENCE MUST MATCH THE PREDICTION! 🚨
+- Positive expectedProfit → Positive, optimistic sentence
+- Negative expectedProfit → Cautious, warning sentence
+- Big profit → Confident tone | Small profit → Mild tone
+
 ═══════════════════════════════════════
 
-💡 EXAMPLES OF QUALITY (HEBREW OUTPUT):
+💡 EXAMPLES OF QUALITY (WITH CORRECT CORRELATION):
 
 ⚠️ IMPORTANT: When mentioning milestones, ALWAYS specify the context clearly!
 - "כולל" or "בסך הכל" = all-time total
 - "בטבלת כל הזמנים" = all-time leaderboard
 - "שיא הקבוצה" = group record
 
-✅ LEADERBOARD: "ליאור עומד על +920₪ בסך הכל. עוד 85₪ הלילה והוא יעקוף את סגל (+1005₪) ויעלה למקום השני בטבלה כל הזמנים!"
+📊 CORRECT CORRELATION EXAMPLES:
 
-✅ ROUND NUMBER: "מור כרגע ב-+935₪ כולל מאז שהתחלנו לשחק. עוד 65₪ הלילה והיא תשבור את רף האלף שקל!"
+✅ expectedProfit: +130 → POSITIVE sentence:
+   "ליאור על גל! 3 נצחונות רצופים ו-+85 ממוצע. הלילה הוא הולך לשלוט על השולחן ולהוסיף עוד +130₪ לקופה."
 
-✅ STREAK RECORD: "אייל ב-4 נצחונות רצופים - שוויון לשיא הקבוצה. נצחון הלילה יכתוב אותו בספרי ההיסטוריה עם 5 ברצף!"
+✅ expectedProfit: +80 → OPTIMISTIC sentence:
+   "מור ב-70% נצחונות החודש. עם הפורום הזה היא צפויה להמשיך את המגמה החיובית עם רווח של +80₪."
 
-✅ DANGER ZONE: "אביב ב-4 הפסדים רצופים, שוויון לשיא השלילי של הקבוצה. הפסד נוסף יהפוך אותו לבעל הרצף הגרוע בהיסטוריה שלנו."
+✅ expectedProfit: -60 → CAUTIOUS/NEGATIVE sentence:
+   "אביב ב-3 הפסדים רצופים וממוצע של -45₪ בחודש האחרון. הלילה נראה מאתגר עבורו, צפי של -60₪."
 
-✅ COMEBACK: "סגל אמנם ב-3 הפסדים רצופים, אבל בסך הכל הוא עדיין +450₪ כולל. הפניקס הזה תמיד חוזר."
+✅ expectedProfit: -120 → NEGATIVE sentence:
+   "סגל נגד כולם הלילה. עם 2 הפסדים כבדים אחרונים והפורום הקשה, הלילה עלול לעלות לו ביוקר: -120₪."
+
+❌ WRONG - CONTRADICTIONS:
+   expectedProfit: +100 with "לילה קשה צפוי לו" ← FORBIDDEN!
+   expectedProfit: -80 with "הולך לשלוט" ← FORBIDDEN!
+
+📍 MILESTONE EXAMPLES (with clear context):
+
+✅ LEADERBOARD: "ליאור עומד על +920₪ בסך הכל. עוד 85₪ הלילה והוא יעקוף את סגל ויעלה למקום השני!"
+
+✅ ROUND NUMBER: "מור כרגע ב-+935₪ כולל. עוד 65₪ הלילה והיא תשבור את רף האלף שקל!"
+
+✅ STREAK: "אייל ב-4 נצחונות רצופים - שוויון לשיא. נצחון הלילה יכתוב אותו בהיסטוריה!"
 
 ═══════════════════════════════════════
 
@@ -941,6 +962,24 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
    - At least ONE player has |expectedProfit| ≥ ${Math.round(avgAbsProfit * 1.2)}₪
    - NO player has |expectedProfit| < ${Math.max(30, Math.round(avgAbsProfit * 0.4))}₪ (too small!)
    - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
+
+5. 🚨 CRITICAL - SENTENCE MUST MATCH expectedProfit! 🚨
+   The "sentence" MUST reflect the same prediction as "expectedProfit". NO CONTRADICTIONS!
+   
+   ✅ CORRECT CORRELATION:
+   - expectedProfit: +120 → sentence: positive, confident, winning tone ("הולך לשלוט", "לילה גדול צפוי", "הכסף יזרום")
+   - expectedProfit: +50 → sentence: cautiously optimistic ("סיכוי טוב", "יכול להפתיע", "מגמה חיובית")
+   - expectedProfit: -50 → sentence: cautiously pessimistic ("לילה קשה", "צפויות בעיות", "המזל לא לצידו")
+   - expectedProfit: -120 → sentence: negative, struggling tone ("עלול להיפגע", "לילה להפסדים", "בדרך למטה")
+   
+   ❌ WRONG (CONTRADICTIONS):
+   - expectedProfit: +100 but sentence says "לילה קשה צפוי" ← FORBIDDEN!
+   - expectedProfit: -80 but sentence says "הולך לנצח גדול" ← FORBIDDEN!
+   - expectedProfit: +150 but sentence talks about "struggles" or "problems" ← FORBIDDEN!
+   
+   RULE: If expectedProfit > 0, sentence MUST be positive/optimistic.
+         If expectedProfit < 0, sentence MUST be negative/cautious.
+         The MAGNITUDE should also match (big profit = very positive, small profit = mildly positive).
 
 ═══════════════════════════════════════
 
