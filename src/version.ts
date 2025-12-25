@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.5';
+export const APP_VERSION = '4.37.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.6',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Duplicate milestones showing same player battles',
+      'Added deduplication logic - same player pair now only appears in ONE milestone',
+      'Champion battle, Leaderboard battles, Podium battle, and Close battle tracked'
+    ]
+  },
   {
     version: '4.37.5',
     date: '2025-12-25',
