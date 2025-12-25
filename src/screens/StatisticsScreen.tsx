@@ -2241,14 +2241,15 @@ const StatisticsScreen = () => {
                 }
                 
                 // 12. COMEBACK KING - someone who went from negative to positive
+                // Note: biggestLoss is stored as negative number (e.g., -150)
                 const comebackKing = rankedStats
-                  .filter(p => p.totalProfit > 0 && p.biggestLoss >= 100 && p.gamesPlayed >= 5)
-                  .sort((a, b) => b.biggestLoss - a.biggestLoss)[0];
+                  .filter(p => p.totalProfit > 0 && p.biggestLoss <= -100 && p.gamesPlayed >= 5)
+                  .sort((a, b) => a.biggestLoss - b.biggestLoss)[0]; // Most negative first
                 if (comebackKing) {
                   milestones.push({
                     emoji: '💪',
                     title: `קאמבק קינג!`,
-                    description: `${comebackKing.playerName} הפסיד פעם ${Math.round(comebackKing.biggestLoss)}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
+                    description: `${comebackKing.playerName} הפסיד פעם ${Math.round(Math.abs(comebackKing.biggestLoss))}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
                     priority: 58
                   });
                 }
@@ -2291,7 +2292,7 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '🎢',
                     title: `מלך התנודות!`,
-                    description: `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד -${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
+                    description: `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד ${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
                     priority: 52
                   });
                 }
@@ -2341,7 +2342,7 @@ const StatisticsScreen = () => {
                 }
                 
                 // 19. MOST GAMES PLAYED
-                const mostGamesPlayer = rankedStats.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
+                const mostGamesPlayer = [...rankedStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
                 if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= 15) {
                   milestones.push({
                     emoji: '🎮',
@@ -2558,12 +2559,13 @@ const StatisticsScreen = () => {
                 ];
                 
                 // LOSING + LOW WIN RATE (The Strugglers)
+                // Note: worstLoss is already negative (e.g., -150)
                 const struggleSentences = [
                   `📉 ${lossCount} הפסדים מתוך ${gamesPlayed} משחקים. תקופה מאתגרת שדורשת סבלנות.`,
                   `⏸️ רק ${Math.round(winRate)}% נצחונות. כל שחקן עובר תקופות כאלה.`,
                   `🔄 הממוצע (${Math.round(avgProfit)}₪) לא משקף את הפוטנציאל. זמן לאיפוס.`,
                   `💪 ${gamesPlayed} משחקים של ניסיון. ההשקעה תשתלם בסוף.`,
-                  `🎯 ההפסד הגדול (-${Math.round(worstLoss)}₪) משך את הממוצע למטה. בלעדיו התמונה שונה.`,
+                  `🎯 ההפסד הגדול (${Math.round(worstLoss)}₪) משך את הממוצע למטה. בלעדיו התמונה שונה.`,
                 ];
                 
                 // HOT STREAK sentences
@@ -2603,11 +2605,12 @@ const StatisticsScreen = () => {
                 ] : [];
                 
                 // VOLATILE (Big swings)
+                // Note: worstLoss is negative, avgLoss is positive
                 const volatileSentences = [
-                  `🎢 תנודות קיצוניות: מ-+${Math.round(bestWin)}₪ ועד -${Math.round(worstLoss)}₪. לילות דרמטיים.`,
-                  `⚡ הפער בין הטוב (+${Math.round(bestWin)}₪) לרע (-${Math.round(worstLoss)}₪) הוא ${Math.round(bestWin + worstLoss)}₪!`,
+                  `🎢 תנודות קיצוניות: מ-+${Math.round(bestWin)}₪ ועד ${Math.round(worstLoss)}₪. לילות דרמטיים.`,
+                  `⚡ הפער בין הטוב (+${Math.round(bestWin)}₪) לרע (${Math.round(worstLoss)}₪) הוא ${Math.round(volatilityScore)}₪!`,
                   `🌊 גלים גבוהים: נצחון ממוצע +${Math.round(avgWin)}₪, הפסד ממוצע -${Math.round(avgLoss)}₪.`,
-                  `🎭 שני פנים: יכול לקחת +${Math.round(bestWin)}₪ או להפסיד -${Math.round(worstLoss)}₪.`,
+                  `🎭 שני פנים: יכול לקחת +${Math.round(bestWin)}₪ או להפסיד ${Math.round(worstLoss)}₪.`,
                   `💥 משחק עוצמתי - הממוצעים לא מספרים את כל הסיפור.`,
                 ];
                 
@@ -2636,10 +2639,11 @@ const StatisticsScreen = () => {
                 ];
                 
                 // RECORDS & MILESTONES
+                const equivalentWins = avgWin > 0 ? Math.round(bestWin / avgWin) : 0;
                 const recordSentences = [
                   `🏆 שיא הנצחון שלו: +${Math.round(bestWin)}₪ בלילה אחד!`,
-                  `📊 הנצחון הגדול (+${Math.round(bestWin)}₪) שווה ${Math.round(bestWin / (avgWin || 1))} נצחונות ממוצעים.`,
-                  `💪 רצף הנצחונות הארוך שלו: ${longestWinStreak} ברצף.`,
+                  ...(equivalentWins >= 2 ? [`📊 הנצחון הגדול (+${Math.round(bestWin)}₪) שווה ${equivalentWins} נצחונות ממוצעים.`] : []),
+                  ...(longestWinStreak >= 2 ? [`💪 רצף הנצחונות הארוך שלו: ${longestWinStreak} ברצף.`] : []),
                   `📈 ${gamesPlayed} משחקים של ניסיון עם רווח כולל של ${formatCurrency(totalProfit)}.`,
                 ];
                 

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.1';
+export const APP_VERSION = '4.37.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.2',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Critical bugs in milestones and player profiles',
+      'Fixed: biggestLoss was treated as positive but is stored as negative',
+      'Fixed: Comeback King milestone now correctly identifies players with big losses',
+      'Fixed: Volatility display now shows correct negative loss values',
+      'Fixed: Player profile sentences now correctly format loss amounts',
+      'Fixed: Array mutation bug in most games calculation',
+      'Fixed: Record sentences now handle edge cases properly'
+    ]
+  },
   {
     version: '4.37.1',
     date: '2025-12-25',
