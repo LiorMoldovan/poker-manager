@@ -849,7 +849,8 @@ const StatisticsScreen = () => {
 
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
-            {/* Active Players Filter - Toggle Switch (FIRST) */}
+            {/* Active Players Filter - Toggle Switch (only for table and records views) */}
+            {(viewMode === 'table' || viewMode === 'records') && (
               <div style={{ 
                 marginBottom: '0.75rem',
                 paddingBottom: '0.75rem',
@@ -900,6 +901,7 @@ const StatisticsScreen = () => {
                   }} />
                 </button>
             </div>
+            )}
 
             {/* Time Period Filter */}
             <div style={{ 
