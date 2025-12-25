@@ -73,9 +73,10 @@ export interface MilestoneItem {
 export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem[] => {
   const milestones: MilestoneItem[] = [];
   
-  // Helper: Parse date from game history
+  // Helper: Parse date from game history (handles multiple formats)
   const parseGameDate = (dateStr: string): Date => {
-    const parts = dateStr.split('/');
+    // Try DD/MM/YYYY format first (with slashes)
+    let parts = dateStr.split('/');
     if (parts.length >= 3) {
       const day = parseInt(parts[0]);
       const month = parseInt(parts[1]) - 1;
@@ -83,6 +84,16 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       if (year < 100) year += 2000;
       return new Date(year, month, day);
     }
+    // Try DD.MM.YYYY format (with dots - Hebrew locale)
+    parts = dateStr.split('.');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    // Fallback to ISO format or other parseable formats
     return new Date(dateStr);
   };
   
@@ -465,9 +476,10 @@ export const generateAIForecasts = async (
   // ========== CALCULATE MILESTONES ==========
   const milestones: string[] = [];
   
-  // Helper: Parse date from game history (format: DD/MM/YYYY or DD/MM/YY)
+  // Helper: Parse date from game history (handles multiple formats)
   const parseGameDate = (dateStr: string): Date => {
-    const parts = dateStr.split('/');
+    // Try DD/MM/YYYY format first (with slashes)
+    let parts = dateStr.split('/');
     if (parts.length >= 3) {
       const day = parseInt(parts[0]);
       const month = parseInt(parts[1]) - 1;
@@ -475,6 +487,16 @@ export const generateAIForecasts = async (
       if (year < 100) year += 2000;
       return new Date(year, month, day);
     }
+    // Try DD.MM.YYYY format (with dots - Hebrew locale)
+    parts = dateStr.split('.');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    // Fallback to ISO format or other parseable formats
     return new Date(dateStr);
   };
   

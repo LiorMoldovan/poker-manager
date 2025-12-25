@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.24.1';
+export const APP_VERSION = '4.25.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.25.0',
+    date: '2025-12-25',
+    changes: [
+      '🐛 CRITICAL BUG FIX: Date format mismatch causing wrong year profits!',
+      'Fixed: Dates were formatted with dots (25.12.2025) but parser expected slashes (25/12/2025)',
+      'parseGameDate now handles both dot and slash formats',
+      'Milestone dates now explicitly use DD/MM/YYYY format',
+      'Year table milestones require 5+ games (was 2)',
+      'Added test suite for milestone accuracy verification'
+    ]
+  },
   {
     version: '4.24.1',
     date: '2025-12-25',

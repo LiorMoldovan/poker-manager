@@ -279,11 +279,17 @@ const NewGameScreen = () => {
         currentStreak: stats?.currentStreak || 0,
         bestWin: stats?.bestWin || 0,
         worstLoss: stats?.worstLoss || 0,
-        gameHistory: (stats?.lastGameResults || []).map(g => ({
-          profit: g.profit,
-          date: new Date(g.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-          gameId: g.gameId
-        })),
+        gameHistory: (stats?.lastGameResults || []).map(g => {
+          const d = new Date(g.date);
+          const day = d.getDate().toString().padStart(2, '0');
+          const month = (d.getMonth() + 1).toString().padStart(2, '0');
+          const year = d.getFullYear();
+          return {
+            profit: g.profit,
+            date: `${day}/${month}/${year}`, // MUST be DD/MM/YYYY format for parseGameDate!
+            gameId: g.gameId
+          };
+        }),
         daysSinceLastGame: daysSince,
         isActive: daysSince <= 60
       };
