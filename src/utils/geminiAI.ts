@@ -128,16 +128,16 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (p.currentStreak >= 3 && p.currentStreak >= maxWinStreak) {
       milestones.push({
         emoji: '🔥',
-        title: `${p.name} - רצף נצחונות!`,
-        description: `${p.currentStreak} נצחונות רצופים. נצחון הלילה = שיא קבוצתי חדש!`,
+        title: `שיא נצחונות רצופים בסכנה!`,
+        description: `${p.name} נמצא כרגע ברצף של ${p.currentStreak} נצחונות רצופים - זה שיא הקבוצה! אם הוא ינצח הלילה, הוא ישבור את השיא ויגיע ל-${p.currentStreak + 1} נצחונות ברצף.`,
         priority: 95
       });
     }
     if (p.currentStreak <= -3 && p.currentStreak <= maxLoseStreak) {
       milestones.push({
         emoji: '❄️',
-        title: `${p.name} - רצף הפסדים`,
-        description: `${Math.abs(p.currentStreak)} הפסדים רצופים. הפסד נוסף = שיא שלילי חדש!`,
+        title: `שיא הפסדים רצופים בסכנה!`,
+        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים - השוויון לשיא השלילי של הקבוצה. הפסד נוסף הלילה יהפוך אותו לבעל הרצף השלילי הארוך ביותר בהיסטוריה שלנו.`,
         priority: 90
       });
     }
@@ -148,11 +148,13 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     const chaser = sortedByTotalProfit[i];
     const leader = sortedByTotalProfit[i - 1];
     const gap = Math.round(leader.totalProfit - chaser.totalProfit);
+    const chaserRank = i + 1;
+    const leaderRank = i;
     if (gap > 0 && gap <= 200) {
       milestones.push({
         emoji: '📈',
-        title: `מרדף בטבלה!`,
-        description: `${chaser.name} (${chaser.totalProfit >= 0 ? '+' : ''}${Math.round(chaser.totalProfit)}₪) יכול לעקוף את ${leader.name} עם +${gap}₪ הלילה!`,
+        title: `מרדף בטבלה הכללית (כל הזמנים)`,
+        description: `${chaser.name} נמצא במקום ${chaserRank} בטבלה הכללית עם ${chaser.totalProfit >= 0 ? '+' : ''}${Math.round(chaser.totalProfit)}₪ כולל. ${leader.name} לפניו במקום ${leaderRank} עם ${leader.totalProfit >= 0 ? '+' : ''}${Math.round(leader.totalProfit)}₪. הפרש של ${gap}₪ בלבד - נצחון גדול הלילה יכול להעביר את ${chaser.name} מעל ${leader.name}!`,
         priority: 85 - i * 5
       });
     }
@@ -165,8 +167,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       if (gap <= 30 && gap > 0) {
         milestones.push({
           emoji: '⚔️',
-          title: 'קרב צמוד!',
-          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} רק ${Math.round(gap)}₪ הפרש! הלילה מכריע.`,
+          title: 'קרב צמוד בטבלה הכללית!',
+          description: `${sortedByTotalProfit[i].name} (${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${Math.round(sortedByTotalProfit[i].totalProfit)}₪) ו-${sortedByTotalProfit[j].name} (${sortedByTotalProfit[j].totalProfit >= 0 ? '+' : ''}${Math.round(sortedByTotalProfit[j].totalProfit)}₪) נמצאים בהפרש של ${gap}₪ בלבד בטבלה הכללית של כל הזמנים. משחק הלילה יקבע מי מהם יהיה מעל השני!`,
           priority: 88
         });
       }
@@ -179,8 +181,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       if (Math.round(sortedByTotalProfit[i].totalProfit) === Math.round(sortedByTotalProfit[j].totalProfit) && sortedByTotalProfit[i].totalProfit !== 0) {
         milestones.push({
           emoji: '🤝',
-          title: 'תיקו מושלם!',
-          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} בדיוק ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${Math.round(sortedByTotalProfit[i].totalProfit)}₪. הלילה שובר!`,
+          title: 'תיקו מושלם בטבלה הכללית!',
+          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} נמצאים בתיקו מושלם בטבלה הכללית של כל הזמנים - שניהם בדיוק ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${Math.round(sortedByTotalProfit[i].totalProfit)}₪! משחק הלילה ישבור את התיקו ויקבע מי מהם יעלה ומי ירד.`,
           priority: 92
         });
       }
@@ -195,8 +197,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       if (distance > 0 && distance <= 150) {
         milestones.push({
           emoji: '🎯',
-          title: `${p.name} - יעד בהישג יד`,
-          description: `עומד על ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪. עוד ${distance}₪ = +${milestone}₪ כולל!`,
+          title: `יעד עגול בטבלה הכללית!`,
+          description: `${p.name} עומד כרגע על ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪ בטבלה הכללית של כל הזמנים. חסרים לו רק ${distance}₪ כדי לחצות את רף ה-+${milestone}₪ - מספר עגול ויפה! נצחון טוב הלילה יכול להביא אותו לשם.`,
           priority: 75 + Math.round(milestone / 100)
         });
         break;
@@ -209,11 +211,13 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     const chaser = sortedByYearProfit[i];
     const leader = sortedByYearProfit[i - 1];
     const gap = Math.round(leader.yearProfit - chaser.yearProfit);
+    const chaserRank = i + 1;
+    const leaderRank = i;
     if (gap > 0 && gap <= 150 && chaser.yearGames >= 2) {
       milestones.push({
         emoji: '📅',
-        title: `מרדף ${currentYear}`,
-        description: `${chaser.name} יכול לעקוף את ${leader.name} בטבלת השנה עם +${gap}₪!`,
+        title: `מרדף בטבלת ${currentYear}!`,
+        description: `${chaser.name} נמצא במקום ${chaserRank} בטבלת שנת ${currentYear} עם ${chaser.yearProfit >= 0 ? '+' : ''}${Math.round(chaser.yearProfit)}₪. ${leader.name} לפניו במקום ${leaderRank} עם ${leader.yearProfit >= 0 ? '+' : ''}${Math.round(leader.yearProfit)}₪. הפרש של ${gap}₪ - נצחון הלילה יכול לשנות את הדירוג השנתי!`,
         priority: 70
       });
     }
@@ -224,10 +228,11 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   players.forEach(p => {
     for (const gm of gamesMilestones) {
       if (p.gamesPlayed === gm - 1) {
+        const avgProfit = p.gamesPlayed > 0 ? Math.round(p.totalProfit / p.gamesPlayed) : 0;
         milestones.push({
           emoji: '🎮',
-          title: `משחק ${gm} ל-${p.name}!`,
-          description: `הלילה זה המשחק ה-${gm} שלו עם הקבוצה!`,
+          title: `יובל משחקים ל-${p.name}!`,
+          description: `הלילה זה המשחק ה-${gm} של ${p.name} עם הקבוצה! עד כה הוא שיחק ${p.gamesPlayed} משחקים עם ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק ורווח כולל של ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪.`,
           priority: 65 + (gm / 10)
         });
         break;
@@ -241,8 +246,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (p.winCount === winsNeeded60 - 1 && p.winPercentage < 60) {
       milestones.push({
         emoji: '🎯',
-        title: `${p.name} - אחוזי נצחון`,
-        description: `עומד על ${Math.round(p.winPercentage)}%. נצחון הלילה = חציית 60%!`,
+        title: `אחוז נצחונות - יעד 60%!`,
+        description: `${p.name} נמצא כרגע על ${Math.round(p.winPercentage)}% נצחונות (${p.winCount} נצחונות מתוך ${p.gamesPlayed} משחקים). נצחון הלילה יעביר אותו מעל רף ה-60% - סימן לשחקן מנצח עקבי!`,
         priority: 60
       });
     }
@@ -253,8 +258,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (p.yearProfit < 0 && p.yearProfit > -120 && p.yearGames >= 3) {
       milestones.push({
         emoji: '🔄',
-        title: `${p.name} - חזרה לפלוס`,
-        description: `${Math.round(p.yearProfit)}₪ ב-${currentYear}. נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ = חזרה לפלוס השנה!`,
+        title: `חזרה לפלוס בטבלת ${currentYear}!`,
+        description: `${p.name} נמצא כרגע ב-${Math.round(p.yearProfit)}₪ בטבלת שנת ${currentYear} (אחרי ${p.yearGames} משחקים השנה). נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ או יותר הלילה יחזיר אותו לרווח חיובי לשנה הנוכחית!`,
         priority: 72
       });
     }
@@ -269,8 +274,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (gap <= 100) {
       milestones.push({
         emoji: '🏆',
-        title: `מרדף על שחקן ${monthNames[currentMonth]}`,
-        description: `${leader.name} מוביל עם ${leader.monthProfit >= 0 ? '+' : ''}${Math.round(leader.monthProfit)}₪. ${chaser.name} רק ${gap}₪ אחריו!`,
+        title: `מרדף על תואר "שחקן ${monthNames[currentMonth]}"!`,
+        description: `בטבלת החודש הנוכחי (${monthNames[currentMonth]}): ${leader.name} מוביל עם ${leader.monthProfit >= 0 ? '+' : ''}${Math.round(leader.monthProfit)}₪, ו-${chaser.name} רודף אחריו עם הפרש של ${gap}₪ בלבד. נצחון גדול של ${chaser.name} הלילה יכול להפוך אותו לשחקן החודש!`,
         priority: 68
       });
     }
@@ -283,8 +288,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (p.currentStreak >= 2 && p.bestWin < biggestWin && biggestWin - p.bestWin <= 100) {
       milestones.push({
         emoji: '💰',
-        title: 'שיא נצחון בלילה',
-        description: `שיא הקבוצה: +${biggestWin}₪ (${recordHolder?.name}). ${p.name} יכול לשבור!`,
+        title: 'שיא הנצחון הגדול ביותר בלילה אחד!',
+        description: `שיא הקבוצה לנצחון הגדול ביותר בלילה אחד הוא +${Math.round(biggestWin)}₪, שהושג על ידי ${recordHolder?.name}. ${p.name} נמצא ברצף חם של ${p.currentStreak} נצחונות - אם הוא ינצח גדול הלילה (מעל +${Math.round(biggestWin)}₪), הוא ישבור את השיא!`,
         priority: 78
       });
     }
@@ -295,8 +300,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     if (p.currentStreak <= -2 && p.totalProfit > 100) {
       milestones.push({
         emoji: '💪',
-        title: `${p.name} - קאמבק`,
-        description: `${Math.abs(p.currentStreak)} הפסדים רצופים, אבל עדיין +${Math.round(p.totalProfit)}₪ כולל. זמן לנקמה!`,
+        title: `הזדמנות לקאמבק!`,
+        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים, אבל בטבלה הכללית של כל הזמנים הוא עדיין ברווח של +${Math.round(p.totalProfit)}₪. נצחון הלילה ישבור את הרצף השלילי ויחזיר אותו למסלול הנצחונות!`,
         priority: 55
       });
     }
@@ -309,8 +314,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       if (yearAvg > p.avgProfit + 40) {
         milestones.push({
           emoji: '📈',
-          title: `${p.name} - השנה הכי טובה?`,
-          description: `ממוצע ${currentYear}: +${Math.round(yearAvg)}₪/משחק לעומת +${Math.round(p.avgProfit)}₪ היסטורי!`,
+          title: `השנה הכי טובה של ${p.name}?`,
+          description: `${p.name} משחק השנה (${currentYear}) הרבה מעל הממוצע שלו! ממוצע רווח השנה: +${Math.round(yearAvg)}₪ למשחק, לעומת ממוצע היסטורי של +${Math.round(p.avgProfit)}₪ למשחק. אם הוא ימשיך ככה, זו תהיה השנה הכי טובה שלו אי פעם!`,
           priority: 62
         });
       }

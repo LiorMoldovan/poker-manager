@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.20.4';
+export const APP_VERSION = '4.21.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.21.0',
+    date: '2025-12-25',
+    changes: [
+      '📝 Much longer, clearer milestone descriptions!',
+      'Every milestone specifies WHICH TABLE (כללית/שנתית/חודשית)',
+      'Full context: current position, exact amounts, what needs to happen',
+      'Explains why milestone matters and what it means',
+      'Game milestones include player stats summary',
+      'All sentences are now detailed and informative'
+    ]
+  },
   {
     version: '4.20.4',
     date: '2025-12-25',
