@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.19.0';
+export const APP_VERSION = '4.19.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.19.1',
+    date: '2025-12-25',
+    changes: [
+      '🎯 10 MORE milestone types added!',
+      '📅 Yearly participation: "10th game of 2025!"',
+      '🎯 Win rate milestones: "One win from 60% win rate!"',
+      '⚔️ Close battles: "Only 25₪ apart - tonight decides!"',
+      '🚀 Jump positions: "Can jump 2 places with a big win!"',
+      '🔄 Recovery: "Back to positive for the year with +80₪"',
+      '🏆 Personal best month potential',
+      '🤝 Exact ties: "Tied at +450₪ - tonight breaks it!"',
+      '🎯 Attendance streaks: "5 of last 5 games!"',
+      '📅 Monthly game counts: "3rd game this December!"'
+    ]
+  },
   {
     version: '4.19.0',
     date: '2025-12-25',

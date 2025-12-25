@@ -348,14 +348,130 @@ export const generateAIForecasts = async (
     }
   });
   
-  // ===== 11. GAMES MILESTONE =====
-  const gamesMilestones = [50, 100, 150, 200];
+  // ===== 11. GAMES MILESTONE (ALL-TIME) =====
+  const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
   players.forEach(p => {
     for (const gm of gamesMilestones) {
       if (p.gamesPlayed === gm - 1) {
         milestones.push(`🎮 GAMES MILESTONE: Tonight is ${p.name}'s ${gm}th game ever with the group!`);
         break;
       }
+    }
+  });
+  
+  // ===== 12. YEARLY PARTICIPATION MILESTONES =====
+  const yearGamesMilestones = [10, 20, 30, 40, 50];
+  playerPeriodStats.forEach(p => {
+    for (const gm of yearGamesMilestones) {
+      if (p.yearGames === gm - 1) {
+        milestones.push(`📅 PARTICIPATION: Tonight is ${p.name}'s ${gm}th game of ${currentYear}!`);
+        break;
+      }
+    }
+  });
+  
+  // ===== 13. WIN RATE MILESTONES =====
+  const winRateMilestones = [50, 60, 70];
+  players.filter(p => p.gamesPlayed >= 10).forEach(p => {
+    const currentWinRate = p.winPercentage;
+    for (const targetRate of winRateMilestones) {
+      // Calculate: if they win tonight, what would their new win rate be?
+      const winsNeeded = Math.ceil((targetRate / 100) * (p.gamesPlayed + 1));
+      if (p.winCount === winsNeeded - 1 && currentWinRate < targetRate) {
+        milestones.push(`🎯 WIN RATE: ${p.name} is at ${Math.round(currentWinRate)}% win rate. A win tonight = crossing ${targetRate}%!`);
+        break;
+      }
+    }
+  });
+  
+  // ===== 14. CLOSE BATTLES (players very close to each other) =====
+  for (let i = 0; i < sortedByTotalProfit.length; i++) {
+    for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
+      const higher = sortedByTotalProfit[i];
+      const lower = sortedByTotalProfit[j];
+      const gap = Math.abs(higher.totalProfit - lower.totalProfit);
+      if (gap <= 30 && gap > 0) {
+        milestones.push(`⚔️ CLOSE BATTLE: ${higher.name} (${higher.totalProfit >= 0 ? '+' : ''}${higher.totalProfit}₪) and ${lower.name} (${lower.totalProfit >= 0 ? '+' : ''}${lower.totalProfit}₪) are only ${gap}₪ apart all-time! Tonight decides who's ahead.`);
+      }
+    }
+  }
+  
+  // ===== 15. PASSING ANYONE IN THE TABLE (not just adjacent) =====
+  sortedByTotalProfit.forEach((p, idx) => {
+    // Look at players 2-3 positions ahead
+    for (let ahead = 2; ahead <= 3; ahead++) {
+      if (idx >= ahead) {
+        const target = sortedByTotalProfit[idx - ahead];
+        const gap = target.totalProfit - p.totalProfit;
+        if (gap > 0 && gap <= 180) {
+          milestones.push(`🚀 JUMP: ${p.name} (#${idx + 1}) can jump ${ahead} places and pass ${target.name} (#${idx + 1 - ahead}) with a +${gap}₪ win!`);
+          break;
+        }
+      }
+    }
+  });
+  
+  // ===== 16. RECOVERY TO POSITIVE (year/half) =====
+  playerPeriodStats.forEach(p => {
+    // Recovery to positive this year
+    if (p.yearProfit < 0 && p.yearProfit > -150 && p.yearGames >= 3) {
+      milestones.push(`🔄 RECOVERY: ${p.name} is at ${p.yearProfit}₪ for ${currentYear}. A +${Math.abs(p.yearProfit)}₪ win = back to positive for the year!`);
+    }
+    // Recovery to positive this half
+    if (p.halfProfit < 0 && p.halfProfit > -120 && p.halfGames >= 2) {
+      milestones.push(`🔄 HALF RECOVERY: ${p.name} is at ${p.halfProfit}₪ for ${halfName}. A +${Math.abs(p.halfProfit)}₪ win = positive half!`);
+    }
+  });
+  
+  // ===== 17. PERSONAL BEST MONTH POTENTIAL =====
+  playerPeriodStats.forEach(p => {
+    if (p.monthGames >= 2) {
+      // Find their best month ever from history
+      const monthlyProfits: { [key: string]: number } = {};
+      p.gameHistory.forEach(g => {
+        const d = parseGameDate(g.date);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        monthlyProfits[key] = (monthlyProfits[key] || 0) + g.profit;
+      });
+      const bestMonth = Math.max(...Object.values(monthlyProfits), 0);
+      if (bestMonth > 0 && p.monthProfit > bestMonth - 150 && p.monthProfit < bestMonth) {
+        const needed = bestMonth - p.monthProfit + 1;
+        milestones.push(`🏆 BEST MONTH: ${p.name} is at ${p.monthProfit >= 0 ? '+' : ''}${p.monthProfit}₪ for ${monthNames[currentMonth]}. +${needed}₪ more = personal best month ever!`);
+      }
+    }
+  });
+  
+  // ===== 18. EXACT TIES =====
+  for (let i = 0; i < sortedByTotalProfit.length; i++) {
+    for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
+      if (sortedByTotalProfit[i].totalProfit === sortedByTotalProfit[j].totalProfit && sortedByTotalProfit[i].totalProfit !== 0) {
+        milestones.push(`🤝 TIED: ${sortedByTotalProfit[i].name} and ${sortedByTotalProfit[j].name} are EXACTLY tied at ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${sortedByTotalProfit[i].totalProfit}₪ all-time! Tonight breaks the tie.`);
+      }
+    }
+  }
+  
+  // ===== 19. CONSECUTIVE GAMES PLAYED (attendance streak) =====
+  players.forEach(p => {
+    if (p.daysSinceLastGame <= 14 && p.gameHistory.length >= 5) {
+      // Check if they played in last 5 games (assuming games are weekly-ish)
+      const recentGames = p.gameHistory.slice(0, 5);
+      const gamesInLast2Months = recentGames.filter(g => {
+        const d = parseGameDate(g.date);
+        const daysDiff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+        return daysDiff <= 60;
+      }).length;
+      if (gamesInLast2Months >= 5) {
+        milestones.push(`🎯 ATTENDANCE: ${p.name} has played ${gamesInLast2Months} of the last 5 games - most consistent player!`);
+      }
+    }
+  });
+  
+  // ===== 20. THIS MONTH GAMES COUNT =====
+  playerPeriodStats.forEach(p => {
+    if (p.monthGames === 2) {
+      milestones.push(`📅 ${monthNames[currentMonth].toUpperCase()}: Tonight is ${p.name}'s 3rd game this month!`);
+    } else if (p.monthGames === 4) {
+      milestones.push(`📅 ${monthNames[currentMonth].toUpperCase()}: Tonight is ${p.name}'s 5th game this month - busiest month!`);
     }
   });
   
