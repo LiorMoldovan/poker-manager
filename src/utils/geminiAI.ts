@@ -202,22 +202,28 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
   
-  // 5. ROUND NUMBER MILESTONES
+  // 5. ROUND NUMBER MILESTONES - Only show ONE best candidate (closest to milestone)
   const roundNumbers = [500, 1000, 1500, 2000];
+  const roundMilestoneCandidates: { player: typeof players[0], milestone: number, distance: number }[] = [];
   players.forEach(p => {
     for (const milestone of roundNumbers) {
       const distance = Math.round(milestone - p.totalProfit);
       if (distance > 0 && distance <= 150) {
-        milestones.push({
-          emoji: '🎯',
-          title: `יעד עגול בטבלה הכללית!`,
-          description: `${p.name} עומד כרגע על ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪ בטבלה הכללית של כל הזמנים. חסרים לו רק ${distance}₪ כדי לחצות את רף ה-+${milestone}₪ - מספר עגול ויפה! נצחון טוב הלילה יכול להביא אותו לשם.`,
-          priority: 75 + Math.round(milestone / 100)
-        });
-        break;
+        roundMilestoneCandidates.push({ player: p, milestone, distance });
+        break; // Only one milestone per player
       }
     }
   });
+  if (roundMilestoneCandidates.length > 0) {
+    // Pick the closest to their milestone
+    const bestRound = [...roundMilestoneCandidates].sort((a, b) => a.distance - b.distance)[0];
+    milestones.push({
+      emoji: '🎯',
+      title: `יעד עגול בטבלה הכללית!`,
+      description: `${bestRound.player.name} עומד כרגע על ${bestRound.player.totalProfit >= 0 ? '+' : ''}${Math.round(bestRound.player.totalProfit)}₪ בטבלה הכללית. חסרים לו רק ${bestRound.distance}₪ כדי לחצות את רף ה-+${bestRound.milestone}₪! נצחון טוב הלילה יכול להביא אותו לשם.`,
+      priority: 75 + Math.round(bestRound.milestone / 100)
+    });
+  }
   
   // 6. THIS YEAR LEADERBOARD
   // DEBUG: Log year profit calculations
@@ -262,30 +268,36 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   });
   
-  // 8. WIN RATE MILESTONES
-  players.filter(p => p.gamesPlayed >= 10).forEach(p => {
-    const winsNeeded60 = Math.ceil(0.6 * (p.gamesPlayed + 1));
-    if (p.winCount === winsNeeded60 - 1 && p.winPercentage < 60) {
-      milestones.push({
-        emoji: '🎯',
-        title: `אחוז נצחונות - יעד 60%!`,
-        description: `${p.name} נמצא כרגע על ${Math.round(p.winPercentage)}% נצחונות (${p.winCount} נצחונות מתוך ${p.gamesPlayed} משחקים). נצחון הלילה יעביר אותו מעל רף ה-60% - סימן לשחקן מנצח עקבי!`,
-        priority: 60
-      });
-    }
-  });
+  // 8. WIN RATE MILESTONES - Only show ONE best candidate (closest to 60%)
+  const winRateCandidates = players
+    .filter(p => p.gamesPlayed >= 10)
+    .filter(p => {
+      const winsNeeded60 = Math.ceil(0.6 * (p.gamesPlayed + 1));
+      return p.winCount === winsNeeded60 - 1 && p.winPercentage < 60;
+    })
+    .sort((a, b) => b.winPercentage - a.winPercentage); // Closest to 60% first
+  if (winRateCandidates.length > 0) {
+    const winRateCandidate = winRateCandidates[0];
+    milestones.push({
+      emoji: '🎯',
+      title: `אחוז נצחונות - יעד 60%!`,
+      description: `${winRateCandidate.name} נמצא כרגע על ${Math.round(winRateCandidate.winPercentage)}% נצחונות (${winRateCandidate.winCount} נצחונות מתוך ${winRateCandidate.gamesPlayed} משחקים). נצחון הלילה יעביר אותו מעל רף ה-60%!`,
+      priority: 60
+    });
+  }
   
-  // 9. RECOVERY TO POSITIVE
-  playerPeriodStats.forEach(p => {
-    if (p.yearProfit < 0 && p.yearProfit > -120 && p.yearGames >= 3) {
-      milestones.push({
-        emoji: '🔄',
-        title: `חזרה לפלוס בטבלת ${currentYear}!`,
-        description: `${p.name} נמצא כרגע ב-${Math.round(p.yearProfit)}₪ בטבלת שנת ${currentYear} (אחרי ${p.yearGames} משחקים השנה). נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ או יותר הלילה יחזיר אותו לרווח חיובי לשנה הנוכחית!`,
-        priority: 72
-      });
-    }
-  });
+  // 9. RECOVERY TO POSITIVE - Only show ONE best candidate (closest to 0)
+  const recoveryCandidate = playerPeriodStats
+    .filter(p => p.yearProfit < 0 && p.yearProfit > -120 && p.yearGames >= 3)
+    .sort((a, b) => b.yearProfit - a.yearProfit)[0]; // Closest to 0 first
+  if (recoveryCandidate) {
+    milestones.push({
+      emoji: '🔄',
+      title: `חזרה לפלוס בטבלת ${currentYear}!`,
+      description: `${recoveryCandidate.name} נמצא כרגע ב-${Math.round(recoveryCandidate.yearProfit)}₪ בטבלת שנת ${currentYear} (אחרי ${recoveryCandidate.yearGames} משחקים השנה). נצחון של +${Math.round(Math.abs(recoveryCandidate.yearProfit))}₪ או יותר הלילה יחזיר אותו לרווח חיובי!`,
+      priority: 72
+    });
+  }
   
   // 10. PLAYER OF THE MONTH
   const sortedByMonthProfit = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit);
@@ -333,20 +345,21 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     });
   }
   
-  // 13. HOT/COLD YEAR
-  playerPeriodStats.forEach(p => {
-    if (p.yearGames >= 5 && p.gamesPlayed >= 10) {
-      const yearAvg = p.yearProfit / p.yearGames;
-      if (yearAvg > p.avgProfit + 40) {
-        milestones.push({
-          emoji: '📈',
-          title: `השנה הכי טובה של ${p.name}?`,
-          description: `${p.name} משחק השנה (${currentYear}) הרבה מעל הממוצע שלו! ממוצע רווח השנה: +${Math.round(yearAvg)}₪ למשחק, לעומת ממוצע היסטורי של +${Math.round(p.avgProfit)}₪ למשחק. אם הוא ימשיך ככה, זו תהיה השנה הכי טובה שלו אי פעם!`,
-          priority: 62
-        });
-      }
-    }
-  });
+  // 13. HOT/COLD YEAR - Only show ONE player with biggest improvement
+  const hotYearCandidates = playerPeriodStats
+    .filter(p => p.yearGames >= 5 && p.gamesPlayed >= 10)
+    .map(p => ({ ...p, yearAvg: p.yearProfit / p.yearGames, improvement: (p.yearProfit / p.yearGames) - p.avgProfit }))
+    .filter(p => p.improvement > 40)
+    .sort((a, b) => b.improvement - a.improvement);
+  if (hotYearCandidates.length > 0) {
+    const hotPlayer = hotYearCandidates[0];
+    milestones.push({
+      emoji: '📈',
+      title: `השנה הכי טובה של ${hotPlayer.name}?`,
+      description: `${hotPlayer.name} משחק השנה (${currentYear}) הרבה מעל הממוצע שלו! ממוצע רווח השנה: +${Math.round(hotPlayer.yearAvg)}₪ למשחק, לעומת ממוצע היסטורי של +${Math.round(hotPlayer.avgProfit)}₪ למשחק. אם הוא ימשיך ככה, זו תהיה השנה הכי טובה שלו אי פעם!`,
+      priority: 62
+    });
+  }
 
   // ========== NEW: HALF-YEAR (H2) TRACKING ==========
   const halfLabel = currentHalf === 1 ? 'H1 (ינואר-יוני)' : 'H2 (יולי-דצמבר)';
@@ -506,17 +519,19 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       }
     }
 
-    // 18. YEAR-END REDEMPTION
-    playerPeriodStats.forEach(p => {
-      if (p.yearProfit < 0 && p.yearProfit > -200 && p.yearGames >= 5) {
-        milestones.push({
-          emoji: '🎯',
-          title: `לסיים את ${currentYear} בפלוס?`,
-          description: `${p.name} נמצא ב-${Math.round(p.yearProfit)}₪ לשנת ${currentYear}. נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ או יותר הלילה יסגור את השנה ברווח! זו ההזדמנות האחרונה.`,
-          priority: 85
-        });
-      }
-    });
+    // 18. YEAR-END REDEMPTION - Only show ONE best candidate (closest to 0, not already covered by Section 9)
+    const yearEndCandidate = playerPeriodStats
+      .filter(p => p.yearProfit < 0 && p.yearProfit > -200 && p.yearGames >= 5)
+      .filter(p => p.yearProfit <= -120) // Only those NOT covered by Section 9 (which covers > -120)
+      .sort((a, b) => b.yearProfit - a.yearProfit)[0]; // Closest to 0 first
+    if (yearEndCandidate) {
+      milestones.push({
+        emoji: '🎯',
+        title: `לסיים את ${currentYear} בפלוס?`,
+        description: `${yearEndCandidate.name} נמצא ב-${Math.round(yearEndCandidate.yearProfit)}₪ לשנת ${currentYear}. נצחון גדול של +${Math.round(Math.abs(yearEndCandidate.yearProfit))}₪ הלילה יסגור את השנה ברווח! זו ההזדמנות האחרונה.`,
+        priority: 85
+      });
+    }
   }
 
   // ========== NEW: ALL-TIME RECORDS ==========
@@ -556,33 +571,37 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
 
   // ========== NEW: UNIQUE INSIGHTS ==========
 
-  // 22. VOLATILITY ALERT - Big swings player
-  players.forEach(p => {
-    const volatility = p.bestWin + Math.abs(p.worstLoss);
-    if (volatility >= 400 && p.gamesPlayed >= 10) {
-      milestones.push({
-        emoji: '🎢',
-        title: `${p.name} - שחקן ההפתעות!`,
-        description: `${p.name} הוא השחקן הכי תנודתי: הנצחון הגדול שלו +${Math.round(p.bestWin)}₪, ההפסד הגדול ${Math.round(p.worstLoss)}₪. פער של ${Math.round(volatility)}₪! הלילה יכול להיות כל דבר.`,
-        priority: 58
-      });
-    }
-  });
+  // 22. VOLATILITY ALERT - Only show the MOST volatile player
+  const volatileCandidates = players
+    .filter(p => p.gamesPlayed >= 10)
+    .map(p => ({ ...p, volatility: p.bestWin + Math.abs(p.worstLoss) }))
+    .filter(p => p.volatility >= 400)
+    .sort((a, b) => b.volatility - a.volatility);
+  if (volatileCandidates.length > 0) {
+    const mostVolatile = volatileCandidates[0];
+    milestones.push({
+      emoji: '🎢',
+      title: `${mostVolatile.name} - שחקן ההפתעות!`,
+      description: `${mostVolatile.name} הוא השחקן הכי תנודתי: הנצחון הגדול שלו +${Math.round(mostVolatile.bestWin)}₪, ההפסד הגדול ${Math.round(mostVolatile.worstLoss)}₪. פער של ${Math.round(mostVolatile.volatility)}₪! הלילה יכול להיות כל דבר.`,
+      priority: 58
+    });
+  }
 
-  // 23. CONSISTENCY KING - Low volatility, positive
-  players.forEach(p => {
-    if (p.gamesPlayed >= 15 && p.winPercentage >= 55 && p.avgProfit > 0) {
-      const consistency = Math.abs(p.bestWin - Math.abs(p.worstLoss));
-      if (consistency <= 100) {
-        milestones.push({
-          emoji: '🎯',
-          title: `${p.name} - מלך העקביות!`,
-          description: `${p.name} הוא אחד השחקנים הכי עקביים: ${Math.round(p.winPercentage)}% נצחונות, ממוצע +${Math.round(p.avgProfit)}₪ למשחק, עם סטיות קטנות יחסית. שחקן שקשה לנבא נגדו.`,
-          priority: 55
-        });
-      }
-    }
-  });
+  // 23. CONSISTENCY KING - Only show the MOST consistent player
+  const consistentCandidates = players
+    .filter(p => p.gamesPlayed >= 15 && p.winPercentage >= 55 && p.avgProfit > 0)
+    .map(p => ({ ...p, consistency: Math.abs(p.bestWin - Math.abs(p.worstLoss)) }))
+    .filter(p => p.consistency <= 100)
+    .sort((a, b) => a.consistency - b.consistency); // Lowest consistency = most stable
+  if (consistentCandidates.length > 0) {
+    const mostConsistent = consistentCandidates[0];
+    milestones.push({
+      emoji: '🎯',
+      title: `${mostConsistent.name} - מלך העקביות!`,
+      description: `${mostConsistent.name} הוא השחקן הכי עקבי: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק, עם סטיות קטנות. שחקן שקשה לנבא נגדו.`,
+      priority: 55
+    });
+  }
 
   // 24. HEAD-TO-HEAD RIVALRY (if exactly 2 players very close)
   if (players.length >= 2) {

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.31.3';
+export const APP_VERSION = '4.31.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.31.4',
+    date: '2025-12-25',
+    changes: [
+      '🐛 MAJOR FIX: No more duplicate milestones!',
+      'FIXED: Lose streaks - only worst player shown',
+      'FIXED: Recovery to positive - only closest to 0 shown',
+      'FIXED: Year-end redemption - only best candidate shown',
+      'FIXED: Hot year - only biggest improvement shown',
+      'FIXED: Round numbers - only closest player shown',
+      'FIXED: Win rate 60% - only best candidate shown',
+      'FIXED: Volatility - only most volatile shown',
+      'FIXED: Consistency - only most consistent shown',
+      'All milestone categories now show ONE best candidate only'
+    ]
+  },
   {
     version: '4.31.3',
     date: '2025-12-25',
