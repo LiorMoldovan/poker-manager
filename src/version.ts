@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.18.2';
+export const APP_VERSION = '4.19.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.19.0',
+    date: '2025-12-25',
+    changes: [
+      '🎯 Multi-timeframe milestones! Not just all-time anymore:',
+      '📅 This Year leaderboard passing opportunities',
+      '📊 This Half (H1/H2) rankings and milestones',
+      '🗓️ Monthly "Player of the Month" competition',
+      '📈 Form comparison: "Best year ever?" vs historical',
+      '🎮 Games milestones: "50th game tonight!"',
+      'All milestones labeled clearly with timeframe'
+    ]
+  },
   {
     version: '4.18.2',
     date: '2025-12-25',

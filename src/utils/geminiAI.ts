@@ -168,78 +168,194 @@ export const generateAIForecasts = async (
   const allTimeRecordsText = allTimeRecords.join('\n');
   
   // ========== CALCULATE MILESTONES ==========
-  // NOTE: All milestones are ALL-TIME (since the group started playing)
   const milestones: string[] = [];
   
-  // 1. Leaderboard passing opportunities (ALL-TIME rankings)
+  // Helper: Parse date from game history (format: DD/MM/YYYY or DD/MM/YY)
+  const parseGameDate = (dateStr: string): Date => {
+    const parts = dateStr.split('/');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+  
+  // Current date info
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const currentHalf = currentMonth < 6 ? 1 : 2; // H1 = Jan-Jun, H2 = Jul-Dec
+  const halfStartMonth = currentHalf === 1 ? 0 : 6;
+  const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+  
+  // Calculate period-specific stats for each player
+  const playerPeriodStats = players.map(p => {
+    const thisYearGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear;
+    });
+    const thisHalfGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear && d.getMonth() >= halfStartMonth && d.getMonth() < halfStartMonth + 6;
+    });
+    const thisMonthGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+    const last5Games = p.gameHistory.slice(0, 5);
+    
+    return {
+      name: p.name,
+      // This year
+      yearProfit: thisYearGames.reduce((sum, g) => sum + g.profit, 0),
+      yearGames: thisYearGames.length,
+      yearWins: thisYearGames.filter(g => g.profit > 0).length,
+      // This half
+      halfProfit: thisHalfGames.reduce((sum, g) => sum + g.profit, 0),
+      halfGames: thisHalfGames.length,
+      halfWins: thisHalfGames.filter(g => g.profit > 0).length,
+      // This month
+      monthProfit: thisMonthGames.reduce((sum, g) => sum + g.profit, 0),
+      monthGames: thisMonthGames.length,
+      monthWins: thisMonthGames.filter(g => g.profit > 0).length,
+      // Last 5 games
+      last5Profit: last5Games.reduce((sum, g) => sum + g.profit, 0),
+      last5Wins: last5Games.filter(g => g.profit > 0).length,
+      // Original data
+      ...p
+    };
+  });
+  
+  // ===== 1. ALL-TIME LEADERBOARD PASSING =====
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
     const chaser = sortedByTotalProfit[i];
     const leader = sortedByTotalProfit[i - 1];
     const gap = leader.totalProfit - chaser.totalProfit;
-    const chaserRank = i + 1;
-    const leaderRank = i;
-    
-    // If gap is achievable in one night (less than 250₪)
     if (gap > 0 && gap <= 250) {
-      milestones.push(`📈 LEADERBOARD (ALL-TIME): ${chaser.name} is currently #${chaserRank} with ${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪ total. If they win +${gap}₪ tonight, they'll PASS ${leader.name} (#${leaderRank}, ${leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit}₪) and move up to #${leaderRank}!`);
+      milestones.push(`📈 ALL-TIME LEADERBOARD: ${chaser.name} (#${i + 1}, ${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪ כולל) can PASS ${leader.name} (#${i}, ${leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit}₪) with a +${gap}₪ win tonight!`);
     }
   }
   
-  // 2. Round number milestones (500, 1000, 1500, 2000, etc.) - ALL-TIME totals
+  // ===== 2. THIS YEAR LEADERBOARD =====
+  const sortedByYearProfit = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
+  for (let i = 1; i < sortedByYearProfit.length && i <= 3; i++) {
+    const chaser = sortedByYearProfit[i];
+    const leader = sortedByYearProfit[i - 1];
+    const gap = leader.yearProfit - chaser.yearProfit;
+    if (gap > 0 && gap <= 200 && chaser.yearGames >= 2) {
+      milestones.push(`📅 THIS YEAR (${currentYear}): ${chaser.name} is #${i + 1} this year with ${chaser.yearProfit >= 0 ? '+' : ''}${chaser.yearProfit}₪. A +${gap}₪ win tonight would move them past ${leader.name} to #${i}!`);
+    }
+  }
+  
+  // ===== 3. THIS HALF LEADERBOARD =====
+  const halfName = currentHalf === 1 ? 'H1' : 'H2';
+  const sortedByHalfProfit = [...playerPeriodStats].sort((a, b) => b.halfProfit - a.halfProfit);
+  for (let i = 1; i < sortedByHalfProfit.length && i <= 3; i++) {
+    const chaser = sortedByHalfProfit[i];
+    const leader = sortedByHalfProfit[i - 1];
+    const gap = leader.halfProfit - chaser.halfProfit;
+    if (gap > 0 && gap <= 150 && chaser.halfGames >= 2) {
+      milestones.push(`📊 THIS HALF (${halfName} ${currentYear}): ${chaser.name} is at ${chaser.halfProfit >= 0 ? '+' : ''}${chaser.halfProfit}₪ this half. +${gap}₪ tonight = passing ${leader.name} for #${i}!`);
+    }
+  }
+  
+  // ===== 4. MONTHLY MILESTONES =====
+  const sortedByMonthProfit = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit);
+  if (sortedByMonthProfit[0]?.monthGames >= 1) {
+    const monthLeader = sortedByMonthProfit[0];
+    // Check if someone can become "Player of the Month"
+    for (let i = 1; i < sortedByMonthProfit.length && i <= 2; i++) {
+      const chaser = sortedByMonthProfit[i];
+      const gap = monthLeader.monthProfit - chaser.monthProfit;
+      if (gap > 0 && gap <= 150 && chaser.monthGames >= 1) {
+        milestones.push(`🗓️ ${monthNames[currentMonth].toUpperCase()}: ${chaser.name} is ${gap}₪ behind ${monthLeader.name} for "Player of the Month"! A big win tonight could claim the title.`);
+      }
+    }
+  }
+  
+  // ===== 5. ALL-TIME ROUND NUMBERS =====
   const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
   players.forEach(p => {
     for (const milestone of roundNumbers) {
-      const distanceToMilestone = milestone - p.totalProfit;
-      // If they're close to crossing UP a milestone
-      if (distanceToMilestone > 0 && distanceToMilestone <= 200) {
-        milestones.push(`🎯 MILESTONE (ALL-TIME TOTAL): ${p.name} is at ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪ total (all games ever). Only ${distanceToMilestone}₪ more tonight to cross the +${milestone}₪ all-time milestone!`);
-        break; // Only show closest milestone
+      const distance = milestone - p.totalProfit;
+      if (distance > 0 && distance <= 200) {
+        milestones.push(`🎯 ALL-TIME MILESTONE: ${p.name} is at ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪ כולל. Only ${distance}₪ more to cross +${milestone}₪ all-time!`);
+        break;
       }
-      // If they're close to dropping BELOW a milestone (negative)
-      const distanceToNegMilestone = p.totalProfit - (-milestone);
-      if (p.totalProfit < 0 && distanceToNegMilestone > 0 && distanceToNegMilestone <= 200) {
-        milestones.push(`⚠️ DANGER ZONE (ALL-TIME TOTAL): ${p.name} is at ${p.totalProfit}₪ total (all games ever). If they lose ${distanceToNegMilestone}₪ tonight, they'll drop to -${milestone}₪ all-time!`);
+      const negDistance = p.totalProfit - (-milestone);
+      if (p.totalProfit < 0 && negDistance > 0 && negDistance <= 200) {
+        milestones.push(`⚠️ DANGER ZONE: ${p.name} is at ${p.totalProfit}₪ כולל. A ${negDistance}₪ loss = dropping to -${milestone}₪ all-time!`);
         break;
       }
     }
   });
   
-  // 3. Streak records that could be broken/tied (CURRENT STREAK)
+  // ===== 6. YEARLY ROUND NUMBERS =====
+  playerPeriodStats.forEach(p => {
+    if (p.yearGames >= 3) {
+      for (const milestone of [500, 1000]) {
+        const distance = milestone - p.yearProfit;
+        if (distance > 0 && distance <= 150) {
+          milestones.push(`📅 ${currentYear} MILESTONE: ${p.name} is at ${p.yearProfit >= 0 ? '+' : ''}${p.yearProfit}₪ this year. ${distance}₪ more = +${milestone}₪ for the year!`);
+          break;
+        }
+      }
+    }
+  });
+  
+  // ===== 7. STREAK RECORDS =====
   const groupWinStreakRecord = Math.max(...players.map(p => p.currentStreak), 0);
   const groupLoseStreakRecord = Math.min(...players.map(p => p.currentStreak), 0);
   
   players.forEach(p => {
-    // Someone on a hot streak could tie/break record
     if (p.currentStreak >= 3 && p.currentStreak >= groupWinStreakRecord) {
-      if (p.currentStreak === groupWinStreakRecord) {
-        milestones.push(`🔥 STREAK RECORD: ${p.name} is currently on a ${p.currentStreak}-game WINNING streak (this is the group record!). If they win tonight, they'll set a NEW all-time group record of ${p.currentStreak + 1} consecutive wins!`);
-      }
+      milestones.push(`🔥 WINNING STREAK RECORD: ${p.name} is on ${p.currentStreak} wins in a row (tied for group record!). Win tonight = NEW ALL-TIME RECORD of ${p.currentStreak + 1}!`);
     }
-    // Someone on a cold streak could tie/break negative record
     if (p.currentStreak <= -3 && p.currentStreak <= groupLoseStreakRecord) {
-      if (p.currentStreak === groupLoseStreakRecord) {
-        milestones.push(`❄️ STREAK RECORD: ${p.name} is currently on a ${Math.abs(p.currentStreak)}-game LOSING streak (tied for worst in group history!). If they lose tonight, they'll set a NEW unfortunate record of ${Math.abs(p.currentStreak) + 1} consecutive losses!`);
-      }
+      milestones.push(`❄️ LOSING STREAK RECORD: ${p.name} is on ${Math.abs(p.currentStreak)} losses in a row (worst in group!). Another loss = new unfortunate record of ${Math.abs(p.currentStreak) + 1}!`);
     }
   });
   
-  // 4. Could someone break the biggest single-night win record?
+  // ===== 8. SINGLE-NIGHT WIN RECORD =====
   const biggestWinRecord = Math.max(...players.map(p => p.bestWin));
   const recordHolder = players.find(p => p.bestWin === biggestWinRecord);
   players.forEach(p => {
-    // If someone's on a hot streak and their best isn't the record
-    if (p.currentStreak >= 2 && p.bestWin < biggestWinRecord) {
-      const gap = biggestWinRecord - p.bestWin;
-      if (gap <= 150) {
-        milestones.push(`💰 SINGLE-NIGHT WIN RECORD: The group record for biggest win in one night is +${biggestWinRecord}₪ (held by ${recordHolder?.name || 'unknown'}). ${p.name}'s personal best is +${p.bestWin}₪. If they win +${biggestWinRecord + 1}₪ tonight, they'll set a new group record!`);
+    if (p.currentStreak >= 2 && p.bestWin < biggestWinRecord && biggestWinRecord - p.bestWin <= 150) {
+      milestones.push(`💰 WIN RECORD: Group record is +${biggestWinRecord}₪ by ${recordHolder?.name}. ${p.name}'s best is +${p.bestWin}₪. A +${biggestWinRecord + 1}₪ night = NEW RECORD!`);
+    }
+  });
+  
+  // ===== 9. COMEBACK OPPORTUNITIES =====
+  players.forEach(p => {
+    if (p.currentStreak <= -2 && p.totalProfit > 0) {
+      milestones.push(`💪 COMEBACK: ${p.name} has ${Math.abs(p.currentStreak)} losses in a row, but still +${p.totalProfit}₪ all-time. Time for revenge!`);
+    }
+  });
+  
+  // ===== 10. FORM COMPARISON (Recent vs Historical) =====
+  playerPeriodStats.forEach(p => {
+    if (p.yearGames >= 5 && p.gamesPlayed >= 10) {
+      const yearAvg = p.yearProfit / p.yearGames;
+      const allTimeAvg = p.avgProfit;
+      if (yearAvg > allTimeAvg + 30) {
+        milestones.push(`📈 HOT YEAR: ${p.name}'s ${currentYear} average is +${Math.round(yearAvg)}₪/game vs +${Math.round(allTimeAvg)}₪ all-time. Best year ever?`);
+      } else if (yearAvg < allTimeAvg - 30) {
+        milestones.push(`📉 TOUGH YEAR: ${p.name}'s ${currentYear} average is ${Math.round(yearAvg)}₪/game vs +${Math.round(allTimeAvg)}₪ all-time. Turnaround tonight?`);
       }
     }
   });
   
-  // 5. Revenge/comeback opportunities (ALL-TIME context)
+  // ===== 11. GAMES MILESTONE =====
+  const gamesMilestones = [50, 100, 150, 200];
   players.forEach(p => {
-    if (p.currentStreak <= -2 && p.totalProfit > 0) {
-      milestones.push(`💪 COMEBACK OPPORTUNITY: ${p.name} is on a ${Math.abs(p.currentStreak)}-game losing streak, but their ALL-TIME total is still +${p.totalProfit}₪ (positive overall!). A win tonight would snap the streak.`);
+    for (const gm of gamesMilestones) {
+      if (p.gamesPlayed === gm - 1) {
+        milestones.push(`🎮 GAMES MILESTONE: Tonight is ${p.name}'s ${gm}th game ever with the group!`);
+        break;
+      }
     }
   });
   
@@ -323,17 +439,20 @@ ${playerDynamics.length > 0 ? `
 ${playerDynamics.join('\n')}` : ''}
 ${milestonesText ? `
 🎯 TONIGHT'S MILESTONES & RECORDS AT STAKE:
-(Note: All totals below are ALL-TIME - from when the group started playing poker together)
 ${milestonesText}
 
-⭐ USE THESE MILESTONES IN YOUR SENTENCES! They make forecasts exciting!
-⚠️ ALWAYS BE CLEAR about what the number means:
-   - Say "בסך הכל" or "כולל" when mentioning all-time totals
-   - Say "בטבלת כל הזמנים" when mentioning leaderboard positions
-   - Say "שיא הקבוצה" when mentioning group records
+⭐ USE THESE MILESTONES IN YOUR SENTENCES! They're GOLD for engagement!
+
+📅 TIME PERIOD LABELS (use these in Hebrew):
+   - "כולל" / "בסך הכל" = all-time total
+   - "השנה" / "ב-${currentYear}" = this year
+   - "בחצי ${currentHalf === 1 ? 'הראשון' : 'השני'}" = this half (H${currentHalf})
+   - "ב${monthNames[currentMonth]}" = this month
+   - "ב-X משחקים אחרונים" = last X games
    
-   ❌ WRONG: "אייל צריך עוד שקל להגיע ל-1500" (unclear - 1500 of what?)
-   ✅ RIGHT: "אייל עומד על +1499₪ בסך הכל. עוד שקל אחד הלילה והוא יעבור את רף ה-1500₪ כולל!"` : ''}
+   ❌ WRONG: "אייל צריך להגיע ל-1500" (unclear!)
+   ✅ RIGHT: "אייל עומד על +1420₪ השנה. עוד 80₪ הלילה = +1500₪ לשנת ${currentYear}!"
+   ✅ RIGHT: "מור מובילה את החצי השני עם +350₪. הלילה היא נלחמת על התואר!"` : ''}
 
 ═══════════════════════════════════════
 
