@@ -374,6 +374,78 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     });
   }
 
+  // ========== NEW: PREVIOUS YEAR/HALF SUMMARY (Early in new period) ==========
+  const lastYear = currentYear - 1;
+  
+  // Calculate PREVIOUS year stats (for January summary)
+  const previousYearStats = players.map(p => {
+    const lastYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === lastYear);
+    return {
+      ...p,
+      lastYearProfit: lastYearGames.reduce((sum, g) => sum + g.profit, 0),
+      lastYearGames: lastYearGames.length,
+    };
+  });
+  
+  // In January: Show "2025 Final Results" summary
+  if (currentMonth === 0) { // January
+    const sortedByLastYearProfit = [...previousYearStats].sort((a, b) => b.lastYearProfit - a.lastYearProfit);
+    const lastYearChampion = sortedByLastYearProfit[0];
+    
+    if (lastYearChampion && lastYearChampion.lastYearGames >= 5) {
+      milestones.push({
+        emoji: '🏆',
+        title: `אלוף שנת ${lastYear}: ${lastYearChampion.name}!`,
+        description: `${lastYearChampion.name} סיים את שנת ${lastYear} במקום הראשון עם ${lastYearChampion.lastYearProfit >= 0 ? '+' : ''}${Math.round(lastYearChampion.lastYearProfit)}₪ מתוך ${lastYearChampion.lastYearGames} משחקים! שנה חדשה, הכל מתאפס - מי יהיה אלוף ${currentYear}?`,
+        priority: 90
+      });
+    }
+    
+    // Show how each player finished last year
+    previousYearStats.forEach(p => {
+      if (p.lastYearGames >= 5) {
+        const rank = sortedByLastYearProfit.findIndex(x => x.name === p.name) + 1;
+        if (rank <= 3 && rank > 1) {
+          milestones.push({
+            emoji: rank === 2 ? '🥈' : '🥉',
+            title: `מקום ${rank} בשנת ${lastYear}`,
+            description: `${p.name} סיים את ${lastYear} במקום ${rank} עם ${p.lastYearProfit >= 0 ? '+' : ''}${Math.round(p.lastYearProfit)}₪. השנה החדשה היא הזדמנות לשפר!`,
+            priority: 85 - rank * 5
+          });
+        }
+      }
+    });
+  }
+  
+  // In July: Show "H1 Final Results" summary
+  if (currentMonth === 6) { // July (start of H2)
+    const lastHalfLabel = 'H1 (ינואר-יוני)';
+    // H1 is months 0-5, so we need to recalculate for H1
+    const h1Stats = players.map(p => {
+      const h1Games = p.gameHistory.filter(g => {
+        const d = parseGameDate(g.date);
+        return d.getFullYear() === currentYear && d.getMonth() < 6;
+      });
+      return {
+        ...p,
+        h1Profit: h1Games.reduce((sum, g) => sum + g.profit, 0),
+        h1Games: h1Games.length,
+      };
+    });
+    
+    const sortedByH1 = [...h1Stats].sort((a, b) => b.h1Profit - a.h1Profit);
+    const h1Champion = sortedByH1[0];
+    
+    if (h1Champion && h1Champion.h1Games >= 3) {
+      milestones.push({
+        emoji: '🏆',
+        title: `אלוף ${lastHalfLabel} ${currentYear}!`,
+        description: `${h1Champion.name} סיים את ${lastHalfLabel} במקום הראשון עם ${h1Champion.h1Profit >= 0 ? '+' : ''}${Math.round(h1Champion.h1Profit)}₪! עכשיו מתחיל H2 - הכל פתוח מחדש.`,
+        priority: 85
+      });
+    }
+  }
+
   // ========== NEW: YEAR-END SPECIAL (December) ==========
   if (currentMonth === 11) { // December
     // 16. YEAR-END SUMMARY - TOP PERFORMERS

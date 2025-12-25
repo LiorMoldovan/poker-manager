@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.28.0';
+export const APP_VERSION = '4.29.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.29.0',
+    date: '2025-12-25',
+    changes: [
+      '🗓️ YEAR TRANSITION: Automatic handling of 2025→2026!',
+      '🏆 NEW: "2025 Final Results" summary in January',
+      '🥈🥉 NEW: Shows who finished 2nd, 3rd last year',
+      '📊 NEW: "H1 Final Results" summary in July',
+      'All dates/years calculated dynamically (no hardcoding)',
+      'All 20 tests still passing!'
+    ]
+  },
   {
     version: '4.28.0',
     date: '2025-12-25',
