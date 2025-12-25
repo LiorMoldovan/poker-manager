@@ -204,9 +204,34 @@ ${gameHistoryText}`;
   
   // Calculate realistic profit ranges from player data
   const allProfits = players.flatMap(p => p.gameHistory.map(g => g.profit));
-  const maxProfit = allProfits.length > 0 ? Math.max(...allProfits) : 200;
-  const minProfit = allProfits.length > 0 ? Math.min(...allProfits) : -200;
-  const typicalRange = Math.max(Math.abs(maxProfit), Math.abs(minProfit));
+  const maxProfit = allProfits.length > 0 ? Math.max(...allProfits) : 300;
+  const minProfit = allProfits.length > 0 ? Math.min(...allProfits) : -300;
+  
+  // Calculate actual statistics
+  const absProfits = allProfits.map(p => Math.abs(p)).sort((a, b) => b - a);
+  const medianAbsProfit = absProfits.length > 0 ? absProfits[Math.floor(absProfits.length / 2)] : 100;
+  const avgAbsProfit = absProfits.length > 0 ? Math.round(absProfits.reduce((a, b) => a + b, 0) / absProfits.length) : 100;
+  
+  // Get recent game examples (last 5 unique games)
+  const recentGames = new Map<string, { date: string; results: { name: string; profit: number }[] }>();
+  players.forEach(p => {
+    p.gameHistory.slice(0, 10).forEach(g => {
+      if (!recentGames.has(g.gameId)) {
+        recentGames.set(g.gameId, { date: g.date, results: [] });
+      }
+      recentGames.get(g.gameId)!.results.push({ name: p.name, profit: g.profit });
+    });
+  });
+  
+  const recentGameExamples = Array.from(recentGames.values())
+    .slice(0, 3)
+    .map(g => {
+      const sorted = g.results.sort((a, b) => b.profit - a.profit);
+      const winner = sorted[0];
+      const loser = sorted[sorted.length - 1];
+      return `${g.date}: Winner ${winner.name} +${winner.profit}₪, Loser ${loser.name} ${loser.profit}₪`;
+    })
+    .join('\n');
   
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
@@ -226,15 +251,24 @@ For each player, calculate an "Expected Profit" (the sum of all expectedProfits 
 
 ═══════════════════════════════════════
 
-💰 REALISTIC PROFIT RANGES (CRITICAL!):
+💰 EXPECTED PROFIT CALIBRATION (VERY IMPORTANT!):
 
-Based on this group's ACTUAL game history:
-- Typical winning range: +50₪ to +${Math.round(typicalRange * 0.7)}₪
-- Typical losing range: -50₪ to -${Math.round(typicalRange * 0.7)}₪
-- Big nights (rare): up to ±${typicalRange}₪
+📈 ACTUAL STATISTICS FROM THIS GROUP:
+- Average absolute profit per player per game: ${avgAbsProfit}₪
+- Median absolute profit: ${medianAbsProfit}₪
+- Biggest win ever: +${maxProfit}₪
+- Biggest loss ever: ${minProfit}₪
 
-DO NOT use tiny amounts like ±10₪ or ±20₪ - those are unrealistic for this group!
-Look at each player's Biggest Win and Biggest Loss to calibrate their personal range.
+📋 RECENT GAME EXAMPLES (this is how games ACTUALLY end):
+${recentGameExamples}
+
+⚠️ YOUR expectedProfit VALUES MUST BE REALISTIC:
+- Minimum absolute value should be around ${Math.max(50, Math.round(avgAbsProfit * 0.5))}₪
+- Typical range: ±${Math.round(avgAbsProfit)}₪ to ±${Math.round(avgAbsProfit * 1.5)}₪
+- For volatile players (check their bestWin/worstLoss): can go up to ±${Math.round(avgAbsProfit * 2)}₪
+
+❌ WRONG: expectedProfit values like +30, -40, +25 (too small!)
+✅ CORRECT: expectedProfit values like +120, -95, +150, -180 (realistic!)
 
 ═══════════════════════════════════════
 
@@ -293,15 +327,18 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 
 ═══════════════════════════════════════
 
-⚠️ CONSTRAINTS:
+⚠️ HARD CONSTRAINTS (MUST FOLLOW):
 
-• Gender: 'מור' is Female (נקבה). All others are Male (זכר).
+1. Gender: 'מור' is Female (נקבה). All others are Male (זכר).
 
-• Math: Sum of all expectedProfit = 0 exactly.
+2. Math: Sum of all expectedProfit = 0 exactly.
 
-• isSurprise = true ONLY when prediction goes AGAINST their historical pattern.
+3. isSurprise = true ONLY when prediction goes AGAINST their historical pattern.
 
-• Calibrate expectedProfit to each player's ACTUAL historical range - not arbitrary small numbers!
+4. PROFIT RANGE CHECK: Before submitting, verify that:
+   - At least ONE player has |expectedProfit| ≥ ${Math.round(avgAbsProfit * 1.2)}₪
+   - NO player has |expectedProfit| < ${Math.max(30, Math.round(avgAbsProfit * 0.4))}₪ (too small!)
+   - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
 
 ═══════════════════════════════════════
 
