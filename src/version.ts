@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.36.0';
+export const APP_VERSION = '4.37.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.37.0',
+    date: '2025-12-25',
+    changes: [
+      '🏷️ PLAYER STYLES: Completely rewritten for clarity!',
+      'Removed abstract "כריש" style - now uses clear labels',
+      'Removed misleading "מאוזן" for losing players',
+      'NEW: רווחי (Profitable), מפסיד (Losing), חם (Hot), קר (Cold)',
+      'NEW: תנודתי (Volatile), יציב (Stable), משתפר (Improving), יורד (Declining)',
+      'NEW: מתקשה (Struggling) for negative players instead of "balanced"',
+      'Streak-based styles (חם/קר) take priority when on 3+ streak',
+      'Each style now clearly reflects player performance'
+    ]
+  },
   {
     version: '4.36.0',
     date: '2025-12-25',

@@ -2442,54 +2442,80 @@ const StatisticsScreen = () => {
                 const isRecentlyHot = recentGames.length >= 3 && recentWins >= Math.ceil(recentGames.length * 0.66);
                 const isRecentlyCold = recentGames.length >= 3 && recentWins <= Math.floor(recentGames.length * 0.33);
                 
-                // ========== PLAYER STYLE CLASSIFICATION (Multi-factor) ==========
+                // ========== PLAYER STYLE CLASSIFICATION ==========
+                // Based on: profitability, streak, volatility, trend
                 // Note: Rebuy-based styles only apply when rebuy data is valid (2026+)
                 let styleEmoji = '';
                 let styleName = '';
                 
-                // Classification based on multiple factors
+                // Calculate recent trend (comparing recent to overall)
+                const recentAvgProfit = recentGames.length > 0 ? recentProfit / recentGames.length : 0;
+                const isImproving = recentGames.length >= 3 && recentAvgProfit > avgProfit + 20;
+                const isDeclining = recentGames.length >= 3 && recentAvgProfit < avgProfit - 20;
+                
+                // Classification priority:
+                // 1. New player (too few games)
+                // 2. Current streak (hot/cold)
+                // 3. Profitability (profitable/losing)
+                // 4. Playing style (volatile/stable)
+                // 5. Trend (improving/declining)
+                
                 if (gamesPlayed < 3) {
+                  // Too few games to classify
                   styleName = 'חדש';
                   styleEmoji = '🌱';
-                } else if (isRebuyDataValid && avgRebuys >= 2.5 && volatilityScore >= 350) {
-                  // High rebuys + high volatility = gambler (only if rebuy data valid)
-                  styleName = 'מהמר';
-                  styleEmoji = '🎰';
-                } else if (winRate >= 60 && avgProfit > 30) {
-                  // High win rate + profit = shark (no rebuy dependency)
-                  styleName = 'כריש';
-                  styleEmoji = '🦈';
-                } else if (volatilityScore >= 450 || (bestWin >= 250 && worstLoss >= 200)) {
-                  // Extreme swings = rollercoaster
-                  styleName = 'רכבת הרים';
+                } else if (currentStreak >= 3) {
+                  // On a hot winning streak
+                  styleName = 'חם';
+                  styleEmoji = '🔥';
+                } else if (currentStreak <= -3) {
+                  // On a cold losing streak
+                  styleName = 'קר';
+                  styleEmoji = '❄️';
+                } else if (avgProfit > 30 && winRate >= 55) {
+                  // Clearly profitable with good win rate
+                  styleName = 'רווחי';
+                  styleEmoji = '💰';
+                } else if (avgProfit > 0 && winRate >= 50) {
+                  // Moderately profitable
+                  styleName = 'רווחי';
+                  styleEmoji = '📈';
+                } else if (avgProfit < -30 && winRate < 45) {
+                  // Clearly losing with low win rate
+                  styleName = 'מפסיד';
+                  styleEmoji = '📉';
+                } else if (avgProfit < 0 && winRate < 50) {
+                  // Losing overall
+                  styleName = 'מפסיד';
+                  styleEmoji = '📉';
+                } else if (volatilityScore >= 400) {
+                  // High volatility - big swings
+                  styleName = 'תנודתי';
                   styleEmoji = '🎢';
-                } else if (isRebuyDataValid && avgRebuys <= 1.3 && volatilityScore <= 250) {
-                  // Low rebuys + low volatility = conservative (only if rebuy data valid)
-                  styleName = 'שמרן';
-                  styleEmoji = '🛡️';
-                } else if (winRate >= 55 && avgProfit > 20) {
-                  // Good win rate + profit = efficient
-                  styleName = 'יעיל';
-                  styleEmoji = '🎯';
-                } else if (winLossRatio >= 1.3 && winRate >= 45) {
-                  // Wins big when winning = opportunist
-                  styleName = 'מנצל הזדמנויות';
-                  styleEmoji = '🦅';
-                } else if (isRebuyDataValid && avgRebuys >= 2 && winRate < 45) {
-                  // High rebuys + low win rate = fighter (only if rebuy data valid)
-                  styleName = 'לוחם';
-                  styleEmoji = '⚔️';
-                } else if (winRate >= 50 && avgProfit < 0) {
-                  // Wins often but loses money = unfocused
-                  styleName = 'לא ממוקד';
-                  styleEmoji = '🎲';
-                } else if (volatilityScore <= 200 && gamesPlayed >= 5) {
-                  // Low volatility = stable (no rebuy dependency)
+                } else if (volatilityScore <= 180 && gamesPlayed >= 5) {
+                  // Low volatility - stable
                   styleName = 'יציב';
                   styleEmoji = '🛡️';
+                } else if (isImproving) {
+                  // Recent improvement trend
+                  styleName = 'משתפר';
+                  styleEmoji = '📈';
+                } else if (isDeclining) {
+                  // Recent decline trend
+                  styleName = 'יורד';
+                  styleEmoji = '📉';
+                } else if (isRebuyDataValid && avgRebuys >= 2.5) {
+                  // High rebuys (2026+ only)
+                  styleName = 'מהמר';
+                  styleEmoji = '🎰';
+                } else if (avgProfit >= 0) {
+                  // Break-even or slightly positive
+                  styleName = 'ממוצע';
+                  styleEmoji = '➖';
                 } else {
-                  styleName = 'מאוזן';
-                  styleEmoji = '⚖️';
+                  // Default for negative but not clearly losing
+                  styleName = 'מתקשה';
+                  styleEmoji = '⚠️';
                 }
                 
                 // ========== GENERATE UNIQUE NARRATIVE (Massive variety) ==========
