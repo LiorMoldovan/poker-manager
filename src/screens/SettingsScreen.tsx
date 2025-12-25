@@ -15,7 +15,7 @@ import {
   getPlayerByName,
   getBackups,
   getLastBackupDate,
-  createBackup,
+  createBackupWithCloudSync,
   restoreFromBackup,
   downloadBackup,
   importBackupFromFile,
@@ -228,13 +228,30 @@ const SettingsScreen = () => {
   };
 
   // Backup handlers
-  const handleCreateBackup = () => {
-    createBackup('manual');
-    setBackups(getBackups());
-    setLastBackup(getLastBackupDate());
-    setStorageUsage(getStorageUsage()); // Update storage info after backup
-    setBackupMessage({ type: 'success', text: 'Backup created successfully!' });
-    setTimeout(() => setBackupMessage(null), 3000);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  
+  const handleCreateBackup = async () => {
+    setIsBackingUp(true);
+    setBackupMessage({ type: 'success', text: '💾 Creating backup...' });
+    
+    try {
+      const { cloudResult } = await createBackupWithCloudSync('manual');
+      
+      setBackups(getBackups());
+      setLastBackup(getLastBackupDate());
+      setStorageUsage(getStorageUsage());
+      
+      if (cloudResult.success) {
+        setBackupMessage({ type: 'success', text: '✅ Backup saved locally + uploaded to cloud!' });
+      } else {
+        setBackupMessage({ type: 'success', text: `✅ Backup saved locally. ⚠️ ${cloudResult.message}` });
+      }
+    } catch (error) {
+      setBackupMessage({ type: 'error', text: 'Backup failed!' });
+    } finally {
+      setIsBackingUp(false);
+      setTimeout(() => setBackupMessage(null), 4000);
+    }
   };
 
   const handleDownloadBackup = () => {
@@ -684,9 +701,10 @@ const SettingsScreen = () => {
               <button 
                 className="btn btn-primary" 
                 onClick={handleCreateBackup}
+                disabled={isBackingUp}
                 style={{ flex: 1 }}
               >
-                💾 Backup Now
+                {isBackingUp ? '⏳ Saving...' : '💾 Backup Now'}
               </button>
               <button 
                 className="btn btn-secondary" 

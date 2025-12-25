@@ -1,4 +1,5 @@
 import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast } from '../types';
+import { uploadBackupToGitHub } from './githubSync';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -587,6 +588,20 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
   }
   
   return backup;
+};
+
+// Create backup and also upload to GitHub cloud
+export const createBackupWithCloudSync = async (
+  type: 'auto' | 'manual' = 'manual', 
+  trigger?: 'friday' | 'game-end'
+): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
+  // First create the local backup
+  const backup = createBackup(type, trigger);
+  
+  // Then try to upload to GitHub
+  const cloudResult = await uploadBackupToGitHub(backup);
+  
+  return { backup, cloudResult };
 };
 
 // Get all available backups

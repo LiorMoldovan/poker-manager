@@ -159,6 +159,90 @@ export const uploadToGitHub = async (
   }
 };
 
+// Full backup data structure (includes everything)
+export interface FullBackupData {
+  id: string;
+  date: string;
+  type: 'auto' | 'manual';
+  trigger?: 'friday' | 'game-end';
+  players: Player[];
+  games: Game[];
+  gamePlayers: GamePlayer[];
+  chipValues: unknown[];
+  settings: unknown;
+  uploadedAt: string;
+}
+
+// Upload full backup to GitHub (separate from sync data)
+export const uploadBackupToGitHub = async (
+  backup: FullBackupData
+): Promise<{ success: boolean; message: string }> => {
+  const token = getGitHubToken();
+  
+  if (!token) {
+    return { success: false, message: 'No GitHub token - backup saved locally only' };
+  }
+
+  try {
+    // Get the current file SHA (needed for updates)
+    const getFileUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_BACKUP_PATH}`;
+    
+    let fileSha: string | undefined;
+    
+    const getResponse = await fetch(getFileUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+    
+    if (getResponse.ok) {
+      const fileInfo = await getResponse.json();
+      fileSha = fileInfo.sha;
+    }
+    
+    // Add upload timestamp
+    const backupWithTimestamp = {
+      ...backup,
+      uploadedAt: new Date().toISOString(),
+    };
+    
+    // Prepare the content
+    const content = JSON.stringify(backupWithTimestamp, null, 2);
+    const contentBase64 = btoa(unescape(encodeURIComponent(content)));
+    
+    // Create or update the file
+    const putResponse = await fetch(getFileUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: `Full backup - ${new Date().toLocaleString()}`,
+        content: contentBase64,
+        sha: fileSha,
+        branch: GITHUB_BRANCH,
+      }),
+    });
+    
+    if (!putResponse.ok) {
+      const error = await putResponse.json();
+      throw new Error(error.message || 'Backup upload failed');
+    }
+    
+    console.log('✅ Full backup uploaded to GitHub');
+    return { success: true, message: 'Backup also saved to cloud!' };
+  } catch (error) {
+    console.error('Error uploading backup to GitHub:', error);
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Cloud backup failed (local backup saved)' 
+    };
+  }
+};
+
 // Get current local data for sync
 // IMPORTANT: Only includes COMPLETED games to prevent test/incomplete games from being synced
 export const getLocalSyncData = (): SyncData => {
