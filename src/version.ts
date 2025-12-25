@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.20.1';
+export const APP_VERSION = '4.20.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.20.2',
+    date: '2025-12-25',
+    changes: [
+      '🔢 NUMBER MATCH: If sentence mentions profit, must equal expectedProfit!',
+      'Header shows +100 → sentence must say +100 (not +70)',
+      'Added clear examples of correct number matching',
+      'Option to write sentence without profit number (stats/streaks)',
+      'Double check: tone AND number must both match'
+    ]
+  },
   {
     version: '4.20.1',
     date: '2025-12-25',

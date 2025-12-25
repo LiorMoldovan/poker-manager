@@ -908,10 +908,15 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
   }
 ]
 
-🚨 THE SENTENCE MUST MATCH THE PREDICTION! 🚨
-- Positive expectedProfit → Positive, optimistic sentence
-- Negative expectedProfit → Cautious, warning sentence
-- Big profit → Confident tone | Small profit → Mild tone
+🚨 CRITICAL RULES FOR SENTENCE! 🚨
+
+1. The TONE must match the prediction (positive profit = optimistic, negative = cautious)
+
+2. If you mention a NUMBER in the sentence, it MUST be the EXACT SAME as expectedProfit!
+   ❌ WRONG: expectedProfit: 120, sentence: "צפי של +80₪"
+   ✅ RIGHT: expectedProfit: 120, sentence: "צפי של +120₪"
+   
+3. You don't HAVE to mention the profit number in the sentence - you can talk about stats, streaks, or milestones instead. But if you DO mention a profit number, it MUST match expectedProfit exactly!
 
 ═══════════════════════════════════════
 
@@ -922,21 +927,28 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 - "בטבלת כל הזמנים" = all-time leaderboard
 - "שיא הקבוצה" = group record
 
-📊 CORRECT CORRELATION EXAMPLES:
+📊 CORRECT EXAMPLES (number in sentence = expectedProfit):
 
-✅ expectedProfit: +130 → POSITIVE sentence:
-   "ליאור על גל! 3 נצחונות רצופים ו-+85 ממוצע. הלילה הוא הולך לשלוט על השולחן ולהוסיף עוד +130₪ לקופה."
+✅ expectedProfit: +130 → sentence mentions +130:
+   "ליאור על גל! 3 נצחונות רצופים. הלילה הוא הולך לשלוט עם +130₪ צפויים."
 
-✅ expectedProfit: +80 → OPTIMISTIC sentence:
-   "מור ב-70% נצחונות החודש. עם הפורום הזה היא צפויה להמשיך את המגמה החיובית עם רווח של +80₪."
+✅ expectedProfit: +80 → sentence mentions +80:
+   "מור ב-70% נצחונות החודש. צפי אופטימי של +80₪ הלילה."
 
-✅ expectedProfit: -60 → CAUTIOUS/NEGATIVE sentence:
-   "אביב ב-3 הפסדים רצופים וממוצע של -45₪ בחודש האחרון. הלילה נראה מאתגר עבורו, צפי של -60₪."
+✅ expectedProfit: -60 → sentence mentions -60:
+   "אביב ב-3 הפסדים רצופים. לילה מאתגר עם צפי של -60₪."
 
-✅ expectedProfit: -120 → NEGATIVE sentence:
-   "סגל נגד כולם הלילה. עם 2 הפסדים כבדים אחרונים והפורום הקשה, הלילה עלול לעלות לו ביוקר: -120₪."
+✅ expectedProfit: -120 → sentence mentions -120:
+   "סגל נגד כולם הלילה. הפורום הקשה צפוי לעלות לו -120₪."
 
-❌ WRONG - CONTRADICTIONS:
+✅ WITHOUT mentioning number (also valid):
+   expectedProfit: +100 → "ליאור ברצף חם עם 4 נצחונות. המומנטום לצידו והוא מוכן לעוד לילה מנצח!"
+
+❌ WRONG - NUMBER MISMATCH:
+   expectedProfit: +100 but sentence says "+70₪" ← FORBIDDEN!
+   expectedProfit: -80 but sentence says "-50₪" ← FORBIDDEN!
+   
+❌ WRONG - TONE MISMATCH:
    expectedProfit: +100 with "לילה קשה צפוי לו" ← FORBIDDEN!
    expectedProfit: -80 with "הולך לשלוט" ← FORBIDDEN!
 
@@ -964,22 +976,20 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
    - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
 
 5. 🚨 CRITICAL - SENTENCE MUST MATCH expectedProfit! 🚨
-   The "sentence" MUST reflect the same prediction as "expectedProfit". NO CONTRADICTIONS!
+
+   A) TONE MUST MATCH:
+   - expectedProfit > 0 → sentence MUST be positive/optimistic
+   - expectedProfit < 0 → sentence MUST be negative/cautious
    
-   ✅ CORRECT CORRELATION:
-   - expectedProfit: +120 → sentence: positive, confident, winning tone ("הולך לשלוט", "לילה גדול צפוי", "הכסף יזרום")
-   - expectedProfit: +50 → sentence: cautiously optimistic ("סיכוי טוב", "יכול להפתיע", "מגמה חיובית")
-   - expectedProfit: -50 → sentence: cautiously pessimistic ("לילה קשה", "צפויות בעיות", "המזל לא לצידו")
-   - expectedProfit: -120 → sentence: negative, struggling tone ("עלול להיפגע", "לילה להפסדים", "בדרך למטה")
+   B) NUMBER MUST MATCH (if mentioned):
+   - If you write a profit number in the sentence, it MUST equal expectedProfit EXACTLY!
+   - expectedProfit: +100 → sentence can only say "+100₪" (not +80, not +120)
+   - You CAN write a sentence without mentioning the profit number (talk about stats/streaks instead)
    
-   ❌ WRONG (CONTRADICTIONS):
-   - expectedProfit: +100 but sentence says "לילה קשה צפוי" ← FORBIDDEN!
-   - expectedProfit: -80 but sentence says "הולך לנצח גדול" ← FORBIDDEN!
-   - expectedProfit: +150 but sentence talks about "struggles" or "problems" ← FORBIDDEN!
-   
-   RULE: If expectedProfit > 0, sentence MUST be positive/optimistic.
-         If expectedProfit < 0, sentence MUST be negative/cautious.
-         The MAGNITUDE should also match (big profit = very positive, small profit = mildly positive).
+   ❌ FORBIDDEN:
+   - expectedProfit: +100 but sentence says "+70₪" ← NUMBER MISMATCH!
+   - expectedProfit: +100 but sentence says "לילה קשה" ← TONE MISMATCH!
+   - expectedProfit: -80 but sentence says "+50₪" ← BOTH WRONG!
 
 ═══════════════════════════════════════
 
