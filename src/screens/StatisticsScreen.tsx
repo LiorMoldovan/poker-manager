@@ -814,33 +814,33 @@ const StatisticsScreen = () => {
       ) : (
         <>
           {/* View Mode Toggle */}
-          <div className="card" style={{ padding: '0.5rem' }}>
-            <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button 
                 className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('table')}
-                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
+                style={{ flex: 1 }}
               >
                 📊 Table
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('records')}
-                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
+                style={{ flex: 1 }}
               >
                 🏆 Records
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('individual')}
-                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
+                style={{ flex: 1 }}
               >
                 👤 Players
               </button>
               <button 
                 className={`btn btn-sm ${viewMode === 'insights' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setViewMode('insights')}
-                style={{ flex: 1, padding: '0.4rem 0.2rem', fontSize: '0.7rem', minWidth: 0 }}
+                style={{ flex: 1 }}
               >
                 🎯 Insights
               </button>
@@ -2045,6 +2045,20 @@ const StatisticsScreen = () => {
                 // Generate diverse milestones based on filtered data
                 const milestones: Array<{ emoji: string; title: string; description: string; priority: number }> = [];
                 
+                // DEDUPLICATION: Track player pairs already featured to avoid repetitive milestones
+                const featuredBattles = new Set<string>();
+                const markBattle = (p1: string, p2: string) => {
+                  const key = [p1, p2].sort().join('|');
+                  featuredBattles.add(key);
+                };
+                const isBattleFeatured = (p1: string, p2: string) => {
+                  const key = [p1, p2].sort().join('|');
+                  return featuredBattles.has(key);
+                };
+                
+                // Track players already featured in individual milestones
+                const featuredPlayers = new Set<string>();
+                
                 // Sort by profit for rankings
                 const rankedStats = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
                 const periodLabel = getTimeframeLabel();
@@ -2120,11 +2134,14 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 4. LEADERBOARD BATTLES (show max 2 most interesting)
+                // 4. LEADERBOARD BATTLES (show max 2 most interesting, skip already featured)
                 let leaderboardBattleCount = 0;
                 for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
                   const chaser = rankedStats[i];
                   const leader = rankedStats[i - 1];
+                  // Skip if this battle was already featured
+                  if (isBattleFeatured(chaser.playerId, leader.playerId)) continue;
+                  
                   const gap = Math.round(leader.totalProfit - chaser.totalProfit);
                   if (gap > 0 && gap <= 200) {
                     const isTopBattle = i <= 2;
@@ -2134,6 +2151,7 @@ const StatisticsScreen = () => {
                       description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
                       priority: 85 - i * 3
                     });
+                    markBattle(chaser.playerId, leader.playerId);
                     leaderboardBattleCount++;
                   }
                 }

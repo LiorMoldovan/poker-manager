@@ -334,36 +334,27 @@ const SettingsScreen = () => {
       </div>
 
       {/* Tabs */}
-      <div className="card" style={{ padding: '0.75rem', marginBottom: '1rem' }}>
-        <div style={{ 
-          display: 'flex', 
-          flexWrap: 'wrap',
-          gap: '0.5rem'
-        }}>
+      <div className="card" style={{ padding: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           {tabs.slice(0, 4).map(tab => (
             <button
               key={tab.id}
               className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setActiveTab(tab.id)}
-              style={{ flex: '1 1 calc(25% - 0.5rem)', minWidth: '70px' }}
+              style={{ flex: 1 }}
             >
               {tab.label}
             </button>
           ))}
         </div>
         {tabs.length > 4 && (
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap',
-            gap: '0.5rem',
-            marginTop: '0.5rem'
-          }}>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
             {tabs.slice(4).map(tab => (
               <button
                 key={tab.id}
                 className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveTab(tab.id)}
-                style={{ flex: '1 1 calc(25% - 0.5rem)', minWidth: '70px' }}
+                style={{ flex: 1 }}
               >
                 {tab.label}
               </button>
