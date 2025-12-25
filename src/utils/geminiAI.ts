@@ -387,6 +387,32 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     };
   });
   
+  // NEW YEAR "FRESH START" milestone (January with few games)
+  if (currentMonth <= 1) { // January or February
+    const totalYearGames = playerPeriodStats.reduce((sum, p) => sum + p.yearGames, 0);
+    if (totalYearGames < 5) {
+      milestones.push({
+        emoji: '🎆',
+        title: `שנת ${currentYear} מתחילה!`,
+        description: `הטבלה השנתית מתאפסת! ${players.length} שחקנים מתחילים את ${currentYear} עם 0₪. מי יוביל את הטבלה החדשה? הכל פתוח!`,
+        priority: 85
+      });
+    }
+  }
+  
+  // NEW HALF "FRESH START" milestone (July with few games)
+  if (currentMonth === 6 || currentMonth === 7) { // July or August (start of H2)
+    const totalHalfGames = playerPeriodStats.reduce((sum, p) => sum + p.halfGames, 0);
+    if (totalHalfGames < 5) {
+      milestones.push({
+        emoji: '🔄',
+        title: `H2 ${currentYear} מתחיל!`,
+        description: `חצי השנה השני מתחיל! טבלת H2 מתאפסת. מי יהיה אלוף החציון השני? ההיסטוריה נמחקת, הכל מתחיל מחדש.`,
+        priority: 80
+      });
+    }
+  }
+
   // In January: Show "2025 Final Results" summary
   if (currentMonth === 0) { // January
     const sortedByLastYearProfit = [...previousYearStats].sort((a, b) => b.lastYearProfit - a.lastYearProfit);

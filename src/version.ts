@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.29.0';
+export const APP_VERSION = '4.30.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.30.0',
+    date: '2025-12-25',
+    changes: [
+      '🎆 NEW: "Fresh Start" milestones for new year/half!',
+      'Shows "שנת 2026 מתחילה!" when year has few games',
+      'Shows "H2 מתחיל!" when half has few games',
+      'All-time milestones still show when year/half is empty',
+      'Graceful handling of empty period data',
+      'All 20 tests passing!'
+    ]
+  },
   {
     version: '4.29.0',
     date: '2025-12-25',
