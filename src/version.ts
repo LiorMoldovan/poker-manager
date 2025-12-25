@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.31.2';
+export const APP_VERSION = '4.31.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.31.3',
+    date: '2025-12-25',
+    changes: [
+      '🐛 FIX: Lose streak duplicates removed!',
+      'Now only shows ONE lose streak milestone (the worst one)',
+      'Removed redundant Section 21 (covered by Section 2)',
+      'Section 12 (comeback) only triggers for exactly -2 streaks',
+      '26 tests now pass including new lose streak test'
+    ]
+  },
   {
     version: '4.31.2',
     date: '2025-12-25',

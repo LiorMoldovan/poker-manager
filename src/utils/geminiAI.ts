@@ -143,17 +143,18 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   });
   
-  // 2. LOSING STREAKS (show any streak of 3+)
-  players.forEach(p => {
-    if (p.currentStreak <= -3) {
-      milestones.push({
-        emoji: '❄️',
-        title: `${p.name} ברצף הפסדים`,
-        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים. נצחון הלילה ישבור את הרצף השלילי ויחזיר אותו למסלול!`,
-        priority: 80 + Math.abs(p.currentStreak) * 2
-      });
-    }
-  });
+  // 2. LOSING STREAKS - Only show the WORST one (to avoid duplicates)
+  const playersWithLoseStreak = players.filter(p => p.currentStreak <= -3);
+  if (playersWithLoseStreak.length > 0) {
+    // Sort by worst streak first
+    const worstStreaker = [...playersWithLoseStreak].sort((a, b) => a.currentStreak - b.currentStreak)[0];
+    milestones.push({
+      emoji: '❄️',
+      title: `${worstStreaker.name} ברצף הפסדים`,
+      description: `${worstStreaker.name} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים - הכי ארוך בין המשתתפים הלילה! נצחון הלילה ישבור את הרצף השלילי.`,
+      priority: 80 + Math.abs(worstStreaker.currentStreak) * 2
+    });
+  }
   
   // 2. LEADERBOARD PASSING (high priority)
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
@@ -319,17 +320,18 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     });
   }
   
-  // 12. COMEBACK OPPORTUNITIES
-  players.forEach(p => {
-    if (p.currentStreak <= -2 && p.totalProfit > 100) {
-      milestones.push({
-        emoji: '💪',
-        title: `הזדמנות לקאמבק!`,
-        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים, אבל בטבלה הכללית של כל הזמנים הוא עדיין ברווח של +${Math.round(p.totalProfit)}₪. נצחון הלילה ישבור את הרצף השלילי ויחזיר אותו למסלול הנצחונות!`,
-        priority: 65
-      });
-    }
-  });
+  // 12. COMEBACK OPPORTUNITIES - Only for streak = -2 (streak -3+ already covered in Section 2)
+  // Also only show ONE best candidate
+  const comebackCandidates = players.filter(p => p.currentStreak === -2 && p.totalProfit > 100);
+  if (comebackCandidates.length > 0) {
+    const bestComeback = [...comebackCandidates].sort((a, b) => b.totalProfit - a.totalProfit)[0];
+    milestones.push({
+      emoji: '💪',
+      title: `הזדמנות לקאמבק!`,
+      description: `${bestComeback.name} נמצא ברצף של 2 הפסדים רצופים, אבל בטבלה הכללית הוא עדיין ברווח של +${Math.round(bestComeback.totalProfit)}₪. נצחון הלילה ישבור את הרצף!`,
+      priority: 65
+    });
+  }
   
   // 13. HOT/COLD YEAR
   playerPeriodStats.forEach(p => {
@@ -550,19 +552,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
 
-  // 21. LONGEST LOSE STREAK - OPPORTUNITY TO BREAK
-  const longestCurrentLoseStreak = Math.min(...players.map(p => p.currentStreak < 0 ? p.currentStreak : 0));
-  if (longestCurrentLoseStreak <= -4) {
-    const loseStreakHolder = players.find(p => p.currentStreak === longestCurrentLoseStreak);
-    if (loseStreakHolder) {
-      milestones.push({
-        emoji: '🆘',
-        title: 'רצף הפסדים ארוך!',
-        description: `${loseStreakHolder.name} ברצף של ${Math.abs(longestCurrentLoseStreak)} הפסדים רצופים - הכי ארוך בקבוצה כרגע. נצחון הלילה יסיים את הסיוט!`,
-        priority: 78
-      });
-    }
-  }
+  // 21. LONGEST LOSE STREAK - REMOVED (now covered by Section 2 which picks the worst streaker)
 
   // ========== NEW: UNIQUE INSIGHTS ==========
 

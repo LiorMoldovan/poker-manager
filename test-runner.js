@@ -76,17 +76,17 @@ const generateMilestones = (players) => {
     }
   });
 
-  // 2. LOSING STREAKS (3+)
-  players.forEach(p => {
-    if (p.currentStreak <= -3) {
-      milestones.push({
-        emoji: '❄️',
-        title: `${p.name} ברצף הפסדים`,
-        description: `${p.name} נמצא ברצף של ${Math.abs(p.currentStreak)} הפסדים רצופים.`,
-        priority: 80 + Math.abs(p.currentStreak) * 2
-      });
-    }
-  });
+  // 2. LOSING STREAKS - Only show the WORST one (to avoid duplicates)
+  const playersWithLoseStreak = players.filter(p => p.currentStreak <= -3);
+  if (playersWithLoseStreak.length > 0) {
+    const worstStreaker = [...playersWithLoseStreak].sort((a, b) => a.currentStreak - b.currentStreak)[0];
+    milestones.push({
+      emoji: '❄️',
+      title: `${worstStreaker.name} ברצף הפסדים`,
+      description: `${worstStreaker.name} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים.`,
+      priority: 80 + Math.abs(worstStreaker.currentStreak) * 2
+    });
+  }
 
   // 3. LEADERBOARD PASSING
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
@@ -666,7 +666,7 @@ console.log('─'.repeat(50));
   }
 }
 
-// Test 22: Streak milestones - one per player
+// Test 22: Win streak milestones - one per player
 {
   const players = [
     createTestPlayer({ name: 'Streak3', currentStreak: 3 }),
@@ -679,10 +679,33 @@ console.log('─'.repeat(50));
   
   if (streakMilestones.length === 3) {
     passed++;
-    console.log('  ✅ One streak per player: PASS');
+    console.log('  ✅ Win streak - one per player: PASS');
   } else {
     failed++;
-    console.log(`  ❌ One streak per player: FAIL (expected 3, got ${streakMilestones.length})`);
+    console.log(`  ❌ Win streak - one per player: FAIL (expected 3, got ${streakMilestones.length})`);
+  }
+}
+
+// Test 22b: Lose streak - only ONE milestone (worst player)
+{
+  const players = [
+    createTestPlayer({ name: 'Loser3', currentStreak: -3, totalProfit: 500 }),
+    createTestPlayer({ name: 'Loser4', currentStreak: -4, totalProfit: 300 }),
+    createTestPlayer({ name: 'Loser5', currentStreak: -5, totalProfit: 200 }),
+  ];
+
+  const { milestones } = generateMilestones(players);
+  const loseStreakMilestones = milestones.filter(m => 
+    m.title.includes('רצף הפסדים') || m.title.includes('קאמבק')
+  );
+  
+  // Should only have 1 milestone for the worst loser (Loser5)
+  if (loseStreakMilestones.length === 1) {
+    passed++;
+    console.log('  ✅ Lose streak - only worst shown: PASS');
+  } else {
+    failed++;
+    console.log(`  ❌ Lose streak - only worst shown: FAIL (expected 1, got ${loseStreakMilestones.length})`);
   }
 }
 
