@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.17.0';
+export const APP_VERSION = '4.17.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.17.1',
+    date: '2025-12-25',
+    changes: [
+      '🎯 Realistic profit ranges - based on actual game history!',
+      '💚 Special handling for Tomer - always optimistic and encouraging',
+      '🚫 Stronger anti-repetition rules - each player gets unique angle',
+      'Calibrated expectedProfit to each player\'s historical range'
+    ]
+  },
   {
     version: '4.17.0',
     date: '2025-12-25',

@@ -202,6 +202,12 @@ ${lastGameInfo ? `- ${lastGameInfo}` : ''}
 ${gameHistoryText}`;
   }).join('\n\n========================================\n');
   
+  // Calculate realistic profit ranges from player data
+  const allProfits = players.flatMap(p => p.gameHistory.map(g => g.profit));
+  const maxProfit = allProfits.length > 0 ? Math.max(...allProfits) : 200;
+  const minProfit = allProfits.length > 0 ? Math.min(...allProfits) : -200;
+  const typicalRange = Math.max(Math.abs(maxProfit), Math.abs(minProfit));
+  
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
 📊 RAW PLAYER DATA:
@@ -216,23 +222,51 @@ ${playerDynamics.join('\n')}` : ''}
 ═══════════════════════════════════════
 
 🎯 THE MISSION:
-For each player, calculate an "Expected Profit" (the sum of all expectedProfits must equal exactly 0). You must cross-reference their current form (recent games) with their "Legacy" (All-time records) to find a unique narrative for each person.
+For each player, calculate an "Expected Profit" (the sum of all expectedProfits must equal exactly 0). Cross-reference their current form with their Legacy to create a unique narrative.
+
+═══════════════════════════════════════
+
+💰 REALISTIC PROFIT RANGES (CRITICAL!):
+
+Based on this group's ACTUAL game history:
+- Typical winning range: +50₪ to +${Math.round(typicalRange * 0.7)}₪
+- Typical losing range: -50₪ to -${Math.round(typicalRange * 0.7)}₪
+- Big nights (rare): up to ±${typicalRange}₪
+
+DO NOT use tiny amounts like ±10₪ or ±20₪ - those are unrealistic for this group!
+Look at each player's Biggest Win and Biggest Loss to calibrate their personal range.
 
 ═══════════════════════════════════════
 
 🛠️ WRITING RULES (CRITICAL):
 
-1. **The Legacy Factor**: Use their all-time records to praise or sting. 
-   Example: "The man who holds the record for the biggest single-night win (540₪) has been quiet lately. Is the King ready to reclaim his throne?"
+1. **The Legacy Factor**: Use all-time records to praise or sting.
 
-2. **Data-Backed Insights**: Avoid generic fluff. Use specific dates, percentages, and amounts. 
+2. **Data-Backed Insights**: Use specific dates, percentages, and amounts. 
    Instead of "He's doing well," say "Since his 120₪ loss on Nov 14th, he has maintained a 65% win rate."
 
-3. **The "Nemesis" Angle**: If data shows Player A loses whenever Player B is present, highlight this rivalry.
+3. **The "Nemesis" Angle**: If Player A loses when Player B is present, highlight the rivalry.
 
-4. **Style & Tone**: Be witty, slightly cynical, and dramatic. The "sentence" must be something a player would immediately want to screenshot and share in the WhatsApp group.
+4. **Style & Tone**: Witty, slightly cynical, dramatic. Each sentence should be screenshot-worthy for WhatsApp.
 
-5. **Language**: The output values (highlight and sentence) MUST be in HEBREW.
+5. **Language**: Output (highlight and sentence) MUST be in HEBREW.
+
+═══════════════════════════════════════
+
+🎭 SPECIAL PLAYER HANDLING:
+
+• **תומר (Tomer)**: Be GENTLE and OPTIMISTIC with him! Even if his stats aren't great, find something encouraging. Focus on potential, recent improvements, or highlight when he beat strong players. Never mock him - keep him hopeful!
+
+═══════════════════════════════════════
+
+🚫 ABSOLUTELY NO REPETITION:
+
+Each player MUST have a COMPLETELY DIFFERENT:
+- Sentence structure (don't start multiple sentences the same way)
+- Narrative angle (streaks, rivalries, milestones, comebacks, consistency, volatility - use DIFFERENT angles)
+- Writing style (dramatic for one, analytical for another, philosophical for a third)
+
+If you find yourself writing similar sentences, STOP and rewrite with a fresh angle!
 
 ═══════════════════════════════════════
 
@@ -240,9 +274,9 @@ For each player, calculate an "Expected Profit" (the sum of all expectedProfits 
 [
   {
     "name": "Player Name",
-    "expectedProfit": number,
+    "expectedProfit": number (REALISTIC based on their historical range!),
     "highlight": "Short data-driven stat in Hebrew (up to 10 words)",
-    "sentence": "The deep analysis in Hebrew (25-40 words) - must include at least one specific number or record",
+    "sentence": "Unique analysis in Hebrew (25-40 words) - must include a specific number",
     "isSurprise": boolean
   }
 ]
@@ -261,13 +295,13 @@ For each player, calculate an "Expected Profit" (the sum of all expectedProfits 
 
 ⚠️ CONSTRAINTS:
 
-• Gender: 'מור' is Female (נקבה). All other players are Male (זכר). Use correct Hebrew conjugations!
+• Gender: 'מור' is Female (נקבה). All others are Male (זכר).
 
-• Math: Sum of all expectedProfit values must equal exactly 0.
+• Math: Sum of all expectedProfit = 0 exactly.
 
-• No generic clichés. If a player is "average," analyze their stability as a "boring genius" or "the group's bank."
+• isSurprise = true ONLY when prediction goes AGAINST their historical pattern.
 
-• isSurprise = true ONLY when your prediction goes AGAINST their historical pattern.
+• Calibrate expectedProfit to each player's ACTUAL historical range - not arbitrary small numbers!
 
 ═══════════════════════════════════════
 
