@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.22.0';
+export const APP_VERSION = '4.23.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.23.0',
+    date: '2025-12-25',
+    changes: [
+      '🚨 CRITICAL ACCURACY FIX - Complete rewrite!',
+      'Added YEAR stats section for each player (games, profit, avg)',
+      'Added explicit RANK field for each player',
+      'Added HUGE accuracy warning with common errors to avoid',
+      'Examples: dont claim streaks that dont exist!',
+      'Examples: dont say #1 wants to reach first place!',
+      'Examples: dont mix year profit with all-time!',
+      'Verification checklist before each sentence',
+      'Clearer data formatting with headers'
+    ]
+  },
   {
     version: '4.22.0',
     date: '2025-12-25',

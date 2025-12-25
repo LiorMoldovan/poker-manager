@@ -815,39 +815,63 @@ export const generateAIForecasts = async (
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
   // Build the prompt with FULL player data (in English for better AI reasoning)
+  // Calculate year stats for each player
+  const currentYear = new Date().getFullYear();
+  const parseGameDate = (dateStr: string): Date => {
+    const parts = dateStr.split('/');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+  
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
-      ? `Current Winning Streak: ${p.currentStreak} games` 
+      ? `🔥 CURRENT WINNING STREAK: ${p.currentStreak} consecutive wins` 
       : p.currentStreak < 0 
-        ? `Current Losing Streak: ${Math.abs(p.currentStreak)} games` 
-        : 'No streak';
+        ? `❄️ CURRENT LOSING STREAK: ${Math.abs(p.currentStreak)} consecutive losses` 
+        : '⚪ NO ACTIVE STREAK (last game was a break-even or just started)';
     
-    // Format all game history (most recent first)
+    // Calculate year stats
+    const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+    const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
+    const yearGames = thisYearGames.length;
+    
+    // Format game history
     const gameHistoryText = p.gameHistory.length > 0
-      ? p.gameHistory.map(g => `${g.date}: ${g.profit >= 0 ? '+' : ''}${g.profit}₪`).join(' | ')
+      ? p.gameHistory.slice(0, 10).map(g => `${g.date}: ${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}₪`).join(' | ')
       : 'New player - no history';
     
-    // Calculate days since last game info
-    const lastGameInfo = p.daysSinceLastGame < 999 
-      ? `Days since last game: ${p.daysSinceLastGame}` 
-      : '';
+    // Determine rank in tonight's players
+    const rankAllTime = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
 
     return `
-Player ${i + 1}: ${p.name} ${p.isFemale ? '(FEMALE - must use feminine Hebrew forms!)' : '(Male)'}
-📊 Overall Statistics:
-- Total Games: ${p.gamesPlayed}
-- Total Profit: ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪
-- Average per Game: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
-- Wins: ${p.winCount} (${Math.round(p.winPercentage)}%)
-- Losses: ${p.lossCount}
-- ${streakText}
-- Biggest Win: +${p.bestWin}₪
-- Biggest Loss: ${p.worstLoss}₪
-${lastGameInfo ? `- ${lastGameInfo}` : ''}
+═══════════════════════════════════════
+PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use feminine Hebrew!)' : '👨 (Male)'}
+═══════════════════════════════════════
 
-📅 Game History (most recent first):
-${gameHistoryText}`;
-  }).join('\n\n========================================\n');
+📊 ALL-TIME STATS (since we started playing):
+   • RANK: #${rankAllTime} out of ${players.length} players tonight
+   • TOTAL PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
+   • GAMES PLAYED: ${p.gamesPlayed}
+   • AVERAGE/GAME: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
+   • WIN RATE: ${Math.round(p.winPercentage)}% (${p.winCount} wins, ${p.lossCount} losses)
+   • BEST WIN EVER: +${Math.round(p.bestWin)}₪
+   • WORST LOSS EVER: ${Math.round(p.worstLoss)}₪
+   • ${streakText}
+
+📅 YEAR ${currentYear} STATS:
+   • GAMES THIS YEAR: ${yearGames}
+   • PROFIT THIS YEAR: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
+   ${yearGames > 0 ? `• AVG THIS YEAR: ${yearGames > 0 ? (yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames) : 0}₪/game` : ''}
+
+📜 LAST 10 GAMES (most recent first):
+   ${gameHistoryText}`;
+  }).join('\n');
   
   // Calculate realistic profit ranges from player data
   const allProfits = players.flatMap(p => p.gameHistory.map(g => g.profit));
@@ -882,7 +906,26 @@ ${gameHistoryText}`;
   
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
-📊 RAW PLAYER DATA:
+🚨🚨🚨 CRITICAL ACCURACY WARNING 🚨🚨🚨
+YOU MUST BE 100% ACCURATE! Every single fact in your response MUST match the data below EXACTLY.
+
+BEFORE writing ANYTHING about a player, you MUST:
+1. Check their EXACT streak number (if no streak, don't claim one!)
+2. Check their EXACT rank (#1 is first place - don't say they "want to reach" a position they already have!)
+3. Check their EXACT year profit (if it's negative, don't say positive things about their year!)
+4. Use ONLY the numbers provided below - DO NOT invent or estimate numbers!
+
+COMMON ERRORS TO AVOID:
+❌ Saying someone has "5 consecutive wins" when their streak is different
+❌ Saying #1 ranked player "wants to reach first place" (they're already there!)
+❌ Mixing up ALL-TIME profit with YEAR profit (check both sections!)
+❌ Saying someone needs X₪ to reach a milestone when they've already passed it
+❌ Claiming positive year when their YEAR ${currentYear} PROFIT is negative!
+
+IF YOU'RE NOT 100% SURE ABOUT A FACT, DON'T WRITE IT!
+🚨🚨🚨 END OF ACCURACY WARNING 🚨🚨🚨
+
+📊 RAW PLAYER DATA (READ CAREFULLY - ONLY USE THESE EXACT NUMBERS!):
 ${playerDataText}
 
 🏆 ALL-TIME RECORDS:
@@ -1056,7 +1099,13 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 
 3. isSurprise = true ONLY when prediction goes AGAINST their historical pattern.
 
-4. PROFIT RANGE CHECK: Before submitting, verify that:
+4. 🚨 ACCURACY CHECK - Before writing each sentence, verify:
+   - Does the player ACTUALLY have a winning/losing streak? Check "CURRENT WINNING STREAK" or "CURRENT LOSING STREAK" field!
+   - Is the player REALLY #1? Check their "RANK" field!
+   - What's their YEAR profit? Check "PROFIT THIS YEAR" - if negative, don't say positive things about their year!
+   - Don't claim someone needs X₪ to reach a milestone if they've already passed it!
+   
+5. PROFIT RANGE CHECK: Before submitting, verify that:
    - At least ONE player has |expectedProfit| ≥ ${Math.round(avgAbsProfit * 1.2)}₪
    - NO player has |expectedProfit| < ${Math.max(30, Math.round(avgAbsProfit * 0.4))}₪ (too small!)
    - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
