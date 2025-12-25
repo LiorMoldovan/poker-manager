@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.16.24';
+export const APP_VERSION = '4.17.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.17.0',
+    date: '2025-12-25',
+    changes: [
+      '🤖 AI Forecast v3.0 - New English prompt with Legacy Factor!',
+      'All-Time Records included: profit leader, biggest win/loss, best win rate',
+      'Cross-references current form with historical records',
+      'The "Nemesis" angle - highlights player rivalries',
+      'Data-Backed Insights - specific dates, percentages, amounts',
+      'Output still in Hebrew, but AI reasons in English for better logic'
+    ]
+  },
   {
     version: '4.16.24',
     date: '2025-12-22',

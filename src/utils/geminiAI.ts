@@ -103,133 +103,175 @@ export const generateAIForecasts = async (
           const loserAvg = Math.round(Math.min(p1Avg, p2Avg));
           
           playerDynamics.push(
-            `${winner} vs ${loser}: ב-${sharedGames.length} משחקים משותפים, ` +
-            `${winner} ממוצע ${winnerAvg >= 0 ? '+' : ''}${winnerAvg}₪, ` +
-            `${loser} ממוצע ${loserAvg >= 0 ? '+' : ''}${loserAvg}₪`
+            `${winner} vs ${loser}: In ${sharedGames.length} shared games, ` +
+            `${winner} averages ${winnerAvg >= 0 ? '+' : ''}${winnerAvg}₪, ` +
+            `${loser} averages ${loserAvg >= 0 ? '+' : ''}${loserAvg}₪`
           );
         }
       }
     }
   }
 
-  // Build the prompt with FULL player data
+  // Calculate ALL-TIME RECORDS for the group
+  const allTimeRecords: string[] = [];
+  
+  // Find record holders among tonight's players
+  const sortedByTotalProfit = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
+  const sortedByBestWin = [...players].sort((a, b) => b.bestWin - a.bestWin);
+  const sortedByWorstLoss = [...players].sort((a, b) => a.worstLoss - b.worstLoss);
+  const sortedByWinRate = [...players].filter(p => p.gamesPlayed >= 5).sort((a, b) => b.winPercentage - a.winPercentage);
+  const sortedByGames = [...players].sort((a, b) => b.gamesPlayed - a.gamesPlayed);
+  const sortedByAvg = [...players].filter(p => p.gamesPlayed >= 3).sort((a, b) => b.avgProfit - a.avgProfit);
+  
+  // Highest all-time profit
+  if (sortedByTotalProfit[0]?.totalProfit > 0) {
+    allTimeRecords.push(`🥇 All-Time Profit Leader: ${sortedByTotalProfit[0].name} with +${sortedByTotalProfit[0].totalProfit}₪ total`);
+  }
+  
+  // Biggest single-night win
+  if (sortedByBestWin[0]?.bestWin > 0) {
+    allTimeRecords.push(`💰 Biggest Single-Night Win: ${sortedByBestWin[0].name} once won +${sortedByBestWin[0].bestWin}₪`);
+  }
+  
+  // Biggest single-night loss
+  if (sortedByWorstLoss[0]?.worstLoss < 0) {
+    allTimeRecords.push(`📉 Biggest Single-Night Loss: ${sortedByWorstLoss[0].name} once lost ${sortedByWorstLoss[0].worstLoss}₪`);
+  }
+  
+  // Highest win rate (min 5 games)
+  if (sortedByWinRate.length > 0) {
+    allTimeRecords.push(`🎯 Best Win Rate: ${sortedByWinRate[0].name} wins ${Math.round(sortedByWinRate[0].winPercentage)}% of games (${sortedByWinRate[0].winCount}/${sortedByWinRate[0].gamesPlayed})`);
+  }
+  
+  // Most games played
+  if (sortedByGames[0]?.gamesPlayed > 0) {
+    allTimeRecords.push(`🎮 Most Games Played: ${sortedByGames[0].name} with ${sortedByGames[0].gamesPlayed} games`);
+  }
+  
+  // Best average (min 3 games)
+  if (sortedByAvg.length > 0 && sortedByAvg[0].avgProfit > 0) {
+    allTimeRecords.push(`📊 Best Average: ${sortedByAvg[0].name} averages +${Math.round(sortedByAvg[0].avgProfit)}₪ per game`);
+  }
+  
+  // Longest current winning streak
+  const longestWinStreak = players.reduce((max, p) => p.currentStreak > max.streak ? { name: p.name, streak: p.currentStreak } : max, { name: '', streak: 0 });
+  if (longestWinStreak.streak >= 2) {
+    allTimeRecords.push(`🔥 Current Hot Streak: ${longestWinStreak.name} is on a ${longestWinStreak.streak}-game winning streak`);
+  }
+  
+  // Longest current losing streak
+  const longestLoseStreak = players.reduce((max, p) => p.currentStreak < max.streak ? { name: p.name, streak: p.currentStreak } : max, { name: '', streak: 0 });
+  if (longestLoseStreak.streak <= -2) {
+    allTimeRecords.push(`❄️ Cold Streak: ${longestLoseStreak.name} is on a ${Math.abs(longestLoseStreak.streak)}-game losing streak`);
+  }
+  
+  const allTimeRecordsText = allTimeRecords.join('\n');
+
+  // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
-      ? `רצף נצחונות נוכחי: ${p.currentStreak}` 
+      ? `Current Winning Streak: ${p.currentStreak} games` 
       : p.currentStreak < 0 
-        ? `רצף הפסדים נוכחי: ${Math.abs(p.currentStreak)}` 
-        : 'ללא רצף';
+        ? `Current Losing Streak: ${Math.abs(p.currentStreak)} games` 
+        : 'No streak';
     
     // Format all game history (most recent first)
     const gameHistoryText = p.gameHistory.length > 0
       ? p.gameHistory.map(g => `${g.date}: ${g.profit >= 0 ? '+' : ''}${g.profit}₪`).join(' | ')
-      : 'שחקן חדש - אין היסטוריה';
+      : 'New player - no history';
     
     // Calculate days since last game info
     const lastGameInfo = p.daysSinceLastGame < 999 
-      ? `ימים מאז משחק אחרון: ${p.daysSinceLastGame}` 
+      ? `Days since last game: ${p.daysSinceLastGame}` 
       : '';
 
     return `
-שחקן ${i + 1}: ${p.name} ${p.isFemale ? '(נקבה - חובה להשתמש בנטיות נקבה!)' : '(זכר)'}
-📊 סטטיסטיקות כלליות:
-- סה"כ משחקים: ${p.gamesPlayed}
-- רווח כולל: ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪
-- ממוצע למשחק: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
-- נצחונות: ${p.winCount} (${Math.round(p.winPercentage)}%)
-- הפסדים: ${p.lossCount}
+Player ${i + 1}: ${p.name} ${p.isFemale ? '(FEMALE - must use feminine Hebrew forms!)' : '(Male)'}
+📊 Overall Statistics:
+- Total Games: ${p.gamesPlayed}
+- Total Profit: ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪
+- Average per Game: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
+- Wins: ${p.winCount} (${Math.round(p.winPercentage)}%)
+- Losses: ${p.lossCount}
 - ${streakText}
-- נצחון הכי גדול: +${p.bestWin}₪
-- הפסד הכי גדול: -${Math.abs(p.worstLoss)}₪
+- Biggest Win: +${p.bestWin}₪
+- Biggest Loss: ${p.worstLoss}₪
 ${lastGameInfo ? `- ${lastGameInfo}` : ''}
 
-📅 היסטוריית משחקים (מהאחרון לראשון):
+📅 Game History (most recent first):
 ${gameHistoryText}`;
   }).join('\n\n========================================\n');
-
-  // Add timestamp to encourage different responses each time
-  const timestamp = new Date().toLocaleString('he-IL');
-  const randomSeed = Math.floor(Math.random() * 10000);
   
-  const prompt = `אתה פרשן ספורט אגדי שעכשיו מנתח פוקר. הסגנון שלך: תובנות חדות, הומור עדין, וניתוח שגורם לשחקנים להרגיש שמישהו באמת מבין אותם.
+  const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
-🎲 מזהה: ${randomSeed} | ${timestamp}
-
-═══════════════════════════════════════
-📊 הנתונים המלאים:
+📊 RAW PLAYER DATA:
 ${playerDataText}
+
+🏆 ALL-TIME RECORDS:
+${allTimeRecordsText}
 ${playerDynamics.length > 0 ? `
-🔥 דינמיקות מעניינות:
+🔥 TABLE DYNAMICS & RIVALRIES:
 ${playerDynamics.join('\n')}` : ''}
-═══════════════════════════════════════
-
-📝 פורמט תשובה (JSON בלבד):
-[{"name":"שם","expectedProfit":מספר,"highlight":"סיבה קצרה","sentence":"משפט יצירתי","isSurprise":true/false}]
 
 ═══════════════════════════════════════
 
-🎯 דוגמאות - ההבדל בין משעמם למעולה:
-
-❌ משעמם: "ליאור משחק טוב לאחרונה וצפוי להמשיך כך"
-✅ מעולה: "מאז נובמבר ליאור ברצף שקט של 4 נצחונות, ממוצע +87₪. הוא מתקרב בזהירות לאלף הראשון - האם הציפיות לא ימוטטו אותו דווקא הלילה?"
-
-❌ משעמם: "אייל הפסיד בזמן האחרון אז כנראה יפסיד שוב"
-✅ מעולה: "אייל נמצא ב-3 הפסדים רצופים עם ממוצע -65₪, אבל מי שמכיר אותו יודע - הפניקס הזה תמיד מתעורר אחרי נפילה. השאלה: האם הלילה הוא הלילה?"
-
-❌ משעמם: "סגל שחקן יציב עם ממוצע טוב"
-✅ מעולה: "סגל הוא האיש שאף פעם לא מרוויח ולא מפסיד הרבה - ממוצע +12₪ ב-15 משחקים אחרונים. יציבות שכזו היא או שעמום מוחלט, או גאונות מוסווית."
+🎯 THE MISSION:
+For each player, calculate an "Expected Profit" (the sum of all expectedProfits must equal exactly 0). You must cross-reference their current form (recent games) with their "Legacy" (All-time records) to find a unique narrative for each person.
 
 ═══════════════════════════════════════
 
-🧠 זהה את הטיפוס של כל שחקן:
-• הקונסיסטנטי - תמיד סביב הממוצע, אין הפתעות
-• הרוסיה-רולטה - או +200 או -150, אין אמצע
-• הפניקס - תמיד חוזר חזק אחרי הפסד גדול
-• הצייד - מצוין נגד שחקנים ספציפיים
-• הנעלם - לא הגיע הרבה זמן, חזר עכשיו
-• העולה - השתפר לאחרונה לעומת העבר
+🛠️ WRITING RULES (CRITICAL):
+
+1. **The Legacy Factor**: Use their all-time records to praise or sting. 
+   Example: "The man who holds the record for the biggest single-night win (540₪) has been quiet lately. Is the King ready to reclaim his throne?"
+
+2. **Data-Backed Insights**: Avoid generic fluff. Use specific dates, percentages, and amounts. 
+   Instead of "He's doing well," say "Since his 120₪ loss on Nov 14th, he has maintained a 65% win rate."
+
+3. **The "Nemesis" Angle**: If data shows Player A loses whenever Player B is present, highlight this rivalry.
+
+4. **Style & Tone**: Be witty, slightly cynical, and dramatic. The "sentence" must be something a player would immediately want to screenshot and share in the WhatsApp group.
+
+5. **Language**: The output values (highlight and sentence) MUST be in HEBREW.
 
 ═══════════════════════════════════════
 
-⚡ 5 הכללים היחידים:
-
-1. סכום אפס - כל ה-expectedProfit ביחד = 0 בדיוק!
-
-2. highlight (עד 12 מילים) - הנתון שהוביל להחלטה:
-   "4 נצחונות רצופים מאז נובמבר"
-   "הפסיד ל-X ב-6 מתוך 7 פעמים"
-   "ממוצע +95₪ ב-5 משחקים אחרונים"
-
-3. sentence (25-35 מילים) - המשפט שישתפו בקבוצה:
-   • לפני שתכתוב, שאל: "האם השחקן ירצה לשלוח את זה לחברים?"
-   • חובה: לפחות מספר אחד מהנתונים
-   • חובה: סגנון שונה לכל שחקן (ציני/דרמטי/פילוסופי/מעודד)
-   • אסור: משפטים גנריים שמתאימים לכולם
-
-4. isSurprise = true רק כשהתחזית הולכת נגד ההיסטוריה
-
-5. מגדר: מור = נקבה. כל השאר = זכר.
+📝 OUTPUT FORMAT (JSON ONLY):
+[
+  {
+    "name": "Player Name",
+    "expectedProfit": number,
+    "highlight": "Short data-driven stat in Hebrew (up to 10 words)",
+    "sentence": "The deep analysis in Hebrew (25-40 words) - must include at least one specific number or record",
+    "isSurprise": boolean
+  }
+]
 
 ═══════════════════════════════════════
 
-🏆 מה הופך תחזית לבלתי נשכחת:
-• תאריכים ספציפיים: "מאז 15/11..."
-• השוואות: "בניגוד לספטמבר..."
-• אבני דרך: "אם ינצח, יעבור את ה-1000₪ כולל"
-• יריבויות: "נגד X הוא 2 מתוך 7"
-• מגמות: "משהו השתנה ב-3 משחקים אחרונים"
-• חזרות: "לא ראינו אותו 3 חודשים"
+💡 EXAMPLES OF QUALITY (HEBREW OUTPUT):
+
+✅ "מאז ה-12/03, יובל נמצא בצניחה חופשית, אבל אל תשכחו שהוא עדיין מלך הקאמבקים עם שיא של מעבר מהפסד לניצחון הכי גבוה בהיסטוריה. הלילה הוא נלחם על הכבוד."
+
+✅ "אביב רחוק משחק אחד בלבד מהשוואת שיא ההפסדים הרצופים של הקבוצה (5). הלחץ בשולחן הלילה יכריע - האם הוא ירשום היסטוריה שלילית או יקטע את הרצף?"
+
+✅ "סגל הוא הבנק של הקבוצה - ממוצע +8₪ ב-20 משחקים. לא מרוויח גדול, לא מפסיד גדול. גאונות משעממת או שעמום גאוני?"
 
 ═══════════════════════════════════════
 
-🚫 מה לא לעשות:
-• לא לחזור על אותו סגנון לשני שחקנים
-• לא משפטים ריקים בלי מספרים
-• לא לפגוע או לזלזל
+⚠️ CONSTRAINTS:
 
-המטרה: תחזית שהשחקנים יקראו, יצחקו, יתווכחו, וישתפו!
+• Gender: 'מור' is Female (נקבה). All other players are Male (זכר). Use correct Hebrew conjugations!
 
-החזר JSON בלבד.`;
+• Math: Sum of all expectedProfit values must equal exactly 0.
+
+• No generic clichés. If a player is "average," analyze their stability as a "boring genius" or "the group's bank."
+
+• isSurprise = true ONLY when your prediction goes AGAINST their historical pattern.
+
+═══════════════════════════════════════
+
+Return ONLY a clean JSON array. No markdown, no explanation.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   

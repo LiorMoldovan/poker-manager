@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rebuy Sound Options</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            padding: 40px;
+        }
+        .sound-option {
+            background: #16213e;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .sound-option h3 {
+            margin: 0;
+            min-width: 200px;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #ff6b6b;
+        }
+        h1 {
+            color: #e94560;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎰 Choose a Rebuy Sound</h1>
+    <p>Click the Play button next to each option to hear it:</p>
+
+    <div class="sound-option">
+        <h3>Option 1: Coin Clink</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 2: Cash Register</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/1989/1989-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 3: Arcade Complete</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 4: Positive Notification</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 5: Video Game Coin</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/888/888-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 6: Simple Ding</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 7: Success Bell</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3')">▶ Play</button>
+    </div>
+
+    <div class="sound-option">
+        <h3>Option 8: Slot Machine Win</h3>
+        <button onclick="play('https://assets.mixkit.co/active_storage/sfx/146/146-preview.mp3')">▶ Play</button>
+    </div>
+
+    <script>
+        let currentAudio = null;
+        function play(url) {
+            if (currentAudio) {
+                currentAudio.pause();
+            }
+            currentAudio = new Audio(url);
+            currentAudio.play();
+        }
+    </script>
+</body>
+</html>
+
