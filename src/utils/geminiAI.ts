@@ -147,12 +147,12 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
     const chaser = sortedByTotalProfit[i];
     const leader = sortedByTotalProfit[i - 1];
-    const gap = leader.totalProfit - chaser.totalProfit;
+    const gap = Math.round(leader.totalProfit - chaser.totalProfit);
     if (gap > 0 && gap <= 200) {
       milestones.push({
         emoji: '📈',
         title: `מרדף בטבלה!`,
-        description: `${chaser.name} (${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪) יכול לעקוף את ${leader.name} עם +${gap}₪ הלילה!`,
+        description: `${chaser.name} (${chaser.totalProfit >= 0 ? '+' : ''}${Math.round(chaser.totalProfit)}₪) יכול לעקוף את ${leader.name} עם +${gap}₪ הלילה!`,
         priority: 85 - i * 5
       });
     }
@@ -161,12 +161,12 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   // 3. CLOSE BATTLES (high priority)
   for (let i = 0; i < sortedByTotalProfit.length; i++) {
     for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
-      const gap = Math.abs(sortedByTotalProfit[i].totalProfit - sortedByTotalProfit[j].totalProfit);
+      const gap = Math.round(Math.abs(sortedByTotalProfit[i].totalProfit - sortedByTotalProfit[j].totalProfit));
       if (gap <= 30 && gap > 0) {
         milestones.push({
           emoji: '⚔️',
           title: 'קרב צמוד!',
-          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} רק ${gap}₪ הפרש! הלילה מכריע.`,
+          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} רק ${Math.round(gap)}₪ הפרש! הלילה מכריע.`,
           priority: 88
         });
       }
@@ -176,11 +176,11 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   // 4. EXACT TIES
   for (let i = 0; i < sortedByTotalProfit.length; i++) {
     for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
-      if (sortedByTotalProfit[i].totalProfit === sortedByTotalProfit[j].totalProfit && sortedByTotalProfit[i].totalProfit !== 0) {
+      if (Math.round(sortedByTotalProfit[i].totalProfit) === Math.round(sortedByTotalProfit[j].totalProfit) && sortedByTotalProfit[i].totalProfit !== 0) {
         milestones.push({
           emoji: '🤝',
           title: 'תיקו מושלם!',
-          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} בדיוק ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${sortedByTotalProfit[i].totalProfit}₪. הלילה שובר!`,
+          description: `${sortedByTotalProfit[i].name} ו-${sortedByTotalProfit[j].name} בדיוק ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${Math.round(sortedByTotalProfit[i].totalProfit)}₪. הלילה שובר!`,
           priority: 92
         });
       }
@@ -191,13 +191,13 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   const roundNumbers = [500, 1000, 1500, 2000];
   players.forEach(p => {
     for (const milestone of roundNumbers) {
-      const distance = milestone - p.totalProfit;
+      const distance = Math.round(milestone - p.totalProfit);
       if (distance > 0 && distance <= 150) {
         milestones.push({
           emoji: '🎯',
           title: `${p.name} - יעד בהישג יד`,
-          description: `עומד על ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪. עוד ${distance}₪ = +${milestone}₪ כולל!`,
-          priority: 75 + (milestone / 100)
+          description: `עומד על ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪. עוד ${distance}₪ = +${milestone}₪ כולל!`,
+          priority: 75 + Math.round(milestone / 100)
         });
         break;
       }
@@ -208,7 +208,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   for (let i = 1; i < Math.min(sortedByYearProfit.length, 4); i++) {
     const chaser = sortedByYearProfit[i];
     const leader = sortedByYearProfit[i - 1];
-    const gap = leader.yearProfit - chaser.yearProfit;
+    const gap = Math.round(leader.yearProfit - chaser.yearProfit);
     if (gap > 0 && gap <= 150 && chaser.yearGames >= 2) {
       milestones.push({
         emoji: '📅',
@@ -254,7 +254,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       milestones.push({
         emoji: '🔄',
         title: `${p.name} - חזרה לפלוס`,
-        description: `${p.yearProfit}₪ ב-${currentYear}. נצחון של +${Math.abs(p.yearProfit)}₪ = חזרה לפלוס השנה!`,
+        description: `${Math.round(p.yearProfit)}₪ ב-${currentYear}. נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ = חזרה לפלוס השנה!`,
         priority: 72
       });
     }
@@ -265,12 +265,12 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   if (sortedByMonthProfit[0]?.monthGames >= 1 && sortedByMonthProfit[1]?.monthGames >= 1) {
     const leader = sortedByMonthProfit[0];
     const chaser = sortedByMonthProfit[1];
-    const gap = leader.monthProfit - chaser.monthProfit;
+    const gap = Math.round(leader.monthProfit - chaser.monthProfit);
     if (gap <= 100) {
       milestones.push({
         emoji: '🏆',
         title: `מרדף על שחקן ${monthNames[currentMonth]}`,
-        description: `${leader.name} מוביל עם ${leader.monthProfit >= 0 ? '+' : ''}${leader.monthProfit}₪. ${chaser.name} רק ${gap}₪ אחריו!`,
+        description: `${leader.name} מוביל עם ${leader.monthProfit >= 0 ? '+' : ''}${Math.round(leader.monthProfit)}₪. ${chaser.name} רק ${gap}₪ אחריו!`,
         priority: 68
       });
     }
@@ -296,7 +296,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       milestones.push({
         emoji: '💪',
         title: `${p.name} - קאמבק`,
-        description: `${Math.abs(p.currentStreak)} הפסדים רצופים, אבל עדיין +${p.totalProfit}₪ כולל. זמן לנקמה!`,
+        description: `${Math.abs(p.currentStreak)} הפסדים רצופים, אבל עדיין +${Math.round(p.totalProfit)}₪ כולל. זמן לנקמה!`,
         priority: 55
       });
     }
@@ -317,9 +317,16 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   });
   
-  // Sort by priority and return top 7-10
+  // Sort by priority and return exactly 10 (or fewer if not enough)
   milestones.sort((a, b) => b.priority - a.priority);
-  return milestones.slice(0, 10);
+  
+  // Clean up any decimal numbers in descriptions
+  const cleanMilestones = milestones.slice(0, 10).map(m => ({
+    ...m,
+    description: m.description.replace(/(\d+)\.(\d+)/g, (match, whole) => Math.round(parseFloat(match)).toString())
+  }));
+  
+  return cleanMilestones;
 };
 
 /**

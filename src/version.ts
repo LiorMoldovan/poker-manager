@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.20.3';
+export const APP_VERSION = '4.20.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.20.4',
+    date: '2025-12-25',
+    changes: [
+      '🔤 Milestones: RTL Hebrew alignment (right-to-left)',
+      '🔢 Clean numbers only - no decimals (87.5 → 88)',
+      '🎯 Always show exactly 10 most interesting milestones',
+      'All profit values rounded with Math.round()',
+      'Better Hebrew text flow in milestone cards'
+    ]
+  },
   {
     version: '4.20.3',
     date: '2025-12-25',

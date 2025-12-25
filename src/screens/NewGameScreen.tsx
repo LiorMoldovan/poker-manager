@@ -2082,7 +2082,7 @@ const NewGameScreen = () => {
                 </div>
 
                 {/* Milestones List */}
-                <div style={{ marginBottom: '1rem' }}>
+                <div style={{ marginBottom: '1rem', direction: 'rtl' }}>
                   {milestonesData.map((milestone, index) => (
                     <div 
                       key={index}
@@ -2092,6 +2092,7 @@ const NewGameScreen = () => {
                         borderRadius: '10px',
                         background: 'rgba(243, 156, 18, 0.1)',
                         borderRight: '4px solid #f39c12',
+                        textAlign: 'right',
                       }}
                     >
                       {/* Emoji and Title */}
@@ -2099,7 +2100,9 @@ const NewGameScreen = () => {
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '0.5rem',
-                        marginBottom: '0.35rem'
+                        marginBottom: '0.35rem',
+                        justifyContent: 'flex-start',
+                        flexDirection: 'row-reverse'
                       }}>
                         <span style={{ fontSize: '1.2rem' }}>{milestone.emoji}</span>
                         <span style={{ 
@@ -2116,7 +2119,7 @@ const NewGameScreen = () => {
                         fontSize: '0.85rem', 
                         color: 'var(--text)',
                         lineHeight: '1.4',
-                        paddingRight: '1.7rem'
+                        paddingLeft: '1.7rem'
                       }}>
                         {milestone.description}
                       </div>
