@@ -908,15 +908,18 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
   }
 ]
 
-🚨 CRITICAL RULES FOR SENTENCE! 🚨
+🚨 SENTENCE RULES! 🚨
 
-1. The TONE must match the prediction (positive profit = optimistic, negative = cautious)
+1. TONE must match prediction (positive profit = optimistic tone, negative = cautious tone)
 
-2. If you mention a NUMBER in the sentence, it MUST be the EXACT SAME as expectedProfit!
-   ❌ WRONG: expectedProfit: 120, sentence: "צפי של +80₪"
-   ✅ RIGHT: expectedProfit: 120, sentence: "צפי של +120₪"
+2. You DON'T have to repeat the profit number in the sentence!
+   - Focus on stats, streaks, milestones, or story - whatever is most interesting
+   - Only mention the number if it adds value to your point
    
-3. You don't HAVE to mention the profit number in the sentence - you can talk about stats, streaks, or milestones instead. But if you DO mention a profit number, it MUST match expectedProfit exactly!
+3. BUT if you DO mention a profit number → it MUST match expectedProfit exactly!
+   ❌ expectedProfit: 120, sentence says "+80₪" ← WRONG!
+   ✅ expectedProfit: 120, sentence says "+120₪" ← CORRECT!
+   ✅ expectedProfit: 120, sentence talks about streaks without mentioning profit ← ALSO FINE!
 
 ═══════════════════════════════════════
 
@@ -927,30 +930,23 @@ If you find yourself writing similar sentences, STOP and rewrite with a fresh an
 - "בטבלת כל הזמנים" = all-time leaderboard
 - "שיא הקבוצה" = group record
 
-📊 CORRECT EXAMPLES (number in sentence = expectedProfit):
+📊 CORRECT EXAMPLES:
 
-✅ expectedProfit: +130 → sentence mentions +130:
-   "ליאור על גל! 3 נצחונות רצופים. הלילה הוא הולך לשלוט עם +130₪ צפויים."
+✅ BEST - Focus on interesting story (no need to repeat number):
+   expectedProfit: +130 → "ליאור ב-4 נצחונות רצופים, קרוב לשיא הקבוצה. המומנטום לצידו והוא מריח דם!"
+   expectedProfit: +80 → "מור עומדת לעקוף את סגל בטבלה. 85₪ הפרש - הלילה יכריע!"
+   expectedProfit: -60 → "אביב ב-3 הפסדים רצופים. צריך לשבור את הרצף לפני שזה הופך לשיא שלילי."
+   expectedProfit: -120 → "סגל נגד הפורום הכי קשה שלו. ההיסטוריה לא לצידו הלילה."
 
-✅ expectedProfit: +80 → sentence mentions +80:
-   "מור ב-70% נצחונות החודש. צפי אופטימי של +80₪ הלילה."
-
-✅ expectedProfit: -60 → sentence mentions -60:
-   "אביב ב-3 הפסדים רצופים. לילה מאתגר עם צפי של -60₪."
-
-✅ expectedProfit: -120 → sentence mentions -120:
-   "סגל נגד כולם הלילה. הפורום הקשה צפוי לעלות לו -120₪."
-
-✅ WITHOUT mentioning number (also valid):
-   expectedProfit: +100 → "ליאור ברצף חם עם 4 נצחונות. המומנטום לצידו והוא מוכן לעוד לילה מנצח!"
+✅ WITH number (only if it adds value):
+   expectedProfit: +100 → "ליאור צריך רק +100₪ כדי לחצות את רף ה-2000₪ כולל!"
+   expectedProfit: -80 → "אביב עלול להפסיד -80₪ ולרדת למקום האחרון."
 
 ❌ WRONG - NUMBER MISMATCH:
    expectedProfit: +100 but sentence says "+70₪" ← FORBIDDEN!
-   expectedProfit: -80 but sentence says "-50₪" ← FORBIDDEN!
    
 ❌ WRONG - TONE MISMATCH:
-   expectedProfit: +100 with "לילה קשה צפוי לו" ← FORBIDDEN!
-   expectedProfit: -80 with "הולך לשלוט" ← FORBIDDEN!
+   expectedProfit: +100 with "לילה קשה צפוי" ← FORBIDDEN!
 
 📍 MILESTONE EXAMPLES (with clear context):
 

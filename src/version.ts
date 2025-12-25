@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.20.2';
+export const APP_VERSION = '4.20.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.20.3',
+    date: '2025-12-25',
+    changes: [
+      '📝 Clarified: No need to repeat profit number in sentence',
+      'Focus on interesting story (streaks, milestones, rivalries)',
+      'Only use number if it adds value to the point',
+      'But IF you use a number → must match exactly',
+      'Better examples showing story-focused sentences'
+    ]
+  },
   {
     version: '4.20.2',
     date: '2025-12-25',
