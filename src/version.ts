@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.33.0';
+export const APP_VERSION = '4.34.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.34.0',
+    date: '2025-12-25',
+    changes: [
+      '🔧 REBUY DATA: Only used for 2026+ (data collection started late 2025)',
+      'Player styles using rebuys only apply when viewing 2026+ data',
+      'Rebuy sentences only shown for 2026+ timeframes',
+      '🎯 REALISTIC MILESTONES: Gap thresholds reduced to 80₪ max',
+      'Only show "can pass" if gap is achievable in one game',
+      'Fixed hardcoded player name in milestone title',
+      'Recovery milestone reduced to 80₪ realistic gap',
+      'Round number milestone reduced to 80₪ gap',
+      '✅ Data accuracy improvements across all filters'
+    ]
+  },
   {
     version: '4.33.0',
     date: '2025-12-25',

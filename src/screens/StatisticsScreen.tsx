@@ -2054,22 +2054,25 @@ const StatisticsScreen = () => {
                 const currentHalf = currentMonth < 6 ? 1 : 2;
                 
                 // 1. CHAMPION TITLE - Who's leading?
+                // Note: Realistic gap for one game is ~80₪ max
                 if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
                   const leader = rankedStats[0];
                   const secondPlace = rankedStats[1];
                   const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
-                  if (gap > 0 && gap <= 100) {
+                  if (gap > 0 && gap <= 80) {
+                    // Close race - passing is realistic in one game
                     milestones.push({
                       emoji: '👑',
-                      title: `אלוף ${periodLabel}?`,
-                      description: `${leader.playerName} מוביל את הטבלה עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} צריך רק ${gap}₪ כדי לעקוף ולהפוך לאלוף!`,
+                      title: `קרב על הכתר!`,
+                      description: `${leader.playerName} מוביל עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪ בלבד - נצחון טוב יכול להפוך את הדירוג!`,
                       priority: 95
                     });
-                  } else if (leader.gamesPlayed >= 10) {
+                  } else if (leader.gamesPlayed >= 5) {
+                    // Big lead - just celebrate the leader, don't claim passing is possible
                     milestones.push({
                       emoji: '🏆',
                       title: `מוביל ${periodLabel}!`,
-                      description: `${leader.playerName} מוביל את טבלת ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
+                      description: `${leader.playerName} מוביל את טבלת ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים.`,
                       priority: 70
                     });
                   }
@@ -2080,7 +2083,7 @@ const StatisticsScreen = () => {
                 if (worstStreaker) {
                   milestones.push({
                     emoji: '❄️',
-                    title: `סגל ברצף הפסדים - הכי ארוך!`,
+                    title: `${worstStreaker.playerName} ברצף הפסדים!`,
                     description: `${worstStreaker.playerName} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים! הלילה הזדמנות לשבור את הרצף השלילי.`,
                     priority: 88
                   });
@@ -2097,31 +2100,33 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 4. LEADERBOARD BATTLES (show max 2 most interesting)
+                // 4. LEADERBOARD BATTLES (show max 2, only realistic gaps of 80₪ or less)
                 let leaderboardBattleCount = 0;
                 for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
                   const chaser = rankedStats[i];
                   const leader = rankedStats[i - 1];
                   const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                  if (gap > 0 && gap <= 150) {
+                  // Only show if gap is realistic for one game (80₪ or less)
+                  if (gap > 0 && gap <= 80) {
                     const isTopBattle = i <= 2;
                     milestones.push({
                       emoji: isTopBattle ? '📈' : '🎯',
-                      title: isTopBattle ? `מרדף על ${i === 1 ? 'הפסגה' : 'מקום ' + i}!` : `${chaser.playerName} רודף`,
-                      description: `${chaser.playerName} במקום ${i + 1} עם ${formatCurrency(chaser.totalProfit)}. ${leader.playerName} לפניו עם הפרש של ${gap}₪ בלבד. נצחון טוב יכול להפוך את הדירוג!`,
+                      title: isTopBattle ? `מרדף על מקום ${i}!` : `קרב על מקום ${i}`,
+                      description: `${chaser.playerName} (מקום ${i + 1}) רודף אחרי ${leader.playerName} (מקום ${i}) עם הפרש של ${gap}₪ בלבד.`,
                       priority: 85 - i * 3
                     });
                     leaderboardBattleCount++;
                   }
                 }
                 
-                // 5. ROUND NUMBER MILESTONE - show ONE best
+                // 5. ROUND NUMBER MILESTONE - show ONE best (only if realistic - 80₪ or less)
                 const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
                 const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
                 rankedStats.forEach(p => {
                   for (const m of roundNumbers) {
                     const dist = Math.round(m - p.totalProfit);
-                    if (dist > 0 && dist <= 120) {
+                    // Only if realistic for one game (80₪ or less)
+                    if (dist > 0 && dist <= 80) {
                       roundCandidates.push({ player: p, milestone: m, distance: dist });
                       break;
                     }
@@ -2132,7 +2137,7 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '🎯',
                     title: `יעד עגול!`,
-                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה!`,
+                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}!`,
                     priority: 75
                   });
                 }
@@ -2165,29 +2170,31 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 8. RECOVERY TO POSITIVE
+                // 8. RECOVERY TO POSITIVE (only if realistic - gap of 80₪ or less)
                 const recoveryCandidate = rankedStats
-                  .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
+                  .filter(p => p.totalProfit < 0 && p.totalProfit > -80 && p.gamesPlayed >= 3)
                   .sort((a, b) => b.totalProfit - a.totalProfit)[0];
                 if (recoveryCandidate) {
                   milestones.push({
                     emoji: '🔄',
-                    title: `חזרה לפלוס!`,
-                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪. נצחון של ${Math.abs(Math.round(recoveryCandidate.totalProfit))}₪ או יותר יחזיר אותו לרווח חיובי!`,
+                    title: `קרוב לפלוס!`,
+                    description: `${recoveryCandidate.playerName} נמצא ב-${Math.round(recoveryCandidate.totalProfit)}₪. נצחון טוב יחזיר אותו לרווח חיובי!`,
                     priority: 72
                   });
                 }
                 
-                // 9. PLAYER OF THE PERIOD - close race
+                // 9. PLAYER OF THE PERIOD - close race (only if gap is realistic)
+                // Skip if champion title already covered this (gap <= 80)
                 if (rankedStats.length >= 2 && rankedStats[0].gamesPlayed >= 3 && rankedStats[1].gamesPlayed >= 3) {
                   const first = rankedStats[0];
                   const second = rankedStats[1];
                   const gap = Math.round(first.totalProfit - second.totalProfit);
-                  if (gap > 0 && gap <= 80) {
+                  // Only show if gap is realistic (60₪ or less) and wasn't covered by champion title
+                  if (gap > 0 && gap <= 60 && gap > 0) {
                     milestones.push({
                       emoji: '🏅',
-                      title: `מרדף על תואר "שחקן ${periodLabel}"!`,
-                      description: `${first.playerName} מוביל עם ${formatCurrency(first.totalProfit)}, ו-${second.playerName} רודף עם הפרש של ${gap}₪ בלבד. קרב צמוד על התואר!`,
+                      title: `קרב צמוד על התואר!`,
+                      description: `${first.playerName} מוביל עם ${formatCurrency(first.totalProfit)}, ${second.playerName} רודף עם הפרש של ${gap}₪ בלבד.`,
                       priority: 78
                     });
                   }
@@ -2280,7 +2287,6 @@ const StatisticsScreen = () => {
                 const avgProfit = player.avgProfit;
                 const avgWin = player.avgWin || 0;
                 const avgLoss = player.avgLoss || 0;
-                const avgRebuys = player.avgRebuysPerGame || 0;
                 const bestWin = player.biggestWin;
                 const worstLoss = player.biggestLoss;
                 const totalProfit = player.totalProfit;
@@ -2292,12 +2298,14 @@ const StatisticsScreen = () => {
                 const lastGames = player.lastGameResults || [];
                 const periodLabel = getTimeframeLabel();
                 
+                // ========== REBUY DATA: Only valid for 2026+ ==========
+                // Rebuy tracking was added in late 2025, so only use it for 2026+ data
+                const isRebuyDataValid = selectedYear >= 2026;
+                const avgRebuys = isRebuyDataValid ? (player.avgRebuysPerGame || 0) : 0;
+                
                 // Calculate advanced metrics
                 const winLossRatio = avgWin > 0 && avgLoss > 0 ? avgWin / avgLoss : 1;
                 const volatilityScore = bestWin + Math.abs(worstLoss);
-                const consistencyScore = winRate >= 45 && winRate <= 55 ? 100 - Math.abs(50 - winRate) * 2 : Math.abs(50 - winRate);
-                const riskScore = avgRebuys * 30 + (volatilityScore / 10); // Higher = more risk-taking
-                const efficiencyScore = avgProfit > 0 ? (avgWin / (avgWin + avgLoss)) * 100 : 0;
                 
                 // Recent form analysis (last 3-6 games)
                 const recentGames = lastGames.slice(0, Math.min(6, lastGames.length));
@@ -2307,6 +2315,7 @@ const StatisticsScreen = () => {
                 const isRecentlyCold = recentGames.length >= 3 && recentWins <= Math.floor(recentGames.length * 0.33);
                 
                 // ========== PLAYER STYLE CLASSIFICATION (Multi-factor) ==========
+                // Note: Rebuy-based styles only apply when rebuy data is valid (2026+)
                 let styleEmoji = '';
                 let styleName = '';
                 
@@ -2314,30 +2323,42 @@ const StatisticsScreen = () => {
                 if (gamesPlayed < 3) {
                   styleName = 'חדש';
                   styleEmoji = '🌱';
-                } else if (avgRebuys >= 2.5 && volatilityScore >= 350) {
+                } else if (isRebuyDataValid && avgRebuys >= 2.5 && volatilityScore >= 350) {
+                  // High rebuys + high volatility = gambler (only if rebuy data valid)
                   styleName = 'מהמר';
                   styleEmoji = '🎰';
-                } else if (winRate >= 60 && avgProfit > 30 && avgRebuys <= 2) {
+                } else if (winRate >= 60 && avgProfit > 30) {
+                  // High win rate + profit = shark (no rebuy dependency)
                   styleName = 'כריש';
                   styleEmoji = '🦈';
                 } else if (volatilityScore >= 450 || (bestWin >= 250 && worstLoss >= 200)) {
+                  // Extreme swings = rollercoaster
                   styleName = 'רכבת הרים';
                   styleEmoji = '🎢';
-                } else if (avgRebuys <= 1.3 && volatilityScore <= 250) {
+                } else if (isRebuyDataValid && avgRebuys <= 1.3 && volatilityScore <= 250) {
+                  // Low rebuys + low volatility = conservative (only if rebuy data valid)
                   styleName = 'שמרן';
                   styleEmoji = '🛡️';
                 } else if (winRate >= 55 && avgProfit > 20) {
+                  // Good win rate + profit = efficient
                   styleName = 'יעיל';
                   styleEmoji = '🎯';
                 } else if (winLossRatio >= 1.3 && winRate >= 45) {
+                  // Wins big when winning = opportunist
                   styleName = 'מנצל הזדמנויות';
                   styleEmoji = '🦅';
-                } else if (avgRebuys >= 2 && winRate < 45) {
+                } else if (isRebuyDataValid && avgRebuys >= 2 && winRate < 45) {
+                  // High rebuys + low win rate = fighter (only if rebuy data valid)
                   styleName = 'לוחם';
                   styleEmoji = '⚔️';
                 } else if (winRate >= 50 && avgProfit < 0) {
+                  // Wins often but loses money = unfocused
                   styleName = 'לא ממוקד';
                   styleEmoji = '🎲';
+                } else if (volatilityScore <= 200 && gamesPlayed >= 5) {
+                  // Low volatility = stable (no rebuy dependency)
+                  styleName = 'יציב';
+                  styleEmoji = '🛡️';
                 } else {
                   styleName = 'מאוזן';
                   styleEmoji = '⚖️';
@@ -2410,23 +2431,23 @@ const StatisticsScreen = () => {
                   `🎯 ${Math.abs(currentStreak)} הפסדים לא משנים את הפוטנציאל. הנצחון הבא קרוב.`,
                 ];
                 
-                // HIGH REBUYS (Risk-takers)
-                const highRebuySentences = [
+                // HIGH REBUYS (Risk-takers) - Only valid for 2026+ data
+                const highRebuySentences = isRebuyDataValid && avgRebuys >= 2.2 ? [
                   `🎰 ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק. לא מפחד להיכנס עמוק.`,
                   `💵 ${avgRebuys.toFixed(1)} רכישות בממוצע - סגנון אגרסיבי שדורש כיסים עמוקים.`,
                   `⚔️ נכנס למשחק עם ${avgRebuys.toFixed(1)} רכישות בממוצע. לוחם עד הסוף.`,
                   `🔥 לא מוותר בקלות - ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק.`,
                   `💪 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על התמדה ונחישות.`,
-                ];
+                ] : [];
                 
-                // LOW REBUYS (Conservative)
-                const lowRebuySentences = [
+                // LOW REBUYS (Conservative) - Only valid for 2026+ data
+                const lowRebuySentences = isRebuyDataValid && avgRebuys > 0 && avgRebuys <= 1.4 ? [
                   `🛡️ רק ${avgRebuys.toFixed(1)} רכישות בממוצע. יודע מתי לעצור.`,
                   `💡 ${avgRebuys.toFixed(1)} רכישות למשחק - גישה שמרנית וחכמה.`,
                   `🎯 שומר על משמעת עם ${avgRebuys.toFixed(1)} רכישות בממוצע.`,
                   `⚖️ ממוצע ${avgRebuys.toFixed(1)} רכישות - לא נסחף, לא מתייאש.`,
                   `🧠 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על שליטה עצמית.`,
-                ];
+                ] : [];
                 
                 // VOLATILE (Big swings)
                 const volatileSentences = [
@@ -2507,10 +2528,12 @@ const StatisticsScreen = () => {
                 } else if (currentStreak <= -3) {
                   const s = pickRandom(coldStreakSentences, 'coldstreak');
                   if (s) sentences.push(s);
-                } else if (avgRebuys >= 2.2 && gamesPlayed >= 5) {
+                } else if (highRebuySentences.length > 0 && gamesPlayed >= 5) {
+                  // Only show rebuy sentences if data is valid (2026+)
                   const s = pickRandom(highRebuySentences, 'highrebuy');
                   if (s) sentences.push(s);
-                } else if (avgRebuys <= 1.4 && avgRebuys > 0 && gamesPlayed >= 5) {
+                } else if (lowRebuySentences.length > 0 && gamesPlayed >= 5) {
+                  // Only show rebuy sentences if data is valid (2026+)
                   const s = pickRandom(lowRebuySentences, 'lowrebuy');
                   if (s) sentences.push(s);
                 } else if (volatilityScore >= 400 && gamesPlayed >= 5) {
@@ -2572,7 +2595,8 @@ const StatisticsScreen = () => {
                     <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                       <span>🎮 {gamesPlayed} משחקים</span>
                       <span>🎯 {Math.round(winRate)}%</span>
-                      {avgRebuys > 0 && <span>💵 {avgRebuys.toFixed(1)} רכישות</span>}
+                      {/* Only show rebuys if data is valid (2026+) */}
+                      {isRebuyDataValid && avgRebuys > 0 && <span>💵 {avgRebuys.toFixed(1)} רכישות</span>}
                       <span>{styleEmoji} {styleName}</span>
                     </div>
                     
