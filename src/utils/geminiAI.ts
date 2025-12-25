@@ -764,20 +764,6 @@ export const generateAIForecasts = async (
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
   // Build the prompt with FULL player data (in English for better AI reasoning)
-  // Calculate year stats for each player
-  const currentYear = new Date().getFullYear();
-  const parseGameDate = (dateStr: string): Date => {
-    const parts = dateStr.split('/');
-    if (parts.length >= 3) {
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]) - 1;
-      let year = parseInt(parts[2]);
-      if (year < 100) year += 2000;
-      return new Date(year, month, day);
-    }
-    return new Date(dateStr);
-  };
-  
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
       ? `🔥 CURRENT WINNING STREAK: ${p.currentStreak} consecutive wins` 
