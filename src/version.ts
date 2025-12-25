@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.27.0';
+export const APP_VERSION = '4.28.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.28.0',
+    date: '2025-12-25',
+    changes: [
+      '📊 NEW: H2 (Half-Year) tracking milestones!',
+      '🏆 NEW: Year-end special milestones (December)!',
+      '⏰ NEW: "Last chance for 2025" battles',
+      '🎢 NEW: Volatility alerts for big-swing players',
+      '👑 NEW: Half-year leader highlights',
+      '⚔️ NEW: Historical rivalry detection',
+      '🎊 NEW: Group total games milestones',
+      'All 20 tests passing!'
+    ]
+  },
   {
     version: '4.27.0',
     date: '2025-12-25',

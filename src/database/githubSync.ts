@@ -15,6 +15,7 @@ import { Player, Game, GamePlayer } from '../types';
 const GITHUB_OWNER = 'LiorMoldovan';
 const GITHUB_REPO = 'poker-manager';
 const GITHUB_FILE_PATH = 'public/sync-data.json';
+const GITHUB_BACKUP_PATH = 'public/full-backup.json';  // Full backup file
 const GITHUB_BRANCH = 'main';
 
 // Storage keys

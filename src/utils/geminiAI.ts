@@ -342,6 +342,185 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       }
     }
   });
+
+  // ========== NEW: HALF-YEAR (H2) TRACKING ==========
+  const halfLabel = currentHalf === 1 ? 'H1 (ינואר-יוני)' : 'H2 (יולי-דצמבר)';
+  const halfLabelShort = currentHalf === 1 ? 'H1' : 'H2';
+  const sortedByHalfProfit = [...playerPeriodStats].sort((a, b) => b.halfProfit - a.halfProfit);
+  
+  // 14. HALF-YEAR LEADERBOARD BATTLES
+  for (let i = 1; i < Math.min(sortedByHalfProfit.length, 4); i++) {
+    const chaser = sortedByHalfProfit[i];
+    const leader = sortedByHalfProfit[i - 1];
+    const gap = Math.round(leader.halfProfit - chaser.halfProfit);
+    if (gap > 0 && gap <= 150 && chaser.halfGames >= 3 && leader.halfGames >= 3) {
+      milestones.push({
+        emoji: '📊',
+        title: `מרדף בטבלת ${halfLabelShort} ${currentYear}!`,
+        description: `בחצי השנה הנוכחי (${halfLabel}): ${chaser.name} במקום ${i + 1} עם ${chaser.halfProfit >= 0 ? '+' : ''}${Math.round(chaser.halfProfit)}₪, ו-${leader.name} לפניו במקום ${i} עם ${leader.halfProfit >= 0 ? '+' : ''}${Math.round(leader.halfProfit)}₪. הפרש של ${gap}₪ בלבד - נצחון הלילה יכול לשנות את הדירוג!`,
+        priority: 75
+      });
+    }
+  }
+
+  // 15. HALF-YEAR LEADER HIGHLIGHT
+  if (sortedByHalfProfit[0]?.halfGames >= 3) {
+    const leader = sortedByHalfProfit[0];
+    milestones.push({
+      emoji: '👑',
+      title: `מוביל ${halfLabelShort} ${currentYear}!`,
+      description: `${leader.name} מוביל את טבלת ${halfLabel} עם ${leader.halfProfit >= 0 ? '+' : ''}${Math.round(leader.halfProfit)}₪ מתוך ${leader.halfGames} משחקים. עם סיום החצי שנה מתקרב, האם הוא ישמור על הכתר?`,
+      priority: 70
+    });
+  }
+
+  // ========== NEW: YEAR-END SPECIAL (December) ==========
+  if (currentMonth === 11) { // December
+    // 16. YEAR-END SUMMARY - TOP PERFORMERS
+    const sortedByYearProfit = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
+    if (sortedByYearProfit[0]?.yearGames >= 5) {
+      const yearLeader = sortedByYearProfit[0];
+      milestones.push({
+        emoji: '🏆',
+        title: `אלוף שנת ${currentYear}?`,
+        description: `${yearLeader.name} מוביל את טבלת ${currentYear} עם ${yearLeader.yearProfit >= 0 ? '+' : ''}${Math.round(yearLeader.yearProfit)}₪! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
+        priority: 95 // Very high priority for year-end!
+      });
+    }
+
+    // 17. YEAR-END BATTLES
+    for (let i = 1; i < Math.min(sortedByYearProfit.length, 3); i++) {
+      const chaser = sortedByYearProfit[i];
+      const leader = sortedByYearProfit[i - 1];
+      const gap = Math.round(leader.yearProfit - chaser.yearProfit);
+      if (gap > 0 && gap <= 200 && chaser.yearGames >= 5 && leader.yearGames >= 5) {
+        milestones.push({
+          emoji: '⏰',
+          title: `הזדמנות אחרונה לשנת ${currentYear}!`,
+          description: `${chaser.name} (מקום ${i + 1}) עם ${chaser.yearProfit >= 0 ? '+' : ''}${Math.round(chaser.yearProfit)}₪ יכול לעקוף את ${leader.name} (מקום ${i}) עם ${leader.yearProfit >= 0 ? '+' : ''}${Math.round(leader.yearProfit)}₪. הפרש של ${gap}₪ - זו ההזדמנות האחרונה לטפס בטבלת ${currentYear}!`,
+          priority: 90
+        });
+      }
+    }
+
+    // 18. YEAR-END REDEMPTION
+    playerPeriodStats.forEach(p => {
+      if (p.yearProfit < 0 && p.yearProfit > -200 && p.yearGames >= 5) {
+        milestones.push({
+          emoji: '🎯',
+          title: `לסיים את ${currentYear} בפלוס?`,
+          description: `${p.name} נמצא ב-${Math.round(p.yearProfit)}₪ לשנת ${currentYear}. נצחון של +${Math.round(Math.abs(p.yearProfit))}₪ או יותר הלילה יסגור את השנה ברווח! זו ההזדמנות האחרונה.`,
+          priority: 85
+        });
+      }
+    });
+  }
+
+  // ========== NEW: ALL-TIME RECORDS ==========
+  
+  // 19. APPROACHING ALL-TIME BEST WIN RECORD
+  const allTimeBestWin = Math.max(...players.map(p => p.bestWin));
+  const bestWinHolder = players.find(p => p.bestWin === allTimeBestWin);
+  players.forEach(p => {
+    if (p !== bestWinHolder && p.currentStreak >= 1 && allTimeBestWin - p.bestWin <= 150) {
+      milestones.push({
+        emoji: '🎰',
+        title: 'מרדף על שיא הנצחון הגדול!',
+        description: `שיא הקבוצה לנצחון הגדול ביותר הוא +${Math.round(allTimeBestWin)}₪ (${bestWinHolder?.name}). השיא האישי של ${p.name} הוא +${Math.round(p.bestWin)}₪. נצחון גדול הלילה יכול לשבור את השיא!`,
+        priority: 72
+      });
+    }
+  });
+
+  // 20. LONGEST WIN STREAK RECORD
+  const allTimeLongestWinStreak = Math.max(...players.map(p => p.currentStreak > 0 ? p.currentStreak : 0));
+  if (allTimeLongestWinStreak >= 3) {
+    const streakHolder = players.find(p => p.currentStreak === allTimeLongestWinStreak);
+    if (streakHolder) {
+      milestones.push({
+        emoji: '🔥',
+        title: 'רצף הנצחונות הארוך ביותר כרגע!',
+        description: `${streakHolder.name} נמצא ברצף של ${allTimeLongestWinStreak} נצחונות רצופים - הרצף הארוך ביותר מבין כל השחקנים הלילה! נצחון נוסף יאריך את הרצף ל-${allTimeLongestWinStreak + 1}.`,
+        priority: 80
+      });
+    }
+  }
+
+  // 21. LONGEST LOSE STREAK - OPPORTUNITY TO BREAK
+  const longestCurrentLoseStreak = Math.min(...players.map(p => p.currentStreak < 0 ? p.currentStreak : 0));
+  if (longestCurrentLoseStreak <= -4) {
+    const loseStreakHolder = players.find(p => p.currentStreak === longestCurrentLoseStreak);
+    if (loseStreakHolder) {
+      milestones.push({
+        emoji: '🆘',
+        title: 'רצף הפסדים ארוך!',
+        description: `${loseStreakHolder.name} ברצף של ${Math.abs(longestCurrentLoseStreak)} הפסדים רצופים - הכי ארוך בקבוצה כרגע. נצחון הלילה יסיים את הסיוט!`,
+        priority: 78
+      });
+    }
+  }
+
+  // ========== NEW: UNIQUE INSIGHTS ==========
+
+  // 22. VOLATILITY ALERT - Big swings player
+  players.forEach(p => {
+    const volatility = p.bestWin + Math.abs(p.worstLoss);
+    if (volatility >= 400 && p.gamesPlayed >= 10) {
+      milestones.push({
+        emoji: '🎢',
+        title: `${p.name} - שחקן ההפתעות!`,
+        description: `${p.name} הוא השחקן הכי תנודתי: הנצחון הגדול שלו +${Math.round(p.bestWin)}₪, ההפסד הגדול ${Math.round(p.worstLoss)}₪. פער של ${Math.round(volatility)}₪! הלילה יכול להיות כל דבר.`,
+        priority: 58
+      });
+    }
+  });
+
+  // 23. CONSISTENCY KING - Low volatility, positive
+  players.forEach(p => {
+    if (p.gamesPlayed >= 15 && p.winPercentage >= 55 && p.avgProfit > 0) {
+      const consistency = Math.abs(p.bestWin - Math.abs(p.worstLoss));
+      if (consistency <= 100) {
+        milestones.push({
+          emoji: '🎯',
+          title: `${p.name} - מלך העקביות!`,
+          description: `${p.name} הוא אחד השחקנים הכי עקביים: ${Math.round(p.winPercentage)}% נצחונות, ממוצע +${Math.round(p.avgProfit)}₪ למשחק, עם סטיות קטנות יחסית. שחקן שקשה לנבא נגדו.`,
+          priority: 55
+        });
+      }
+    }
+  });
+
+  // 24. HEAD-TO-HEAD RIVALRY (if exactly 2 players very close)
+  if (players.length >= 2) {
+    const sorted = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const gap = Math.abs(sorted[i].totalProfit - sorted[i + 1].totalProfit);
+      if (gap <= 50 && sorted[i].gamesPlayed >= 10 && sorted[i + 1].gamesPlayed >= 10) {
+        milestones.push({
+          emoji: '⚔️',
+          title: 'יריבות היסטורית!',
+          description: `${sorted[i].name} ו-${sorted[i + 1].name} נמצאים בפער של ${Math.round(gap)}₪ בלבד בטבלה הכללית של כל הזמנים! שנים של משחקים והם עדיין צמודים. הלילה יקבע מי יוביל.`,
+          priority: 82
+        });
+        break; // Only show one rivalry
+      }
+    }
+  }
+
+  // 25. TOTAL GAMES MILESTONE FOR GROUP
+  const totalGroupGames = players.reduce((sum, p) => sum + p.gamesPlayed, 0);
+  const groupMilestones = [100, 200, 300, 500, 750, 1000];
+  for (const gm of groupMilestones) {
+    if (totalGroupGames >= gm - 10 && totalGroupGames < gm) {
+      milestones.push({
+        emoji: '🎊',
+        title: `הקבוצה מתקרבת ל-${gm} משחקים!`,
+        description: `השחקנים הלילה שיחקו ביחד ${totalGroupGames} משחקים. עוד ${gm - totalGroupGames} משחקים וזה יהיה המשחק ה-${gm} של הקבוצה! אבן דרך משמעותית.`,
+        priority: 60
+      });
+      break;
+    }
+  }
   
   // Sort by priority and return 7-10 most interesting milestones
   // Don't force to 10 - only show truly interesting ones
