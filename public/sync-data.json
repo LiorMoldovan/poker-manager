@@ -1587,6 +1587,72 @@
           "sentence": "ספי, הקאמבק המטורף של הערב! אחרי שנעלם מהנוף של הפוקר, הוא חוזר עם 100% הצלחה. זה כמו לראות אגדה שמתעוררת לחיים, אז מי שמעז – הרווח שלו."
         }
       ]
+    },
+    {
+      "id": "mjoo9is7xeiw2jvmi1p",
+      "date": "2025-12-27T19:06:57.751Z",
+      "status": "completed",
+      "createdAt": "2025-12-27T19:06:57.751Z",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 160,
+          "highlight": "מוביל טבלה כללית, ממוצע +67₪.",
+          "sentence": "ליאור ממשיך לשרוף את הטבלה! עם ממוצע של +67₪ למשחק בטבלה הכללית (כל הזמנים) ו-75% אחוזי נצחון, הוא לא מראה סימני האטה.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 125,
+          "highlight": "עומד על +1498₪ כולל, שואף ל-1500₪.",
+          "sentence": "האם הלילה אייל יחצה את רף ה-1500₪ בטבלה הכללית (כל הזמנים)? אחרי 46 משחקים ב-2025, הוא מתקרב ליעד עם ממוצע של +16₪ למשחק.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": -100,
+          "highlight": "רצף 2 הפסדים, ממוצע -31₪ ב-2025.",
+          "sentence": "אורן מתמודד עם שנה מאתגרת, עם ממוצע של -31₪ למשחק בטבלת 2025. הוא נמצא ברצף של 2 הפסדים, ומחפש נקודת מפנה הלילה.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -65,
+          "highlight": "ממוצע -43₪ ב-2025, לעומת -7₪ היסטורי.",
+          "sentence": "הלילה ליכטר מחפש שיפור משמעותי. ממוצע של -43₪ למשחק בטבלת 2025 גבוה משמעותית מהממוצע ההיסטורי שלו של -7₪ למשחק.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": -70,
+          "highlight": "רצף 2 הפסדים, רווח -5249₪ כולל.",
+          "sentence": "תומר במצוקה קשה! עם רצף של 2 הפסדים בטבלה הכללית (כל הזמנים) ורווח כולל של -5249₪, הוא מחפש נקודות אור.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": -90,
+          "highlight": "סכנה לירידה ל-2500₪ כולל.",
+          "sentence": "אם פיליפ יפסיד הלילה 30₪, הוא יצנח מתחת לרף של -2500₪ בטבלה הכללית (כל הזמנים). הוא נמצא ברצף של 2 הפסדים.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "דן מאן",
+          "expectedProfit": 90,
+          "highlight": "שואף ל-500₪ רווח ב-2025.",
+          "sentence": "דן מאן בדרך לחגוג יום הולדת 25 למשחקיו בקבוצה! הוא שואף להגיע ל-500₪ רווח בטבלת 2025, עם 419₪ כרגע.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "חרדון",
+          "expectedProfit": -50,
+          "highlight": "רצף 2 נצחונות, רווח +1806₪ ב-2025.",
+          "sentence": "חרדון מוביל את החודש עם +385.7₪ בדצמבר, אך הלילה הוא מתמודד מול רצף נצחונות ורווח מרשים של +1806₪ ב-2025. האם יצליח לשמור על המומנטום?",
+          "isSurprise": false
+        }
+      ],
+      "chipGap": -11.999999999999886,
+      "chipGapPerPlayer": -1.4999999999999858
     }
   ],
   "gamePlayers": [
@@ -17248,8 +17314,144 @@
       },
       "finalValue": 155.70000000000002,
       "profit": 35.7
+    },
+    {
+      "id": "mjoo9is7ml7lmadfmos",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 12,
+        "2": 3,
+        "3": 17,
+        "4": 5,
+        "5": 16,
+        "6": 17
+      },
+      "finalValue": 323.40000000000003,
+      "profit": 294.90000000000003
+    },
+    {
+      "id": "mjoo9is7m39yn32nno",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -118.50000000000001
+    },
+    {
+      "id": "mjoo9is7vth8cqbx0v",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 4.5,
+      "chipCounts": {
+        "1": 52,
+        "2": 20,
+        "3": 18,
+        "4": 11,
+        "5": 40,
+        "6": 17
+      },
+      "finalValue": 416.1,
+      "profit": 282.6
+    },
+    {
+      "id": "mjoo9is75cffcj03maw",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 10,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -298.5
+    },
+    {
+      "id": "mjoo9is7mpmntxz4hym",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 5,
+      "chipCounts": {
+        "1": 9,
+        "2": 2,
+        "3": 0,
+        "4": 11,
+        "5": 28,
+        "6": 0
+      },
+      "finalValue": 102.45,
+      "profit": -46.05000000000001
+    },
+    {
+      "id": "mjoo9is7tg51i6412mb",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -88.50000000000001
+    },
+    {
+      "id": "mjoo9is76hekuk4arn8",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 18,
+        "2": 25,
+        "3": 15,
+        "4": 13,
+        "5": 18,
+        "6": 4
+      },
+      "finalValue": 152.70000000000002,
+      "profit": 94.2
+    },
+    {
+      "id": "mjoo9is7hf121t4u5jv",
+      "gameId": "mjoo9is7xeiw2jvmi1p",
+      "playerId": "bce0db4f-e093-42a4-871f-a029f284e3bf",
+      "playerName": "דן מאן",
+      "rebuys": 4.5,
+      "chipCounts": {
+        "1": 9,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 4,
+        "6": 0
+      },
+      "finalValue": 13.35,
+      "profit": -120.15000000000002
     }
   ],
-  "lastUpdated": "2025-12-22T11:00:41.143Z",
+  "lastUpdated": "2025-12-27T23:42:13.791Z",
   "updatedBy": "admin"
 }
