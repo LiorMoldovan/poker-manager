@@ -48,6 +48,18 @@ export interface PendingForecast {
   linkedGameId?: string;  // Set when game starts
 }
 
+// Shared expense (food, pizza, etc.) during a game
+export interface SharedExpense {
+  id: string;
+  description: string;      // e.g., "Pizza", "Food", etc.
+  paidBy: string;           // playerId of who paid
+  paidByName: string;       // player name of who paid (for display)
+  amount: number;           // total amount paid
+  participants: string[];   // playerIds who are splitting the cost
+  participantNames: string[]; // player names (for display)
+  createdAt: string;
+}
+
 export interface Game {
   id: string;
   date: string;
@@ -57,6 +69,7 @@ export interface Game {
   chipGap?: number; // Gap in money value (positive = extra chips, negative = missing chips)
   chipGapPerPlayer?: number; // How much each player's profit was adjusted
   forecasts?: GameForecast[]; // Forecasts made before the game started
+  sharedExpenses?: SharedExpense[]; // Shared expenses (food, etc.) during the game
 }
 
 export interface GamePlayer {

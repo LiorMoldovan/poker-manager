@@ -1,4 +1,4 @@
-import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast } from '../types';
+import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
 import { uploadBackupToGitHub } from './githubSync';
 
 const STORAGE_KEYS = {
@@ -248,6 +248,31 @@ export const updateGame = (gameId: string, updates: Partial<Game>): void => {
   if (gameIndex !== -1) {
     games[gameIndex] = { ...games[gameIndex], ...updates };
     setItem(STORAGE_KEYS.GAMES, games);
+  }
+};
+
+// Add a shared expense to a game
+export const addSharedExpense = (gameId: string, expense: SharedExpense): void => {
+  const games = getAllGames();
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    const game = games[gameIndex];
+    game.sharedExpenses = game.sharedExpenses || [];
+    game.sharedExpenses.push(expense);
+    setItem(STORAGE_KEYS.GAMES, games);
+  }
+};
+
+// Remove a shared expense from a game
+export const removeSharedExpense = (gameId: string, expenseId: string): void => {
+  const games = getAllGames();
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    const game = games[gameIndex];
+    if (game.sharedExpenses) {
+      game.sharedExpenses = game.sharedExpenses.filter(e => e.id !== expenseId);
+      setItem(STORAGE_KEYS.GAMES, games);
+    }
   }
 };
 

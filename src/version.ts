@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.21';
+export const APP_VERSION = '4.38.22';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.22',
+    date: '2025-12-28',
+    changes: [
+      '📅 AI Prompt: Focus on YEAR/HALF, not all-time!',
+      'Reordered player data: Year → Half → Recent → All-time',
+      'Added Current Half (H1/H2) stats for each player',
+      'Fixed: Streak of 1 now says "Won/Lost last game" not "streak"',
+      'All-time section marked as "only for dramatic milestones"',
+      'Added rule 6: Focus on current year/half in sentences'
+    ]
+  },
   {
     version: '4.38.21',
     date: '2025-12-28',

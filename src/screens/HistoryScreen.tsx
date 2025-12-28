@@ -118,6 +118,11 @@ const HistoryScreen = () => {
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
                     {game.players.length} players • {(game as any).totalBuyins || 0} buyins
+                    {game.sharedExpenses && game.sharedExpenses.length > 0 && (
+                      <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>
+                        🍕 ₪{cleanNumber(game.sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

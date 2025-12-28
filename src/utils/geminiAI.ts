@@ -1101,11 +1101,16 @@ export const generateAIForecasts = async (
   
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
-    const streakText = p.currentStreak > 0 
-      ? `🔥 CURRENT WINNING STREAK: ${p.currentStreak} consecutive wins` 
-      : p.currentStreak < 0 
-        ? `❄️ CURRENT LOSING STREAK: ${Math.abs(p.currentStreak)} consecutive losses` 
-        : '⚪ NO ACTIVE STREAK (last game was a break-even or just started)';
+    // Only call it a "streak" if 2+ consecutive wins/losses
+    const streakText = p.currentStreak >= 2 
+      ? `🔥 HOT STREAK: ${p.currentStreak} consecutive wins!` 
+      : p.currentStreak <= -2 
+        ? `❄️ COLD STREAK: ${Math.abs(p.currentStreak)} consecutive losses` 
+        : p.currentStreak === 1
+          ? `📈 Won last game`
+          : p.currentStreak === -1
+            ? `📉 Lost last game`
+            : '⚪ Last game was break-even';
     
     // Calculate year stats
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
@@ -1130,38 +1135,45 @@ export const generateAIForecasts = async (
     // Determine rank in tonight's players
     const rankAllTime = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
 
+    // Calculate current half stats
+    const halfStartMonth = currentHalf === 1 ? 0 : 6;
+    const thisHalfGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear && d.getMonth() >= halfStartMonth && d.getMonth() < halfStartMonth + 6;
+    });
+    const halfProfit = thisHalfGames.reduce((sum, g) => sum + g.profit, 0);
+    const halfGamesCount = thisHalfGames.length;
+
     return `
 ═══════════════════════════════════════
 PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use feminine Hebrew!)' : '👨 (Male)'}
 ═══════════════════════════════════════
 
 🎯 SUGGESTED EXPECTED PROFIT: ${suggestion >= 0 ? '+' : ''}${suggestion}₪
-   (Based on 70% recent performance + 30% overall + streak modifiers)
    You can adjust ±30₪ based on your analysis, but stay close to this!
 
-📊 ALL-TIME STATS (since we started playing):
-   • RANK: #${rankAllTime} out of ${players.length} players tonight
-   • TOTAL PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
-   • GAMES PLAYED: ${p.gamesPlayed}
-   • AVERAGE/GAME: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
-   • WIN RATE: ${Math.round(p.winPercentage)}% (${p.winCount} wins, ${p.lossCount} losses)
-   • BEST WIN EVER: +${Math.round(p.bestWin)}₪
-   • WORST LOSS EVER: ${Math.round(p.worstLoss)}₪
-   • ${streakText}
-
-📈 RECENT FORM (VERY IMPORTANT!):
-   • LAST 5 GAMES AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪/game
-   • Compare to ALL-TIME AVG: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪/game
-   ${recentAvg > p.avgProfit + 10 ? '⬆️ IMPROVING - Recent form better than average!' : 
-     recentAvg < p.avgProfit - 10 ? '⬇️ DECLINING - Recent form worse than average!' : 
-     '➡️ STABLE - Performing as expected'}
-
-📅 YEAR ${currentYear} STATS:
+⭐ CURRENT YEAR ${currentYear} (MOST IMPORTANT - FOCUS ON THIS!):
    • GAMES THIS YEAR: ${yearGames}
    • PROFIT THIS YEAR: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
-   ${yearGames > 0 ? `• AVG THIS YEAR: ${yearGames > 0 ? (yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames) : 0}₪/game` : ''}
+   ${yearGames > 0 ? `• AVG THIS YEAR: ${(yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames)}₪/game` : ''}
+   • ${streakText}
 
-📜 LAST 10 GAMES (most recent first):
+📅 CURRENT HALF (H${currentHalf} ${currentYear}):
+   • GAMES THIS HALF: ${halfGamesCount}
+   • PROFIT THIS HALF: ${halfProfit >= 0 ? '+' : ''}${Math.round(halfProfit)}₪
+
+📈 RECENT FORM (Last 5 games):
+   • AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪/game
+   ${recentAvg > p.avgProfit + 10 ? '⬆️ IMPROVING' : 
+     recentAvg < p.avgProfit - 10 ? '⬇️ DECLINING' : 
+     '➡️ STABLE'}
+
+📊 ALL-TIME (use only for dramatic milestones like "about to reach 10,000₪ total"):
+   • RANK: #${rankAllTime}/${players.length} tonight
+   • TOTAL: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
+   • GAMES: ${p.gamesPlayed}
+
+📜 LAST 10 GAMES:
    ${gameHistoryText}`;
   }).join('\n');
   
@@ -1198,12 +1210,13 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
   
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
-📋 TL;DR - THE 5 RULES YOU MUST FOLLOW:
+📋 TL;DR - THE 6 RULES YOU MUST FOLLOW:
 1. Use SUGGESTED expected profits for each player (±30₪ max deviation)
 2. Mark PRE-SELECTED surprise players with isSurprise: true (see below)
 3. Sum of all expectedProfits MUST = 0 exactly
 4. Tone must match profit (positive=optimistic, negative=cautious)
 5. Each sentence must start differently (use variety patterns below)
+6. FOCUS ON CURRENT YEAR/HALF in sentences - only mention all-time for dramatic milestones!
 ${surpriseText}
 
 🚨🚨🚨 CRITICAL ACCURACY WARNING 🚨🚨🚨

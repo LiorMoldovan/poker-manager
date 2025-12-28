@@ -1,4 +1,4 @@
-import { GamePlayer, ChipValue, Settlement, SkippedTransfer } from '../types';
+import { GamePlayer, ChipValue, Settlement, SkippedTransfer, SharedExpense } from '../types';
 
 export const calculateChipTotal = (
   chipCounts: Record<string, number>,
@@ -149,5 +149,81 @@ export const getProfitColor = (profit: number): string => {
   if (profit > 0) return 'profit';
   if (profit < 0) return 'loss';
   return 'neutral';
+};
+
+// Calculate expense balances for each player
+// Returns: { playerId: balance } where positive = receives money, negative = owes money
+export interface ExpenseBalance {
+  playerId: string;
+  playerName: string;
+  balance: number; // positive = receives, negative = owes
+}
+
+export const calculateExpenseBalances = (expenses: SharedExpense[]): ExpenseBalance[] => {
+  const balanceMap = new Map<string, { name: string; balance: number }>();
+  
+  for (const expense of expenses) {
+    const perPerson = expense.amount / expense.participants.length;
+    
+    // Person who paid receives money from everyone
+    const payerData = balanceMap.get(expense.paidBy) || { name: expense.paidByName, balance: 0 };
+    payerData.balance += expense.amount; // They paid the full amount
+    balanceMap.set(expense.paidBy, payerData);
+    
+    // Each participant owes their share
+    for (let i = 0; i < expense.participants.length; i++) {
+      const participantId = expense.participants[i];
+      const participantName = expense.participantNames[i];
+      const data = balanceMap.get(participantId) || { name: participantName, balance: 0 };
+      data.balance -= perPerson; // They owe their share
+      balanceMap.set(participantId, data);
+    }
+  }
+  
+  return Array.from(balanceMap.entries()).map(([playerId, data]) => ({
+    playerId,
+    playerName: data.name,
+    balance: data.balance,
+  }));
+};
+
+// Calculate settlements for expenses only
+export const calculateExpenseSettlements = (
+  expenses: SharedExpense[],
+  minTransfer: number = 1
+): Settlement[] => {
+  const balances = calculateExpenseBalances(expenses);
+  
+  // Use the same settlement algorithm
+  const settlements: Settlement[] = [];
+  
+  // Clone balances for mutation
+  const workingBalances = balances.map(b => ({ ...b }));
+  
+  // Get creditors (positive balance - they paid more than their share)
+  // Get debtors (negative balance - they owe money)
+  const creditors = workingBalances.filter(b => b.balance > 0.01);
+  const debtors = workingBalances.filter(b => b.balance < -0.01);
+  
+  // Simple greedy matching
+  for (const creditor of creditors) {
+    while (creditor.balance > 0.01) {
+      const debtor = debtors.find(d => d.balance < -0.01);
+      if (!debtor) break;
+      
+      const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
+      if (amount >= minTransfer) {
+        settlements.push({
+          from: debtor.playerName,
+          to: creditor.playerName,
+          amount: Math.round(amount),
+        });
+      }
+      creditor.balance -= amount;
+      debtor.balance += amount;
+    }
+  }
+  
+  return settlements;
 };
 

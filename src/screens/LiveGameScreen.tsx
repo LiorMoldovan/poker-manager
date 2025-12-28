@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GamePlayer, GameAction } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame } from '../database/storage';
+import { GamePlayer, GameAction, SharedExpense } from '../types';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
+import AddExpenseModal from '../components/AddExpenseModal';
 
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -15,6 +16,8 @@ const LiveGameScreen = () => {
   const [rebuyValue, setRebuyValue] = useState(50);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
+  const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
@@ -55,7 +58,26 @@ const LiveGameScreen = () => {
     setPlayers(gamePlayers);
     const settings = getSettings();
     setRebuyValue(settings.rebuyValue);
+    
+    // Load existing shared expenses
+    const game = getGame(gameId);
+    if (game?.sharedExpenses) {
+      setSharedExpenses(game.sharedExpenses);
+    }
+    
     setIsLoading(false);
+  };
+  
+  const handleAddExpense = (expense: SharedExpense) => {
+    if (!gameId) return;
+    addSharedExpense(gameId, expense);
+    setSharedExpenses(prev => [...prev, expense]);
+  };
+  
+  const handleRemoveExpense = (expenseId: string) => {
+    if (!gameId) return;
+    removeSharedExpense(gameId, expenseId);
+    setSharedExpenses(prev => prev.filter(e => e.id !== expenseId));
   };
 
   // Loading state
@@ -577,6 +599,71 @@ const LiveGameScreen = () => {
         </div>
       </div>
 
+      {/* Shared Expenses Section */}
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">🍕 Shared Expenses</h2>
+          <button 
+            className="btn btn-sm btn-primary"
+            onClick={() => setShowExpenseModal(true)}
+          >
+            + Add
+          </button>
+        </div>
+        
+        {sharedExpenses.length === 0 ? (
+          <div className="text-muted" style={{ textAlign: 'center', padding: '1rem', fontSize: '0.875rem' }}>
+            No shared expenses yet
+          </div>
+        ) : (
+          <div className="list">
+            {sharedExpenses.map(expense => {
+              const perPerson = expense.amount / expense.participants.length;
+              return (
+                <div key={expense.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontWeight: '600' }}>{expense.description}</span>
+                      <span className="text-muted" style={{ marginLeft: '0.5rem' }}>
+                        ₪{cleanNumber(expense.amount)}
+                      </span>
+                    </div>
+                    <button 
+                      className="btn btn-sm btn-secondary"
+                      onClick={() => handleRemoveExpense(expense.id)}
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>
+                    <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span> paid
+                    {' • '}
+                    ₪{cleanNumber(perPerson)} per person
+                    {' • '}
+                    {expense.participantNames.length} participants
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        
+        {sharedExpenses.length > 0 && (
+          <div style={{ 
+            marginTop: '0.5rem', 
+            padding: '0.5rem', 
+            background: 'rgba(16, 185, 129, 0.1)', 
+            borderRadius: '6px',
+            textAlign: 'center',
+            fontSize: '0.875rem',
+          }}>
+            <span className="text-muted">Total expenses: </span>
+            <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">Players</h2>
@@ -643,7 +730,15 @@ const LiveGameScreen = () => {
         🏁 End Game & Count Chips
       </button>
 
-      </div>
+      {/* Expense Modal */}
+      {showExpenseModal && (
+        <AddExpenseModal
+          players={players}
+          onClose={() => setShowExpenseModal(false)}
+          onAdd={handleAddExpense}
+        />
+      )}
+    </div>
   );
 };
 
