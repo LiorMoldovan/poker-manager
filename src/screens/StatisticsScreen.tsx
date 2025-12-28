@@ -418,14 +418,14 @@ const StatisticsScreen = () => {
     const allGamePlayers = getAllGamePlayers();
     const allPlayers = getAllPlayers();
     
-    // Helper to calculate stats for a specific period - returns only winner (1st place)
-    const calculatePeriodWinner = (start: Date, end: Date) => {
+    // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
+    const calculatePeriodTop3 = (start: Date, end: Date): Array<{ playerName: string; profit: number }> => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
         return gameDate >= start && gameDate <= end;
       });
       
-      if (periodGames.length === 0) return null;
+      if (periodGames.length === 0) return [];
       
       // Calculate profit per player
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
@@ -453,12 +453,12 @@ const StatisticsScreen = () => {
       // Calculate min games threshold (33% of period games)
       const minGames = Math.ceil(periodGames.length * 0.33);
       
-      // Filter to active players and sort by profit - return only winner
-      const sorted = Object.values(playerProfits)
+      // Filter to active players and sort by profit - return top 3
+      return Object.values(playerProfits)
         .filter(p => p.gamesPlayed >= minGames)
-        .sort((a, b) => b.profit - a.profit);
-      
-      return sorted.length > 0 ? sorted[0] : null;
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3)
+        .map(p => ({ playerName: p.playerName, profit: p.profit }));
     };
 
     // Helper to calculate stats for a specific period - returns top 3
@@ -522,9 +522,9 @@ const StatisticsScreen = () => {
     // This updates automatically each year - in 2026 it will include 2026, 2025, etc.
     const history: Array<{
       year: number;
-      h1Winner: { playerName: string; profit: number } | null;
-      h2Winner: { playerName: string; profit: number } | null;
-      yearlyWinner: { playerName: string; profit: number } | null;
+      h1Top3: Array<{ playerName: string; profit: number }>;
+      h2Top3: Array<{ playerName: string; profit: number }>;
+      yearlyTop3: Array<{ playerName: string; profit: number }>;
     }> = [];
     
     for (let year = currentYear; year >= 2021; year--) {
@@ -535,17 +535,17 @@ const StatisticsScreen = () => {
       const fullYearStart = new Date(year, 0, 1);
       const fullYearEnd = new Date(year, 11, 31, 23, 59, 59);
       
-      const h1Winner = calculatePeriodWinner(yearH1Start, yearH1End);
-      const h2Winner = calculatePeriodWinner(yearH2Start, yearH2End);
-      const yearlyWinner = calculatePeriodWinner(fullYearStart, fullYearEnd);
+      const h1Top3 = calculatePeriodTop3(yearH1Start, yearH1End);
+      const h2Top3 = calculatePeriodTop3(yearH2Start, yearH2End);
+      const yearlyTop3 = calculatePeriodTop3(fullYearStart, fullYearEnd);
       
-      // Only add if there's at least one winner
-      if (h1Winner || h2Winner || yearlyWinner) {
+      // Only add if there's at least one result
+      if (h1Top3.length > 0 || h2Top3.length > 0 || yearlyTop3.length > 0) {
         history.push({
           year,
-          h1Winner: h1Winner ? { playerName: h1Winner.playerName, profit: h1Winner.profit } : null,
-          h2Winner: h2Winner ? { playerName: h2Winner.playerName, profit: h2Winner.profit } : null,
-          yearlyWinner: yearlyWinner ? { playerName: yearlyWinner.playerName, profit: yearlyWinner.profit } : null
+          h1Top3,
+          h2Top3,
+          yearlyTop3
         });
       }
     }
@@ -2289,21 +2289,21 @@ const StatisticsScreen = () => {
                   {/* Table Header */}
                   <div style={{ 
                     display: 'grid', 
-                    gridTemplateColumns: '50px 1fr 1fr 1fr',
+                    gridTemplateColumns: '45px 1fr 1fr 1fr',
                     gap: '0.25rem',
                     marginBottom: '0.35rem',
                     padding: '0.25rem 0.4rem',
                     background: 'rgba(255, 255, 255, 0.03)',
                     borderRadius: '4px',
-                    fontSize: '0.6rem',
+                    fontSize: '0.55rem',
                     fontWeight: '600',
                     color: 'var(--text-muted)',
                     textAlign: 'center'
                   }}>
                     <div>Year</div>
-                    <div style={{ color: '#3b82f6' }}>H1 🏆</div>
-                    <div style={{ color: '#8b5cf6' }}>H2 🏆</div>
-                    <div style={{ color: 'var(--primary)' }}>Year 🏆</div>
+                    <div style={{ color: '#3b82f6' }}>H1</div>
+                    <div style={{ color: '#8b5cf6' }}>H2</div>
+                    <div style={{ color: 'var(--primary)' }}>Year</div>
                   </div>
 
                   {/* Year Rows */}
@@ -2312,14 +2312,14 @@ const StatisticsScreen = () => {
                       key={yearData.year}
                       style={{ 
                         display: 'grid', 
-                        gridTemplateColumns: '50px 1fr 1fr 1fr',
+                        gridTemplateColumns: '45px 1fr 1fr 1fr',
                         gap: '0.25rem',
                         padding: '0.4rem',
-                        marginBottom: '0.25rem',
+                        marginBottom: '0.35rem',
                         background: 'rgba(255, 255, 255, 0.02)',
                         borderRadius: '6px',
                         border: '1px solid rgba(255, 255, 255, 0.05)',
-                        fontSize: '0.65rem'
+                        fontSize: '0.55rem'
                       }}
                     >
                       {/* Year */}
@@ -2334,85 +2334,124 @@ const StatisticsScreen = () => {
                         {yearData.year}
                       </div>
 
-                      {/* H1 Winner */}
+                      {/* H1 Top 3 */}
                       <div style={{ 
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        gap: '0.15rem',
                         padding: '0.2rem',
-                        background: yearData.h1Winner ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        background: yearData.h1Top3.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
                         borderRadius: '4px'
                       }}>
-                        {yearData.h1Winner ? (
-                          <>
-                            <span style={{ fontWeight: '600', color: 'var(--text)' }}>
-                              {yearData.h1Winner.playerName}
-                            </span>
-                            <span style={{ 
-                              fontSize: '0.55rem',
-                              color: yearData.h1Winner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                        {yearData.h1Top3.length > 0 ? (
+                          yearData.h1Top3.map((player, idx) => (
+                            <div key={idx} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.2rem',
+                              justifyContent: 'center'
                             }}>
-                              {yearData.h1Winner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.h1Winner.profit)}
-                            </span>
-                          </>
+                              <span style={{ fontSize: '0.6rem' }}>
+                                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                              </span>
+                              <span style={{ 
+                                fontWeight: idx === 0 ? '600' : '400', 
+                                color: 'var(--text)',
+                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
+                              }}>
+                                {player.playerName}
+                              </span>
+                              <span style={{ 
+                                fontSize: '0.48rem',
+                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                              }}>
+                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              </span>
+                            </div>
+                          ))
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
                         )}
                       </div>
 
-                      {/* H2 Winner */}
+                      {/* H2 Top 3 */}
                       <div style={{ 
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        gap: '0.15rem',
                         padding: '0.2rem',
-                        background: yearData.h2Winner ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                        background: yearData.h2Top3.length > 0 ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
                         borderRadius: '4px'
                       }}>
-                        {yearData.h2Winner ? (
-                          <>
-                            <span style={{ fontWeight: '600', color: 'var(--text)' }}>
-                              {yearData.h2Winner.playerName}
-                            </span>
-                            <span style={{ 
-                              fontSize: '0.55rem',
-                              color: yearData.h2Winner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                        {yearData.h2Top3.length > 0 ? (
+                          yearData.h2Top3.map((player, idx) => (
+                            <div key={idx} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.2rem',
+                              justifyContent: 'center'
                             }}>
-                              {yearData.h2Winner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.h2Winner.profit)}
-                            </span>
-                          </>
+                              <span style={{ fontSize: '0.6rem' }}>
+                                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                              </span>
+                              <span style={{ 
+                                fontWeight: idx === 0 ? '600' : '400', 
+                                color: 'var(--text)',
+                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
+                              }}>
+                                {player.playerName}
+                              </span>
+                              <span style={{ 
+                                fontSize: '0.48rem',
+                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                              }}>
+                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              </span>
+                            </div>
+                          ))
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
                         )}
                       </div>
 
-                      {/* Yearly Winner */}
+                      {/* Yearly Top 3 */}
                       <div style={{ 
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        gap: '0.15rem',
                         padding: '0.2rem',
-                        background: yearData.yearlyWinner ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.08))' : 'transparent',
+                        background: yearData.yearlyTop3.length > 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))' : 'transparent',
                         borderRadius: '4px',
-                        border: yearData.yearlyWinner ? '1px solid rgba(251, 191, 36, 0.2)' : 'none'
+                        border: yearData.yearlyTop3.length > 0 ? '1px solid rgba(251, 191, 36, 0.15)' : 'none'
                       }}>
-                        {yearData.yearlyWinner ? (
-                          <>
-                            <span style={{ fontWeight: '700', color: '#fbbf24' }}>
-                              🏆 {yearData.yearlyWinner.playerName}
-                            </span>
-                            <span style={{ 
-                              fontSize: '0.55rem',
-                              color: yearData.yearlyWinner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                        {yearData.yearlyTop3.length > 0 ? (
+                          yearData.yearlyTop3.map((player, idx) => (
+                            <div key={idx} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '0.2rem',
+                              justifyContent: 'center'
                             }}>
-                              {yearData.yearlyWinner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.yearlyWinner.profit)}
-                            </span>
-                          </>
+                              <span style={{ fontSize: '0.6rem' }}>
+                                {idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}
+                              </span>
+                              <span style={{ 
+                                fontWeight: idx === 0 ? '700' : '400', 
+                                color: idx === 0 ? '#fbbf24' : 'var(--text)',
+                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
+                              }}>
+                                {player.playerName}
+                              </span>
+                              <span style={{ 
+                                fontSize: '0.48rem',
+                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                              }}>
+                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              </span>
+                            </div>
+                          ))
                         ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
                         )}
                       </div>
                     </div>
