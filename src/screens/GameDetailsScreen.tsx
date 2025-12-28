@@ -127,6 +127,32 @@ const GameDetailsScreen = () => {
   
   // Calculate expense total
   const totalExpenseAmount = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  
+  // Helper to get food role for a player name (for settlement display)
+  const getFoodRole = (playerName: string): 'buyer' | 'eater' | null => {
+    if (sharedExpenses.length === 0) return null;
+    
+    // Check if they paid for any food
+    const isBuyer = sharedExpenses.some(e => e.paidByName === playerName);
+    if (isBuyer) return 'buyer';
+    
+    // Check if they participated in any food
+    const isEater = sharedExpenses.some(e => e.participantNames.includes(playerName));
+    if (isEater) return 'eater';
+    
+    return null;
+  };
+  
+  // Render player name with food icon if applicable
+  const renderPlayerWithFoodIcon = (playerName: string) => {
+    const role = getFoodRole(playerName);
+    if (role === 'buyer') {
+      return <>{playerName} <span style={{ fontSize: '1rem' }}>🍕</span></>;
+    } else if (role === 'eater') {
+      return <>{playerName} <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>🍕</span></>;
+    }
+    return playerName;
+  };
 
   // Loading state
   if (isLoading) {
@@ -308,9 +334,9 @@ const GameDetailsScreen = () => {
             <h2 className="card-title mb-2">💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
             {settlements.map((s, index) => (
               <div key={index} className="settlement-row">
-                <span>{s.from}</span>
+                <span>{renderPlayerWithFoodIcon(s.from)}</span>
                 <span className="settlement-arrow">➜</span>
-                <span>{s.to}</span>
+                <span>{renderPlayerWithFoodIcon(s.to)}</span>
                 <span className="settlement-amount">{formatCurrency(s.amount)}</span>
               </div>
             ))}
@@ -325,9 +351,9 @@ const GameDetailsScreen = () => {
             </p>
             {skippedTransfers.map((s, index) => (
               <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
-                <span>{s.from}</span>
+                <span>{renderPlayerWithFoodIcon(s.from)}</span>
                 <span className="settlement-arrow">➜</span>
-                <span>{s.to}</span>
+                <span>{renderPlayerWithFoodIcon(s.to)}</span>
                 <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
               </div>
             ))}

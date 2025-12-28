@@ -2779,8 +2779,22 @@ const StatisticsScreen = () => {
                   const secondPlace = rankedStats[1];
                   const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
                   
-                  // Year-end special milestone
-                  if (timePeriod === 'year' && isEndOfYear && leader.gamesPlayed >= 5) {
+                  if (isHistoricalPeriod) {
+                    // HISTORICAL: Show what happened, not speculation
+                    const halfName = timePeriod === 'h1' ? 'H1' : timePeriod === 'h2' ? 'H2' : '';
+                    const periodName = timePeriod === 'year' ? `שנת ${selectedYear}` : 
+                                       halfName ? `${halfName} ${selectedYear}` : periodLabel;
+                    milestones.push({
+                      emoji: '🏆',
+                      title: `אלוף ${periodName}!`,
+                      description: secondPlace && gap <= 150 
+                        ? `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)}, בפער של ${gap}₪ בלבד מ-${secondPlace.playerName}! קרב צמוד עד הסוף.`
+                        : `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים.`,
+                      priority: 98
+                    });
+                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
+                  } else if (timePeriod === 'year' && isEndOfYear && leader.gamesPlayed >= 5) {
+                    // Year-end special milestone
                     milestones.push({
                       emoji: '🏆',
                       title: `אלוף שנת ${selectedYear}?`,
@@ -2829,7 +2843,9 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '❄️',
                     title: `${worstStreaker.playerName} ברצף הפסדים!`,
-                    description: `${worstStreaker.playerName} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים! הלילה הזדמנות לשבור את הרצף השלילי.`,
+                    description: isHistoricalPeriod
+                      ? `${worstStreaker.playerName} סיים את התקופה ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים.`
+                      : `${worstStreaker.playerName} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים! הלילה הזדמנות לשבור את הרצף השלילי.`,
                     priority: 88
                   });
                 }
@@ -2840,53 +2856,60 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '🔥',
                     title: `${hotStreaker.playerName} על גל!`,
-                    description: `${hotStreaker.currentStreak} נצחונות רצופים! ${hotStreaker.playerName} נמצא בתקופה הכי חזקה שלו. האם הרצף ימשיך?`,
+                    description: isHistoricalPeriod
+                      ? `${hotStreaker.playerName} סיים את התקופה ברצף מרשים של ${hotStreaker.currentStreak} נצחונות רצופים!`
+                      : `${hotStreaker.currentStreak} נצחונות רצופים! ${hotStreaker.playerName} נמצא בתקופה הכי חזקה שלו. האם הרצף ימשיך?`,
                     priority: 90
                   });
                 }
                 
                 // 4. LEADERBOARD BATTLES (show max 2 most interesting, skip already featured)
-                let leaderboardBattleCount = 0;
-                for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
-                  const chaser = rankedStats[i];
-                  const leader = rankedStats[i - 1];
-                  // Skip if this battle was already featured
-                  if (isBattleFeatured(chaser.playerId, leader.playerId)) continue;
-                  
-                  const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                  if (gap > 0 && gap <= 200) {
-                    const isTopBattle = i <= 2;
-                    milestones.push({
-                      emoji: isTopBattle ? '📈' : '🎯',
-                      title: `מרדף על מקום ${i}!`,
-                      description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
-                      priority: 85 - i * 3
-                    });
-                    markBattle(chaser.playerId, leader.playerId);
-                    leaderboardBattleCount++;
+                // Skip for historical periods - no point showing "could have passed" scenarios
+                if (!isHistoricalPeriod) {
+                  let leaderboardBattleCount = 0;
+                  for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
+                    const chaser = rankedStats[i];
+                    const leader = rankedStats[i - 1];
+                    // Skip if this battle was already featured
+                    if (isBattleFeatured(chaser.playerId, leader.playerId)) continue;
+                    
+                    const gap = Math.round(leader.totalProfit - chaser.totalProfit);
+                    if (gap > 0 && gap <= 200) {
+                      const isTopBattle = i <= 2;
+                      milestones.push({
+                        emoji: isTopBattle ? '📈' : '🎯',
+                        title: `מרדף על מקום ${i}!`,
+                        description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
+                        priority: 85 - i * 3
+                      });
+                      markBattle(chaser.playerId, leader.playerId);
+                      leaderboardBattleCount++;
+                    }
                   }
                 }
                 
-                // 5. ROUND NUMBER MILESTONE - show ONE best candidate
-                const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
-                const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
-                rankedStats.forEach(p => {
-                  for (const m of roundNumbers) {
-                    const dist = Math.round(m - p.totalProfit);
-                    if (dist > 0 && dist <= 150) {
-                      roundCandidates.push({ player: p, milestone: m, distance: dist });
-                      break;
+                // 5. ROUND NUMBER MILESTONE - show ONE best candidate (skip for historical)
+                if (!isHistoricalPeriod) {
+                  const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
+                  const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
+                  rankedStats.forEach(p => {
+                    for (const m of roundNumbers) {
+                      const dist = Math.round(m - p.totalProfit);
+                      if (dist > 0 && dist <= 150) {
+                        roundCandidates.push({ player: p, milestone: m, distance: dist });
+                        break;
+                      }
                     }
-                  }
-                });
-                if (roundCandidates.length > 0) {
-                  const best = roundCandidates.sort((a, b) => a.distance - b.distance)[0];
-                  milestones.push({
-                    emoji: '🎯',
-                    title: `יעד עגול!`,
-                    description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה - האם הוא יגיע אליו?`,
-                    priority: 75
                   });
+                  if (roundCandidates.length > 0) {
+                    const best = roundCandidates.sort((a, b) => a.distance - b.distance)[0];
+                    milestones.push({
+                      emoji: '🎯',
+                      title: `יעד עגול!`,
+                      description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה - האם הוא יגיע אליו?`,
+                      priority: 75
+                    });
+                  }
                 }
                 
                 // 6. EXACT TIE - very dramatic!
@@ -2896,39 +2919,45 @@ const StatisticsScreen = () => {
                       milestones.push({
                         emoji: '🤝',
                         title: `תיקו מושלם!`,
-                        description: `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} נמצאים בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}! המשחק הבא יקבע מי יעלה.`,
+                        description: isHistoricalPeriod
+                          ? `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} סיימו בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}!`
+                          : `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} נמצאים בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}! המשחק הבא יקבע מי יעלה.`,
                         priority: 92
                       });
                     }
                   }
                 }
                 
-                // 7. GAMES MILESTONE - ONE player closest
-                const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
-                const gameMilestonePlayer = rankedStats.find(p => gamesMilestones.includes(p.gamesPlayed + 1));
-                if (gameMilestonePlayer) {
-                  const nextMilestone = gameMilestonePlayer.gamesPlayed + 1;
-                  const avgProfit = gameMilestonePlayer.gamesPlayed > 0 ? Math.round(gameMilestonePlayer.totalProfit / gameMilestonePlayer.gamesPlayed) : 0;
-                  milestones.push({
-                    emoji: '🎮',
-                    title: `יובל משחקים ל-${gameMilestonePlayer.playerName}!`,
-                    description: `המשחק הבא יהיה המשחק ה-${nextMilestone} של ${gameMilestonePlayer.playerName}! עד כה עם ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק.`,
-                    priority: 65
-                  });
+                // 7. GAMES MILESTONE - ONE player closest (skip for historical - already happened)
+                if (!isHistoricalPeriod) {
+                  const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
+                  const gameMilestonePlayer = rankedStats.find(p => gamesMilestones.includes(p.gamesPlayed + 1));
+                  if (gameMilestonePlayer) {
+                    const nextMilestone = gameMilestonePlayer.gamesPlayed + 1;
+                    const avgProfit = gameMilestonePlayer.gamesPlayed > 0 ? Math.round(gameMilestonePlayer.totalProfit / gameMilestonePlayer.gamesPlayed) : 0;
+                    milestones.push({
+                      emoji: '🎮',
+                      title: `יובל משחקים ל-${gameMilestonePlayer.playerName}!`,
+                      description: `המשחק הבא יהיה המשחק ה-${nextMilestone} של ${gameMilestonePlayer.playerName}! עד כה עם ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק.`,
+                      priority: 65
+                    });
+                  }
                 }
                 
-                // 8. RECOVERY TO POSITIVE
-                const recoveryCandidate = rankedStats
-                  .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
-                  .sort((a, b) => b.totalProfit - a.totalProfit)[0];
-                if (recoveryCandidate) {
-                  const absProfit = Math.abs(Math.round(recoveryCandidate.totalProfit));
-                  milestones.push({
-                    emoji: '🔄',
-                    title: `חזרה לפלוס!`,
-                    description: `${recoveryCandidate.playerName} נמצא ב-${absProfit}₪ ב${periodLabel}. נצחון של ${absProfit}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
-                    priority: 72
-                  });
+                // 8. RECOVERY TO POSITIVE (skip for historical - outcome is already known)
+                if (!isHistoricalPeriod) {
+                  const recoveryCandidate = rankedStats
+                    .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
+                    .sort((a, b) => b.totalProfit - a.totalProfit)[0];
+                  if (recoveryCandidate) {
+                    const absProfit = Math.abs(Math.round(recoveryCandidate.totalProfit));
+                    milestones.push({
+                      emoji: '🔄',
+                      title: `חזרה לפלוס!`,
+                      description: `${recoveryCandidate.playerName} נמצא ב-${absProfit}₪ ב${periodLabel}. נצחון של ${absProfit}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
+                      priority: 72
+                    });
+                  }
                 }
                 
                 // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured in leaderboard battles)
