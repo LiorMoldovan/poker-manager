@@ -336,8 +336,8 @@ const LiveGameScreen = () => {
     
     // Quick rebuy messages (< 5 min since last) - no gender
     const quickMessages = [
-      'מהר חזרו',
-      'עוד פעם? כבר?',
+      'תנשום קצת בין הקניות',
+      'תזכור שזה על כסף אמיתי',
     ];
     
     // Messages by REBUY number (not total) - gender neutral, natural Hebrew
