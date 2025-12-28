@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.39.8';
+export const APP_VERSION = '4.39.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.39.9',
+    date: '2025-12-28',
+    changes: [
+      '🍕 Expense display shows payer and eater names',
+      'Big pizza icon for payer, small for eaters',
+      'Hebrew labels: שילם (paid), אכלו (ate)'
+    ]
+  },
   {
     version: '4.39.8',
     date: '2025-12-28',

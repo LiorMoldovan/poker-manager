@@ -664,12 +664,15 @@ const LiveGameScreen = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>
-                    <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span> paid
-                    {' • '}
-                    ₪{cleanNumber(perPerson)} per person
-                    {' • '}
-                    {expense.participantNames.length} participants
+                  <div className="text-muted" style={{ fontSize: '0.8rem', direction: 'rtl' }}>
+                    <div>
+                      <span style={{ fontSize: '1rem' }}>🍕</span> שילם: <span style={{ color: 'var(--primary)', fontWeight: '500' }}>{expense.paidByName}</span>
+                      {' • '}
+                      ₪{cleanNumber(perPerson)} לאחד
+                    </div>
+                    <div style={{ marginTop: '0.2rem' }}>
+                      <span style={{ fontSize: '0.7rem' }}>🍕</span> אכלו: {expense.participantNames.join(', ')}
+                    </div>
                   </div>
                 </div>
               );
