@@ -618,80 +618,80 @@ const LiveGameScreen = () => {
         </div>
       </div>
 
-      {/* Shared Expenses Section */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">🍕 Shared Expenses</h2>
+      {/* Shared Expenses Section - Compact */}
+      <div className="card" style={{ padding: '0.6rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>🍕 Expenses</span>
           <button 
             className="btn btn-sm btn-primary"
             onClick={() => setShowExpenseModal(true)}
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
           >
             + Add
           </button>
         </div>
         
         {sharedExpenses.length === 0 ? (
-          <div className="text-muted" style={{ textAlign: 'center', padding: '1rem', fontSize: '0.875rem' }}>
-            No shared expenses yet
+          <div className="text-muted" style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem' }}>
+            No expenses yet
           </div>
         ) : (
-          <div className="list">
+          <>
             {sharedExpenses.map(expense => {
               const perPerson = expense.amount / expense.participants.length;
               return (
-                <div key={expense.id} className="list-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.5rem' }}>
+                <div key={expense.id} style={{ 
+                  padding: '0.4rem', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  borderRadius: '4px',
+                  marginBottom: '0.3rem',
+                  fontSize: '0.75rem'
+                }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <span style={{ fontWeight: '600' }}>{expense.description}</span>
-                      <span className="text-muted" style={{ marginLeft: '0.5rem' }}>
+                      <span className="text-muted" style={{ marginLeft: '0.3rem' }}>
                         ₪{cleanNumber(expense.amount)}
                       </span>
+                      <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: '0.65rem' }}>
+                        (₪{cleanNumber(perPerson)}/person)
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                    <div style={{ display: 'flex', gap: '0.15rem' }}>
                       <button 
                         className="btn btn-sm btn-secondary"
                         onClick={() => handleEditExpense(expense)}
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
                       >
                         ✏️
                       </button>
                       <button 
                         className="btn btn-sm btn-secondary"
                         onClick={() => handleRemoveExpense(expense.id)}
-                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
                       >
                         ✕
                       </button>
                     </div>
                   </div>
-                  <div className="text-muted" style={{ fontSize: '0.8rem', direction: 'rtl' }}>
-                    <div>
-                      <span style={{ fontSize: '1rem' }}>🍕</span> שילם: <span style={{ color: 'var(--primary)', fontWeight: '500' }}>{expense.paidByName}</span>
-                      {' • '}
-                      ₪{cleanNumber(perPerson)} לאחד
-                    </div>
-                    <div style={{ marginTop: '0.2rem' }}>
-                      <span style={{ fontSize: '0.7rem' }}>🍕</span> אכלו: {expense.participantNames.join(', ')}
-                    </div>
+                  <div className="text-muted" style={{ fontSize: '0.65rem', marginTop: '0.2rem', direction: 'rtl' }}>
+                    <span style={{ fontSize: '0.8rem' }}>🍕</span> {expense.paidByName}
+                    {' • '}
+                    <span style={{ fontSize: '0.55rem' }}>🍕</span> {expense.participantNames.join(', ')}
                   </div>
                 </div>
               );
             })}
-          </div>
-        )}
-        
-        {sharedExpenses.length > 0 && (
-          <div style={{ 
-            marginTop: '0.5rem', 
-            padding: '0.5rem', 
-            background: 'rgba(16, 185, 129, 0.1)', 
-            borderRadius: '6px',
-            textAlign: 'center',
-            fontSize: '0.875rem',
-          }}>
-            <span className="text-muted">Total expenses: </span>
-            <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
-          </div>
+            <div style={{ 
+              padding: '0.3rem', 
+              background: 'rgba(16, 185, 129, 0.1)', 
+              borderRadius: '4px',
+              textAlign: 'center',
+              fontSize: '0.75rem',
+            }}>
+              Total: <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+            </div>
+          </>
         )}
       </div>
 
