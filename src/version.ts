@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.12';
+export const APP_VERSION = '4.38.13';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.13',
+    date: '2025-12-28',
+    changes: [
+      '📍 Location is now mandatory to start a game',
+      '📍 Game location now displayed in History cards',
+      '🔧 Updated Dec 27 game location to "ליאור"'
+    ]
+  },
   {
     version: '4.38.12',
     date: '2025-12-28',

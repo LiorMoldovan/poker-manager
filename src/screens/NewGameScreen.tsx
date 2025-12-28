@@ -166,6 +166,13 @@ const NewGameScreen = () => {
       return;
     }
     
+    // Validate location is selected
+    const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
+    if (!location) {
+      setError('Please select a game location');
+      return;
+    }
+    
     // Check if there's a pending forecast
     const { matches, pending, addedPlayers, removedPlayers } = checkForecastMatch(Array.from(selectedIds));
     
