@@ -1086,6 +1086,32 @@ export const generateAIForecasts = async (
   
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
+  // Calculate SUGGESTED expected profit for each player (70% recent, 30% overall + streaks)
+  const playerSuggestions = players.map(p => {
+    // Recent average (last 5 games)
+    const last5 = p.gameHistory.slice(0, 5);
+    const recentAvg = last5.length > 0 ? last5.reduce((sum, g) => sum + g.profit, 0) / last5.length : 0;
+    
+    // Weighted score: 70% recent, 30% overall (if has recent data)
+    let suggested = p.gamesPlayed === 0 ? 0 : 
+      last5.length >= 3 ? (recentAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
+    
+    // Apply streak modifiers
+    if (p.currentStreak >= 4) suggested *= 1.5;
+    else if (p.currentStreak >= 3) suggested *= 1.35;
+    else if (p.currentStreak >= 2) suggested *= 1.2;
+    else if (p.currentStreak <= -4) suggested *= 0.5;
+    else if (p.currentStreak <= -3) suggested *= 0.65;
+    else if (p.currentStreak <= -2) suggested *= 0.8;
+    
+    return { name: p.name, suggested: Math.round(suggested) };
+  });
+  
+  // Balance suggestions to zero-sum
+  const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
+  const adjustment = totalSuggested / playerSuggestions.length;
+  playerSuggestions.forEach(p => p.suggested = Math.round(p.suggested - adjustment));
+  
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
@@ -1098,6 +1124,13 @@ export const generateAIForecasts = async (
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
     const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
     const yearGames = thisYearGames.length;
+    
+    // Get recent average
+    const last5 = p.gameHistory.slice(0, 5);
+    const recentAvg = last5.length > 0 ? Math.round(last5.reduce((sum, g) => sum + g.profit, 0) / last5.length) : 0;
+    
+    // Get suggested expected profit
+    const suggestion = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
     
     // DEBUG: Log year profit calculation
     console.log(`🔍 ${p.name}: ${yearGames} games in ${currentYear}, Year Profit: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪, Total Profit: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
@@ -1115,6 +1148,10 @@ export const generateAIForecasts = async (
 PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use feminine Hebrew!)' : '👨 (Male)'}
 ═══════════════════════════════════════
 
+🎯 SUGGESTED EXPECTED PROFIT: ${suggestion >= 0 ? '+' : ''}${suggestion}₪
+   (Based on 70% recent performance + 30% overall + streak modifiers)
+   You can adjust ±30₪ based on your analysis, but stay close to this!
+
 📊 ALL-TIME STATS (since we started playing):
    • RANK: #${rankAllTime} out of ${players.length} players tonight
    • TOTAL PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
@@ -1124,6 +1161,13 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
    • BEST WIN EVER: +${Math.round(p.bestWin)}₪
    • WORST LOSS EVER: ${Math.round(p.worstLoss)}₪
    • ${streakText}
+
+📈 RECENT FORM (VERY IMPORTANT!):
+   • LAST 5 GAMES AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪/game
+   • Compare to ALL-TIME AVG: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪/game
+   ${recentAvg > p.avgProfit + 10 ? '⬆️ IMPROVING - Recent form better than average!' : 
+     recentAvg < p.avgProfit - 10 ? '⬇️ DECLINING - Recent form worse than average!' : 
+     '➡️ STABLE - Performing as expected'}
 
 📅 YEAR ${currentYear} STATS:
    • GAMES THIS YEAR: ${yearGames}
@@ -1214,7 +1258,10 @@ ${milestonesText}
 ═══════════════════════════════════════
 
 🎯 THE MISSION:
-For each player, calculate an "Expected Profit" (the sum of all expectedProfits must equal exactly 0). Cross-reference their current form with their Legacy to create a unique narrative.
+USE THE SUGGESTED EXPECTED PROFIT for each player (marked with 🎯 in their data).
+These suggestions are pre-calculated using: 70% recent performance + 30% overall + streak bonuses.
+You can adjust ±30₪ if you have strong reasoning, but STAY CLOSE to the suggestions!
+The sum of all expectedProfits must equal exactly 0. Cross-reference their current form with their Legacy to create a unique narrative.
 
 ═══════════════════════════════════════
 
@@ -1455,9 +1502,9 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.75,  // Balanced: creative but data-focused
+            temperature: 0.6,  // Lower = more accurate, less random
             topK: 40,
-            topP: 0.9,
+            topP: 0.85,
             maxOutputTokens: 2048,
           }
         })
