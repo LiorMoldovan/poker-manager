@@ -227,3 +227,140 @@ export const calculateExpenseSettlements = (
   return settlements;
 };
 
+// Calculate COMBINED settlements (poker + expenses)
+// This merges poker profit/loss with expense balances into a single settlement
+export const calculateCombinedSettlement = (
+  players: GamePlayer[],
+  expenses: SharedExpense[],
+  minTransfer: number
+): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
+  // Start with poker balances
+  const balanceMap = new Map<string, { name: string; balance: number }>();
+  
+  // Add poker profit/loss
+  for (const player of players) {
+    if (Math.abs(player.profit) > 0.001) {
+      balanceMap.set(player.playerId, { 
+        name: player.playerName, 
+        balance: player.profit 
+      });
+    }
+  }
+  
+  // Add expense balances
+  for (const expense of expenses) {
+    const perPerson = expense.amount / expense.participants.length;
+    
+    // Person who paid receives money from everyone
+    const payerData = balanceMap.get(expense.paidBy) || { name: expense.paidByName, balance: 0 };
+    payerData.balance += expense.amount; // They paid the full amount
+    balanceMap.set(expense.paidBy, payerData);
+    
+    // Each participant owes their share
+    for (let i = 0; i < expense.participants.length; i++) {
+      const participantId = expense.participants[i];
+      const participantName = expense.participantNames[i];
+      const data = balanceMap.get(participantId) || { name: participantName, balance: 0 };
+      data.balance -= perPerson; // They owe their share
+      balanceMap.set(participantId, data);
+    }
+  }
+  
+  // Convert to array for settlement calculation
+  const balances = Array.from(balanceMap.entries())
+    .filter(([_, data]) => Math.abs(data.balance) > 0.001)
+    .map(([_, data]) => ({ name: data.name, balance: data.balance }));
+
+  const allTransfers: Settlement[] = [];
+
+  // Step 1: Find exact matches first (minimizes transactions)
+  for (let i = 0; i < balances.length; i++) {
+    if (Math.abs(balances[i].balance) < 0.001) continue;
+    
+    for (let j = i + 1; j < balances.length; j++) {
+      if (Math.abs(balances[j].balance) < 0.001) continue;
+      
+      const sum = balances[i].balance + balances[j].balance;
+      if (Math.abs(sum) < 0.01) {
+        const [debtor, creditor] = balances[i].balance < 0 
+          ? [balances[i], balances[j]] 
+          : [balances[j], balances[i]];
+        
+        const amount = Math.abs(debtor.balance);
+        allTransfers.push({ from: debtor.name, to: creditor.name, amount });
+        
+        balances[i].balance = 0;
+        balances[j].balance = 0;
+      }
+    }
+  }
+
+  // Step 2: Process remaining balances
+  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => a.balance - b.balance);
+  const debtors = balances.filter(b => b.balance < -0.001);
+
+  for (const creditor of creditors) {
+    while (creditor.balance > 0.001) {
+      const goodSplitDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .filter(d => Math.abs(d.balance) >= creditor.balance + minTransfer)
+        .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance))[0];
+      
+      if (goodSplitDebtor) {
+        const amount = creditor.balance;
+        allTransfers.push({ from: goodSplitDebtor.name, to: creditor.name, amount });
+        goodSplitDebtor.balance += amount;
+        creditor.balance = 0;
+        continue;
+      }
+      
+      const perfectFitDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .filter(d => Math.abs(d.balance) <= creditor.balance + 0.001)
+        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))[0];
+      
+      if (perfectFitDebtor) {
+        const amount = Math.abs(perfectFitDebtor.balance);
+        allTransfers.push({ from: perfectFitDebtor.name, to: creditor.name, amount });
+        creditor.balance -= amount;
+        perfectFitDebtor.balance = 0;
+        continue;
+      }
+      
+      const anyDebtor = debtors
+        .filter(d => Math.abs(d.balance) > 0.001)
+        .sort((a, b) => a.balance - b.balance)[0];
+      
+      if (anyDebtor) {
+        const amount = Math.min(creditor.balance, Math.abs(anyDebtor.balance));
+        if (amount > 0.001) {
+          allTransfers.push({ from: anyDebtor.name, to: creditor.name, amount });
+          creditor.balance -= amount;
+          anyDebtor.balance += amount;
+        }
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Separate into regular settlements and small transfers
+  const settlements = allTransfers.filter(t => t.amount >= minTransfer);
+  const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
+
+  // Sort settlements
+  settlements.sort((a, b) => {
+    const nameCompare = a.from.localeCompare(b.from);
+    if (nameCompare !== 0) return nameCompare;
+    return b.amount - a.amount;
+  });
+
+  smallTransfers.sort((a, b) => {
+    const nameCompare = a.from.localeCompare(b.from);
+    if (nameCompare !== 0) return nameCompare;
+    return b.amount - a.amount;
+  });
+
+  return { settlements, smallTransfers };
+};
+

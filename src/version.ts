@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.39.4';
+export const APP_VERSION = '4.39.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.39.5',
+    date: '2025-12-28',
+    changes: [
+      '🔀 Combined settlements: Poker + Expenses in ONE transfer list!',
+      'No more separate expense settlements - all merged together',
+      'Minimizes number of transfers between players',
+      'Poker profit/loss still shown separately in results table',
+      'Settlements header shows (+ 🍕) when expenses are included'
+    ]
+  },
   {
     version: '4.39.4',
     date: '2025-12-28',

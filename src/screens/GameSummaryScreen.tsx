@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateExpenseBalances, calculateExpenseSettlements } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 
 const GameSummaryScreen = () => {
@@ -75,12 +75,29 @@ const GameSummaryScreen = () => {
     const sortedPlayers = gamePlayers.sort((a, b) => b.profit - a.profit);
     setPlayers(sortedPlayers);
     
-    const { settlements: settl, smallTransfers: small } = calculateSettlement(
-      gamePlayers, 
-      settings.minTransfer
-    );
-    setSettlements(settl);
-    setSkippedTransfers(small);
+    // Load shared expenses first
+    const gameExpenses = game.sharedExpenses || [];
+    if (gameExpenses.length > 0) {
+      setSharedExpenses(gameExpenses);
+    }
+    
+    // Calculate settlements - use COMBINED if there are expenses
+    if (gameExpenses.length > 0) {
+      const { settlements: settl, smallTransfers: small } = calculateCombinedSettlement(
+        gamePlayers,
+        gameExpenses,
+        settings.minTransfer
+      );
+      setSettlements(settl);
+      setSkippedTransfers(small);
+    } else {
+      const { settlements: settl, smallTransfers: small } = calculateSettlement(
+        gamePlayers, 
+        settings.minTransfer
+      );
+      setSettlements(settl);
+      setSkippedTransfers(small);
+    }
     
     // Load forecasts if available
     if (game.forecasts && game.forecasts.length > 0) {
@@ -100,17 +117,10 @@ const GameSummaryScreen = () => {
       }
     }
     
-    // Load shared expenses if available
-    if (game.sharedExpenses && game.sharedExpenses.length > 0) {
-      setSharedExpenses(game.sharedExpenses);
-    }
-    
     setIsLoading(false);
   };
   
-  // Calculate expense-related data
-  const expenseBalances = calculateExpenseBalances(sharedExpenses);
-  const expenseSettlements = calculateExpenseSettlements(sharedExpenses);
+  // Calculate expense total for display
   const totalExpenseAmount = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Loading state
@@ -331,7 +341,7 @@ const GameSummaryScreen = () => {
       {settlements.length > 0 && (
         <div ref={settlementsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
-            <h2 className="card-title mb-2">💸 Settlements</h2>
+            <h2 className="card-title mb-2">💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
             {settlements.map((s, index) => (
               <div key={index} className="settlement-row">
                 <span>{s.from}</span>
@@ -488,14 +498,14 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
-      {/* Shared Expenses Section - separate screenshot */}
+      {/* Shared Expenses Info - separate screenshot (for reference only, settlements are combined) */}
       {sharedExpenses.length > 0 && (
         <div ref={expenseSettlementsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
             <h2 className="card-title mb-2">🍕 Shared Expenses</h2>
             
             {/* Expense Summary */}
-            <div style={{ marginBottom: '1rem' }}>
+            <div>
               {sharedExpenses.map(expense => (
                 <div key={expense.id} style={{ 
                   padding: '0.5rem', 
@@ -514,36 +524,19 @@ const GameSummaryScreen = () => {
               ))}
             </div>
             
-            {/* Expense Settlements */}
-            {expenseSettlements.length > 0 && (
-              <>
-                <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                  Expense Settlements
-                </h3>
-                {expenseSettlements.map((s, index) => (
-                  <div key={index} className="settlement-row">
-                    <span>{s.from}</span>
-                    <span className="settlement-arrow">➜</span>
-                    <span>{s.to}</span>
-                    <span className="settlement-amount" style={{ color: '#f59e0b' }}>₪{cleanNumber(s.amount)}</span>
-                  </div>
-                ))}
-              </>
-            )}
-            
             {/* Total */}
             <div style={{ 
-              marginTop: '0.75rem', 
+              marginTop: '0.5rem', 
               padding: '0.5rem', 
               background: 'rgba(245, 158, 11, 0.1)', 
               borderRadius: '6px',
               textAlign: 'center',
             }}>
-              <span className="text-muted">Total Expenses: </span>
+              <span className="text-muted">Total: </span>
               <span style={{ fontWeight: '600', color: '#f59e0b' }}>₪{cleanNumber(totalExpenseAmount)}</span>
             </div>
             
-            {/* Note about separation */}
+            {/* Note about combined settlements */}
             <div style={{ 
               marginTop: '0.5rem', 
               fontSize: '0.75rem', 
@@ -551,7 +544,7 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
               fontStyle: 'italic',
             }}>
-              ⚠️ These are separate from poker results
+              ✓ Included in settlements above (combined with poker)
             </div>
           </div>
           

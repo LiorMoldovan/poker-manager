@@ -2762,6 +2762,16 @@ const StatisticsScreen = () => {
                 const isEndOfYear = currentMonth === 11; // December
                 const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
                 
+                // Determine if this is a historical (completed) period
+                const isHistoricalPeriod = (() => {
+                  if (timePeriod === 'all') return false; // All-time is always "current"
+                  if (timePeriod === 'year') return selectedYear < currentYear;
+                  if (timePeriod === 'h1') return selectedYear < currentYear || (selectedYear === currentYear && currentMonth >= 6); // H1 ends in June
+                  if (timePeriod === 'h2') return selectedYear < currentYear; // H2 of current year may still be ongoing
+                  if (timePeriod === 'month') return selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth + 1);
+                  return false;
+                })();
+                
                 // 1. CHAMPION TITLE - Dramatic year/half-year milestone
                 
                 if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
