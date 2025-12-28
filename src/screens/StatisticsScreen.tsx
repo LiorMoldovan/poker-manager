@@ -419,7 +419,7 @@ const StatisticsScreen = () => {
     const allPlayers = getAllPlayers();
     
     // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
-    // NO FILTERS - includes ALL players regardless of type, shows the absolute best
+    // Only includes PERMANENT players - same as Season Podium
     const calculatePeriodTop3 = (start: Date, end: Date): Array<{ playerName: string; profit: number }> => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
@@ -428,16 +428,17 @@ const StatisticsScreen = () => {
       
       if (periodGames.length === 0) return [];
       
-      // Calculate profit per player - ALL players, no type filter
+      // Calculate profit per player - ONLY permanent players
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
       
       for (const game of periodGames) {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
-          // Include ALL players - no type filter for Hall of Fame
-          // Look up CURRENT player name from allPlayers (not the stored name in game record)
+          // Only include PERMANENT players for Hall of Fame
           const currentPlayer = allPlayers.find(p => p.id === gp.playerId);
-          const playerName = currentPlayer?.name || gp.playerName;
+          if (!currentPlayer || currentPlayer.type !== 'permanent') continue;
+          
+          const playerName = currentPlayer.name || gp.playerName;
           
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
