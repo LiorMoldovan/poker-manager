@@ -14,8 +14,6 @@ const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
   const [paidBy, setPaidBy] = useState('');
   const [participants, setParticipants] = useState<string[]>([]);
 
-  const quickDescriptions = ['פיצה', 'אוכל', 'שתייה', 'חטיפים'];
-
   const handleToggleParticipant = (playerId: string) => {
     setParticipants(prev => 
       prev.includes(playerId) 
@@ -94,25 +92,13 @@ const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
         {/* Description */}
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            תיאור
+            תיאור (ברירת מחדל: פיצה)
           </label>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-            {quickDescriptions.map(desc => (
-              <button
-                key={desc}
-                type="button"
-                className={`btn btn-sm ${description === desc ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setDescription(desc)}
-              >
-                {desc}
-              </button>
-            ))}
-          </div>
           <input
             type="text"
             value={description}
             onChange={e => setDescription(e.target.value)}
-            placeholder="תיאור מותאם אישית"
+            placeholder="פיצה"
             className="input"
             style={{ width: '100%', direction: 'rtl' }}
           />
