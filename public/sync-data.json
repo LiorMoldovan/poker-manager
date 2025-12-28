@@ -1741,6 +1741,31 @@
           "createdAt": "2025-12-28T13:27:02.152Z"
         }
       ]
+    },
+    {
+      "id": "mjpruhgca0dtamqv22n",
+      "date": "2025-12-28T13:35:00.828Z",
+      "status": "completed",
+      "createdAt": "2025-12-28T13:35:00.828Z",
+      "location": "ליאור",
+      "sharedExpenses": [
+        {
+          "id": "mjpruwxz9fc2acam91",
+          "description": "פיצה",
+          "paidBy": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+          "paidByName": "אייל",
+          "amount": 50,
+          "participants": [
+            "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+            "b1ae0113-3ffc-41f5-a732-778d79c46286"
+          ],
+          "participantNames": [
+            "ליאור",
+            "אייל"
+          ],
+          "createdAt": "2025-12-28T13:35:20.903Z"
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17674,8 +17699,76 @@
       },
       "finalValue": 0,
       "profit": -90
+    },
+    {
+      "id": "mjpruhgclxzu647dorl",
+      "gameId": "mjpruhgca0dtamqv22n",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 8
+      },
+      "finalValue": 120,
+      "profit": 90
+    },
+    {
+      "id": "mjpruhgcrvg4shluw7q",
+      "gameId": "mjpruhgca0dtamqv22n",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpruhgc4i063oobb87",
+      "gameId": "mjpruhgca0dtamqv22n",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpruhgcttw7zcoy3h",
+      "gameId": "mjpruhgca0dtamqv22n",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-28T13:28:09.291Z",
+  "lastUpdated": "2025-12-28T13:35:33.378Z",
   "updatedBy": "admin"
 }
