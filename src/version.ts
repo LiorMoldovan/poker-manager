@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.22';
+export const APP_VERSION = '4.39.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.39.0',
+    date: '2025-12-28',
+    changes: [
+      '🍕 NEW: Shared Expenses feature!',
+      'Track food/pizza purchases during games',
+      'Mark who paid and who participated',
+      'Cost split equally among participants',
+      'Separate from poker profit/loss calculations',
+      'Shows in settlement with clear indication',
+      'Visible in game summary, details, and history'
+    ]
+  },
   {
     version: '4.38.22',
     date: '2025-12-28',

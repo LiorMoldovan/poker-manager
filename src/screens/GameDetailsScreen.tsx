@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { GamePlayer, Settlement, SkippedTransfer } from '../types';
+import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateExpenseSettlements } from '../utils/calculations';
 
 const GameDetailsScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -35,6 +35,7 @@ const GameDetailsScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player (same as GameSummaryScreen)
@@ -103,8 +104,18 @@ const GameDetailsScreen = () => {
     );
     setSettlements(settl);
     setSkippedTransfers(small);
+    
+    // Load shared expenses
+    if (game.sharedExpenses && game.sharedExpenses.length > 0) {
+      setSharedExpenses(game.sharedExpenses);
+    }
+    
     setIsLoading(false);
   };
+  
+  // Calculate expense settlements
+  const expenseSettlements = calculateExpenseSettlements(sharedExpenses);
+  const totalExpenseAmount = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   // Loading state
   if (isLoading) {
@@ -309,6 +320,73 @@ const GameDetailsScreen = () => {
                 <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Shared Expenses Section */}
+        {sharedExpenses.length > 0 && (
+          <div className="card">
+            <h2 className="card-title mb-2">🍕 Shared Expenses</h2>
+            
+            {/* Expense Summary */}
+            <div style={{ marginBottom: '1rem' }}>
+              {sharedExpenses.map(expense => (
+                <div key={expense.id} style={{ 
+                  padding: '0.5rem', 
+                  background: 'rgba(100, 100, 100, 0.1)', 
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: '600' }}>{expense.description}</span>
+                    <span>₪{cleanNumber(expense.amount)}</span>
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.8rem' }}>
+                    {expense.paidByName} paid • {expense.participantNames.length} participants • ₪{cleanNumber(expense.amount / expense.participants.length)} each
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Expense Settlements */}
+            {expenseSettlements.length > 0 && (
+              <>
+                <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  Expense Settlements
+                </h3>
+                {expenseSettlements.map((s, index) => (
+                  <div key={index} className="settlement-row">
+                    <span>{s.from}</span>
+                    <span className="settlement-arrow">➜</span>
+                    <span>{s.to}</span>
+                    <span className="settlement-amount" style={{ color: '#f59e0b' }}>₪{cleanNumber(s.amount)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Total */}
+            <div style={{ 
+              marginTop: '0.75rem', 
+              padding: '0.5rem', 
+              background: 'rgba(245, 158, 11, 0.1)', 
+              borderRadius: '6px',
+              textAlign: 'center',
+            }}>
+              <span className="text-muted">Total Expenses: </span>
+              <span style={{ fontWeight: '600', color: '#f59e0b' }}>₪{cleanNumber(totalExpenseAmount)}</span>
+            </div>
+            
+            {/* Note about separation */}
+            <div style={{ 
+              marginTop: '0.5rem', 
+              fontSize: '0.75rem', 
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+              fontStyle: 'italic',
+            }}>
+              ⚠️ These are separate from poker results
+            </div>
           </div>
         )}
         
