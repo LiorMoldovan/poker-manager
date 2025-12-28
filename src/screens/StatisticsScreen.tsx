@@ -367,7 +367,50 @@ const StatisticsScreen = () => {
     const allGamePlayers = getAllGamePlayers();
     const allPlayers = getAllPlayers();
     
-    // Helper to calculate stats for a specific period
+    // Helper to calculate stats for a specific period - returns only winner (1st place)
+    const calculatePeriodWinner = (start: Date, end: Date) => {
+      const periodGames = allGames.filter(g => {
+        const gameDate = new Date(g.date);
+        return gameDate >= start && gameDate <= end;
+      });
+      
+      if (periodGames.length === 0) return null;
+      
+      // Calculate profit per player
+      const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
+      
+      for (const game of periodGames) {
+        const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+        for (const gp of gamePlayers) {
+          // Only include permanent players
+          const player = allPlayers.find(p => p.id === gp.playerId);
+          if (!player || player.type !== 'permanent') continue;
+          
+          if (!playerProfits[gp.playerId]) {
+            playerProfits[gp.playerId] = {
+              playerId: gp.playerId,
+              playerName: gp.playerName,
+              profit: 0,
+              gamesPlayed: 0
+            };
+          }
+          playerProfits[gp.playerId].profit += gp.profit;
+          playerProfits[gp.playerId].gamesPlayed += 1;
+        }
+      }
+      
+      // Calculate min games threshold (33% of period games)
+      const minGames = Math.ceil(periodGames.length * 0.33);
+      
+      // Filter to active players and sort by profit - return only winner
+      const sorted = Object.values(playerProfits)
+        .filter(p => p.gamesPlayed >= minGames)
+        .sort((a, b) => b.profit - a.profit);
+      
+      return sorted.length > 0 ? sorted[0] : null;
+    };
+
+    // Helper to calculate stats for a specific period - returns top 3
     const calculatePeriodStats = (start: Date, end: Date) => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
@@ -424,7 +467,38 @@ const StatisticsScreen = () => {
     const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
     const yearly = calculatePeriodStats(yearStart, yearEnd);
     
-    return { h1, h2, yearly, year: currentYear };
+    // Calculate historical champions for all years (from 2021 to previous year)
+    const history: Array<{
+      year: number;
+      h1Winner: { playerName: string; profit: number } | null;
+      h2Winner: { playerName: string; profit: number } | null;
+      yearlyWinner: { playerName: string; profit: number } | null;
+    }> = [];
+    
+    for (let year = currentYear - 1; year >= 2021; year--) {
+      const yearH1Start = new Date(year, 0, 1);
+      const yearH1End = new Date(year, 5, 30, 23, 59, 59);
+      const yearH2Start = new Date(year, 6, 1);
+      const yearH2End = new Date(year, 11, 31, 23, 59, 59);
+      const fullYearStart = new Date(year, 0, 1);
+      const fullYearEnd = new Date(year, 11, 31, 23, 59, 59);
+      
+      const h1Winner = calculatePeriodWinner(yearH1Start, yearH1End);
+      const h2Winner = calculatePeriodWinner(yearH2Start, yearH2End);
+      const yearlyWinner = calculatePeriodWinner(fullYearStart, fullYearEnd);
+      
+      // Only add if there's at least one winner
+      if (h1Winner || h2Winner || yearlyWinner) {
+        history.push({
+          year,
+          h1Winner: h1Winner ? { playerName: h1Winner.playerName, profit: h1Winner.profit } : null,
+          h2Winner: h2Winner ? { playerName: h2Winner.playerName, profit: h2Winner.profit } : null,
+          yearlyWinner: yearlyWinner ? { playerName: yearlyWinner.playerName, profit: yearlyWinner.profit } : null
+        });
+      }
+    }
+    
+    return { h1, h2, yearly, year: currentYear, history };
   }, []);
 
   useEffect(() => {
@@ -2143,6 +2217,156 @@ const StatisticsScreen = () => {
                   {isSharingPodium ? '📸...' : '📤 שתף פודיום'}
                 </button>
               </div>
+
+              {/* Hall of Fame - All Years Champions */}
+              {podiumData.history.length > 0 && (
+                <div className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '0.5rem', 
+                    marginBottom: '0.75rem',
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1))',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    color: '#a855f7'
+                  }}>
+                    🏅 Hall of Fame
+                  </div>
+
+                  {/* Table Header */}
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '50px 1fr 1fr 1fr',
+                    gap: '0.25rem',
+                    marginBottom: '0.35rem',
+                    padding: '0.25rem 0.4rem',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: '4px',
+                    fontSize: '0.6rem',
+                    fontWeight: '600',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center'
+                  }}>
+                    <div>Year</div>
+                    <div style={{ color: '#3b82f6' }}>H1 🏆</div>
+                    <div style={{ color: '#8b5cf6' }}>H2 🏆</div>
+                    <div style={{ color: 'var(--primary)' }}>Year 🏆</div>
+                  </div>
+
+                  {/* Year Rows */}
+                  {podiumData.history.map((yearData) => (
+                    <div 
+                      key={yearData.year}
+                      style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '50px 1fr 1fr 1fr',
+                        gap: '0.25rem',
+                        padding: '0.4rem',
+                        marginBottom: '0.25rem',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        fontSize: '0.65rem'
+                      }}
+                    >
+                      {/* Year */}
+                      <div style={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '700',
+                        fontSize: '0.7rem',
+                        color: 'var(--text)'
+                      }}>
+                        {yearData.year}
+                      </div>
+
+                      {/* H1 Winner */}
+                      <div style={{ 
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.2rem',
+                        background: yearData.h1Winner ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                        borderRadius: '4px'
+                      }}>
+                        {yearData.h1Winner ? (
+                          <>
+                            <span style={{ fontWeight: '600', color: 'var(--text)' }}>
+                              {yearData.h1Winner.playerName}
+                            </span>
+                            <span style={{ 
+                              fontSize: '0.55rem',
+                              color: yearData.h1Winner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {yearData.h1Winner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.h1Winner.profit)}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                        )}
+                      </div>
+
+                      {/* H2 Winner */}
+                      <div style={{ 
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.2rem',
+                        background: yearData.h2Winner ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
+                        borderRadius: '4px'
+                      }}>
+                        {yearData.h2Winner ? (
+                          <>
+                            <span style={{ fontWeight: '600', color: 'var(--text)' }}>
+                              {yearData.h2Winner.playerName}
+                            </span>
+                            <span style={{ 
+                              fontSize: '0.55rem',
+                              color: yearData.h2Winner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {yearData.h2Winner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.h2Winner.profit)}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                        )}
+                      </div>
+
+                      {/* Yearly Winner */}
+                      <div style={{ 
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.2rem',
+                        background: yearData.yearlyWinner ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.08))' : 'transparent',
+                        borderRadius: '4px',
+                        border: yearData.yearlyWinner ? '1px solid rgba(251, 191, 36, 0.2)' : 'none'
+                      }}>
+                        {yearData.yearlyWinner ? (
+                          <>
+                            <span style={{ fontWeight: '700', color: '#fbbf24' }}>
+                              🏆 {yearData.yearlyWinner.playerName}
+                            </span>
+                            <span style={{ 
+                              fontSize: '0.55rem',
+                              color: yearData.yearlyWinner.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {yearData.yearlyWinner.profit >= 0 ? '+' : ''}{formatCurrency(yearData.yearlyWinner.profit)}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }}>-</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 
@@ -2582,14 +2806,14 @@ const StatisticsScreen = () => {
                   const third = rankedStats[2];
                   // Skip if this battle was already featured
                   if (!isBattleFeatured(second.playerId, third.playerId)) {
-                    const gap = Math.round(second.totalProfit - third.totalProfit);
-                    if (gap > 0 && gap <= 150) {
-                      milestones.push({
-                        emoji: '🥈',
-                        title: `מרדף על מקום 2!`,
-                        description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
-                        priority: 78
-                      });
+                  const gap = Math.round(second.totalProfit - third.totalProfit);
+                  if (gap > 0 && gap <= 150) {
+                    milestones.push({
+                      emoji: '🥈',
+                      title: `מרדף על מקום 2!`,
+                      description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
+                      priority: 78
+                    });
                       markBattle(second.playerId, third.playerId);
                     }
                   }
