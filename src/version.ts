@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.18';
+export const APP_VERSION = '4.38.19';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.19',
+    date: '2025-12-28',
+    changes: [
+      '🎲 AI Forecast: Added MANDATORY surprise requirement!',
+      'AI must now include at least 1 surprise prediction',
+      'Added examples of when to use surprises',
+      'Maximum 35% of players can be surprises'
+    ]
+  },
   {
     version: '4.38.18',
     date: '2025-12-28',

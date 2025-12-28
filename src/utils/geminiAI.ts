@@ -1449,7 +1449,18 @@ Player 7: START WITH rivalry/comparison
 
 2. Math: Sum of all expectedProfit = 0 exactly.
 
-3. isSurprise = true ONLY when prediction goes AGAINST their historical pattern.
+3. 🎲 SURPRISE REQUIREMENT (MANDATORY!):
+   - You MUST have AT LEAST 1 surprise (isSurprise: true) among the players!
+   - Maximum 35% of players can be surprises
+   - A surprise means predicting OPPOSITE of their historical pattern:
+     * Good player (positive avg) predicted to LOSE tonight
+     * Bad player (negative avg) predicted to WIN tonight
+   - Look for players where RECENT form contradicts OVERALL history
+   - Mark these with isSurprise: true and adjust their expectedProfit accordingly
+   
+   ⚡ SURPRISE EXAMPLES:
+   - Player with +50₪ average but last 3 games negative → Surprise: predict loss tonight
+   - Player with -30₪ average but on 2-game winning streak → Surprise: predict win tonight
 
 4. 🚨 ACCURACY CHECK - Before writing each sentence, verify:
    - Does the player ACTUALLY have a winning/losing streak? Check "CURRENT WINNING STREAK" or "CURRENT LOSING STREAK" field!
