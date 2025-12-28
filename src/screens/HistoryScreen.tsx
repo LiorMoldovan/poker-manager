@@ -114,10 +114,10 @@ const HistoryScreen = () => {
                       day: 'numeric',
                       year: 'numeric',
                     })}
+                    {game.location && <span style={{ fontWeight: '400', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>📍 {game.location}</span>}
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.875rem' }}>
                     {game.players.length} players • {(game as any).totalBuyins || 0} buyins
-                    {game.location && <span> • 📍 {game.location}</span>}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
