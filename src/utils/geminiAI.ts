@@ -1101,6 +1101,13 @@ export const generateAIForecasts = async (
   
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
+    // Get explicit last game result
+    const lastGame = p.gameHistory[0];
+    const lastGameResult = lastGame 
+      ? (lastGame.profit > 0 ? `WON +${Math.round(lastGame.profit)}₪` : 
+         lastGame.profit < 0 ? `LOST ${Math.round(lastGame.profit)}₪` : 'BREAK-EVEN')
+      : 'No games';
+    
     // Only call it a "streak" if 2+ consecutive wins/losses
     const streakText = p.currentStreak >= 2 
       ? `🔥 HOT STREAK: ${p.currentStreak} consecutive wins!` 
@@ -1111,6 +1118,9 @@ export const generateAIForecasts = async (
           : p.currentStreak === -1
             ? `📉 Lost last game`
             : '⚪ Last game was break-even';
+    
+    // Combine streak with explicit last game (to prevent AI confusion)
+    const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
     
     // Calculate year stats
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
@@ -1157,6 +1167,7 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
    • PROFIT THIS YEAR: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
    ${yearGames > 0 ? `• AVG THIS YEAR: ${(yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames)}₪/game` : ''}
    • ${streakText}
+   • ${lastGameInfo} ← USE THIS EXACT DATA!
 
 📅 CURRENT HALF (H${currentHalf} ${currentYear}):
    • GAMES THIS HALF: ${halfGamesCount}
@@ -1210,13 +1221,14 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
   
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
 
-📋 TL;DR - THE 6 RULES YOU MUST FOLLOW:
+📋 TL;DR - THE 7 RULES YOU MUST FOLLOW:
 1. Use SUGGESTED expected profits for each player (±30₪ max deviation)
 2. Mark PRE-SELECTED surprise players with isSurprise: true (see below)
 3. Sum of all expectedProfits MUST = 0 exactly
 4. Tone must match profit (positive=optimistic, negative=cautious)
 5. Each sentence must start differently (use variety patterns below)
 6. FOCUS ON CURRENT YEAR/HALF in sentences - only mention all-time for dramatic milestones!
+7. 🚫 NEVER MAKE UP DATA! Use ONLY the "LAST GAME" and streak info provided for each player!
 ${surpriseText}
 
 🚨🚨🚨 CRITICAL ACCURACY WARNING 🚨🚨🚨
@@ -1293,14 +1305,17 @@ ${recentGameExamples}
 
 🛠️ WRITING RULES (CRITICAL):
 
-1. **The Legacy Factor**: Use all-time records to praise or sting.
+1. **🚨 FACTUAL ACCURACY (MOST IMPORTANT!)**: NEVER make up or guess data!
+   - The "LAST GAME" line shows the EXACT result - USE IT!
+   - If it says "WON +50₪", DO NOT say they lost!
+   - If it says "LOST -80₪", DO NOT say they won!
+   - When in doubt, just state the data as given.
 
-2. **Data-Backed Insights**: Use specific dates, percentages, and amounts. 
-   Instead of "He's doing well," say "Since his 120₪ loss on Nov 14th, he has maintained a 65% win rate."
+2. **The Legacy Factor**: Use all-time records to praise or sting.
 
-3. **MILESTONES ARE GOLD**: If a player has a milestone opportunity (passing someone, breaking a record, crossing 1000₪), MENTION IT in their sentence! 
-   Example: "אם ליאור יקח הלילה +95₪, הוא יעקוף את סגל ויעלה למקום השני בטבלה!"
-   Example: "עוד נצחון אחד ואייל ישבור את שיא הנצחונות הרצופים של הקבוצה!"
+3. **Data-Backed Insights**: Use specific dates, percentages, and amounts from the data provided.
+
+4. **MILESTONES ARE GOLD**: If a player has a milestone opportunity, MENTION IT in their sentence! 
 
 5. **Style & Tone**: Witty, slightly cynical, dramatic. Each sentence should be screenshot-worthy for WhatsApp.
 
