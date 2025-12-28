@@ -419,7 +419,7 @@ const StatisticsScreen = () => {
     const allPlayers = getAllPlayers();
     
     // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
-    // Only includes PERMANENT players - same as Season Podium
+    // Includes ALL player types who were ACTIVE in that period (met min games threshold)
     const calculatePeriodTop3 = (start: Date, end: Date): Array<{ playerName: string; profit: number }> => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
@@ -428,17 +428,15 @@ const StatisticsScreen = () => {
       
       if (periodGames.length === 0) return [];
       
-      // Calculate profit per player - ONLY permanent players
+      // Calculate profit per player - ALL player types
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
       
       for (const game of periodGames) {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
-          // Only include PERMANENT players for Hall of Fame
+          // Include ALL player types - activity is determined by games played
           const currentPlayer = allPlayers.find(p => p.id === gp.playerId);
-          if (!currentPlayer || currentPlayer.type !== 'permanent') continue;
-          
-          const playerName = currentPlayer.name || gp.playerName;
+          const playerName = currentPlayer?.name || gp.playerName;
           
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
@@ -453,10 +451,10 @@ const StatisticsScreen = () => {
         }
       }
       
-      // Minimum 3 games to qualify for Hall of Fame (prevents one-game wonders)
+      // Minimum games to qualify = 20% of period games (min 3) - ensures they were ACTIVE
       const minGames = Math.max(3, Math.ceil(periodGames.length * 0.2));
       
-      // Filter to qualified players and sort by profit - return top 3
+      // Filter to ACTIVE players (met min games) and sort by profit - return top 3
       return Object.values(playerProfits)
         .filter(p => p.gamesPlayed >= minGames)
         .sort((a, b) => b.profit - a.profit)

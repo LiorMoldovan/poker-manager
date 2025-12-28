@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.9';
+export const APP_VERSION = '4.38.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.10',
+    date: '2025-12-28',
+    changes: [
+      'Hall of Fame: Now includes ALL player types who were active in each year',
+      'Activity = played at least 20% of games in the period (min 3 games)',
+      'Guests who played a lot in 2023 will appear in 2023 Hall of Fame'
+    ]
+  },
   {
     version: '4.38.9',
     date: '2025-12-28',
