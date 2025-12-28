@@ -2105,7 +2105,7 @@ const StatisticsScreen = () => {
                               fontWeight: '600',
                               color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                             }}>
-                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              {formatCurrency(player.profit)}
                             </span>
                           </div>
                         ))}
@@ -2168,7 +2168,7 @@ const StatisticsScreen = () => {
                               fontWeight: '600',
                               color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                             }}>
-                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              {formatCurrency(player.profit)}
                             </span>
                           </div>
                         ))}
@@ -2231,7 +2231,7 @@ const StatisticsScreen = () => {
                               fontWeight: '600',
                               color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                             }}>
-                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                              {formatCurrency(player.profit)}
                             </span>
                           </div>
                         ))}
@@ -2363,7 +2363,7 @@ const StatisticsScreen = () => {
                                 fontSize: '0.48rem',
                                 color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                               }}>
-                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                                {formatCurrency(player.profit)}
                               </span>
                             </div>
                           ))
@@ -2403,7 +2403,7 @@ const StatisticsScreen = () => {
                                 fontSize: '0.48rem',
                                 color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                               }}>
-                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                                {formatCurrency(player.profit)}
                               </span>
                             </div>
                           ))
@@ -2444,7 +2444,7 @@ const StatisticsScreen = () => {
                                 fontSize: '0.48rem',
                                 color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
                               }}>
-                                {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                                {formatCurrency(player.profit)}
                               </span>
                             </div>
                           ))
