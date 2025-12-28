@@ -1108,6 +1108,15 @@ export const generateAIForecasts = async (
          lastGame.profit < 0 ? `LOST ${Math.round(lastGame.profit)}₪` : 'BREAK-EVEN')
       : 'No games';
     
+    // Check for comeback after long absence (30+ days is notable)
+    const comebackText = p.daysSinceLastGame >= 90 
+      ? `🔙 COMEBACK AFTER 3+ MONTHS! (${p.daysSinceLastGame} days since last game)`
+      : p.daysSinceLastGame >= 60
+        ? `🔙 RETURNING AFTER 2 MONTHS! (${p.daysSinceLastGame} days since last game)`
+        : p.daysSinceLastGame >= 30
+          ? `🔙 Back after a month break (${p.daysSinceLastGame} days)`
+          : null;
+    
     // Only call it a "streak" if 2+ consecutive wins/losses
     const streakText = p.currentStreak >= 2 
       ? `🔥 HOT STREAK: ${p.currentStreak} consecutive wins!` 
@@ -1167,7 +1176,8 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
    • PROFIT THIS YEAR: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
    ${yearGames > 0 ? `• AVG THIS YEAR: ${(yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames)}₪/game` : ''}
    • ${streakText}
-   • ${lastGameInfo} ← USE THIS EXACT DATA!
+   • ${lastGameInfo} ← USE THIS EXACT DATA!${comebackText ? `
+   • ${comebackText}` : ''}
 
 📅 CURRENT HALF (H${currentHalf} ${currentYear}):
    • GAMES THIS HALF: ${halfGamesCount}

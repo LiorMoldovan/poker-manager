@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.39.2';
+export const APP_VERSION = '4.39.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.39.3',
+    date: '2025-12-28',
+    changes: [
+      '🔙 AI Forecast: Added "comeback after absence" indicator',
+      'Shows when player returns after 30/60/90+ days',
+      'AI can mention long breaks in forecast sentences'
+    ]
+  },
   {
     version: '4.39.2',
     date: '2025-12-28',
