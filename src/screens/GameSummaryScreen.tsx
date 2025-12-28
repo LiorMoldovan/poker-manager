@@ -381,14 +381,24 @@ const GameSummaryScreen = () => {
                 marginTop: '0.75rem', 
                 paddingTop: '0.5rem', 
                 borderTop: '1px solid rgba(255,255,255,0.1)',
-                fontSize: '0.7rem',
-                color: 'var(--text-muted)',
-                display: 'flex',
-                gap: '1rem',
-                justifyContent: 'center'
               }}>
-                <span><span style={{ fontSize: '0.9rem' }}>🍕</span> = שילם</span>
-                <span><span style={{ fontSize: '0.6rem' }}>🍕</span> = אכל</span>
+                {sharedExpenses.map((expense, idx) => (
+                  <div key={idx} style={{ 
+                    fontSize: '0.75rem', 
+                    color: 'var(--text-muted)',
+                    direction: 'rtl',
+                    marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - ₪{cleanNumber(expense.amount)}
+                    </div>
+                    <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
+                      שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
+                      {' • '}
+                      אכלו: {expense.participantNames.join(', ')}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
