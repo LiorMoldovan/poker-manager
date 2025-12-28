@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { GamePlayer, SharedExpense } from '../types';
 import { generateId } from '../database/storage';
 
@@ -73,7 +73,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        padding: '1rem',
+        padding: '0.5rem',
       }}
       onClick={onClose}
     >
@@ -81,61 +81,62 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         className="card"
         style={{
           width: '100%',
-          maxWidth: '400px',
-          maxHeight: '85vh',
-          overflow: 'auto',
+          maxWidth: '360px',
+          padding: '0.75rem',
           background: '#1a1a2e',
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="card-header" style={{ marginBottom: '1rem' }}>
-          <h2 className="card-title">🍕 {isEditing ? 'עריכת הוצאה' : 'הוצאה משותפת'}</h2>
-        </div>
+        {/* Header */}
+        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+          🍕 {isEditing ? 'עריכת הוצאה' : 'הוצאה משותפת'}
+        </h2>
 
-        {/* Description */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            תיאור (ברירת מחדל: פיצה)
-          </label>
-          <input
-            type="text"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="פיצה"
-            className="input"
-            style={{ width: '100%', direction: 'rtl' }}
-          />
-        </div>
-
-        {/* Amount */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            סכום ₪
-          </label>
-          <input
-            type="number"
-            value={amount}
-            onChange={e => setAmount(e.target.value)}
-            placeholder="הכנס סכום"
-            className="input"
-            style={{ width: '100%', fontSize: '1.25rem', textAlign: 'center' }}
-            min="0"
-            step="1"
-          />
+        {/* Description + Amount Row */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+              תיאור
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="פיצה"
+              className="input"
+              style={{ width: '100%', direction: 'rtl', padding: '0.4rem', fontSize: '0.85rem' }}
+            />
+          </div>
+          <div style={{ width: '100px' }}>
+            <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+              סכום ₪
+            </label>
+            <input
+              type="number"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              placeholder="0"
+              className="input"
+              style={{ width: '100%', fontSize: '1rem', textAlign: 'center', padding: '0.4rem' }}
+              min="0"
+              step="1"
+            />
+          </div>
         </div>
 
         {/* Who Paid */}
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+        <div style={{ marginBottom: '0.6rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
             מי שילם?
           </label>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
             {players.map(player => (
               <button
                 key={player.playerId}
                 type="button"
-                className={`btn btn-sm ${paidBy === player.playerId ? 'btn-primary' : 'btn-secondary'}`}
+                className={`btn ${paidBy === player.playerId ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setPaidBy(player.playerId)}
+                style={{ padding: '0.2rem 0.4rem', fontSize: '0.75rem' }}
               >
                 {player.playerName}
               </button>
@@ -144,73 +145,78 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         </div>
 
         {/* Participants */}
-        <div style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <label style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-              מי משתתף? ({participants.length}/{players.length})
+        <div style={{ marginBottom: '0.6rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+              משתתפים ({participants.length}/{players.length})
             </label>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button 
                 type="button" 
-                className="btn btn-sm btn-secondary"
+                className="btn btn-secondary"
                 onClick={handleSelectAll}
+                style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem' }}
               >
                 כולם
               </button>
               <button 
                 type="button" 
-                className="btn btn-sm btn-secondary"
+                className="btn btn-secondary"
                 onClick={handleDeselectAll}
+                style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem' }}
               >
                 נקה
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
             {players.map(player => (
               <button
                 key={player.playerId}
                 type="button"
-                className={`btn btn-sm ${participants.includes(player.playerId) ? 'btn-primary' : 'btn-secondary'}`}
+                className={`btn ${participants.includes(player.playerId) ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => handleToggleParticipant(player.playerId)}
                 style={{
+                  padding: '0.2rem 0.4rem',
+                  fontSize: '0.75rem',
                   opacity: participants.includes(player.playerId) ? 1 : 0.6,
                 }}
               >
-                {participants.includes(player.playerId) ? '✓ ' : ''}{player.playerName}
+                {participants.includes(player.playerId) ? '✓' : ''}{player.playerName}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Summary */}
+        {/* Summary - compact inline */}
         {participants.length > 0 && amount && parseFloat(amount) > 0 && (
           <div style={{ 
-            padding: '0.75rem', 
-            background: 'rgba(16, 185, 129, 0.1)', 
-            borderRadius: '8px',
-            marginBottom: '1rem',
-            textAlign: 'center',
+            padding: '0.4rem 0.6rem', 
+            background: 'rgba(16, 185, 129, 0.15)', 
+            borderRadius: '6px',
+            marginBottom: '0.6rem',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.5rem',
             direction: 'rtl',
           }}>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-              לכל משתתף:
-            </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--success)' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>לכל אחד:</span>
+            <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>
               ₪{perPersonCost.toFixed(0)}
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              ({participants.length} משתתפים)
-            </div>
+            </span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              ({participants.length})
+            </span>
           </div>
         )}
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
             type="button" 
             className="btn btn-secondary" 
-            style={{ flex: 1 }}
+            style={{ flex: 1, padding: '0.5rem' }}
             onClick={onClose}
           >
             ביטול
@@ -218,7 +224,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
           <button 
             type="button"
             className="btn btn-primary" 
-            style={{ flex: 1 }}
+            style={{ flex: 1, padding: '0.5rem' }}
             onClick={handleSubmit}
             disabled={!isValid}
           >
@@ -231,4 +237,3 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
 };
 
 export default AddExpenseModal;
-
