@@ -908,37 +908,41 @@ const NewGameScreen = () => {
         gamesCount: 0, trend: 'stable' as const, highlights: '' 
       };
       
-      // WEIGHTED SCORE: 60% recent performance, 40% overall (if enough recent data)
+      // WEIGHTED SCORE: 70% recent performance, 30% overall (if enough recent data)
+      // Recent form is a much better predictor than long-term average
       let weightedAvg: number;
       const hasRecentData = stats?.lastGameResults && stats.lastGameResults.length >= 3;
       
       if (gamesPlayed === 0) {
         weightedAvg = 0;
       } else if (hasRecentData) {
-        // Weight recent performance more heavily
-        weightedAvg = (recent.recentAvg * 0.6) + (avgProfit * 0.4);
+        // Weight recent performance HEAVILY
+        weightedAvg = (recent.recentAvg * 0.7) + (avgProfit * 0.3);
       } else {
         // Not enough recent data, use overall
         weightedAvg = avgProfit;
       }
       
-      // Apply streak bonuses/penalties
-      if (stats && stats.currentStreak >= 3) weightedAvg *= 1.25; // Hot streak bonus
-      else if (stats && stats.currentStreak >= 2) weightedAvg *= 1.1;
-      else if (stats && stats.currentStreak <= -3) weightedAvg *= 0.75; // Cold streak penalty
-      else if (stats && stats.currentStreak <= -2) weightedAvg *= 0.9;
+      // Apply streak bonuses/penalties - STRONGER impact
+      if (stats && stats.currentStreak >= 4) weightedAvg *= 1.5; // Very hot streak
+      else if (stats && stats.currentStreak >= 3) weightedAvg *= 1.35;
+      else if (stats && stats.currentStreak >= 2) weightedAvg *= 1.2;
+      else if (stats && stats.currentStreak <= -4) weightedAvg *= 0.5; // Very cold streak
+      else if (stats && stats.currentStreak <= -3) weightedAvg *= 0.65;
+      else if (stats && stats.currentStreak <= -2) weightedAvg *= 0.8;
       
       // Determine tendency based on weighted average
+      // Thresholds adjusted based on actual player distribution analysis
       let tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new' = 'new';
       if (gamesPlayed === 0) {
         tendency = 'new';
-      } else if (weightedAvg > 25) {
+      } else if (weightedAvg > 30) {
         tendency = 'strong_winner';
-      } else if (weightedAvg > 8) {
+      } else if (weightedAvg > 5) {
         tendency = 'winner';
-      } else if (weightedAvg >= -8) {
+      } else if (weightedAvg >= -12) {
         tendency = 'neutral';
-      } else if (weightedAvg >= -25) {
+      } else if (weightedAvg >= -35) {
         tendency = 'loser';
       } else {
         tendency = 'strong_loser';
@@ -977,31 +981,32 @@ const NewGameScreen = () => {
     });
     
     const maxSurprises = Math.min(
-      Math.ceil(playerAnalysis.length * 0.25), // Max 25%
+      Math.ceil(playerAnalysis.length * 0.35), // Max 35% - more surprises!
       eligibleForSurprise.length
     );
     
-    // Random number of surprises (0 to max)
-    const numSurprises = Math.floor(Math.random() * (maxSurprises + 1));
+    // At least 1 surprise if there are eligible players, up to max
+    const minSurprises = eligibleForSurprise.length > 0 ? 1 : 0;
+    const numSurprises = minSurprises + Math.floor(Math.random() * (maxSurprises - minSurprises + 1));
     
     // Randomly pick which players get surprised
     const surprisePlayerIds = new Set<string>();
     const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
     shuffled.slice(0, numSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
 
-    // Step 3: Calculate expected values with variance
+    // Step 3: Calculate expected values with CONTROLLED variance
     const withExpected = playerAnalysis.map(p => {
       const isSurprise = surprisePlayerIds.has(p.player.id);
       let expectedValue = p.rawExpected;
       
       if (isSurprise) {
         // Flip the expected value based on recent contradicting trend
-        expectedValue = -expectedValue * (0.4 + Math.random() * 0.5);
+        expectedValue = -expectedValue * (0.5 + Math.random() * 0.3);
       } else {
-        // Add SIGNIFICANT variance to make each forecast unique
-        // Base variance ±20, plus random multiplier 0.7-1.3
-        const variance = (Math.random() - 0.5) * 40;
-        const multiplier = 0.7 + Math.random() * 0.6;
+        // REDUCED variance - keep predictions closer to actual data
+        // Small variance ±10, plus tighter multiplier 0.85-1.15
+        const variance = (Math.random() - 0.5) * 20;
+        const multiplier = 0.85 + Math.random() * 0.3;
         expectedValue = (expectedValue * multiplier) + variance;
       }
       
@@ -1017,14 +1022,14 @@ const NewGameScreen = () => {
       const adjustment = -totalExpected * weight;
       const balancedExpected = Math.round(f.expectedValue + adjustment);
       
-      // Determine outcome category
+      // Determine outcome category - adjusted to match actual game profit ranges
       let outcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss';
-      if (balancedExpected > 35) outcome = 'big_win';
-      else if (balancedExpected > 15) outcome = 'win';
-      else if (balancedExpected > 3) outcome = 'slight_win';
-      else if (balancedExpected >= -3) outcome = 'neutral';
-      else if (balancedExpected >= -15) outcome = 'slight_loss';
-      else if (balancedExpected >= -35) outcome = 'loss';
+      if (balancedExpected > 60) outcome = 'big_win';
+      else if (balancedExpected > 25) outcome = 'win';
+      else if (balancedExpected > 5) outcome = 'slight_win';
+      else if (balancedExpected >= -5) outcome = 'neutral';
+      else if (balancedExpected >= -25) outcome = 'slight_loss';
+      else if (balancedExpected >= -60) outcome = 'loss';
       else outcome = 'big_loss';
       
       // Generate creative sentence (fun, no stats - stats go in highlights)

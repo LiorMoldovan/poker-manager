@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.16';
+export const APP_VERSION = '4.38.17';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.17',
+    date: '2025-12-28',
+    changes: [
+      '🎯 Forecast: Major accuracy improvements!',
+      'Reduced random variance (was ±₪20, now ±₪10)',
+      'Increased recent weight (70% recent, 30% overall)',
+      'Stronger streak modifiers (up to 50% bonus/penalty)',
+      'Adjusted thresholds based on actual player data',
+      'Guaranteed 1 surprise if eligible players exist',
+      'Increased max surprises from 25% to 35%'
+    ]
+  },
   {
     version: '4.38.16',
     date: '2025-12-28',
