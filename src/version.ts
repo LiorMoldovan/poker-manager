@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.1';
+export const APP_VERSION = '4.38.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.2',
+    date: '2025-12-28',
+    changes: [
+      'Hall of Fame now includes current year (2025)',
+      'Automatically adds new years - in 2026 it will show 2026, 2025, etc.'
+    ]
+  },
   {
     version: '4.38.1',
     date: '2025-12-28',

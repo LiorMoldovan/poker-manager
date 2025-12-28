@@ -467,7 +467,8 @@ const StatisticsScreen = () => {
     const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
     const yearly = calculatePeriodStats(yearStart, yearEnd);
     
-    // Calculate historical champions for all years (from 2021 to previous year)
+    // Calculate historical champions for all years (from 2021 to current year)
+    // This updates automatically each year - in 2026 it will include 2026, 2025, etc.
     const history: Array<{
       year: number;
       h1Winner: { playerName: string; profit: number } | null;
@@ -475,7 +476,7 @@ const StatisticsScreen = () => {
       yearlyWinner: { playerName: string; profit: number } | null;
     }> = [];
     
-    for (let year = currentYear - 1; year >= 2021; year--) {
+    for (let year = currentYear; year >= 2021; year--) {
       const yearH1Start = new Date(year, 0, 1);
       const yearH1End = new Date(year, 5, 30, 23, 59, 59);
       const yearH2Start = new Date(year, 6, 1);
