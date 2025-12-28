@@ -62,9 +62,11 @@ const StatisticsScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [isSharingTop20, setIsSharingTop20] = useState(false);
   const [isSharingPodium, setIsSharingPodium] = useState(false);
+  const [isSharingHallOfFame, setIsSharingHallOfFame] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const podiumRef = useRef<HTMLDivElement>(null);
+  const hallOfFameRef = useRef<HTMLDivElement>(null);
 
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
@@ -226,6 +228,55 @@ const StatisticsScreen = () => {
     } catch (error) {
       console.error('Error sharing podium:', error);
       setIsSharingPodium(false);
+    }
+  };
+
+  // Share Hall of Fame as screenshot
+  const handleShareHallOfFame = async () => {
+    if (!hallOfFameRef.current) return;
+    
+    setIsSharingHallOfFame(true);
+    try {
+      const canvas = await html2canvas(hallOfFameRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsSharingHallOfFame(false);
+          return;
+        }
+        
+        const file = new File([blob], 'poker-hall-of-fame.png', { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Poker Hall of Fame',
+            });
+          } catch (err) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'poker-hall-of-fame.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'poker-hall-of-fame.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingHallOfFame(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing hall of fame:', error);
+      setIsSharingHallOfFame(false);
     }
   };
 
@@ -2221,7 +2272,7 @@ const StatisticsScreen = () => {
 
               {/* Hall of Fame - All Years Champions */}
               {podiumData.history.length > 0 && (
-                <div className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
+                <div ref={hallOfFameRef} className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
                   <div style={{ 
                     textAlign: 'center', 
                     padding: '0.5rem', 
@@ -2366,6 +2417,31 @@ const StatisticsScreen = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Hall of Fame Share Button */}
+              {podiumData.history.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
+                  <button
+                    onClick={handleShareHallOfFame}
+                    disabled={isSharingHallOfFame}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingHallOfFame ? '📸...' : '📤 שתף היכל התהילה'}
+                  </button>
                 </div>
               )}
             </>
