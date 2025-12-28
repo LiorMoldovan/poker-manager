@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.39.3';
+export const APP_VERSION = '4.39.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.39.4',
+    date: '2025-12-28',
+    changes: [
+      '✏️ Shared Expenses: Edit existing expenses',
+      'Click the pencil icon to modify any expense',
+      'Update description, amount, payer, or participants'
+    ]
+  },
   {
     version: '4.39.3',
     date: '2025-12-28',

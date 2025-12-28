@@ -276,6 +276,22 @@ export const removeSharedExpense = (gameId: string, expenseId: string): void => 
   }
 };
 
+// Update a shared expense in a game
+export const updateSharedExpense = (gameId: string, expense: SharedExpense): void => {
+  const games = getAllGames();
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    const game = games[gameIndex];
+    if (game.sharedExpenses) {
+      const expenseIndex = game.sharedExpenses.findIndex(e => e.id === expense.id);
+      if (expenseIndex !== -1) {
+        game.sharedExpenses[expenseIndex] = expense;
+        setItem(STORAGE_KEYS.GAMES, games);
+      }
+    }
+  }
+};
+
 export const deleteGame = (id: string): void => {
   const games = getAllGames().filter(g => g.id !== id);
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId !== id);

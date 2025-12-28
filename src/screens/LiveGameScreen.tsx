@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -18,6 +18,7 @@ const LiveGameScreen = () => {
   const [gameNotFound, setGameNotFound] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<SharedExpense | null>(null);
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
@@ -70,14 +71,32 @@ const LiveGameScreen = () => {
   
   const handleAddExpense = (expense: SharedExpense) => {
     if (!gameId) return;
-    addSharedExpense(gameId, expense);
-    setSharedExpenses(prev => [...prev, expense]);
+    
+    // Check if we're editing an existing expense
+    if (editingExpense) {
+      updateSharedExpense(gameId, expense);
+      setSharedExpenses(prev => prev.map(e => e.id === expense.id ? expense : e));
+      setEditingExpense(null);
+    } else {
+      addSharedExpense(gameId, expense);
+      setSharedExpenses(prev => [...prev, expense]);
+    }
+  };
+  
+  const handleEditExpense = (expense: SharedExpense) => {
+    setEditingExpense(expense);
+    setShowExpenseModal(true);
   };
   
   const handleRemoveExpense = (expenseId: string) => {
     if (!gameId) return;
     removeSharedExpense(gameId, expenseId);
     setSharedExpenses(prev => prev.filter(e => e.id !== expenseId));
+  };
+  
+  const handleCloseExpenseModal = () => {
+    setShowExpenseModal(false);
+    setEditingExpense(null);
   };
 
   // Loading state
@@ -628,13 +647,22 @@ const LiveGameScreen = () => {
                         ₪{cleanNumber(expense.amount)}
                       </span>
                     </div>
-                    <button 
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => handleRemoveExpense(expense.id)}
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                    >
-                      ✕
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button 
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleEditExpense(expense)}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleRemoveExpense(expense.id)}
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.8rem' }}>
                     <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span> paid
@@ -734,8 +762,9 @@ const LiveGameScreen = () => {
       {showExpenseModal && (
         <AddExpenseModal
           players={players}
-          onClose={() => setShowExpenseModal(false)}
+          onClose={handleCloseExpenseModal}
           onAdd={handleAddExpense}
+          existingExpense={editingExpense || undefined}
         />
       )}
     </div>

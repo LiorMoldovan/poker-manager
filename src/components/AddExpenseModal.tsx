@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GamePlayer, SharedExpense } from '../types';
 import { generateId } from '../database/storage';
 
@@ -6,13 +6,16 @@ interface AddExpenseModalProps {
   players: GamePlayer[];
   onClose: () => void;
   onAdd: (expense: SharedExpense) => void;
+  existingExpense?: SharedExpense; // For editing
 }
 
-const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
-  const [description, setDescription] = useState('פיצה');
-  const [amount, setAmount] = useState('');
-  const [paidBy, setPaidBy] = useState('');
-  const [participants, setParticipants] = useState<string[]>([]);
+const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpenseModalProps) => {
+  const [description, setDescription] = useState(existingExpense?.description || 'פיצה');
+  const [amount, setAmount] = useState(existingExpense?.amount?.toString() || '');
+  const [paidBy, setPaidBy] = useState(existingExpense?.paidBy || '');
+  const [participants, setParticipants] = useState<string[]>(existingExpense?.participants || []);
+  
+  const isEditing = !!existingExpense;
 
   const handleToggleParticipant = (playerId: string) => {
     setParticipants(prev => 
@@ -40,14 +43,14 @@ const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
     const participantPlayers = players.filter(p => participants.includes(p.playerId));
 
     const expense: SharedExpense = {
-      id: generateId(),
+      id: existingExpense?.id || generateId(),
       description: description || 'הוצאה משותפת',
       paidBy,
       paidByName: payer?.playerName || '',
       amount: amountNum,
       participants,
       participantNames: participantPlayers.map(p => p.playerName),
-      createdAt: new Date().toISOString(),
+      createdAt: existingExpense?.createdAt || new Date().toISOString(),
     };
 
     onAdd(expense);
@@ -86,7 +89,7 @@ const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
         onClick={e => e.stopPropagation()}
       >
         <div className="card-header" style={{ marginBottom: '1rem' }}>
-          <h2 className="card-title">🍕 הוצאה משותפת</h2>
+          <h2 className="card-title">🍕 {isEditing ? 'עריכת הוצאה' : 'הוצאה משותפת'}</h2>
         </div>
 
         {/* Description */}
@@ -219,7 +222,7 @@ const AddExpenseModal = ({ players, onClose, onAdd }: AddExpenseModalProps) => {
             onClick={handleSubmit}
             disabled={!isValid}
           >
-            הוסף
+            {isEditing ? 'עדכן' : 'הוסף'}
           </button>
         </div>
       </div>
