@@ -376,6 +376,21 @@ const GameSummaryScreen = () => {
                 <span className="settlement-amount">{formatCurrency(s.amount)}</span>
               </div>
             ))}
+            {sharedExpenses.length > 0 && (
+              <div style={{ 
+                marginTop: '0.75rem', 
+                paddingTop: '0.5rem', 
+                borderTop: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '0.7rem',
+                color: 'var(--text-muted)',
+                display: 'flex',
+                gap: '1rem',
+                justifyContent: 'center'
+              }}>
+                <span><span style={{ fontSize: '0.9rem' }}>🍕</span> = שילם</span>
+                <span><span style={{ fontSize: '0.6rem' }}>🍕</span> = אכל</span>
+              </div>
+            )}
           </div>
 
           {skippedTransfers.length > 0 && (
