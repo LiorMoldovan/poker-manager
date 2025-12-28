@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.19';
+export const APP_VERSION = '4.38.20';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.20',
+    date: '2025-12-28',
+    changes: [
+      '🧹 AI Prompt: Removed redundancy and simplified!',
+      'Removed player dynamics/rivalries section (low impact)',
+      'Removed duplicate accuracy warnings',
+      'Consolidated sentence matching rules',
+      'Prompt is now ~20% shorter and clearer'
+    ]
+  },
   {
     version: '4.38.19',
     date: '2025-12-28',

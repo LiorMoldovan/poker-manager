@@ -669,47 +669,6 @@ export const generateAIForecasts = async (
     throw new Error('NO_API_KEY');
   }
 
-  // Analyze player dynamics - how players perform when playing together
-  const playerDynamics: string[] = [];
-  
-  for (let i = 0; i < players.length; i++) {
-    for (let j = i + 1; j < players.length; j++) {
-      const p1 = players[i];
-      const p2 = players[j];
-      
-      // Find games where both players participated
-      const p1GameIds = new Set(p1.gameHistory.map(g => g.gameId));
-      const sharedGames = p2.gameHistory.filter(g => p1GameIds.has(g.gameId));
-      
-      if (sharedGames.length >= 3) {
-        // Calculate each player's performance in shared games
-        const p1SharedGames = p1.gameHistory.filter(g => 
-          sharedGames.some(sg => sg.gameId === g.gameId)
-        );
-        
-        const p1Avg = p1SharedGames.reduce((sum, g) => sum + g.profit, 0) / p1SharedGames.length;
-        const p2Avg = sharedGames.reduce((sum, g) => sum + g.profit, 0) / sharedGames.length;
-        
-        const p1Wins = p1SharedGames.filter(g => g.profit > 0).length;
-        const p2Wins = sharedGames.filter(g => g.profit > 0).length;
-        
-        // Only add interesting dynamics
-        if (Math.abs(p1Avg - p2Avg) > 20 || Math.abs(p1Wins - p2Wins) >= 2) {
-          const winner = p1Avg > p2Avg ? p1.name : p2.name;
-          const loser = p1Avg > p2Avg ? p2.name : p1.name;
-          const winnerAvg = Math.round(Math.max(p1Avg, p2Avg));
-          const loserAvg = Math.round(Math.min(p1Avg, p2Avg));
-          
-          playerDynamics.push(
-            `${winner} vs ${loser}: In ${sharedGames.length} shared games, ` +
-            `${winner} averages ${winnerAvg >= 0 ? '+' : ''}${winnerAvg}₪, ` +
-            `${loser} averages ${loserAvg >= 0 ? '+' : ''}${loserAvg}₪`
-          );
-        }
-      }
-    }
-  }
-
   // Calculate ALL-TIME RECORDS for the group
   const allTimeRecords: string[] = [];
   
@@ -1235,9 +1194,6 @@ ${playerDataText}
 
 🏆 ALL-TIME RECORDS:
 ${allTimeRecordsText}
-${playerDynamics.length > 0 ? `
-🔥 TABLE DYNAMICS & RIVALRIES:
-${playerDynamics.join('\n')}` : ''}
 ${milestonesText ? `
 🎯 TONIGHT'S MILESTONES & RECORDS AT STAKE:
 ${milestonesText}
@@ -1293,9 +1249,7 @@ ${recentGameExamples}
 2. **Data-Backed Insights**: Use specific dates, percentages, and amounts. 
    Instead of "He's doing well," say "Since his 120₪ loss on Nov 14th, he has maintained a 65% win rate."
 
-3. **The "Nemesis" Angle**: If Player A loses when Player B is present, highlight the rivalry.
-
-4. **MILESTONES ARE GOLD**: If a player has a milestone opportunity (passing someone, breaking a record, crossing 1000₪), MENTION IT in their sentence! 
+3. **MILESTONES ARE GOLD**: If a player has a milestone opportunity (passing someone, breaking a record, crossing 1000₪), MENTION IT in their sentence! 
    Example: "אם ליאור יקח הלילה +95₪, הוא יעקוף את סגל ויעלה למקום השני בטבלה!"
    Example: "עוד נצחון אחד ואייל ישבור את שיא הנצחונות הרצופים של הקבוצה!"
 
@@ -1462,34 +1416,15 @@ Player 7: START WITH rivalry/comparison
    - Player with +50₪ average but last 3 games negative → Surprise: predict loss tonight
    - Player with -30₪ average but on 2-game winning streak → Surprise: predict win tonight
 
-4. 🚨 ACCURACY CHECK - Before writing each sentence, verify:
-   - Does the player ACTUALLY have a winning/losing streak? Check "CURRENT WINNING STREAK" or "CURRENT LOSING STREAK" field!
-   - Is the player REALLY #1? Check their "RANK" field!
-   - What's their YEAR profit? Check "PROFIT THIS YEAR" - if negative, don't say positive things about their year!
-   - Don't claim someone needs X₪ to reach a milestone if they've already passed it!
-   
-5. PROFIT RANGE CHECK: Before submitting, verify that:
+4. PROFIT RANGE CHECK: Before submitting, verify that:
    - At least ONE player has |expectedProfit| ≥ ${Math.round(avgAbsProfit * 1.2)}₪
    - NO player has |expectedProfit| < ${Math.max(30, Math.round(avgAbsProfit * 0.4))}₪ (too small!)
    - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
 
-5. 🚨 CRITICAL - SENTENCE MUST MATCH expectedProfit! 🚨
-
-   A) TONE MUST MATCH:
-   - expectedProfit > 0 → sentence MUST be positive/optimistic
-   - expectedProfit < 0 → sentence MUST be negative/cautious
-   
-   B) NUMBER MUST MATCH (if mentioned):
-   - If you write a profit number in the sentence, it MUST equal expectedProfit EXACTLY!
-   - expectedProfit: +100 → sentence can only say "+100₪" (not +80, not +120)
-   - You CAN write a sentence without mentioning the profit number (talk about stats/streaks instead)
-   
-   ❌ FORBIDDEN:
-   - expectedProfit: +100 but sentence says "+70₪" ← NUMBER MISMATCH!
-   - expectedProfit: +100 but sentence says "לילה קשה" ← TONE MISMATCH!
-   - expectedProfit: -80 but sentence says "+50₪" ← BOTH WRONG!
-
-═══════════════════════════════════════
+5. SENTENCE MUST MATCH expectedProfit:
+   - Positive profit → optimistic tone
+   - Negative profit → cautious tone
+   - If you mention a number, it MUST match expectedProfit exactly!
 
 Return ONLY a clean JSON array. No markdown, no explanation.`;
 
