@@ -61,8 +61,10 @@ const StatisticsScreen = () => {
   } | null>(null); // Modal for all player games
   const [isSharing, setIsSharing] = useState(false);
   const [isSharingTop20, setIsSharingTop20] = useState(false);
+  const [isSharingPodium, setIsSharingPodium] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
+  const podiumRef = useRef<HTMLDivElement>(null);
 
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
@@ -175,6 +177,55 @@ const StatisticsScreen = () => {
     } catch (error) {
       console.error('Error sharing top 20:', error);
       setIsSharingTop20(false);
+    }
+  };
+
+  // Share podium as screenshot
+  const handleSharePodium = async () => {
+    if (!podiumRef.current) return;
+    
+    setIsSharingPodium(true);
+    try {
+      const canvas = await html2canvas(podiumRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsSharingPodium(false);
+          return;
+        }
+        
+        const file = new File([blob], 'poker-podium.png', { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Poker Podium',
+            });
+          } catch (err) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'poker-podium.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'poker-podium.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingPodium(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing podium:', error);
+      setIsSharingPodium(false);
     }
   };
 
@@ -308,6 +359,73 @@ const StatisticsScreen = () => {
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
   }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]);
+
+  // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
+  const podiumData = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    const allPlayers = getAllPlayers();
+    
+    // Helper to calculate stats for a specific period
+    const calculatePeriodStats = (start: Date, end: Date) => {
+      const periodGames = allGames.filter(g => {
+        const gameDate = new Date(g.date);
+        return gameDate >= start && gameDate <= end;
+      });
+      
+      if (periodGames.length === 0) return [];
+      
+      // Calculate profit per player
+      const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
+      
+      for (const game of periodGames) {
+        const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+        for (const gp of gamePlayers) {
+          // Only include permanent players
+          const player = allPlayers.find(p => p.id === gp.playerId);
+          if (!player || player.type !== 'permanent') continue;
+          
+          if (!playerProfits[gp.playerId]) {
+            playerProfits[gp.playerId] = {
+              playerId: gp.playerId,
+              playerName: gp.playerName,
+              profit: 0,
+              gamesPlayed: 0
+            };
+          }
+          playerProfits[gp.playerId].profit += gp.profit;
+          playerProfits[gp.playerId].gamesPlayed += 1;
+        }
+      }
+      
+      // Calculate min games threshold (33% of period games)
+      const minGames = Math.ceil(periodGames.length * 0.33);
+      
+      // Filter to active players and sort by profit
+      return Object.values(playerProfits)
+        .filter(p => p.gamesPlayed >= minGames)
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 3); // Top 3
+    };
+    
+    // H1: Jan-Jun of current year
+    const h1Start = new Date(currentYear, 0, 1);
+    const h1End = new Date(currentYear, 5, 30, 23, 59, 59);
+    const h1 = calculatePeriodStats(h1Start, h1End);
+    
+    // H2: Jul-Dec of current year
+    const h2Start = new Date(currentYear, 6, 1);
+    const h2End = new Date(currentYear, 11, 31, 23, 59, 59);
+    const h2 = calculatePeriodStats(h2Start, h2End);
+    
+    // Full Year
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
+    const yearly = calculatePeriodStats(yearStart, yearEnd);
+    
+    return { h1, h2, yearly, year: currentYear };
+  }, []);
 
   useEffect(() => {
     loadStats();
@@ -1793,6 +1911,236 @@ const StatisticsScreen = () => {
                   }}
                 >
                   {isSharingTop20 ? '📸...' : '📤 שתף'}
+                </button>
+              </div>
+
+              {/* Season Podium - Independent of Filters */}
+              <div ref={podiumRef} className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '0.5rem', 
+                  marginBottom: '0.75rem',
+                  background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  color: '#fbbf24'
+                }}>
+                  🏆 Season Podium {podiumData.year}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {/* H1 Podium */}
+                  <div style={{ 
+                    flex: '1 1 30%', 
+                    minWidth: '140px',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    border: '1px solid rgba(59, 130, 246, 0.2)'
+                  }}>
+                    <div style={{ 
+                      textAlign: 'center', 
+                      fontSize: '0.7rem', 
+                      fontWeight: '600', 
+                      color: '#3b82f6',
+                      marginBottom: '0.4rem',
+                      padding: '0.25rem',
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      borderRadius: '4px'
+                    }}>
+                      H1 (Jan-Jun)
+                    </div>
+                    {podiumData.h1.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {podiumData.h1.map((player, idx) => (
+                          <div key={player.playerId} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.3rem 0.4rem',
+                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                            borderRadius: '4px',
+                            fontSize: '0.65rem'
+                          }}>
+                            <span style={{ fontSize: '0.9rem' }}>
+                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                            </span>
+                            <span style={{ 
+                              flex: 1, 
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {player.playerName}
+                            </span>
+                            <span style={{ 
+                              fontWeight: '600',
+                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                        No data
+                      </div>
+                    )}
+                  </div>
+
+                  {/* H2 Podium */}
+                  <div style={{ 
+                    flex: '1 1 30%', 
+                    minWidth: '140px',
+                    background: 'rgba(139, 92, 246, 0.08)',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    border: '1px solid rgba(139, 92, 246, 0.2)'
+                  }}>
+                    <div style={{ 
+                      textAlign: 'center', 
+                      fontSize: '0.7rem', 
+                      fontWeight: '600', 
+                      color: '#8b5cf6',
+                      marginBottom: '0.4rem',
+                      padding: '0.25rem',
+                      background: 'rgba(139, 92, 246, 0.15)',
+                      borderRadius: '4px'
+                    }}>
+                      H2 (Jul-Dec)
+                    </div>
+                    {podiumData.h2.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {podiumData.h2.map((player, idx) => (
+                          <div key={player.playerId} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.3rem 0.4rem',
+                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                            borderRadius: '4px',
+                            fontSize: '0.65rem'
+                          }}>
+                            <span style={{ fontSize: '0.9rem' }}>
+                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                            </span>
+                            <span style={{ 
+                              flex: 1, 
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {player.playerName}
+                            </span>
+                            <span style={{ 
+                              fontWeight: '600',
+                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                        No data
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Yearly Podium */}
+                  <div style={{ 
+                    flex: '1 1 30%', 
+                    minWidth: '140px',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    borderRadius: '8px',
+                    padding: '0.5rem',
+                    border: '1px solid rgba(16, 185, 129, 0.2)'
+                  }}>
+                    <div style={{ 
+                      textAlign: 'center', 
+                      fontSize: '0.7rem', 
+                      fontWeight: '600', 
+                      color: 'var(--primary)',
+                      marginBottom: '0.4rem',
+                      padding: '0.25rem',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      borderRadius: '4px'
+                    }}>
+                      Full Year
+                    </div>
+                    {podiumData.yearly.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {podiumData.yearly.map((player, idx) => (
+                          <div key={player.playerId} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            padding: '0.3rem 0.4rem',
+                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                            borderRadius: '4px',
+                            fontSize: '0.65rem'
+                          }}>
+                            <span style={{ fontSize: '0.9rem' }}>
+                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                            </span>
+                            <span style={{ 
+                              flex: 1, 
+                              fontWeight: '500',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {player.playerName}
+                            </span>
+                            <span style={{ 
+                              fontWeight: '600',
+                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
+                            }}>
+                              {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+                        No data
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Podium Share Button */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
+                <button
+                  onClick={handleSharePodium}
+                  disabled={isSharingPodium}
+                  style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.75rem',
+                    padding: '0.4rem 0.8rem',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isSharingPodium ? '📸...' : '📤 שתף פודיום'}
                 </button>
               </div>
             </>

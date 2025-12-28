@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.37.11';
+export const APP_VERSION = '4.38.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.0',
+    date: '2025-12-28',
+    changes: [
+      '🏆 NEW: Season Podium showing top 3 players for H1, H2, and Full Year',
+      'Podium is independent of filters - always shows current year standings',
+      'Share podium as screenshot to WhatsApp',
+      'Beautiful visual design with medals and colored sections'
+    ]
+  },
   {
     version: '4.37.11',
     date: '2025-12-25',
