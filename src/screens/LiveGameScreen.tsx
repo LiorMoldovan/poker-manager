@@ -329,33 +329,34 @@ const LiveGameScreen = () => {
 
   // Creative messages for each REBUY (not total buyins)
   // rebuyNumber = totalBuyins - 1 (since everyone starts with 1 buyin)
+  // All sentences are gender-neutral (no "אתה/את") for natural female voice
   const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
     // Calculate rebuy number (first rebuy = 1, not 2)
     const rebuyNumber = Math.max(1, totalBuyins - 1);
     
-    // Quick rebuy messages (< 5 min since last)
+    // Quick rebuy messages (< 5 min since last) - no gender
     const quickMessages = [
-      'חזרת מהר',
-      'אני לא רוצה לראות אותך שוב כל כך מהר',
+      'מהר חזרו',
+      'עוד פעם? כבר?',
     ];
     
-    // Messages by REBUY number (not total)
+    // Messages by REBUY number (not total) - gender neutral, natural Hebrew
     const messages: Record<number, string[]> = {
       1: [
         // First rebuy - encouraging
         'הכל יהיה בסדר',
         'עכשיו מתחילים ברצינות',
-        'לא נורא אני מאמין שהערב ישתפר',
+        'לא נורא, הערב עוד ארוך',
         'עוד הזדמנות',
         'הפעם זה יעבוד',
-        'תזכור שזה על כסף אמיתי',
+        'בהצלחה הפעם',
       ],
       2: [
         // Second rebuy - still positive
         'לא נורא, יהיה בסדר',
         'זה קורה לכולם',
         'עדיין בתחילת הדרך',
-        'אל תדאג',
+        'אין מה לדאוג',
       ],
       3: [
         // Third rebuy - mild concern
@@ -366,16 +367,16 @@ const LiveGameScreen = () => {
       ],
       4: [
         // Fourth rebuy - concern
-        'כבר ארבע, שים לב',
+        'כבר ארבע, שימו לב',
         'מתחיל להיות יקר',
-        'אולי תנוח קצת',
-        'וואלה, ארבע',
+        'אולי הפסקה קטנה',
+        'וואו, ארבע כבר',
       ],
       5: [
         // Fifth rebuy - serious
         'חמש כבר, רציני',
         'ערב יקר הולך להיות',
-        'אתה בטוח שכדאי',
+        'בטוח שכדאי להמשיך',
         'חמש זה הרבה',
       ],
     };
@@ -384,16 +385,16 @@ const LiveGameScreen = () => {
     const highMessages = [
       'שיא אישי בדרך',
       'נו באמת, מספיק',
-      'אתה שובר שיאים',
+      'שוברים שיאים הלילה',
       'זה כבר מוגזם',
     ];
     
     // Messages for 9+ rebuys
     const finalMessages = [
-      'בבקשה תעצור',
+      'בבקשה לעצור',
       'מספיק להיום',
       'די, נגמר',
-      'לך הביתה',
+      'הביתה, יאללה',
     ];
     
     let message: string;
@@ -424,9 +425,9 @@ const LiveGameScreen = () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       
-      // Get available voices and prefer Hebrew male voice
+      // Get available voices - prefer Hebrew female voice for natural sound
       const voices = window.speechSynthesis.getVoices();
-      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('male')) 
+      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('female')) 
         || voices.find(v => v.lang.startsWith('he'))
         || null;
       
@@ -434,8 +435,8 @@ const LiveGameScreen = () => {
       const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
       const whole = Math.floor(totalBuyins);
       
-      // Hebrew numbers for speech
-      const hebrewNumbers = ['אפס', 'אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+      // Hebrew numbers for speech - natural pronunciation
+      const hebrewNumbers = ['אפס', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
       
       // Format total in Hebrew
       let totalText: string;
@@ -455,15 +456,13 @@ const LiveGameScreen = () => {
         }
       }
       
-      // "קנה" with niqqud for correct pronunciation (kana, not kne)
-      // Using "קָנָה" to force proper vowels
-      // For half buyin: "קנה חצי", for 1 buyin: "קנה אחד", for more: just "קנה"
+      // Use neutral "לקח/לקחה" (took) instead of gendered "קנה/קנתה"
+      // Or use simple "עוד" (another) for natural flow
       let buyAction: string;
       if (isHalfBuyin) {
-        buyAction = 'קָנָה חצי';
+        buyAction = 'עוד חצי';
       } else {
-        // Always say "one" in Hebrew for 1 buyin
-        buyAction = 'קָנָה אחד';
+        buyAction = 'עוד אחד';
       }
       
       const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
@@ -472,8 +471,8 @@ const LiveGameScreen = () => {
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
       if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.85;  // Slower for clarity
-      utterance.pitch = 0.9;  // Slightly lower for male sound
+      utterance.rate = 0.9;   // Natural pace
+      utterance.pitch = 1.0;  // Natural pitch for female voice
       utterance.volume = 1;
       
       window.speechSynthesis.speak(utterance);
