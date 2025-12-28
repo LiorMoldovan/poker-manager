@@ -435,10 +435,14 @@ const StatisticsScreen = () => {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
           // Include ALL players - no type filter for Hall of Fame
+          // Look up CURRENT player name from allPlayers (not the stored name in game record)
+          const currentPlayer = allPlayers.find(p => p.id === gp.playerId);
+          const playerName = currentPlayer?.name || gp.playerName;
+          
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
-              playerName: gp.playerName,
+              playerName: playerName,
               profit: 0,
               gamesPlayed: 0
             };
@@ -459,7 +463,8 @@ const StatisticsScreen = () => {
         .map(p => ({ playerName: p.playerName, profit: p.profit }));
     };
 
-    // Helper to calculate stats for a specific period - returns top 3
+    // Helper to calculate stats for a specific period - returns top 3 for Season Podium
+    // Only includes PERMANENT players for current season
     const calculatePeriodStats = (start: Date, end: Date) => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
@@ -478,10 +483,13 @@ const StatisticsScreen = () => {
           const player = allPlayers.find(p => p.id === gp.playerId);
           if (!player || player.type !== 'permanent') continue;
           
+          // Use CURRENT player name from allPlayers (not the stored name in game record)
+          const playerName = player.name || gp.playerName;
+          
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
-              playerName: gp.playerName,
+              playerName: playerName,
               profit: 0,
               gamesPlayed: 0
             };

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.38.7';
+export const APP_VERSION = '4.38.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.38.8',
+    date: '2025-12-28',
+    changes: [
+      '🐛 FIX: Hall of Fame and Season Podium now show current player names',
+      'Was using old names from game records, now uses current player names',
+      'Fixed for both Season Podium (permanent) and Hall of Fame (all players)'
+    ]
+  },
   {
     version: '4.38.7',
     date: '2025-12-28',
