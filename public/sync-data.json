@@ -1654,6 +1654,57 @@
       ],
       "chipGap": -11.999999999999886,
       "chipGapPerPlayer": -1.4999999999999858
+    },
+    {
+      "id": "mjpwjjtnrh8tmdv8gif",
+      "date": "2025-12-28T15:46:28.763Z",
+      "status": "completed",
+      "createdAt": "2025-12-28T15:46:28.763Z",
+      "location": "ליאור",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 132,
+          "highlight": "מוביל את הליגה ב-2025 עם +3426₪!",
+          "sentence": "ליאור שורף את הטבלה! הוא מוביל את טבלת 2025 עם רווח של +3426₪, ועם 4 נצחונות רצופים, הוא בדרך לשבור שיאים אישיים.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 52,
+          "highlight": "עומד על +1451₪ כללי, עוד 49₪ לחצות את ה-1500₪!",
+          "sentence": "האם הלילה אייל יחצה את רף ה-1500₪ בטבלה הכללית? הוא קרוב מתמיד, ועם ממוצע של +14₪ השנה, הוא בהחלט בכיוון הנכון.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -94,
+          "highlight": "בסיכון לרדת מתחת ל-1000₪ בטבלה הכללית.",
+          "sentence": "ליכטר נמצא בדרך מסוכנת לעבר קו ה-1000₪ השלילי בטבלה הכללית, עם ממוצע של -46₪ השנה, הוא חייב להפוך את המגמה.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -39,
+          "highlight": "ברצף של 5 הפסדים, מחפש לשבור את הרצף הלא מחמיא.",
+          "sentence": "הלילה סגל מחפש נואשות לשבור את רצף 5 ההפסדים שלו בטבלת 2025, עם ממוצע של -14₪ השנה, הוא זקוק לשינוי דרמטי.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": -72,
+          "highlight": "ניצחון אחרון מעורר תקווה, אבל היסטוריה מדברת על ירידה.",
+          "sentence": "הפניקס קם מהאפר! פיליפ ניצח במשחק האחרון ב-2025, אך עם ממוצע של -29₪ השנה, הוא עדיין נאבק להשיג יציבות.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "מלמד",
+          "expectedProfit": 21,
+          "highlight": "חוזר אחרי חודשיים, מחפש לשבור רצף של 3 הפסדים.",
+          "sentence": "אם מלמד יצליח לנצל את החזרה שלו אחרי חודשיים, הוא יוכל לשבור את רצף 3 ההפסדים האחרונים שלו בטבלת 2025, ולהמשיך את המומנטום החיובי.",
+          "isSurprise": false
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17451,8 +17502,110 @@
       },
       "finalValue": 25.35,
       "profit": -109.65000000000002
+    },
+    {
+      "id": "mjpwjjtnmgv6k6ph9ao",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 26,
+        "2": 50,
+        "3": 1,
+        "4": 1,
+        "5": 3,
+        "6": 12
+      },
+      "finalValue": 210,
+      "profit": 150
+    },
+    {
+      "id": "mjpwjjtnyaoei0tnk",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpwjjtnl3xit3s1h2f",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpwjjtnhe65prkqenl",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpwjjtnljpwkyttqs",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mjpwjjtn3der9d2iq8y",
+      "gameId": "mjpwjjtnrh8tmdv8gif",
+      "playerId": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
+      "playerName": "מלמד",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2025-12-28T13:44:32.604Z",
+  "lastUpdated": "2025-12-28T15:47:45.243Z",
   "updatedBy": "admin"
 }
