@@ -426,10 +426,9 @@ const LiveGameScreen = () => {
       message = levelMessages[Math.floor(Math.random() * levelMessages.length)];
     }
     
-    // Add quick rebuy prefix if applicable (only for 2nd rebuy onwards)
+    // Use ONLY quick rebuy message if applicable (only for 2nd rebuy onwards)
     if (isQuickRebuy && rebuyNumber > 1) {
-      const quickMsg = quickMessages[Math.floor(Math.random() * quickMessages.length)];
-      message = `${quickMsg}, ${message}`;
+      message = quickMessages[Math.floor(Math.random() * quickMessages.length)];
     }
     
     return message;
