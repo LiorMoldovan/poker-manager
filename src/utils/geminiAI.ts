@@ -1071,6 +1071,34 @@ export const generateAIForecasts = async (
   const adjustment = totalSuggested / playerSuggestions.length;
   playerSuggestions.forEach(p => p.suggested = Math.round(p.suggested - adjustment));
   
+  // Pre-select SURPRISE candidates (recent contradicts overall)
+  const surpriseCandidates = players.filter(p => {
+    if (p.gamesPlayed < 5) return false;
+    const last5 = p.gameHistory.slice(0, 5);
+    if (last5.length < 3) return false;
+    
+    const recentAvg = last5.reduce((sum, g) => sum + g.profit, 0) / last5.length;
+    const overallPositive = p.avgProfit > 10;
+    const overallNegative = p.avgProfit < -10;
+    const recentPositive = recentAvg > 10;
+    const recentNegative = recentAvg < -10;
+    
+    // Contradiction: good player doing badly recently, or bad player doing well recently
+    return (overallPositive && recentNegative) || (overallNegative && recentPositive);
+  });
+  
+  // Pick 1-2 surprises (at least 1 if candidates exist)
+  const maxSurprises = Math.min(Math.ceil(players.length * 0.35), surpriseCandidates.length);
+  const numSurprises = surpriseCandidates.length > 0 ? Math.max(1, Math.floor(Math.random() * (maxSurprises + 1))) : 0;
+  const selectedSurprises = surpriseCandidates
+    .sort(() => Math.random() - 0.5)
+    .slice(0, numSurprises)
+    .map(p => p.name);
+  
+  const surpriseText = selectedSurprises.length > 0 
+    ? `\n🎲 PRE-SELECTED SURPRISES: ${selectedSurprises.join(', ')}\n   Mark these players with isSurprise: true and FLIP their expected profit!`
+    : '\n🎲 NO GOOD SURPRISE CANDIDATES (recent matches overall for all players)';
+  
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = players.map((p, i) => {
     const streakText = p.currentStreak > 0 
@@ -1169,6 +1197,14 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
     .join('\n');
   
   const prompt = `You are the "Master of Poker Analytics," a legendary sports commentator turned data scientist. Your job is to analyze the game history and all-time records of a private poker group to generate a sharp, humorous, and data-driven prediction for tonight's game.
+
+📋 TL;DR - THE 5 RULES YOU MUST FOLLOW:
+1. Use SUGGESTED expected profits for each player (±30₪ max deviation)
+2. Mark PRE-SELECTED surprise players with isSurprise: true (see below)
+3. Sum of all expectedProfits MUST = 0 exactly
+4. Tone must match profit (positive=optimistic, negative=cautious)
+5. Each sentence must start differently (use variety patterns below)
+${surpriseText}
 
 🚨🚨🚨 CRITICAL ACCURACY WARNING 🚨🚨🚨
 YOU MUST BE 100% ACCURATE! Every single fact in your response MUST match the data below EXACTLY.
@@ -1403,18 +1439,8 @@ Player 7: START WITH rivalry/comparison
 
 2. Math: Sum of all expectedProfit = 0 exactly.
 
-3. 🎲 SURPRISE REQUIREMENT (MANDATORY!):
-   - You MUST have AT LEAST 1 surprise (isSurprise: true) among the players!
-   - Maximum 35% of players can be surprises
-   - A surprise means predicting OPPOSITE of their historical pattern:
-     * Good player (positive avg) predicted to LOSE tonight
-     * Bad player (negative avg) predicted to WIN tonight
-   - Look for players where RECENT form contradicts OVERALL history
-   - Mark these with isSurprise: true and adjust their expectedProfit accordingly
-   
-   ⚡ SURPRISE EXAMPLES:
-   - Player with +50₪ average but last 3 games negative → Surprise: predict loss tonight
-   - Player with -30₪ average but on 2-game winning streak → Surprise: predict win tonight
+3. 🎲 SURPRISES: Use the PRE-SELECTED surprises from the TL;DR section above.
+   For surprise players: set isSurprise: true and FLIP their expectedProfit to opposite sign.
 
 4. PROFIT RANGE CHECK: Before submitting, verify that:
    - At least ONE player has |expectedProfit| ≥ ${Math.round(avgAbsProfit * 1.2)}₪
