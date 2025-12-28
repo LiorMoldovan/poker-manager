@@ -317,6 +317,12 @@ const LiveGameScreen = () => {
 
         // Pick a random sound and play it
         const randomIndex = Math.floor(Math.random() * sounds.length);
+        
+        // Resume AudioContext if suspended (required on some browsers)
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
+        
         const duration = sounds[randomIndex]();
         
         setTimeout(resolve, duration);
@@ -447,8 +453,8 @@ const LiveGameScreen = () => {
       const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
       const whole = Math.floor(totalBuyins);
       
-      // Hebrew numbers for speech - natural pronunciation
-      const hebrewNumbers = ['אפס', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+      // Hebrew numbers for speech - feminine forms for female voice
+      const hebrewNumbers = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
       
       // Format total in Hebrew
       let totalText: string;
