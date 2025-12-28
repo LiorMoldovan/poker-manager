@@ -2960,8 +2960,8 @@ const StatisticsScreen = () => {
                   }
                 }
                 
-                // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured in leaderboard battles)
-                if (rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
+                // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured or historical)
+                if (!isHistoricalPeriod && rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
                   const second = rankedStats[1];
                   const third = rankedStats[2];
                   // Skip if this battle was already featured
@@ -2987,12 +2987,14 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '💰',
                     title: `שיא הנצחון הגדול!`,
-                    description: `${bestWinRecord.playerName} מחזיק בשיא הנצחון הגדול ב${periodLabel} עם +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד. האם מישהו ישבור את השיא?`,
+                    description: isHistoricalPeriod
+                      ? `${bestWinRecord.playerName} סיים עם שיא הנצחון הגדול ב${periodLabel} - +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד!`
+                      : `${bestWinRecord.playerName} מחזיק בשיא הנצחון הגדול ב${periodLabel} עם +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד. האם מישהו ישבור את השיא?`,
                     priority: 60
                   });
                 }
                 
-                // 11. CONSISTENCY KING - best win rate with enough games
+                // 11. CONSISTENCY KING - best win rate with enough games (works for both)
                 const consistencyKing = rankedStats
                   .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 60)
                   .sort((a, b) => b.winPercentage - a.winPercentage)[0];
@@ -3000,7 +3002,9 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '🎯',
                     title: `מלך העקביות!`,
-                    description: `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
+                    description: isHistoricalPeriod
+                      ? `${consistencyKing.playerName} סיים עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`
+                      : `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
                     priority: 55
                   });
                 }
@@ -3019,19 +3023,21 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 13. WIN RATE MILESTONE - approaching 60%
-                const winRateCandidate = rankedStats
-                  .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 55 && p.winPercentage < 60)
-                  .sort((a, b) => b.winPercentage - a.winPercentage)[0];
-                if (winRateCandidate) {
-                  const winsNeeded = Math.ceil(0.6 * (winRateCandidate.gamesPlayed + 1)) - winRateCandidate.winCount;
-                  if (winsNeeded === 1) {
-                    milestones.push({
-                      emoji: '🎯',
-                      title: `יעד 60% נצחונות!`,
-                      description: `${winRateCandidate.playerName} נמצא על ${Math.round(winRateCandidate.winPercentage)}% נצחונות. נצחון נוסף יעביר אותו מעל רף ה-60%!`,
-                      priority: 65
-                    });
+                // 13. WIN RATE MILESTONE - approaching 60% (skip for historical)
+                if (!isHistoricalPeriod) {
+                  const winRateCandidate = rankedStats
+                    .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 55 && p.winPercentage < 60)
+                    .sort((a, b) => b.winPercentage - a.winPercentage)[0];
+                  if (winRateCandidate) {
+                    const winsNeeded = Math.ceil(0.6 * (winRateCandidate.gamesPlayed + 1)) - winRateCandidate.winCount;
+                    if (winsNeeded === 1) {
+                      milestones.push({
+                        emoji: '🎯',
+                        title: `יעד 60% נצחונות!`,
+                        description: `${winRateCandidate.playerName} נמצא על ${Math.round(winRateCandidate.winPercentage)}% נצחונות. נצחון נוסף יעביר אותו מעל רף ה-60%!`,
+                        priority: 65
+                      });
+                    }
                   }
                 }
                 
@@ -3042,8 +3048,10 @@ const StatisticsScreen = () => {
                 if (biggestLoser && biggestLoser.totalProfit < -200) {
                   milestones.push({
                     emoji: '📉',
-                    title: `במאבק על שיפור`,
-                    description: `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
+                    title: isHistoricalPeriod ? `תקופה קשה` : `במאבק על שיפור`,
+                    description: isHistoricalPeriod
+                      ? `${biggestLoser.playerName} סיים ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת.`
+                      : `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
                     priority: 50
                   });
                 }
@@ -3062,19 +3070,21 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 16. TOTAL PLAYER PARTICIPATIONS - approaching milestone
-                // Note: This counts total player-game participations, not unique games
-                const totalParticipations = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
-                const participationMilestones = [100, 200, 300, 500, 750, 1000];
-                for (const pm of participationMilestones) {
-                  if (totalParticipations >= pm - 15 && totalParticipations < pm) {
-                    milestones.push({
-                      emoji: '🎊',
-                      title: `${pm} השתתפויות בקבוצה!`,
-                      description: `הקבוצה צברה ${totalParticipations} השתתפויות במשחקים ב${periodLabel}. עוד ${pm - totalParticipations} להשגת יעד ${pm}!`,
-                      priority: 45
-                    });
-                    break;
+                // 16. TOTAL PLAYER PARTICIPATIONS - approaching milestone (skip for historical)
+                if (!isHistoricalPeriod) {
+                  // Note: This counts total player-game participations, not unique games
+                  const totalParticipations = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                  const participationMilestones = [100, 200, 300, 500, 750, 1000];
+                  for (const pm of participationMilestones) {
+                    if (totalParticipations >= pm - 15 && totalParticipations < pm) {
+                      milestones.push({
+                        emoji: '🎊',
+                        title: `${pm} השתתפויות בקבוצה!`,
+                        description: `הקבוצה צברה ${totalParticipations} השתתפויות במשחקים ב${periodLabel}. עוד ${pm - totalParticipations} להשגת יעד ${pm}!`,
+                        priority: 45
+                      });
+                      break;
+                    }
                   }
                 }
                 
@@ -3086,28 +3096,32 @@ const StatisticsScreen = () => {
                   milestones.push({
                     emoji: '⚡',
                     title: `שיא רצף נצחונות!`,
-                    description: `${longestStreakHolder.playerName} מחזיק בשיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}. האם מישהו ישבור את השיא?`,
+                    description: isHistoricalPeriod
+                      ? `${longestStreakHolder.playerName} סיים עם שיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}.`
+                      : `${longestStreakHolder.playerName} מחזיק בשיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}. האם מישהו ישבור את השיא?`,
                     priority: 48
                   });
                 }
                 
-                // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured)
-                for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
-                  const p1 = rankedStats[i];
-                  const p2 = rankedStats[i + 1];
-                  // Skip if this battle was already featured
-                  if (isBattleFeatured(p1.playerId, p2.playerId)) continue;
-                  
-                  const gap = Math.abs(p1.totalProfit - p2.totalProfit);
-                  if (gap <= 30 && gap > 0) {
-                    milestones.push({
-                      emoji: '⚔️',
-                      title: `קרב צמוד!`,
-                      description: `${p1.playerName} ו-${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד! המשחק הבא יקבע מי יהיה מעל.`,
-                      priority: 82
-                    });
-                    markBattle(p1.playerId, p2.playerId);
-                    break; // Only show one close battle
+                // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured or historical)
+                if (!isHistoricalPeriod) {
+                  for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
+                    const p1 = rankedStats[i];
+                    const p2 = rankedStats[i + 1];
+                    // Skip if this battle was already featured
+                    if (isBattleFeatured(p1.playerId, p2.playerId)) continue;
+                    
+                    const gap = Math.abs(p1.totalProfit - p2.totalProfit);
+                    if (gap <= 30 && gap > 0) {
+                      milestones.push({
+                        emoji: '⚔️',
+                        title: `קרב צמוד!`,
+                        description: `${p1.playerName} ו-${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד! המשחק הבא יקבע מי יהיה מעל.`,
+                        priority: 82
+                      });
+                      markBattle(p1.playerId, p2.playerId);
+                      break; // Only show one close battle
+                    }
                   }
                 }
                 
