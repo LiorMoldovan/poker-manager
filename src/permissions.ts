@@ -4,6 +4,7 @@ import { Permission, PermissionRole } from './types';
 export const ROLE_PINS: Record<PermissionRole, string> = {
   admin: '2351',
   member: '2580',
+  memberSync: '0852',
   viewer: '9876',
 };
 
@@ -28,6 +29,16 @@ const ROLE_PERMISSIONS: Record<PermissionRole, Permission[]> = {
   ],
   member: [
     // Member can manage games and add players
+    'game:create',
+    'game:manage_rebuys',
+    'game:enter_chips',
+    'game:finalize',
+    'player:add',
+    'backup:all',
+    'view:all',
+  ],
+  memberSync: [
+    // Member with cloud sync - same as member but uses embedded token for sync
     'game:create',
     'game:manage_rebuys',
     'game:enter_chips',
@@ -70,6 +81,7 @@ export const getRoleDisplayName = (role: PermissionRole): string => {
   switch (role) {
     case 'admin': return 'מנהל (Admin)';
     case 'member': return 'חבר קבוע (Member)';
+    case 'memberSync': return 'חבר + סנכרון (Member+Sync)';
     case 'viewer': return 'צופה (Viewer)';
   }
 };
@@ -79,6 +91,7 @@ export const getRoleEmoji = (role: PermissionRole): string => {
   switch (role) {
     case 'admin': return '👑';
     case 'member': return '⭐';
+    case 'memberSync': return '🔄';
     case 'viewer': return '👁️';
   }
 };

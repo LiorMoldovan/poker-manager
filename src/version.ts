@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.39.12';
+export const APP_VERSION = '4.40.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.0',
+    date: '2025-12-28',
+    changes: [
+      '🔄 New MemberSync role (PIN: 0852)',
+      'Has all Member permissions plus automatic cloud sync',
+      'Uses embedded token - no configuration needed',
+      'Games sync to GitHub automatically when finished'
+    ]
+  },
   {
     version: '4.39.12',
     date: '2025-12-28',

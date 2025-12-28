@@ -1,7 +1,7 @@
 export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
 
 // Permission system
-export type PermissionRole = 'admin' | 'member' | 'viewer';
+export type PermissionRole = 'admin' | 'member' | 'memberSync' | 'viewer';
 
 export type Permission = 
   // Game management

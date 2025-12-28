@@ -235,7 +235,9 @@ const SettingsScreen = () => {
     setBackupMessage({ type: 'success', text: '💾 Creating backup...' });
     
     try {
-      const { cloudResult } = await createBackupWithCloudSync('manual');
+      // Use embedded token if memberSync role
+      const useMemberSyncToken = role === 'memberSync';
+      const { cloudResult } = await createBackupWithCloudSync('manual', undefined, useMemberSyncToken);
       
       setBackups(getBackups());
       setLastBackup(getLastBackupDate());

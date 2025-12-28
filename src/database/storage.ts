@@ -634,13 +634,14 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
 // Create backup and also upload to GitHub cloud
 export const createBackupWithCloudSync = async (
   type: 'auto' | 'manual' = 'manual', 
-  trigger?: 'friday' | 'game-end'
+  trigger?: 'friday' | 'game-end',
+  useMemberSyncToken: boolean = false
 ): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
   // First create the local backup
   const backup = createBackup(type, trigger);
   
-  // Then try to upload to GitHub
-  const cloudResult = await uploadBackupToGitHub(backup);
+  // Then try to upload to GitHub (use embedded token if memberSync role)
+  const cloudResult = await uploadBackupToGitHub(backup, useMemberSyncToken);
   
   return { backup, cloudResult };
 };

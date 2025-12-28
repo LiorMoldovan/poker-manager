@@ -14,7 +14,7 @@ const HistoryScreen = () => {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   
   const canDeleteGames = hasPermission('game:delete');
-  const isAdmin = role === 'admin';
+  const canSyncToCloud = role === 'admin' || role === 'memberSync';
 
   useEffect(() => {
     loadGames();
@@ -44,10 +44,11 @@ const HistoryScreen = () => {
     setGames(games.filter(g => g.id !== gameId));
     setDeleteConfirm(null);
     
-    // If admin, sync deletion to cloud
-    if (isAdmin) {
+    // If admin or memberSync, sync deletion to cloud
+    if (canSyncToCloud) {
       setSyncStatus('Syncing deletion...');
-      const result = await syncToCloud();
+      const useMemberSyncToken = role === 'memberSync';
+      const result = await syncToCloud(useMemberSyncToken);
       if (result.success) {
         setSyncStatus('✅ Deletion synced to cloud');
       } else {

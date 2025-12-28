@@ -10,6 +10,7 @@
  */
 
 import { Player, Game, GamePlayer } from '../types';
+import { getEmbeddedToken } from './embeddedToken';
 
 // GitHub repository info
 const GITHUB_OWNER = 'LiorMoldovan';
@@ -34,6 +35,25 @@ export interface SyncData {
 // Get stored GitHub token
 export const getGitHubToken = (): string | null => {
   return localStorage.getItem(GITHUB_TOKEN_KEY);
+};
+
+// Get effective token (stored or embedded based on role)
+export const getEffectiveToken = (useMemberSyncToken: boolean = false): string | null => {
+  // First check localStorage (admin configured token)
+  const storedToken = getGitHubToken();
+  if (storedToken) {
+    return storedToken;
+  }
+  
+  // If memberSync role, use embedded token
+  if (useMemberSyncToken) {
+    const embeddedToken = getEmbeddedToken();
+    if (embeddedToken) {
+      return embeddedToken;
+    }
+  }
+  
+  return null;
 };
 
 // Save GitHub token
@@ -175,9 +195,10 @@ export interface FullBackupData {
 
 // Upload full backup to GitHub (separate from sync data)
 export const uploadBackupToGitHub = async (
-  backup: FullBackupData
+  backup: FullBackupData,
+  useMemberSyncToken: boolean = false
 ): Promise<{ success: boolean; message: string }> => {
-  const token = getGitHubToken();
+  const token = getEffectiveToken(useMemberSyncToken);
   
   if (!token) {
     return { success: false, message: 'No GitHub token - backup saved locally only' };
@@ -406,12 +427,12 @@ export const syncFromCloud = async (): Promise<{
   }
 };
 
-// Upload current data to cloud (for admin)
-export const syncToCloud = async (): Promise<{
+// Upload current data to cloud (for admin or memberSync)
+export const syncToCloud = async (useMemberSyncToken: boolean = false): Promise<{
   success: boolean;
   message: string;
 }> => {
-  const token = getGitHubToken();
+  const token = getEffectiveToken(useMemberSyncToken);
   
   if (!token) {
     return { success: false, message: 'No GitHub token configured' };
