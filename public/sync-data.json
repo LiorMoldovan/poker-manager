@@ -3,49 +3,61 @@
     {
       "id": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
       "name": "ליאור",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.421Z",
       "type": "permanent"
     },
     {
       "id": "b1ae0113-3ffc-41f5-a732-778d79c46286",
       "name": "אייל",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.432Z",
       "type": "permanent"
     },
     {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
       "name": "אורן",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.432Z",
       "type": "permanent"
     },
     {
       "id": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
       "name": "ליכטר",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.432Z",
       "type": "permanent"
     },
     {
       "id": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
       "name": "סגל",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.432Z",
       "type": "permanent"
     },
     {
       "id": "2cedc21c-7c0d-479c-ac04-483638d01881",
       "name": "תומר",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.432Z",
       "type": "permanent"
     },
     {
       "id": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
       "name": "פיליפ",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.433Z",
+      "type": "permanent"
+    },
+    {
+      "id": "p9",
+      "name": "אסף",
+      "createdAt": "2025-12-28T01:04:42.433Z",
+      "type": "permanent"
+    },
+    {
+      "id": "p10",
+      "name": "פבל",
+      "createdAt": "2025-12-28T01:04:42.433Z",
       "type": "permanent"
     },
     {
       "id": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
       "name": "מלמד",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2025-12-28T01:04:42.433Z",
       "type": "permanent"
     },
     {
@@ -1654,6 +1666,13 @@
       ],
       "chipGap": -11.999999999999886,
       "chipGapPerPlayer": -1.4999999999999858
+    },
+    {
+      "id": "mjyodq4rqfgvp0i6aab",
+      "date": "2026-01-03T19:07:55.659Z",
+      "status": "completed",
+      "createdAt": "2026-01-03T19:07:55.659Z",
+      "location": "סגל"
     }
   ],
   "gamePlayers": [
@@ -17451,8 +17470,144 @@
       },
       "finalValue": 25.35,
       "profit": -109.65000000000002
+    },
+    {
+      "id": "mjyodq4rp24s2vphivc",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mjyodq4r7856azoxyp9",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 5,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -150
+    },
+    {
+      "id": "mjyodq4rohd55ip28c",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 26,
+        "2": 13,
+        "3": 11,
+        "4": 13,
+        "5": 0,
+        "6": 5
+      },
+      "finalValue": 108.9,
+      "profit": 48.900000000000006
+    },
+    {
+      "id": "mjyodq4rgq5hyu9kybw",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -60
+    },
+    {
+      "id": "mjyodq4rctq6tmv5vxp",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 2
+      },
+      "finalValue": 30,
+      "profit": 0
+    },
+    {
+      "id": "mjyodq4r2xahcnqg7xr",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
+      "playerName": "מלמד",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 28,
+        "2": 2,
+        "3": 3,
+        "4": 12,
+        "5": 28,
+        "6": 5
+      },
+      "finalValue": 183.6,
+      "profit": 63.599999999999994
+    },
+    {
+      "id": "mjyodq4rf54qnv20dsk",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 3.5,
+      "chipCounts": {
+        "1": 22,
+        "2": 18,
+        "3": 14,
+        "4": 3,
+        "5": 0,
+        "6": 12
+      },
+      "finalValue": 201.6,
+      "profit": 96.6
+    },
+    {
+      "id": "mjyodq4rgdamlj7nafu",
+      "gameId": "mjyodq4rqfgvp0i6aab",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 24,
+        "2": 17,
+        "3": 12,
+        "4": 20,
+        "5": 20,
+        "6": 5
+      },
+      "finalValue": 180.9,
+      "profit": 90.9
     }
   ],
-  "lastUpdated": "2025-12-29T11:49:32.082Z",
+  "lastUpdated": "2026-01-03T23:51:20.520Z",
   "updatedBy": "admin"
 }
