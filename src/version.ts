@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.18';
+export const APP_VERSION = '4.40.19';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.19',
+    date: '2026-01-04',
+    changes: [
+      '🎯 MUCH more dynamic milestones in New Game!',
+      'NEW: "Last Game Hero" - who won last time?',
+      'NEW: "Looking for Comeback" - redemption stories',
+      'NEW: "Hot Form" / "Cold Form" - recent performance vs average',
+      'NEW: Monthly position changes - who is climbing?',
+      'NEW: Fun rotating facts that change by day',
+      'REMOVED: Static "Consistency King" (same player every week)',
+      'REDUCED: "2025 Champion" priority after first 2 weeks of January',
+      'IMPROVED: Half-year leader only high priority if close race'
+    ]
+  },
   {
     version: '4.40.18',
     date: '2026-01-04',

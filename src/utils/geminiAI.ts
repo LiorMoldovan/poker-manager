@@ -381,14 +381,20 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
 
-  // 15. HALF-YEAR LEADER HIGHLIGHT
-  if (sortedByHalfProfit[0]?.halfGames >= 3) {
+  // 15. HALF-YEAR LEADER HIGHLIGHT - only high priority if there's a close race
+  if (sortedByHalfProfit[0]?.halfGames >= 3 && sortedByHalfProfit[1]?.halfGames >= 2) {
     const leader = sortedByHalfProfit[0];
+    const second = sortedByHalfProfit[1];
+    const gap = Math.round(leader.halfProfit - second.halfProfit);
+    const isCloseRace = gap <= 150;
+    
     milestones.push({
       emoji: '👑',
       title: `מוביל ${halfLabelShort} ${currentYear}!`,
-      description: `${leader.name} מוביל את טבלת ${halfLabel} עם ${leader.halfProfit >= 0 ? '+' : ''}${Math.round(leader.halfProfit)}₪ מתוך ${leader.halfGames} משחקים. עם סיום החצי שנה מתקרב, האם הוא ישמור על הכתר?`,
-      priority: 70
+      description: isCloseRace 
+        ? `${leader.name} מוביל עם ${leader.halfProfit >= 0 ? '+' : ''}${Math.round(leader.halfProfit)}₪, אבל ${second.name} רודף אחריו עם הפרש של ${gap}₪ בלבד!`
+        : `${leader.name} מוביל את טבלת ${halfLabel} עם ${leader.halfProfit >= 0 ? '+' : ''}${Math.round(leader.halfProfit)}₪ מתוך ${leader.halfGames} משחקים.`,
+      priority: isCloseRace ? 72 : 50 // Lower priority if no close race
     });
   }
 
@@ -431,34 +437,40 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
 
-  // In January: Show "2025 Final Results" summary
+  // In January: Show "2025 Final Results" summary - only first 2 weeks, then lower priority
   if (currentMonth === 0) { // January
     const sortedByLastYearProfit = [...previousYearStats].sort((a, b) => b.lastYearProfit - a.lastYearProfit);
     const lastYearChampion = sortedByLastYearProfit[0];
+    const dayOfMonth = now.getDate();
+    const isEarlyJanuary = dayOfMonth <= 14; // First 2 weeks only high priority
     
     if (lastYearChampion && lastYearChampion.lastYearGames >= 5) {
       milestones.push({
         emoji: '🏆',
         title: `אלוף שנת ${lastYear}: ${lastYearChampion.name}!`,
-        description: `${lastYearChampion.name} סיים את שנת ${lastYear} במקום הראשון עם ${lastYearChampion.lastYearProfit >= 0 ? '+' : ''}${Math.round(lastYearChampion.lastYearProfit)}₪ מתוך ${lastYearChampion.lastYearGames} משחקים! שנה חדשה, הכל מתאפס - מי יהיה אלוף ${currentYear}?`,
-        priority: 90
+        description: isEarlyJanuary 
+          ? `${lastYearChampion.name} סיים את שנת ${lastYear} במקום הראשון עם ${lastYearChampion.lastYearProfit >= 0 ? '+' : ''}${Math.round(lastYearChampion.lastYearProfit)}₪ מתוך ${lastYearChampion.lastYearGames} משחקים! שנה חדשה, הכל מתאפס - מי יהיה אלוף ${currentYear}?`
+          : `${lastYearChampion.name} היה אלוף ${lastYear}. עכשיו כולם מתחילים מחדש - מי יוביל ב-${currentYear}?`,
+        priority: isEarlyJanuary ? 75 : 40 // Lower priority after first 2 weeks
       });
     }
     
-    // Show how each player finished last year
-    previousYearStats.forEach(p => {
-      if (p.lastYearGames >= 5) {
-        const rank = sortedByLastYearProfit.findIndex(x => x.name === p.name) + 1;
-        if (rank <= 3 && rank > 1) {
-          milestones.push({
-            emoji: rank === 2 ? '🥈' : '🥉',
-            title: `מקום ${rank} בשנת ${lastYear}`,
-            description: `${p.name} סיים את ${lastYear} במקום ${rank} עם ${p.lastYearProfit >= 0 ? '+' : ''}${Math.round(p.lastYearProfit)}₪. השנה החדשה היא הזדמנות לשפר!`,
-            priority: 85 - rank * 5
-          });
+    // Show how each player finished last year - only first week of January
+    if (isEarlyJanuary) {
+      previousYearStats.forEach(p => {
+        if (p.lastYearGames >= 5) {
+          const rank = sortedByLastYearProfit.findIndex(x => x.name === p.name) + 1;
+          if (rank <= 3 && rank > 1) {
+            milestones.push({
+              emoji: rank === 2 ? '🥈' : '🥉',
+              title: `מקום ${rank} בשנת ${lastYear}`,
+              description: `${p.name} סיים את ${lastYear} במקום ${rank} עם ${p.lastYearProfit >= 0 ? '+' : ''}${Math.round(p.lastYearProfit)}₪. השנה החדשה היא הזדמנות לשפר!`,
+              priority: 55 - rank * 5 // Lower priority
+            });
+          }
         }
-      }
-    });
+      });
+    }
   }
   
   // In July: Show "H1 Final Results" summary
@@ -587,33 +599,8 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     });
   }
 
-  // 23. CONSISTENCY KING - Only show the MOST consistent player
-  const consistentCandidates = players
-    .filter(p => p.gamesPlayed >= 15 && p.winPercentage >= 55 && p.avgProfit > 0)
-    .map(p => ({ ...p, consistency: Math.abs(p.bestWin - Math.abs(p.worstLoss)) }))
-    .filter(p => p.consistency <= 100)
-    .sort((a, b) => a.consistency - b.consistency); // Lowest consistency = most stable
-  if (consistentCandidates.length > 0) {
-    const mostConsistent = consistentCandidates[0];
-    // Add variety to consistency descriptions
-    const consistencyDescriptions = [
-      `${mostConsistent.name} הוא השחקן הכי עקבי: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק, עם סטיות קטנות. שחקן שקשה לנבא נגדו.`,
-      `העקביות של ${mostConsistent.name} מדהימה: ${Math.round(mostConsistent.winPercentage)}% נצחונות ב-${mostConsistent.gamesPlayed} משחקים, ממוצע יציב של +${Math.round(mostConsistent.avgProfit)}₪. לא משאיר הרבה מקום להפתעות.`,
-      `${mostConsistent.name} - המכונה היציבה של הקבוצה! ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק. תמיד יודע מה לצפות ממנו.`,
-      `עם ${Math.round(mostConsistent.winPercentage)}% נצחונות ו-${mostConsistent.gamesPlayed} משחקים, ${mostConsistent.name} הוא הדוגמה המושלמת לעקביות. ממוצע של +${Math.round(mostConsistent.avgProfit)}₪ למשחק - יציב כמו סלע.`,
-      `${mostConsistent.name} מחזיק בשיא העקביות: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק. שחקן שאפשר לסמוך עליו.`
-    ];
-    // Use player name hash for consistent variety (same player gets same description each time)
-    const nameHash = mostConsistent.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const description = consistencyDescriptions[nameHash % consistencyDescriptions.length];
-    
-    milestones.push({
-      emoji: '🎯',
-      title: `${mostConsistent.name} - מלך העקביות!`,
-      description,
-      priority: 55
-    });
-  }
+  // 23. CONSISTENCY KING - REMOVED (too static, shows same player every week)
+  // Replaced with more dynamic insights below
 
   // 24. HEAD-TO-HEAD RIVALRY (if exactly 2 players very close)
   if (players.length >= 2) {
@@ -646,6 +633,142 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       break;
     }
   }
+  
+  // ========== NEW DYNAMIC MILESTONES (change week to week) ==========
+  
+  // 26. LAST GAME HERO - who won the most last game? (high priority - always different)
+  const lastGameResults = players
+    .filter(p => p.gameHistory.length > 0)
+    .map(p => ({ name: p.name, lastProfit: p.gameHistory[0]?.profit || 0, lastDate: p.gameHistory[0]?.date }))
+    .sort((a, b) => b.lastProfit - a.lastProfit);
+  
+  if (lastGameResults.length > 0 && lastGameResults[0].lastProfit > 0) {
+    const lastWinner = lastGameResults[0];
+    milestones.push({
+      emoji: '🌟',
+      title: `גיבור הלילה הקודם!`,
+      description: `${lastWinner.name} ניצח במשחק האחרון עם ${lastWinner.lastProfit >= 0 ? '+' : ''}${Math.round(lastWinner.lastProfit)}₪! האם הוא ימשיך את המומנטום הלילה?`,
+      priority: 78
+    });
+  }
+  
+  // 27. LAST GAME'S LOSER - redemption story (high priority - always different)  
+  if (lastGameResults.length > 0) {
+    const lastLoser = lastGameResults[lastGameResults.length - 1];
+    if (lastLoser.lastProfit < -50) {
+      milestones.push({
+        emoji: '💪',
+        title: `מחפש קאמבק!`,
+        description: `${lastLoser.name} הפסיד ${Math.round(lastLoser.lastProfit)}₪ במשחק האחרון. הלילה זו ההזדמנות שלו לתקן ולחזור לפלוס!`,
+        priority: 76
+      });
+    }
+  }
+  
+  // 28. FORM COMPARISON - who's playing above/below their average recently?
+  const formPlayers = players
+    .filter(p => p.gamesPlayed >= 5 && p.gameHistory.length >= 3)
+    .map(p => {
+      const last3 = p.gameHistory.slice(0, 3);
+      const last3Avg = last3.reduce((sum, g) => sum + g.profit, 0) / 3;
+      const formDiff = last3Avg - p.avgProfit;
+      return { ...p, last3Avg, formDiff };
+    });
+  
+  // Hot form - playing way above average
+  const hotFormPlayer = formPlayers.filter(p => p.formDiff > 40).sort((a, b) => b.formDiff - a.formDiff)[0];
+  if (hotFormPlayer) {
+    milestones.push({
+      emoji: '📈',
+      title: `${hotFormPlayer.name} בפורם חם!`,
+      description: `ממוצע של +${Math.round(hotFormPlayer.last3Avg)}₪ ב-3 משחקים אחרונים (לעומת +${Math.round(hotFormPlayer.avgProfit)}₪ היסטורי). הוא משחק הרבה מעל הרמה הרגילה שלו!`,
+      priority: 74
+    });
+  }
+  
+  // Cold form - playing below average
+  const coldFormPlayer = formPlayers.filter(p => p.formDiff < -40).sort((a, b) => a.formDiff - b.formDiff)[0];
+  if (coldFormPlayer) {
+    milestones.push({
+      emoji: '📉',
+      title: `${coldFormPlayer.name} מתחת לממוצע`,
+      description: `ממוצע של ${Math.round(coldFormPlayer.last3Avg)}₪ ב-3 משחקים אחרונים (לעומת +${Math.round(coldFormPlayer.avgProfit)}₪ היסטורי). תקופה קשה - אבל הסטטיסטיקה לטובתו!`,
+      priority: 72
+    });
+  }
+  
+  // 29. MONTHLY POSITION CHANGES - who moved up/down this month?
+  const monthlyChanges = playerPeriodStats
+    .filter(p => p.monthGames >= 1)
+    .map(p => {
+      const allTimeRank = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
+      const monthRank = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit).findIndex(sp => sp.name === p.name) + 1;
+      return { ...p, allTimeRank, monthRank, rankDiff: allTimeRank - monthRank };
+    });
+  
+  const bigClimber = monthlyChanges.filter(p => p.rankDiff >= 2).sort((a, b) => b.rankDiff - a.rankDiff)[0];
+  if (bigClimber && bigClimber.monthProfit > 0) {
+    milestones.push({
+      emoji: '🚀',
+      title: `${bigClimber.name} עולה בטבלה!`,
+      description: `ב${monthNames[currentMonth]} הוא מקום ${bigClimber.monthRank} (לעומת מקום ${bigClimber.allTimeRank} בכל הזמנים). עם +${Math.round(bigClimber.monthProfit)}₪ החודש, הוא בדרך לשפר את הדירוג!`,
+      priority: 70
+    });
+  }
+  
+  // 30. RANDOM FUN FACTS - rotate through interesting stats
+  const funFacts: MilestoneItem[] = [];
+  
+  // Total money moved
+  const totalProfit = players.reduce((sum, p) => sum + Math.max(0, p.totalProfit), 0);
+  const totalLoss = players.reduce((sum, p) => sum + Math.abs(Math.min(0, p.totalProfit)), 0);
+  funFacts.push({
+    emoji: '💸',
+    title: 'כמה כסף עבר בקבוצה?',
+    description: `בין ${players.length} השחקנים הלילה: ${Math.round(totalProfit)}₪ רווחים לעומת ${Math.round(totalLoss)}₪ הפסדים. הכסף עובר ידיים!`,
+    priority: 45
+  });
+  
+  // Average games per player
+  const avgGames = Math.round(totalGroupGames / players.length);
+  funFacts.push({
+    emoji: '🎮',
+    title: 'כמה משחקים בממוצע?',
+    description: `השחקנים הלילה שיחקו בממוצע ${avgGames} משחקים כל אחד. סה"כ ${totalGroupGames} משחקים ביחד!`,
+    priority: 42
+  });
+  
+  // Best win rate tonight
+  const bestWinRatePlayer = players.filter(p => p.gamesPlayed >= 5).sort((a, b) => b.winPercentage - a.winPercentage)[0];
+  if (bestWinRatePlayer) {
+    funFacts.push({
+      emoji: '🎯',
+      title: `אחוז הנצחונות הגבוה ביותר`,
+      description: `${bestWinRatePlayer.name} עם ${Math.round(bestWinRatePlayer.winPercentage)}% נצחונות (${bestWinRatePlayer.winCount} מתוך ${bestWinRatePlayer.gamesPlayed} משחקים). קשה לנצח אותו!`,
+      priority: 48
+    });
+  }
+  
+  // Most games player
+  const mostGamesPlayer = players.sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
+  if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= 20) {
+    funFacts.push({
+      emoji: '🎖️',
+      title: `הוותיק של הקבוצה`,
+      description: `${mostGamesPlayer.name} שיחק ${mostGamesPlayer.gamesPlayed} משחקים - הכי הרבה בין המשתתפים הלילה!`,
+      priority: 44
+    });
+  }
+  
+  // Random selection from fun facts (pick 1-2 based on day of week for variety)
+  const dayOfWeek = now.getDay();
+  const shuffledFunFacts = funFacts.sort((a, b) => {
+    // Use day of week as seed for pseudo-random shuffle
+    const hashA = (a.title.length * dayOfWeek) % 100;
+    const hashB = (b.title.length * dayOfWeek) % 100;
+    return hashA - hashB;
+  });
+  milestones.push(...shuffledFunFacts.slice(0, 2));
   
   // Sort by priority and return 7-10 most interesting milestones
   // Don't force to 10 - only show truly interesting ones
