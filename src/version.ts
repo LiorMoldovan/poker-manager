@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.5';
+export const APP_VERSION = '4.40.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.6',
+    date: '2026-01-04',
+    changes: [
+      '🎯 Milestones: Added variety to consistency/stability descriptions',
+      'Consistency milestone now has 5 different description variations',
+      'Each player gets a consistent but unique description (based on name hash)',
+      'Fixes repetitive "עקביות מרשימה" sentence for stable players like Lior'
+    ]
+  },
   {
     version: '4.40.5',
     date: '2026-01-04',

@@ -595,10 +595,22 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     .sort((a, b) => a.consistency - b.consistency); // Lowest consistency = most stable
   if (consistentCandidates.length > 0) {
     const mostConsistent = consistentCandidates[0];
+    // Add variety to consistency descriptions
+    const consistencyDescriptions = [
+      `${mostConsistent.name} הוא השחקן הכי עקבי: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק, עם סטיות קטנות. שחקן שקשה לנבא נגדו.`,
+      `העקביות של ${mostConsistent.name} מדהימה: ${Math.round(mostConsistent.winPercentage)}% נצחונות ב-${mostConsistent.gamesPlayed} משחקים, ממוצע יציב של +${Math.round(mostConsistent.avgProfit)}₪. לא משאיר הרבה מקום להפתעות.`,
+      `${mostConsistent.name} - המכונה היציבה של הקבוצה! ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק. תמיד יודע מה לצפות ממנו.`,
+      `עם ${Math.round(mostConsistent.winPercentage)}% נצחונות ו-${mostConsistent.gamesPlayed} משחקים, ${mostConsistent.name} הוא הדוגמה המושלמת לעקביות. ממוצע של +${Math.round(mostConsistent.avgProfit)}₪ למשחק - יציב כמו סלע.`,
+      `${mostConsistent.name} מחזיק בשיא העקביות: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק. שחקן שאפשר לסמוך עליו.`
+    ];
+    // Use player name hash for consistent variety (same player gets same description each time)
+    const nameHash = mostConsistent.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const description = consistencyDescriptions[nameHash % consistencyDescriptions.length];
+    
     milestones.push({
       emoji: '🎯',
       title: `${mostConsistent.name} - מלך העקביות!`,
-      description: `${mostConsistent.name} הוא השחקן הכי עקבי: ${Math.round(mostConsistent.winPercentage)}% נצחונות, ממוצע +${Math.round(mostConsistent.avgProfit)}₪ למשחק, עם סטיות קטנות. שחקן שקשה לנבא נגדו.`,
+      description,
       priority: 55
     });
   }

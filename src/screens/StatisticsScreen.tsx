@@ -2862,12 +2862,28 @@ const StatisticsScreen = () => {
                   .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 60)
                   .sort((a, b) => b.winPercentage - a.winPercentage)[0];
                 if (consistencyKing) {
+                  // Add variety to consistency descriptions
+                  const consistencyDescriptions = isHistoricalPeriod ? [
+                    `${consistencyKing.playerName} סיים עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
+                    `${consistencyKing.playerName} החזיק בשיא העקביות ב${periodLabel} - ${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים.`,
+                    `עם ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים, ${consistencyKing.playerName} היה השחקן הכי יציב ב${periodLabel}.`,
+                    `${consistencyKing.playerName} סיים את ${periodLabel} עם עקביות מדהימה: ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים.`,
+                    `שיא העקביות של ${periodLabel} שייך ל${consistencyKing.playerName}: ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים.`
+                  ] : [
+                    `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
+                    `מלך העקביות: ${consistencyKing.playerName} מחזיק ב-${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים. יציב כמו סלע!`,
+                    `${consistencyKing.playerName} - הדוגמה המושלמת לעקביות: ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים.`,
+                    `עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים, ${consistencyKing.playerName} הוא השחקן הכי יציב.`,
+                    `${consistencyKing.playerName} מחזיק בשיא העקביות: ${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים. תמיד יודע מה לצפות.`
+                  ];
+                  // Use player name hash for consistent variety (same player gets same description each time)
+                  const nameHash = consistencyKing.playerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                  const description = consistencyDescriptions[nameHash % consistencyDescriptions.length];
+                  
                   milestones.push({
                     emoji: '🎯',
                     title: `מלך העקביות!`,
-                    description: isHistoricalPeriod
-                      ? `${consistencyKing.playerName} סיים עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`
-                      : `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
+                    description,
                     priority: 55
                   });
                 }
