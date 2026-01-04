@@ -15,6 +15,7 @@ import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import GraphsScreen from './screens/GraphsScreen';
+import ChatbotScreen from './screens/ChatbotScreen';
 
 // Permission context
 interface PermissionContextType {
@@ -178,6 +179,7 @@ function App() {
               <Route path="/history" element={<HistoryScreen />} />
               <Route path="/game/:gameId" element={<GameDetailsScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
+              <Route path="/chatbot" element={<ChatbotScreen />} />
               {/* Redirect everything else to statistics */}
               <Route path="*" element={<Navigate to="/statistics" replace />} />
             </Routes>
@@ -296,6 +298,7 @@ function App() {
             <Route path="/game/:gameId" element={<GameDetailsScreen />} />
             <Route path="/statistics" element={<StatisticsScreen />} />
             <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/chatbot" element={<ChatbotScreen />} />
             {/* Graphs page - admin and member only */}
             {(role === 'admin' || role === 'member') && <Route path="/graphs" element={<GraphsScreen />} />}
             {/* Catch-all route - redirect unknown URLs to home */}

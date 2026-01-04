@@ -22,6 +22,10 @@ const Navigation = () => {
         <span className="nav-icon">📈</span>
         <span>Statistics</span>
       </NavLink>
+      <NavLink to="/chatbot" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+        <span className="nav-icon">💬</span>
+        <span>Chat</span>
+      </NavLink>
       {canViewGraphs && (
         <NavLink to="/graphs" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <span className="nav-icon">📊</span>

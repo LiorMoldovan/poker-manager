@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.12';
+export const APP_VERSION = '4.40.14';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,31 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.14',
+    date: '2026-01-21',
+    changes: [
+      '🐛 FIX: Player profile sentences for low data (1-2 games)',
+      'Removed meaningless generic statements for players with few games',
+      'Now shows simple factual statements: "Player won/lost X in game"',
+      'For 2 games: Shows both results clearly',
+      'Complex analysis only appears for 5+ games',
+      'Much more meaningful and accurate profiles'
+    ]
+  },
+  {
+    version: '4.40.13',
+    date: '2026-01-21',
+    changes: [
+      '💬 NEW: AI Chatbot feature!',
+      'Ask questions in natural language about players, games, and statistics',
+      'Uses local data for answers - works offline',
+      'AI enhancement available when Gemini API key is configured',
+      'Smart fallback: local answers when AI unavailable',
+      'Accessible from navigation menu',
+      'Supports questions about wins, losses, streaks, leaderboards, and more'
+    ]
+  },
   {
     version: '4.40.12',
     date: '2026-01-04',

@@ -3552,9 +3552,26 @@ const StatisticsScreen = () => {
                 const maxVolatilityForStable = isLowData ? 100 : 200;
                 
                 // Sentence 1: Main performance angle
-                if (gamesPlayed < minGamesForChampion) {
-                  const s = pickRandom(newcomerSentences, 'newcomer');
-                  if (s) sentences.push(s);
+                // For very low data (1-2 games), use simple factual statements
+                if (isLowData && gamesPlayed <= 2) {
+                  if (gamesPlayed === 1) {
+                    // Single game - just state the fact
+                    sentences.push(`📊 ${player.playerName} ${totalProfit >= 0 ? 'ניצח' : 'הפסיד'} במשחק היחיד עם ${formatCurrency(Math.abs(totalProfit))}₪.`);
+                  } else if (gamesPlayed === 2) {
+                    // Two games - show both results
+                    const game1 = lastGames[0];
+                    const game2 = lastGames[1];
+                    if (game1 && game2) {
+                      const result1 = game1.profit >= 0 ? `ניצח +${Math.round(game1.profit)}₪` : `הפסיד ${Math.round(game1.profit)}₪`;
+                      const result2 = game2.profit >= 0 ? `ניצח +${Math.round(game2.profit)}₪` : `הפסיד ${Math.round(game2.profit)}₪`;
+                      sentences.push(`📊 ${player.playerName} שיחק 2 משחקים: ${result1}, ${result2}. רווח כולל: ${formatCurrency(totalProfit)}.`);
+                    } else {
+                      sentences.push(`📊 ${player.playerName} שיחק 2 משחקים עם רווח כולל של ${formatCurrency(totalProfit)}.`);
+                    }
+                  }
+                } else if (gamesPlayed < minGamesForChampion) {
+                  // 3-4 games - still low data, use simple facts
+                  sentences.push(`📊 ${player.playerName} שיחק ${gamesPlayed} משחקים עם רווח כולל של ${formatCurrency(totalProfit)} (${winCount} נצחונות, ${lossCount} הפסדים).`);
                 } else if (avgProfit > (isLowData ? 0 : 20) && winRate >= (isLowData ? 50 : 55)) {
                   const s = pickRandom(championSentences, 'champion');
                   if (s) sentences.push(s);
@@ -3569,68 +3586,72 @@ const StatisticsScreen = () => {
                   if (s) sentences.push(s);
                 } else {
                   // Fallback to a neutral performance sentence
-                  if (isLowData && gamesPlayed === 1) {
-                    sentences.push(`📊 ${player.playerName} ${totalProfit >= 0 ? 'ניצח' : 'הפסיד'} במשחק הראשון עם ${formatCurrency(Math.abs(totalProfit))}₪. ${totalProfit >= 0 ? 'התחלה מעולה!' : 'הלילה הזדמנות להתהפך!'}`);
-                  } else {
-                    sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
-                  }
+                  sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
                 }
                 
                 // Sentence 2: Streak/momentum or style angle
-                const minStreakForShow = isLowData ? 1 : 3;
-                if (currentStreak >= minStreakForShow) {
-                  const s = pickRandom(hotStreakSentences, 'hotstreak');
-                  if (s) sentences.push(s);
-                } else if (currentStreak <= -minStreakForShow) {
-                  const s = pickRandom(coldStreakSentences, 'coldstreak');
-                  if (s) sentences.push(s);
-                } else if (highRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
-                  // Only show rebuy sentences if data is valid (2026+)
-                  const s = pickRandom(highRebuySentences, 'highrebuy');
-                  if (s) sentences.push(s);
-                } else if (lowRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
-                  // Only show rebuy sentences if data is valid (2026+)
-                  const s = pickRandom(lowRebuySentences, 'lowrebuy');
-                  if (s) sentences.push(s);
-                } else if (volatilityScore >= minVolatilityForShow && gamesPlayed >= minGamesForStyle) {
-                  const s = pickRandom(volatileSentences, 'volatile');
-                  if (s) sentences.push(s);
-                } else if (volatilityScore <= maxVolatilityForStable && gamesPlayed >= minGamesForStyle) {
-                  const s = pickRandom(consistentSentences, 'consistent');
-                  if (s) sentences.push(s);
-                } else if (isRecentlyHot && recentGames.length >= minGamesForRecent) {
-                  const s = pickRandom(recentHotSentences, 'recenthot');
-                  if (s) sentences.push(s);
-                } else if (isRecentlyCold && recentGames.length >= minGamesForRecent) {
-                  const s = pickRandom(recentColdSentences, 'recentcold');
-                  if (s) sentences.push(s);
-                } else if (isLowData && gamesPlayed === 1) {
-                  // For single game, add a simple insight
-                  if (bestWin > 0) {
-                    sentences.push(`💰 הנצחון הגדול: +${Math.round(bestWin)}₪ במשחק הראשון.`);
-                  } else if (worstLoss < 0) {
-                    sentences.push(`📉 הפסיד ${Math.abs(Math.round(worstLoss))}₪ במשחק הראשון. הלילה הזדמנות להתהפך!`);
+                // Skip complex analysis for very low data (1-2 games)
+                if (isLowData && gamesPlayed <= 2) {
+                  // For low data, only add meaningful facts
+                  if (gamesPlayed === 2 && lastGames.length >= 2) {
+                    const game1 = lastGames[0];
+                    const game2 = lastGames[1];
+                    if (game1 && game2) {
+                      // Show if they're on a streak
+                      if (game1.profit > 0 && game2.profit > 0) {
+                        sentences.push(`🔥 2 נצחונות ברצף - התחלה טובה!`);
+                      } else if (game1.profit < 0 && game2.profit < 0) {
+                        sentences.push(`❄️ 2 הפסדים ברצף - מחפש לשבור את הרצף.`);
+                      }
+                    }
+                  }
+                } else {
+                  const minStreakForShow = isLowData ? 1 : 3;
+                  if (currentStreak >= minStreakForShow) {
+                    const s = pickRandom(hotStreakSentences, 'hotstreak');
+                    if (s) sentences.push(s);
+                  } else if (currentStreak <= -minStreakForShow) {
+                    const s = pickRandom(coldStreakSentences, 'coldstreak');
+                    if (s) sentences.push(s);
+                  } else if (highRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
+                    // Only show rebuy sentences if data is valid (2026+)
+                    const s = pickRandom(highRebuySentences, 'highrebuy');
+                    if (s) sentences.push(s);
+                  } else if (lowRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
+                    // Only show rebuy sentences if data is valid (2026+)
+                    const s = pickRandom(lowRebuySentences, 'lowrebuy');
+                    if (s) sentences.push(s);
+                  } else if (volatilityScore >= minVolatilityForShow && gamesPlayed >= minGamesForStyle) {
+                    const s = pickRandom(volatileSentences, 'volatile');
+                    if (s) sentences.push(s);
+                  } else if (volatilityScore <= maxVolatilityForStable && gamesPlayed >= minGamesForStyle) {
+                    const s = pickRandom(consistentSentences, 'consistent');
+                    if (s) sentences.push(s);
+                  } else if (isRecentlyHot && recentGames.length >= minGamesForRecent) {
+                    const s = pickRandom(recentHotSentences, 'recenthot');
+                    if (s) sentences.push(s);
+                  } else if (isRecentlyCold && recentGames.length >= minGamesForRecent) {
+                    const s = pickRandom(recentColdSentences, 'recentcold');
+                    if (s) sentences.push(s);
                   }
                 }
                 
                 // Sentence 3: Additional insight (record, comparison, or tip)
-                const minBestWinForRecord = isLowData ? 100 : 200;
-                if (sentences.length < 3 && gamesPlayed >= minGamesForRecord) {
-                  // Try to add a third sentence for variety
-                  if (bestWin >= minBestWinForRecord && !usedAngles.has('record')) {
-                    const s = pickRandom(recordSentences, 'record');
-                    if (s) sentences.push(s);
-                  } else if (isRecentlyHot && !usedAngles.has('recenthot')) {
-                    const s = pickRandom(recentHotSentences, 'recenthot');
-                    if (s) sentences.push(s);
-                  } else if (isRecentlyCold && !usedAngles.has('recentcold')) {
-                    const s = pickRandom(recentColdSentences, 'recentcold');
-                    if (s) sentences.push(s);
-                  }
-                } else if (isLowData && gamesPlayed === 1 && sentences.length < 2) {
-                  // For single game, ensure we have at least 2 sentences
-                  if (bestWin > 0 && !usedAngles.has('record')) {
-                    sentences.push(`🏆 ${player.playerName} עם נצחון של +${Math.round(bestWin)}₪ במשחק הראשון ב${periodLabel}.`);
+                // Skip for very low data (1-2 games) - we already have factual statements
+                if (!(isLowData && gamesPlayed <= 2)) {
+                  const minBestWinForRecord = isLowData ? 100 : 200;
+                  if (sentences.length < 3 && gamesPlayed >= minGamesForRecord) {
+                    // Try to add a third sentence for variety
+                    if (bestWin >= minBestWinForRecord && !usedAngles.has('record')) {
+                      const s = pickRandom(recordSentences, 'record');
+                      if (s) sentences.push(s);
+                    } else if (isRecentlyHot && !usedAngles.has('recenthot')) {
+                      const s = pickRandom(recentHotSentences, 'recenthot');
+                      if (s) sentences.push(s);
+                    } else if (isRecentlyCold && !usedAngles.has('recentcold')) {
+                      const s = pickRandom(recentColdSentences, 'recentcold');
+                      if (s) sentences.push(s);
+                    }
                   }
                 }
                 
