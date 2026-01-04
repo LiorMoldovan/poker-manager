@@ -2625,6 +2625,11 @@ const StatisticsScreen = () => {
                 const isEndOfYear = currentMonth === 11; // December
                 const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
                 
+                // Detect low data scenario - calculate total games in period
+                const totalGamesInPeriod = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                const maxGamesPlayed = rankedStats.length > 0 ? Math.max(...rankedStats.map(p => p.gamesPlayed)) : 0;
+                const isLowData = totalGamesInPeriod <= 3 || maxGamesPlayed <= 2; // Very few games in period
+                
                 // Determine if this is a historical (completed) period
                 const isHistoricalPeriod = (() => {
                   if (timePeriod === 'all') return false; // All-time is always "current"
@@ -2636,8 +2641,8 @@ const StatisticsScreen = () => {
                 })();
                 
                 // 1. CHAMPION TITLE - Dramatic year/half-year milestone
-                
-                if (rankedStats.length > 0 && rankedStats[0].totalProfit > 0) {
+                // For low data scenarios, always show leader even with 1 game
+                if (rankedStats.length > 0) {
                   const leader = rankedStats[0];
                   const secondPlace = rankedStats[1];
                   const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
@@ -2652,27 +2657,31 @@ const StatisticsScreen = () => {
                       title: `אלוף ${periodName}!`,
                       description: secondPlace && gap <= 150 
                         ? `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)}, בפער של ${gap}₪ בלבד מ-${secondPlace.playerName}! קרב צמוד עד הסוף.`
-                        : `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים.`,
+                        : `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed > 1 ? ` אחרי ${leader.gamesPlayed} משחקים` : ''}.`,
                       priority: 98
                     });
                     if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if (timePeriod === 'year' && isEndOfYear && leader.gamesPlayed >= 5) {
-                    // Year-end special milestone
+                  } else if (timePeriod === 'year' && isEndOfYear && (leader.gamesPlayed >= 5 || isLowData)) {
+                    // Year-end special milestone (lower threshold for low data)
                     milestones.push({
                       emoji: '🏆',
                       title: `אלוף שנת ${selectedYear}?`,
-                      description: `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
+                      description: isLowData
+                        ? `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
+                        : `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
                       priority: 98
                     });
                     // Mark the leader battle to avoid duplication
                     if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if ((timePeriod === 'h1' || timePeriod === 'h2') && isEndOfHalf && leader.gamesPlayed >= 3) {
-                    // Half-year end special
+                  } else if ((timePeriod === 'h1' || timePeriod === 'h2') && isEndOfHalf && (leader.gamesPlayed >= 3 || isLowData)) {
+                    // Half-year end special (lower threshold for low data)
                     const halfName = timePeriod === 'h1' ? 'H1' : 'H2';
                     milestones.push({
                       emoji: '🏆',
                       title: `אלוף ${halfName} ${selectedYear}?`,
-                      description: `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}! עם סיום החצי מתקרב, האם מישהו יצליח לעקוף אותו?`,
+                      description: isLowData
+                        ? `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה מבטיחה!`
+                        : `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}! עם סיום החצי מתקרב, האם מישהו יצליח לעקוף אותו?`,
                       priority: 96
                     });
                     // Mark the leader battle to avoid duplication
@@ -2687,12 +2696,14 @@ const StatisticsScreen = () => {
                     });
                     // Mark this battle to avoid showing it again in leaderboard battles
                     if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if (leader.gamesPlayed >= 5) {
-                    // Big lead - celebrate but still ask the question
+                  } else if (leader.gamesPlayed >= 5 || (isLowData && leader.gamesPlayed >= 1)) {
+                    // Big lead - celebrate but still ask the question (lower threshold for low data)
                     milestones.push({
                       emoji: '🏆',
                       title: `מוביל ${periodLabel}!`,
-                      description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
+                      description: isLowData
+                        ? `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
+                        : `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
                       priority: 80
                     });
                   }
@@ -2842,11 +2853,12 @@ const StatisticsScreen = () => {
                   }
                 }
                 
-                // 10. BIGGEST WIN RECORD - show current record holder
+                // 10. BIGGEST WIN RECORD - show current record holder (lower threshold for low data)
                 const bestWinRecord = rankedStats.length > 0 
                   ? rankedStats.reduce((max, p) => p.biggestWin > max.biggestWin ? p : max, rankedStats[0])
                   : null;
-                if (bestWinRecord && bestWinRecord.biggestWin >= 200) {
+                const winThreshold = isLowData ? 100 : 200; // Lower threshold when few games
+                if (bestWinRecord && bestWinRecord.biggestWin >= winThreshold) {
                   milestones.push({
                     emoji: '💰',
                     title: `שיא הנצחון הגדול!`,
@@ -2857,9 +2869,11 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 11. CONSISTENCY KING - best win rate with enough games (works for both)
+                // 11. CONSISTENCY KING - best win rate (lower threshold for low data)
+                const minGamesForConsistency = isLowData ? 1 : 8;
+                const minWinRateForConsistency = isLowData ? 50 : 60;
                 const consistencyKing = rankedStats
-                  .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 60)
+                  .filter(p => p.gamesPlayed >= minGamesForConsistency && p.winPercentage >= minWinRateForConsistency)
                   .sort((a, b) => b.winPercentage - a.winPercentage)[0];
                 if (consistencyKing) {
                   // Add variety to consistency descriptions
@@ -2888,22 +2902,26 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 12. COMEBACK KING - someone who went from negative to positive
+                // 12. COMEBACK KING - someone who went from negative to positive (lower threshold for low data)
                 // Note: biggestLoss is stored as negative number (e.g., -150)
+                const minGamesForComeback = isLowData ? 1 : 5;
+                const minLossForComeback = isLowData ? -50 : -100;
                 const comebackKing = rankedStats
-                  .filter(p => p.totalProfit > 0 && p.biggestLoss <= -100 && p.gamesPlayed >= 5)
+                  .filter(p => p.totalProfit > 0 && p.biggestLoss <= minLossForComeback && p.gamesPlayed >= minGamesForComeback)
                   .sort((a, b) => a.biggestLoss - b.biggestLoss)[0]; // Most negative first
                 if (comebackKing) {
                   milestones.push({
                     emoji: '💪',
                     title: `קאמבק קינג!`,
-                    description: `${comebackKing.playerName} הפסיד פעם ${Math.round(Math.abs(comebackKing.biggestLoss))}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
+                    description: isLowData && comebackKing.gamesPlayed === 1
+                      ? `${comebackKing.playerName} התחיל חזק עם ${formatCurrency(comebackKing.totalProfit)} במשחק הראשון ב${periodLabel}!`
+                      : `${comebackKing.playerName} הפסיד פעם ${Math.round(Math.abs(comebackKing.biggestLoss))}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
                     priority: 58
                   });
                 }
                 
-                // 13. WIN RATE MILESTONE - approaching 60% (skip for historical)
-                if (!isHistoricalPeriod) {
+                // 13. WIN RATE MILESTONE - approaching 60% (skip for historical, skip for low data - not meaningful)
+                if (!isHistoricalPeriod && !isLowData) {
                   const winRateCandidate = rankedStats
                     .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 55 && p.winPercentage < 60)
                     .sort((a, b) => b.winPercentage - a.winPercentage)[0];
@@ -2920,31 +2938,39 @@ const StatisticsScreen = () => {
                   }
                 }
                 
-                // 14. BIGGEST LOSER - who's struggling the most
+                // 14. BIGGEST LOSER - who's struggling the most (lower threshold for low data)
+                const minGamesForLoser = isLowData ? 1 : 5;
+                const minLossForLoser = isLowData ? -50 : -200;
                 const biggestLoser = rankedStats
-                  .filter(p => p.totalProfit < 0 && p.gamesPlayed >= 5)
+                  .filter(p => p.totalProfit < 0 && p.gamesPlayed >= minGamesForLoser)
                   .sort((a, b) => a.totalProfit - b.totalProfit)[0];
-                if (biggestLoser && biggestLoser.totalProfit < -200) {
+                if (biggestLoser && biggestLoser.totalProfit < minLossForLoser) {
                   milestones.push({
                     emoji: '📉',
                     title: isHistoricalPeriod ? `תקופה קשה` : `במאבק על שיפור`,
                     description: isHistoricalPeriod
                       ? `${biggestLoser.playerName} סיים ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת.`
-                      : `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
+                      : isLowData && biggestLoser.gamesPlayed === 1
+                        ? `${biggestLoser.playerName} התחיל עם ${Math.abs(Math.round(biggestLoser.totalProfit))}₪ במשחק הראשון ב${periodLabel}. הלילה הזדמנות להתהפך!`
+                        : `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
                     priority: 50
                   });
                 }
                 
-                // 15. VOLATILITY KING - biggest swings
+                // 15. VOLATILITY KING - biggest swings (lower threshold for low data)
+                const minGamesForVolatility = isLowData ? 1 : 5;
+                const minVolatility = isLowData ? 150 : 400;
                 const volatilityKing = rankedStats
-                  .filter(p => p.gamesPlayed >= 5)
+                  .filter(p => p.gamesPlayed >= minGamesForVolatility)
                   .map(p => ({ ...p, volatility: p.biggestWin + Math.abs(p.biggestLoss) }))
                   .sort((a, b) => b.volatility - a.volatility)[0];
-                if (volatilityKing && volatilityKing.volatility >= 400) {
+                if (volatilityKing && volatilityKing.volatility >= minVolatility) {
                   milestones.push({
                     emoji: '🎢',
                     title: `מלך התנודות!`,
-                    description: `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד ${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
+                    description: isLowData && volatilityKing.gamesPlayed === 1
+                      ? `${volatilityKing.playerName} עם ${volatilityKing.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(volatilityKing.totalProfit))}₪ במשחק הראשון. התחלה דרמטית!`
+                      : `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד ${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
                     priority: 52
                   });
                 }
@@ -3004,28 +3030,95 @@ const StatisticsScreen = () => {
                   }
                 }
                 
-                // 19. MOST GAMES PLAYED
+                // 19. MOST GAMES PLAYED (lower threshold for low data)
                 const mostGamesPlayer = [...rankedStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
-                if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= 15) {
+                const minGamesForIron = isLowData ? 1 : 15;
+                if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= minGamesForIron && rankedStats.filter(p => p.gamesPlayed === mostGamesPlayer.gamesPlayed).length === 1) {
+                  // Only show if there's a clear leader (not everyone tied at 1 game)
                   milestones.push({
                     emoji: '🎮',
                     title: `שחקן הברזל!`,
-                    description: `${mostGamesPlayer.playerName} שיחק ${mostGamesPlayer.gamesPlayed} משחקים ב${periodLabel} - הכי הרבה בקבוצה!`,
+                    description: isLowData && mostGamesPlayer.gamesPlayed === 1
+                      ? `${mostGamesPlayer.playerName} השתתף במשחק הראשון ב${periodLabel} עם ${mostGamesPlayer.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(mostGamesPlayer.totalProfit))}₪.`
+                      : `${mostGamesPlayer.playerName} שיחק ${mostGamesPlayer.gamesPlayed} משחקים ב${periodLabel} - הכי הרבה בקבוצה!`,
                     priority: 40
                   });
                 }
                 
-                // 20. BEST AVERAGE PROFIT (min 5 games)
+                // 20. BEST AVERAGE PROFIT (lower threshold for low data)
+                const minGamesForAvg = isLowData ? 1 : 5;
+                const minAvgForShow = isLowData ? 0 : 30;
                 const bestAvgPlayer = rankedStats
-                  .filter(p => p.gamesPlayed >= 5)
+                  .filter(p => p.gamesPlayed >= minGamesForAvg)
                   .sort((a, b) => b.avgProfit - a.avgProfit)[0];
-                if (bestAvgPlayer && bestAvgPlayer.avgProfit >= 30) {
+                if (bestAvgPlayer && bestAvgPlayer.avgProfit >= minAvgForShow) {
                   milestones.push({
                     emoji: '📊',
                     title: `הממוצע הגבוה ביותר!`,
-                    description: `${bestAvgPlayer.playerName} עם ממוצע +${Math.round(bestAvgPlayer.avgProfit)}₪ למשחק ב${periodLabel}. יעילות מרשימה!`,
+                    description: isLowData && bestAvgPlayer.gamesPlayed === 1
+                      ? `${bestAvgPlayer.playerName} עם ${bestAvgPlayer.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(bestAvgPlayer.totalProfit))}₪ במשחק הראשון ב${periodLabel}. התחלה ${bestAvgPlayer.totalProfit >= 0 ? 'חזקה' : 'מאתגרת'}!`
+                      : `${bestAvgPlayer.playerName} עם ממוצע +${Math.round(bestAvgPlayer.avgProfit)}₪ למשחק ב${periodLabel}. יעילות מרשימה!`,
                     priority: 42
                   });
+                }
+                
+                // 21. LOW DATA SPECIFIC MILESTONES - focus on what we have
+                if (isLowData && rankedStats.length > 0) {
+                  // Show all players who participated (when there's only 1-2 games, everyone matters)
+                  const participants = rankedStats.filter(p => p.gamesPlayed >= 1);
+                  
+                  // First game milestone
+                  if (totalGamesInPeriod === 1 && participants.length > 0) {
+                    const winner = participants.find(p => p.totalProfit > 0);
+                    const loser = participants.find(p => p.totalProfit < 0);
+                    if (winner) {
+                      milestones.push({
+                        emoji: '🎉',
+                        title: `המשחק הראשון ב${periodLabel}!`,
+                        description: `${winner.playerName} ניצח במשחק הראשון עם ${formatCurrency(winner.totalProfit)}. התחלה מעולה!`,
+                        priority: 70
+                      });
+                    }
+                    if (loser && participants.length > 1) {
+                      milestones.push({
+                        emoji: '💪',
+                        title: `הזדמנות להתהפך!`,
+                        description: `${loser.playerName} הפסיד ${Math.abs(Math.round(loser.totalProfit))}₪ במשחק הראשון. הלילה הזדמנות לחזור לפלוס!`,
+                        priority: 65
+                      });
+                    }
+                  }
+                  
+                  // Show close battles even with 1-2 games
+                  if (rankedStats.length >= 2) {
+                    const p1 = rankedStats[0];
+                    const p2 = rankedStats[1];
+                    const gap = Math.abs(p1.totalProfit - p2.totalProfit);
+                    if (gap <= 100 && gap > 0 && !isBattleFeatured(p1.playerId, p2.playerId)) {
+                      milestones.push({
+                        emoji: '⚔️',
+                        title: `קרב צמוד!`,
+                        description: `${p1.playerName} מוביל את ${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד. המשחק הבא יקבע מי יהיה מעל!`,
+                        priority: 75
+                      });
+                      markBattle(p1.playerId, p2.playerId);
+                    }
+                  }
+                  
+                  // Show all participants when there are very few games
+                  if (totalGamesInPeriod <= 2 && participants.length <= 4) {
+                    participants.forEach((p, idx) => {
+                      if (idx < 3 && !featuredPlayers.has(p.playerId)) { // Limit to top 3
+                        milestones.push({
+                          emoji: p.totalProfit >= 0 ? '✅' : '📊',
+                          title: `${p.playerName} ב${periodLabel}`,
+                          description: `${p.playerName} עם ${formatCurrency(p.totalProfit)}${p.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${p.gamesPlayed} משחקים`}. ${p.totalProfit >= 0 ? 'התחלה טובה!' : 'הלילה הזדמנות להתהפך!'}`,
+                          priority: 35 - idx * 5
+                        });
+                        featuredPlayers.add(p.playerId);
+                      }
+                    });
+                  }
                 }
                 
                 // Sort by priority and show top 8

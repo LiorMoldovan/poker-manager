@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.6';
+export const APP_VERSION = '4.40.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.7',
+    date: '2026-01-04',
+    changes: [
+      '🎯 Milestones: Improved low-data scenarios (1-2 games)',
+      'Lowered thresholds for milestones when period has few games',
+      'Added simple milestones that work with 1 game (leader, winner, close battles)',
+      'Focus on available data instead of "no data" messages',
+      'Milestones now meaningful even in early periods of the year'
+    ]
+  },
   {
     version: '4.40.6',
     date: '2026-01-04',
