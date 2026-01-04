@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.25';
+export const APP_VERSION = '4.40.26';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.26',
+    date: '2026-01-04',
+    changes: [
+      '🌟 DRAMATIC MILESTONES - The stories that matter!',
+      '"מהפסיד למנצח" - player who usually loses but just won!',
+      '"מנצח לנפגע" - star player who unexpectedly lost',
+      '"מלחמת הרצפים" - hot streak vs cold streak clash',
+      '"הרים רוסיים" - biggest swings in recent games',
+      '"המקום האחרון עולה" - bottom player showing comeback',
+      '"המוביל מאבד אחיזה" - leader losing momentum',
+      '2025 champion: First week only (high priority), second week (low), then GONE!',
+      'Focus on current dynamics, not old history!'
+    ]
+  },
   {
     version: '4.40.25',
     date: '2026-01-04',
