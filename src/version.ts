@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.28';
+export const APP_VERSION = '4.40.29';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,24 +13,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.40.28',
+    version: '4.40.29',
     date: '2026-01-04',
     changes: [
-      '🎯 Chatbot now prioritizes LOCAL answers for accuracy!',
-      'Known questions get instant, accurate local responses',
-      'AI only used for creative/unknown questions',
-      'Fixed: answers now match the actual question asked',
-      'Much faster responses for common questions'
-    ]
-  },
-  {
-    version: '4.40.27',
-    date: '2026-01-04',
-    changes: [
-      '🐛 FIX: Chatbot was not loading player data correctly',
-      'Fixed getPlayerStats() call that was passing wrong parameter',
-      'Chatbot now properly finds and displays all player statistics',
-      'No more "no data" errors when data exists!'
+      '🗑️ Removed chatbot feature',
+      'Cleaner app without the chat button'
     ]
   },
   {

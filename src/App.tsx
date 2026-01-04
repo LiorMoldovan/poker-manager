@@ -15,7 +15,6 @@ import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import GraphsScreen from './screens/GraphsScreen';
-import { ChatbotModal, ChatFAB } from './screens/ChatbotScreen';
 
 // Permission context
 interface PermissionContextType {
@@ -37,7 +36,6 @@ function App() {
   const [syncStatus, setSyncStatus] = useState<{ syncing: boolean; message: string | null }>({ syncing: false, message: null });
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [storageWarningDismissed, setStorageWarningDismissed] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     initializeStorage();
@@ -185,8 +183,6 @@ function App() {
             </Routes>
           </main>
           <Navigation />
-          <ChatFAB onClick={() => setChatOpen(true)} />
-          <ChatbotModal isOpen={chatOpen} onClose={() => setChatOpen(false)} />
         </div>
       </PermissionContext.Provider>
     );
@@ -307,8 +303,6 @@ function App() {
           </Routes>
         </main>
         {!hideNav && <Navigation />}
-        {!hideNav && <ChatFAB onClick={() => setChatOpen(true)} />}
-        <ChatbotModal isOpen={chatOpen} onClose={() => setChatOpen(false)} />
       </div>
     </PermissionContext.Provider>
   );
