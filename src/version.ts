@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.26';
+export const APP_VERSION = '4.40.27';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.27',
+    date: '2026-01-04',
+    changes: [
+      '🐛 FIX: Chatbot was not loading player data correctly',
+      'Fixed getPlayerStats() call that was passing wrong parameter',
+      'Chatbot now properly finds and displays all player statistics',
+      'No more "no data" errors when data exists!'
+    ]
+  },
   {
     version: '4.40.26',
     date: '2026-01-04',

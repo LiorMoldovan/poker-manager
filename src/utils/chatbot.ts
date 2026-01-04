@@ -161,9 +161,12 @@ const getProcessedData = () => {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const settings = getSettings();
 
-  // Get all player stats
+  // Get all player stats (getPlayerStats returns array of all players' stats)
+  const allStats = getPlayerStats();
+  
+  // Map players to their stats
   const playerStats = players.map(p => {
-    const stats = getPlayerStats(p.id);
+    const stats = allStats.find(s => s.playerId === p.id);
     return { player: p, stats };
   }).filter(ps => ps.stats && ps.stats.gamesPlayed > 0);
 
