@@ -3552,21 +3552,78 @@ const StatisticsScreen = () => {
                 const maxVolatilityForStable = isLowData ? 100 : 200;
                 
                 // Sentence 1: Main performance angle
-                // For very low data (1-2 games), use simple factual statements
+                // For very low data (1-2 games), use creative and engaging statements
                 if (isLowData && gamesPlayed <= 2) {
                   if (gamesPlayed === 1) {
-                    // Single game - just state the fact
-                    sentences.push(`📊 ${player.playerName} ${totalProfit >= 0 ? 'ניצח' : 'הפסיד'} במשחק היחיד עם ${formatCurrency(Math.abs(totalProfit))}₪.`);
+                    // Single game - creative dramatic openers based on result
+                    const singleGameSentences = totalProfit > 0 ? [
+                      `🎉 כניסה רועמת! ${formatCurrency(totalProfit)} ברווח במופע הבכורה.`,
+                      `⚡ התחלה מבטיחה - ${formatCurrency(totalProfit)} ברווח ביציאה הראשונה!`,
+                      `🚀 פתיחה חזקה! ${formatCurrency(totalProfit)} מהמשחק הראשון.`,
+                      `💫 הדבר הטוב ביותר שיכול לקרות למתחיל - ${formatCurrency(totalProfit)} ברווח!`,
+                      `🎯 ישר לעניין - ${formatCurrency(totalProfit)} במכה אחת.`,
+                      `🏆 אלופי העולם התחילו בדיוק ככה - ${formatCurrency(totalProfit)} במשחק הראשון!`,
+                      `🌟 "שמים מחכים למי שמעז" - ${formatCurrency(totalProfit)} ברווח בהתחלה.`,
+                    ] : totalProfit < 0 ? [
+                      `💪 הפסד של ${formatCurrency(Math.abs(totalProfit))} במשחק הראשון? זה רק שיעור ראשון!`,
+                      `🔥 שילם ${formatCurrency(Math.abs(totalProfit))} שכר לימוד. עכשיו הוא יודע למה להיזהר.`,
+                      `📉 התחלה קשה (-${formatCurrency(Math.abs(totalProfit))}). אבל כולם יודעים - הנפילה לפני העלייה!`,
+                      `🎲 המזל לא היה בצד שלו - ${formatCurrency(Math.abs(totalProfit))} הפסד. אבל עוד לא אמרנו את המילה האחרונה.`,
+                      `⏳ ${formatCurrency(Math.abs(totalProfit))} הפסד בהתחלה? הסטטיסטיקה אומרת שהבא יותר טוב.`,
+                      `🌊 גל ראשון קשה (-${formatCurrency(Math.abs(totalProfit))}). אבל הים הזה עוד יהיה שלו.`,
+                      `💎 יהלומים נוצרים תחת לחץ - ${formatCurrency(Math.abs(totalProfit))} הפסד זה רק ההתחלה של הסיפור.`,
+                    ] : [
+                      `⚖️ יציאה מאוזנת! לא הפסיד, לא הרוויח - טקטיקה שמרנית.`,
+                      `🎭 משחק ראשון, תוצאה אפסית. שחקן זהיר או סתם מזל?`,
+                      `🔮 תוצאה אפס במשחק הראשון - הכל פתוח להמשך!`,
+                    ];
+                    sentences.push(singleGameSentences[Math.floor(Math.random() * singleGameSentences.length)]);
                   } else if (gamesPlayed === 2) {
-                    // Two games - show both results
-                    const game1 = lastGames[0];
-                    const game2 = lastGames[1];
+                    // Two games - creative narratives based on pattern
+                    const game1 = lastGames[0]; // Most recent
+                    const game2 = lastGames[1]; // Earlier game
                     if (game1 && game2) {
-                      const result1 = game1.profit >= 0 ? `ניצח +${Math.round(game1.profit)}₪` : `הפסיד ${Math.round(game1.profit)}₪`;
-                      const result2 = game2.profit >= 0 ? `ניצח +${Math.round(game2.profit)}₪` : `הפסיד ${Math.round(game2.profit)}₪`;
-                      sentences.push(`📊 ${player.playerName} שיחק 2 משחקים: ${result1}, ${result2}. רווח כולל: ${formatCurrency(totalProfit)}.`);
+                      const twoGameSentences = 
+                        // Win-Win pattern
+                        (game1.profit > 0 && game2.profit > 0) ? [
+                          `🔥 2 מתוך 2 נצחונות! הוא יודע משהו שאנחנו לא?`,
+                          `💰 מנצח את שני המשחקים הראשונים! כישרון טבעי או מזל מתחילים?`,
+                          `🚀 רצף מושלם - 2 נצחונות ברצף. ההתחלה הטובה ביותר האפשרית!`,
+                          `⚡ 100% נצחונות! ${formatCurrency(totalProfit)} ברווח ב-2 משחקים. מפחיד.`,
+                          `🏆 2/2 נצחונות - אם זה ימשיך ככה, יש לנו בעיה...`,
+                        ] :
+                        // Loss-Loss pattern
+                        (game1.profit < 0 && game2.profit < 0) ? [
+                          `❄️ 2 הפסדים ברצף. אבל היסטוריית הפוקר מלאה בקאמבקים אגדיים!`,
+                          `💪 ${formatCurrency(Math.abs(totalProfit))} הפסד ב-2 משחקים - עכשיו הוא מכיר את הטעויות שלו.`,
+                          `🎲 התחלה קשה, אבל הסטטיסטיקה חייבת להסתובב לטובתו!`,
+                          `🔄 2 הפסדים רצופים? הנצחון הבא יהיה מתוק במיוחד.`,
+                          `📉 תקופת לימודים - ${formatCurrency(Math.abs(totalProfit))} הפסד. אבל זה רק ההתחלה.`,
+                        ] :
+                        // Win then Loss (improving trend - most recent is win)
+                        (game1.profit > 0 && game2.profit < 0) ? [
+                          `📈 אחרי הפסד - נצחון! הוא למד מהר וחזר חזק.`,
+                          `🔥 קאמבק מרשים! מהפסד של ${formatCurrency(Math.abs(game2.profit))} לנצחון של ${formatCurrency(game1.profit)}.`,
+                          `💫 נפל וקם! הלילה האחרון היה נצחון - המגמה חיובית.`,
+                          `🎯 תיקן במהירות - מ-${formatCurrency(game2.profit)} ל+${formatCurrency(game1.profit)}. יודע להסתגל!`,
+                          `⬆️ מגמה עולה! הנצחון האחרון (+${formatCurrency(game1.profit)}) מוחק את ההפסד הקודם.`,
+                        ] :
+                        // Loss then Win (declining trend - most recent is loss)
+                        (game1.profit < 0 && game2.profit > 0) ? [
+                          `📉 התחיל בנצחון אבל הלילה האחרון היה הפסד. מחפש לחזור למסלול.`,
+                          `⏸️ אחרי נצחון ראשון (+${formatCurrency(game2.profit)}), הפסד של ${formatCurrency(game1.profit)}. 1:1 לעכשיו.`,
+                          `🎢 תנודות מוקדמות - נצחון ואז הפסד. הסיפור רק מתחיל.`,
+                          `🔄 מ+${formatCurrency(game2.profit)} ל${formatCurrency(game1.profit)}. המשחק הבא יכריע!`,
+                          `⚔️ תוצאות מעורבות - ${totalProfit >= 0 ? 'עדיין בפלוס!' : 'קצת במינוס.'} הכל פתוח.`,
+                        ] :
+                        // Mixed with zero
+                        [
+                          `📊 2 משחקים, תוצאה מעורבת. רווח כולל: ${formatCurrency(totalProfit)}.`,
+                          `🎭 1-1 לעכשיו. המשחק הבא יקבע את הכיוון!`,
+                        ];
+                      sentences.push(twoGameSentences[Math.floor(Math.random() * twoGameSentences.length)]);
                     } else {
-                      sentences.push(`📊 ${player.playerName} שיחק 2 משחקים עם רווח כולל של ${formatCurrency(totalProfit)}.`);
+                      sentences.push(`📊 2 משחקים, רווח כולל ${formatCurrency(totalProfit)}. הסיפור רק מתחיל!`);
                     }
                   }
                 } else if (gamesPlayed < minGamesForChampion) {
@@ -3590,21 +3647,39 @@ const StatisticsScreen = () => {
                 }
                 
                 // Sentence 2: Streak/momentum or style angle
-                // Skip complex analysis for very low data (1-2 games)
+                // For low data (1-2 games), add creative predictions and insights
                 if (isLowData && gamesPlayed <= 2) {
-                  // For low data, only add meaningful facts
-                  if (gamesPlayed === 2 && lastGames.length >= 2) {
-                    const game1 = lastGames[0];
-                    const game2 = lastGames[1];
-                    if (game1 && game2) {
-                      // Show if they're on a streak
-                      if (game1.profit > 0 && game2.profit > 0) {
-                        sentences.push(`🔥 2 נצחונות ברצף - התחלה טובה!`);
-                      } else if (game1.profit < 0 && game2.profit < 0) {
-                        sentences.push(`❄️ 2 הפסדים ברצף - מחפש לשבור את הרצף.`);
-                      }
-                    }
-                  }
+                  // Creative second sentences for low data - predictions, comparisons, fun facts
+                  const lowDataSecondSentences = totalProfit > 50 ? [
+                    `🎰 אם ימשיך בקצב הזה, הוא יהפוך לאלוף בעוד כמה משחקים!`,
+                    `📊 ממוצע של ${formatCurrency(Math.round(avgProfit))} למשחק - יותר טוב מהרבה "ותיקים"!`,
+                    `🎯 התחלה כזו רואים רק אחת ל-100 שחקנים.`,
+                    `💡 טיפ: אל תתנו לו לשבת לידכם בשבוע הבא!`,
+                    `🌟 הכוכב הבא של הקבוצה? הזמן יגיד.`,
+                  ] : totalProfit > 0 ? [
+                    `🎲 ממוצע חיובי בהתחלה - סימן טוב להמשך!`,
+                    `📈 אם זה לא מזל מתחילים, זה כישרון אמיתי.`,
+                    `🔮 התחזית: עוד כמה משחקים ונדע אם זה אמיתי.`,
+                    `💫 בפלוס מההתחלה - יש לו את הקטע!`,
+                    `🎯 מומלץ להמשיך לעקוב אחריו.`,
+                  ] : totalProfit < -50 ? [
+                    `🔄 הסטטיסטיקה אומרת: הממוצע חייב לעלות!`,
+                    `💪 שחקנים גדולים התחילו בהרבה יותר גרוע.`,
+                    `🎲 "לא משנה כמה פעמים נופלים, משנה כמה פעמים קמים."`,
+                    `📊 המספרים יתאזנו - זה רק עניין של זמן.`,
+                    `🌊 כל שחקן עובר גלים - זה פשוט הגל הראשון.`,
+                  ] : totalProfit < 0 ? [
+                    `⏳ הפסד קטן - נגמר בלחיצת יד, ההמשך יותר טוב.`,
+                    `🎯 מינוס קל לגמרי - יכול להתהפך במשחק אחד.`,
+                    `💡 הניסיון הזה ישתלם במשחקים הבאים.`,
+                    `🔮 המספרים האלה לא אומרים כלום עדיין.`,
+                    `📊 מדגם קטן מדי להסקת מסקנות - הכל פתוח!`,
+                  ] : [
+                    `⚖️ אפס מושלם - יציב כמו סלע!`,
+                    `🎭 לא מפסיד, לא מרוויח - שחקן מחושב?`,
+                    `🔮 כרטיס ביקור מעניין - נראה מה יקרה הלאה.`,
+                  ];
+                  sentences.push(lowDataSecondSentences[Math.floor(Math.random() * lowDataSecondSentences.length)]);
                 } else {
                   const minStreakForShow = isLowData ? 1 : 3;
                   if (currentStreak >= minStreakForShow) {
@@ -3637,10 +3712,38 @@ const StatisticsScreen = () => {
                 }
                 
                 // Sentence 3: Additional insight (record, comparison, or tip)
-                // Skip for very low data (1-2 games) - we already have factual statements
-                if (!(isLowData && gamesPlayed <= 2)) {
+                // For low data (1-2 games), add fun comparisons and call-to-action
+                if (isLowData && gamesPlayed <= 2) {
+                  // Third sentence - fun facts, comparisons, looking forward
+                  const game1 = lastGames[0];
+                  const bestGameProfit = game1 ? Math.max(...lastGames.map(g => g.profit)) : totalProfit;
+                  const worstGameProfit = game1 ? Math.min(...lastGames.map(g => g.profit)) : totalProfit;
+                  
+                  const lowDataThirdSentences = bestGameProfit > 100 ? [
+                    `💰 הנצחון הגדול (+${formatCurrency(bestGameProfit)}) כבר בספרי השיאים!`,
+                    `🏆 +${formatCurrency(bestGameProfit)} בלילה אחד - התחלה שראויה לכבוד.`,
+                    `📊 אם זה ימשיך, הוא יטפס מהר בטבלה.`,
+                    `⚡ ${formatCurrency(bestGameProfit)} במכה - יש פוטנציאל גדול כאן!`,
+                  ] : worstGameProfit < -100 ? [
+                    `📉 ההפסד הגדול (${formatCurrency(worstGameProfit)}) כבר מאחוריו. רק למעלה מכאן!`,
+                    `💪 ידע להפסיד ${formatCurrency(Math.abs(worstGameProfit))} ולהישאר במשחק - זו תכונה חשובה.`,
+                    `🔥 ההפסד הזה יהפוך לסיפור קאמבק מעולה.`,
+                    `🎯 חייב לתקן את ה-${formatCurrency(worstGameProfit)} הזה - מוטיבציה מובנית!`,
+                  ] : gamesPlayed === 1 ? [
+                    `🎮 המשחק הראשון תמיד מיוחד - נזכור אותו!`,
+                    `📌 נקודת ההתחלה נקבעה. עכשיו מתחיל הסיפור האמיתי.`,
+                    `🚀 משחק אחד לא אומר כלום - אבל שניים כבר מגמה!`,
+                    `⏳ מחכים לראות אותו שוב בשבוע הבא!`,
+                  ] : [
+                    `🎲 2 משחקים בספרים. המשחק השלישי יגדיר את הדרך!`,
+                    `📊 עוד קצת ונוכל באמת לנתח את הסגנון שלו.`,
+                    `🔮 3 משחקים = מגמה. עוד אחד ונדע לאן זה הולך!`,
+                    `💡 ההמלצה: לשים לב אליו בשבועות הקרובים.`,
+                  ];
+                  sentences.push(lowDataThirdSentences[Math.floor(Math.random() * lowDataThirdSentences.length)]);
+                } else if (gamesPlayed >= minGamesForRecord) {
                   const minBestWinForRecord = isLowData ? 100 : 200;
-                  if (sentences.length < 3 && gamesPlayed >= minGamesForRecord) {
+                  if (sentences.length < 3) {
                     // Try to add a third sentence for variety
                     if (bestWin >= minBestWinForRecord && !usedAngles.has('record')) {
                       const s = pickRandom(recordSentences, 'record');

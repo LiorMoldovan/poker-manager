@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.16';
+export const APP_VERSION = '4.40.17';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.17',
+    date: '2026-01-04',
+    changes: [
+      '🤖 MAJOR: Complete AI chatbot rewrite!',
+      'Now uses TRUE natural language understanding - ask ANYTHING',
+      'AI receives ALL your data: every game, every player, every stat',
+      'No more pattern matching - AI understands context and nuance',
+      'Ask in Hebrew or English, get answers in Hebrew',
+      'Examples: "מי הכי מצליח בחצי שנה האחרונה?", "תספר לי על ליאור"',
+      '"מי ניצח הכי הרבה פעמים?", "איפה שיחקנו לאחרונה?"',
+      'Beautiful new chat UI with purple theme',
+      'Dynamic suggested questions based on your data'
+    ]
+  },
   {
     version: '4.40.16',
     date: '2026-01-04',
