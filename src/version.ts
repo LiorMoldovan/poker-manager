@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.21';
+export const APP_VERSION = '4.40.22';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.22',
+    date: '2026-01-04',
+    changes: [
+      '💬 Smarter chatbot fallback - never says "I don\'t understand"',
+      'Unknown questions now show interesting facts instead of error',
+      'Added 10+ more question patterns (average, win rate, summary, predictions)',
+      '"עזרה" / "help" shows what you can ask',
+      '"סיכום" shows quick group overview',
+      '"על מי להמר?" gives fun prediction based on streaks',
+      '"עובדות מעניינות" shows fun stats',
+      'Always gives useful info, even for unexpected questions'
+    ]
+  },
   {
     version: '4.40.21',
     date: '2026-01-04',

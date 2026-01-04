@@ -298,12 +298,95 @@ const getLocalAnswer = (question: string): string => {
     }
   }
 
-  // ===== DEFAULT =====
-  return `לא הבנתי בדיוק. נסה לשאול על:\n` +
-         `• המשחק האחרון (מנצח, מפסיד, מיקום)\n` +
-         `• שחקן ספציפי (למשל: "ספר לי על ${players[0]?.name || 'ליאור'}")\n` +
-         `• טבלת מובילים\n` +
-         `• שיאים ורצפים`;
+  // ===== ADDITIONAL PATTERNS =====
+
+  // Best / worst average
+  if ((q.includes('ממוצע') || q.includes('average')) && (q.includes('הכי') || q.includes('best') || q.includes('worst'))) {
+    const withEnoughGames = players.filter(p => p.gamesPlayed >= 3);
+    if (withEnoughGames.length > 0) {
+      const bestAvg = withEnoughGames.reduce((max, p) => p.avgProfit > max.avgProfit ? p : max, withEnoughGames[0]);
+      const worstAvg = withEnoughGames.reduce((min, p) => p.avgProfit < min.avgProfit ? p : min, withEnoughGames[0]);
+      if (q.includes('גרוע') || q.includes('worst') || q.includes('נמוך')) {
+        return `הממוצע הנמוך ביותר: ${worstAvg.name} עם ${worstAvg.avgProfit >= 0 ? '+' : ''}₪${cleanNumber(worstAvg.avgProfit)} למשחק`;
+      }
+      return `הממוצע הגבוה ביותר: ${bestAvg.name} עם +₪${cleanNumber(bestAvg.avgProfit)} למשחק! 📈`;
+    }
+  }
+
+  // Best win rate
+  if ((q.includes('אחוז') || q.includes('%') || q.includes('נצחונות')) && 
+      (q.includes('הכי') || q.includes('best') || q.includes('גבוה'))) {
+    const withEnoughGames = players.filter(p => p.gamesPlayed >= 5);
+    if (withEnoughGames.length > 0) {
+      const best = withEnoughGames.reduce((max, p) => p.winPercentage > max.winPercentage ? p : max, withEnoughGames[0]);
+      return `אחוז הנצחונות הגבוה ביותר: ${best.name} עם ${best.winPercentage.toFixed(0)}% (${best.winCount}/${best.gamesPlayed} משחקים) 🎯`;
+    }
+  }
+
+  // Summary / overview
+  if (q.includes('סיכום') || q.includes('summary') || q.includes('overview') || q.includes('סקירה')) {
+    const top3 = players.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name}: ${p.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(p.totalProfit)}`).join('\n');
+    return `📊 סיכום הקבוצה:\n\n${top3}\n\nסה"כ ${totalGames} משחקים | ${players.length} שחקנים פעילים`;
+  }
+
+  // Who should I bet on / prediction
+  if (q.includes('להמר') || q.includes('bet') || q.includes('ינצח') || q.includes('יזכה') || q.includes('סיכוי')) {
+    const hot = players.find(p => p.currentStreak >= 2);
+    const bestRecent = players.filter(p => p.currentStreak > 0).sort((a, b) => b.avgProfit - a.avgProfit)[0];
+    const pick = hot || bestRecent || leader;
+    return `🎲 המומלץ שלי: ${pick.name}!\n${pick.currentStreak > 0 ? `ברצף ${pick.currentStreak} נצחונות 🔥` : ''}\nממוצע: ${pick.avgProfit >= 0 ? '+' : ''}₪${cleanNumber(pick.avgProfit)} למשחק`;
+  }
+
+  // Fun facts / interesting
+  if (q.includes('מעניין') || q.includes('interesting') || q.includes('fun') || q.includes('כיף') || q.includes('עובדות')) {
+    const mostGames = players.reduce((max, p) => p.gamesPlayed > max.gamesPlayed ? p : max, players[0]);
+    const biggestSwing = players.reduce((max, p) => (p.biggestWin - p.biggestLoss) > (max.biggestWin - max.biggestLoss) ? p : max, players[0]);
+    return `🎰 עובדות מעניינות:\n\n` +
+           `• ${mostGames.name} שיחק הכי הרבה: ${mostGames.gamesPlayed} משחקים\n` +
+           `• ${biggestSwing.name} הכי תנודתי: בין +₪${cleanNumber(biggestSwing.biggestWin)} ל-₪${cleanNumber(biggestSwing.biggestLoss)}\n` +
+           `• סה"כ ${totalGames} משחקים שוחקו`;
+  }
+
+  // Help
+  if (q.includes('עזרה') || q.includes('help') || q.includes('מה אתה יכול') || q.includes('what can you')) {
+    return `אני יכול לענות על שאלות כמו:\n\n` +
+           `🎮 "מי ניצח במשחק האחרון?"\n` +
+           `📍 "איפה שיחקנו לאחרונה?"\n` +
+           `🏆 "מי מוביל בטבלה?"\n` +
+           `👤 "ספר לי על ${players[0]?.name || 'שחקן'}"\n` +
+           `🔥 "מי ברצף נצחונות?"\n` +
+           `📊 "סיכום הקבוצה"`;
+  }
+
+  // ===== DEFAULT - Give something useful =====
+  // Instead of "I don't understand", give a quick summary of interesting facts
+  
+  const facts: string[] = [];
+  
+  // Leader info
+  if (leader) {
+    facts.push(`🥇 ${leader.name} מוביל עם ${leader.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(leader.totalProfit)}`);
+  }
+  
+  // Last game info
+  if (lastGame) {
+    facts.push(`🎮 משחק אחרון: ${lastGame.date}${lastGame.location !== 'לא צוין' ? ` ב-${lastGame.location}` : ''} - ${lastGame.winner} ניצח`);
+  }
+  
+  // Hot/cold streaks
+  const hotPlayer = players.find(p => p.currentStreak >= 2);
+  const coldPlayer = players.find(p => p.currentStreak <= -2);
+  if (hotPlayer) {
+    facts.push(`🔥 ${hotPlayer.name} ברצף ${hotPlayer.currentStreak} נצחונות`);
+  }
+  if (coldPlayer) {
+    facts.push(`❄️ ${coldPlayer.name} ברצף ${Math.abs(coldPlayer.currentStreak)} הפסדים`);
+  }
+  
+  // Total games
+  facts.push(`📊 סה"כ ${totalGames} משחקים | ${players.length} שחקנים`);
+  
+  return `הנה כמה עובדות מעניינות:\n\n${facts.join('\n')}\n\n💡 נסה לשאול על שחקן ספציפי או על המשחק האחרון!`;
 };
 
 /**
