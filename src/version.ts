@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.11';
+export const APP_VERSION = '4.40.12';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.12',
+    date: '2026-01-04',
+    changes: [
+      '🎯 Milestones: Focus on recent insights and interesting findings',
+      'Removed repetitive consistency/stability milestone (always same player)',
+      'Reduced routine "leader is leading" messages when gap is large',
+      'Added recent form changes milestone (improving/declining trends)',
+      'Added pattern-breaking milestone (players breaking their usual pattern)',
+      'Streak milestones now only show current active streaks, not old records',
+      'Focus on current period dynamics instead of historical champions'
+    ]
+  },
   {
     version: '4.40.11',
     date: '2026-01-04',

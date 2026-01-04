@@ -2721,15 +2721,21 @@ const StatisticsScreen = () => {
                       if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
                     }
                   } else if (leader.gamesPlayed >= 5 || (isLowData && leader.gamesPlayed >= 1)) {
-                    // Big lead - celebrate but still ask the question (lower threshold for low data)
-                    milestones.push({
-                      emoji: '🏆',
-                      title: `מוביל ${periodLabel}!`,
-                      description: isLowData
-                        ? `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
-                        : `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)} אחרי ${leader.gamesPlayed} משחקים. האם הוא ישמור על הכתר?`,
-                      priority: 80
-                    });
+                    // Big lead - only show if it's interesting (close gap or low data)
+                    // Skip routine "leader is leading" messages to avoid repetition
+                    if (gap > 150 && !isLowData) {
+                      // Big lead - skip to avoid repetitive "leader is leading" messages
+                      // Only show if there's something interesting (low data, close race, etc.)
+                    } else {
+                      milestones.push({
+                        emoji: '🏆',
+                        title: `מוביל ${periodLabel}!`,
+                        description: isLowData
+                          ? `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
+                          : `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed > 1 ? ` אחרי ${leader.gamesPlayed} משחקים` : ''}. ${secondPlace && gap <= 150 ? `${secondPlace.playerName} רודף עם הפרש של ${gap}₪.` : 'האם הוא יצליח לשמור על ההובלה?'}`,
+                        priority: 80
+                      });
+                    }
                   }
                   // Mark leader as featured for individual milestones
                   featuredPlayers.add(leader.playerId);
@@ -2918,36 +2924,44 @@ const StatisticsScreen = () => {
                   });
                 }
                 
-                // 11. CONSISTENCY KING - best win rate (lower threshold for low data)
-                const minGamesForConsistency = isLowData ? 1 : 8;
-                const minWinRateForConsistency = isLowData ? 50 : 60;
-                const consistencyKing = rankedStats
-                  .filter(p => p.gamesPlayed >= minGamesForConsistency && p.winPercentage >= minWinRateForConsistency)
-                  .sort((a, b) => b.winPercentage - a.winPercentage)[0];
-                if (consistencyKing) {
-                  // Add variety to consistency descriptions
-                  const consistencyDescriptions = isHistoricalPeriod ? [
-                    `${consistencyKing.playerName} סיים עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
-                    `${consistencyKing.playerName} החזיק בשיא העקביות ב${periodLabel} - ${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים.`,
-                    `עם ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים, ${consistencyKing.playerName} היה השחקן הכי יציב ב${periodLabel}.`,
-                    `${consistencyKing.playerName} סיים את ${periodLabel} עם עקביות מדהימה: ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים.`,
-                    `שיא העקביות של ${periodLabel} שייך ל${consistencyKing.playerName}: ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים.`
-                  ] : [
-                    `${consistencyKing.playerName} עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים. עקביות מרשימה!`,
-                    `מלך העקביות: ${consistencyKing.playerName} מחזיק ב-${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים. יציב כמו סלע!`,
-                    `${consistencyKing.playerName} - הדוגמה המושלמת לעקביות: ${Math.round(consistencyKing.winPercentage)}% נצחונות ב-${consistencyKing.gamesPlayed} משחקים.`,
-                    `עם ${Math.round(consistencyKing.winPercentage)}% נצחונות מתוך ${consistencyKing.gamesPlayed} משחקים, ${consistencyKing.playerName} הוא השחקן הכי יציב.`,
-                    `${consistencyKing.playerName} מחזיק בשיא העקביות: ${Math.round(consistencyKing.winPercentage)}% נצחונות מ-${consistencyKing.gamesPlayed} משחקים. תמיד יודע מה לצפות.`
-                  ];
-                  // Use player name hash for consistent variety (same player gets same description each time)
-                  const nameHash = consistencyKing.playerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                  const description = consistencyDescriptions[nameHash % consistencyDescriptions.length];
-                  
-                  milestones.push({
-                    emoji: '🎯',
-                    title: `מלך העקביות!`,
-                    description,
-                    priority: 55
+                // 11. CONSISTENCY KING - REMOVED (too repetitive, always same player)
+                // Skipped to focus on more interesting recent insights
+                
+                // 11a. RECENT FORM CHANGES - players showing significant improvement/decline
+                if (!isHistoricalPeriod) {
+                  rankedStats.forEach(p => {
+                    if (p.lastGameResults && p.lastGameResults.length >= 3) {
+                      const recent3 = p.lastGameResults.slice(0, 3);
+                      const recentAvg = recent3.reduce((sum, g) => sum + g.profit, 0) / 3;
+                      const overallAvg = p.avgProfit;
+                      
+                      // Significant improvement (recent much better than overall)
+                      if (recentAvg > overallAvg + 50 && recentAvg > 30) {
+                        const recentWins = recent3.filter(g => g.profit > 0).length;
+                        if (recentWins >= 2 && !featuredPlayers.has(p.playerId)) {
+                          milestones.push({
+                            emoji: '📈',
+                            title: `${p.playerName} בתאוצה!`,
+                            description: `${p.playerName} משפר את הביצועים - ${recentWins} נצחונות ב-3 המשחקים האחרונים עם ממוצע +${Math.round(recentAvg)}₪, הרבה יותר מהממוצע הכללי שלו.`,
+                            priority: 72
+                          });
+                          featuredPlayers.add(p.playerId);
+                        }
+                      }
+                      // Significant decline (recent much worse than overall)
+                      else if (recentAvg < overallAvg - 50 && recentAvg < -30) {
+                        const recentLosses = recent3.filter(g => g.profit < 0).length;
+                        if (recentLosses >= 2 && !featuredPlayers.has(p.playerId)) {
+                          milestones.push({
+                            emoji: '📉',
+                            title: `${p.playerName} במגמת ירידה`,
+                            description: `${p.playerName} חווה תקופה קשה - ${recentLosses} הפסדים ב-3 המשחקים האחרונים עם ממוצע ${Math.round(recentAvg)}₪. האם הוא יצליח לעצור את הירידה?`,
+                            priority: 68
+                          });
+                          featuredPlayers.add(p.playerId);
+                        }
+                      }
+                    }
                   });
                 }
                 
@@ -3042,19 +3056,20 @@ const StatisticsScreen = () => {
                   }
                 }
                 
-                // 17. LONGEST WIN STREAK RECORD HOLDER
-                const longestStreakHolder = rankedStats
-                  .filter(p => (p.longestWinStreak || 0) >= 4)
-                  .sort((a, b) => (b.longestWinStreak || 0) - (a.longestWinStreak || 0))[0];
-                if (longestStreakHolder) {
-                  milestones.push({
-                    emoji: '⚡',
-                    title: `שיא רצף נצחונות!`,
-                    description: isHistoricalPeriod
-                      ? `${longestStreakHolder.playerName} סיים עם שיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}.`
-                      : `${longestStreakHolder.playerName} מחזיק בשיא של ${longestStreakHolder.longestWinStreak} נצחונות ברצף ב${periodLabel}. האם מישהו ישבור את השיא?`,
-                    priority: 48
-                  });
+                // 17. LONGEST WIN STREAK RECORD HOLDER - Only show if it's recent/current
+                // Skip if it's an old record that's not relevant to current period
+                if (!isHistoricalPeriod) {
+                  // Only show if someone is currently ON a long streak (not just historical record)
+                  const currentLongStreaker = rankedStats.find(p => p.currentStreak >= 4);
+                  if (currentLongStreaker) {
+                    const longestStreakRecord = Math.max(...rankedStats.map(p => p.longestWinStreak || 0));
+                    milestones.push({
+                      emoji: '⚡',
+                      title: `רצף נצחונות חם!`,
+                      description: `${currentLongStreaker.playerName} נמצא כרגע ברצף של ${currentLongStreaker.currentStreak} נצחונות! ${currentLongStreaker.currentStreak >= longestStreakRecord ? 'שיא חדש!' : `נצחון נוסף ישבור את השיא של ${longestStreakRecord}!`}`,
+                      priority: 75
+                    });
+                  }
                 }
                 
                 // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured or historical)
@@ -3089,6 +3104,36 @@ const StatisticsScreen = () => {
                       break; // Only show one close battle
                     }
                   }
+                }
+                
+                // 18a. NEW PATTERNS - players breaking their usual pattern
+                if (!isHistoricalPeriod) {
+                  rankedStats.forEach(p => {
+                    if (p.lastGameResults && p.lastGameResults.length >= 4 && !featuredPlayers.has(p.playerId)) {
+                      const last4 = p.lastGameResults.slice(0, 4);
+                      const last4Wins = last4.filter(g => g.profit > 0).length;
+                      const last4Losses = last4.filter(g => g.profit < 0).length;
+                      
+                      // Usually wins but losing streak, or usually loses but winning streak
+                      if (p.winPercentage >= 60 && last4Losses >= 3) {
+                        milestones.push({
+                          emoji: '🔄',
+                          title: `${p.playerName} יוצא מהדפוס`,
+                          description: `${p.playerName} בדרך כלל מנצח (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Losses} הפסדים ב-4 המשחקים האחרונים. האם זה שינוי מגמה או רק תקלה זמנית?`,
+                          priority: 70
+                        });
+                        featuredPlayers.add(p.playerId);
+                      } else if (p.winPercentage <= 40 && last4Wins >= 3) {
+                        milestones.push({
+                          emoji: '🌟',
+                          title: `${p.playerName} משנה את המגמה!`,
+                          description: `${p.playerName} בדרך כלל מתקשה (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Wins} נצחונות ב-4 המשחקים האחרונים! האם זה הקאמבק שלו?`,
+                          priority: 73
+                        });
+                        featuredPlayers.add(p.playerId);
+                      }
+                    }
+                  });
                 }
                 
                 // 19. MOST GAMES PLAYED (lower threshold for low data)
