@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.2';
+export const APP_VERSION = '4.40.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.3',
+    date: '2026-01-04',
+    changes: [
+      '🔧 Fixed: Build error in StatisticsScreen (mismatched JSX tags)',
+      'Fixed Vercel deployment issue - removed extra closing fragment tag',
+      'Build now succeeds successfully'
+    ]
+  },
   {
     version: '4.40.2',
     date: '2026-01-04',

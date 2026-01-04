@@ -3673,8 +3673,6 @@ const StatisticsScreen = () => {
           </div>
         </div>
       )}
-        </>
-      )}
     </div>
   );
 };
