@@ -1196,13 +1196,13 @@ ${dataContext}
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({
+          body: JSON.stringify({
           contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: {
+            generationConfig: {
             temperature: 0.8,
             maxOutputTokens: 500,
           },
@@ -1212,19 +1212,19 @@ ${dataContext}
             { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
           ]
-        })
-      });
+          })
+        });
       
       clearTimeout(timeoutId);
 
-      if (response.ok) {
-        const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (response.ok) {
+          const data = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text && text.trim().length > 0) {
-          return text.trim();
+            return text.trim();
+          }
         }
-      }
-    } catch (e) {
+      } catch (e) {
       // Continue to next model
       console.log(`Model ${model} failed, trying next...`);
     }
@@ -1234,20 +1234,35 @@ ${dataContext}
 };
 
 /**
+ * Check if local answer is a "fallback" answer (not a direct match)
+ */
+const isLocalFallbackAnswer = (answer: string): boolean => {
+  return answer.includes('הנה כמה עובדות מעניינות') || 
+         answer.includes('אין עדיין נתונים במערכת');
+};
+
+/**
  * Process question - always returns an answer
+ * Priority: Local match > AI (if available) > Local fallback
  */
 export const processQuestion = async (question: string): Promise<{ answer: string; source: 'local' | 'ai' }> => {
   const apiKey = getGeminiApiKey();
   
-  // First, get local answer as backup
+  // First, get local answer
   const localAnswer = getLocalAnswer(question);
   
-  // If no API key, use local answer
+  // If local answer is a direct match (not fallback), use it immediately
+  // This ensures fast, accurate responses for known question patterns
+  if (!isLocalFallbackAnswer(localAnswer)) {
+    return { answer: localAnswer, source: 'local' };
+  }
+  
+  // If no API key, use local fallback
   if (!apiKey) {
     return { answer: localAnswer, source: 'local' };
   }
 
-  // Try AI answer
+  // Local answer was a fallback, try AI for more creative response
   try {
     const dataContext = buildDataContext();
     const aiAnswer = await tryAIAnswer(question, dataContext, apiKey);
