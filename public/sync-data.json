@@ -1661,13 +1661,6 @@
       "status": "completed",
       "createdAt": "2026-01-03T19:07:55.659Z",
       "location": "סגל"
-    },
-    {
-      "id": "mk05r25k3gtbe2dvzpq",
-      "date": "2026-01-04T20:01:57.416Z",
-      "status": "completed",
-      "createdAt": "2026-01-04T20:01:57.416Z",
-      "location": "ליאור"
     }
   ],
   "gamePlayers": [
@@ -17601,42 +17594,8 @@
       },
       "finalValue": 180.9,
       "profit": 90.9
-    },
-    {
-      "id": "mk05r25kwyzhtw1nc3p",
-      "gameId": "mk05r25k3gtbe2dvzpq",
-      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
-      "playerName": "ליכטר",
-      "rebuys": 1.5,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -45
-    },
-    {
-      "id": "mk05r25kq5v2ekkqup8",
-      "gameId": "mk05r25k3gtbe2dvzpq",
-      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
-      "playerName": "חרדון",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 5
-      },
-      "finalValue": 75,
-      "profit": 45
     }
   ],
-  "lastUpdated": "2026-01-04T20:02:15.147Z",
+  "lastUpdated": "2026-01-04T20:02:48.809Z",
   "updatedBy": "admin"
 }
