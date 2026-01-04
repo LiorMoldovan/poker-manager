@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.29';
+export const APP_VERSION = '4.40.30';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.30',
+    date: '2026-01-04',
+    changes: [
+      '🧹 Milestone DEDUPLICATION - no more repetition!',
+      'Each player appears in max 2 milestones',
+      'Each theme (streak, form, comeback) only once',
+      'Hot streak + Form comparison = picks best one only',
+      'Reduced from 10 to 8 max milestones (quality > quantity)',
+      'Smarter theme detection to avoid similar messages'
+    ]
+  },
   {
     version: '4.40.29',
     date: '2026-01-04',

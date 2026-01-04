@@ -889,21 +889,92 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   });
   milestones.push(...shuffledFunFacts.slice(0, 2));
   
-  // Sort by priority and return 7-10 most interesting milestones
-  // Don't force to 10 - only show truly interesting ones
+  // Sort by priority
   milestones.sort((a, b) => b.priority - a.priority);
   
-  // Take top 10 but filter out low-priority ones (below 50)
-  const topMilestones = milestones.filter(m => m.priority >= 50).slice(0, 10);
+  // ===== DEDUPLICATION: Avoid repetitive milestones =====
+  // Rules:
+  // 1. Each player can appear in max 2 milestones
+  // 2. Each theme (streak, form, comeback, etc.) can only appear once
+  // 3. Similar emojis = similar themes, avoid duplicates
   
-  // If we have less than 7, take some lower priority ones
-  if (topMilestones.length < 7) {
-    const remaining = milestones.filter(m => m.priority < 50).slice(0, 7 - topMilestones.length);
-    topMilestones.push(...remaining);
+  const playerMentions: Record<string, number> = {};
+  const usedThemes: Set<string> = new Set();
+  
+  // Theme detection based on emoji and keywords
+  const getTheme = (m: MilestoneItem): string => {
+    const text = m.title + m.description;
+    if (m.emoji === '🔥' || text.includes('רצף') || text.includes('נצחונות רצופים')) return 'hot_streak';
+    if (m.emoji === '❄️' || text.includes('הפסדים רצופים')) return 'cold_streak';
+    if (m.emoji === '📈' || text.includes('פורם חם') || text.includes('מעל הממוצע')) return 'hot_form';
+    if (m.emoji === '📉' || text.includes('מתחת לממוצע')) return 'cold_form';
+    if (m.emoji === '💪' || text.includes('קאמבק') || text.includes('לא מוותר')) return 'comeback';
+    if (m.emoji === '🏆' || text.includes('אלוף')) return 'champion';
+    if (m.emoji === '🥇' || text.includes('מוביל')) return 'leader';
+    if (m.emoji === '🌟' || text.includes('הפתעה')) return 'surprise';
+    if (m.emoji === '😮' || text.includes('נפגע')) return 'fallen_star';
+    if (m.emoji === '⚔️' || text.includes('מלחמת')) return 'rivalry';
+    if (m.emoji === '🎢' || text.includes('הרים רוסיים') || text.includes('תנודות')) return 'volatility';
+    if (m.emoji === '👀' || text.includes('מאבד אחיזה')) return 'leader_falling';
+    if (m.emoji === '🚀' || text.includes('עולה בטבלה')) return 'climbing';
+    if (m.emoji === '💰' || text.includes('שיא')) return 'record';
+    if (m.emoji === '🔙' || text.includes('חזר')) return 'return';
+    return `other_${m.emoji}`; // Unique theme for misc
+  };
+  
+  // Extract player names from milestone
+  const getPlayersInMilestone = (m: MilestoneItem): string[] => {
+    const names: string[] = [];
+    players.forEach(p => {
+      if (m.title.includes(p.name) || m.description.includes(p.name)) {
+        names.push(p.name);
+      }
+    });
+    return names;
+  };
+  
+  const deduplicatedMilestones: MilestoneItem[] = [];
+  
+  for (const milestone of milestones) {
+    const theme = getTheme(milestone);
+    const mentionedPlayers = getPlayersInMilestone(milestone);
+    
+    // Skip if theme already used (except for 'other_' themes)
+    if (!theme.startsWith('other_') && usedThemes.has(theme)) {
+      continue;
+    }
+    
+    // Skip if any mentioned player already has 2+ milestones
+    const playerOverexposed = mentionedPlayers.some(name => (playerMentions[name] || 0) >= 2);
+    if (playerOverexposed) {
+      continue;
+    }
+    
+    // Accept this milestone
+    deduplicatedMilestones.push(milestone);
+    usedThemes.add(theme);
+    mentionedPlayers.forEach(name => {
+      playerMentions[name] = (playerMentions[name] || 0) + 1;
+    });
+    
+    // Stop at 8 milestones (not 10 - quality over quantity)
+    if (deduplicatedMilestones.length >= 8) {
+      break;
+    }
+  }
+  
+  // If we have less than 5, take some more without strict deduplication
+  if (deduplicatedMilestones.length < 5) {
+    for (const milestone of milestones) {
+      if (!deduplicatedMilestones.includes(milestone)) {
+        deduplicatedMilestones.push(milestone);
+        if (deduplicatedMilestones.length >= 5) break;
+      }
+    }
   }
   
   // Clean up any decimal numbers in descriptions
-  const cleanMilestones = topMilestones.slice(0, 10).map(m => ({
+  const cleanMilestones = deduplicatedMilestones.map(m => ({
     ...m,
     description: m.description.replace(/(\d+)\.(\d+)/g, (match) => Math.round(parseFloat(match)).toString())
   }));
