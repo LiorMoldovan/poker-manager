@@ -45,6 +45,105 @@ interface PlayerData {
   biggestLoss: number;
 }
 
+// Month names in Hebrew and English
+const MONTH_NAMES_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+const MONTH_NAMES_EN = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const MONTH_NAMES_EN_SHORT = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * Parse date references from question
+ */
+const parseDateReference = (question: string): { startDate?: Date; endDate?: Date; description: string } | null => {
+  const q = question.toLowerCase();
+  const now = new Date();
+  
+  // "לפני חודש" / "a month ago"
+  if (q.includes('לפני חודש') || q.includes('month ago') || q.includes('חודש שעבר')) {
+    const targetDate = new Date(now);
+    targetDate.setMonth(targetDate.getMonth() - 1);
+    const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+    return { startDate: startOfMonth, endDate: endOfMonth, description: MONTH_NAMES_HE[targetDate.getMonth()] };
+  }
+  
+  // "לפני שבוע" / "a week ago"
+  if (q.includes('לפני שבוע') || q.includes('week ago') || q.includes('שבוע שעבר')) {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return { startDate: weekAgo, endDate: now, description: 'השבוע האחרון' };
+  }
+  
+  // "לפני X חודשים" / "X months ago"
+  const monthsAgoMatch = q.match(/לפני\s+(\d+)\s+חודש/) || q.match(/(\d+)\s+months?\s+ago/);
+  if (monthsAgoMatch) {
+    const monthsAgo = parseInt(monthsAgoMatch[1]);
+    const targetDate = new Date(now);
+    targetDate.setMonth(targetDate.getMonth() - monthsAgo);
+    const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+    return { startDate: startOfMonth, endDate: endOfMonth, description: MONTH_NAMES_HE[targetDate.getMonth()] };
+  }
+  
+  // Check for month names (Hebrew)
+  for (let i = 0; i < MONTH_NAMES_HE.length; i++) {
+    if (q.includes(MONTH_NAMES_HE[i])) {
+      // Check for year
+      const yearMatch = q.match(/20\d{2}/);
+      const year = yearMatch ? parseInt(yearMatch[0]) : now.getFullYear();
+      const startOfMonth = new Date(year, i, 1);
+      const endOfMonth = new Date(year, i + 1, 0);
+      return { startDate: startOfMonth, endDate: endOfMonth, description: `${MONTH_NAMES_HE[i]} ${year}` };
+    }
+  }
+  
+  // Check for month names (English)
+  for (let i = 0; i < MONTH_NAMES_EN.length; i++) {
+    if (q.includes(MONTH_NAMES_EN[i]) || q.includes(MONTH_NAMES_EN_SHORT[i])) {
+      const yearMatch = q.match(/20\d{2}/);
+      const year = yearMatch ? parseInt(yearMatch[0]) : now.getFullYear();
+      const startOfMonth = new Date(year, i, 1);
+      const endOfMonth = new Date(year, i + 1, 0);
+      return { startDate: startOfMonth, endDate: endOfMonth, description: `${MONTH_NAMES_HE[i]} ${year}` };
+    }
+  }
+  
+  // "בשנת 2025" / "in 2025"
+  const yearOnlyMatch = q.match(/ב?שנת?\s*(20\d{2})/) || q.match(/in\s+(20\d{2})/);
+  if (yearOnlyMatch) {
+    const year = parseInt(yearOnlyMatch[1]);
+    return { 
+      startDate: new Date(year, 0, 1), 
+      endDate: new Date(year, 11, 31), 
+      description: `שנת ${year}` 
+    };
+  }
+  
+  // "היום" / "today"
+  if (q.includes('היום') || q.includes('today')) {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    return { startDate: startOfDay, endDate: endOfDay, description: 'היום' };
+  }
+  
+  // "החודש" / "this month"
+  if (q.includes('החודש') || q.includes('this month')) {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { startDate: startOfMonth, endDate: endOfMonth, description: MONTH_NAMES_HE[now.getMonth()] };
+  }
+  
+  // "השנה" / "this year"
+  if (q.includes('השנה') || q.includes('this year')) {
+    return { 
+      startDate: new Date(now.getFullYear(), 0, 1), 
+      endDate: now, 
+      description: `${now.getFullYear()}` 
+    };
+  }
+  
+  return null;
+};
+
 /**
  * Get all processed data for answering questions
  */
@@ -79,8 +178,8 @@ const getProcessedData = () => {
       biggestLoss: ps.stats!.biggestLoss,
     }));
 
-  // Get recent games with full details
-  const recentGames: GameData[] = completedGames.slice(0, 10).map(game => {
+  // Get ALL games with full details (for date-based queries)
+  const allGames: GameData[] = completedGames.map(game => {
     const gamePlayers = getGamePlayers(game.id).sort((a, b) => b.profit - a.profit);
     const totalBuyins = gamePlayers.reduce((sum, p) => sum + p.rebuys, 0);
     
@@ -106,10 +205,24 @@ const getProcessedData = () => {
 
   return {
     players: rankedPlayers,
-    games: recentGames,
+    games: allGames,
     totalGames: completedGames.length,
     settings,
   };
+};
+
+/**
+ * Filter games by date range
+ */
+const filterGamesByDate = (games: GameData[], startDate?: Date, endDate?: Date): GameData[] => {
+  if (!startDate && !endDate) return games;
+  
+  return games.filter(game => {
+    const gameDate = game.dateObj;
+    if (startDate && gameDate < startDate) return false;
+    if (endDate && gameDate > endDate) return false;
+    return true;
+  });
 };
 
 /**
@@ -131,6 +244,62 @@ const getLocalAnswer = (question: string): string => {
   // Helper to find player by name
   const findPlayer = (name: string) => players.find(p => q.includes(p.name.toLowerCase()));
   const mentionedPlayer = findPlayer(q);
+
+  // ===== DATE-BASED QUESTIONS =====
+  const dateRef = parseDateReference(question);
+  if (dateRef) {
+    const filteredGames = filterGamesByDate(games, dateRef.startDate, dateRef.endDate);
+    
+    if (filteredGames.length === 0) {
+      return `לא היו משחקים ב${dateRef.description} 📅`;
+    }
+    
+    // How many games in period
+    if (q.includes('כמה משחקים') || q.includes('how many games')) {
+      return `ב${dateRef.description} היו ${filteredGames.length} משחקים 🎮`;
+    }
+    
+    // Who won in period (last game of that period)
+    if (q.includes('ניצח') || q.includes('מנצח') || q.includes('won') || q.includes('winner')) {
+      const lastInPeriod = filteredGames[0]; // Most recent in filtered
+      return `🏆 ב${dateRef.description}, ${lastInPeriod.winner} ניצח במשחק האחרון (${lastInPeriod.date}) עם +₪${cleanNumber(lastInPeriod.winnerProfit)}`;
+    }
+    
+    // Who lost in period
+    if (q.includes('הפסיד') || q.includes('מפסיד') || q.includes('lost') || q.includes('loser') || q.includes('אחרון')) {
+      const lastInPeriod = filteredGames[0];
+      return `ב${dateRef.description}, ${lastInPeriod.loser} סיים אחרון במשחק האחרון (${lastInPeriod.date}) עם ₪${cleanNumber(lastInPeriod.loserProfit)}`;
+    }
+    
+    // Results / what happened in period
+    if (q.includes('תוצאות') || q.includes('results') || q.includes('מה היה') || q.includes('what happened')) {
+      const lastInPeriod = filteredGames[0];
+      const top3 = lastInPeriod.results.slice(0, 3).map(r => 
+        `${r.rank}. ${r.name}: ${r.profit >= 0 ? '+' : ''}₪${cleanNumber(r.profit)}`
+      ).join('\n');
+      return `תוצאות ב${dateRef.description} (${lastInPeriod.date}):\n${top3}`;
+    }
+    
+    // Where was game in period
+    if (q.includes('איפה') || q.includes('מיקום') || q.includes('where') || q.includes('location')) {
+      const lastInPeriod = filteredGames[0];
+      if (lastInPeriod.location !== 'לא צוין') {
+        return `המשחק ב${dateRef.description} (${lastInPeriod.date}) היה אצל ${lastInPeriod.location} 📍`;
+      }
+      return `למשחק ב${dateRef.description} (${lastInPeriod.date}) לא נרשם מיקום.`;
+    }
+    
+    // General period summary
+    const periodWinners = filteredGames.map(g => g.winner);
+    const winnerCounts: { [key: string]: number } = {};
+    periodWinners.forEach(w => winnerCounts[w] = (winnerCounts[w] || 0) + 1);
+    const topWinner = Object.entries(winnerCounts).sort((a, b) => b[1] - a[1])[0];
+    
+    return `📅 ב${dateRef.description}:\n` +
+           `• ${filteredGames.length} משחקים\n` +
+           `• מנצח אחרון: ${filteredGames[0].winner} (+₪${cleanNumber(filteredGames[0].winnerProfit)})\n` +
+           (topWinner && topWinner[1] > 1 ? `• הכי הרבה נצחונות: ${topWinner[0]} (${topWinner[1]} פעמים)` : '');
+  }
 
   // ===== LAST GAME QUESTIONS =====
   

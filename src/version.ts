@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.22';
+export const APP_VERSION = '4.40.23';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.23',
+    date: '2026-01-04',
+    changes: [
+      '📅 Chatbot now understands DATE-BASED questions!',
+      '"מי ניצח בנובמבר?" - who won in November',
+      '"מה היה לפני חודש?" - what happened a month ago',
+      '"כמה משחקים היו ב-2025?" - games count in 2025',
+      '"תוצאות בדצמבר" - December results',
+      'Supports Hebrew & English month names',
+      'Supports: לפני חודש, לפני שבוע, החודש, השנה',
+      'Filters ALL games by date range automatically'
+    ]
+  },
   {
     version: '4.40.22',
     date: '2026-01-04',
