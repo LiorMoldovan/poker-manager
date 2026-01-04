@@ -565,195 +565,287 @@ const GraphsScreen = () => {
         </div>
       </div>
 
-      {/* Time Period Filter */}
+      {/* Filters Card - Always visible */}
       <div className="card" style={{ padding: '0.75rem' }}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
-          style={{ 
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
-            marginBottom: showTimePeriod ? '0.5rem' : 0
-          }}
-        >
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-            📅 TIME PERIOD ({getTimeframeLabel()})
-          </span>
-          <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
-        </button>
-        {showTimePeriod && (
-          <>
-            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-              {(['all', 'year', 'h1', 'h2', 'month'] as TimePeriod[]).map(period => (
+        {/* Time Period Filter */}
+        <div style={{ 
+          marginBottom: '0.75rem',
+          paddingBottom: '0.75rem',
+          borderBottom: '1px solid var(--border)'
+        }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowTimePeriod(!showTimePeriod); }}
+            style={{ 
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
+              marginBottom: showTimePeriod ? '0.5rem' : 0
+            }}
+          >
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+              📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+            </span>
+            <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
+          </button>
+          {showTimePeriod && (
+            <>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                 <button
-                  key={period}
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod(period); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('all'); }}
                   style={{
                     flex: 1,
-                    minWidth: '45px',
+                    minWidth: '50px',
                     padding: '0.4rem',
                     fontSize: '0.7rem',
                     borderRadius: '6px',
-                    border: timePeriod === period ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: timePeriod === period ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: timePeriod === period ? 'var(--primary)' : 'var(--text-muted)',
+                    border: timePeriod === 'all' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'all' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'all' ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
-                  {period === 'all' ? 'הכל' : period === 'year' ? 'שנה' : period === 'month' ? 'חודש' : period.toUpperCase()}
+                  הכל
                 </button>
-              ))}
-            </div>
-            {timePeriod !== 'all' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('year'); }}
                   style={{
-                    padding: '0.25rem 0.4rem',
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
                     fontSize: '0.7rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
-                    cursor: 'pointer',
-                    minWidth: '60px'
+                    borderRadius: '6px',
+                    border: timePeriod === 'year' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'year' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'year' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
                   }}
                 >
-                  {getAvailableYears().map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-                {timePeriod === 'month' && (
-                  <>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      style={{
-                        padding: '0.25rem 0.4rem',
-                        fontSize: '0.7rem',
-                        borderRadius: '4px',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text)',
-                        cursor: 'pointer',
-                        minWidth: '70px'
-                      }}
-                    >
-                      {[
-                        { value: 1, label: 'ינואר' },
-                        { value: 2, label: 'פברואר' },
-                        { value: 3, label: 'מרץ' },
-                        { value: 4, label: 'אפריל' },
-                        { value: 5, label: 'מאי' },
-                        { value: 6, label: 'יוני' },
-                        { value: 7, label: 'יולי' },
-                        { value: 8, label: 'אוגוסט' },
-                        { value: 9, label: 'ספטמבר' },
-                        { value: 10, label: 'אוקטובר' },
-                        { value: 11, label: 'נובמבר' },
-                        { value: 12, label: 'דצמבר' },
-                      ].map(month => (
-                        <option key={month.value} value={month.value}>{month.label}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
-                <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
-                  {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
-                </span>
+                  שנה
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h1'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'h1' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'h1' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h1' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  H1
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('h2'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'h2' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'h2' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'h2' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  H2
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('month'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'month' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'month' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'month' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  חודש
+                </button>
               </div>
+              {/* Year Selector - only show when not "all" */}
+              {timePeriod !== 'all' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    style={{
+                      padding: '0.25rem 0.4rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      cursor: 'pointer',
+                      minWidth: '60px'
+                    }}
+                  >
+                    {getAvailableYears().map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  {timePeriod === 'month' && (
+                    <>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                        style={{
+                          padding: '0.25rem 0.4rem',
+                          fontSize: '0.7rem',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface)',
+                          color: 'var(--text)',
+                          cursor: 'pointer',
+                          minWidth: '70px'
+                        }}
+                      >
+                        {[
+                          { value: 1, label: 'ינואר' },
+                          { value: 2, label: 'פברואר' },
+                          { value: 3, label: 'מרץ' },
+                          { value: 4, label: 'אפריל' },
+                          { value: 5, label: 'מאי' },
+                          { value: 6, label: 'יוני' },
+                          { value: 7, label: 'יולי' },
+                          { value: 8, label: 'אוגוסט' },
+                          { value: 9, label: 'ספטמבר' },
+                          { value: 10, label: 'אוקטובר' },
+                          { value: 11, label: 'נובמבר' },
+                          { value: 12, label: 'דצמבר' },
+                        ].map(month => (
+                          <option key={month.value} value={month.value}>{month.label}</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                    {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
+                    {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Player Filter - Only show for cumulative view */}
+        {(viewMode === 'cumulative' || viewMode === 'monthly') && (
+          <>
+            <button 
+              type="button"
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerSelector(!showPlayerSelector); }}
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                width: '100%',
+                padding: 0,
+                marginBottom: showPlayerSelector ? '0.5rem' : 0,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text)'
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
+                FILTER PLAYERS ({selectedPlayers.size}/{players.filter(p => p.type === 'permanent').length})
+              </span>
+              <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+                {showPlayerSelector ? '▲' : '▼'}
+              </span>
+            </button>
+            
+            {showPlayerSelector && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllPermanent(); }}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      e.preventDefault(); 
+                      setSelectedPlayers(new Set()); 
+                    }}
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      fontSize: '0.7rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {players
+                    .filter(p => p.type === 'permanent')
+                    .map((player) => {
+                      const isSelected = selectedPlayers.has(player.id);
+                      const color = getPlayerColor(player.id);
+                      return (
+                        <button
+                          type="button"
+                          key={player.id}
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePlayer(player.id); }}
+                          style={{
+                            padding: '0.4rem 0.65rem',
+                            borderRadius: '16px',
+                            border: isSelected 
+                              ? `2px solid ${color}` 
+                              : '2px solid var(--border)',
+                            background: isSelected 
+                              ? `${color}22` 
+                              : 'var(--surface)',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: '600',
+                            color: isSelected ? color : 'var(--text-muted)',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {isSelected && '✓ '}{player.name}
+                        </button>
+                      );
+                    })}
+                </div>
+              </>
             )}
           </>
         )}
       </div>
-
-      {/* Player Selector (for Cumulative and Monthly views) */}
-      {(viewMode === 'cumulative' || viewMode === 'monthly') && (
-        <div className="card" style={{ padding: '0.75rem' }}>
-          <button
-            type="button"
-            onClick={() => setShowPlayerSelector(!showPlayerSelector)}
-            style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              width: '100%',
-              padding: 0,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text)',
-              marginBottom: showPlayerSelector ? '0.5rem' : 0
-            }}
-          >
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              SELECT PLAYERS ({selectedPlayers.size} selected)
-            </span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
-              {showPlayerSelector ? '▲' : '▼'}
-            </span>
-          </button>
-          
-          {showPlayerSelector && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
-                <button
-                  type="button"
-                  onClick={selectAllPermanent}
-                  style={{
-                    padding: '0.25rem 0.5rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Select All
-                </button>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                {players
-                  .filter(p => p.type === 'permanent')
-                  .map((player) => {
-                    const isSelected = selectedPlayers.has(player.id);
-                    const color = getPlayerColor(player.id);
-                    return (
-                      <button
-                        type="button"
-                        key={player.id}
-                        onClick={() => togglePlayer(player.id)}
-                        style={{
-                          padding: '0.4rem 0.65rem',
-                          borderRadius: '16px',
-                          border: isSelected 
-                            ? `2px solid ${color}` 
-                            : '2px solid var(--border)',
-                          background: isSelected 
-                            ? `${color}22` 
-                            : 'var(--surface)',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          fontWeight: '600',
-                          color: isSelected ? color : 'var(--text-muted)',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        {isSelected && '✓ '}{player.name}
-                      </button>
-                    );
-                  })}
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Head-to-Head Player Selection */}
       {viewMode === 'headToHead' && (
