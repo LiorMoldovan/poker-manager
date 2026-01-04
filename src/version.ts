@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.20';
+export const APP_VERSION = '4.40.21';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.21',
+    date: '2026-01-04',
+    changes: [
+      '🔍 AI Forecast FACT-CHECKING system!',
+      'Auto-detects and corrects wrong streak claims (e.g., "4 wins" when actually 1)',
+      'Auto-detects and corrects wrong game counts (e.g., "2 games in Jan" when 1)',
+      'Replaces broken/incorrect sentences with factual fallbacks',
+      'Fixes Hebrew patterns like "רצף X נצחונות" and "X משחקים בינואר"',
+      'Logs all corrections to console for debugging',
+      'No more AI hallucinations in forecast text!'
+    ]
+  },
   {
     version: '4.40.20',
     date: '2026-01-04',
