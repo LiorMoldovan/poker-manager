@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { processQuestion, ChatMessage, isAIAvailable } from '../utils/chatbot';
 
-const ChatbotScreen = () => {
+interface ChatbotModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -9,22 +14,21 @@ const ChatbotScreen = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const available = isAIAvailable();
-    setAiAvailable(available);
-    
-    // Add welcome message
-    const welcomeMessage: ChatMessage = {
-      id: 'welcome',
-      role: 'assistant',
-      content: available 
-        ? 'שלום! אני עוזר AI לשאלות על משחקי הפוקר שלך. שאל אותי כל שאלה - על שחקנים, משחקים, סטטיסטיקות ועוד!'
-        : 'שלום! אני עוזר לשאלות על משחקי הפוקר שלך. שאל אותי כל שאלה - על שחקנים, משחקים, סטטיסטיקות ועוד! (מצב מקומי - ללא AI)',
-      timestamp: new Date(),
-      source: 'local',
-    };
-    setMessages([welcomeMessage]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (isOpen && messages.length === 0) {
+      const available = isAIAvailable();
+      setAiAvailable(available);
+      
+      // Add welcome message
+      const welcomeMessage: ChatMessage = {
+        id: 'welcome',
+        role: 'assistant',
+        content: 'שאל אותי כל שאלה על המשחקים שלכם! 🎯',
+        timestamp: new Date(),
+        source: 'local',
+      };
+      setMessages([welcomeMessage]);
+    }
+  }, [isOpen, messages.length]);
 
   useEffect(() => {
     scrollToBottom();
@@ -82,181 +86,255 @@ const ChatbotScreen = () => {
   };
 
   const suggestedQuestions = [
+    'איפה היה המשחק האחרון?',
+    'מי סיים אחרון במשחק האחרון?',
     'מי המוביל בטבלה?',
-    'כמה משחקים שיחקתי?',
-    'מה הרווח הכולל שלי?',
     'מי ניצח במשחק האחרון?',
-    'מה הטבלה העליונה?',
   ];
 
-  return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="page-header">
-        <h1 className="page-title">💬 עוזר AI</h1>
-        <p className="page-subtitle">
-          {aiAvailable ? '🤖 AI פעיל' : '📱 מצב מקומי'}
-        </p>
-      </div>
+  if (!isOpen) return null;
 
-      {/* Messages area */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '1rem',
+  return (
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '0.75rem',
-      }}>
-        {messages.map(msg => (
-          <div
-            key={msg.id}
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        padding: '0',
+      }}
+    >
+      <div 
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '500px',
+          height: '80vh',
+          maxHeight: '600px',
+          background: 'var(--background)',
+          borderRadius: '20px 20px 0 0',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          animation: 'slideUp 0.3s ease-out',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '1rem',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'var(--surface)',
+        }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>💬 שאל אותי</h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              {aiAvailable ? '🤖 AI פעיל' : '📱 מצב מקומי'}
+            </span>
+          </div>
+          <button 
+            onClick={onClose}
             style={{
-              display: 'flex',
-              justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              background: 'none',
+              border: 'none',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              padding: '0.25rem',
             }}
           >
+            ✕
+          </button>
+        </div>
+
+        {/* Messages area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '1rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+        }}>
+          {messages.map(msg => (
             <div
+              key={msg.id}
               style={{
-                maxWidth: '80%',
-                padding: '0.75rem 1rem',
-                borderRadius: '12px',
-                background: msg.role === 'user'
-                  ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
-                  : 'var(--card-background)',
-                color: msg.role === 'user' ? 'white' : 'var(--text)',
-                border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                boxShadow: msg.role === 'user' ? '0 2px 8px rgba(59, 130, 246, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
+                display: 'flex',
+                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
               }}
             >
-              {msg.content}
-              {msg.role === 'assistant' && msg.source && (
-                <div style={{
-                  fontSize: '0.7rem',
-                  opacity: 0.7,
-                  marginTop: '0.5rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                }}>
-                  {msg.source === 'ai' ? '🤖 AI' : '📱 מקומי'}
-                </div>
-              )}
+              <div
+                style={{
+                  maxWidth: '85%',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  background: msg.role === 'user'
+                    ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                    : 'var(--surface)',
+                  color: msg.role === 'user' ? 'white' : 'var(--text)',
+                  border: msg.role === 'assistant' ? '1px solid var(--border)' : 'none',
+                  boxShadow: msg.role === 'user' ? '0 2px 8px rgba(59, 130, 246, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontSize: '0.95rem',
+                  lineHeight: '1.5',
+                }}
+              >
+                {msg.content}
+                {msg.role === 'assistant' && msg.source && msg.id !== 'welcome' && (
+                  <div style={{
+                    fontSize: '0.65rem',
+                    opacity: 0.6,
+                    marginTop: '0.4rem',
+                  }}>
+                    {msg.source === 'ai' ? '🤖' : '📱'}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-        
-        {isProcessing && (
-          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <div style={{
-              padding: '0.75rem 1rem',
-              borderRadius: '12px',
-              background: 'var(--card-background)',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}>
-              <span style={{ fontSize: '1.2rem' }}>💭</span>
-              <span>חושב...</span>
+          ))}
+          
+          {isProcessing && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{
+                padding: '0.75rem 1rem',
+                borderRadius: '12px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.9rem',
+              }}>
+                <span>💭</span>
+                <span>חושב...</span>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Suggested questions */}
+        {messages.length === 1 && (
+          <div style={{ padding: '0 1rem 0.5rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {suggestedQuestions.map((q, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(q)}
+                  style={{
+                    padding: '0.4rem 0.6rem',
+                    borderRadius: '8px',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
             </div>
           </div>
         )}
-        
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Suggested questions */}
-      {messages.length === 1 && (
-        <div style={{ padding: '0 1rem 0.5rem' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            שאלות מומלצות:
+        {/* Input area */}
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--surface)',
+        }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="שאל שאלה..."
+              style={{
+                flex: 1,
+                padding: '0.75rem',
+                borderRadius: '12px',
+                border: '1px solid var(--border)',
+                background: 'var(--background)',
+                color: 'var(--text)',
+                fontSize: '1rem',
+                fontFamily: 'inherit',
+              }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isProcessing}
+              style={{
+                padding: '0.75rem 1.25rem',
+                borderRadius: '12px',
+                background: input.trim() && !isProcessing
+                  ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
+                  : 'var(--border)',
+                color: input.trim() && !isProcessing ? 'white' : 'var(--text-muted)',
+                border: 'none',
+                fontSize: '1rem',
+                fontWeight: '500',
+                cursor: input.trim() && !isProcessing ? 'pointer' : 'not-allowed',
+              }}
+            >
+              שלח
+            </button>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {suggestedQuestions.map((q, idx) => (
-              <button
-                key={idx}
-                onClick={() => setInput(q)}
-                style={{
-                  padding: '0.5rem 0.75rem',
-                  borderRadius: '8px',
-                  background: 'var(--card-background)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text)',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--primary)';
-                  e.currentTarget.style.color = 'white';
-                  e.currentTarget.style.borderColor = 'var(--primary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--card-background)';
-                  e.currentTarget.style.color = 'var(--text)';
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                }}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Input area */}
-      <div style={{
-        padding: '1rem',
-        borderTop: '1px solid var(--border)',
-        background: 'var(--background)',
-      }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="שאל שאלה..."
-            style={{
-              flex: 1,
-              padding: '0.75rem',
-              borderRadius: '12px',
-              border: '1px solid var(--border)',
-              background: 'var(--card-background)',
-              color: 'var(--text)',
-              fontSize: '1rem',
-              fontFamily: 'inherit',
-              resize: 'none',
-              minHeight: '44px',
-              maxHeight: '120px',
-            }}
-            rows={1}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isProcessing}
-            style={{
-              padding: '0.75rem 1.5rem',
-              borderRadius: '12px',
-              background: input.trim() && !isProcessing
-                ? 'linear-gradient(135deg, #3B82F6, #2563EB)'
-                : 'var(--border)',
-              color: input.trim() && !isProcessing ? 'white' : 'var(--text-muted)',
-              border: 'none',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: input.trim() && !isProcessing ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s',
-            }}
-          >
-            שלח
-          </button>
         </div>
       </div>
     </div>
   );
 };
 
-export default ChatbotScreen;
+// Floating Action Button component
+export const ChatFAB = ({ onClick }: { onClick: () => void }) => {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        position: 'fixed',
+        bottom: '80px', // Above the navigation bar
+        right: '16px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+        border: 'none',
+        boxShadow: '0 4px 12px rgba(139, 92, 246, 0.4)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '1.5rem',
+        color: 'white',
+        zIndex: 90,
+        transition: 'transform 0.2s, box-shadow 0.2s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'scale(1.1)';
+        e.currentTarget.style.boxShadow = '0 6px 16px rgba(139, 92, 246, 0.5)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'scale(1)';
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)';
+      }}
+    >
+      💬
+    </button>
+  );
+};
 
+// Old screen component - kept for backwards compatibility but not used
+const ChatbotScreen = () => {
+  return null;
+};
+
+export default ChatbotScreen;

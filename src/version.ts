@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.15';
+export const APP_VERSION = '4.40.16';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.16',
+    date: '2026-01-04',
+    changes: [
+      '💬 Chat is now a floating button (bottom-right corner)',
+      'Cleaner navigation bar - back to 5 icons',
+      '🔧 MAJOR FIX: Chatbot now actually works!',
+      'Answers questions about last game location, who finished last, who won',
+      'Supports Hebrew questions about players, leaderboard, records',
+      'Much better question understanding and responses',
+      'Improved header text in chat modal'
+    ]
+  },
   {
     version: '4.40.15',
     date: '2026-01-04',
