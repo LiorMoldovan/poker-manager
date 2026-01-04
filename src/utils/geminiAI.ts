@@ -1252,43 +1252,47 @@ export const generateAIForecasts = async (
           ? `🔙 Back after a month break (${p.daysSinceLastGame} days)`
           : null;
     
-    // Calculate year stats FIRST (needed for year-specific streak)
+    // Calculate year stats FIRST
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
     const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
     const yearGames = thisYearGames.length;
     
-    // Calculate year-specific streak (only games from current year, most recent first)
-    let yearStreak = 0;
-    if (thisYearGames.length > 0) {
-      // Games are already sorted most recent first, so iterate from start
+    // USE THE ACTUAL CURRENT STREAK (spans across years!)
+    // A streak from Dec 2025 + Jan 2026 is still one continuous streak
+    const actualStreak = p.currentStreak; // This is the TRUE streak from all games
+    
+    // Count how many of the current streak games are in this year
+    let streakGamesInYear = 0;
+    if (actualStreak !== 0) {
+      const isWinStreak = actualStreak > 0;
       for (const game of thisYearGames) {
-        if (game.profit > 0) {
-          if (yearStreak >= 0) yearStreak++;
-          else break; // Streak broken by a loss
-        } else if (game.profit < 0) {
-          if (yearStreak <= 0) yearStreak--;
-          else break; // Streak broken by a win
+        if ((isWinStreak && game.profit > 0) || (!isWinStreak && game.profit < 0)) {
+          streakGamesInYear++;
         } else {
-          // Break-even breaks the streak
-          break;
+          break; // Streak broken
         }
       }
     }
     
-    // Only call it a "streak" if 2+ consecutive wins/losses IN THIS YEAR
-    const streakText = yearStreak >= 2 
-      ? `🔥 HOT STREAK IN ${currentYear}: ${yearStreak} consecutive wins this year!` 
-      : yearStreak <= -2 
-        ? `❄️ COLD STREAK IN ${currentYear}: ${Math.abs(yearStreak)} consecutive losses this year` 
-        : yearStreak === 1
-          ? `📈 Won last game in ${currentYear}`
-          : yearStreak === -1
-            ? `📉 Lost last game in ${currentYear}`
-            : thisYearGames.length > 0 && thisYearGames[0].profit === 0
-              ? `⚪ Last game in ${currentYear} was break-even`
-              : thisYearGames.length === 0
-                ? `📅 No games yet in ${currentYear}`
-                : `📊 ${thisYearGames.length} game${thisYearGames.length > 1 ? 's' : ''} in ${currentYear}`;
+    // Build streak text - use ACTUAL streak, note how many in this year
+    let streakText = '';
+    if (actualStreak >= 3) {
+      streakText = `🔥 HOT STREAK: ${actualStreak} consecutive wins!${streakGamesInYear > 0 && streakGamesInYear < Math.abs(actualStreak) ? ` (${streakGamesInYear} in ${currentYear}, streak continues from ${currentYear - 1})` : ''}`;
+    } else if (actualStreak <= -3) {
+      streakText = `❄️ COLD STREAK: ${Math.abs(actualStreak)} consecutive losses${streakGamesInYear > 0 && streakGamesInYear < Math.abs(actualStreak) ? ` (${streakGamesInYear} in ${currentYear}, streak continues from ${currentYear - 1})` : ''}`;
+    } else if (actualStreak === 2) {
+      streakText = `📈 2 wins in a row${streakGamesInYear === 1 ? ` (streak started in ${currentYear - 1})` : ''}`;
+    } else if (actualStreak === -2) {
+      streakText = `📉 2 losses in a row${streakGamesInYear === 1 ? ` (streak started in ${currentYear - 1})` : ''}`;
+    } else if (actualStreak === 1) {
+      streakText = `📈 Won last game`;
+    } else if (actualStreak === -1) {
+      streakText = `📉 Lost last game`;
+    } else if (thisYearGames.length === 0) {
+      streakText = `📅 No games yet in ${currentYear}`;
+    } else {
+      streakText = `📊 ${thisYearGames.length} game${thisYearGames.length > 1 ? 's' : ''} in ${currentYear}`;
+    }
     
     // Combine streak with explicit last game (to prevent AI confusion)
     const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
@@ -1757,19 +1761,9 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
         const yearGames = thisYearGames.length;
         const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
         
-        // Calculate actual year streak
-        let actualYearStreak = 0;
-        for (const game of thisYearGames) {
-          if (game.profit > 0) {
-            if (actualYearStreak >= 0) actualYearStreak++;
-            else break;
-          } else if (game.profit < 0) {
-            if (actualYearStreak <= 0) actualYearStreak--;
-            else break;
-          } else {
-            break;
-          }
-        }
+        // USE THE ACTUAL CURRENT STREAK (spans across years!)
+        // A streak from Dec 2025 + Jan 2026 is still one continuous streak
+        const actualStreak = player.currentStreak; // This is the TRUE streak from all games
         
         let correctedSentence = forecast.sentence;
         let correctedHighlight = forecast.highlight;
@@ -1782,6 +1776,8 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
           /(\d+)\s*consecutive\s*wins/gi,
           /רצף\s*(?:של\s*)?(\d+)\s*הפסדים/g,
           /(\d+)\s*הפסדים\s*רצופים/g,
+          /(\d+)\s*wins?\s*in\s*a\s*row/gi,
+          /(\d+)\s*losses?\s*in\s*a\s*row/gi,
         ];
         
         for (const pattern of streakPatterns) {
@@ -1789,18 +1785,19 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
           for (const match of matches) {
             const claimedStreak = parseInt(match[1]);
             const isWinPattern = match[0].includes('נצחונות') || match[0].toLowerCase().includes('wins');
-            const actualStreak = isWinPattern ? Math.max(0, actualYearStreak) : Math.abs(Math.min(0, actualYearStreak));
+            // Use the TRUE streak that spans across years
+            const expectedStreak = isWinPattern ? Math.max(0, actualStreak) : Math.abs(Math.min(0, actualStreak));
             
-            if (claimedStreak !== actualStreak && actualStreak >= 0) {
-              console.log(`⚠️ ${player.name}: Claimed streak ${claimedStreak}, actual ${actualStreak}`);
+            if (claimedStreak !== expectedStreak) {
+              console.log(`⚠️ ${player.name}: Claimed streak ${claimedStreak}, actual ${expectedStreak} (spans across years)`);
               hadErrors = true;
               
-              if (actualStreak === 0) {
+              if (expectedStreak === 0) {
                 // No streak - remove the streak claim entirely
                 correctedSentence = correctedSentence.replace(match[0], '');
               } else {
                 // Fix the number
-                correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualStreak)));
+                correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(expectedStreak)));
               }
             }
           }
@@ -1856,7 +1853,8 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
             correctedSentence = `משחק שני ב-${currentYear}. ${lastResult ? `המשחק הקודם: ${lastResult}.` : ''} ממוצע כללי: ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪ למשחק.`;
           } else {
             const yearAvg = Math.round(yearProfit / yearGames);
-            correctedSentence = `${yearGames} משחקים ב-${currentYear} עם ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ (ממוצע ${yearAvg >= 0 ? '+' : ''}${yearAvg}₪). ${actualYearStreak > 1 ? `רצף ${actualYearStreak} נצחונות!` : actualYearStreak < -1 ? `רצף ${Math.abs(actualYearStreak)} הפסדים.` : ''}`;
+            // Use actual streak (spans across years!)
+            correctedSentence = `${yearGames} משחקים ב-${currentYear} עם ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ (ממוצע ${yearAvg >= 0 ? '+' : ''}${yearAvg}₪). ${actualStreak > 1 ? `רצף ${actualStreak} נצחונות!` : actualStreak < -1 ? `רצף ${Math.abs(actualStreak)} הפסדים.` : ''}`;
           }
           console.log(`🔧 ${player.name}: Replaced with factual fallback`);
         }
@@ -1867,7 +1865,8 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
           for (const match of matches) {
             const claimedNum = parseInt(match[1]);
             const isStreak = match[0].includes('נצחונות') || match[0].includes('הפסדים');
-            const actualNum = isStreak ? Math.abs(actualYearStreak) : yearGames;
+            // Use actual streak (spans across years!)
+            const actualNum = isStreak ? Math.abs(actualStreak) : yearGames;
             
             if (claimedNum !== actualNum) {
               correctedHighlight = correctedHighlight.replace(match[0], match[0].replace(match[1], String(actualNum)));
