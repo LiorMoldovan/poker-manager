@@ -2621,8 +2621,20 @@ const StatisticsScreen = () => {
                 // Track players already featured in individual milestones
                 const featuredPlayers = new Set<string>();
                 
-                // Sort by profit for rankings
+                // Sort by profit for rankings (filtered players only)
                 const rankedStats = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
+                
+                // Get ALL players' stats (unfiltered) to calculate actual overall rankings
+                // This ensures we show correct rank numbers even when some players are filtered out
+                const allStatsForRanking = getPlayerStats(getDateFilter());
+                const allRankedStats = [...allStatsForRanking].sort((a, b) => b.totalProfit - a.totalProfit);
+                
+                // Create a map of playerId -> actual overall rank (1-based)
+                const overallRankMap = new Map<string, number>();
+                allRankedStats.forEach((stat, idx) => {
+                  overallRankMap.set(stat.playerId, idx + 1);
+                });
+                
                 const periodLabel = getTimeframeLabel();
                 const currentYear = new Date().getFullYear();
                 const currentMonth = new Date().getMonth();
@@ -2693,15 +2705,21 @@ const StatisticsScreen = () => {
                     // Mark the leader battle to avoid duplication
                     if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
                   } else if (gap > 0 && gap <= 150) {
-                    // Close race for 1st place
-                    milestones.push({
-                      emoji: '👑',
-                      title: `קרב על הכתר!`,
-                      description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪. האם הוא יצליח לעקוף?`,
-                      priority: 95
-                    });
-                    // Mark this battle to avoid showing it again in leaderboard battles
-                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
+                    // Close race for 1st place - only show if both are actually #1 and #2 overall
+                    const leaderOverallRank = overallRankMap.get(leader.playerId) || 999;
+                    const secondOverallRank = secondPlace ? (overallRankMap.get(secondPlace.playerId) || 999) : 999;
+                    
+                    // Only show if they're actually #1 and #2 in overall ranking
+                    if (leaderOverallRank === 1 && secondOverallRank === 2) {
+                      milestones.push({
+                        emoji: '👑',
+                        title: `קרב על הכתר!`,
+                        description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪. האם הוא יצליח לעקוף?`,
+                        priority: 95
+                      });
+                      // Mark this battle to avoid showing it again in leaderboard battles
+                      if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
+                    }
                   } else if (leader.gamesPlayed >= 5 || (isLowData && leader.gamesPlayed >= 1)) {
                     // Big lead - celebrate but still ask the question (lower threshold for low data)
                     milestones.push({
@@ -2745,22 +2763,40 @@ const StatisticsScreen = () => {
                 
                 // 4. LEADERBOARD BATTLES (show max 2 most interesting, skip already featured)
                 // Skip for historical periods - no point showing "could have passed" scenarios
+                // IMPORTANT: Only show battles between players who are BOTH in the filtered set
+                // Use actual overall rankings, not filtered rankings
                 if (!isHistoricalPeriod) {
                   let leaderboardBattleCount = 0;
+                  // Create a set of filtered player IDs for quick lookup
+                  const filteredPlayerIds = new Set(rankedStats.map(p => p.playerId));
+                  
+                  // Check each adjacent pair in filtered list
                   for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
                     const chaser = rankedStats[i];
                     const leader = rankedStats[i - 1];
+                    
                     // Skip if this battle was already featured
                     if (isBattleFeatured(chaser.playerId, leader.playerId)) continue;
                     
+                    // Get actual overall ranks
+                    const chaserOverallRank = overallRankMap.get(chaser.playerId) || 999;
+                    const leaderOverallRank = overallRankMap.get(leader.playerId) || 999;
+                    
+                    // Only show milestone if they are actually adjacent in overall ranking
+                    // (no players between them in the overall ranking)
+                    // OR if they're very close (within 2 positions) and the gap is small
+                    const rankDifference = chaserOverallRank - leaderOverallRank;
                     const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                    if (gap > 0 && gap <= 200) {
-                      const isTopBattle = i <= 2;
+                    
+                    // Show if: gap is achievable AND they're actually close in overall ranking
+                    // (rankDifference should be 1 if truly adjacent, but allow 2-3 if gap is very small)
+                    if (gap > 0 && gap <= 200 && rankDifference <= Math.max(1, Math.ceil(gap / 100))) {
+                      const isTopBattle = leaderOverallRank <= 3;
                       milestones.push({
                         emoji: isTopBattle ? '📈' : '🎯',
-                        title: `מרדף על מקום ${i}!`,
-                        description: `${chaser.playerName} (מקום ${i + 1}) יכול לעקוף את ${leader.playerName} (מקום ${i}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
-                        priority: 85 - i * 3
+                        title: `מרדף על מקום ${leaderOverallRank}!`,
+                        description: `${chaser.playerName} (מקום ${chaserOverallRank} ב${periodLabel}) יכול לעקוף את ${leader.playerName} (מקום ${leaderOverallRank}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
+                        priority: 85 - leaderOverallRank * 3
                       });
                       markBattle(chaser.playerId, leader.playerId);
                       leaderboardBattleCount++;
@@ -2841,19 +2877,26 @@ const StatisticsScreen = () => {
                 }
                 
                 // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured or historical)
+                // Only show if both players are actually 2nd and 3rd in overall ranking
                 if (!isHistoricalPeriod && rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
                   const second = rankedStats[1];
                   const third = rankedStats[2];
+                  
+                  // Get actual overall ranks
+                  const secondOverallRank = overallRankMap.get(second.playerId) || 999;
+                  const thirdOverallRank = overallRankMap.get(third.playerId) || 999;
+                  
+                  // Only show if they're actually 2nd and 3rd in overall ranking
                   // Skip if this battle was already featured
-                  if (!isBattleFeatured(second.playerId, third.playerId)) {
-                  const gap = Math.round(second.totalProfit - third.totalProfit);
-                  if (gap > 0 && gap <= 150) {
-                    milestones.push({
-                      emoji: '🥈',
-                      title: `מרדף על מקום 2!`,
-                      description: `${third.playerName} (מקום 3) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
-                      priority: 78
-                    });
+                  if (!isBattleFeatured(second.playerId, third.playerId) && secondOverallRank === 2 && thirdOverallRank === 3) {
+                    const gap = Math.round(second.totalProfit - third.totalProfit);
+                    if (gap > 0 && gap <= 150) {
+                      milestones.push({
+                        emoji: '🥈',
+                        title: `מרדף על מקום 2!`,
+                        description: `${third.playerName} (מקום 3 ב${periodLabel}) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
+                        priority: 78
+                      });
                       markBattle(second.playerId, third.playerId);
                     }
                   }
@@ -3015,19 +3058,31 @@ const StatisticsScreen = () => {
                 }
                 
                 // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured or historical)
+                // Only show if players are actually close in overall ranking
                 if (!isHistoricalPeriod) {
+                  // Create a set of filtered player IDs for quick lookup
+                  const filteredPlayerIds = new Set(rankedStats.map(p => p.playerId));
+                  
                   for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
                     const p1 = rankedStats[i];
                     const p2 = rankedStats[i + 1];
+                    
                     // Skip if this battle was already featured
                     if (isBattleFeatured(p1.playerId, p2.playerId)) continue;
                     
+                    // Get actual overall ranks
+                    const p1OverallRank = overallRankMap.get(p1.playerId) || 999;
+                    const p2OverallRank = overallRankMap.get(p2.playerId) || 999;
+                    
                     const gap = Math.abs(p1.totalProfit - p2.totalProfit);
-                    if (gap <= 30 && gap > 0) {
+                    const rankDifference = Math.abs(p1OverallRank - p2OverallRank);
+                    
+                    // Only show if gap is very small AND they're actually close in overall ranking (within 2 positions)
+                    if (gap <= 30 && gap > 0 && rankDifference <= 2) {
                       milestones.push({
                         emoji: '⚔️',
                         title: `קרב צמוד!`,
-                        description: `${p1.playerName} ו-${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד! המשחק הבא יקבע מי יהיה מעל.`,
+                        description: `${p1.playerName} (מקום ${p1OverallRank}) ו-${p2.playerName} (מקום ${p2OverallRank}) בהפרש של ${Math.round(gap)}₪ בלבד ב${periodLabel}! המשחק הבא יקבע מי יהיה מעל.`,
                         priority: 82
                       });
                       markBattle(p1.playerId, p2.playerId);

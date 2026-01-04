@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.10';
+export const APP_VERSION = '4.40.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.11',
+    date: '2026-01-04',
+    changes: [
+      '🎯 Milestones: Fixed leaderboard battles to use actual overall rankings',
+      'Milestones now only show "can pass" when both players are actually adjacent in overall ranking',
+      'Prevents incorrect milestones when filtered players skip over missing players',
+      'Uses actual rank numbers from all players, not just filtered set',
+      'Podium battles and close battles also check overall ranking positions'
+    ]
+  },
   {
     version: '4.40.10',
     date: '2026-01-04',
