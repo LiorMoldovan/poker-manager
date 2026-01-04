@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.9';
+export const APP_VERSION = '4.40.10';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.10',
+    date: '2026-01-04',
+    changes: [
+      '🤖 AI Forecast: Fixed streak calculation for year-specific periods',
+      'Streaks now calculated only from games in the current year (2026)',
+      'Prevents incorrect "2-game streak in 2026" when only 1 game played',
+      'Year-specific streak shown in CURRENT YEAR section of AI prompt',
+      'All-time streaks still shown separately in ALL-TIME section'
+    ]
+  },
   {
     version: '4.40.9',
     date: '2026-01-04',

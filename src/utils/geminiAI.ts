@@ -1129,24 +1129,46 @@ export const generateAIForecasts = async (
           ? `🔙 Back after a month break (${p.daysSinceLastGame} days)`
           : null;
     
-    // Only call it a "streak" if 2+ consecutive wins/losses
-    const streakText = p.currentStreak >= 2 
-      ? `🔥 HOT STREAK: ${p.currentStreak} consecutive wins!` 
-      : p.currentStreak <= -2 
-        ? `❄️ COLD STREAK: ${Math.abs(p.currentStreak)} consecutive losses` 
-        : p.currentStreak === 1
-          ? `📈 Won last game`
-          : p.currentStreak === -1
-            ? `📉 Lost last game`
-            : '⚪ Last game was break-even';
-    
-    // Combine streak with explicit last game (to prevent AI confusion)
-    const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
-    
-    // Calculate year stats
+    // Calculate year stats FIRST (needed for year-specific streak)
     const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
     const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
     const yearGames = thisYearGames.length;
+    
+    // Calculate year-specific streak (only games from current year, most recent first)
+    let yearStreak = 0;
+    if (thisYearGames.length > 0) {
+      // Games are already sorted most recent first, so iterate from start
+      for (const game of thisYearGames) {
+        if (game.profit > 0) {
+          if (yearStreak >= 0) yearStreak++;
+          else break; // Streak broken by a loss
+        } else if (game.profit < 0) {
+          if (yearStreak <= 0) yearStreak--;
+          else break; // Streak broken by a win
+        } else {
+          // Break-even breaks the streak
+          break;
+        }
+      }
+    }
+    
+    // Only call it a "streak" if 2+ consecutive wins/losses IN THIS YEAR
+    const streakText = yearStreak >= 2 
+      ? `🔥 HOT STREAK IN ${currentYear}: ${yearStreak} consecutive wins this year!` 
+      : yearStreak <= -2 
+        ? `❄️ COLD STREAK IN ${currentYear}: ${Math.abs(yearStreak)} consecutive losses this year` 
+        : yearStreak === 1
+          ? `📈 Won last game in ${currentYear}`
+          : yearStreak === -1
+            ? `📉 Lost last game in ${currentYear}`
+            : thisYearGames.length > 0 && thisYearGames[0].profit === 0
+              ? `⚪ Last game in ${currentYear} was break-even`
+              : thisYearGames.length === 0
+                ? `📅 No games yet in ${currentYear}`
+                : `📊 ${thisYearGames.length} game${thisYearGames.length > 1 ? 's' : ''} in ${currentYear}`;
+    
+    // Combine streak with explicit last game (to prevent AI confusion)
+    const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
     
     // Get recent average
     const last5 = p.gameHistory.slice(0, 5);
