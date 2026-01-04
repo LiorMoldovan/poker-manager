@@ -437,26 +437,28 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
 
-  // In January: Show "2025 Final Results" summary - only first 2 weeks, then lower priority
+  // In January: Show "2025 Final Results" summary - ONLY first week, then it's old news
   if (currentMonth === 0) { // January
     const sortedByLastYearProfit = [...previousYearStats].sort((a, b) => b.lastYearProfit - a.lastYearProfit);
     const lastYearChampion = sortedByLastYearProfit[0];
     const dayOfMonth = now.getDate();
-    const isEarlyJanuary = dayOfMonth <= 14; // First 2 weeks only high priority
+    const isFirstWeek = dayOfMonth <= 7; // Only first week is high priority
+    const isSecondWeek = dayOfMonth > 7 && dayOfMonth <= 14;
     
-    if (lastYearChampion && lastYearChampion.lastYearGames >= 5) {
+    // After 2 weeks, 2025 champion is completely removed - it's old news!
+    if (lastYearChampion && lastYearChampion.lastYearGames >= 5 && (isFirstWeek || isSecondWeek)) {
       milestones.push({
         emoji: '🏆',
         title: `אלוף שנת ${lastYear}: ${lastYearChampion.name}!`,
-        description: isEarlyJanuary 
+        description: isFirstWeek 
           ? `${lastYearChampion.name} סיים את שנת ${lastYear} במקום הראשון עם ${lastYearChampion.lastYearProfit >= 0 ? '+' : ''}${Math.round(lastYearChampion.lastYearProfit)}₪ מתוך ${lastYearChampion.lastYearGames} משחקים! שנה חדשה, הכל מתאפס - מי יהיה אלוף ${currentYear}?`
           : `${lastYearChampion.name} היה אלוף ${lastYear}. עכשיו כולם מתחילים מחדש - מי יוביל ב-${currentYear}?`,
-        priority: isEarlyJanuary ? 75 : 40 // Lower priority after first 2 weeks
+        priority: isFirstWeek ? 75 : 30 // Much lower in second week
       });
     }
     
-    // Show how each player finished last year - only first week of January
-    if (isEarlyJanuary) {
+    // Show 2nd/3rd place - only first week of January
+    if (isFirstWeek) {
       previousYearStats.forEach(p => {
         if (p.lastYearGames >= 5) {
           const rank = sortedByLastYearProfit.findIndex(x => x.name === p.name) + 1;
@@ -472,6 +474,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       });
     }
   }
+  // After January - NO 2025 champion milestone at all! Focus on current year dynamics
   
   // In July: Show "H1 Final Results" summary
   if (currentMonth === 6) { // July (start of H2)
@@ -705,7 +708,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       const monthRank = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit).findIndex(sp => sp.name === p.name) + 1;
       return { ...p, allTimeRank, monthRank, rankDiff: allTimeRank - monthRank };
     });
-  
+
   const bigClimber = monthlyChanges.filter(p => p.rankDiff >= 2).sort((a, b) => b.rankDiff - a.rankDiff)[0];
   if (bigClimber && bigClimber.monthProfit > 0) {
     milestones.push({
@@ -713,6 +716,122 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       title: `${bigClimber.name} עולה בטבלה!`,
       description: `ב${monthNames[currentMonth]} הוא מקום ${bigClimber.monthRank} (לעומת מקום ${bigClimber.allTimeRank} בכל הזמנים). עם +${Math.round(bigClimber.monthProfit)}₪ החודש, הוא בדרך לשפר את הדירוג!`,
       priority: 70
+    });
+  }
+  
+  // ===== 31. DRAMATIC CHANGES - The most interesting stories! =====
+  // These highlight unexpected turnarounds that make poker exciting
+  
+  // 31a. "FROM LOSER TO WINNER" - Player who usually loses but won their last game(s)
+  const loserToWinner = players
+    .filter(p => {
+      if (p.gamesPlayed < 5) return false;
+      const last2 = p.gameHistory.slice(0, 2);
+      const last2Wins = last2.filter(g => g.profit > 0).length;
+      // Usually loses (negative average or <40% win rate) but won last 1-2 games
+      return (p.avgProfit < 0 || p.winPercentage < 40) && last2Wins >= 1 && last2[0].profit > 0;
+    })
+    .sort((a, b) => b.gameHistory[0].profit - a.gameHistory[0].profit);
+  
+  if (loserToWinner.length > 0) {
+    const star = loserToWinner[0];
+    const lastWin = star.gameHistory[0].profit;
+    milestones.push({
+      emoji: '🌟',
+      title: `${star.name} בהפתעה!`,
+      description: `בדרך כלל ${star.name} מפסיד (ממוצע ${Math.round(star.avgProfit)}₪), אבל במשחק האחרון ניצח +${Math.round(lastWin)}₪! האם זה תחילת תפנית?`,
+      priority: 82 // High priority - this is the drama people want!
+    });
+  }
+  
+  // 31b. "FROM WINNER TO LOSER" - Player who usually wins but lost their last game(s)
+  const winnerToLoser = players
+    .filter(p => {
+      if (p.gamesPlayed < 5) return false;
+      const last2 = p.gameHistory.slice(0, 2);
+      const last2Losses = last2.filter(g => g.profit < 0).length;
+      // Usually wins (positive average AND >50% win rate) but lost last 1-2 games
+      return p.avgProfit > 20 && p.winPercentage > 50 && last2Losses >= 1 && last2[0].profit < 0;
+    })
+    .sort((a, b) => a.gameHistory[0].profit - b.gameHistory[0].profit);
+  
+  if (winnerToLoser.length > 0) {
+    const fallen = winnerToLoser[0];
+    const lastLoss = fallen.gameHistory[0].profit;
+    milestones.push({
+      emoji: '😮',
+      title: `${fallen.name} נפגע!`,
+      description: `בדרך כלל ${fallen.name} מנצח (ממוצע +${Math.round(fallen.avgProfit)}₪), אבל הפסיד ${Math.round(lastLoss)}₪ במשחק האחרון. קאמבק הלילה?`,
+      priority: 80
+    });
+  }
+  
+  // 31c. "STREAK BREAKER CANDIDATE" - Someone who can break another's streak
+  const hotStreakers = players.filter(p => p.currentStreak >= 3);
+  const coldStreakers = players.filter(p => p.currentStreak <= -3);
+  
+  if (hotStreakers.length > 0 && coldStreakers.length > 0) {
+    const hotPlayer = hotStreakers.sort((a, b) => b.currentStreak - a.currentStreak)[0];
+    const coldPlayer = coldStreakers.sort((a, b) => a.currentStreak - b.currentStreak)[0];
+    milestones.push({
+      emoji: '⚔️',
+      title: 'מלחמת הרצפים!',
+      description: `${hotPlayer.name} ברצף ${hotPlayer.currentStreak} נצחונות, ${coldPlayer.name} ברצף ${Math.abs(coldPlayer.currentStreak)} הפסדים. מי ישבור את הרצף של השני הלילה?`,
+      priority: 78
+    });
+  }
+  
+  // 31d. "BIGGEST SWING" - Player with the most volatile recent results
+  const volatilePlayers = players
+    .filter(p => p.gamesPlayed >= 4)
+    .map(p => {
+      const last4 = p.gameHistory.slice(0, 4);
+      const maxProfit = Math.max(...last4.map(g => g.profit));
+      const minProfit = Math.min(...last4.map(g => g.profit));
+      const swing = maxProfit - minProfit;
+      return { ...p, swing, maxProfit, minProfit };
+    })
+    .filter(p => p.swing > 150) // Only big swings
+    .sort((a, b) => b.swing - a.swing);
+  
+  if (volatilePlayers.length > 0) {
+    const volatile = volatilePlayers[0];
+    milestones.push({
+      emoji: '🎢',
+      title: `${volatile.name} על הרים רוסיים!`,
+      description: `ב-4 משחקים אחרונים: מ-${Math.round(volatile.minProfit)}₪ עד +${Math.round(volatile.maxProfit)}₪. תנודות של ${Math.round(volatile.swing)}₪! הלילה - לאן?`,
+      priority: 73
+    });
+  }
+  
+  // 31e. "LAST PLACE RISING" - Player from bottom 2 who won their last game
+  const bottomPlayers = sortedByTotalProfit.slice(-2);
+  const risingFromBottom = bottomPlayers.filter(p => {
+    const lastGame = p.gameHistory[0];
+    return lastGame && lastGame.profit > 30; // Meaningful win
+  });
+  
+  if (risingFromBottom.length > 0) {
+    const riser = risingFromBottom[0];
+    const rank = sortedByTotalProfit.findIndex(p => p.name === riser.name) + 1;
+    milestones.push({
+      emoji: '💪',
+      title: `${riser.name} לא מוותר!`,
+      description: `למרות מקום ${rank} בטבלה, ניצח +${Math.round(riser.gameHistory[0].profit)}₪ במשחק האחרון! האם זו תחילת הקאמבק הגדול?`,
+      priority: 77
+    });
+  }
+  
+  // 31f. "FIRST PLACE VULNERABLE" - Leader who lost their last game
+  const leader = sortedByTotalProfit[0];
+  const secondPlace = sortedByTotalProfit[1];
+  if (leader && leader.gameHistory[0]?.profit < -30 && secondPlace) {
+    const gap = leader.totalProfit - secondPlace.totalProfit;
+    milestones.push({
+      emoji: '👀',
+      title: `${leader.name} מאבד אחיזה?`,
+      description: `המוביל הפסיד ${Math.round(leader.gameHistory[0].profit)}₪ במשחק האחרון! הפער מ${secondPlace.name} ירד ל-${Math.round(gap)}₪ בלבד. הלחץ גובר!`,
+      priority: 79
     });
   }
   

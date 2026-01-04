@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.24';
+export const APP_VERSION = '4.40.25';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,24 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.25',
+    date: '2026-01-04',
+    changes: [
+      '🤖 ULTIMATE POKER CHATBOT!',
+      '⚔️ Head-to-head: "X נגד Y" - full rivalry stats',
+      '😈 Nemesis: "מי הנמסיס של X?" - who beats you most',
+      '🎯 Victim: "מי הקורבן של X?" - who you beat most',
+      '📈 Trends: "מי משתפר?" - who is improving/declining',
+      '🏠 Location stats: "מי מנצח אצל X?" - performance by venue',
+      '🎢 Volatility: "מי הכי תנודתי?" - consistent vs wild players',
+      '👥 Lineups: "מי משחק הכי הרבה ביחד?" - common pairs',
+      '🔮 Predictions: "תחזית להערב" - smart betting tips',
+      '💬 Follow-ups: "ומה איתו?" - remembers context',
+      'AI gets enhanced data: trends, h2h, locations',
+      '30+ new question patterns supported!'
+    ]
+  },
   {
     version: '4.40.24',
     date: '2026-01-04',

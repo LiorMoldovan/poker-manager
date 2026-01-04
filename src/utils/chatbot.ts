@@ -1,7 +1,7 @@
 /**
- * Chatbot Utilities
- * Provides intelligent answers about poker game data
- * Works with or without AI - always provides useful answers
+ * ULTIMATE Poker Chatbot
+ * The most comprehensive poker group assistant
+ * Features: Head-to-head, trends, location stats, predictions, nemesis detection, and more!
  */
 
 import { getAllPlayers, getAllGames, getGamePlayers, getSettings, getPlayerStats } from '../database/storage';
@@ -17,6 +17,7 @@ export interface ChatMessage {
 }
 
 interface GameData {
+  id: string;
   date: string;
   dateObj: Date;
   location: string;
@@ -28,9 +29,11 @@ interface GameData {
   winnerProfit: number;
   loser: string;
   loserProfit: number;
+  participants: string[]; // List of player names
 }
 
 interface PlayerData {
+  id: string;
   rank: number;
   name: string;
   type: string;
@@ -44,6 +47,10 @@ interface PlayerData {
   biggestWin: number;
   biggestLoss: number;
 }
+
+// Store last mentioned player for follow-up questions
+let lastMentionedPlayer: PlayerData | null = null;
+let conversationContext: { topic?: string; player?: string; games?: GameData[] } = {};
 
 // Month names in Hebrew and English
 const MONTH_NAMES_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -164,6 +171,7 @@ const getProcessedData = () => {
   const rankedPlayers: PlayerData[] = [...playerStats]
     .sort((a, b) => b.stats!.totalProfit - a.stats!.totalProfit)
     .map((ps, idx) => ({
+      id: ps.player.id,
       rank: idx + 1,
       name: ps.player.name,
       type: ps.player.type,
@@ -184,6 +192,7 @@ const getProcessedData = () => {
     const totalBuyins = gamePlayers.reduce((sum, p) => sum + p.rebuys, 0);
     
     return {
+      id: game.id,
       date: new Date(game.date).toLocaleDateString('he-IL'),
       dateObj: new Date(game.date),
       location: game.location || 'לא צוין',
@@ -200,6 +209,7 @@ const getProcessedData = () => {
       winnerProfit: gamePlayers[0]?.profit || 0,
       loser: gamePlayers[gamePlayers.length - 1]?.playerName || '',
       loserProfit: gamePlayers[gamePlayers.length - 1]?.profit || 0,
+      participants: gamePlayers.map(p => p.playerName),
     };
   });
 
@@ -226,12 +236,332 @@ const filterGamesByDate = (games: GameData[], startDate?: Date, endDate?: Date):
 };
 
 /**
- * Smart local answer - understands common questions without AI
+ * Calculate head-to-head stats between two players
+ */
+const getHeadToHead = (player1: string, player2: string, games: GameData[]): {
+  gamesPlayedTogether: number;
+  player1Wins: number;
+  player2Wins: number;
+  player1BetterFinish: number;
+  player2BetterFinish: number;
+} => {
+  const gamesTogether = games.filter(g => 
+    g.participants.includes(player1) && g.participants.includes(player2)
+  );
+  
+  let player1Wins = 0;
+  let player2Wins = 0;
+  let player1BetterFinish = 0;
+  let player2BetterFinish = 0;
+  
+  gamesTogether.forEach(game => {
+    if (game.winner === player1) player1Wins++;
+    if (game.winner === player2) player2Wins++;
+    
+    const p1Result = game.results.find(r => r.name === player1);
+    const p2Result = game.results.find(r => r.name === player2);
+    if (p1Result && p2Result) {
+      if (p1Result.rank < p2Result.rank) player1BetterFinish++;
+      else if (p2Result.rank < p1Result.rank) player2BetterFinish++;
+    }
+  });
+  
+  return {
+    gamesPlayedTogether: gamesTogether.length,
+    player1Wins,
+    player2Wins,
+    player1BetterFinish,
+    player2BetterFinish,
+  };
+};
+
+/**
+ * Find a player's nemesis (who beats them most often)
+ */
+const getNemesis = (playerName: string, players: PlayerData[], games: GameData[]): { nemesis: string; stats: string } | null => {
+  const opponents: { [name: string]: { betterFinish: number; total: number } } = {};
+  
+  games.forEach(game => {
+    if (!game.participants.includes(playerName)) return;
+    
+    const playerResult = game.results.find(r => r.name === playerName);
+    if (!playerResult) return;
+    
+    game.results.forEach(result => {
+      if (result.name === playerName) return;
+      if (!opponents[result.name]) opponents[result.name] = { betterFinish: 0, total: 0 };
+      opponents[result.name].total++;
+      if (result.rank < playerResult.rank) {
+        opponents[result.name].betterFinish++;
+      }
+    });
+  });
+  
+  // Find who beats player most often (with minimum 3 games)
+  let nemesis = '';
+  let maxRatio = 0;
+  let minGames = 3;
+  
+  Object.entries(opponents).forEach(([name, stats]) => {
+    if (stats.total >= minGames) {
+      const ratio = stats.betterFinish / stats.total;
+      if (ratio > maxRatio) {
+        maxRatio = ratio;
+        nemesis = name;
+      }
+    }
+  });
+  
+  if (nemesis && maxRatio > 0.5) {
+    const stats = opponents[nemesis];
+    return { 
+      nemesis, 
+      stats: `${stats.betterFinish}/${stats.total} משחקים (${(maxRatio * 100).toFixed(0)}%)` 
+    };
+  }
+  
+  return null;
+};
+
+/**
+ * Get player's "victim" (who they beat most often)
+ */
+const getVictim = (playerName: string, games: GameData[]): { victim: string; stats: string } | null => {
+  const opponents: { [name: string]: { betterFinish: number; total: number } } = {};
+  
+  games.forEach(game => {
+    if (!game.participants.includes(playerName)) return;
+    
+    const playerResult = game.results.find(r => r.name === playerName);
+    if (!playerResult) return;
+    
+    game.results.forEach(result => {
+      if (result.name === playerName) return;
+      if (!opponents[result.name]) opponents[result.name] = { betterFinish: 0, total: 0 };
+      opponents[result.name].total++;
+      if (playerResult.rank < result.rank) {
+        opponents[result.name].betterFinish++;
+      }
+    });
+  });
+  
+  // Find who player beats most often
+  let victim = '';
+  let maxRatio = 0;
+  let minGames = 3;
+  
+  Object.entries(opponents).forEach(([name, stats]) => {
+    if (stats.total >= minGames) {
+      const ratio = stats.betterFinish / stats.total;
+      if (ratio > maxRatio) {
+        maxRatio = ratio;
+        victim = name;
+      }
+    }
+  });
+  
+  if (victim && maxRatio > 0.5) {
+    const stats = opponents[victim];
+    return { 
+      victim, 
+      stats: `${stats.betterFinish}/${stats.total} משחקים (${(maxRatio * 100).toFixed(0)}%)` 
+    };
+  }
+  
+  return null;
+};
+
+/**
+ * Analyze player trend (improving, declining, stable)
+ */
+const getPlayerTrend = (playerName: string, games: GameData[]): { trend: 'improving' | 'declining' | 'stable'; description: string } => {
+  const playerGames = games.filter(g => g.participants.includes(playerName)).slice(0, 10); // Last 10 games
+  
+  if (playerGames.length < 4) {
+    return { trend: 'stable', description: 'אין מספיק משחקים לזהות מגמה' };
+  }
+  
+  const firstHalf = playerGames.slice(Math.floor(playerGames.length / 2));
+  const secondHalf = playerGames.slice(0, Math.floor(playerGames.length / 2));
+  
+  const avgFirstHalf = firstHalf.reduce((sum, g) => {
+    const result = g.results.find(r => r.name === playerName);
+    return sum + (result?.profit || 0);
+  }, 0) / firstHalf.length;
+  
+  const avgSecondHalf = secondHalf.reduce((sum, g) => {
+    const result = g.results.find(r => r.name === playerName);
+    return sum + (result?.profit || 0);
+  }, 0) / secondHalf.length;
+  
+  const diff = avgSecondHalf - avgFirstHalf;
+  
+  if (diff > 50) {
+    return { trend: 'improving', description: `📈 ${playerName} בעלייה! ממוצע ${avgSecondHalf > 0 ? '+' : ''}₪${cleanNumber(avgSecondHalf)} ב-${secondHalf.length} משחקים אחרונים` };
+  } else if (diff < -50) {
+    return { trend: 'declining', description: `📉 ${playerName} בירידה. ממוצע ₪${cleanNumber(avgSecondHalf)} ב-${secondHalf.length} משחקים אחרונים` };
+  }
+  
+  return { trend: 'stable', description: `➡️ ${playerName} יציב יחסית` };
+};
+
+/**
+ * Get location-based stats
+ */
+const getLocationStats = (games: GameData[]): { [location: string]: { games: number; winners: { [name: string]: number } } } => {
+  const stats: { [location: string]: { games: number; winners: { [name: string]: number } } } = {};
+  
+  games.forEach(game => {
+    const loc = game.location;
+    if (loc === 'לא צוין') return;
+    
+    if (!stats[loc]) stats[loc] = { games: 0, winners: {} };
+    stats[loc].games++;
+    
+    if (!stats[loc].winners[game.winner]) stats[loc].winners[game.winner] = 0;
+    stats[loc].winners[game.winner]++;
+  });
+  
+  return stats;
+};
+
+/**
+ * Get player's performance at a specific location
+ */
+const getPlayerLocationStats = (playerName: string, games: GameData[]): { best: string; worst: string } => {
+  const locationProfit: { [loc: string]: { total: number; count: number } } = {};
+  
+  games.forEach(game => {
+    if (game.location === 'לא צוין') return;
+    if (!game.participants.includes(playerName)) return;
+    
+    const result = game.results.find(r => r.name === playerName);
+    if (!result) return;
+    
+    if (!locationProfit[game.location]) locationProfit[game.location] = { total: 0, count: 0 };
+    locationProfit[game.location].total += result.profit;
+    locationProfit[game.location].count++;
+  });
+  
+  const locations = Object.entries(locationProfit)
+    .filter(([, stats]) => stats.count >= 2)
+    .map(([loc, stats]) => ({ loc, avg: stats.total / stats.count }));
+  
+  if (locations.length === 0) {
+    return { best: '', worst: '' };
+  }
+  
+  locations.sort((a, b) => b.avg - a.avg);
+  
+  return {
+    best: locations[0]?.loc || '',
+    worst: locations[locations.length - 1]?.loc || '',
+  };
+};
+
+/**
+ * Calculate player volatility (standard deviation)
+ */
+const getPlayerVolatility = (playerName: string, games: GameData[]): number => {
+  const playerGames = games.filter(g => g.participants.includes(playerName));
+  const profits = playerGames.map(g => {
+    const result = g.results.find(r => r.name === playerName);
+    return result?.profit || 0;
+  });
+  
+  if (profits.length < 2) return 0;
+  
+  const avg = profits.reduce((a, b) => a + b, 0) / profits.length;
+  const squaredDiffs = profits.map(p => Math.pow(p - avg, 2));
+  const variance = squaredDiffs.reduce((a, b) => a + b, 0) / profits.length;
+  
+  return Math.sqrt(variance);
+};
+
+/**
+ * Get most common player combinations
+ */
+const getCommonLineups = (games: GameData[]): { players: string[]; count: number }[] => {
+  const pairCounts: { [key: string]: number } = {};
+  
+  games.forEach(game => {
+    // Count pairs
+    for (let i = 0; i < game.participants.length; i++) {
+      for (let j = i + 1; j < game.participants.length; j++) {
+        const pair = [game.participants[i], game.participants[j]].sort().join('|');
+        pairCounts[pair] = (pairCounts[pair] || 0) + 1;
+      }
+    }
+  });
+  
+  return Object.entries(pairCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([pair, count]) => ({ players: pair.split('|'), count }));
+};
+
+/**
+ * Get player attendance stats
+ */
+const getAttendanceStats = (players: PlayerData[], totalGames: number): { most: PlayerData; least: PlayerData } => {
+  const sorted = [...players].sort((a, b) => b.gamesPlayed - a.gamesPlayed);
+  return {
+    most: sorted[0],
+    least: sorted[sorted.length - 1],
+  };
+};
+
+/**
+ * Generate fun prediction based on stats
+ */
+const generatePrediction = (players: PlayerData[], games: GameData[]): string => {
+  const predictions: string[] = [];
+  
+  // Hot players
+  const hotPlayers = players.filter(p => p.currentStreak >= 2);
+  if (hotPlayers.length > 0) {
+    const hot = hotPlayers[0];
+    predictions.push(`🔥 ${hot.name} ברצף ${hot.currentStreak} נצחונות - סיכוי גבוה להמשך!`);
+  }
+  
+  // Player with best recent average
+  const recentGames = games.slice(0, 5);
+  const recentPerformance: { [name: string]: number } = {};
+  recentGames.forEach(game => {
+    game.results.forEach(r => {
+      if (!recentPerformance[r.name]) recentPerformance[r.name] = 0;
+      recentPerformance[r.name] += r.profit;
+    });
+  });
+  
+  const bestRecent = Object.entries(recentPerformance).sort((a, b) => b[1] - a[1])[0];
+  if (bestRecent && bestRecent[1] > 0) {
+    predictions.push(`📊 ${bestRecent[0]} הכי רווחי ב-5 משחקים אחרונים (+₪${cleanNumber(bestRecent[1])})`);
+  }
+  
+  // Cold player might be due for comeback
+  const coldPlayers = players.filter(p => p.currentStreak <= -3 && p.winPercentage > 20);
+  if (coldPlayers.length > 0) {
+    const cold = coldPlayers[0];
+    predictions.push(`🎲 ${cold.name} ברצף הפסדים - אולי הגיע הזמן לקאמבק?`);
+  }
+  
+  // Consistent player
+  const consistent = players.find(p => p.gamesPlayed >= 10 && p.winPercentage >= 35);
+  if (consistent) {
+    predictions.push(`🎯 ${consistent.name} יציב עם ${consistent.winPercentage.toFixed(0)}% נצחונות`);
+  }
+  
+  return predictions.length > 0 ? predictions.join('\n') : '🎰 הכל פתוח הערב - יהיה מעניין!';
+};
+
+/**
+ * Smart local answer - understands many question types
  */
 const getLocalAnswer = (question: string): string => {
   const q = question.toLowerCase();
   const data = getProcessedData();
-  const { players, games, totalGames } = data;
+  const { players, games, totalGames, settings } = data;
 
   if (players.length === 0) {
     return 'אין עדיין נתונים במערכת. שחקו כמה משחקים ואז אוכל לענות על שאלות! 🎰';
@@ -242,8 +572,201 @@ const getLocalAnswer = (question: string): string => {
   const lastPlace = players[players.length - 1];
 
   // Helper to find player by name
-  const findPlayer = (name: string) => players.find(p => q.includes(p.name.toLowerCase()));
+  const findPlayer = (text: string) => players.find(p => text.includes(p.name.toLowerCase()));
   const mentionedPlayer = findPlayer(q);
+  
+  // Update last mentioned player for follow-ups
+  if (mentionedPlayer) {
+    lastMentionedPlayer = mentionedPlayer;
+    conversationContext.player = mentionedPlayer.name;
+  }
+
+  // ===== FOLLOW-UP QUESTIONS =====
+  if ((q.includes('ומה איתו') || q.includes('ועליו') || q.includes('ומה לגביו') || q.includes('מה עוד') ||
+       q.includes('and him') || q.includes('about him') || q.includes('what else')) && lastMentionedPlayer) {
+    const p = lastMentionedPlayer;
+    const trend = getPlayerTrend(p.name, games);
+    const nemesis = getNemesis(p.name, players, games);
+    const victim = getVictim(p.name, games);
+    const locationStats = getPlayerLocationStats(p.name, games);
+    
+    let response = `עוד על ${p.name}:\n\n`;
+    response += `${trend.description}\n`;
+    if (nemesis) response += `😈 הנמסיס שלו: ${nemesis.nemesis} (${nemesis.stats})\n`;
+    if (victim) response += `🎯 הקורבן שלו: ${victim.victim} (${victim.stats})\n`;
+    if (locationStats.best) response += `🏠 הכי טוב אצל: ${locationStats.best}\n`;
+    
+    return response;
+  }
+
+  // ===== HEAD-TO-HEAD QUESTIONS =====
+  if (q.includes(' vs ') || q.includes(' נגד ') || q.includes(' מול ') || q.includes('בין ') || 
+      q.includes('הסיפור') || q.includes('ביניהם')) {
+    const names = players.map(p => p.name.toLowerCase());
+    const found = names.filter(n => q.includes(n));
+    if (found.length >= 2) {
+      const p1Name = players.find(p => p.name.toLowerCase() === found[0])!.name;
+      const p2Name = players.find(p => p.name.toLowerCase() === found[1])!.name;
+      const h2h = getHeadToHead(p1Name, p2Name, games);
+      
+      if (h2h.gamesPlayedTogether === 0) {
+        return `${p1Name} ו${p2Name} עוד לא שיחקו יחד!`;
+      }
+      
+      return `⚔️ ${p1Name} vs ${p2Name}\n\n` +
+             `🎮 ${h2h.gamesPlayedTogether} משחקים משותפים\n` +
+             `🏆 נצחונות: ${p1Name} ${h2h.player1Wins} | ${p2Name} ${h2h.player2Wins}\n` +
+             `📊 סיים גבוה יותר: ${p1Name} ${h2h.player1BetterFinish} | ${p2Name} ${h2h.player2BetterFinish}\n` +
+             `\n${h2h.player1BetterFinish > h2h.player2BetterFinish ? `${p1Name} מוביל!` : 
+                  h2h.player2BetterFinish > h2h.player1BetterFinish ? `${p2Name} מוביל!` : 'שווים!'}`;
+    }
+  }
+
+  // ===== NEMESIS QUESTIONS =====
+  if (q.includes('נמסיס') || q.includes('nemesis') || q.includes('מי מנצח אותי') || 
+      q.includes('מי מכה') || q.includes('הכי קשה')) {
+    if (mentionedPlayer) {
+      const nemesis = getNemesis(mentionedPlayer.name, players, games);
+      if (nemesis) {
+        return `😈 הנמסיס של ${mentionedPlayer.name}: ${nemesis.nemesis}\nמנצח אותו ב-${nemesis.stats}`;
+      }
+      return `ל${mentionedPlayer.name} אין נמסיס ברור - הוא מחזיק מעמד מול כולם! 💪`;
+    }
+    
+    // Find most dominant rivalries
+    let biggestNemesis = { player: '', nemesis: '', ratio: 0 };
+    players.forEach(p => {
+      const nem = getNemesis(p.name, players, games);
+      if (nem && parseFloat(nem.stats) > biggestNemesis.ratio) {
+        biggestNemesis = { player: p.name, nemesis: nem.nemesis, ratio: parseFloat(nem.stats) };
+      }
+    });
+    
+    if (biggestNemesis.nemesis) {
+      return `😈 היריבות הגדולה: ${biggestNemesis.nemesis} שולט על ${biggestNemesis.player}!`;
+    }
+  }
+
+  // ===== VICTIM / WHO DO I BEAT =====
+  if (q.includes('קורבן') || q.includes('victim') || q.includes('מי אני מנצח') || q.includes('שולט על')) {
+    if (mentionedPlayer) {
+      const victim = getVictim(mentionedPlayer.name, games);
+      if (victim) {
+        return `🎯 הקורבן של ${mentionedPlayer.name}: ${victim.victim}\nמנצח אותו ב-${victim.stats}`;
+      }
+      return `ל${mentionedPlayer.name} אין קורבן ברור 🤷`;
+    }
+  }
+
+  // ===== TREND QUESTIONS =====
+  if (q.includes('מגמה') || q.includes('trend') || q.includes('משתפר') || q.includes('יורד') || 
+      q.includes('improving') || q.includes('declining') || q.includes('עולה') || q.includes('מתדרדר')) {
+    if (mentionedPlayer) {
+      const trend = getPlayerTrend(mentionedPlayer.name, games);
+      return trend.description;
+    }
+    
+    // Find players with clearest trends
+    const trends = players.map(p => ({
+      player: p,
+      trend: getPlayerTrend(p.name, games),
+    }));
+    
+    const improving = trends.filter(t => t.trend.trend === 'improving');
+    const declining = trends.filter(t => t.trend.trend === 'declining');
+    
+    let response = '📈 מגמות:\n\n';
+    if (improving.length > 0) {
+      response += `עולים: ${improving.map(t => t.player.name).join(', ')}\n`;
+    }
+    if (declining.length > 0) {
+      response += `יורדים: ${declining.map(t => t.player.name).join(', ')}\n`;
+    }
+    if (improving.length === 0 && declining.length === 0) {
+      response += 'כולם יציבים יחסית!';
+    }
+    
+    return response;
+  }
+
+  // ===== LOCATION QUESTIONS =====
+  if ((q.includes('מיקום') || q.includes('location') || q.includes('איפה') || q.includes('אצל')) &&
+      (q.includes('הכי טוב') || q.includes('best') || q.includes('מנצח') || q.includes('הצלחה'))) {
+    if (mentionedPlayer) {
+      const locStats = getPlayerLocationStats(mentionedPlayer.name, games);
+      if (locStats.best) {
+        return `${mentionedPlayer.name} הכי מצליח אצל ${locStats.best} 🏠${locStats.worst && locStats.worst !== locStats.best ? `\nהכי פחות מצליח אצל ${locStats.worst}` : ''}`;
+      }
+      return `אין מספיק נתונים על ביצועי ${mentionedPlayer.name} לפי מיקום`;
+    }
+    
+    const locStats = getLocationStats(games);
+    const locations = Object.entries(locStats)
+      .sort((a, b) => b[1].games - a[1].games)
+      .slice(0, 3);
+    
+    if (locations.length === 0) {
+      return 'אין מספיק נתונים על מיקומים.';
+    }
+    
+    let response = '📍 סטטיסטיקות לפי מיקום:\n\n';
+    locations.forEach(([loc, stats]) => {
+      const topWinner = Object.entries(stats.winners).sort((a, b) => b[1] - a[1])[0];
+      response += `${loc}: ${stats.games} משחקים${topWinner ? ` | מלך: ${topWinner[0]} (${topWinner[1]} נצחונות)` : ''}\n`;
+    });
+    
+    return response;
+  }
+
+  // ===== VOLATILITY / CONSISTENT QUESTIONS =====
+  if (q.includes('תנודתי') || q.includes('volatile') || q.includes('יציב') || q.includes('consistent') ||
+      q.includes('stable') || q.includes('אמין') || q.includes('reliable')) {
+    const volatilities = players
+      .filter(p => p.gamesPlayed >= 5)
+      .map(p => ({ name: p.name, volatility: getPlayerVolatility(p.name, games) }))
+      .sort((a, b) => b.volatility - a.volatility);
+    
+    if (volatilities.length === 0) {
+      return 'אין מספיק משחקים לחישוב יציבות.';
+    }
+    
+    const mostVolatile = volatilities[0];
+    const mostStable = volatilities[volatilities.length - 1];
+    
+    return `📊 יציבות שחקנים:\n\n` +
+           `🎢 הכי תנודתי: ${mostVolatile.name}\n` +
+           `🎯 הכי יציב: ${mostStable.name}`;
+  }
+
+  // ===== COMMON LINEUPS =====
+  if (q.includes('הרכב') || q.includes('lineup') || q.includes('שחקנים ביחד') || q.includes('צמד') ||
+      q.includes('משחקים ביחד') || q.includes('pair')) {
+    const lineups = getCommonLineups(games);
+    
+    if (lineups.length === 0) {
+      return 'אין מספיק נתונים על הרכבים.';
+    }
+    
+    return `👥 צמדים שמשחקים הכי הרבה ביחד:\n\n` +
+           lineups.map((l, i) => `${i + 1}. ${l.players.join(' & ')} - ${l.count} משחקים`).join('\n');
+  }
+
+  // ===== ATTENDANCE =====
+  if (q.includes('נוכחות') || q.includes('attendance') || q.includes('מי משחק הכי הרבה') ||
+      q.includes('מי חסר') || q.includes('missing')) {
+    const attendance = getAttendanceStats(players, totalGames);
+    
+    return `👥 נוכחות:\n\n` +
+           `🎰 הכי נוכח: ${attendance.most.name} (${attendance.most.gamesPlayed} משחקים)\n` +
+           `👻 הכי פחות נוכח: ${attendance.least.name} (${attendance.least.gamesPlayed} משחקים)`;
+  }
+
+  // ===== PREDICTIONS =====
+  if (q.includes('תחזית') || q.includes('prediction') || q.includes('הערב') || q.includes('tonight') ||
+      q.includes('ינצח') || q.includes('will win') || q.includes('סיכוי') || q.includes('chances') ||
+      q.includes('להמר') || q.includes('bet') || q.includes('טיפ') || q.includes('tip')) {
+    return `🔮 תחזית:\n\n${generatePrediction(players, games)}`;
+  }
 
   // ===== DATE-BASED QUESTIONS =====
   const dateRef = parseDateReference(question);
@@ -376,12 +899,17 @@ const getLocalAnswer = (question: string): string => {
     if (q.includes('ספר') || q.includes('tell') || q.includes('מידע') || q.includes('info') || q.includes('סטטיסטיקה')) {
       const streakText = p.currentStreak > 0 ? `🔥 ברצף ${p.currentStreak} נצחונות!` :
                          p.currentStreak < 0 ? `❄️ ברצף ${Math.abs(p.currentStreak)} הפסדים` : '';
+      const trend = getPlayerTrend(p.name, games);
+      const nemesis = getNemesis(p.name, players, games);
+      
       return `${p.name} (מקום ${p.rank}):\n` +
              `💰 רווח כולל: ${p.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(p.totalProfit)}\n` +
              `🎮 ${p.gamesPlayed} משחקים | ${p.winPercentage.toFixed(0)}% נצחונות\n` +
              `📊 ממוצע: ${p.avgProfit >= 0 ? '+' : ''}₪${cleanNumber(p.avgProfit)} למשחק\n` +
              `🎯 שיא: +₪${cleanNumber(p.biggestWin)} | שפל: ₪${cleanNumber(p.biggestLoss)}\n` +
-             (streakText ? streakText : '');
+             (streakText ? streakText + '\n' : '') +
+             `${trend.trend !== 'stable' ? trend.description : ''}` +
+             (nemesis ? `\n😈 נמסיס: ${nemesis.nemesis}` : '');
     }
 
     // How much did player profit
@@ -452,21 +980,6 @@ const getLocalAnswer = (question: string): string => {
     return `יש ${players.length} שחקנים פעילים במערכת 👥`;
   }
 
-  // ===== COMPARISONS =====
-  
-  // Compare two players
-  if (q.includes(' vs ') || q.includes(' נגד ') || q.includes(' מול ')) {
-    const names = players.map(p => p.name.toLowerCase());
-    const found = names.filter(n => q.includes(n));
-    if (found.length >= 2) {
-      const p1 = players.find(p => p.name.toLowerCase() === found[0])!;
-      const p2 = players.find(p => p.name.toLowerCase() === found[1])!;
-      return `⚔️ ${p1.name} vs ${p2.name}:\n` +
-             `${p1.name}: ${p1.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(p1.totalProfit)} (מקום ${p1.rank})\n` +
-             `${p2.name}: ${p2.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(p2.totalProfit)} (מקום ${p2.rank})`;
-    }
-  }
-
   // ===== ADDITIONAL PATTERNS =====
 
   // Best / worst average
@@ -495,40 +1008,52 @@ const getLocalAnswer = (question: string): string => {
   // Summary / overview
   if (q.includes('סיכום') || q.includes('summary') || q.includes('overview') || q.includes('סקירה')) {
     const top3 = players.slice(0, 3).map((p, i) => `${['🥇', '🥈', '🥉'][i]} ${p.name}: ${p.totalProfit >= 0 ? '+' : ''}₪${cleanNumber(p.totalProfit)}`).join('\n');
-    return `📊 סיכום הקבוצה:\n\n${top3}\n\nסה"כ ${totalGames} משחקים | ${players.length} שחקנים פעילים`;
-  }
-
-  // Who should I bet on / prediction
-  if (q.includes('להמר') || q.includes('bet') || q.includes('ינצח') || q.includes('יזכה') || q.includes('סיכוי')) {
     const hot = players.find(p => p.currentStreak >= 2);
-    const bestRecent = players.filter(p => p.currentStreak > 0).sort((a, b) => b.avgProfit - a.avgProfit)[0];
-    const pick = hot || bestRecent || leader;
-    return `🎲 המומלץ שלי: ${pick.name}!\n${pick.currentStreak > 0 ? `ברצף ${pick.currentStreak} נצחונות 🔥` : ''}\nממוצע: ${pick.avgProfit >= 0 ? '+' : ''}₪${cleanNumber(pick.avgProfit)} למשחק`;
+    const cold = players.find(p => p.currentStreak <= -2);
+    
+    return `📊 סיכום הקבוצה:\n\n${top3}\n\n` +
+           `🎮 סה"כ ${totalGames} משחקים | ${players.length} שחקנים\n` +
+           (hot ? `🔥 ${hot.name} חם (${hot.currentStreak} נצחונות)\n` : '') +
+           (cold ? `❄️ ${cold.name} קר (${Math.abs(cold.currentStreak)} הפסדים)` : '');
   }
 
   // Fun facts / interesting
   if (q.includes('מעניין') || q.includes('interesting') || q.includes('fun') || q.includes('כיף') || q.includes('עובדות')) {
     const mostGames = players.reduce((max, p) => p.gamesPlayed > max.gamesPlayed ? p : max, players[0]);
-    const biggestSwing = players.reduce((max, p) => (p.biggestWin - p.biggestLoss) > (max.biggestWin - max.biggestLoss) ? p : max, players[0]);
+    const volatilities = players.filter(p => p.gamesPlayed >= 5).map(p => ({ name: p.name, v: getPlayerVolatility(p.name, games) }));
+    const mostVolatile = volatilities.sort((a, b) => b.v - a.v)[0];
+    const lineups = getCommonLineups(games);
+    
     return `🎰 עובדות מעניינות:\n\n` +
            `• ${mostGames.name} שיחק הכי הרבה: ${mostGames.gamesPlayed} משחקים\n` +
-           `• ${biggestSwing.name} הכי תנודתי: בין +₪${cleanNumber(biggestSwing.biggestWin)} ל-₪${cleanNumber(biggestSwing.biggestLoss)}\n` +
+           (mostVolatile ? `• ${mostVolatile.name} הכי תנודתי\n` : '') +
+           (lineups[0] ? `• ${lineups[0].players.join(' & ')} משחקים הכי הרבה ביחד (${lineups[0].count})\n` : '') +
            `• סה"כ ${totalGames} משחקים שוחקו`;
+  }
+
+  // Rebuy value
+  if (q.includes('ערך') || q.includes('כניסה') || q.includes('rebuy') || q.includes('value') || q.includes('buy-in')) {
+    return `💰 ערך כניסה: ₪${settings.rebuyValue}`;
   }
 
   // Help
   if (q.includes('עזרה') || q.includes('help') || q.includes('מה אתה יכול') || q.includes('what can you')) {
-    return `אני יכול לענות על שאלות כמו:\n\n` +
+    return `אני יכול לענות על המון שאלות! כמה רעיונות:\n\n` +
            `🎮 "מי ניצח במשחק האחרון?"\n` +
            `📍 "איפה שיחקנו לאחרונה?"\n` +
            `🏆 "מי מוביל בטבלה?"\n` +
            `👤 "ספר לי על ${players[0]?.name || 'שחקן'}"\n` +
-           `🔥 "מי ברצף נצחונות?"\n` +
-           `📊 "סיכום הקבוצה"`;
+           `⚔️ "${players[0]?.name} נגד ${players[1]?.name || 'שחקן'}"\n` +
+           `😈 "מי הנמסיס של ${players[0]?.name}?"\n` +
+           `📈 "מי משתפר לאחרונה?"\n` +
+           `🏠 "מי מנצח הכי הרבה אצל X?"\n` +
+           `🎢 "מי הכי תנודתי?"\n` +
+           `👥 "מי משחק הכי הרבה ביחד?"\n` +
+           `🔮 "תחזית להערב"\n` +
+           `📅 "מי ניצח בנובמבר?"`;
   }
 
   // ===== DEFAULT - Give something useful =====
-  // Instead of "I don't understand", give a quick summary of interesting facts
   
   const facts: string[] = [];
   
@@ -552,10 +1077,20 @@ const getLocalAnswer = (question: string): string => {
     facts.push(`❄️ ${coldPlayer.name} ברצף ${Math.abs(coldPlayer.currentStreak)} הפסדים`);
   }
   
+  // Rivalry hint
+  let biggestRivalry = { p1: '', p2: '', games: 0 };
+  const lineups = getCommonLineups(games);
+  if (lineups[0] && lineups[0].count >= 5) {
+    const h2h = getHeadToHead(lineups[0].players[0], lineups[0].players[1], games);
+    if (Math.abs(h2h.player1BetterFinish - h2h.player2BetterFinish) <= 2) {
+      facts.push(`⚔️ יריבות צמודה: ${lineups[0].players[0]} vs ${lineups[0].players[1]}`);
+    }
+  }
+  
   // Total games
   facts.push(`📊 סה"כ ${totalGames} משחקים | ${players.length} שחקנים`);
   
-  return `הנה כמה עובדות מעניינות:\n\n${facts.join('\n')}\n\n💡 נסה לשאול על שחקן ספציפי או על המשחק האחרון!`;
+  return `הנה כמה עובדות מעניינות:\n\n${facts.join('\n')}\n\n💡 אפשר לשאול:\n"מי הנמסיס של X?"\n"X נגד Y"\n"תחזית להערב"`;
 };
 
 /**
@@ -572,6 +1107,26 @@ const buildDataContext = (): string => {
   // Current streaks
   const hotPlayers = players.filter(p => p.currentStreak >= 2);
   const coldPlayers = players.filter(p => p.currentStreak <= -2);
+
+  // Head-to-head summary for common pairs
+  const commonPairs = getCommonLineups(games).slice(0, 3);
+  const h2hSummary = commonPairs.map(pair => {
+    const h2h = getHeadToHead(pair.players[0], pair.players[1], games);
+    return `${pair.players[0]} vs ${pair.players[1]}: ${h2h.gamesPlayedTogether} משחקים, נצחונות ${pair.players[0]}:${h2h.player1Wins} ${pair.players[1]}:${h2h.player2Wins}`;
+  }).join('\n');
+
+  // Trends
+  const trends = players.slice(0, 5).map(p => {
+    const trend = getPlayerTrend(p.name, games);
+    return `${p.name}: ${trend.trend}`;
+  }).join(', ');
+
+  // Location stats
+  const locStats = getLocationStats(games);
+  const locSummary = Object.entries(locStats).slice(0, 3).map(([loc, stats]) => {
+    const topWinner = Object.entries(stats.winners).sort((a, b) => b[1] - a[1])[0];
+    return `${loc}: ${stats.games} משחקים, מנצח עיקרי: ${topWinner?.[0] || 'N/A'}`;
+  }).join('\n');
 
   return `
 === נתוני קבוצת הפוקר ===
@@ -593,8 +1148,17 @@ ${players.map(p =>
 חמים: ${hotPlayers.length > 0 ? hotPlayers.map(p => `${p.name} (${p.currentStreak} נצחונות)`).join(', ') : 'אין'}
 קרים: ${coldPlayers.length > 0 ? coldPlayers.map(p => `${p.name} (${Math.abs(p.currentStreak)} הפסדים)`).join(', ') : 'אין'}
 
-=== ${games.length} משחקים אחרונים ===
-${games.map((game, idx) => `
+=== מגמות שחקנים ===
+${trends}
+
+=== יריבויות Head-to-Head ===
+${h2hSummary}
+
+=== סטטיסטיקות לפי מיקום ===
+${locSummary}
+
+=== ${Math.min(games.length, 10)} משחקים אחרונים ===
+${games.slice(0, 10).map((game, idx) => `
 משחק ${idx + 1}: ${game.date}
 מיקום: ${game.location}
 שחקנים: ${game.playerCount}
@@ -609,15 +1173,16 @@ ${games.map((game, idx) => `
  * Try to get AI answer with retries
  */
 const tryAIAnswer = async (question: string, dataContext: string, apiKey: string): Promise<string | null> => {
-  const systemPrompt = `אתה עוזר חכם לקבוצת פוקר. עונה בעברית, קצר וקולע (2-3 משפטים).
-השתמש באימוג'ים במידה. תהיה ידידותי ומצחיק לפעמים.
+  const systemPrompt = `אתה עוזר חכם ומומחה לקבוצת פוקר ביתית. עונה בעברית, קצר וקולע (2-4 משפטים).
+השתמש באימוג'ים במידה. תהיה ידידותי, מצחיק לפעמים, ותן תשובות מעניינות.
+אתה יודע לנתח יריבויות, מגמות, ביצועים לפי מיקום, ולתת תחזיות.
 
 שאלת המשתמש: "${question}"
 
 הנה כל הנתונים:
 ${dataContext}
 
-ענה על השאלה בעברית:`;
+ענה על השאלה בעברית בצורה מעניינת ואינפורמטיבית:`;
 
   const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro'];
   
@@ -635,8 +1200,8 @@ ${dataContext}
         body: JSON.stringify({
           contents: [{ parts: [{ text: systemPrompt }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 400,
+            temperature: 0.8,
+            maxOutputTokens: 500,
           },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -713,17 +1278,30 @@ export const getSuggestedQuestions = (): string[] => {
   
   if (games.length > 0) {
     questions.push('מי ניצח במשחק האחרון?');
-    questions.push('איפה שיחקנו לאחרונה?');
   }
   
   questions.push('מי מוביל בטבלה?');
   
-  if (players.length > 0) {
-    const randomPlayer = players[Math.floor(Math.random() * Math.min(5, players.length))];
-    questions.push(`ספר לי על ${randomPlayer.name}`);
+  if (players.length >= 2) {
+    const p1 = players[0].name;
+    const p2 = players[1].name;
+    questions.push(`${p1} נגד ${p2}`);
   }
   
-  questions.push('מי ברצף נצחונות?');
+  if (players.length > 0) {
+    questions.push(`מי הנמסיס של ${players[0].name}?`);
+  }
   
-  return questions.slice(0, 4);
+  questions.push('תחזית להערב');
+  questions.push('מי משתפר לאחרונה?');
+  
+  return questions.slice(0, 5);
+};
+
+/**
+ * Clear conversation context
+ */
+export const clearConversationContext = (): void => {
+  lastMentionedPlayer = null;
+  conversationContext = {};
 };
