@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.1';
+export const APP_VERSION = '4.40.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.2',
+    date: '2026-01-04',
+    changes: [
+      '📊 Statistics: Removed player type filter (redundant with active players filter)',
+      'All player types now included by default',
+      'Cleaner, simpler filter interface'
+    ]
+  },
   {
     version: '4.40.1',
     date: '2026-01-04',

@@ -33,7 +33,7 @@ const StatisticsScreen = () => {
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
-  const [selectedTypes, setSelectedTypes] = useState<Set<PlayerType>>(new Set(['permanent']));
+  const [selectedTypes] = useState<Set<PlayerType>>(new Set(['permanent', 'permanent_guest', 'guest']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
     // Restore from navigation state if available, otherwise default to current half year
     if (savedTimePeriod) return savedTimePeriod;
@@ -45,7 +45,6 @@ const StatisticsScreen = () => {
   const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
-  const [showPlayerType, setShowPlayerType] = useState(false); // Collapsed by default
   const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set()); // Track which record sections are expanded
   const [recordDetails, setRecordDetails] = useState<{
     title: string;
@@ -704,21 +703,7 @@ const StatisticsScreen = () => {
     [stats, filterActiveOnly, activeThreshold]
   );
 
-  // Separate stats by player type (after minGames filter) - memoized
-  const permanentStats = useMemo(() => 
-    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent'),
-    [statsWithMinGames, getPlayerType]
-  );
-  const permanentGuestStats = useMemo(() => 
-    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'permanent_guest'),
-    [statsWithMinGames, getPlayerType]
-  );
-  const guestStats = useMemo(() => 
-    statsWithMinGames.filter(s => getPlayerType(s.playerId) === 'guest'),
-    [statsWithMinGames, getPlayerType]
-  );
-
-  // Stats available for selection based on selected types - memoized
+  // Stats available for selection (all types included)
   const availableStats = useMemo(() => 
     statsWithMinGames.filter(s => selectedTypes.has(getPlayerType(s.playerId))),
     [statsWithMinGames, selectedTypes, getPlayerType]
@@ -755,39 +740,12 @@ const StatisticsScreen = () => {
     }
   }, [selectedPlayers, availableStats]);
 
-  // Toggle player type in filter
-  const toggleType = useCallback((type: PlayerType) => {
-    setSelectedTypes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(type)) {
-        // Don't allow deselecting if only one type is selected
-        if (newSet.size > 1) {
-          newSet.delete(type);
-        }
-    } else {
-        newSet.add(type);
-      }
-      return newSet;
-    });
-  }, []);
-
-  // Select all types
-  const selectAllTypes = useCallback(() => {
-    setSelectedTypes(new Set(['permanent', 'permanent_guest', 'guest']));
-  }, []);
-
-  // Create a stable key for selectedTypes to use in useEffect
-  const selectedTypesKey = useMemo(() => 
-    Array.from(selectedTypes).sort().join(','),
-    [selectedTypes]
-  );
-
-  // Update selected players when types or active filter changes
+  // Update selected players when active filter changes
   useEffect(() => {
     if (availableStats.length > 0) {
       setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
-  }, [selectedTypesKey, filterActiveOnly, stats.length]);
+  }, [filterActiveOnly, stats.length, availableStats]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -1313,102 +1271,6 @@ const StatisticsScreen = () => {
                   </span>
               </div>
             )}
-              </>
-              )}
-            </div>
-
-            {/* Player Type Filter (Multi-select) */}
-            <div style={{ 
-              marginBottom: '0.75rem',
-              paddingBottom: '0.75rem',
-              borderBottom: '1px solid var(--border)'
-            }}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlayerType(!showPlayerType); }}
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text)',
-                  marginBottom: showPlayerType ? '0.5rem' : 0
-                }}
-              >
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  PLAYER TYPE ({selectedTypes.size === 3 ? 'הכל' : Array.from(selectedTypes).map(t => t === 'permanent' ? 'קבוע' : t === 'permanent_guest' ? 'אורח' : 'מזדמן').join(', ')})
-                </span>
-                <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showPlayerType ? '▲' : '▼'}</span>
-              </button>
-              {showPlayerType && (
-              <>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); selectAllTypes(); }}
-                  style={{
-                    padding: '0.2rem 0.4rem',
-                    fontSize: '0.65rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  הכל
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('permanent'); }}
-                  style={{
-                    flex: 1,
-                    minWidth: '60px',
-                    padding: '0.4rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '6px',
-                    border: selectedTypes.has('permanent') ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: selectedTypes.has('permanent') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('permanent') ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {selectedTypes.has('permanent') && '✓ '}⭐ קבוע ({permanentStats.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('permanent_guest'); }}
-                  style={{
-                    flex: 1,
-                    minWidth: '60px',
-                    padding: '0.4rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '6px',
-                    border: selectedTypes.has('permanent_guest') ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: selectedTypes.has('permanent_guest') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('permanent_guest') ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {selectedTypes.has('permanent_guest') && '✓ '}🏠 אורח ({permanentGuestStats.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleType('guest'); }}
-                  style={{
-                    flex: 1,
-                    minWidth: '60px',
-                    padding: '0.4rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '6px',
-                    border: selectedTypes.has('guest') ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: selectedTypes.has('guest') ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: selectedTypes.has('guest') ? 'var(--primary)' : 'var(--text-muted)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {selectedTypes.has('guest') && '✓ '}👤 מזדמן ({guestStats.length})
-                </button>
-              </div>
               </>
               )}
             </div>
