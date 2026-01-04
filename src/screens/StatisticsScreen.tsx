@@ -3170,7 +3170,13 @@ const StatisticsScreen = () => {
               👤 Player Profiles - {getTimeframeLabel()}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {sortedStats.map((player, idx) => {
+              {(() => {
+                // Detect low data scenario for player profiles
+                const totalGamesInPeriod = sortedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
+                const maxGamesPlayed = sortedStats.length > 0 ? Math.max(...sortedStats.map(p => p.gamesPlayed)) : 0;
+                const isLowData = totalGamesInPeriod <= 3 || maxGamesPlayed <= 2;
+                
+                return sortedStats.map((player, idx) => {
                 // ========== COMPREHENSIVE PLAYER ANALYSIS ==========
                 const gamesPlayed = player.gamesPlayed;
                 const winRate = player.winPercentage;
@@ -3223,39 +3229,56 @@ const StatisticsScreen = () => {
                 // 4. Playing style (volatile/stable)
                 // 5. Trend (improving/declining)
                 
-                if (gamesPlayed < 3) {
-                  // Too few games to classify
-                  styleName = 'חדש';
-                  styleEmoji = '🌱';
-                } else if (currentStreak >= 3) {
+                const minGamesForClassification = isLowData ? 1 : 3;
+                const minStreakForHotCold = isLowData ? 1 : 3;
+                
+                if (gamesPlayed < minGamesForClassification) {
+                  // Too few games to classify (only for non-low-data scenarios)
+                  if (!isLowData) {
+                    styleName = 'חדש';
+                    styleEmoji = '🌱';
+                  } else {
+                    // For low data, classify based on single game result
+                    if (totalProfit > 0) {
+                      styleName = 'רווחי';
+                      styleEmoji = '💰';
+                    } else if (totalProfit < 0) {
+                      styleName = 'מפסיד';
+                      styleEmoji = '📉';
+                    } else {
+                      styleName = 'ממוצע';
+                      styleEmoji = '➖';
+                    }
+                  }
+                } else if (currentStreak >= minStreakForHotCold) {
                   // On a hot winning streak
                   styleName = 'חם';
                   styleEmoji = '🔥';
-                } else if (currentStreak <= -3) {
+                } else if (currentStreak <= -minStreakForHotCold) {
                   // On a cold losing streak
                   styleName = 'קר';
                   styleEmoji = '❄️';
-                } else if (avgProfit > 30 && winRate >= 55) {
+                } else if (avgProfit > (isLowData ? 0 : 30) && winRate >= (isLowData ? 50 : 55)) {
                   // Clearly profitable with good win rate
                   styleName = 'רווחי';
                   styleEmoji = '💰';
-                } else if (avgProfit > 0 && winRate >= 50) {
+                } else if (avgProfit > 0 && winRate >= (isLowData ? 0 : 50)) {
                   // Moderately profitable
                   styleName = 'רווחי';
                   styleEmoji = '📈';
-                } else if (avgProfit < -30 && winRate < 45) {
+                } else if (avgProfit < (isLowData ? 0 : -30) && winRate < (isLowData ? 100 : 45)) {
                   // Clearly losing with low win rate
                   styleName = 'מפסיד';
                   styleEmoji = '📉';
-                } else if (avgProfit < 0 && winRate < 50) {
+                } else if (avgProfit < 0 && winRate < (isLowData ? 100 : 50)) {
                   // Losing overall
                   styleName = 'מפסיד';
                   styleEmoji = '📉';
-                } else if (volatilityScore >= 400) {
+                } else if (volatilityScore >= (isLowData ? 150 : 400)) {
                   // High volatility - big swings
                   styleName = 'תנודתי';
                   styleEmoji = '🎢';
-                } else if (volatilityScore <= 180 && gamesPlayed >= 5) {
+                } else if (volatilityScore <= (isLowData ? 100 : 180) && gamesPlayed >= (isLowData ? 1 : 5)) {
                   // Low volatility - stable
                   styleName = 'יציב';
                   styleEmoji = '🛡️';
@@ -3267,7 +3290,7 @@ const StatisticsScreen = () => {
                   // Recent decline trend
                   styleName = 'יורד';
                   styleEmoji = '📉';
-                } else if (isRebuyDataValid && avgRebuys >= 2.5) {
+                } else if (isRebuyDataValid && avgRebuys >= 2.5 && gamesPlayed >= minGamesForStyle) {
                   // High rebuys (2026+ only)
                   styleName = 'מהמר';
                   styleEmoji = '🎰';
@@ -3420,60 +3443,81 @@ const StatisticsScreen = () => {
                 
                 // ===== BUILD NARRATIVE BASED ON PLAYER PROFILE =====
                 
+                // Adjust thresholds for low-data scenarios
+                const minGamesForChampion = isLowData ? 1 : 5;
+                const minGamesForStyle = isLowData ? 1 : 5;
+                const minGamesForRecord = isLowData ? 1 : 5;
+                const minGamesForRecent = isLowData ? 1 : 3;
+                const minVolatilityForShow = isLowData ? 150 : 400;
+                const maxVolatilityForStable = isLowData ? 100 : 200;
+                
                 // Sentence 1: Main performance angle
-                if (gamesPlayed < 5) {
+                if (gamesPlayed < minGamesForChampion) {
                   const s = pickRandom(newcomerSentences, 'newcomer');
                   if (s) sentences.push(s);
-                } else if (avgProfit > 20 && winRate >= 55) {
+                } else if (avgProfit > (isLowData ? 0 : 20) && winRate >= (isLowData ? 50 : 55)) {
                   const s = pickRandom(championSentences, 'champion');
                   if (s) sentences.push(s);
-                } else if (avgProfit > 0 && winRate < 50) {
+                } else if (avgProfit > 0 && winRate < (isLowData ? 100 : 50)) {
                   const s = pickRandom(bigWinnerSentences, 'bigwinner');
                   if (s) sentences.push(s);
-                } else if (avgProfit < 0 && winRate >= 50) {
+                } else if (avgProfit < 0 && winRate >= (isLowData ? 0 : 50)) {
                   const s = pickRandom(unluckySentences, 'unlucky');
                   if (s) sentences.push(s);
-                } else if (avgProfit < -10 && winRate < 45) {
+                } else if (avgProfit < (isLowData ? 0 : -10) && winRate < (isLowData ? 100 : 45)) {
                   const s = pickRandom(struggleSentences, 'struggle');
                   if (s) sentences.push(s);
                 } else {
                   // Fallback to a neutral performance sentence
-                  sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
+                  if (isLowData && gamesPlayed === 1) {
+                    sentences.push(`📊 ${player.playerName} ${totalProfit >= 0 ? 'ניצח' : 'הפסיד'} במשחק הראשון עם ${formatCurrency(Math.abs(totalProfit))}₪. ${totalProfit >= 0 ? 'התחלה מעולה!' : 'הלילה הזדמנות להתהפך!'}`);
+                  } else {
+                    sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
+                  }
                 }
                 
                 // Sentence 2: Streak/momentum or style angle
-                if (currentStreak >= 3) {
+                const minStreakForShow = isLowData ? 1 : 3;
+                if (currentStreak >= minStreakForShow) {
                   const s = pickRandom(hotStreakSentences, 'hotstreak');
                   if (s) sentences.push(s);
-                } else if (currentStreak <= -3) {
+                } else if (currentStreak <= -minStreakForShow) {
                   const s = pickRandom(coldStreakSentences, 'coldstreak');
                   if (s) sentences.push(s);
-                } else if (highRebuySentences.length > 0 && gamesPlayed >= 5) {
+                } else if (highRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
                   // Only show rebuy sentences if data is valid (2026+)
                   const s = pickRandom(highRebuySentences, 'highrebuy');
                   if (s) sentences.push(s);
-                } else if (lowRebuySentences.length > 0 && gamesPlayed >= 5) {
+                } else if (lowRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
                   // Only show rebuy sentences if data is valid (2026+)
                   const s = pickRandom(lowRebuySentences, 'lowrebuy');
                   if (s) sentences.push(s);
-                } else if (volatilityScore >= 400 && gamesPlayed >= 5) {
+                } else if (volatilityScore >= minVolatilityForShow && gamesPlayed >= minGamesForStyle) {
                   const s = pickRandom(volatileSentences, 'volatile');
                   if (s) sentences.push(s);
-                } else if (volatilityScore <= 200 && gamesPlayed >= 5) {
+                } else if (volatilityScore <= maxVolatilityForStable && gamesPlayed >= minGamesForStyle) {
                   const s = pickRandom(consistentSentences, 'consistent');
                   if (s) sentences.push(s);
-                } else if (isRecentlyHot && recentGames.length >= 3) {
+                } else if (isRecentlyHot && recentGames.length >= minGamesForRecent) {
                   const s = pickRandom(recentHotSentences, 'recenthot');
                   if (s) sentences.push(s);
-                } else if (isRecentlyCold && recentGames.length >= 3) {
+                } else if (isRecentlyCold && recentGames.length >= minGamesForRecent) {
                   const s = pickRandom(recentColdSentences, 'recentcold');
                   if (s) sentences.push(s);
+                } else if (isLowData && gamesPlayed === 1) {
+                  // For single game, add a simple insight
+                  if (bestWin > 0) {
+                    sentences.push(`💰 הנצחון הגדול: +${Math.round(bestWin)}₪ במשחק הראשון.`);
+                  } else if (worstLoss < 0) {
+                    sentences.push(`📉 הפסיד ${Math.abs(Math.round(worstLoss))}₪ במשחק הראשון. הלילה הזדמנות להתהפך!`);
+                  }
                 }
                 
                 // Sentence 3: Additional insight (record, comparison, or tip)
-                if (sentences.length < 3 && gamesPlayed >= 5) {
+                const minBestWinForRecord = isLowData ? 100 : 200;
+                if (sentences.length < 3 && gamesPlayed >= minGamesForRecord) {
                   // Try to add a third sentence for variety
-                  if (bestWin >= 200 && !usedAngles.has('record')) {
+                  if (bestWin >= minBestWinForRecord && !usedAngles.has('record')) {
                     const s = pickRandom(recordSentences, 'record');
                     if (s) sentences.push(s);
                   } else if (isRecentlyHot && !usedAngles.has('recenthot')) {
@@ -3482,6 +3526,11 @@ const StatisticsScreen = () => {
                   } else if (isRecentlyCold && !usedAngles.has('recentcold')) {
                     const s = pickRandom(recentColdSentences, 'recentcold');
                     if (s) sentences.push(s);
+                  }
+                } else if (isLowData && gamesPlayed === 1 && sentences.length < 2) {
+                  // For single game, ensure we have at least 2 sentences
+                  if (bestWin > 0 && !usedAngles.has('record')) {
+                    sentences.push(`🏆 ${player.playerName} עם נצחון של +${Math.round(bestWin)}₪ במשחק הראשון ב${periodLabel}.`);
                   }
                 }
                 
@@ -3537,7 +3586,8 @@ const StatisticsScreen = () => {
                     </div>
                   </div>
                 );
-              })}
+              });
+              })()}
             </div>
           </div>
         </>

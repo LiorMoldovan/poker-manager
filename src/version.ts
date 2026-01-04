@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.8';
+export const APP_VERSION = '4.40.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.9',
+    date: '2026-01-04',
+    changes: [
+      '👤 Player Profiles: Improved low-data scenarios (1-2 games)',
+      'Lowered thresholds for player classification and narrative generation',
+      'Player profiles now show meaningful insights even with 1 game',
+      'Style classification works with single games (profitable/losing/average)',
+      'Sentences focus on available data instead of requiring many games'
+    ]
+  },
   {
     version: '4.40.8',
     date: '2026-01-04',
