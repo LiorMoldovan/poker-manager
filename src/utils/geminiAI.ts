@@ -1403,13 +1403,24 @@ Player 7: START WITH rivalry/comparison
 
 1. TONE must match prediction (positive profit = optimistic tone, negative = cautious tone)
 
-2. You DON'T have to repeat the profit number in the sentence!
-   - Focus on stats, streaks, milestones, or story - whatever is most interesting
-   - Only mention the number if it adds value to your point
+2. 🚫 NEVER mention the expectedProfit number in the sentence!
+   - The profit number is ALREADY shown in the header (+₪112, -₪9, etc.)
+   - Repeating it is redundant and wastes valuable sentence space
+   - Focus INSTEAD on: stats, streaks, milestones, rivalries, comebacks, or interesting stories
+   - Use your sentence to provide CONTEXT and INSIGHT, not repeat what's already visible
    
-3. BUT if you DO mention a profit number → it MUST match expectedProfit exactly!
+3. ❌ FORBIDDEN: Do NOT write sentences like:
+   - "מצופה שיביא 1120 רווח הלילה" ← The number is already in the header!
+   - "צפוי להמשיך את המומנטום החיובי עם רווח של 4" ← Redundant!
+   - "מצופה שיגדיל את הונו ב-27 הלילה" ← Number already shown!
+   
+4. ✅ CORRECT: Write sentences like:
+   - "חזרה חזקה אחרי חודש היעדרות, ממוצע מרשים של 1250 ב-5 המשחקים האחרונים בטבלה הכללית"
+   - "מקום שני בטבלה הכללית, שואף לשבור את הרצף השלילי ולהתחיל את שנת 2026 בסטייל"
+   - "רצף 2 ניצחונות והובלה של 97 בטבלת ינואר, צפוי להמשיך את המומנטום החיובי"
+   - "רצף 4 הפסדים ב-2026, מתקרב מסוכנת לסף המינוס של 2000₪ בטבלה הכללית"
 
-4. 🚨 CRITICAL: EVERY NUMBER NEEDS CONTEXT! 🚨
+5. 🚨 CRITICAL: EVERY NUMBER NEEDS CONTEXT! 🚨
    When you mention ANY number (profit, average, milestone, position), you MUST specify:
    - WHICH TABLE: "בטבלה הכללית" (all-time) / "בטבלת ${new Date().getFullYear()}" (year) / "החודש" (month)
    - WHAT TIMEFRAME: "כולל מאז שהתחלנו" / "השנה" / "ב-5 משחקים אחרונים"
@@ -1445,20 +1456,29 @@ Player 7: START WITH rivalry/comparison
 ✅ PLAYER 2 - Start with QUESTION:
    "האם חרדון יצליח לשבור את קללת דצמבר? 3 הפסדים רצופים בטבלת 2025, אבל ההיסטוריה שלו מדברת אחרת."
 
-✅ PLAYER 3 - Start with STAT/NUMBER:
-   "+1806₪ בטבלת 2025. דן מאן על גל, וצריך רק 200₪ הלילה כדי לחצות את רף ה-2000₪ השנתי!"
+✅ PLAYER 3 - Start with STAT/NUMBER (NOT profit, but milestone/position):
+   "1806₪ בטבלת 2025. דן מאן על גל, וצריך רק 200₪ הלילה כדי לחצות את רף ה-2000₪ השנתי!"
 
 ✅ PLAYER 4 - Start with "הלילה" or time:
-   "הלילה תומר מחפש לשבור רצף של 3 הפסדים. אחרי -120₪ במשחק האחרון, זה הזמן לתפנית."
+   "הלילה תומר מחפש לשבור רצף של 3 הפסדים. אחרי הפסד כואב במשחק האחרון, זה הזמן לתפנית."
 
 ✅ PLAYER 5 - Start with METAPHOR:
    "הפניקס קם מהאפר! אחרי חודש קשה, ליכטר חוזר עם 2 נצחונות רצופים בטבלה הכללית."
 
-✅ PLAYER 6 - Start with "אם" (conditional):
-   "אם סגל יקח הלילה +95₪, הוא יעקוף את אייל ויעלה למקום 3 בטבלה הכללית של כל הזמנים!"
+✅ PLAYER 6 - Start with "אם" (conditional - milestone, NOT expectedProfit):
+   "אם סגל יעקוף את אייל הלילה, הוא יעלה למקום 3 בטבלה הכללית של כל הזמנים!"
 
 ✅ PLAYER 7 - Start with RIVALRY:
    "הקרב נגד ליאור נמשך! אייל צריך נצחון גדול הלילה כדי לסגור את הפער של 150₪ בטבלת 2025."
+
+❌ WRONG - MENTIONING EXPECTED PROFIT (REDUNDANT):
+   "מצופה שיביא 1120 רווח הלילה" ← The number is already in the header!
+   "צפוי להמשיך עם רווח של 4" ← Redundant!
+   "מצופה שיגדיל את הונו ב-27 הלילה" ← Number already shown!
+   "שואף להתחיל את 2026 עם רווח של 31₪" ← Don't repeat the header number!
+
+❌ WRONG - NUMBER MISMATCH:
+   expectedProfit: +34 but sentence says "31₪" ← FORBIDDEN! If you mention a number, it MUST match exactly!
 
 ❌ WRONG - NO CONTEXT:
    "שואף לחצות את רף ה-2000₪" ← חסר: "בטבלה הכללית"
@@ -1486,9 +1506,9 @@ Player 7: START WITH rivalry/comparison
    - The spread between highest winner and biggest loser should be ≥ ${Math.round(avgAbsProfit * 2)}₪
 
 5. SENTENCE MUST MATCH expectedProfit:
-   - Positive profit → optimistic tone
-   - Negative profit → cautious tone
-   - If you mention a number, it MUST match expectedProfit exactly!
+   - Positive profit → optimistic tone (e.g., "חזרה חזקה", "מומנטום חיובי", "שואף לטפס")
+   - Negative profit → cautious tone (e.g., "מתקרב מסוכנת", "רצף הפסדים", "מחפש לשבור")
+   - 🚫 NEVER mention the expectedProfit number itself - focus on the story behind it!
 
 Return ONLY a clean JSON array. No markdown, no explanation.`;
 
