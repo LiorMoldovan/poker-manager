@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.17';
+export const APP_VERSION = '4.40.18';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.18',
+    date: '2026-01-04',
+    changes: [
+      '🎯 MUCH better player insights for low-data periods!',
+      'Single game: Dramatic, engaging sentences with personality',
+      'Two games: Pattern-based narratives (streak detection, comebacks)',
+      '3 unique sentences per player even with 1-2 games',
+      'Fun predictions, comparisons, and call-to-actions',
+      'No more boring "Player won X in his only game" statements',
+      'Hebrew insights with variety and humor'
+    ]
+  },
   {
     version: '4.40.17',
     date: '2026-01-04',
