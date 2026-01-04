@@ -1745,6 +1745,146 @@ Return ONLY a clean JSON array. No markdown, no explanation.`;
         continue; // Try next model
       }
       
+      // ========== FACT-CHECK AND CORRECT AI OUTPUT ==========
+      console.log('🔍 Fact-checking AI output...');
+      
+      forecasts = forecasts.map(forecast => {
+        const player = players.find(p => p.name === forecast.name);
+        if (!player) return forecast;
+        
+        // Get actual year data
+        const thisYearGames = player.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+        const yearGames = thisYearGames.length;
+        const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
+        
+        // Calculate actual year streak
+        let actualYearStreak = 0;
+        for (const game of thisYearGames) {
+          if (game.profit > 0) {
+            if (actualYearStreak >= 0) actualYearStreak++;
+            else break;
+          } else if (game.profit < 0) {
+            if (actualYearStreak <= 0) actualYearStreak--;
+            else break;
+          } else {
+            break;
+          }
+        }
+        
+        let correctedSentence = forecast.sentence;
+        let correctedHighlight = forecast.highlight;
+        let hadErrors = false;
+        
+        // 1. Fix wrong streak numbers (match patterns like "רצף X נצחונות" or "X נצחונות רצופים")
+        const streakPatterns = [
+          /רצף\s*(?:של\s*)?(\d+)\s*נצחונות/g,
+          /(\d+)\s*נצחונות\s*רצופים/g,
+          /(\d+)\s*consecutive\s*wins/gi,
+          /רצף\s*(?:של\s*)?(\d+)\s*הפסדים/g,
+          /(\d+)\s*הפסדים\s*רצופים/g,
+        ];
+        
+        for (const pattern of streakPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedStreak = parseInt(match[1]);
+            const isWinPattern = match[0].includes('נצחונות') || match[0].toLowerCase().includes('wins');
+            const actualStreak = isWinPattern ? Math.max(0, actualYearStreak) : Math.abs(Math.min(0, actualYearStreak));
+            
+            if (claimedStreak !== actualStreak && actualStreak >= 0) {
+              console.log(`⚠️ ${player.name}: Claimed streak ${claimedStreak}, actual ${actualStreak}`);
+              hadErrors = true;
+              
+              if (actualStreak === 0) {
+                // No streak - remove the streak claim entirely
+                correctedSentence = correctedSentence.replace(match[0], '');
+              } else {
+                // Fix the number
+                correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualStreak)));
+              }
+            }
+          }
+        }
+        
+        // 2. Fix wrong game counts (e.g., "2 משחקים בינואר" when there's only 1)
+        const gameCountPatterns = [
+          /(\d+)\s*משחקים?\s*(?:ב)?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)/g,
+          /(\d+)\s*משחקים?\s*(?:ב)?-?(?:2026|2025|השנה)/g,
+          /(\d+)\s*games?\s*(?:in\s*)?(?:January|February|this year|2026)/gi,
+        ];
+        
+        for (const pattern of gameCountPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedGames = parseInt(match[1]);
+            // Check if it's about current year
+            const isYearMention = match[0].includes('2026') || match[0].includes('השנה') || match[0].toLowerCase().includes('this year');
+            const isMonthMention = !isYearMention;
+            
+            let actualGames = yearGames;
+            if (isMonthMention) {
+              // Get month games
+              const thisMonthGames = player.gameHistory.filter(g => {
+                const d = parseGameDate(g.date);
+                return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+              });
+              actualGames = thisMonthGames.length;
+            }
+            
+            if (claimedGames !== actualGames && actualGames >= 0) {
+              console.log(`⚠️ ${player.name}: Claimed ${claimedGames} games, actual ${actualGames}`);
+              hadErrors = true;
+              correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualGames)));
+            }
+          }
+        }
+        
+        // 3. Remove empty or broken sentences after corrections
+        correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
+        correctedSentence = correctedSentence.replace(/,\s*,/g, ',');
+        correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
+        
+        // 4. If sentence is now too short or empty, generate a safe fallback
+        if (correctedSentence.length < 20 || hadErrors) {
+          // Generate a safe, factual fallback sentence
+          const lastGame = player.gameHistory[0];
+          const lastResult = lastGame ? (lastGame.profit > 0 ? `נצחון (+${Math.round(lastGame.profit)}₪)` : lastGame.profit < 0 ? `הפסד (${Math.round(lastGame.profit)}₪)` : 'תיקו') : '';
+          
+          if (yearGames === 0) {
+            correctedSentence = `המשחק הראשון ב-${currentYear}! סה"כ ${player.gamesPlayed} משחקים עם ממוצע ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪.`;
+          } else if (yearGames === 1) {
+            correctedSentence = `משחק שני ב-${currentYear}. ${lastResult ? `המשחק הקודם: ${lastResult}.` : ''} ממוצע כללי: ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪ למשחק.`;
+          } else {
+            const yearAvg = Math.round(yearProfit / yearGames);
+            correctedSentence = `${yearGames} משחקים ב-${currentYear} עם ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ (ממוצע ${yearAvg >= 0 ? '+' : ''}${yearAvg}₪). ${actualYearStreak > 1 ? `רצף ${actualYearStreak} נצחונות!` : actualYearStreak < -1 ? `רצף ${Math.abs(actualYearStreak)} הפסדים.` : ''}`;
+          }
+          console.log(`🔧 ${player.name}: Replaced with factual fallback`);
+        }
+        
+        // Also fix highlight if it has errors
+        for (const pattern of [...streakPatterns, ...gameCountPatterns]) {
+          const matches = [...correctedHighlight.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedNum = parseInt(match[1]);
+            const isStreak = match[0].includes('נצחונות') || match[0].includes('הפסדים');
+            const actualNum = isStreak ? Math.abs(actualYearStreak) : yearGames;
+            
+            if (claimedNum !== actualNum) {
+              correctedHighlight = correctedHighlight.replace(match[0], match[0].replace(match[1], String(actualNum)));
+            }
+          }
+        }
+        
+        return {
+          ...forecast,
+          sentence: correctedSentence,
+          highlight: correctedHighlight
+        };
+      });
+      
+      console.log('✅ Fact-checking complete');
+      // ========== END FACT-CHECKING ==========
+      
       // Validate and ensure zero-sum
       let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
       if (total !== 0 && forecasts.length > 0) {

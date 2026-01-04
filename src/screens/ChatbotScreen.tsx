@@ -10,25 +10,21 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [aiAvailable, setAiAvailable] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      const available = isAIAvailable();
-      setAiAvailable(available);
       setSuggestedQuestions(getSuggestedQuestions());
       
       // Only add welcome message if no messages yet
       if (messages.length === 0) {
+        const aiAvailable = isAIAvailable();
         const welcomeMessage: ChatMessage = {
           id: 'welcome',
           role: 'assistant',
-          content: available 
-            ? 'היי! 👋 שאל אותי כל שאלה על המשחקים - מי מוביל, מי ניצח, איפה שיחקתם, סטטיסטיקות, וכל מה שמעניין אותך!'
-            : 'כדי להשתמש בצ\'אט, צריך להגדיר מפתח Gemini API בהגדרות.',
+          content: `היי! 👋 שאל אותי כל שאלה על המשחקים שלכם!\n\nלמשל: מי ניצח, איפה שיחקתם, מי מוביל, ועוד...${aiAvailable ? '' : '\n\n💡 טיפ: הוסף מפתח Gemini API בהגדרות לתשובות חכמות יותר!'}`,
           timestamp: new Date(),
           source: 'local',
         };
@@ -79,7 +75,7 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'סליחה, משהו השתבש. נסה שוב.',
+        content: 'משהו לא עבד, נסה שוב 🔄',
         timestamp: new Date(),
         source: 'local',
       };
@@ -102,7 +98,7 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
 
   if (!isOpen) return null;
 
-  const showSuggestions = messages.length === 1 && aiAvailable;
+  const showSuggestions = messages.length === 1;
 
   return (
     <div 
@@ -141,9 +137,9 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
           color: 'white',
         }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600' }}>💬 שאל אותי הכל</h3>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600' }}>💬 שאל אותי</h3>
             <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-              {aiAvailable ? 'AI מוכן לענות' : 'נדרש מפתח API'}
+              שאלות על המשחקים והשחקנים
             </span>
           </div>
           <button 
@@ -204,6 +200,11 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
                 }}
               >
                 {msg.content}
+                {msg.role === 'assistant' && msg.source === 'ai' && msg.id !== 'welcome' && (
+                  <div style={{ fontSize: '0.65rem', opacity: 0.5, marginTop: '0.3rem' }}>
+                    ✨ AI
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -220,7 +221,7 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
                 gap: '0.5rem',
                 fontSize: '0.9rem',
               }}>
-                <span className="loading-dots">חושב</span>
+                <span className="loading-dots">💭</span>
               </div>
             </div>
           )}
@@ -241,7 +242,7 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
               marginBottom: '0.5rem',
               fontWeight: '500',
             }}>
-              💡 נסה לשאול:
+              💡 נסה:
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {suggestedQuestions.map((q, idx) => (
@@ -279,8 +280,7 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={aiAvailable ? "שאל כל שאלה..." : "נדרש מפתח API"}
-              disabled={!aiAvailable}
+              placeholder="שאל כל שאלה..."
               style={{
                 flex: 1,
                 padding: '0.875rem 1rem',
@@ -295,19 +295,19 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
             />
             <button
               onClick={() => handleSend()}
-              disabled={!input.trim() || isProcessing || !aiAvailable}
+              disabled={!input.trim() || isProcessing}
               style={{
                 padding: '0.875rem',
                 borderRadius: '50%',
                 width: '48px',
                 height: '48px',
-                background: input.trim() && !isProcessing && aiAvailable
+                background: input.trim() && !isProcessing
                   ? 'linear-gradient(135deg, #8B5CF6, #7C3AED)'
                   : 'var(--border)',
-                color: input.trim() && !isProcessing && aiAvailable ? 'white' : 'var(--text-muted)',
+                color: input.trim() && !isProcessing ? 'white' : 'var(--text-muted)',
                 border: 'none',
                 fontSize: '1.25rem',
-                cursor: input.trim() && !isProcessing && aiAvailable ? 'pointer' : 'not-allowed',
+                cursor: input.trim() && !isProcessing ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -321,15 +321,12 @@ export const ChatbotModal = ({ isOpen, onClose }: ChatbotModalProps) => {
       </div>
       
       <style>{`
-        .loading-dots::after {
-          content: '';
-          animation: dots 1.5s steps(4, end) infinite;
+        .loading-dots {
+          animation: pulse 1s ease-in-out infinite;
         }
-        @keyframes dots {
-          0%, 20% { content: ''; }
-          40% { content: '.'; }
-          60% { content: '..'; }
-          80%, 100% { content: '...'; }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
     </div>

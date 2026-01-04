@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.19';
+export const APP_VERSION = '4.40.20';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.20',
+    date: '2026-01-04',
+    changes: [
+      '💬 BULLETPROOF Chatbot - always works!',
+      'Smart local answers for 20+ question types',
+      'AI enhancement when available (not required)',
+      'No more "can\'t connect" errors - graceful fallback',
+      'Questions about: last game, players, leaderboard, records, streaks',
+      'Works offline with local data intelligence',
+      'Timeout handling and retry logic for AI',
+      'Better loading animation'
+    ]
+  },
   {
     version: '4.40.19',
     date: '2026-01-04',
