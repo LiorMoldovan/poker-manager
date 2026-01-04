@@ -78,14 +78,16 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.5rem;
   color: var(--text-muted);
   text-decoration: none;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   transition: color 0.2s;
   cursor: pointer;
   background: none;
   border: none;
+  min-width: 0;
+  flex: 1;
 }
 
 .nav-item:hover {
@@ -97,8 +99,8 @@ body {
 }
 
 .nav-icon {
-  font-size: 1.5rem;
-  margin-bottom: 0.25rem;
+  font-size: 1.25rem;
+  margin-bottom: 0.15rem;
 }
 
 /* Cards */

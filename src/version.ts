@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.14';
+export const APP_VERSION = '4.40.15';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.15',
+    date: '2026-01-04',
+    changes: [
+      '🔧 FIX: Navigation bar - all 6 icons now fit on screen',
+      'Reduced icon and text size for compact navigation',
+      'Settings icon visible again alongside Chat icon'
+    ]
+  },
   {
     version: '4.40.14',
     date: '2026-01-21',
