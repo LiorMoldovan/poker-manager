@@ -900,8 +900,11 @@ const StatisticsScreen = () => {
       for (const game of playerGames) {
         if (game.profit > 0) {
           streakGames.push(game);
-        } else if (recordType === 'currentWinStreak') {
-          break; // Current streak stops at first loss
+        } else {
+          // Current streak stops at first loss or break-even (profit === 0)
+          if (recordType === 'currentWinStreak') {
+            break;
+          }
         }
       }
       filteredGames = recordType === 'currentWinStreak' ? streakGames : streakGames.slice(0, player.longestWinStreak);
@@ -911,8 +914,11 @@ const StatisticsScreen = () => {
       for (const game of playerGames) {
         if (game.profit < 0) {
           streakGames.push(game);
-        } else if (recordType === 'currentLossStreak') {
-          break; // Current streak stops at first win
+        } else {
+          // Current streak stops at first win or break-even (profit === 0)
+          if (recordType === 'currentLossStreak') {
+            break;
+          }
         }
       }
       filteredGames = recordType === 'currentLossStreak' ? streakGames : streakGames.slice(0, player.longestLossStreak);

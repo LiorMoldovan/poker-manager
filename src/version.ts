@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.7';
+export const APP_VERSION = '4.40.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.8',
+    date: '2026-01-04',
+    changes: [
+      '🔧 Streaks: Break-even games (0 profit) now break streaks',
+      'Games ending with 0 profit reset both win and loss streaks',
+      'Affects current streaks, longest streaks, and milestone calculations',
+      'Consistent behavior across Statistics, Graphs, and AI Forecast'
+    ]
+  },
   {
     version: '4.40.7',
     date: '2026-01-04',

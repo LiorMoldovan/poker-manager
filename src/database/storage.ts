@@ -468,12 +468,14 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
         tempWinStreak = 0;
         if (tempLossStreak > longestLossStreak) longestLossStreak = tempLossStreak;
       } else {
-        // Break-even doesn't break streaks but doesn't extend them either
+        // Break-even (profit === 0) breaks both streaks
+        tempWinStreak = 0;
+        tempLossStreak = 0;
       }
     }
     
     // Calculate current streak (from most recent games)
-    // Break-even games are skipped (don't break or extend streaks) - consistent with longest streak calculation
+    // Break-even (profit === 0) breaks streaks
     for (let i = sortedPlayerGames.length - 1; i >= 0; i--) {
       const profit = sortedPlayerGames[i].profit;
       if (profit > 0) {
@@ -482,8 +484,10 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
       } else if (profit < 0) {
         if (currentStreak <= 0) currentStreak--;
         else break;
+      } else {
+        // Break-even (profit === 0) breaks the streak
+        break;
       }
-      // Break-even (profit === 0): skip and continue checking previous games
     }
     
     // ALL game results (most recent first) with dates and gameId
