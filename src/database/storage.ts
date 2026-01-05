@@ -314,6 +314,22 @@ export const getAllGamePlayers = (): GamePlayer[] => {
   return getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
 };
 
+// Remove a player from an active game (player didn't show up)
+export const removeGamePlayer = (gamePlayerId: string): boolean => {
+  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);
+  if (index !== -1) {
+    // Only allow removal if player hasn't bought in yet (rebuys = 1 means initial buyin only)
+    const player = gamePlayers[index];
+    if (player.rebuys <= 1) {
+      gamePlayers.splice(index, 1);
+      setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
+      return true;
+    }
+  }
+  return false;
+};
+
 export const updateGamePlayerRebuys = (gamePlayerId: string, rebuys: number): void => {
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
   const index = gamePlayers.findIndex(gp => gp.id === gamePlayerId);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -19,6 +19,7 @@ const LiveGameScreen = () => {
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<SharedExpense | null>(null);
+  const [playerToRemove, setPlayerToRemove] = useState<GamePlayer | null>(null);
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
@@ -97,6 +98,25 @@ const LiveGameScreen = () => {
   const handleCloseExpenseModal = () => {
     setShowExpenseModal(false);
     setEditingExpense(null);
+  };
+
+  // Remove a player who didn't show up (only if they haven't rebought yet)
+  const handleRemovePlayer = (player: GamePlayer) => {
+    if (player.rebuys > 1) {
+      // Player has already rebought, can't remove
+      alert('לא ניתן להסיר שחקן שכבר עשה ריביי. אפשר להמשיך עם 0 ג\'יפים בסוף המשחק.');
+      return;
+    }
+    setPlayerToRemove(player);
+  };
+
+  const confirmRemovePlayer = () => {
+    if (!playerToRemove) return;
+    const success = removeGamePlayer(playerToRemove.id);
+    if (success) {
+      setPlayers(prev => prev.filter(p => p.id !== playerToRemove.id));
+    }
+    setPlayerToRemove(null);
   };
 
   // Loading state
@@ -702,7 +722,31 @@ const LiveGameScreen = () => {
         </div>
 
           {players.map(player => (
-          <div key={player.id} className="player-card">
+          <div key={player.id} className="player-card" style={{ position: 'relative' }}>
+            {/* Remove button - only show for players who haven't rebought yet */}
+            {isAdmin && player.rebuys <= 1 && (
+              <button
+                onClick={() => handleRemovePlayer(player)}
+                style={{
+                  position: 'absolute',
+                  top: '0.25rem',
+                  left: '0.25rem',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  padding: '0.25rem',
+                  opacity: 0.6,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+                title="הסר שחקן (לא הגיע)"
+              >
+                ✕
+              </button>
+            )}
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
@@ -769,6 +813,60 @@ const LiveGameScreen = () => {
           onAdd={handleAddExpense}
           existingExpense={editingExpense || undefined}
         />
+      )}
+
+      {/* Remove Player Confirmation */}
+      {playerToRemove && (
+        <div 
+          className="modal-overlay" 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setPlayerToRemove(null)}
+        >
+          <div 
+            className="modal-content card"
+            style={{
+              maxWidth: '400px',
+              margin: '1rem',
+              padding: '1.5rem',
+              textAlign: 'center'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>👋</div>
+            <h3 style={{ marginBottom: '0.5rem' }}>הסרת שחקן</h3>
+            <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
+              להסיר את <strong>{playerToRemove.playerName}</strong> מהמשחק?
+              <br />
+              <span style={{ fontSize: '0.875rem' }}>(השחקן לא הגיע)</span>
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => setPlayerToRemove(null)}
+              >
+                ביטול
+              </button>
+              <button 
+                className="btn btn-danger"
+                onClick={confirmRemovePlayer}
+                style={{ background: '#dc3545', borderColor: '#dc3545' }}
+              >
+                הסר שחקן
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

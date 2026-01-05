@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.30';
+export const APP_VERSION = '4.40.31';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.31',
+    date: '2026-01-05',
+    changes: [
+      '👋 Remove player after game started!',
+      'If a player doesn\'t show up, click ✕ to remove them',
+      'Only works before they rebuy (initial buyin only)',
+      'Admin-only feature with confirmation dialog',
+      'No more stuck with missing players!'
+    ]
+  },
   {
     version: '4.40.30',
     date: '2026-01-04',
