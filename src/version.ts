@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.31';
+export const APP_VERSION = '4.40.32';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.32',
+    date: '2026-01-05',
+    changes: [
+      '🔊 Voice notification on Undo rebuy!',
+      'When you undo a rebuy, you hear: "ביטול. [שם] מינוס אחד. סך הכל [X]"',
+      'Same Hebrew voice as rebuy announcements',
+      'Works for both full and half buyins'
+    ]
+  },
   {
     version: '4.40.31',
     date: '2026-01-05',

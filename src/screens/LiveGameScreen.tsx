@@ -589,6 +589,54 @@ const LiveGameScreen = () => {
     speakBuyin(player.playerName, newRebuys, isQuickRebuy, isHalfBuyin);
   };
 
+  // Voice notification for undo
+  const speakUndo = (playerName: string, undoAmount: number, newTotal: number) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      
+      const voices = window.speechSynthesis.getVoices();
+      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('female')) 
+        || voices.find(v => v.lang.startsWith('he'))
+        || null;
+      
+      // Hebrew numbers
+      const hebrewNumbers = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+      
+      // Format new total
+      const hasHalf = Math.abs((newTotal % 1) - 0.5) < 0.01;
+      const whole = Math.floor(newTotal);
+      let totalText: string;
+      if (hasHalf) {
+        if (whole === 0) {
+          totalText = 'חצי';
+        } else if (whole <= 10) {
+          totalText = `${hebrewNumbers[whole]} וחצי`;
+        } else {
+          totalText = `${whole} וחצי`;
+        }
+      } else {
+        if (whole <= 10) {
+          totalText = hebrewNumbers[whole];
+        } else {
+          totalText = String(whole);
+        }
+      }
+      
+      // Undo message
+      const undoText = undoAmount === 0.5 ? 'חצי' : 'אחד';
+      const message = `ביטול. ${playerName} מינוס ${undoText}. סך הכל ${totalText}.`;
+      
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = 'he-IL';
+      if (hebrewVoice) utterance.voice = hebrewVoice;
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 1;
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
   const handleUndo = () => {
     if (actions.length === 0) return;
     
@@ -606,6 +654,9 @@ const LiveGameScreen = () => {
         ));
         
         setActions(actions.slice(1));
+        
+        // Voice notification for undo
+        speakUndo(player.playerName, lastAction.amount, newRebuys);
       }
     }
   };
