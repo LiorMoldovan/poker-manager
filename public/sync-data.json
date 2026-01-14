@@ -1668,13 +1668,6 @@
       "status": "completed",
       "createdAt": "2026-01-10T19:10:06.378Z",
       "location": "ליכטר"
-    },
-    {
-      "id": "mke84jyzy8f4bkq6of",
-      "date": "2026-01-14T16:17:12.731Z",
-      "status": "completed",
-      "createdAt": "2026-01-14T16:17:12.731Z",
-      "location": "ליאור"
     }
   ],
   "gamePlayers": [
@@ -17744,144 +17737,8 @@
       },
       "finalValue": 0,
       "profit": -90
-    },
-    {
-      "id": "mke84jyzzojpadzbl9",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
-      "playerName": "ליאור",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 25,
-        "2": 57,
-        "3": 35,
-        "4": 0,
-        "5": 0,
-        "6": 10
-      },
-      "finalValue": 191.85,
-      "profit": 131.85
-    },
-    {
-      "id": "mke84jyz0iv5zj9qntva",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
-      "playerName": "ליכטר",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mke84jyz1yf6q7r4txo",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
-      "playerName": "פיליפ",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -60
-    },
-    {
-      "id": "mke84jyzccfy4hxniqp",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
-      "playerName": "חרדון",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mke84jyzsb5g8k54fu",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
-      "playerName": "אייל",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -60
-    },
-    {
-      "id": "mke84jyznt1cssn4i3",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
-      "playerName": "סגל",
-      "rebuys": 2,
-      "chipCounts": {
-        "1": 1,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 1,
-        "6": 5
-      },
-      "finalValue": 78.15,
-      "profit": 18.150000000000006
-    },
-    {
-      "id": "mke84jyzeba1swco72c",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
-      "playerName": "מלמד",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0
-      },
-      "finalValue": 0,
-      "profit": -30
-    },
-    {
-      "id": "mke84jyzsf1htaxoffp",
-      "gameId": "mke84jyzy8f4bkq6of",
-      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
-      "playerName": "אורן",
-      "rebuys": 1,
-      "chipCounts": {
-        "1": 0,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 6
-      },
-      "finalValue": 90,
-      "profit": 60
     }
   ],
-  "lastUpdated": "2026-01-14T16:18:00.249Z",
+  "lastUpdated": "2026-01-14T16:18:56.463Z",
   "updatedBy": "admin"
 }
