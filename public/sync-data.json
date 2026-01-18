@@ -1668,6 +1668,64 @@
       "status": "completed",
       "createdAt": "2026-01-10T19:10:06.378Z",
       "location": "ליכטר"
+    },
+    {
+      "id": "mkio3u70rtfkvw490zm",
+      "date": "2026-01-17T18:55:37.884Z",
+      "status": "completed",
+      "createdAt": "2026-01-17T18:55:37.884Z",
+      "location": "ליכטר",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 137,
+          "highlight": "מוביל הכללי, רצף 2 נצחונות השנה!",
+          "sentence": "ליאור ממשיך לשרוף את הטבלה! עם 2 נצחונות רצופים השנה, הוא מוכיח שוב למה הוא מלך הבית, וממוצע של +49₪ למשחק ב-2026.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": 5,
+          "highlight": "רצף 3 הפסדים, מחפש שיפור השנה.",
+          "sentence": "האם אייל יצליח לשבור את הרצף השלילי? 3 הפסדים רצופים בטבלת 2026, אבל עם ניסיון של 209 משחקים, הוא בהחלט יכול להפתיע.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": -23,
+          "highlight": "רצף 4 הפסדים, על סף שיא שלילי.",
+          "sentence": "4 הפסדים רצופים בטבלת 2026, אורן מתקרב מסוכנת לשיא הפסדים חדש של 5, והפסד הלילה עלול להוריד אותו מתחת ל-2000₪ כולל.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -39,
+          "highlight": "ניצחון מרשים במשחק האחרון, אך ירידה בטופס.",
+          "sentence": "הלילה ליכטר מחפש לשבור את הירידה בטופס. למרות ניצחון של +150₪ במשחק האחרון, ממוצע 5 המשחקים האחרונים שלו צנח ל-56₪-.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -71,
+          "highlight": "רצף הפסדים, שואף לחזור לחצי חיובי.",
+          "sentence": "הרכבת יוצאת מהתחנה? סגל הפסיד בשני המשחקים האחרונים ב-2026, אך הלילה הזדמנות לחזור למסלול חיובי בחצי הראשון של השנה.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": -17,
+          "highlight": "רצף הפסדים, שיפור ממוצע ב-5 המשחקים האחרונים.",
+          "sentence": "אם תומר יצליח להפוך את המגמה, הוא יכול לשבור את הרצף השלילי. למרות הפסד במשחק האחרון, הממוצע שלו ב-5 המשחקים האחרונים משתפר.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": 8,
+          "highlight": "רצף 3 נצחונות, מוביל את השנה והחצי.",
+          "sentence": "הקרב נגד ליאור נמשך! פיליפ עם רצף 3 נצחונות מדהים, מוביל את טבלת 2026 והחצי הראשון, ועם ניצחון נוסף הלילה הוא ישבור שיא קבוצתי.",
+          "isSurprise": false
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17737,8 +17795,127 @@
       },
       "finalValue": 0,
       "profit": -90
+    },
+    {
+      "id": "mkio3u70zxviqj9j9",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 12,
+        "2": 22,
+        "3": 16,
+        "4": 15,
+        "5": 26,
+        "6": 5
+      },
+      "finalValue": 193.5,
+      "profit": 133.5
+    },
+    {
+      "id": "mkio3u70068kd4l5oom9",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 6,
+        "2": 4,
+        "3": 2,
+        "4": 1,
+        "5": 3,
+        "6": 4
+      },
+      "finalValue": 73.8,
+      "profit": -46.2
+    },
+    {
+      "id": "mkio3u70btg3tl4i8x",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mkio3u702x9bb7bsm2o",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 8,
+      "chipCounts": {
+        "1": 9,
+        "2": 5,
+        "3": 7,
+        "4": 11,
+        "5": 4,
+        "6": 3
+      },
+      "finalValue": 80.55,
+      "profit": -159.45
+    },
+    {
+      "id": "mkio3u706a6g3huj7xc",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 24,
+        "2": 4,
+        "3": 8,
+        "4": 3,
+        "5": 1,
+        "6": 3
+      },
+      "finalValue": 62.1,
+      "profit": -57.9
+    },
+    {
+      "id": "mkio3u708c5pjwhaqc7",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 30,
+        "2": 3,
+        "3": 5,
+        "4": 20,
+        "5": 1,
+        "6": 15
+      },
+      "finalValue": 266.4,
+      "profit": 236.39999999999998
+    },
+    {
+      "id": "mkio3u708fd8vj9bz6u",
+      "gameId": "mkio3u70rtfkvw490zm",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 19,
+        "2": 12,
+        "3": 12,
+        "4": 0,
+        "5": 0,
+        "6": 4
+      },
+      "finalValue": 73.65,
+      "profit": -16.349999999999994
     }
   ],
-  "lastUpdated": "2026-01-14T16:18:56.463Z",
+  "lastUpdated": "2026-01-18T00:31:56.331Z",
   "updatedBy": "admin"
 }
