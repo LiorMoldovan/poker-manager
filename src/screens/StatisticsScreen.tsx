@@ -437,16 +437,13 @@ const StatisticsScreen = () => {
       
       if (periodGames.length === 0) return [];
       
-      // Calculate profit per player - permanent players only
+      // Calculate profit per player - ALL player types for historical accuracy
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
       
       for (const game of periodGames) {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
-          // Only include permanent players (same as Season Podium)
-          const player = allPlayers.find(p => p.id === gp.playerId);
-          if (!player || player.type !== 'permanent') continue;
-          
+          // Include ALL player types - Hall of Fame is historical, shows everyone
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
@@ -468,8 +465,8 @@ const StatisticsScreen = () => {
         }
       });
       
-      // Minimum games to qualify = 33% of period games (matches Season Podium)
-      const minGames = Math.ceil(periodGames.length * 0.33);
+      // Minimum games to qualify = 20% of period games (min 3) - ensures they were ACTIVE
+      const minGames = Math.max(3, Math.ceil(periodGames.length * 0.2));
       
       // Filter to ACTIVE players (met min games) and sort by profit - return top 3
       return Object.values(playerProfits)
