@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.36';
+export const APP_VERSION = '4.40.37';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.37',
+    date: '2026-01-19',
+    changes: [
+      '🐛 Debug version: Added console logging to diagnose Hall of Fame name issue',
+      'Check browser console (F12) to see if player names are being updated'
+    ]
+  },
   {
     version: '4.40.36',
     date: '2026-01-19',

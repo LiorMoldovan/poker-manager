@@ -452,10 +452,14 @@ const StatisticsScreen = () => {
       }
       
       // Update all player names to use CURRENT names from database
+      console.log('[Hall of Fame Debug] All players available:', allPlayers.length);
       Object.values(playerProfits).forEach(p => {
         const currentPlayer = allPlayers.find(player => player.id === p.playerId);
         if (currentPlayer) {
+          console.log(`[Hall of Fame] Updating ${p.playerId}: "${p.playerName}" → "${currentPlayer.name}"`);
           p.playerName = currentPlayer.name; // Use current name from database
+        } else {
+          console.warn(`[Hall of Fame] ⚠️ Player ${p.playerId} (${p.playerName}) NOT FOUND in database`);
         }
       });
       
@@ -504,10 +508,14 @@ const StatisticsScreen = () => {
       }
       
       // Update all player names to use CURRENT names from database
+      console.log('[Season Podium Debug] All players available:', allPlayers.length);
       Object.values(playerProfits).forEach(p => {
         const currentPlayer = allPlayers.find(player => player.id === p.playerId);
         if (currentPlayer) {
+          console.log(`[Season Podium] Updating ${p.playerId}: "${p.playerName}" → "${currentPlayer.name}"`);
           p.playerName = currentPlayer.name; // Use current name from database
+        } else {
+          console.warn(`[Season Podium] ⚠️ Player ${p.playerId} (${p.playerName}) NOT FOUND in database`);
         }
       });
       
