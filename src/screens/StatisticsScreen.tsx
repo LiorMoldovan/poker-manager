@@ -796,13 +796,8 @@ const StatisticsScreen = () => {
     const biggestLossPlayers = findTied(filteredStats, s => s.biggestLoss, false);
     const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
     
-    const qualifiedForWinRate = filteredStats.filter(s => s.gamesPlayed >= 3);
-    const sharpshooters = qualifiedForWinRate.length > 0 
-      ? findTied(qualifiedForWinRate, s => s.winPercentage, true)
-      : [];
-    const worstWinRates = qualifiedForWinRate.length > 0
-      ? findTied(qualifiedForWinRate, s => s.winPercentage, false)
-      : [];
+    const sharpshooters = findTied(filteredStats, s => s.winPercentage, true);
+    const worstWinRates = findTied(filteredStats, s => s.winPercentage, false);
     
     const onFirePlayers = findTied(filteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
     const iceColdPlayers = findTied(filteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
