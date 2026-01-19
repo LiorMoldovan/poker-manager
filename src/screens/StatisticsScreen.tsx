@@ -434,13 +434,10 @@ const StatisticsScreen = () => {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
           // Include ALL player types - activity is determined by games played
-          const currentPlayer = allPlayers.find(p => p.id === gp.playerId);
-          const playerName = currentPlayer?.name || gp.playerName;
-          
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
-              playerName: playerName,
+              playerName: gp.playerName, // Temporary, will be updated below
               profit: 0,
               gamesPlayed: 0
             };
@@ -449,6 +446,14 @@ const StatisticsScreen = () => {
           playerProfits[gp.playerId].gamesPlayed += 1;
         }
       }
+      
+      // Update all player names to use CURRENT names from database
+      Object.values(playerProfits).forEach(p => {
+        const currentPlayer = allPlayers.find(player => player.id === p.playerId);
+        if (currentPlayer) {
+          p.playerName = currentPlayer.name; // Use current name from database
+        }
+      });
       
       // Minimum games to qualify = 20% of period games (min 3) - ensures they were ACTIVE
       const minGames = Math.max(3, Math.ceil(periodGames.length * 0.2));

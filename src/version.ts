@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.34';
+export const APP_VERSION = '4.40.35';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.35',
+    date: '2026-01-19',
+    changes: [
+      '🏆 Fixed Hall of Fame displaying incorrect player names',
+      'Player names now always show current database names, not historical game record names',
+      'Affects all years in Hall of Fame table including 2026',
+      'Ensures name changes are reflected correctly in historical records'
+    ]
+  },
   {
     version: '4.40.34',
     date: '2026-01-19',
