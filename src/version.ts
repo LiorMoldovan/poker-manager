@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.38';
+export const APP_VERSION = '4.40.42';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,42 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.42',
+    date: '2026-01-19',
+    changes: [
+      '✅ PROPER FIX: Added initial data load on mount + storage change listener',
+      'Fixed: podiumData was calculating with empty players array on first render',
+      'Fixed: No listener for GitHub sync storage changes - data never reloaded',
+      'Now Hall of Fame recalculates with correct data on mount and after syncs'
+    ]
+  },
+  {
+    version: '4.40.41',
+    date: '2026-01-19',
+    changes: [
+      '✅ REAL FIX: Hall of Fame now uses players STATE instead of calling getAllPlayers()',
+      'The memo was fetching stale data from storage instead of using React state',
+      'Now correctly shows current player names matching Season Podium'
+    ]
+  },
+  {
+    version: '4.40.40',
+    date: '2026-01-19',
+    changes: [
+      '✅ CRITICAL FIX: Hall of Fame now recalculates when player data changes',
+      'Fixed podiumData useMemo to depend on players state instead of empty array',
+      'This ensures Hall of Fame shows current player names after syncs/updates'
+    ]
+  },
+  {
+    version: '4.40.39',
+    date: '2026-01-19',
+    changes: [
+      '🔍 Added debug logging to compare Season Podium vs Hall of Fame calculations',
+      'Identified root cause: useMemo was returning stale cached data'
+    ]
+  },
   {
     version: '4.40.38',
     date: '2026-01-19',

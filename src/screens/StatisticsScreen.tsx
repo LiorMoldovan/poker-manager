@@ -416,13 +416,16 @@ const StatisticsScreen = () => {
 
   // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
   const podiumData = useMemo(() => {
-    console.log('[PODIUM DEBUG START] ================');
+    // If players not loaded yet, return empty data
+    if (players.length === 0) {
+      return { h1: [], h2: [], yearly: [], year: new Date().getFullYear(), history: [] };
+    }
+    
     const currentYear = new Date().getFullYear();
     const allGames = getAllGames().filter(g => g.status === 'completed');
     const allGamePlayers = getAllGamePlayers();
-    const allPlayers = getAllPlayers();
-    console.log(`[PODIUM DEBUG] Total players in database: ${allPlayers.length}`);
-    console.log('[PODIUM DEBUG] Player names:', allPlayers.map(p => `${p.id}: ${p.name}`).join(', '));
+    // USE STATE DATA instead of fetching from storage - ensures we use current synced data
+    const allPlayers = players;
     
     // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
     // Includes ALL player types who were ACTIVE in that period (met min games threshold)
@@ -455,14 +458,10 @@ const StatisticsScreen = () => {
       }
       
       // Update all player names to use CURRENT names from database
-      console.log('[Hall of Fame Debug] All players available:', allPlayers.length);
       Object.values(playerProfits).forEach(p => {
         const currentPlayer = allPlayers.find(player => player.id === p.playerId);
         if (currentPlayer) {
-          console.log(`[Hall of Fame] Updating ${p.playerId}: "${p.playerName}" → "${currentPlayer.name}"`);
           p.playerName = currentPlayer.name; // Use current name from database
-        } else {
-          console.warn(`[Hall of Fame] ⚠️ Player ${p.playerId} (${p.playerName}) NOT FOUND in database`);
         }
       });
       
@@ -511,14 +510,10 @@ const StatisticsScreen = () => {
       }
       
       // Update all player names to use CURRENT names from database
-      console.log('[Season Podium Debug] All players available:', allPlayers.length);
       Object.values(playerProfits).forEach(p => {
         const currentPlayer = allPlayers.find(player => player.id === p.playerId);
         if (currentPlayer) {
-          console.log(`[Season Podium] Updating ${p.playerId}: "${p.playerName}" → "${currentPlayer.name}"`);
           p.playerName = currentPlayer.name; // Use current name from database
-        } else {
-          console.warn(`[Season Podium] ⚠️ Player ${p.playerId} (${p.playerName}) NOT FOUND in database`);
         }
       });
       
@@ -580,8 +575,24 @@ const StatisticsScreen = () => {
     }
     
     return { h1, h2, yearly, year: currentYear, history };
-  }, []);
+  }, [players]); // Recalculate when player data changes (name updates, syncs, etc.)
 
+  // Load initial data on mount
+  useEffect(() => {
+    loadStats();
+    
+    // Listen for storage changes (e.g., from GitHub sync)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'poker_players' || e.key === 'poker_games' || e.key === 'poker_game_players') {
+        loadStats();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Reload data when filters change
   useEffect(() => {
     loadStats();
   }, [timePeriod, selectedYear, selectedMonth]);
