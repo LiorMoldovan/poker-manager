@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.45';
+export const APP_VERSION = '4.40.46';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.46',
+    date: '2026-01-19',
+    changes: [
+      '✅ CRITICAL: Hall of Fame 2026 now uses SAME data as Season Podium 2026',
+      'Fixed: Current year was being calculated twice with different thresholds',
+      'Now guaranteed to show identical names for current year in both sections'
+    ]
+  },
   {
     version: '4.40.45',
     date: '2026-01-19',

@@ -549,16 +549,26 @@ const StatisticsScreen = () => {
     }> = [];
     
     for (let year = currentYear; year >= 2021; year--) {
-      const yearH1Start = new Date(year, 0, 1);
-      const yearH1End = new Date(year, 5, 30, 23, 59, 59);
-      const yearH2Start = new Date(year, 6, 1);
-      const yearH2End = new Date(year, 11, 31, 23, 59, 59);
-      const fullYearStart = new Date(year, 0, 1);
-      const fullYearEnd = new Date(year, 11, 31, 23, 59, 59);
+      let h1Top3, h2Top3, yearlyTop3;
       
-      const h1Top3 = calculatePeriodTop3(yearH1Start, yearH1End);
-      const h2Top3 = calculatePeriodTop3(yearH2Start, yearH2End);
-      const yearlyTop3 = calculatePeriodTop3(fullYearStart, fullYearEnd);
+      // For CURRENT year, use the SAME data as Season Podium to ensure consistency
+      if (year === currentYear) {
+        h1Top3 = h1.slice(0, 3).map(p => ({ playerName: p.playerName, profit: p.profit }));
+        h2Top3 = h2.slice(0, 3).map(p => ({ playerName: p.playerName, profit: p.profit }));
+        yearlyTop3 = yearly.slice(0, 3).map(p => ({ playerName: p.playerName, profit: p.profit }));
+      } else {
+        // For historical years, calculate separately
+        const yearH1Start = new Date(year, 0, 1);
+        const yearH1End = new Date(year, 5, 30, 23, 59, 59);
+        const yearH2Start = new Date(year, 6, 1);
+        const yearH2End = new Date(year, 11, 31, 23, 59, 59);
+        const fullYearStart = new Date(year, 0, 1);
+        const fullYearEnd = new Date(year, 11, 31, 23, 59, 59);
+        
+        h1Top3 = calculatePeriodTop3(yearH1Start, yearH1End);
+        h2Top3 = calculatePeriodTop3(yearH2Start, yearH2End);
+        yearlyTop3 = calculatePeriodTop3(fullYearStart, fullYearEnd);
+      }
       
       // Only add if there's at least one result
       if (h1Top3.length > 0 || h2Top3.length > 0 || yearlyTop3.length > 0) {
