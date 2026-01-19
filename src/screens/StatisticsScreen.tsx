@@ -486,16 +486,13 @@ const StatisticsScreen = () => {
       
       if (periodGames.length === 0) return [];
       
-      // Calculate profit per player
+      // Calculate profit per player - ALL player types
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
       
       for (const game of periodGames) {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
-          // Only include permanent players
-          const player = allPlayers.find(p => p.id === gp.playerId);
-          if (!player || player.type !== 'permanent') continue;
-          
+          // Include ALL player types - show whoever has highest profit
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.44';
+export const APP_VERSION = '4.40.45';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.45',
+    date: '2026-01-19',
+    changes: [
+      '✅ Season Podium now shows ALL player types (highest profit regardless of type)',
+      'Both Hall of Fame and Season Podium now rank by profit only, not player type',
+      'Fixed: Season Podium was incorrectly filtering to permanent players only'
+    ]
+  },
   {
     version: '4.40.44',
     date: '2026-01-19',
