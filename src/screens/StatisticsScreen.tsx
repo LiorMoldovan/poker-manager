@@ -416,10 +416,13 @@ const StatisticsScreen = () => {
 
   // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
   const podiumData = useMemo(() => {
+    console.log('[PODIUM DEBUG START] ================');
     const currentYear = new Date().getFullYear();
     const allGames = getAllGames().filter(g => g.status === 'completed');
     const allGamePlayers = getAllGamePlayers();
     const allPlayers = getAllPlayers();
+    console.log(`[PODIUM DEBUG] Total players in database: ${allPlayers.length}`);
+    console.log('[PODIUM DEBUG] Player names:', allPlayers.map(p => `${p.id}: ${p.name}`).join(', '));
     
     // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
     // Includes ALL player types who were ACTIVE in that period (met min games threshold)
