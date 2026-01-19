@@ -393,8 +393,12 @@ const StatisticsScreen = () => {
         if (!validPlayerIds.has(gp.playerId)) continue;
         
         if (gp.profit > 0) { // Only wins
+          // Look up current player name from database
+          const currentPlayer = players.find(p => p.id === gp.playerId);
+          const playerName = currentPlayer?.name || gp.playerName;
+          
           allResults.push({
-            playerName: gp.playerName,
+            playerName: playerName,
             profit: gp.profit,
             date: game.date,
             gameId: game.id,
@@ -486,13 +490,10 @@ const StatisticsScreen = () => {
           const player = allPlayers.find(p => p.id === gp.playerId);
           if (!player || player.type !== 'permanent') continue;
           
-          // Use CURRENT player name from allPlayers (not the stored name in game record)
-          const playerName = player.name || gp.playerName;
-          
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
-              playerName: playerName,
+              playerName: gp.playerName, // Temporary, will be updated below
               profit: 0,
               gamesPlayed: 0
             };
@@ -501,6 +502,14 @@ const StatisticsScreen = () => {
           playerProfits[gp.playerId].gamesPlayed += 1;
         }
       }
+      
+      // Update all player names to use CURRENT names from database
+      Object.values(playerProfits).forEach(p => {
+        const currentPlayer = allPlayers.find(player => player.id === p.playerId);
+        if (currentPlayer) {
+          p.playerName = currentPlayer.name; // Use current name from database
+        }
+      });
       
       // Calculate min games threshold (33% of period games)
       const minGames = Math.ceil(periodGames.length * 0.33);

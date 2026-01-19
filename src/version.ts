@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.35';
+export const APP_VERSION = '4.40.36';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.36',
+    date: '2026-01-19',
+    changes: [
+      '🔧 Fixed Season Podium (H1/H2/Yearly) showing incorrect player names',
+      '📊 Fixed Biggest Wins leaderboard showing historical names instead of current names',
+      'All player name displays now use current database names across the app',
+      'Complete fix for player name consistency in all statistics sections'
+    ]
+  },
   {
     version: '4.40.35',
     date: '2026-01-19',
