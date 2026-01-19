@@ -1421,33 +1421,28 @@ const StatisticsScreen = () => {
               {/* All-Time Leaders */}
               <div className="card">
                 <h2 className="card-title mb-2">👑 Leaders</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 Top Earner</span>
-                      {renderRecord(
-                        'leader',
-                        records.leaders,
-                        (p) => <div className="profit" style={{ fontSize: '1.1rem', fontWeight: '700' }}>+{formatCurrency(p.totalProfit)}</div>,
-                        { fontSize: '1.1rem' },
-                        'all',
-                        '🥇 כל המשחקים'
-                      )}
-                    </div>
+                <div className="grid grid-2">
+                  <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 Top Earner</div>
+                    {renderRecord(
+                      'leader',
+                      records.leaders,
+                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.totalProfit)}</div>,
+                      undefined,
+                      'all',
+                      '🥇 כל המשחקים'
+                    )}
                   </div>
-                  
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</span>
-                      {renderRecord(
-                        'biggestLoser',
-                        records.biggestLosers,
-                        (p) => <div className="loss" style={{ fontSize: '1.1rem', fontWeight: '700' }}>{formatCurrency(p.totalProfit)}</div>,
-                        { fontSize: '1.1rem' },
-                        'all',
-                        '📉 כל המשחקים'
-                      )}
-                    </div>
+                  <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</div>
+                    {renderRecord(
+                      'biggestLoser',
+                      records.biggestLosers,
+                      (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.totalProfit)}</div>,
+                      undefined,
+                      'all',
+                      '📉 כל המשחקים'
+                    )}
                   </div>
                 </div>
               </div>
@@ -1527,7 +1522,7 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'highestAvgProfit',
                           records.highestAvgProfits,
-                          (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.avgProfit)}</div>,
+                          (p) => <div className="profit" style={{ fontWeight: '700' }}>{p.avgProfit >= 0 ? '+' : ''}{formatCurrency(p.avgProfit)}</div>,
                           undefined,
                           'all',
                           '📈 ממוצע למשחק'

@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.33';
+export const APP_VERSION = '4.40.34';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.34',
+    date: '2026-01-19',
+    changes: [
+      '✨ Unified Leaders section format to match other record sections',
+      'Leaders now display in 2-column grid layout with center alignment',
+      '🔧 Fixed Best Avg/Game sign handling - now correctly shows + or - based on value',
+      'Consistent visual styling across all record sections'
+    ]
+  },
   {
     version: '4.40.33',
     date: '2026-01-19',
