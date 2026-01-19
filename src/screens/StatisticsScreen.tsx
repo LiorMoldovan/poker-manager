@@ -806,13 +806,8 @@ const StatisticsScreen = () => {
     const longestLossStreakPlayers = findTied(filteredStats, s => s.longestLossStreak, true);
     
     // Additional records
-    const qualifiedForAvg = filteredStats.filter(s => s.gamesPlayed >= 3);
-    const highestAvgProfits = qualifiedForAvg.length > 0
-      ? findTied(qualifiedForAvg, s => s.avgProfit, true)
-      : [];
-    const lowestAvgProfits = qualifiedForAvg.length > 0
-      ? findTied(qualifiedForAvg, s => s.avgProfit, false)
-      : [];
+    const highestAvgProfits = findTied(filteredStats, s => s.avgProfit, true);
+    const lowestAvgProfits = findTied(filteredStats, s => s.avgProfit, false);
     const mostWinsPlayers = findTied(filteredStats, s => s.winCount, true);
     const mostLossesPlayers = findTied(filteredStats, s => s.lossCount, true);
     
