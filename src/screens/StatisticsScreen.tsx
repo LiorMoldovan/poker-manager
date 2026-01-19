@@ -1633,7 +1633,7 @@ const StatisticsScreen = () => {
                         (p) => <span style={{ fontWeight: '600' }}>({p.totalRebuys} total)</span>,
                         undefined,
                         'all',
-                        '🎰 כל המשחקים'
+                        '🎰 רכישות'
                       )}
                   </div>
                   )}
