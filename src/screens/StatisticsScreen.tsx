@@ -428,7 +428,7 @@ const StatisticsScreen = () => {
     const allPlayers = players;
     
     // Helper to calculate stats for a specific period - returns top 3 for Hall of Fame
-    // Includes ALL player types who were ACTIVE in that period (met min games threshold)
+    // Only includes permanent players (matches Season Podium logic)
     const calculatePeriodTop3 = (start: Date, end: Date): Array<{ playerName: string; profit: number }> => {
       const periodGames = allGames.filter(g => {
         const gameDate = new Date(g.date);
@@ -437,13 +437,16 @@ const StatisticsScreen = () => {
       
       if (periodGames.length === 0) return [];
       
-      // Calculate profit per player - ALL player types
+      // Calculate profit per player - permanent players only
       const playerProfits: Record<string, { playerId: string; playerName: string; profit: number; gamesPlayed: number }> = {};
       
       for (const game of periodGames) {
         const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
         for (const gp of gamePlayers) {
-          // Include ALL player types - activity is determined by games played
+          // Only include permanent players (same as Season Podium)
+          const player = allPlayers.find(p => p.id === gp.playerId);
+          if (!player || player.type !== 'permanent') continue;
+          
           if (!playerProfits[gp.playerId]) {
             playerProfits[gp.playerId] = {
               playerId: gp.playerId,
@@ -465,8 +468,8 @@ const StatisticsScreen = () => {
         }
       });
       
-      // Minimum games to qualify = 20% of period games (min 3) - ensures they were ACTIVE
-      const minGames = Math.max(3, Math.ceil(periodGames.length * 0.2));
+      // Minimum games to qualify = 33% of period games (matches Season Podium)
+      const minGames = Math.ceil(periodGames.length * 0.33);
       
       // Filter to ACTIVE players (met min games) and sort by profit - return top 3
       return Object.values(playerProfits)

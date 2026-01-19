@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.42';
+export const APP_VERSION = '4.40.43';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.43',
+    date: '2026-01-19',
+    changes: [
+      '✅ CRITICAL: Hall of Fame now matches Season Podium player filtering',
+      'Fixed: Hall of Fame showed ALL player types while Season Podium only showed permanent',
+      'Fixed: Different minimum games thresholds (20% vs 33%)',
+      'Now both use same logic: permanent players only, 33% min games'
+    ]
+  },
   {
     version: '4.40.42',
     date: '2026-01-19',
