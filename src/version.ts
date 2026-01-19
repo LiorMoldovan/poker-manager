@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.32';
+export const APP_VERSION = '4.40.33';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.40.33',
+    date: '2026-01-19',
+    changes: [
+      '📊 Statistics records now align with applied filters',
+      'Removed minimum games requirement for win rate records',
+      'Removed minimum games requirement for average profit records',
+      'Fixed Hebrew translation: Buyin King record now shows "רכישות" instead of "כל המשחקים"',
+      'All records now respect your selected time period filters'
+    ]
+  },
   {
     version: '4.40.32',
     date: '2026-01-05',
