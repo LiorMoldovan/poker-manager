@@ -1726,6 +1726,64 @@
           "isSurprise": false
         }
       ]
+    },
+    {
+      "id": "mkso36xgrxxb7gn6d7l",
+      "date": "2026-01-24T18:52:49.492Z",
+      "status": "completed",
+      "createdAt": "2026-01-24T18:52:49.492Z",
+      "location": "ליאור",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 140,
+          "highlight": "מוביל את טבלת 2026 עם 182₪ רווח!",
+          "sentence": "2 משחקים ב-2026 עם +182₪ (ממוצע +91₪). רצף 3 נצחונות!",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": -88,
+          "highlight": "רצף 4 הפסדים ב-2026, מחפש שינוי.",
+          "sentence": "האם אייל יצליח לשבור את הרצף השלילי? 4 הפסדים רצופים בטבלת 2026, אבל ההיסטוריה שלו מדברת אחרת.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": -27,
+          "highlight": "רצף 1 הפסדים, שואף לשיפור.",
+          "sentence": "2 משחקים ב-2026 עם +103₪ (ממוצע +52₪). ",
+          "isSurprise": false
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -115,
+          "highlight": "2 הפסדים רצופים, מחפש יציבות.",
+          "sentence": "הלילה סגל מחפש לשבור רצף של 2 הפסדים. אחרי הפסד כואב במשחק האחרון, זה הזמן לתפנית.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": 44,
+          "highlight": "ניצחון אחרון, שואף להוביל את ינואר.",
+          "sentence": "הרכבת יוצאת מהתחנה! אחרי ניצחון מרשים במשחק האחרון, תומר שואף להוביל את טבלת ינואר.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "דן מאן",
+          "expectedProfit": -2,
+          "highlight": "ניצחון בודד, שואף להרחיב.",
+          "sentence": "אם דן מאן יצליח להשיג רווח של 148₪ הלילה, הוא יחזור לטבלה החיובית של שנת 2026!",
+          "isSurprise": false
+        },
+        {
+          "playerName": "חרדון",
+          "expectedProfit": 48,
+          "highlight": "2 נצחונות רצופים, עולה בטבלה.",
+          "sentence": "הקרב נגד ליכטר נמשך! חרדון עם 2 נצחונות רצופים בטבלת 2026, שואף לעקוף אותו.",
+          "isSurprise": false
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -17914,8 +17972,127 @@
       },
       "finalValue": 73.65,
       "profit": -16.349999999999994
+    },
+    {
+      "id": "mkso36xg4qiqvc4k1ss",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 30,
+        "2": 10,
+        "3": 7,
+        "4": 19,
+        "5": 13,
+        "6": 10
+      },
+      "finalValue": 229.20000000000002,
+      "profit": 169.20000000000002
+    },
+    {
+      "id": "mkso36xgb29xkw4jfyk",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 6,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -180
+    },
+    {
+      "id": "mkso36xgmlhk6kby75",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 1,
+        "4": 1,
+        "5": 1,
+        "6": 2
+      },
+      "finalValue": 35.1,
+      "profit": -24.9
+    },
+    {
+      "id": "mkso36xgm5l2u585a8k",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 4.5,
+      "chipCounts": {
+        "1": 40,
+        "2": 10,
+        "3": 24,
+        "4": 25,
+        "5": 3,
+        "6": 3
+      },
+      "finalValue": 114.9,
+      "profit": -20.099999999999994
+    },
+    {
+      "id": "mkso36xgc5bw18apd26",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mkso36xgxfqms5m2uji",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 3
+      },
+      "finalValue": 45,
+      "profit": -45
+    },
+    {
+      "id": "mkso36xg2v6pbyylgjy",
+      "gameId": "mkso36xgrxxb7gn6d7l",
+      "playerId": "bce0db4f-e093-42a4-871f-a029f284e3bf",
+      "playerName": "דן מאן",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 30,
+        "2": 30,
+        "3": 18,
+        "4": 3,
+        "5": 34,
+        "6": 8
+      },
+      "finalValue": 250.8,
+      "profit": 190.8
     }
   ],
-  "lastUpdated": "2026-01-18T00:31:56.331Z",
+  "lastUpdated": "2026-01-25T00:02:29.615Z",
   "updatedBy": "admin"
 }
