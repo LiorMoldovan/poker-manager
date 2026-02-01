@@ -3359,6 +3359,7 @@ const StatisticsScreen = () => {
                 
                 const minGamesForClassification = isLowData ? 1 : 3;
                 const minStreakForHotCold = isLowData ? 1 : 3;
+                const minGamesForStyle = isLowData ? 1 : 5; // Used for rebuy-based classification
                 
                 if (gamesPlayed < minGamesForClassification) {
                   // Too few games to classify (only for non-low-data scenarios)
@@ -3573,7 +3574,7 @@ const StatisticsScreen = () => {
                 
                 // Adjust thresholds for low-data scenarios
                 const minGamesForChampion = isLowData ? 1 : 5;
-                const minGamesForStyle = isLowData ? 1 : 5;
+                // minGamesForStyle already defined above
                 const minGamesForRecord = isLowData ? 1 : 5;
                 const minGamesForRecent = isLowData ? 1 : 3;
                 const minVolatilityForShow = isLowData ? 150 : 400;
