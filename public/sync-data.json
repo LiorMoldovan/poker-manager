@@ -124,7 +124,7 @@
       "id": "49d82f27-fc9c-4e94-b4f6-35b538b42855",
       "name": "ספי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "5a6af55f-64d4-4286-a869-4ba801663a9c",
@@ -1784,6 +1784,13 @@
           "isSurprise": false
         }
       ]
+    },
+    {
+      "id": "ml2oenlzxxlm8q0urqm",
+      "date": "2026-01-31T18:59:26.087Z",
+      "status": "completed",
+      "createdAt": "2026-01-31T18:59:26.087Z",
+      "location": "סגל"
     }
   ],
   "gamePlayers": [
@@ -18091,8 +18098,144 @@
       },
       "finalValue": 250.8,
       "profit": 190.8
+    },
+    {
+      "id": "ml2oenlznc0x6qgpnwg",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 14,
+        "2": 3,
+        "3": 6,
+        "4": 13,
+        "5": 54,
+        "6": 8
+      },
+      "finalValue": 308.1,
+      "profit": 188.10000000000002
+    },
+    {
+      "id": "ml2oenlz8bd9i3g4oe3",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 10,
+        "6": 6
+      },
+      "finalValue": 120,
+      "profit": 90
+    },
+    {
+      "id": "ml2oenlzm4fa4zmnew",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 5,
+      "chipCounts": {
+        "1": 25,
+        "2": 22,
+        "3": 14,
+        "4": 17,
+        "5": 33,
+        "6": 6
+      },
+      "finalValue": 233.25,
+      "profit": 83.25
+    },
+    {
+      "id": "ml2oenlzfpfqwih05p7",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 5,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -150
+    },
+    {
+      "id": "ml2oenlzd81tz1eymvj",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 4,
+      "chipCounts": {
+        "1": 49,
+        "2": 23,
+        "3": 30,
+        "4": 10,
+        "5": 19,
+        "6": 15
+      },
+      "finalValue": 329.25,
+      "profit": 209.25
+    },
+    {
+      "id": "ml2oenlzyuxwdnwsxhn",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 12,
+        "2": 2,
+        "3": 0,
+        "4": 0,
+        "5": 4,
+        "6": 5
+      },
+      "finalValue": 89.4,
+      "profit": 59.400000000000006
+    },
+    {
+      "id": "ml2oenlzmuqasuowiz",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "49d82f27-fc9c-4e94-b4f6-35b538b42855",
+      "playerName": "ספי",
+      "rebuys": 7,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -210
+    },
+    {
+      "id": "ml2oenlzt8fytcnbell",
+      "gameId": "ml2oenlzxxlm8q0urqm",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 9,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -270
     }
   ],
-  "lastUpdated": "2026-01-25T00:02:29.615Z",
+  "lastUpdated": "2026-02-01T00:13:41.714Z",
   "updatedBy": "admin"
 }
