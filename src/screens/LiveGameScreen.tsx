@@ -23,6 +23,9 @@ const LiveGameScreen = () => {
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
+  
+  // Shared AudioContext to avoid creating too many instances (browsers have limits)
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     if (gameId) {
@@ -141,11 +144,24 @@ const LiveGameScreen = () => {
     );
   }
 
+  // Get or create shared AudioContext (reuse to avoid browser limits)
+  const getAudioContext = (): AudioContext => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioContextRef.current;
+  };
+
   // Casino rebuy sounds - randomly picks from 20 different sounds
   const playRebuyCasinoSound = (): Promise<void> => {
     return new Promise((resolve) => {
       try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioContext = getAudioContext();
+        
+        // Resume AudioContext if suspended (required on some browsers after user interaction)
+        if (audioContext.state === 'suspended') {
+          audioContext.resume();
+        }
         
         // Helper functions
         const tone = (freq: number, start: number, dur: number, type: OscillatorType = 'sine', vol: number = 0.2) => {
@@ -378,12 +394,6 @@ const LiveGameScreen = () => {
 
         // Pick a random sound and play it
         const randomIndex = Math.floor(Math.random() * sounds.length);
-        
-        // Resume AudioContext if suspended (required on some browsers)
-        if (audioContext.state === 'suspended') {
-          audioContext.resume();
-        }
-        
         const duration = sounds[randomIndex]();
         
         setTimeout(resolve, duration);
