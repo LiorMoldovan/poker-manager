@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.41.0';
+export const APP_VERSION = '4.41.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.1',
+    date: '2026-02-05',
+    changes: [
+      '✅ Fixed milestone distance rounding (no more decimal values like 69.75₪)',
+      'Added comprehensive validation scripts for all features',
+      'All 49 validation tests passing at 100%'
+    ]
+  },
   {
     version: '4.41.0',
     date: '2026-02-05',

@@ -300,7 +300,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       emoji: '🎯',
       category: 'milestone',
       title: `יעד ${best.target.toLocaleString()}₪`,
-      description: `${best.player.name} על ${formatProfit(best.player.totalProfit)} בטבלה הכללית. עוד ${best.distance}₪ = חציית רף ${best.target.toLocaleString()}₪!`,
+      description: `${best.player.name} על ${formatProfit(best.player.totalProfit)} בטבלה הכללית. עוד ${Math.round(best.distance)}₪ = חציית רף ${best.target.toLocaleString()}₪!`,
       priority: 78 + Math.round(best.target / 200)
     });
   }
