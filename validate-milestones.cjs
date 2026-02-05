@@ -232,7 +232,7 @@ function generateMilestones(players, games) {
       emoji: '🎯',
       category: 'milestone',
       title: `יעד ${best.target.toLocaleString()}₪`,
-      description: `${best.player.name} על ${formatProfit(best.player.totalProfit)} בטבלה הכללית. עוד ${best.distance}₪ = חציית רף ${best.target.toLocaleString()}₪!`,
+      description: `${best.player.name} על ${formatProfit(best.player.totalProfit)} בטבלה הכללית. עוד ${Math.round(best.distance)}₪ = חציית רף ${best.target.toLocaleString()}₪!`,
       priority: 78 + Math.round(best.target / 200)
     });
   }
@@ -246,7 +246,7 @@ function generateMilestones(players, games) {
           emoji: '🎮',
           category: 'milestone',
           title: `משחק מספר ${gm}`,
-          description: `הלילה ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${formatProfit(p.avgProfit)}/משחק.`,
+          description: `הלילה ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${formatProfit(p.avgProfit)} למשחק.`,
           priority: 65 + gm / 5
         });
         break;
@@ -281,7 +281,7 @@ function generateMilestones(players, games) {
       emoji: '📈',
       category: 'form',
       title: `${hotForm.name} בפורם חם`,
-      description: `ממוצע אחרון: ${formatProfit(hotForm.last3Avg)}/משחק (לעומת ${formatProfit(hotForm.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}₪!`,
+      description: `ממוצע אחרון: ${formatProfit(hotForm.last3Avg)} למשחק (לעומת ${formatProfit(hotForm.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}₪!`,
       priority: 76
     });
   }
@@ -297,7 +297,7 @@ function generateMilestones(players, games) {
       emoji: '📉',
       category: 'form',
       title: `${coldForm.name} מתחת לרמה`,
-      description: `בדרך כלל ${formatProfit(coldForm.avgProfit)}/משחק, אבל לאחרונה ${formatProfit(coldForm.last3Avg)}. הסטטיסטיקה לטובתו - צפוי קאמבק.`,
+      description: `בדרך כלל ${formatProfit(coldForm.avgProfit)} למשחק, אבל לאחרונה ${formatProfit(coldForm.last3Avg)}. הסטטיסטיקה לטובתו - צפוי קאמבק.`,
       priority: 72
     });
   }
@@ -338,7 +338,7 @@ function generateMilestones(players, games) {
       emoji: '🌟',
       category: 'drama',
       title: `${upsetCandidate.name} בהפתעה`,
-      description: `ממוצע היסטורי: ${formatProfit(upsetCandidate.avgProfit)}/משחק, אבל ניצח ${formatProfit(upsetCandidate.lastGameProfit)} לאחרונה. תחילת שינוי מגמה?`,
+      description: `ממוצע היסטורי: ${formatProfit(upsetCandidate.avgProfit)} למשחק, אבל ניצח ${formatProfit(upsetCandidate.lastGameProfit)} לאחרונה. תחילת שינוי מגמה?`,
       priority: 77
     });
   }
@@ -412,12 +412,13 @@ function generateMilestones(players, games) {
   
   if (currentMonth <= 1) {
     const totalYearGames = playerStats.reduce((sum, p) => sum + p.yearGames, 0);
-    if (totalYearGames < 5 * players.length) {
+    // Only show if January AND very few games played
+    if (currentMonth === 0 && totalYearGames <= 1) {
       milestones.push({
         emoji: '🎆',
         category: 'season',
         title: `${currentYear} מתחילה`,
-        description: `שנה חדשה, טבלה חדשה. ${players.length} שחקנים, 0₪ לכולם. מי יוביל ב-${currentYear}?`,
+        description: `שנה חדשה, טבלה חדשה. ${players.length} שחקנים מתחילים מחדש. מי יוביל ב-${currentYear}?`,
         priority: 85
       });
     }
