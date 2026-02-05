@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.0';
+export const APP_VERSION = '4.42.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,12 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.42.0',
+    version: '4.42.1',
     date: '2026-02-05',
     changes: [
-      '✅ CRITICAL FIX: Tonight ranking now uses 2026 profit (matches table)',
-      'Previously used all-time profit causing wrong rankings',
-      'תומר now correctly shows #3 instead of #7'
+      '✅ Both rankings now available: 2026 (priority) + all-time (secondary)',
+      'Clear priority order: last game > form > 2026 table > all-time',
+      'All-time shown only if notable (TOP 3, close battle)'
     ]
   },
   {

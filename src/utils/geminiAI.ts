@@ -1142,31 +1142,33 @@ export const generateAIForecasts = async (
     const gapToAboveTonight = tonightAbove ? Math.round(tonightAbove.yearProfit - p.yearProfit) : null;
     const gapToBelowTonight = tonightBelow ? Math.round(p.yearProfit - tonightBelow.yearProfit) : null;
 
+    // Calculate all-time rank among tonight's players (for comparison)
+    const allTimeRankTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit).findIndex(sp => sp.name === p.name) + 1;
+    
     return `
 ═══════════════════════════════════════
 PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE)' : ''}
 ═══════════════════════════════════════
 
-🎯 EXPECTED PROFIT: ${suggestion >= 0 ? '+' : ''}${suggestion}₪ (adjust ±30₪, sum=0)
+🎯 EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪
 
-⭐ LAST GAME (MOST IMPORTANT!):
+⭐⭐ LAST GAME & STREAK (PRIORITY 1):
    ${lastGameInfo}
-   ${actualStreak >= 2 ? `🔥 ON A ${actualStreak}-WIN STREAK!` : ''}
-   ${actualStreak <= -2 ? `Looking to break ${Math.abs(actualStreak)}-loss streak` : ''}
+   ${streakText}
 
-📈 RECENT FORM (Last 5 games - USE THIS!):
-   • AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ למשחק
-   • TREND: ${recentAvg > p.avgProfit + 10 ? '⬆️ HOT' : recentAvg < p.avgProfit - 10 ? '⬇️ COLD' : '➡️ STABLE'}
+📈 RECENT FORM - Last 5 games (PRIORITY 2):
+   ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪
+   AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ | TREND: ${recentAvg > p.avgProfit + 10 ? 'HOT ⬆️' : recentAvg < p.avgProfit - 10 ? 'COLD ⬇️' : 'STABLE'}
 
-⭐ ${currentYear} (PRIMARY TABLE):
-   • ${yearGames} games | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
-${isActiveYear ? `   • RANK: #${yearRank}/${yearTotalActive} בטבלת ${currentYear}` : ''}
+⭐ ${currentYear} TABLE (PRIORITY 3):
+   #${rankTonight}/${players.length} מבין שחקני הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
+   ${rankTonight === 1 ? '👑 מוביל הלילה!' : rankTonight <= 3 ? `🥈 TOP 3 הלילה` : ''}
 
-🎲 TONIGHT (${players.length} players):
-   • RANK: #${rankTonight}/${players.length} מבין שחקני הלילה
-   ${rankTonight === 1 ? '👑 LEADING TONIGHT' : tonightAbove ? `• Chasing ${tonightAbove.name}` : ''}
-
-📜 LAST 5 GAMES: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪`;
+📊 ALL-TIME (secondary - mention only if notable):
+   #${allTimeRankTonight}/${players.length} מבין שחקני הלילה (כללי)
+   ${isActiveAllTime ? `#${allTimeRank}/${allTimeTotalActive} בטבלה הכללית | ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪` : ''}
+   ${allTimeRank === 1 ? '👑 #1 ALL-TIME!' : allTimeRank <= 3 && isActiveAllTime ? '⭐ TOP 3 ALL-TIME' : ''}
+   ${gapToAboveAllTime && gapToAboveAllTime <= 100 && isActiveAllTime ? `🔥 רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!` : ''}`;
   }).join('\n');
   
   // Calculate realistic profit ranges from player data
@@ -1256,24 +1258,23 @@ ${milestonesText}
 Recent examples:
 ${recentGameExamples}
 
-🎯 FOCUS ON RECENT DATA:
-- LAST GAME result is most important
-- Recent 5-game form matters more than all-time
-- ${currentYear} table is the primary ranking reference
-- Avoid all-time stats unless #1 or very close battle
+🎯 PRIORITY ORDER (follow this!):
+1. LAST GAME & STREAK - most important, always reference
+2. RECENT FORM (5 games) - trend matters
+3. ${currentYear} ranking - primary table ("מבין ${players.length} הלילה")
+4. ALL-TIME - only if #1, TOP 3, or close battle (<100₪)
 
 📝 SENTENCE (25-40 words):
-- Reference LAST GAME or RECENT FORM
-- Rankings: "מבין ${players.length} הלילה" or "בטבלת ${currentYear}"
-- Be encouraging even for negative predictions
-- מור = feminine Hebrew
+- MUST mention last game OR recent form
+- Rankings: say "מבין ${players.length} הלילה" for current, "בטבלה הכללית" for all-time
+- Be encouraging | מור = feminine Hebrew
 
 🎯 ANGLES (vary per player):
-1. LAST GAME → "נצחון/הפסד של X₪ במשחק האחרון"
-2. STREAK → "X נצחונות רצופים"
+1. LAST GAME → "נצחון של +X₪ במשחק האחרון"
+2. STREAK → "X נצחונות/הפסדים רצופים"
 3. FORM → "ממוצע +X₪ ב-5 אחרונים"
-4. YEAR → "#X בטבלת ${currentYear}"
-5. TONIGHT → "#X מבין ${players.length} הלילה"
+4. TONIGHT → "#X מבין ${players.length} הלילה"
+5. ALL-TIME (only if notable) → "#X בטבלה הכללית"
 
 📝 OUTPUT (JSON ONLY):
 [
