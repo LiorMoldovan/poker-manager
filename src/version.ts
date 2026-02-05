@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.2';
+export const APP_VERSION = '4.41.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.3',
+    date: '2026-02-05',
+    changes: [
+      '✅ Fixed forecast tone mismatch - sentence now matches prediction direction',
+      '✅ Fixed milestone deduplication - same player no longer appears twice as main subject',
+      'Strengthened AI prompt rules for tone/prediction alignment'
+    ]
+  },
   {
     version: '4.41.2',
     date: '2026-02-05',

@@ -530,8 +530,13 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     const categoryCount = selected.filter(s => s.category === m.category).length;
     if (categoryCount >= categoryLimit) continue;
     
-    // Skip if player mentioned too many times
+    // Skip if player mentioned too many times (max 1 as MAIN subject, max 2 total)
     const mentionedPlayers = players.filter(p => m.title.includes(p.name) || m.description.includes(p.name)).map(p => p.name);
+    const isMainSubject = mentionedPlayers.length === 1 || m.title.includes(mentionedPlayers[0]);
+    
+    // If this player is the MAIN subject and already appeared as main subject, skip
+    if (isMainSubject && mentionedPlayers.some(name => (playerMentions[name] || 0) >= 1)) continue;
+    // If player mentioned too many times overall, skip
     if (mentionedPlayers.some(name => (playerMentions[name] || 0) >= 2)) continue;
     
     // Accept
@@ -1280,6 +1285,12 @@ ${recentGameExamples}
 - Witty, dramatic, WhatsApp-worthy
 - DON'T mention the expectedProfit number (shown separately)
 - DO use: streaks, milestones, rivalries, comebacks
+
+🚨 CRITICAL - TONE MUST MATCH PREDICTION:
+- If expectedProfit > 0: Optimistic, confident, "ימשיך לנצח", "בדרך לעוד נצחון"
+- If expectedProfit < 0: Cautious, challenging, "יתקשה הלילה", "מחפש לשבור את הרצף"
+- NEVER write optimistic text for a negative prediction!
+- Example: If predicting -86₪, DON'T write "נצחון גדול" - write about the challenge ahead
 
 VARIETY PATTERNS (use different one for each player):
 1. Action: "ליאור שורף את הטבלה!"
