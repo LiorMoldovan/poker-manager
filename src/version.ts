@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.2';
+export const APP_VERSION = '4.43.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.3',
+    date: '2026-02-05',
+    changes: [
+      '🔧 CRITICAL FIX: "Recent" now means CURRENT YEAR (matches visible table!)',
+      '✅ No more confusion: AI uses 2026 games only for averages',
+      '✅ Player data shows all current year games, not "last 5"',
+      '✅ Suggestion calculation uses current year performance',
+      '✅ Surprise detection uses current year vs all-time comparison'
+    ]
+  },
   {
     version: '4.43.2',
     date: '2026-02-05',

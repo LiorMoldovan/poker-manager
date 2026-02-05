@@ -970,13 +970,18 @@ export const generateAIForecasts = async (
   // Calculate SUGGESTED expected profit for each player
   // Use AMPLIFIED predictions for more interesting forecasts
   const playerSuggestions = players.map(p => {
-    // Recent average (last 5 games)
-    const last5 = p.gameHistory.slice(0, 5);
-    const recentAvg = last5.length > 0 ? last5.reduce((sum, g) => sum + g.profit, 0) / last5.length : 0;
+    // Use CURRENT YEAR games (matches the visible table!)
+    const currentYearGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear;
+    });
+    const yearAvg = currentYearGames.length > 0 
+      ? currentYearGames.reduce((sum, g) => sum + g.profit, 0) / currentYearGames.length 
+      : 0;
     
-    // Weighted score: 70% recent, 30% overall (if has recent data)
+    // Weighted score: 70% current year, 30% all-time (if has year data)
     let suggested = p.gamesPlayed === 0 ? 0 : 
-      last5.length >= 3 ? (recentAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
+      currentYearGames.length >= 2 ? (yearAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
     
     // Apply streak modifiers
     if (p.currentStreak >= 4) suggested *= 1.5;
@@ -1014,25 +1019,32 @@ export const generateAIForecasts = async (
     sortedByAbs[0].suggested -= finalTotal;
   }
   
-  // Pre-select SURPRISE candidates (bad history but recent improvement = surprise WIN expected)
+  // Pre-select SURPRISE candidates (bad all-time history but good CURRENT YEAR = surprise WIN expected)
   const surpriseCandidates = players.filter(p => {
     if (p.gamesPlayed < 5) return false;
-    const last5 = p.gameHistory.slice(0, 5);
-    if (last5.length < 3) return false;
     
-    const recentAvg = last5.reduce((sum, g) => sum + g.profit, 0) / last5.length;
+    // Use CURRENT YEAR games for "recent" performance
+    const yearGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear;
+    });
+    if (yearGames.length < 2) return false;
     
-    // SURPRISE = bad overall history but good recent form (unexpected WIN)
+    const yearAvg = yearGames.reduce((sum, g) => sum + g.profit, 0) / yearGames.length;
+    
+    // SURPRISE = bad all-time history but good CURRENT YEAR (unexpected WIN)
     // This ensures surprise always means POSITIVE prediction
-    return p.avgProfit < -5 && recentAvg > 10;
+    return p.avgProfit < -5 && yearAvg > 10;
   });
   
   // Pick 0-1 surprise (only if good candidate exists)
   const selectedSurprises = surpriseCandidates.length > 0 
     ? [surpriseCandidates.sort((a, b) => {
-        const aRecent = a.gameHistory.slice(0, 5).reduce((sum, g) => sum + g.profit, 0) / 5;
-        const bRecent = b.gameHistory.slice(0, 5).reduce((sum, g) => sum + g.profit, 0) / 5;
-        return bRecent - aRecent; // Pick the one with best recent form
+        const aYearGames = a.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+        const bYearGames = b.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+        const aYearAvg = aYearGames.length > 0 ? aYearGames.reduce((sum, g) => sum + g.profit, 0) / aYearGames.length : 0;
+        const bYearAvg = bYearGames.length > 0 ? bYearGames.reduce((sum, g) => sum + g.profit, 0) / bYearGames.length : 0;
+        return bYearAvg - aYearAvg; // Pick the one with best current year form
       })[0].name]
     : [];
   
@@ -1112,9 +1124,16 @@ export const generateAIForecasts = async (
     // Combine streak with explicit last game (to prevent AI confusion)
     const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
     
-    // Get recent average
-    const last5 = p.gameHistory.slice(0, 5);
-    const recentAvg = last5.length > 0 ? Math.round(last5.reduce((sum, g) => sum + g.profit, 0) / last5.length) : 0;
+    // Get CURRENT YEAR games only (matches what players see in the table!)
+    const currentYearGames = p.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === currentYear;
+    });
+    
+    // Recent average = current year average (to match the visible table)
+    const recentAvg = currentYearGames.length > 0 
+      ? Math.round(currentYearGames.reduce((sum, g) => sum + g.profit, 0) / currentYearGames.length) 
+      : 0;
     
     // Get suggested expected profit
     const suggestion = playerSuggestions.find(s => s.name === p.name)?.suggested || 0;
@@ -1201,8 +1220,13 @@ export const generateAIForecasts = async (
     lines.push(`משחק אחרון: ${lastGameResult}`);
     if (streakText) lines.push(`רצף: ${streakText}`);
     
-    lines.push(`5 אחרונים: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)`);
-    lines.push(`היסטוריה: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
+    // Show current year games (matches what players see in the table)
+    if (currentYearGames.length > 0) {
+      lines.push(`${currentYear}: ${currentYearGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${currentYearGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)`);
+    } else {
+      lines.push(`${currentYear}: אין משחקים עדיין`);
+    }
+    lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
     
     if (trendText) lines.push(trendText);
     
