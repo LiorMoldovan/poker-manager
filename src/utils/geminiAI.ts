@@ -1149,26 +1149,45 @@ export const generateAIForecasts = async (
     const allTimeAvg = Math.round(p.avgProfit);
     const trendDiff = recentAvg - allTimeAvg;
     let trendText = '';
-    if (trendDiff >= 20) {
-      trendText = `📈 IMPROVING: Recent avg (${recentAvg >= 0 ? '+' : ''}${recentAvg}₪) much better than all-time avg (${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪)`;
-    } else if (trendDiff <= -20) {
-      trendText = `📉 DECLINING: Recent avg (${recentAvg >= 0 ? '+' : ''}${recentAvg}₪) worse than all-time avg (${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪)`;
-    } else if (p.totalProfit < -100 && recentAvg > 0) {
-      trendText = `📈 TURNAROUND: History is negative (${Math.round(p.totalProfit)}₪ total) but recent games are positive!`;
+    if (p.totalProfit < -100 && recentAvg > 0) {
+      // TURNAROUND has priority - most interesting story
+      trendText = `📈 מגמת שיפור! היסטוריה: ${Math.round(p.totalProfit)}₪ | לאחרונה: ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`;
     } else if (p.totalProfit > 100 && recentAvg < -10) {
-      trendText = `📉 SLUMP: Usually profitable (${Math.round(p.totalProfit)}₪ total) but recent form is weak`;
+      trendText = `📉 בירידה. היסטוריה: +${Math.round(p.totalProfit)}₪ | לאחרונה: ממוצע ${recentAvg}₪`;
+    } else if (trendDiff >= 20) {
+      trendText = `📈 משתפר: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
+    } else if (trendDiff <= -20) {
+      trendText = `📉 יורד: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
     }
     
-    // Only show all-time if notable (TOP 3 or close battle)
-    const showAllTime = isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100));
+    // Build concise player data block
+    const lines = [];
+    lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══`);
     
-    return `
-══ ${p.name.toUpperCase()} ${p.isFemale ? '(FEMALE)' : ''} ══
-${comebackText ? `🔙 ${comebackText}\n` : ''}LAST GAME: ${lastGameResult}
-${streakText ? `STREAK: ${streakText}\n` : ''}RECENT (Last 5): ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ → AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪
-ALL-TIME: ${p.gamesPlayed} games, total ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪, avg ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪ per game
-${trendText ? `${trendText}\n` : ''}⭐ CURRENT RANKING (${currentYear}): #${rankTonight}/${players.length} מבין שחקני הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪${rankTonight === 1 ? ' 👑מוביל!' : rankTonight <= 3 ? ' 🥈TOP3' : ''}
-${showAllTime ? `ALL-TIME RANKING: #${allTimeRank}/${allTimeTotalActive} בטבלה הכללית${allTimeRank <= 3 ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 ? ` (רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!)` : ''}\n` : ''}EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+    if (comebackText) lines.push(`🔙 ${comebackText}`);
+    
+    lines.push(`משחק אחרון: ${lastGameResult}`);
+    if (streakText) lines.push(`רצף: ${streakText}`);
+    
+    lines.push(`5 אחרונים: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)`);
+    lines.push(`היסטוריה: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
+    
+    if (trendText) lines.push(trendText);
+    
+    lines.push(`דירוג ${currentYear}: #${rankTonight} מבין ${players.length} השחקנים (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
+    
+    // Only show all-time rank if notable
+    if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {
+      let allTimeNote = `דירוג כללי: #${allTimeRank}/${allTimeTotalActive}`;
+      if (gapToAboveAllTime && gapToAboveAllTime <= 100) {
+        allTimeNote += ` (${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1})`;
+      }
+      lines.push(allTimeNote);
+    }
+    
+    lines.push(`צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
+    
+    return lines.join('\n');
   }).join('\n');
   
   // Calculate realistic profit ranges from player data
@@ -1202,59 +1221,49 @@ ${showAllTime ? `ALL-TIME RANKING: #${allTimeRank}/${allTimeTotalActive} בטב�
     })
     .join('\n');
   
-  const prompt = `Poker predictions for tonight. Output in HEBREW.
+  const prompt = `תחזית פוקר להערב. פלט JSON בעברית בלבד.
 
-📊 PLAYER DATA:
+📊 נתוני שחקנים:
 ${playerDataText}
-${milestonesText ? `\n🎯 MILESTONES:\n${milestonesText}` : ''}
+${milestonesText ? `\n🎯 אבני דרך:\n${milestonesText}` : ''}
 ${surpriseText}
 
 ═══════════════════════════════════════════════════════════════════
-🎯 SENTENCE MUST USE ACTUAL DATA! Be specific, not generic!
+📋 הוראות
 ═══════════════════════════════════════════════════════════════════
 
-EACH SENTENCE MUST INCLUDE AT LEAST ONE SPECIFIC FACT:
-- Last game result: "אחרי ניצחון של 120₪ במשחק האחרון..."
-- Streak: "עם 3 ניצחונות רצופים..." or "אחרי 2 הפסדים..."
-- Recent form: "ממוצע של +45₪ ב-5 משחקים אחרונים..."
-- Ranking: "במקום 2 מבין 7 הלילה..."
-- Trend contrast: "למרות -200₪ כולל, ב-5 משחקים אחרונים הרוויח..."
-- Battle: "רק 30₪ מאחורי ליאור..."
+1️⃣ סכום כל ה-expectedProfit חייב להיות בדיוק 0
+2️⃣ השתמש בצפי מהנתונים (גמישות ±30₪)
+3️⃣ מור = לשון נקבה. שאר השחקנים = לשון זכר
 
-❌ BORING/GENERIC (FORBIDDEN):
-- "צפוי לערב טוב" (no data!)
-- "יתאמץ הלילה" (no data!)
-- "בדרך להצלחה" (no data!)
+🎯 התאמת טון:
+• expectedProfit חיובי → משפט אופטימי
+• expectedProfit שלילי → "מאתגר אך אפשרי" (לא מייאש!)
+• isSurprise=true רק כש-expectedProfit חיובי (הפתעה = ניצחון לא צפוי)
 
-✅ GOOD (USE DATA!):
-- "אחרי ניצחון של 80₪ ורצף של 3, צפוי להמשיך את הדומיננטיות"
-- "למרות היסטוריה של -150₪, ב-5 משחקים אחרונים שינה כיוון עם ממוצע של +30₪"
-- "במקום 2 מבין 7 הלילה, רק 50₪ מהמוביל - קרב צמוד!"
+📈 מגמות (עדיפות גבוהה! אם יש 📈 או 📉):
+• 📈 שיפור: חובה להדגיש! "למרות היסטוריה של X₪, ממוצע אחרון Y₪ - מגמת עלייה"
+• 📉 ירידה: "בדרך כלל ממוצע X₪, אבל לאחרונה Y₪ - מחפש לחזור לעצמו"
+• זו הנקודה המעניינת ביותר - תמיד הזכר את הניגוד!
 
-═══════════════════════════════════════════════════════════════════
-⚠️ ALIGNMENT: expectedProfit, highlight, sentence MUST MATCH
-═══════════════════════════════════════════════════════════════════
+✍️ כל משפט חייב עובדה ספציפית אחת לפחות:
+• תוצאת משחק אחרון: "אחרי +80₪ במשחק האחרון..."
+• רצף: "עם 3 ניצחונות רצופים..."
+• ממוצע אחרון: "ממוצע +45₪ ב-5 משחקים..."
+• דירוג: "במקום 2 מבין ${players.length} השחקנים..."
+• קרב צמוד: "רק 30₪ מהמקום הבא..."
 
-- POSITIVE expectedProfit → optimistic tone (but still use data!)
-- NEGATIVE expectedProfit → challenging but hopeful (but still use data!)
-- isSurprise: true → ONLY if expectedProfit is POSITIVE
+🔙 שחקנים חוזרים (מסומנים 🔙) - חובה להזכיר את החזרה!
 
-📈 TREND (if marked 📈 or 📉):
-- 📈 IMPROVING: "למרות עבר קשה, הפורמה האחרונה של X₪ מבטיחה"
-- 📉 DECLINING: "בדרך כלל מרוויח X₪ למשחק, אבל לאחרונה מתקשה"
+❌ לא לעשות:
+• לכתוב את מספר ה-expectedProfit במשפט
+• משפטים גנריים בלי מספרים
+• להדגיש הפסדים גדולים בסכום
 
-📋 RULES:
-1. Use EXPECTED profit (±30₪ max), sum MUST = 0
-2. DON'T write expectedProfit NUMBER in sentence (shown separately)
-3. Rankings: "מבין ${players.length} הלילה" for ${currentYear}
-4. 🔙 COMEBACK players - mention their return!
-5. מור = feminine Hebrew
-6. Don't highlight big losses negatively
+📝 פלט:
+[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים עם נתון", "sentence":"25-40 מילים עם עובדות", "isSurprise":boolean}]
 
-📝 OUTPUT (JSON):
-[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 5-10 words WITH DATA", "sentence":"Hebrew 25-40 words WITH SPECIFIC NUMBERS", "isSurprise":boolean}]
-
-Sum = 0. Return ONLY JSON.`;
+סכום=0. JSON בלבד.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
