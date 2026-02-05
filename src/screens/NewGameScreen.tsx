@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem } from '../utils/geminiAI';
+import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem, GlobalRankingContext } from '../utils/geminiAI';
 
 // Default location options
 const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
@@ -1198,6 +1198,114 @@ const NewGameScreen = () => {
     }
   };
 
+  /**
+   * Calculate global rankings among ACTIVE players (33% threshold)
+   * This matches the Statistics screen's active filter logic
+   */
+  const calculateGlobalRankings = (): GlobalRankingContext => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    const allPlayersList = getAllPlayers();
+    const currentYear = new Date().getFullYear();
+    const currentHalf = new Date().getMonth() < 6 ? 1 : 2;
+    const halfStartMonth = currentHalf === 1 ? 0 : 6;
+    
+    // Helper to calculate player stats for a date range
+    const calculateStatsForPeriod = (
+      startDate?: Date,
+      endDate?: Date
+    ): { playerStats: Map<string, { name: string; profit: number; gamesPlayed: number }>; totalGames: number } => {
+      const filteredGames = allGames.filter(g => {
+        const gameDate = new Date(g.date);
+        if (startDate && gameDate < startDate) return false;
+        if (endDate && gameDate > endDate) return false;
+        return true;
+      });
+      
+      const playerStats = new Map<string, { name: string; profit: number; gamesPlayed: number }>();
+      
+      for (const gp of allGamePlayers) {
+        const game = filteredGames.find(g => g.id === gp.gameId);
+        if (!game) continue;
+        
+        const player = allPlayersList.find(p => p.id === gp.playerId);
+        if (!player) continue;
+        
+        const current = playerStats.get(player.name) || { name: player.name, profit: 0, gamesPlayed: 0 };
+        playerStats.set(player.name, {
+          name: player.name,
+          profit: current.profit + gp.profit,
+          gamesPlayed: current.gamesPlayed + 1
+        });
+      }
+      
+      return { playerStats, totalGames: filteredGames.length };
+    };
+    
+    // ALL-TIME rankings
+    const { playerStats: allTimeStats, totalGames: allTimeTotalGames } = calculateStatsForPeriod();
+    const allTimeThreshold = Math.ceil(allTimeTotalGames * 0.33);
+    const allTimeActive = [...allTimeStats.values()]
+      .filter(p => p.gamesPlayed >= allTimeThreshold)
+      .sort((a, b) => b.profit - a.profit);
+    
+    // CURRENT YEAR rankings
+    const yearStart = new Date(currentYear, 0, 1);
+    const { playerStats: yearStats, totalGames: yearTotalGames } = calculateStatsForPeriod(yearStart);
+    const yearThreshold = Math.ceil(yearTotalGames * 0.33);
+    const yearActive = [...yearStats.values()]
+      .filter(p => p.gamesPlayed >= yearThreshold)
+      .sort((a, b) => b.profit - a.profit);
+    
+    // CURRENT HALF rankings
+    const halfStart = new Date(currentYear, halfStartMonth, 1);
+    const halfEnd = new Date(currentYear, halfStartMonth + 6, 0);
+    const { playerStats: halfStats, totalGames: halfTotalGames } = calculateStatsForPeriod(halfStart, halfEnd);
+    const halfThreshold = Math.ceil(halfTotalGames * 0.33);
+    const halfActive = [...halfStats.values()]
+      .filter(p => p.gamesPlayed >= halfThreshold)
+      .sort((a, b) => b.profit - a.profit);
+    
+    return {
+      allTime: {
+        totalActivePlayers: allTimeActive.length,
+        totalGames: allTimeTotalGames,
+        threshold: allTimeThreshold,
+        rankings: allTimeActive.map((p, i) => ({ 
+          name: p.name, 
+          rank: i + 1, 
+          profit: p.profit,
+          gamesPlayed: p.gamesPlayed
+        }))
+      },
+      currentYear: {
+        year: currentYear,
+        totalActivePlayers: yearActive.length,
+        totalGames: yearTotalGames,
+        threshold: yearThreshold,
+        rankings: yearActive.map((p, i) => ({ 
+          name: p.name, 
+          rank: i + 1, 
+          profit: p.profit,
+          gamesPlayed: p.gamesPlayed
+        }))
+      },
+      currentHalf: {
+        half: currentHalf as 1 | 2,
+        year: currentYear,
+        totalActivePlayers: halfActive.length,
+        totalGames: halfTotalGames,
+        threshold: halfThreshold,
+        rankings: halfActive.map((p, i) => ({ 
+          name: p.name, 
+          rank: i + 1, 
+          profit: p.profit,
+          gamesPlayed: p.gamesPlayed
+        }))
+      }
+    };
+  };
+
   const handleShowForecast = async () => {
     if (selectedIds.size < 2) {
       setError('Select at least 2 players');
@@ -1250,7 +1358,10 @@ const NewGameScreen = () => {
           };
         });
         
-        const forecasts = await generateAIForecasts(playerData);
+        // Calculate global rankings for accurate table positions
+        const globalRankings = calculateGlobalRankings();
+        
+        const forecasts = await generateAIForecasts(playerData, globalRankings);
         setAiForecasts(forecasts);
         setIsLoadingAI(false);
         
