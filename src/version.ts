@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.4';
+export const APP_VERSION = '4.42.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.42.5',
+    date: '2026-02-05',
+    changes: [
+      '📈 Added TREND ANALYSIS: AI compares recent vs all-time performance',
+      '✅ IMPROVING: "history bad but recent good" → optimistic forecast',
+      '✅ DECLINING: "usually good but recent slump" → cautious forecast',
+      '✅ Player data now shows both recent avg AND all-time avg for comparison',
+      '✅ AI instructed to mention trend contrasts in sentences'
+    ]
+  },
   {
     version: '4.42.4',
     date: '2026-02-05',

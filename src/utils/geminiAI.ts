@@ -1145,15 +1145,30 @@ export const generateAIForecasts = async (
     // Calculate all-time rank among tonight's players (for comparison)
     const allTimeRankTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit).findIndex(sp => sp.name === p.name) + 1;
     
+    // Calculate trend: compare recent avg to all-time avg
+    const allTimeAvg = Math.round(p.avgProfit);
+    const trendDiff = recentAvg - allTimeAvg;
+    let trendText = '';
+    if (trendDiff >= 20) {
+      trendText = `📈 IMPROVING: Recent avg (${recentAvg >= 0 ? '+' : ''}${recentAvg}₪) much better than all-time avg (${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪)`;
+    } else if (trendDiff <= -20) {
+      trendText = `📉 DECLINING: Recent avg (${recentAvg >= 0 ? '+' : ''}${recentAvg}₪) worse than all-time avg (${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪)`;
+    } else if (p.totalProfit < -100 && recentAvg > 0) {
+      trendText = `📈 TURNAROUND: History is negative (${Math.round(p.totalProfit)}₪ total) but recent games are positive!`;
+    } else if (p.totalProfit > 100 && recentAvg < -10) {
+      trendText = `📉 SLUMP: Usually profitable (${Math.round(p.totalProfit)}₪ total) but recent form is weak`;
+    }
+    
     // Only show all-time if notable (TOP 3 or close battle)
     const showAllTime = isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100));
     
     return `
 ══ ${p.name.toUpperCase()} ${p.isFemale ? '(FEMALE)' : ''} ══
 ${comebackText ? `🔙 ${comebackText}\n` : ''}LAST GAME: ${lastGameResult}
-${streakText ? `STREAK: ${streakText}\n` : ''}LAST 5 GAMES: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪${recentAvg > p.avgProfit + 10 ? ' ⬆️HOT' : recentAvg < p.avgProfit - 10 ? ' ⬇️COLD' : ''})
-⭐ CURRENT RANKING: #${rankTonight}/${players.length} מבין שחקני הלילה (${currentYear}) | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪${rankTonight === 1 ? ' 👑מוביל!' : rankTonight <= 3 ? ' 🥈TOP3' : ''}
-${showAllTime ? `ALL-TIME: #${allTimeRank}/${allTimeTotalActive} בטבלה הכללית${allTimeRank <= 3 ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 ? ` (רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!)` : ''}\n` : ''}EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+${streakText ? `STREAK: ${streakText}\n` : ''}RECENT (Last 5): ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ → AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪
+ALL-TIME: ${p.gamesPlayed} games, total ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪, avg ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪ per game
+${trendText ? `${trendText}\n` : ''}⭐ CURRENT RANKING (${currentYear}): #${rankTonight}/${players.length} מבין שחקני הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪${rankTonight === 1 ? ' 👑מוביל!' : rankTonight <= 3 ? ' 🥈TOP3' : ''}
+${showAllTime ? `ALL-TIME RANKING: #${allTimeRank}/${allTimeTotalActive} בטבלה הכללית${allTimeRank <= 3 ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 ? ` (רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!)` : ''}\n` : ''}EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
   }).join('\n');
   
   // Calculate realistic profit ranges from player data
@@ -1220,10 +1235,17 @@ ALIGNMENT RULES:
 - expectedProfit: +1 with "על גל" or "ישלוט" ← WRONG! (too small for big claims)
 - isSurprise: true with negative expectedProfit ← WRONG! (surprise = unexpected WIN)
 
+📈 TREND ANALYSIS (USE THIS!):
+- 📈 IMPROVING/TURNAROUND: Player's recent games are BETTER than history → optimistic forecast!
+  Example: "למרות עבר קשה, הפורמה האחרונה מבטיחה" or "בדרך לשינוי מגמה"
+- 📉 DECLINING/SLUMP: Player's recent games are WORSE than history → cautious forecast
+  Example: "הפורמה האחרונה לא משקפת את היכולת" or "מחפש לחזור לעצמו"
+- When trend exists, MENTION the contrast between history and recent form!
+
 📋 OTHER RULES:
 1. Use EXPECTED profit from data (±30₪ max), sum MUST = 0
 2. DON'T write the expectedProfit NUMBER in highlight/sentence
-3. ${currentYear} ranking: "מבין ${players.length} הלילה". ALL-TIME only if TOP 3.
+3. ${currentYear} ranking: "מבין ${players.length} הלילה". ALL-TIME ranking only if TOP 3.
 4. 🔙 COMEBACK players - mention their return!
 5. מור = feminine Hebrew
 6. NEVER highlight big losses or be discouraging
