@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.2';
+export const APP_VERSION = '4.42.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.42.3',
+    date: '2026-02-05',
+    changes: [
+      '🔧 Fixed: Restored critical prompt rules lost in over-optimization',
+      '✅ "DON\'T mention expectedProfit number in sentence" rule restored',
+      '✅ Tone/profit correlation enforced (positive→optimistic, negative→hopeful)',
+      '✅ Current ranking (2026) made more prominent, all-time only if notable',
+      '✅ Player data restructured - clearer hierarchy',
+      '❌ No more highlighting big losses'
+    ]
+  },
   {
     version: '4.42.2',
     date: '2026-02-05',

@@ -1145,14 +1145,15 @@ export const generateAIForecasts = async (
     // Calculate all-time rank among tonight's players (for comparison)
     const allTimeRankTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit).findIndex(sp => sp.name === p.name) + 1;
     
+    // Only show all-time if notable (TOP 3 or close battle)
+    const showAllTime = isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100));
+    
     return `
-══ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '(FEMALE)' : ''} ══
-${comebackText ? `🔙 ${comebackText}\n` : ''}
-LAST GAME: ${lastGameResult} | ${streakText}
-LAST 5: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ | AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ${recentAvg > p.avgProfit + 10 ? '⬆️HOT' : recentAvg < p.avgProfit - 10 ? '⬇️COLD' : ''}
-${currentYear}: #${rankTonight}/${players.length} הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ${rankTonight === 1 ? '👑' : rankTonight <= 3 ? '🥈' : ''}
-ALL-TIME: #${allTimeRankTonight}/${players.length} הלילה${isActiveAllTime ? ` | #${allTimeRank}/${allTimeTotalActive} כללי | ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪` : ''}${allTimeRank <= 3 && isActiveAllTime ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 && isActiveAllTime ? ` 🔥${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}` : ''}
-EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+══ ${p.name.toUpperCase()} ${p.isFemale ? '(FEMALE)' : ''} ══
+${comebackText ? `🔙 ${comebackText}\n` : ''}LAST GAME: ${lastGameResult}
+${streakText ? `STREAK: ${streakText}\n` : ''}LAST 5 GAMES: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪${recentAvg > p.avgProfit + 10 ? ' ⬆️HOT' : recentAvg < p.avgProfit - 10 ? ' ⬇️COLD' : ''})
+⭐ CURRENT RANKING: #${rankTonight}/${players.length} מבין שחקני הלילה (${currentYear}) | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪${rankTonight === 1 ? ' 👑מוביל!' : rankTonight <= 3 ? ' 🥈TOP3' : ''}
+${showAllTime ? `ALL-TIME: #${allTimeRank}/${allTimeTotalActive} בטבלה הכללית${allTimeRank <= 3 ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 ? ` (רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!)` : ''}\n` : ''}EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
   }).join('\n');
   
   // Calculate realistic profit ranges from player data
@@ -1186,31 +1187,57 @@ EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
     })
     .join('\n');
   
-  const prompt = `Poker predictions for tonight's game. Output HEBREW.
+  const prompt = `Poker predictions for tonight. Output in HEBREW.
 
-📊 PLAYERS:
+📊 PLAYER DATA:
 ${playerDataText}
 ${milestonesText ? `\n🎯 MILESTONES:\n${milestonesText}` : ''}
 ${surpriseText}
 
-📋 RULES:
-- Use EXPECTED profit (±30₪), sum MUST = 0
-- Positive profit → optimistic tone | Negative → challenging but hopeful
-- Each sentence DIFFERENT angle, 25-40 words Hebrew
-- Rankings: "${players.length} הלילה" for ${currentYear}, "בטבלה הכללית" for all-time
-- 🔙 COMEBACK players = mention their return!
-- מור = feminine Hebrew
+═══════════════════════════════════════════════════════════════════
+📋 CRITICAL RULES (MUST FOLLOW!)
+═══════════════════════════════════════════════════════════════════
 
-🎯 PRIORITY (pick main angle per player):
-1. LAST GAME result or STREAK (if 2+)
-2. RECENT 5-game form (if hot/cold trend)
-3. ${currentYear} rank "מבין ${players.length} הלילה"
-4. ALL-TIME only if TOP 3 or close battle
+1. Use the EXPECTED profit shown (±30₪ max), sum MUST = 0
+2. DON'T mention the expectedProfit NUMBER in the sentence (it's shown separately!)
+3. TONE must match prediction:
+   - Positive profit → optimistic: "ימשיך לנצח", "על גל", "בדרך להצלחה"
+   - Negative profit → hopeful challenge: "מחפש קאמבק", "יתקשה אבל יכול להפתיע"
+   - NEVER write discouraging text or highlight big losses!
 
-📝 OUTPUT JSON:
-[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 10 words", "sentence":"Hebrew 25-40 words", "isSurprise":boolean}]
+4. Use ONLY the ${currentYear} ranking shown ("מבין ${players.length} הלילה")
+   - This is the CURRENT ranking - use it!
+   - ALL-TIME ranking only if player is TOP 3 or has close battle (<100₪)
 
-Sum must = 0. Return ONLY JSON.`;
+5. 🔙 COMEBACK players (marked with 🔙) - MUST mention their return!
+
+6. Each sentence must be DIFFERENT - vary the angles:
+   - Last game result
+   - Streak (if 2+)
+   - Recent form trend
+   - Tonight's ranking
+   - Rivalry with another player
+
+7. מור = feminine Hebrew. All others male.
+
+📝 OUTPUT (JSON ONLY):
+[
+  {
+    "name": "Player Name",
+    "expectedProfit": number,
+    "highlight": "Short Hebrew stat (max 10 words)",
+    "sentence": "Hebrew 25-40 words - encouraging, matches profit direction",
+    "isSurprise": boolean
+  }
+]
+
+⚠️ FINAL CHECK:
+- Sum of expectedProfit = 0
+- No expectedProfit number in sentences
+- Positive prediction = optimistic text, Negative = hopeful challenge
+- Rankings use "מבין ${players.length} הלילה" for current period
+
+Return ONLY clean JSON array.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
