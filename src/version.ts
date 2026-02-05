@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.5';
+export const APP_VERSION = '4.42.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.42.6',
+    date: '2026-02-05',
+    changes: [
+      '🔧 Fixed boring/generic sentences - now MUST include actual data',
+      '✅ Required: streaks, profits, rankings, trends with real numbers',
+      '❌ Forbidden: generic phrases like "צפוי לערב טוב" without data',
+      '✅ Examples added: "אחרי ניצחון של 80₪ ורצף של 3..."',
+      '✅ Kept: trend analysis, alignment rules, comeback mentions'
+    ]
+  },
   {
     version: '4.42.5',
     date: '2026-02-05',

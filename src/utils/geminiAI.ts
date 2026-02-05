@@ -1210,55 +1210,51 @@ ${milestonesText ? `\n🎯 MILESTONES:\n${milestonesText}` : ''}
 ${surpriseText}
 
 ═══════════════════════════════════════════════════════════════════
-⚠️ CRITICAL: THE 3 PARTS MUST TELL THE SAME STORY!
+🎯 SENTENCE MUST USE ACTUAL DATA! Be specific, not generic!
 ═══════════════════════════════════════════════════════════════════
 
-Each player has 3 output parts that MUST ALIGN:
-  1. expectedProfit (number) - the prediction
-  2. highlight (short phrase) - summarizes the prediction direction
-  3. sentence (full text) - explains the prediction
+EACH SENTENCE MUST INCLUDE AT LEAST ONE SPECIFIC FACT:
+- Last game result: "אחרי ניצחון של 120₪ במשחק האחרון..."
+- Streak: "עם 3 ניצחונות רצופים..." or "אחרי 2 הפסדים..."
+- Recent form: "ממוצע של +45₪ ב-5 משחקים אחרונים..."
+- Ranking: "במקום 2 מבין 7 הלילה..."
+- Trend contrast: "למרות -200₪ כולל, ב-5 משחקים אחרונים הרוויח..."
+- Battle: "רק 30₪ מאחורי ליאור..."
 
-ALIGNMENT RULES:
-┌─────────────────┬────────────────────────────────────────────────────┐
-│ expectedProfit  │ highlight & sentence MUST say                     │
-├─────────────────┼────────────────────────────────────────────────────┤
-│ POSITIVE (+50+) │ Strong win: "על גל", "ימשיך לשלוט", "צפוי לנצח"   │
-│ POSITIVE (+1-49)│ Likely win: "סיכוי טוב", "יסיים ברווח"            │
-│ ZERO (0)        │ Even: "ערב מאוזן", "לא חד צדדי"                   │
-│ NEGATIVE (-1-49)│ Challenge: "יתאמץ", "לא קל אבל אפשרי"             │
-│ NEGATIVE (-50-) │ Tough night: "ערב מאתגר", "יצטרך להילחם"          │
-└─────────────────┴────────────────────────────────────────────────────┘
+❌ BORING/GENERIC (FORBIDDEN):
+- "צפוי לערב טוב" (no data!)
+- "יתאמץ הלילה" (no data!)
+- "בדרך להצלחה" (no data!)
 
-❌ FORBIDDEN COMBINATIONS (these are CONTRADICTIONS!):
-- expectedProfit: -50 with "בדרך להצלחה" or "הפתעה חיובית" ← WRONG!
-- expectedProfit: +80 with "יתקשה" or "ערב מאתגר" ← WRONG!
-- expectedProfit: +1 with "על גל" or "ישלוט" ← WRONG! (too small for big claims)
-- isSurprise: true with negative expectedProfit ← WRONG! (surprise = unexpected WIN)
+✅ GOOD (USE DATA!):
+- "אחרי ניצחון של 80₪ ורצף של 3, צפוי להמשיך את הדומיננטיות"
+- "למרות היסטוריה של -150₪, ב-5 משחקים אחרונים שינה כיוון עם ממוצע של +30₪"
+- "במקום 2 מבין 7 הלילה, רק 50₪ מהמוביל - קרב צמוד!"
 
-📈 TREND ANALYSIS (USE THIS!):
-- 📈 IMPROVING/TURNAROUND: Player's recent games are BETTER than history → optimistic forecast!
-  Example: "למרות עבר קשה, הפורמה האחרונה מבטיחה" or "בדרך לשינוי מגמה"
-- 📉 DECLINING/SLUMP: Player's recent games are WORSE than history → cautious forecast
-  Example: "הפורמה האחרונה לא משקפת את היכולת" or "מחפש לחזור לעצמו"
-- When trend exists, MENTION the contrast between history and recent form!
+═══════════════════════════════════════════════════════════════════
+⚠️ ALIGNMENT: expectedProfit, highlight, sentence MUST MATCH
+═══════════════════════════════════════════════════════════════════
 
-📋 OTHER RULES:
-1. Use EXPECTED profit from data (±30₪ max), sum MUST = 0
-2. DON'T write the expectedProfit NUMBER in highlight/sentence
-3. ${currentYear} ranking: "מבין ${players.length} הלילה". ALL-TIME ranking only if TOP 3.
+- POSITIVE expectedProfit → optimistic tone (but still use data!)
+- NEGATIVE expectedProfit → challenging but hopeful (but still use data!)
+- isSurprise: true → ONLY if expectedProfit is POSITIVE
+
+📈 TREND (if marked 📈 or 📉):
+- 📈 IMPROVING: "למרות עבר קשה, הפורמה האחרונה של X₪ מבטיחה"
+- 📉 DECLINING: "בדרך כלל מרוויח X₪ למשחק, אבל לאחרונה מתקשה"
+
+📋 RULES:
+1. Use EXPECTED profit (±30₪ max), sum MUST = 0
+2. DON'T write expectedProfit NUMBER in sentence (shown separately)
+3. Rankings: "מבין ${players.length} הלילה" for ${currentYear}
 4. 🔙 COMEBACK players - mention their return!
 5. מור = feminine Hebrew
-6. NEVER highlight big losses or be discouraging
+6. Don't highlight big losses negatively
 
-📝 OUTPUT FORMAT (JSON):
-[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 5-10 words", "sentence":"Hebrew 25-40 words", "isSurprise":boolean}]
+📝 OUTPUT (JSON):
+[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 5-10 words WITH DATA", "sentence":"Hebrew 25-40 words WITH SPECIFIC NUMBERS", "isSurprise":boolean}]
 
-⚠️ BEFORE RETURNING - VERIFY EACH PLAYER:
-✓ Is expectedProfit positive? → highlight & sentence must be optimistic
-✓ Is expectedProfit negative? → highlight & sentence must be "challenging but hopeful"
-✓ Is isSurprise true? → expectedProfit must be POSITIVE (surprise = unexpected win)
-
-Return ONLY clean JSON array.`;
+Sum = 0. Return ONLY JSON.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
