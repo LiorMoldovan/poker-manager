@@ -1224,8 +1224,21 @@ export const generateAIForecasts = async (
     const halfThreshold = globalRankings?.currentHalf.threshold || 0;
     const isActiveHalf = halfRank > 0;
     
-    // Rank among tonight's players BY YEAR PROFIT (2026) - this matches the table!
-    const rankTonight = tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+    // Use GLOBAL HALF ranking if available (matches the visible period table!)
+    // This is the rank among ALL active players, not just tonight's
+    let rankTonight: number;
+    let rankTotalPlayers: number;
+    
+    if (halfRank > 0) {
+      // Use global half ranking (among all active players)
+      rankTonight = halfRank;
+      rankTotalPlayers = halfTotalActive;
+    } else {
+      // Fallback: rank among tonight's players by year profit
+      rankTonight = tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+      rankTotalPlayers = players.length;
+    }
+    
     const tonightAbove = rankTonight > 1 ? tonightRanking[rankTonight - 2] : null;
     const tonightBelow = rankTonight < players.length ? tonightRanking[rankTonight] : null;
     const gapToAboveTonight = tonightAbove ? Math.round(tonightAbove.yearProfit - p.yearProfit) : null;
@@ -1269,7 +1282,9 @@ export const generateAIForecasts = async (
     
     if (trendText) lines.push(trendText);
     
-    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${players.length} השחקנים (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
+    // Show ranking - use global rank if available, otherwise rank among tonight's players
+    const rankContext = halfRank > 0 ? `${rankTotalPlayers} שחקנים פעילים` : `${players.length} שחקני הערב`;
+    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${rankContext} (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
     
     // Only show all-time rank if notable
     if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {

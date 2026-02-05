@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.4';
+export const APP_VERSION = '4.43.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.5',
+    date: '2026-02-05',
+    changes: [
+      '🔧 FIX: Ranking now uses GLOBAL half-year ranking (matches visible table)',
+      '✅ Uses rank among ALL active players, not just tonight\'s players',
+      '✅ Shows "X שחקנים פעילים" when using global rank',
+      '✅ Falls back to tonight\'s players ranking if global not available'
+    ]
+  },
   {
     version: '4.43.4',
     date: '2026-02-05',
