@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.3';
+export const APP_VERSION = '4.43.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.4',
+    date: '2026-02-05',
+    changes: [
+      '🔧 FIX: Now uses CURRENT PERIOD (H1/H2) not just year',
+      '✅ H1 2026 = Jan-Jun, H2 2026 = Jul-Dec',
+      '✅ If no games in current half, falls back to previous half WITH NOTE',
+      '✅ Player data shows period label (e.g., "H1 2026")',
+      '✅ If using previous period, marked as "(מתקופה קודמת)"'
+    ]
+  },
   {
     version: '4.43.3',
     date: '2026-02-05',

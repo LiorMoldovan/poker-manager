@@ -967,21 +967,52 @@ export const generateAIForecasts = async (
   
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
+  // Helper: Get games for a specific half-year period
+  const getHalfGames = (player: typeof players[0], year: number, half: 1 | 2) => {
+    const startMonth = half === 1 ? 0 : 6;
+    const endMonth = half === 1 ? 5 : 11;
+    return player.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === year && d.getMonth() >= startMonth && d.getMonth() <= endMonth;
+    });
+  };
+  
+  // Helper: Get previous period (H1->prev year H2, H2->same year H1)
+  const getPreviousPeriod = () => {
+    if (currentHalf === 1) {
+      return { year: currentYear - 1, half: 2 as const, label: `H2 ${currentYear - 1}` };
+    } else {
+      return { year: currentYear, half: 1 as const, label: `H1 ${currentYear}` };
+    }
+  };
+  
+  const currentPeriodLabel = `H${currentHalf} ${currentYear}`;
+  const prevPeriod = getPreviousPeriod();
+
   // Calculate SUGGESTED expected profit for each player
   // Use AMPLIFIED predictions for more interesting forecasts
   const playerSuggestions = players.map(p => {
-    // Use CURRENT YEAR games (matches the visible table!)
-    const currentYearGames = p.gameHistory.filter(g => {
-      const d = parseGameDate(g.date);
-      return d.getFullYear() === currentYear;
-    });
-    const yearAvg = currentYearGames.length > 0 
-      ? currentYearGames.reduce((sum, g) => sum + g.profit, 0) / currentYearGames.length 
+    // Use CURRENT HALF games first (matches the visible table!)
+    const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
+    const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
+    
+    // Determine which period to use
+    let periodGames = currentHalfGames;
+    let usingPrevPeriod = false;
+    
+    if (currentHalfGames.length < 2 && prevHalfGames.length >= 2) {
+      // Fall back to previous period
+      periodGames = prevHalfGames;
+      usingPrevPeriod = true;
+    }
+    
+    const periodAvg = periodGames.length > 0 
+      ? periodGames.reduce((sum, g) => sum + g.profit, 0) / periodGames.length 
       : 0;
     
-    // Weighted score: 70% current year, 30% all-time (if has year data)
+    // Weighted score: 70% current period, 30% all-time (if has period data)
     let suggested = p.gamesPlayed === 0 ? 0 : 
-      currentYearGames.length >= 2 ? (yearAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
+      periodGames.length >= 2 ? (periodAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
     
     // Apply streak modifiers
     if (p.currentStreak >= 4) suggested *= 1.5;
@@ -1019,32 +1050,29 @@ export const generateAIForecasts = async (
     sortedByAbs[0].suggested -= finalTotal;
   }
   
-  // Pre-select SURPRISE candidates (bad all-time history but good CURRENT YEAR = surprise WIN expected)
+  // Pre-select SURPRISE candidates (bad all-time history but good CURRENT PERIOD = surprise WIN expected)
   const surpriseCandidates = players.filter(p => {
     if (p.gamesPlayed < 5) return false;
     
-    // Use CURRENT YEAR games for "recent" performance
-    const yearGames = p.gameHistory.filter(g => {
-      const d = parseGameDate(g.date);
-      return d.getFullYear() === currentYear;
-    });
-    if (yearGames.length < 2) return false;
+    // Use CURRENT HALF games for "recent" performance
+    const halfGames = getHalfGames(p, currentYear, currentHalf);
+    if (halfGames.length < 2) return false;
     
-    const yearAvg = yearGames.reduce((sum, g) => sum + g.profit, 0) / yearGames.length;
+    const halfAvg = halfGames.reduce((sum, g) => sum + g.profit, 0) / halfGames.length;
     
-    // SURPRISE = bad all-time history but good CURRENT YEAR (unexpected WIN)
+    // SURPRISE = bad all-time history but good CURRENT PERIOD (unexpected WIN)
     // This ensures surprise always means POSITIVE prediction
-    return p.avgProfit < -5 && yearAvg > 10;
+    return p.avgProfit < -5 && halfAvg > 10;
   });
   
   // Pick 0-1 surprise (only if good candidate exists)
   const selectedSurprises = surpriseCandidates.length > 0 
     ? [surpriseCandidates.sort((a, b) => {
-        const aYearGames = a.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
-        const bYearGames = b.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
-        const aYearAvg = aYearGames.length > 0 ? aYearGames.reduce((sum, g) => sum + g.profit, 0) / aYearGames.length : 0;
-        const bYearAvg = bYearGames.length > 0 ? bYearGames.reduce((sum, g) => sum + g.profit, 0) / bYearGames.length : 0;
-        return bYearAvg - aYearAvg; // Pick the one with best current year form
+        const aHalfGames = getHalfGames(a, currentYear, currentHalf);
+        const bHalfGames = getHalfGames(b, currentYear, currentHalf);
+        const aHalfAvg = aHalfGames.length > 0 ? aHalfGames.reduce((sum, g) => sum + g.profit, 0) / aHalfGames.length : 0;
+        const bHalfAvg = bHalfGames.length > 0 ? bHalfGames.reduce((sum, g) => sum + g.profit, 0) / bHalfGames.length : 0;
+        return bHalfAvg - aHalfAvg; // Pick the one with best current period form
       })[0].name]
     : [];
   
@@ -1124,15 +1152,25 @@ export const generateAIForecasts = async (
     // Combine streak with explicit last game (to prevent AI confusion)
     const lastGameInfo = `LAST GAME: ${lastGameResult} (${lastGame?.date || 'N/A'})`;
     
-    // Get CURRENT YEAR games only (matches what players see in the table!)
-    const currentYearGames = p.gameHistory.filter(g => {
-      const d = parseGameDate(g.date);
-      return d.getFullYear() === currentYear;
-    });
+    // Get CURRENT HALF games (matches what players see in the period table!)
+    const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
+    const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
     
-    // Recent average = current year average (to match the visible table)
-    const recentAvg = currentYearGames.length > 0 
-      ? Math.round(currentYearGames.reduce((sum, g) => sum + g.profit, 0) / currentYearGames.length) 
+    // Determine which period to show
+    let periodGames = currentHalfGames;
+    let periodLabel = currentPeriodLabel;
+    let usingPrevPeriod = false;
+    
+    if (currentHalfGames.length === 0 && prevHalfGames.length > 0) {
+      // Fall back to previous period
+      periodGames = prevHalfGames;
+      periodLabel = prevPeriod.label;
+      usingPrevPeriod = true;
+    }
+    
+    // Recent average = current period average (to match the visible table)
+    const recentAvg = periodGames.length > 0 
+      ? Math.round(periodGames.reduce((sum, g) => sum + g.profit, 0) / periodGames.length) 
       : 0;
     
     // Get suggested expected profit
@@ -1220,17 +1258,18 @@ export const generateAIForecasts = async (
     lines.push(`משחק אחרון: ${lastGameResult}`);
     if (streakText) lines.push(`רצף: ${streakText}`);
     
-    // Show current year games (matches what players see in the table)
-    if (currentYearGames.length > 0) {
-      lines.push(`${currentYear}: ${currentYearGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${currentYearGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)`);
-    } else {
-      lines.push(`${currentYear}: אין משחקים עדיין`);
+    // Show current period games (matches what players see in the table)
+    if (periodGames.length > 0) {
+      const periodNote = usingPrevPeriod ? ` (מתקופה קודמת - ${periodLabel})` : '';
+      lines.push(`${periodLabel}: ${periodGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${periodGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)${periodNote}`);
+    } else if (currentHalfGames.length === 0 && prevHalfGames.length === 0) {
+      lines.push(`${currentPeriodLabel}: אין משחקים בתקופה הנוכחית או הקודמת`);
     }
     lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
     
     if (trendText) lines.push(trendText);
     
-    lines.push(`דירוג ${currentYear}: #${rankTonight} מבין ${players.length} השחקנים (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
+    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${players.length} השחקנים (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
     
     // Only show all-time rank if notable
     if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {
@@ -1305,9 +1344,10 @@ ${surpriseText}
 ✍️ כל משפט חייב עובדה ספציפית אחת לפחות:
 • תוצאת משחק אחרון: "אחרי +80₪ במשחק האחרון..."
 • רצף: "עם 3 ניצחונות רצופים..."
-• ממוצע אחרון: השתמש במספר המדויק מ"5 אחרונים (ממוצע: X₪)"
-• דירוג: "במקום 2 מבין ${players.length} השחקנים..."
+• ממוצע תקופה: השתמש במספר מהנתונים (ממוצע: X₪)
+• דירוג: "במקום 2 מבין ${players.length} השחקנים ב-${currentPeriodLabel}..."
 • קרב צמוד: "רק 30₪ מהמקום הבא..."
+• אם מסומן "מתקופה קודמת" - הזכר שהנתונים מתקופה קודמת!
 
 ⚠️ חשוב: השתמש רק במספרים שמופיעים בנתונים - אל תחשב בעצמך!
 
