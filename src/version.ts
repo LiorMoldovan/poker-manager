@@ -1,9 +1,10 @@
 /**
  * App Version Management
  * Increment version with each change for tracking purposes
+ * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.1';
+export const APP_VERSION = '4.41.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.2',
+    date: '2026-02-05',
+    changes: [
+      '✅ Fixed Vercel caching - mobile will now always get latest version',
+      'Added cache-busting headers to vercel.json'
+    ]
+  },
   {
     version: '4.41.1',
     date: '2026-02-05',
