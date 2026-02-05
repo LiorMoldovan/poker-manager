@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.3';
+export const APP_VERSION = '4.42.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.42.4',
+    date: '2026-02-05',
+    changes: [
+      '🔧 CRITICAL: Enforced 3-way alignment between expectedProfit, highlight, and sentence',
+      '✅ Added explicit alignment table: positive profit → optimistic text',
+      '✅ Added forbidden combinations to prevent contradictions',
+      '✅ isSurprise=true now requires POSITIVE expectedProfit',
+      '✅ Added verification checklist at end of prompt'
+    ]
+  },
   {
     version: '4.42.3',
     date: '2026-02-05',

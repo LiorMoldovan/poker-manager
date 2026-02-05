@@ -1195,47 +1195,46 @@ ${milestonesText ? `\n🎯 MILESTONES:\n${milestonesText}` : ''}
 ${surpriseText}
 
 ═══════════════════════════════════════════════════════════════════
-📋 CRITICAL RULES (MUST FOLLOW!)
+⚠️ CRITICAL: THE 3 PARTS MUST TELL THE SAME STORY!
 ═══════════════════════════════════════════════════════════════════
 
-1. Use the EXPECTED profit shown (±30₪ max), sum MUST = 0
-2. DON'T mention the expectedProfit NUMBER in the sentence (it's shown separately!)
-3. TONE must match prediction:
-   - Positive profit → optimistic: "ימשיך לנצח", "על גל", "בדרך להצלחה"
-   - Negative profit → hopeful challenge: "מחפש קאמבק", "יתקשה אבל יכול להפתיע"
-   - NEVER write discouraging text or highlight big losses!
+Each player has 3 output parts that MUST ALIGN:
+  1. expectedProfit (number) - the prediction
+  2. highlight (short phrase) - summarizes the prediction direction
+  3. sentence (full text) - explains the prediction
 
-4. Use ONLY the ${currentYear} ranking shown ("מבין ${players.length} הלילה")
-   - This is the CURRENT ranking - use it!
-   - ALL-TIME ranking only if player is TOP 3 or has close battle (<100₪)
+ALIGNMENT RULES:
+┌─────────────────┬────────────────────────────────────────────────────┐
+│ expectedProfit  │ highlight & sentence MUST say                     │
+├─────────────────┼────────────────────────────────────────────────────┤
+│ POSITIVE (+50+) │ Strong win: "על גל", "ימשיך לשלוט", "צפוי לנצח"   │
+│ POSITIVE (+1-49)│ Likely win: "סיכוי טוב", "יסיים ברווח"            │
+│ ZERO (0)        │ Even: "ערב מאוזן", "לא חד צדדי"                   │
+│ NEGATIVE (-1-49)│ Challenge: "יתאמץ", "לא קל אבל אפשרי"             │
+│ NEGATIVE (-50-) │ Tough night: "ערב מאתגר", "יצטרך להילחם"          │
+└─────────────────┴────────────────────────────────────────────────────┘
 
-5. 🔙 COMEBACK players (marked with 🔙) - MUST mention their return!
+❌ FORBIDDEN COMBINATIONS (these are CONTRADICTIONS!):
+- expectedProfit: -50 with "בדרך להצלחה" or "הפתעה חיובית" ← WRONG!
+- expectedProfit: +80 with "יתקשה" or "ערב מאתגר" ← WRONG!
+- expectedProfit: +1 with "על גל" or "ישלוט" ← WRONG! (too small for big claims)
+- isSurprise: true with negative expectedProfit ← WRONG! (surprise = unexpected WIN)
 
-6. Each sentence must be DIFFERENT - vary the angles:
-   - Last game result
-   - Streak (if 2+)
-   - Recent form trend
-   - Tonight's ranking
-   - Rivalry with another player
+📋 OTHER RULES:
+1. Use EXPECTED profit from data (±30₪ max), sum MUST = 0
+2. DON'T write the expectedProfit NUMBER in highlight/sentence
+3. ${currentYear} ranking: "מבין ${players.length} הלילה". ALL-TIME only if TOP 3.
+4. 🔙 COMEBACK players - mention their return!
+5. מור = feminine Hebrew
+6. NEVER highlight big losses or be discouraging
 
-7. מור = feminine Hebrew. All others male.
+📝 OUTPUT FORMAT (JSON):
+[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 5-10 words", "sentence":"Hebrew 25-40 words", "isSurprise":boolean}]
 
-📝 OUTPUT (JSON ONLY):
-[
-  {
-    "name": "Player Name",
-    "expectedProfit": number,
-    "highlight": "Short Hebrew stat (max 10 words)",
-    "sentence": "Hebrew 25-40 words - encouraging, matches profit direction",
-    "isSurprise": boolean
-  }
-]
-
-⚠️ FINAL CHECK:
-- Sum of expectedProfit = 0
-- No expectedProfit number in sentences
-- Positive prediction = optimistic text, Negative = hopeful challenge
-- Rankings use "מבין ${players.length} הלילה" for current period
+⚠️ BEFORE RETURNING - VERIFY EACH PLAYER:
+✓ Is expectedProfit positive? → highlight & sentence must be optimistic
+✓ Is expectedProfit negative? → highlight & sentence must be "challenging but hopeful"
+✓ Is isSurprise true? → expectedProfit must be POSITIVE (surprise = unexpected win)
 
 Return ONLY clean JSON array.`;
 
