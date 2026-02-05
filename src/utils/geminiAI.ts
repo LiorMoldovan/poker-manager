@@ -1021,8 +1021,21 @@ export const generateAIForecasts = async (
     ? `\n🎲 PRE-SELECTED SURPRISES: ${selectedSurprises.join(', ')}\n   Mark these players with isSurprise: true and FLIP their expected profit!`
     : '\n🎲 NO GOOD SURPRISE CANDIDATES (recent matches overall for all players)';
   
+  // Pre-calculate year profit for all players to sort by 2026 ranking
+  const playersWithYearStats = players.map(p => {
+    const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+    return {
+      ...p,
+      yearProfit: thisYearGames.reduce((sum, g) => sum + g.profit, 0),
+      yearGames: thisYearGames.length
+    };
+  });
+  
+  // Sort by YEAR PROFIT (2026) - this is "tonight's" ranking!
+  const tonightRanking = [...playersWithYearStats].sort((a, b) => b.yearProfit - a.yearProfit);
+  
   // Build the prompt with FULL player data (in English for better AI reasoning)
-  const playerDataText = players.map((p, i) => {
+  const playerDataText = playersWithYearStats.map((p, i) => {
     // Get explicit last game result
     const lastGame = p.gameHistory[0];
     const lastGameResult = lastGame 
@@ -1039,46 +1052,29 @@ export const generateAIForecasts = async (
           ? `🔙 Back after a month break (${p.daysSinceLastGame} days)`
           : null;
     
-    // Calculate year stats FIRST
-    const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
-    const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
-    const yearGames = thisYearGames.length;
+    // Use pre-calculated year stats
+    const yearProfit = p.yearProfit;
+    const yearGames = p.yearGames;
     
     // USE THE ACTUAL CURRENT STREAK (spans across years!)
-    // A streak from Dec 2025 + Jan 2026 is still one continuous streak
-    const actualStreak = p.currentStreak; // This is the TRUE streak from all games
+    const actualStreak = p.currentStreak;
     
-    // Count how many of the current streak games are in this year
-    let streakGamesInYear = 0;
-    if (actualStreak !== 0) {
-      const isWinStreak = actualStreak > 0;
-      for (const game of thisYearGames) {
-        if ((isWinStreak && game.profit > 0) || (!isWinStreak && game.profit < 0)) {
-          streakGamesInYear++;
-        } else {
-          break; // Streak broken
-        }
-      }
-    }
-    
-    // Build streak text - use ACTUAL streak, note how many in this year
+    // Build simple streak text
     let streakText = '';
     if (actualStreak >= 3) {
-      streakText = `🔥 HOT STREAK: ${actualStreak} consecutive wins!${streakGamesInYear > 0 && streakGamesInYear < Math.abs(actualStreak) ? ` (${streakGamesInYear} in ${currentYear}, streak continues from ${currentYear - 1})` : ''}`;
+      streakText = `🔥 ${actualStreak} WINS IN A ROW!`;
     } else if (actualStreak <= -3) {
-      streakText = `❄️ COLD STREAK: ${Math.abs(actualStreak)} consecutive losses${streakGamesInYear > 0 && streakGamesInYear < Math.abs(actualStreak) ? ` (${streakGamesInYear} in ${currentYear}, streak continues from ${currentYear - 1})` : ''}`;
+      streakText = `${Math.abs(actualStreak)} losses - looking for comeback`;
     } else if (actualStreak === 2) {
-      streakText = `📈 2 wins in a row${streakGamesInYear === 1 ? ` (streak started in ${currentYear - 1})` : ''}`;
+      streakText = `2 wins in a row`;
     } else if (actualStreak === -2) {
-      streakText = `📉 2 losses in a row${streakGamesInYear === 1 ? ` (streak started in ${currentYear - 1})` : ''}`;
+      streakText = `2 losses - due for a win`;
     } else if (actualStreak === 1) {
-      streakText = `📈 Won last game`;
+      streakText = `Won last game`;
     } else if (actualStreak === -1) {
-      streakText = `📉 Lost last game`;
-    } else if (thisYearGames.length === 0) {
-      streakText = `📅 No games yet in ${currentYear}`;
+      streakText = `Lost last game`;
     } else {
-      streakText = `📊 ${thisYearGames.length} game${thisYearGames.length > 1 ? 's' : ''} in ${currentYear}`;
+      streakText = `${yearGames} games in ${currentYear}`;
     }
     
     // Combine streak with explicit last game (to prevent AI confusion)
@@ -1139,12 +1135,12 @@ export const generateAIForecasts = async (
     const halfThreshold = globalRankings?.currentHalf.threshold || 0;
     const isActiveHalf = halfRank > 0;
     
-    // Rank among tonight's players only (for "טבלת הלילה" context)
-    const rankTonight = sortedByTotalProfit.findIndex(sp => sp.name === p.name) + 1;
-    const tonightAbove = rankTonight > 1 ? sortedByTotalProfit[rankTonight - 2] : null;
-    const tonightBelow = rankTonight < players.length ? sortedByTotalProfit[rankTonight] : null;
-    const gapToAboveTonight = tonightAbove ? Math.round(tonightAbove.totalProfit - p.totalProfit) : null;
-    const gapToBelowTonight = tonightBelow ? Math.round(p.totalProfit - tonightBelow.totalProfit) : null;
+    // Rank among tonight's players BY YEAR PROFIT (2026) - this matches the table!
+    const rankTonight = tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+    const tonightAbove = rankTonight > 1 ? tonightRanking[rankTonight - 2] : null;
+    const tonightBelow = rankTonight < players.length ? tonightRanking[rankTonight] : null;
+    const gapToAboveTonight = tonightAbove ? Math.round(tonightAbove.yearProfit - p.yearProfit) : null;
+    const gapToBelowTonight = tonightBelow ? Math.round(p.yearProfit - tonightBelow.yearProfit) : null;
 
     return `
 ═══════════════════════════════════════
