@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.5';
+export const APP_VERSION = '4.41.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.6',
+    date: '2026-02-05',
+    changes: [
+      '✅ Improved forecast variety - less repetitive ranking mentions',
+      'Prioritized current year/half over all-time rankings',
+      'All-time ranking only shown if noteworthy (top 3, bottom 3, close battle)',
+      'Added anti-repetition rules for more diverse sentence content'
+    ]
+  },
   {
     version: '4.41.5',
     date: '2026-02-05',

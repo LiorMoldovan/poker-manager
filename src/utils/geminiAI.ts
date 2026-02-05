@@ -1154,24 +1154,11 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE - use femi
 🎯 SUGGESTED EXPECTED PROFIT: ${suggestion >= 0 ? '+' : ''}${suggestion}₪
    (You may adjust ±30₪ but sum must = 0)
 
-🏆 TABLE RANKINGS (among ACTIVE players only - min ${allTimeThreshold} games threshold):
-${isActiveAllTime ? `   📊 ALL-TIME ("בטבלה הכללית"): #${allTimeRank}/${allTimeTotalActive} active players
-      • YOUR PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
-      ${allTimeAbove ? `• Above you: ${allTimeAbove.name} at ${allTimeAbove.profit >= 0 ? '+' : ''}${Math.round(allTimeAbove.profit)}₪ (gap: ${gapToAboveAllTime}₪)` : '• YOU ARE #1!'}
-      ${allTimeBelow ? `• Below you: ${allTimeBelow.name} at ${allTimeBelow.profit >= 0 ? '+' : ''}${Math.round(allTimeBelow.profit)}₪ (gap: ${gapToBelowAllTime}₪)` : ''}` 
-   : `   📊 ALL-TIME: NOT ACTIVE (needs ${allTimeThreshold}+ games, has ${p.gamesPlayed})`}
-   
-   ⚠️ CRITICAL: When you mention "מקום X" or rankings, ALWAYS specify context:
-      - "בטבלה הכללית" = all-time among ${allTimeTotalActive} active players
-      - "בטבלת ${currentYear}" = this year among ${yearTotalActive} active players  
-      - "בטבלת הלילה" = tonight's ${players.length} players only
-
-⭐ CURRENT YEAR ${currentYear} (MOST IMPORTANT!):
-   • GAMES THIS YEAR: ${yearGames}
-   • PROFIT THIS YEAR: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
-${isActiveYear ? `   • RANK THIS YEAR: #${yearRank}/${yearTotalActive} active players (min ${yearThreshold} games)` 
-   : `   • RANK THIS YEAR: NOT ACTIVE (needs ${yearThreshold}+ games, has ${yearGames})`}
-   ${yearGames > 0 ? `• AVG THIS YEAR: ${(yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames)}₪/game` : ''}
+⭐ CURRENT YEAR ${currentYear} (PRIMARY FOCUS!):
+   • GAMES: ${yearGames} | PROFIT: ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
+${isActiveYear ? `   • RANK: #${yearRank}/${yearTotalActive} ("בטבלת ${currentYear}")` 
+   : `   • NOT ACTIVE YET (needs ${yearThreshold}+ games)`}
+   ${yearGames > 0 ? `• AVG: ${(yearProfit >= 0 ? '+' : '') + Math.round(yearProfit / yearGames)}₪ למשחק` : ''}
 
 🔥 CURRENT STREAK (VERIFIED DATA - USE EXACTLY!):
    • ${streakText}
@@ -1182,28 +1169,28 @@ ${isActiveYear ? `   • RANK THIS YEAR: #${yearRank}/${yearTotalActive} active 
    ${comebackText ? `• ${comebackText}` : ''}
 
 📅 CURRENT HALF (H${currentHalf} ${currentYear}):
-   • GAMES THIS HALF: ${halfGamesCount}
-   • PROFIT THIS HALF: ${halfProfit >= 0 ? '+' : ''}${Math.round(halfProfit)}₪
-${isActiveHalf ? `   • RANK THIS HALF: #${halfRank}/${halfTotalActive} active players` 
-   : `   • RANK THIS HALF: NOT ACTIVE (needs ${halfThreshold}+ games)`}
-
-🎲 TONIGHT'S TABLE (among the ${players.length} players playing tonight):
-   • RANK TONIGHT: #${rankTonight}/${players.length}
-   ${tonightAbove ? `• Above: ${tonightAbove.name} (gap: ${gapToAboveTonight}₪)` : '• YOU ARE #1 TONIGHT!'}
-   ${tonightBelow ? `• Below: ${tonightBelow.name} (gap: ${gapToBelowTonight}₪)` : ''}
+   • GAMES: ${halfGamesCount} | PROFIT: ${halfProfit >= 0 ? '+' : ''}${Math.round(halfProfit)}₪
+${isActiveHalf ? `   • RANK: #${halfRank}/${halfTotalActive} ("בטבלת המחצית")` 
+   : `   • NOT ACTIVE YET`}
 
 📈 RECENT FORM (Last 5 games):
-   • AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪/game
-   • TREND: ${recentAvg > p.avgProfit + 10 ? '⬆️ IMPROVING (playing above historical average)' : 
-     recentAvg < p.avgProfit - 10 ? '⬇️ DECLINING (playing below historical average)' : 
-     '➡️ STABLE (playing at historical average)'}
+   • AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ למשחק
+   • TREND: ${recentAvg > p.avgProfit + 10 ? '⬆️ HOT - above historical avg' : 
+     recentAvg < p.avgProfit - 10 ? '⬇️ COLD - below historical avg' : 
+     '➡️ STABLE'}
 
-📊 ALL-TIME STATS:
-   • TOTAL GAMES: ${p.gamesPlayed}
-   • TOTAL PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪
-   • ALL-TIME AVG: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪/game
-   • WIN RATE: ${Math.round(p.winPercentage)}% (${p.winCount}W/${p.lossCount}L)
-   • BEST WIN: +${Math.round(p.bestWin)}₪ | WORST LOSS: ${Math.round(p.worstLoss)}₪
+🎲 TONIGHT'S MATCHUP (among ${players.length} players tonight):
+   • RANK: #${rankTonight}/${players.length}
+   ${tonightAbove ? `• Chasing: ${tonightAbove.name} (${gapToAboveTonight}₪ behind)` : '• LEADING TONIGHT'}
+   ${tonightBelow ? `• Ahead of: ${tonightBelow.name} (by ${gapToBelowTonight}₪)` : ''}
+
+📊 ALL-TIME (use ONLY if noteworthy - top 3, bottom 3, or close battle):
+${isActiveAllTime ? `   • RANK: #${allTimeRank}/${allTimeTotalActive} ("בטבלה הכללית")
+   • PROFIT: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪ | AVG: ${p.avgProfit >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪
+   ${allTimeRank <= 3 ? '⭐ TOP 3 ALL-TIME - worth mentioning!' : ''}
+   ${allTimeRank >= allTimeTotalActive - 2 ? '📍 BOTTOM 3 - mention comeback potential' : ''}
+   ${gapToAboveAllTime && gapToAboveAllTime <= 100 ? `🔥 CLOSE BATTLE: only ${gapToAboveAllTime}₪ from #${allTimeRank - 1}!` : ''}`
+   : `   • NOT ACTIVE (${p.gamesPlayed} games, needs ${allTimeThreshold})`}
 
 📜 LAST 10 GAMES (VERIFIED HISTORY):
    ${gameHistoryText}`;
@@ -1303,7 +1290,14 @@ ${recentGameExamples}
 📝 SENTENCE STYLE (25-40 words):
 - Witty, dramatic, WhatsApp-worthy
 - DON'T mention the expectedProfit number (shown separately)
-- DO use: streaks, milestones, rivalries, comebacks
+- DO use: streaks, form, rivalries, comebacks, tonight's matchups
+
+🎯 RANKING VARIETY (CRITICAL - avoid boring repetition!):
+- Focus on CURRENT YEAR/HALF rankings - these are most relevant
+- Only mention ALL-TIME if noteworthy: top 3, bottom 3, or close battle (<100₪ gap)
+- Don't give every player a ranking sentence - vary the content!
+- Mix it up: streak for one, form for another, rivalry for third, etc.
+- If nothing special about ranking, focus on: recent form, tonight's matchup, comeback story
 
 🚨 CRITICAL - TONE MUST MATCH PREDICTION:
 - If expectedProfit > 0: Optimistic, confident, "ימשיך לנצח", "בדרך לעוד נצחון"
@@ -1311,22 +1305,30 @@ ${recentGameExamples}
 - NEVER write optimistic text for a negative prediction!
 - Example: If predicting -86₪, DON'T write "נצחון גדול" - write about the challenge ahead
 
-VARIETY PATTERNS (use different one for each player):
-1. Action: "ליאור שורף את הטבלה!"
-2. Question: "האם הלילה הוא ישבור את הרצף?"
-3. Stat-led: "3 נצחונות רצופים ו-+450₪ השנה"
-4. Time: "הלילה הוא מחפש קאמבק"
-5. Metaphor: "הפניקס קם מהאפר!"
-6. Rivalry: "הקרב נגד X נמשך! הפער: 100₪"
+VARIETY PATTERNS (MUST use different one for each player!):
+1. STREAK: "3 נצחונות רצופים! הפורמה הטובה ממשיכה"
+2. FORM: "ממוצע של +67₪ ב-5 משחקים אחרונים - על גל"
+3. RIVALRY: "הקרב נגד X נמשך! הפער: 100₪ בטבלת ${currentYear}"
+4. COMEBACK: "אחרי 3 הפסדים, הלילה מחפש לשנות כיוון"
+5. TONIGHT: "מוביל את שחקני הלילה ברווח הכולל"
+6. MILESTONE: "בדרך למשחק ה-100! רגע היסטורי מתקרב"
+7. CURRENT YEAR: "+340₪ ב-${currentYear}, מקום 2 בטבלה השנתית"
 
-✅ Good sentences:
-- "ליאור שורף את הטבלה! 4 נצחונות רצופים בטבלה הכללית, ממוצע של +67₪ למשחק"
-- "האם חרדון יצליח לשבור את הרצף? 3 הפסדים רצופים בטבלת ${currentYear}"
+⚠️ ANTI-REPETITION RULES:
+- Do NOT write "מקום X בטבלה הכללית" for every player!
+- Do NOT mention all-time ranking unless TOP 3, BOTTOM 3, or close battle
+- Each sentence should highlight DIFFERENT aspect
+- First player: maybe streak. Second: form. Third: rivalry. Etc.
 
-❌ Bad sentences:
-- "מצופה שיביא 120 רווח" (number in header!)
-- "ממוצע של -7₪" (which table/period?)
-- "במקום 3" (which table?!)
+✅ Good variety:
+- Player 1: "על גל של 3 נצחונות! הפורמה הטובה ביותר השנה"
+- Player 2: "הקרב נגד אייל מתחדש - הפער ביניהם 85₪ בלבד"  
+- Player 3: "מוביל את ${currentYear} עם +450₪. ימשיך להפליא?"
+
+❌ Bad (repetitive):
+- Player 1: "במקום 4 בטבלה הכללית..."
+- Player 2: "במקום 7 בטבלה הכללית..."
+- Player 3: "במקום 2 בטבלה הכללית..."
 
 📝 OUTPUT (JSON ONLY):
 [
