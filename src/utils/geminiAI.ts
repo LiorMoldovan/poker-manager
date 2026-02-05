@@ -1274,7 +1274,11 @@ export const generateAIForecasts = async (
     // Show current period games (matches what players see in the table)
     if (periodGames.length > 0) {
       const periodNote = usingPrevPeriod ? ` (מתקופה קודמת - ${periodLabel})` : '';
-      lines.push(`${periodLabel}: ${periodGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${periodGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪)${periodNote}`);
+      // For single game, say "במשחק היחיד" not "ממוצע"
+      const avgOrSingle = periodGames.length === 1 
+        ? `במשחק היחיד: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`
+        : `${periodGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`;
+      lines.push(`${periodLabel}: ${periodGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${avgOrSingle})${periodNote}`);
     } else if (currentHalfGames.length === 0 && prevHalfGames.length === 0) {
       lines.push(`${currentPeriodLabel}: אין משחקים בתקופה הנוכחית או הקודמת`);
     }
@@ -1352,9 +1356,9 @@ ${surpriseText}
 • isSurprise=true רק כש-expectedProfit חיובי (הפתעה = ניצחון לא צפוי)
 
 📈 מגמות (עדיפות גבוהה! אם יש 📈 או 📉):
-• 📈 שיפור: חובה להדגיש! "למרות היסטוריה של X₪, ממוצע אחרון Y₪ - מגמת עלייה"
-• 📉 ירידה: "בדרך כלל ממוצע X₪, אבל לאחרונה Y₪ - מחפש לחזור לעצמו"
-• זו הנקודה המעניינת ביותר - תמיד הזכר את הניגוד!
+• 📈 שיפור: חובה להזכיר את שני המספרים! "ממוצע היסטורי X₪ אבל לאחרונה Y₪"
+• 📉 ירידה: "ממוצע היסטורי X₪ אבל לאחרונה Y₪ - מחפש לחזור"
+• תמיד הזכר את ההשוואה - המספר ההיסטורי מול האחרון!
 
 ✍️ כל משפט חייב עובדה ספציפית + פתיח מגוון:
 
@@ -1374,7 +1378,10 @@ ${surpriseText}
 • דירוג ב-${currentPeriodLabel}
 • אם מסומן "מתקופה קודמת" - הזכר זאת!
 
-⚠️ חשוב: השתמש רק במספרים שמופיעים בנתונים - אל תחשב בעצמך!
+⚠️ חשוב: 
+• השתמש רק במספרים שמופיעים בנתונים - אל תחשב בעצמך!
+• מספרים שלמים בלבד (ללא נקודה עשרונית)
+• משחק יחיד = "במשחק היחיד" (לא "ממוצע")
 
 🔙 שחקנים חוזרים (מסומנים 🔙) - חובה להזכיר את החזרה!
 

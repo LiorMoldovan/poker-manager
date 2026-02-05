@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.6';
+export const APP_VERSION = '4.43.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.7',
+    date: '2026-02-05',
+    changes: [
+      '🔧 Single game says "במשחק היחיד" not "ממוצע"',
+      '🔢 Whole numbers only (no decimals)',
+      '📈 Trend must show comparison: historical X₪ vs recent Y₪'
+    ]
+  },
   {
     version: '4.43.6',
     date: '2026-02-05',
