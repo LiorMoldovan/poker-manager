@@ -3,7 +3,7 @@
  * Increment version with each change for tracking purposes
  */
 
-export const APP_VERSION = '4.40.46';
+export const APP_VERSION = '4.41.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.0',
+    date: '2026-02-05',
+    changes: [
+      '✅ Major AI forecast improvements - optimized prompts for accuracy and engagement',
+      '✅ Completely rewrote milestone/insight generation with 7 professional categories',
+      'New categories: battles, streaks, milestones, form, drama, records, season',
+      'Smart deduplication ensures diverse, high-quality insights (5-8 per game)',
+      'Implemented GlobalRankingContext for precise active player rankings (33% threshold)',
+      'Improved Hebrew text quality with punchy titles and exact statistics'
+    ]
+  },
   {
     version: '4.40.46',
     date: '2026-01-19',
