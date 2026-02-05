@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.8';
+export const APP_VERSION = '4.41.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,12 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.41.8',
+    version: '4.41.9',
     date: '2026-02-05',
     changes: [
-      '✅ Rankings must specify context (tonight/year/all-time)',
-      'Kinder tone for struggling players - focus on potential not losses',
-      'Clearer rules for "מוביל הלילה" = only #1 tonight'
+      '✅ Focus on RECENT data: last game, last 5 games, current year',
+      'Removed all-time table references - less confusion',
+      'Cleaner, shorter player data for AI'
     ]
   },
   {
