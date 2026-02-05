@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.1';
+export const APP_VERSION = '4.43.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.2',
+    date: '2026-02-05',
+    changes: [
+      '📊 FORECAST RANGE FIX: Predictions now more meaningful (±50-150₪ typical)',
+      '✅ Amplified predictions by 2.5x for realistic game swings',
+      '✅ Minimum threshold: ±25₪ (no more +1₪ predictions)',
+      '🎲 SURPRISE FIX: Now only for players with bad history + good recent form',
+      '✅ Surprise always means POSITIVE prediction (unexpected win)',
+      '✅ Surprise player boosted to at least +50₪'
+    ]
+  },
   {
     version: '4.43.0',
     date: '2026-02-05',

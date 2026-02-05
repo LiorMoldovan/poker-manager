@@ -967,7 +967,8 @@ export const generateAIForecasts = async (
   
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
-  // Calculate SUGGESTED expected profit for each player (70% recent, 30% overall + streaks)
+  // Calculate SUGGESTED expected profit for each player
+  // Use AMPLIFIED predictions for more interesting forecasts
   const playerSuggestions = players.map(p => {
     // Recent average (last 5 games)
     const last5 = p.gameHistory.slice(0, 5);
@@ -985,41 +986,72 @@ export const generateAIForecasts = async (
     else if (p.currentStreak <= -3) suggested *= 0.65;
     else if (p.currentStreak <= -2) suggested *= 0.8;
     
+    // AMPLIFY: Multiply by 2-3x to get more interesting ranges (typical game swings are ±50-150)
+    suggested *= 2.5;
+    
+    // Ensure minimum meaningful prediction (at least ±30₪ unless truly neutral)
+    if (suggested > 0 && suggested < 30) suggested = 30;
+    if (suggested < 0 && suggested > -30) suggested = -30;
+    
     return { name: p.name, suggested: Math.round(suggested) };
   });
   
   // Balance suggestions to zero-sum
   const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
   const adjustment = totalSuggested / playerSuggestions.length;
-  playerSuggestions.forEach(p => p.suggested = Math.round(p.suggested - adjustment));
+  playerSuggestions.forEach(p => {
+    p.suggested = Math.round(p.suggested - adjustment);
+    // After balancing, re-apply minimum threshold
+    if (p.suggested > 0 && p.suggested < 25) p.suggested = 25;
+    if (p.suggested < 0 && p.suggested > -25) p.suggested = -25;
+  });
   
-  // Pre-select SURPRISE candidates (recent contradicts overall)
+  // Re-balance after minimum threshold (small adjustment)
+  const finalTotal = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
+  if (finalTotal !== 0) {
+    // Adjust the player closest to 0 to balance
+    const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
+    sortedByAbs[0].suggested -= finalTotal;
+  }
+  
+  // Pre-select SURPRISE candidates (bad history but recent improvement = surprise WIN expected)
   const surpriseCandidates = players.filter(p => {
     if (p.gamesPlayed < 5) return false;
     const last5 = p.gameHistory.slice(0, 5);
     if (last5.length < 3) return false;
     
     const recentAvg = last5.reduce((sum, g) => sum + g.profit, 0) / last5.length;
-    const overallPositive = p.avgProfit > 10;
-    const overallNegative = p.avgProfit < -10;
-    const recentPositive = recentAvg > 10;
-    const recentNegative = recentAvg < -10;
     
-    // Contradiction: good player doing badly recently, or bad player doing well recently
-    return (overallPositive && recentNegative) || (overallNegative && recentPositive);
+    // SURPRISE = bad overall history but good recent form (unexpected WIN)
+    // This ensures surprise always means POSITIVE prediction
+    return p.avgProfit < -5 && recentAvg > 10;
   });
   
-  // Pick 1-2 surprises (at least 1 if candidates exist)
-  const maxSurprises = Math.min(Math.ceil(players.length * 0.35), surpriseCandidates.length);
-  const numSurprises = surpriseCandidates.length > 0 ? Math.max(1, Math.floor(Math.random() * (maxSurprises + 1))) : 0;
-  const selectedSurprises = surpriseCandidates
-    .sort(() => Math.random() - 0.5)
-    .slice(0, numSurprises)
-    .map(p => p.name);
+  // Pick 0-1 surprise (only if good candidate exists)
+  const selectedSurprises = surpriseCandidates.length > 0 
+    ? [surpriseCandidates.sort((a, b) => {
+        const aRecent = a.gameHistory.slice(0, 5).reduce((sum, g) => sum + g.profit, 0) / 5;
+        const bRecent = b.gameHistory.slice(0, 5).reduce((sum, g) => sum + g.profit, 0) / 5;
+        return bRecent - aRecent; // Pick the one with best recent form
+      })[0].name]
+    : [];
+  
+  // If we have a surprise, ensure their suggestion is POSITIVE
+  if (selectedSurprises.length > 0) {
+    const surprisePlayer = playerSuggestions.find(p => p.name === selectedSurprises[0]);
+    if (surprisePlayer && surprisePlayer.suggested < 50) {
+      // Boost surprise player to positive
+      const oldValue = surprisePlayer.suggested;
+      surprisePlayer.suggested = Math.max(50, Math.abs(oldValue) + 30);
+      // Re-balance by reducing from highest positive player
+      const highest = playerSuggestions.filter(p => p.name !== selectedSurprises[0]).sort((a, b) => b.suggested - a.suggested)[0];
+      if (highest) highest.suggested -= (surprisePlayer.suggested - oldValue);
+    }
+  }
   
   const surpriseText = selectedSurprises.length > 0 
-    ? `\n🎲 PRE-SELECTED SURPRISES: ${selectedSurprises.join(', ')}\n   Mark these players with isSurprise: true and FLIP their expected profit!`
-    : '\n🎲 NO GOOD SURPRISE CANDIDATES (recent matches overall for all players)';
+    ? `\n🎲 הפתעה: ${selectedSurprises.join(', ')} (היסטוריה שלילית אבל פורמה אחרונה חיובית - צפי לניצחון מפתיע!)`
+    : '';
   
   // Pre-calculate year profit for all players to sort by 2026 ranking
   const playersWithYearStats = players.map(p => {
