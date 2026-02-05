@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.7';
+export const APP_VERSION = '4.41.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,12 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.41.7',
+    version: '4.41.8',
     date: '2026-02-05',
     changes: [
-      '✅ Simplified forecast prompt - positive instructions instead of prohibitions',
-      'Each player gets unique angle: streak/form/rivalry/comeback/tonight/year',
-      'Shorter, cleaner prompt for better AI results'
+      '✅ Rankings must specify context (tonight/year/all-time)',
+      'Kinder tone for struggling players - focus on potential not losses',
+      'Clearer rules for "מוביל הלילה" = only #1 tonight'
     ]
   },
   {

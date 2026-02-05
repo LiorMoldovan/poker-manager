@@ -1283,26 +1283,27 @@ ${milestonesText}
 Recent examples:
 ${recentGameExamples}
 
-🎭 SPECIAL HANDLING:
-- **תומר**: Be KIND but ACCURATE (never invent positive facts)
-- **מור**: Female (use feminine Hebrew). All others Male.
+🎭 CRITICAL RULES:
+- Rankings MUST specify context: "מבין ${players.length} הלילה" OR "בטבלת ${currentYear}" OR "בטבלה הכללית"
+- "מוביל הלילה" = ONLY the #1 ranked among tonight's players
+- Be KIND to struggling players - focus on comeback potential, not losses
+- מור = Female (use feminine Hebrew)
 
 📝 SENTENCE STYLE (25-40 words):
-- Witty, dramatic, WhatsApp-worthy
-- DON'T mention the expectedProfit number (shown separately)
-- DO use: streaks, form, rivalries, comebacks, tonight's matchups
+- Witty, encouraging, WhatsApp-worthy
+- Focus on POSITIVE aspects: wins, streaks, improvement, potential
+- For negative predictions: frame as "challenge" or "opportunity", not failure
 
-🎯 EACH PLAYER GETS A UNIQUE ANGLE (assign one per player):
-1. STREAK → "3 נצחונות רצופים! הפורמה ממשיכה"
-2. FORM → "ממוצע +67₪ ב-5 אחרונים - על גל"
-3. RIVALRY → "הקרב נגד X! הפער: 85₪"
-4. COMEBACK → "מחפש לשנות כיוון אחרי תקופה קשה"
-5. TONIGHT → "מוביל את שחקני הלילה"
-6. YEAR → "מוביל ${currentYear} עם +450₪"
+🎯 EACH PLAYER GETS A UNIQUE ANGLE:
+1. STREAK → "3 נצחונות רצופים!"
+2. FORM → "ממוצע +67₪ ב-5 אחרונים"
+3. RIVALRY → "הקרב נגד X בטבלת ${currentYear}!"
+4. COMEBACK → "מחפש לשנות כיוון"
+5. YEAR → "מוביל ${currentYear} עם +450₪"
 
-🎭 TONE MATCHES PREDICTION:
-- Positive profit → confident: "ימשיך לנצח", "על גל"
-- Negative profit → challenging: "יתקשה", "מחפש קאמבק"
+🎭 TONE:
+- Positive profit → confident
+- Negative profit → hopeful challenge (never discouraging)
 
 📝 OUTPUT (JSON ONLY):
 [
@@ -1317,9 +1318,8 @@ ${recentGameExamples}
 
 ⚠️ FINAL CHECK:
 - Sum of expectedProfit = 0
-- Each sentence starts differently
-- All numbers have table context
-- Tone matches profit direction
+- Each ranking specifies which table (tonight/year/all-time)
+- Tone is encouraging even for negative predictions
 
 Return ONLY clean JSON array.`;
 
