@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.4';
+export const APP_VERSION = '4.41.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.5',
+    date: '2026-02-05',
+    changes: [
+      '✅ Fixed Hebrew text - changed "/משחק" to "למשחק" (proper Hebrew grammar)',
+      'Applied to all milestone descriptions'
+    ]
+  },
   {
     version: '4.41.4',
     date: '2026-02-05',

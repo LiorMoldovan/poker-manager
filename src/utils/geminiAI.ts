@@ -314,7 +314,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
           emoji: '🎮',
           category: 'milestone',
           title: `משחק מספר ${gm}`,
-          description: `הלילה ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${formatProfit(p.avgProfit)}/משחק.`,
+          description: `הלילה ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${formatProfit(p.avgProfit)} למשחק.`,
           priority: 65 + gm / 5
         });
         break;
@@ -353,7 +353,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       emoji: '📈',
       category: 'form',
       title: `${hotForm.name} בפורם חם`,
-      description: `ממוצע אחרון: ${formatProfit(hotForm.last3Avg)}/משחק (לעומת ${formatProfit(hotForm.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}₪!`,
+      description: `ממוצע אחרון: ${formatProfit(hotForm.last3Avg)} למשחק (לעומת ${formatProfit(hotForm.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}₪!`,
       priority: 76
     });
   }
@@ -370,7 +370,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       emoji: '📉',
       category: 'form',
       title: `${coldForm.name} מתחת לרמה`,
-      description: `בדרך כלל ${formatProfit(coldForm.avgProfit)}/משחק, אבל לאחרונה ${formatProfit(coldForm.last3Avg)}. הסטטיסטיקה לטובתו - צפוי קאמבק.`,
+      description: `בדרך כלל ${formatProfit(coldForm.avgProfit)} למשחק, אבל לאחרונה ${formatProfit(coldForm.last3Avg)}. הסטטיסטיקה לטובתו - צפוי קאמבק.`,
       priority: 72
     });
   }
@@ -417,7 +417,7 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
       emoji: '🌟',
       category: 'drama',
       title: `${upsetCandidate.name} בהפתעה`,
-      description: `ממוצע היסטורי: ${formatProfit(upsetCandidate.avgProfit)}/משחק, אבל ניצח ${formatProfit(upsetCandidate.lastGameProfit)} לאחרונה. תחילת שינוי מגמה?`,
+      description: `ממוצע היסטורי: ${formatProfit(upsetCandidate.avgProfit)} למשחק, אבל ניצח ${formatProfit(upsetCandidate.lastGameProfit)} לאחרונה. תחילת שינוי מגמה?`,
       priority: 77
     });
   }
