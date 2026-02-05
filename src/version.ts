@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.3';
+export const APP_VERSION = '4.41.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.41.4',
+    date: '2026-02-05',
+    changes: [
+      '✅ Fixed "2026 מתחילה" milestone showing incorrectly after games were played',
+      'New year milestone now only shows in January with 0-1 games played',
+      'Added "Early Year Leader" milestone for Jan/Feb with actual 2026 standings'
+    ]
+  },
   {
     version: '4.41.3',
     date: '2026-02-05',

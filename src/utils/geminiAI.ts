@@ -499,17 +499,36 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
     }
   }
   
-  // 7C. FRESH START (January/February or July/August)
-  if (currentMonth <= 1) {
+  // 7C. FRESH START (January only, and only if very few games played)
+  if (currentMonth === 0) { // January only
     const totalYearGames = playerStats.reduce((sum, p) => sum + p.yearGames, 0);
-    if (totalYearGames < 5 * players.length) {
+    // Only show if less than 2 total games played this year
+    if (totalYearGames <= 1) {
       milestones.push({
         emoji: '🎆',
         category: 'season',
         title: `${currentYear} מתחילה`,
-        description: `שנה חדשה, טבלה חדשה. ${players.length} שחקנים, 0₪ לכולם. מי יוביל ב-${currentYear}?`,
+        description: `שנה חדשה, טבלה חדשה. ${players.length} שחקנים מתחילים מחדש. מי יוביל ב-${currentYear}?`,
         priority: 85
       });
+    }
+  }
+  
+  // 7D. EARLY YEAR LEADER (January/February with some games played)
+  if (currentMonth <= 1 && sortedYear[0]?.yearGames >= 2) {
+    const yearLeader = sortedYear[0];
+    const yearSecond = sortedYear[1];
+    if (yearSecond && yearSecond.yearGames >= 1) {
+      const gap = Math.round(yearLeader.yearProfit - yearSecond.yearProfit);
+      if (gap > 0 && gap <= 200) {
+        milestones.push({
+          emoji: '📅',
+          category: 'season',
+          title: `מוביל ${currentYear}`,
+          description: `${yearLeader.name} מוביל את ${currentYear} עם ${formatProfit(yearLeader.yearProfit)} ב-${yearLeader.yearGames} משחקים. ${yearSecond.name} רודף ב-${gap}₪.`,
+          priority: 80
+        });
+      }
     }
   }
   
