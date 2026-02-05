@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.42.1';
+export const APP_VERSION = '4.42.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,12 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.42.1',
+    version: '4.42.2',
     date: '2026-02-05',
     changes: [
-      '✅ Both rankings now available: 2026 (priority) + all-time (secondary)',
-      'Clear priority order: last game > form > 2026 table > all-time',
-      'All-time shown only if notable (TOP 3, close battle)'
+      '✅ Fixed: Comeback players now mentioned (was missing)',
+      'Prompt optimized: ~60% shorter, clearer structure',
+      'Player data more compact but complete'
     ]
   },
   {

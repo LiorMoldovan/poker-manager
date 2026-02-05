@@ -1146,29 +1146,13 @@ export const generateAIForecasts = async (
     const allTimeRankTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit).findIndex(sp => sp.name === p.name) + 1;
     
     return `
-═══════════════════════════════════════
-PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE)' : ''}
-═══════════════════════════════════════
-
-🎯 EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪
-
-⭐⭐ LAST GAME & STREAK (PRIORITY 1):
-   ${lastGameInfo}
-   ${streakText}
-
-📈 RECENT FORM - Last 5 games (PRIORITY 2):
-   ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪
-   AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ | TREND: ${recentAvg > p.avgProfit + 10 ? 'HOT ⬆️' : recentAvg < p.avgProfit - 10 ? 'COLD ⬇️' : 'STABLE'}
-
-⭐ ${currentYear} TABLE (PRIORITY 3):
-   #${rankTonight}/${players.length} מבין שחקני הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪
-   ${rankTonight === 1 ? '👑 מוביל הלילה!' : rankTonight <= 3 ? `🥈 TOP 3 הלילה` : ''}
-
-📊 ALL-TIME (secondary - mention only if notable):
-   #${allTimeRankTonight}/${players.length} מבין שחקני הלילה (כללי)
-   ${isActiveAllTime ? `#${allTimeRank}/${allTimeTotalActive} בטבלה הכללית | ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪` : ''}
-   ${allTimeRank === 1 ? '👑 #1 ALL-TIME!' : allTimeRank <= 3 && isActiveAllTime ? '⭐ TOP 3 ALL-TIME' : ''}
-   ${gapToAboveAllTime && gapToAboveAllTime <= 100 && isActiveAllTime ? `🔥 רק ${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}!` : ''}`;
+══ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '(FEMALE)' : ''} ══
+${comebackText ? `🔙 ${comebackText}\n` : ''}
+LAST GAME: ${lastGameResult} | ${streakText}
+LAST 5: ${p.gameHistory.slice(0, 5).map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ | AVG: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ${recentAvg > p.avgProfit + 10 ? '⬆️HOT' : recentAvg < p.avgProfit - 10 ? '⬇️COLD' : ''}
+${currentYear}: #${rankTonight}/${players.length} הלילה | ${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ${rankTonight === 1 ? '👑' : rankTonight <= 3 ? '🥈' : ''}
+ALL-TIME: #${allTimeRankTonight}/${players.length} הלילה${isActiveAllTime ? ` | #${allTimeRank}/${allTimeTotalActive} כללי | ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪` : ''}${allTimeRank <= 3 && isActiveAllTime ? ' ⭐TOP3' : ''}${gapToAboveAllTime && gapToAboveAllTime <= 100 && isActiveAllTime ? ` 🔥${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1}` : ''}
+EXPECTED: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
   }).join('\n');
   
   // Calculate realistic profit ranges from player data
@@ -1202,97 +1186,31 @@ PLAYER ${i + 1}: ${p.name.toUpperCase()} ${p.isFemale ? '👩 (FEMALE)' : ''}
     })
     .join('\n');
   
-  const prompt = `You are the "Master of Poker Analytics" creating predictions for a private poker group's game tonight.
+  const prompt = `Poker predictions for tonight's game. Output HEBREW.
 
-🚨🚨🚨 ACCURACY IS EVERYTHING - READ THIS FIRST! 🚨🚨🚨
-
-BEFORE writing about ANY player, RE-READ their data section and verify:
-1. EXACT streak number from "CURRENT STREAK" (if data says 2, write "2", not "5")
-2. EXACT ranking from "TABLE RANKINGS" (check if ACTIVE in that table!)
-3. EXACT year profit from "CURRENT YEAR ${currentYear}"
-4. EXACT last game result from "LAST GAME" line
-
-❌ FORBIDDEN (will cause rejection):
-- Inventing streak numbers not in the data
-- Claiming rankings in tables where player is "NOT ACTIVE"
-- Saying positive profit when data shows negative (or vice versa)
-- Numbers without table context ("מקום 3" - which table?!)
-- Mentioning the expectedProfit number in the sentence (already in header!)
-
-🎯 SAFE STRATEGY: Unsure about a fact? Write about something ELSE from their data.
-
-═══════════════════════════════════════════════════════════════════
-📋 CORE RULES
-═══════════════════════════════════════════════════════════════════
-
-1. Use SUGGESTED expected profits (±30₪ max deviation), sum MUST = 0
-2. Mark PRE-SELECTED surprises with isSurprise: true
-3. Tone must match profit direction (positive→optimistic, negative→cautious)
-4. Each sentence must start DIFFERENTLY (use variety patterns below)
-5. Every number needs table context:
-   - "בטבלה הכללית" = among ${globalRankings?.allTime.totalActivePlayers || 'all'} active players (all-time)
-   - "בטבלת ${currentYear}" = among ${globalRankings?.currentYear.totalActivePlayers || 'all'} active players
-   - "מבין ה-${players.length} הלילה" = tonight's players only
-6. Output in HEBREW (highlight and sentence)
+📊 PLAYERS:
+${playerDataText}
+${milestonesText ? `\n🎯 MILESTONES:\n${milestonesText}` : ''}
 ${surpriseText}
 
-📊 PLAYER DATA:
-${playerDataText}
+📋 RULES:
+- Use EXPECTED profit (±30₪), sum MUST = 0
+- Positive profit → optimistic tone | Negative → challenging but hopeful
+- Each sentence DIFFERENT angle, 25-40 words Hebrew
+- Rankings: "${players.length} הלילה" for ${currentYear}, "בטבלה הכללית" for all-time
+- 🔙 COMEBACK players = mention their return!
+- מור = feminine Hebrew
 
-🏆 ALL-TIME RECORDS:
-${allTimeRecordsText}
-${milestonesText ? `
-🎯 MILESTONES AT STAKE (USE THESE!):
-${milestonesText}
+🎯 PRIORITY (pick main angle per player):
+1. LAST GAME result or STREAK (if 2+)
+2. RECENT 5-game form (if hot/cold trend)
+3. ${currentYear} rank "מבין ${players.length} הלילה"
+4. ALL-TIME only if TOP 3 or close battle
 
-✅ PLAYER COMPARISONS ENCOURAGED (use exact gaps from data):
-- "הפער ביניהם בטבלה הכללית: X₪!"
-- "מבין ה-${players.length} הלילה, [name] הכי קרוב ל..."` : ''}
+📝 OUTPUT JSON:
+[{"name":"...", "expectedProfit":number, "highlight":"Hebrew 10 words", "sentence":"Hebrew 25-40 words", "isSurprise":boolean}]
 
-💰 PROFIT CALIBRATION:
-- Group average: ±${avgAbsProfit}₪ | Median: ±${medianAbsProfit}₪
-- Biggest ever: +${maxProfit}₪ / ${minProfit}₪
-- Your values should range: ±${Math.max(50, Math.round(avgAbsProfit * 0.5))}₪ to ±${Math.round(avgAbsProfit * 1.5)}₪
-- At least ONE player ≥ ${Math.round(avgAbsProfit * 1.2)}₪, NO player < ${Math.max(30, Math.round(avgAbsProfit * 0.4))}₪
-
-Recent examples:
-${recentGameExamples}
-
-🎯 PRIORITY ORDER (follow this!):
-1. LAST GAME & STREAK - most important, always reference
-2. RECENT FORM (5 games) - trend matters
-3. ${currentYear} ranking - primary table ("מבין ${players.length} הלילה")
-4. ALL-TIME - only if #1, TOP 3, or close battle (<100₪)
-
-📝 SENTENCE (25-40 words):
-- MUST mention last game OR recent form
-- Rankings: say "מבין ${players.length} הלילה" for current, "בטבלה הכללית" for all-time
-- Be encouraging | מור = feminine Hebrew
-
-🎯 ANGLES (vary per player):
-1. LAST GAME → "נצחון של +X₪ במשחק האחרון"
-2. STREAK → "X נצחונות/הפסדים רצופים"
-3. FORM → "ממוצע +X₪ ב-5 אחרונים"
-4. TONIGHT → "#X מבין ${players.length} הלילה"
-5. ALL-TIME (only if notable) → "#X בטבלה הכללית"
-
-📝 OUTPUT (JSON ONLY):
-[
-  {
-    "name": "Player Name",
-    "expectedProfit": number,
-    "highlight": "Short stat in Hebrew (max 10 words)",
-    "sentence": "Hebrew analysis (25-40 words) matching expectedProfit tone",
-    "isSurprise": boolean
-  }
-]
-
-⚠️ FINAL CHECK:
-- Sum of expectedProfit = 0
-- Each ranking specifies which table (tonight/year/all-time)
-- Tone is encouraging even for negative predictions
-
-Return ONLY clean JSON array.`;
+Sum must = 0. Return ONLY JSON.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
