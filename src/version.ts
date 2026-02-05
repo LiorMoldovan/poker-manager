@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.41.6';
+export const APP_VERSION = '4.41.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,13 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.41.6',
+    version: '4.41.7',
     date: '2026-02-05',
     changes: [
-      '✅ Improved forecast variety - less repetitive ranking mentions',
-      'Prioritized current year/half over all-time rankings',
-      'All-time ranking only shown if noteworthy (top 3, bottom 3, close battle)',
-      'Added anti-repetition rules for more diverse sentence content'
+      '✅ Simplified forecast prompt - positive instructions instead of prohibitions',
+      'Each player gets unique angle: streak/form/rivalry/comeback/tonight/year',
+      'Shorter, cleaner prompt for better AI results'
     ]
   },
   {

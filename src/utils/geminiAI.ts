@@ -1292,43 +1292,17 @@ ${recentGameExamples}
 - DON'T mention the expectedProfit number (shown separately)
 - DO use: streaks, form, rivalries, comebacks, tonight's matchups
 
-🎯 RANKING VARIETY (CRITICAL - avoid boring repetition!):
-- Focus on CURRENT YEAR/HALF rankings - these are most relevant
-- Only mention ALL-TIME if noteworthy: top 3, bottom 3, or close battle (<100₪ gap)
-- Don't give every player a ranking sentence - vary the content!
-- Mix it up: streak for one, form for another, rivalry for third, etc.
-- If nothing special about ranking, focus on: recent form, tonight's matchup, comeback story
+🎯 EACH PLAYER GETS A UNIQUE ANGLE (assign one per player):
+1. STREAK → "3 נצחונות רצופים! הפורמה ממשיכה"
+2. FORM → "ממוצע +67₪ ב-5 אחרונים - על גל"
+3. RIVALRY → "הקרב נגד X! הפער: 85₪"
+4. COMEBACK → "מחפש לשנות כיוון אחרי תקופה קשה"
+5. TONIGHT → "מוביל את שחקני הלילה"
+6. YEAR → "מוביל ${currentYear} עם +450₪"
 
-🚨 CRITICAL - TONE MUST MATCH PREDICTION:
-- If expectedProfit > 0: Optimistic, confident, "ימשיך לנצח", "בדרך לעוד נצחון"
-- If expectedProfit < 0: Cautious, challenging, "יתקשה הלילה", "מחפש לשבור את הרצף"
-- NEVER write optimistic text for a negative prediction!
-- Example: If predicting -86₪, DON'T write "נצחון גדול" - write about the challenge ahead
-
-VARIETY PATTERNS (MUST use different one for each player!):
-1. STREAK: "3 נצחונות רצופים! הפורמה הטובה ממשיכה"
-2. FORM: "ממוצע של +67₪ ב-5 משחקים אחרונים - על גל"
-3. RIVALRY: "הקרב נגד X נמשך! הפער: 100₪ בטבלת ${currentYear}"
-4. COMEBACK: "אחרי 3 הפסדים, הלילה מחפש לשנות כיוון"
-5. TONIGHT: "מוביל את שחקני הלילה ברווח הכולל"
-6. MILESTONE: "בדרך למשחק ה-100! רגע היסטורי מתקרב"
-7. CURRENT YEAR: "+340₪ ב-${currentYear}, מקום 2 בטבלה השנתית"
-
-⚠️ ANTI-REPETITION RULES:
-- Do NOT write "מקום X בטבלה הכללית" for every player!
-- Do NOT mention all-time ranking unless TOP 3, BOTTOM 3, or close battle
-- Each sentence should highlight DIFFERENT aspect
-- First player: maybe streak. Second: form. Third: rivalry. Etc.
-
-✅ Good variety:
-- Player 1: "על גל של 3 נצחונות! הפורמה הטובה ביותר השנה"
-- Player 2: "הקרב נגד אייל מתחדש - הפער ביניהם 85₪ בלבד"  
-- Player 3: "מוביל את ${currentYear} עם +450₪. ימשיך להפליא?"
-
-❌ Bad (repetitive):
-- Player 1: "במקום 4 בטבלה הכללית..."
-- Player 2: "במקום 7 בטבלה הכללית..."
-- Player 3: "במקום 2 בטבלה הכללית..."
+🎭 TONE MATCHES PREDICTION:
+- Positive profit → confident: "ימשיך לנצח", "על גל"
+- Negative profit → challenging: "יתקשה", "מחפש קאמבק"
 
 📝 OUTPUT (JSON ONLY):
 [
