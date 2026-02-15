@@ -1851,6 +1851,57 @@
       ],
       "chipGap": -18,
       "chipGapPerPlayer": -2.5714285714285716
+    },
+    {
+      "id": "mlmobvakffgyvuv4tlt",
+      "date": "2026-02-14T18:52:39.596Z",
+      "status": "completed",
+      "createdAt": "2026-02-14T18:52:39.596Z",
+      "location": "ליאור",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 0,
+          "highlight": "ממוצע +66₪ ב-5 משחקים אחרונים",
+          "sentence": "ליאור מגיע למשחק עם ממוצע של +66₪ ב-5 המשחקים האחרונים, למרות הפסד אחרון של -207₪, ומקווה לשמור על מעמדו כמדורג #1 כללי.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": -250,
+          "highlight": "ממוצע -50₪ ב-6 משחקים אחרונים",
+          "sentence": "אייל נמצא בירידה עם ממוצע של -50₪ ב-6 המשחקים האחרונים, לעומת ממוצע היסטורי של +5₪, ומחפש דרך לחזור למסלול.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": 105,
+          "highlight": "ממוצע +157₪ ב-4 משחקים אחרונים",
+          "sentence": "ליכטר מגיע עם רצף של ניצחון אחרון עם +703₪, ומציג מגמת שיפור עם ממוצע של +157₪ לאחרונה לעומת ממוצע היסטורי של -3₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": 143,
+          "highlight": "ממוצע +48₪ ב-4 משחקים אחרונים",
+          "sentence": "תומר מראה סימני שיפור עם ממוצע של +48₪ ב-4 המשחקים האחרונים, למרות היסטוריה כוללת שלילית, ומקווה להמשיך את המומנטום החיובי.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "חרדון",
+          "expectedProfit": -27,
+          "highlight": "ממוצע +62₪ ב-5 משחקים אחרונים",
+          "sentence": "חרדון מגיע עם רצף של 2 ניצחונות, ומציג שיפור משמעותי עם ממוצע של +62₪ לאחרונה לעומת ממוצע היסטורי של +12₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "שגיא אחיין",
+          "expectedProfit": 29,
+          "highlight": "ממוצע +120₪ ב-4 משחקים היסטוריים",
+          "sentence": "שגיא אחיין, עם ממוצע היסטורי מרשים של +120₪, נמצא בירידה עם הפסד של -147₪ במשחקו האחרון, ומקווה לחצות את רף ה-500₪.",
+          "isSurprise": false
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -18413,8 +18464,110 @@
       },
       "finalValue": 0,
       "profit": -147.42857142857142
+    },
+    {
+      "id": "mlmobvaknioeqqap8ja",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 1,
+        "2": 0,
+        "3": 0,
+        "4": 6,
+        "5": 2,
+        "6": 10
+      },
+      "finalValue": 165.15,
+      "profit": 105.15
+    },
+    {
+      "id": "mlmobvakqivlo2b5h",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 6,
+      "chipCounts": {
+        "1": 0,
+        "2": 8,
+        "3": 6,
+        "4": 1,
+        "5": 1,
+        "6": 2
+      },
+      "finalValue": 40.5,
+      "profit": -139.5
+    },
+    {
+      "id": "mlmobvaks0lt1shpnkm",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 7,
+      "chipCounts": {
+        "1": 12,
+        "2": 7,
+        "3": 6,
+        "4": 9,
+        "5": 6,
+        "6": 6
+      },
+      "finalValue": 129,
+      "profit": -81
+    },
+    {
+      "id": "mlmobvakdxvnkw4dy0q",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 2.5,
+      "chipCounts": {
+        "1": 57,
+        "2": 11,
+        "3": 25,
+        "4": 18,
+        "5": 6,
+        "6": 15
+      },
+      "finalValue": 296.85,
+      "profit": 221.85000000000002
+    },
+    {
+      "id": "mlmobvakgon8lk07ky",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 20,
+        "2": 24,
+        "3": 13,
+        "4": 15,
+        "5": 11,
+        "6": 4
+      },
+      "finalValue": 133.5,
+      "profit": 103.5
+    },
+    {
+      "id": "mlmobvakmhvvbhal8ik",
+      "gameId": "mlmobvakffgyvuv4tlt",
+      "playerId": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
+      "playerName": "שגיא אחיין",
+      "rebuys": 7,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -210
     }
   ],
-  "lastUpdated": "2026-02-08T00:03:30.809Z",
+  "lastUpdated": "2026-02-15T00:11:11.538Z",
   "updatedBy": "admin"
 }
