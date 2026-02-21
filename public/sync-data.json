@@ -3,61 +3,49 @@
     {
       "id": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
       "name": "ליאור",
-      "createdAt": "2025-12-28T01:04:42.421Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "b1ae0113-3ffc-41f5-a732-778d79c46286",
       "name": "אייל",
-      "createdAt": "2025-12-28T01:04:42.432Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
       "name": "אורן",
-      "createdAt": "2025-12-28T01:04:42.432Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
       "name": "ליכטר",
-      "createdAt": "2025-12-28T01:04:42.432Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
       "name": "סגל",
-      "createdAt": "2025-12-28T01:04:42.432Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "2cedc21c-7c0d-479c-ac04-483638d01881",
       "name": "תומר",
-      "createdAt": "2025-12-28T01:04:42.432Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
       "name": "פיליפ",
-      "createdAt": "2025-12-28T01:04:42.433Z",
-      "type": "permanent"
-    },
-    {
-      "id": "p9",
-      "name": "אסף",
-      "createdAt": "2025-12-28T01:04:42.433Z",
-      "type": "permanent"
-    },
-    {
-      "id": "p10",
-      "name": "פבל",
-      "createdAt": "2025-12-28T01:04:42.433Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
       "id": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
       "name": "מלמד",
-      "createdAt": "2025-12-28T01:04:42.433Z",
+      "createdAt": "2025-12-18T17:00:27.639Z",
       "type": "permanent"
     },
     {
@@ -1921,6 +1909,64 @@
       "status": "completed",
       "createdAt": "2026-02-19T18:59:36.908Z",
       "location": "סגל"
+    },
+    {
+      "id": "mlwdi9yoawvx8aesk85",
+      "date": "2026-02-21T13:47:24.528Z",
+      "status": "completed",
+      "createdAt": "2026-02-21T13:47:24.528Z",
+      "location": "ליאור",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 180,
+          "highlight": "ממוצע 71₪, #2 ב-H1 2026",
+          "sentence": "ליאור מגיע עם ממוצע מרשים של 71₪ ב-7 המשחקים האחרונים, מדורג #2 ב-H1 2026. צפי לניצחון של 180₪.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": -58,
+          "highlight": "ממוצע -6₪, רק 95₪ מה-1500₪",
+          "sentence": "אייל מגיע אחרי 2 ניצחונות רצופים, אך ממוצעו ב-H1 2026 הוא -6₪. צפי לאתגר של -58₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": 138,
+          "highlight": "ממוצע 97₪, #3 ב-H1 2026",
+          "sentence": "ליכטר מראה מגמת שיפור עם ממוצע של 97₪ ב-5 המשחקים האחרונים, ומדורג #3 ב-H1 2026. צפי לניצחון של 138₪.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -125,
+          "highlight": "5 הפסדים רצופים, ממוצע -105₪",
+          "sentence": "סגל נמצא ברצף של 5 הפסדים, עם ממוצע של -105₪ ב-6 המשחקים האחרונים. צפי למשחק מאתגר של -125₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פיליפ",
+          "expectedProfit": -134,
+          "highlight": "3 הפסדים רצופים, ממוצע -80₪",
+          "sentence": "פיליפ מגיע אחרי 3 הפסדים רצופים, עם ממוצע של -80₪ ב-5 המשחקים האחרונים. צפי למשחק מאתגר של -134₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "מלמד",
+          "expectedProfit": -124,
+          "highlight": "ממוצע -69₪, #8 ב-H1 2026",
+          "sentence": "מלמד זכה במשחקו האחרון, אך ממוצעו ב-3 המשחקים האחרונים הוא -69₪. צפי למשחק מאתגר של -124₪.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "חרדון",
+          "expectedProfit": 123,
+          "highlight": "ממוצע 82₪, #1 ב-H1 2026",
+          "sentence": "נצחון גדול של +345₪ במשחק האחרון. מקום 3 מתוך 7 הלילה.",
+          "isSurprise": true
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -18721,8 +18767,127 @@
       },
       "finalValue": 87.75,
       "profit": -2.25
+    },
+    {
+      "id": "mlwdi9yoap9wxnyas1m",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 16
+      },
+      "finalValue": 240,
+      "profit": 180
+    },
+    {
+      "id": "mlwdi9yobaeaa02mzug",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mlwdi9yoiur5ne3cmn8",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
+      "playerName": "פיליפ",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mlwdi9yowzf244vsu8h",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mlwdi9yoty37cx4qac",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mlwdi9yo5gxjlx2hjv6",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
+    },
+    {
+      "id": "mlwdi9yplmoehvot97m",
+      "gameId": "mlwdi9yoawvx8aesk85",
+      "playerId": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
+      "playerName": "מלמד",
+      "rebuys": 1,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -30
     }
   ],
-  "lastUpdated": "2026-02-19T23:56:18.799Z",
+  "lastUpdated": "2026-02-21T13:48:11.112Z",
   "updatedBy": "admin"
 }
