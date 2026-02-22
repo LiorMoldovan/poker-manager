@@ -404,13 +404,10 @@ const LiveGameScreen = () => {
     });
   };
 
-  // Creative messages for each REBUY (not total buyins)
-  // rebuyNumber = totalBuyins - 1 (since everyone starts with 1 buyin)
+  // Creative messages by total buyins count (including the initial buy-in)
+  // Numbers in sentences match totalBuyins so they align with "סך הכל X" in the announcement
   // All sentences are gender-neutral (no "אתה/את") for natural female voice
   const getBuyinMessage = (totalBuyins: number, isQuickRebuy: boolean): string => {
-    // Calculate rebuy number (first rebuy = 1, not 2)
-    const rebuyNumber = Math.max(1, totalBuyins - 1);
-    
     // Quick rebuy messages (< 5 min since last) - no gender
     const quickMessages = [
       'תנשום קצת בין הקניות',
@@ -419,15 +416,13 @@ const LiveGameScreen = () => {
       'רגע, עוד אחד ככה מהר',
       'וואו, זה היה מהיר',
       'שנייה, מה קרה שם',
-      'כבר עוד אחד, רצינו',
       'קצב מרשים של קניות',
     ];
     
-    // Messages by REBUY number (not total) - gender neutral, natural Hebrew
-    // EXPANDED: Many more messages for variety, especially for low rebuy counts
+    // Messages keyed by totalBuyins - gender neutral, natural Hebrew
     const messages: Record<number, string[]> = {
-      1: [
-        // First rebuy - encouraging
+      2: [
+        // totalBuyins = 2 (first rebuy) - encouraging
         'הכל יהיה בסדר',
         'עכשיו מתחילים ברצינות',
         'לא נורא, הערב עוד ארוך',
@@ -442,93 +437,78 @@ const LiveGameScreen = () => {
         'פעם ראשונה לא נחשבת',
         'חימום נגמר, עכשיו ברצינות',
         'זה היה רק אימון',
-        'למדנו משהו, נמשיך',
-        'נתחיל מחדש',
         'הפעם עם יותר זהירות',
         'עכשיו יודעים את הסגנון',
         'בוא נתחיל לשחק',
         'מוכנים לסיבוב שני',
       ],
-      2: [
-        // Second rebuy - still positive
+      3: [
+        // totalBuyins = 3 (second rebuy) - still positive
         'לא נורא, יהיה בסדר',
         'זה קורה לכולם',
         'עדיין בתחילת הדרך',
         'אין מה לדאוג',
         'הכל עוד יכול להשתנות',
         'זה חלק מהמשחק',
-        'נשאר חיובי',
         'הערב עוד לא נגמר',
         'עדיין בטווח הנורמלי',
-        'שני זה לא נורא',
         'עדיין יש המון זמן',
         'אפשר לחזור מזה',
         'ראינו קאמבקים יותר גדולים',
         'עדיין במשחק',
         'לא אומר כלום עדיין',
-        'זה מרתון, לא ספרינט',
         'עוד הכל פתוח',
         'בוא נהפוך את זה',
         'עכשיו מתחילים להרוויח',
         'הזמן לשינוי מגמה',
         'מכאן רק למעלה',
       ],
-      3: [
-        // Third rebuy - mild concern
-        'פעם שלישית גלידה',
+      4: [
+        // totalBuyins = 4 (third rebuy) - mild concern
         'נו טוב, עכשיו ברצינות',
         'בוא נשנה את המזל',
         'עדיין יש סיכוי',
-        'שלוש זה מספר מזל',
         'עכשיו באמת צריך להתרכז',
         'בוא נהיה חכמים מכאן',
         'אוקיי, עכשיו ברצינות',
-        'שלוש, מתחיל להיות מעניין',
         'הגיע הזמן לשנות גישה',
-        'שלוש זה עדיין בסדר',
         'בוא נראה קצת יותר זהירות',
         'אולי נחכה לידיים טובות',
         'מכאן כל יד חשובה',
-        'שלוש, הגיע הזמן להתרכז',
         'עכשיו צריך לשחק חכם',
         'בוא נהיה סבלניים',
-        'שלישי ואחרון, נכון',
         'הפעם זה יעבוד, מרגיש את זה',
       ],
-      4: [
-        // Fourth rebuy - concern
-        'כבר ארבע, שימו לב',
+      5: [
+        // totalBuyins = 5 (fourth rebuy) - concern
         'מתחיל להיות יקר',
         'אולי הפסקה קטנה',
-        'וואו, ארבע כבר',
         'ערב לא פשוט',
-        'ארבע זה כבר משהו',
         'נו טוב, מה קורה פה',
-        'הגענו לארבע',
         'אוקיי, זה כבר רציני',
-        'ארבע, צריך לחשוב',
+        'חמש, צריך לחשוב',
         'נו, מה אפשר לעשות',
         'זה מתחיל להצטבר',
       ],
-      5: [
-        // Fifth rebuy - serious
-        'חמש כבר, רציני',
+      6: [
+        // totalBuyins = 6 (fifth rebuy) - serious
+        'שש כבר, רציני',
         'ערב יקר הולך להיות',
         'בטוח שכדאי להמשיך',
-        'חמש זה הרבה',
+        'שש זה הרבה',
         'מתחיל להיות כבד',
-        'חמש קניות, נו נו',
+        'שש קניות, נו נו',
         'הערב הזה יזכר',
-        'חמש, אין מה לעשות',
+        'שש, אין מה לעשות',
         'זה כבר ערב יקר',
-        'חמש בפנים',
-        'נו, חמש כבר',
+        'שש בפנים',
+        'נו, שש כבר',
         'הולך להיות סיפור',
-        'אוקיי, חמש, נמשיך',
+        'אוקיי, שש, נמשיך',
       ],
     };
     
-    // Messages for 6-8 rebuys
+    // Messages for totalBuyins 7-9
     const highMessages = [
       'שיא אישי בדרך',
       'נו באמת, מספיק',
@@ -543,7 +523,7 @@ const LiveGameScreen = () => {
       'הערב הזה יעלה ביוקר',
     ];
     
-    // Messages for 9+ rebuys
+    // Messages for totalBuyins 10+
     const finalMessages = [
       'בבקשה לעצור',
       'מספיק להיום',
@@ -558,17 +538,17 @@ const LiveGameScreen = () => {
     
     let message: string;
     
-    if (rebuyNumber >= 9) {
+    if (totalBuyins >= 10) {
       message = finalMessages[Math.floor(Math.random() * finalMessages.length)];
-    } else if (rebuyNumber >= 6) {
+    } else if (totalBuyins >= 7) {
       message = highMessages[Math.floor(Math.random() * highMessages.length)];
     } else {
-      const levelMessages = messages[rebuyNumber] || messages[5];
+      const levelMessages = messages[totalBuyins] || messages[6];
       message = levelMessages[Math.floor(Math.random() * levelMessages.length)];
     }
     
-    // Use ONLY quick rebuy message if applicable (only for 2nd rebuy onwards)
-    if (isQuickRebuy && rebuyNumber > 1) {
+    // Use ONLY quick rebuy message if applicable (only for 3rd+ total buyin)
+    if (isQuickRebuy && totalBuyins > 2) {
       message = quickMessages[Math.floor(Math.random() * quickMessages.length)];
     }
     
