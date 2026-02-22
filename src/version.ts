@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.44.3';
+export const APP_VERSION = '4.45.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.45.0',
+    date: '2026-02-05',
+    changes: [
+      '🏗️ Major: 100% code-generated sentences - AI only balances profits',
+      '✨ Diverse: 7 unique sentence patterns based on player index',
+      '🎯 Accurate: All facts computed in code, not AI interpretation',
+      '🚀 Faster: Simplified AI prompt, reduced token usage',
+    ]
+  },
   {
     version: '4.44.3',
     date: '2026-02-05',
