@@ -948,6 +948,7 @@ const StatisticsScreen = () => {
     const biggestWinPlayers = findTied(filteredStats, s => s.biggestWin, true);
     const biggestLossPlayers = findTied(filteredStats, s => s.biggestLoss, false);
     const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
+    const avgBuyinKings = findTied(filteredStats.filter(s => s.gamesPlayed >= 3), s => s.avgRebuysPerGame, true);
     
     const sharpshooters = findTied(filteredStats, s => s.winPercentage, true);
     const worstWinRates = findTied(filteredStats, s => s.winPercentage, false);
@@ -970,6 +971,7 @@ const StatisticsScreen = () => {
       biggestWinPlayers,
       biggestLossPlayers,
       rebuyKings,
+      avgBuyinKings,
       sharpshooters,
       worstWinRates,
       onFirePlayers,
@@ -1763,7 +1765,7 @@ const StatisticsScreen = () => {
                     </div>
                   )}
                   {records.rebuyKings[0]?.totalRebuys > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ color: 'var(--text-muted)' }}>🎰 Buyin King</span>
                       {renderRecord(
                         'rebuyKing',
@@ -1772,6 +1774,19 @@ const StatisticsScreen = () => {
                         undefined,
                         'all',
                         '🎰 רכישות'
+                      )}
+                  </div>
+                  )}
+                  {records.avgBuyinKings[0]?.avgRebuysPerGame > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>💸 Avg Buyin King</span>
+                      {renderRecord(
+                        'avgBuyinKing',
+                        records.avgBuyinKings.filter(p => p.avgRebuysPerGame > 0),
+                        (p) => <span style={{ fontWeight: '600' }}>({p.avgRebuysPerGame.toFixed(1)} avg)</span>,
+                        undefined,
+                        'all',
+                        '💸 ממוצע רכישות'
                       )}
                   </div>
                   )}
