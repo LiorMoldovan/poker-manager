@@ -1108,11 +1108,12 @@ export const generateAIForecasts = async (
   
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = playersWithYearStats.map((p, i) => {
-    // Get explicit last game result
+    // Get explicit last game result - in Hebrew
     const lastGame = p.gameHistory[0];
+    const lastGameProfit = lastGame ? Math.round(lastGame.profit) : 0;
     const lastGameResult = lastGame 
-      ? (lastGame.profit > 0 ? `WON +${Math.round(lastGame.profit)}₪` : 
-         lastGame.profit < 0 ? `LOST ${Math.round(lastGame.profit)}₪` : 'BREAK-EVEN')
+      ? (lastGame.profit > 0 ? `רווח של +${lastGameProfit}₪` : 
+         lastGame.profit < 0 ? `הפסד של ${lastGameProfit}₪` : 'יצא בלי שינוי')
       : 'No games';
     
     // Check for comeback after long absence (30+ days is notable)
@@ -1270,39 +1271,48 @@ export const generateAIForecasts = async (
     const rankText = rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`;
     
     // Simple sentence patterns - pick based on player index
+    // Each pattern is unique and uses different facts
     let suggestedSentence = '';
+    let suggestedHighlight = '';
+    
     switch (playerIndex % 7) {
       case 0:
-        suggestedSentence = `אחרי ${lastGameResult} במשחק האחרון, ${streakText ? streakText + ' ו' : ''}ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}.`;
+        suggestedHighlight = `${lastGameResult} אחרון`;
+        suggestedSentence = `${streakText ? streakText + ', ' : ''}ממוצע של ${avgSign}${recentAvg}₪ ב${periodLabel}. ${rankText} בטבלה.`;
         break;
       case 1:
-        suggestedSentence = streakText 
-          ? `עם ${streakText}, ${p.name} ${rankText} ב${currentPeriodLabel}.`
-          : `${rankText} ב${currentPeriodLabel} עם ממוצע ${avgSign}${recentAvg}₪.`;
+        suggestedHighlight = streakText || `${rankText} ב${currentPeriodLabel}`;
+        suggestedSentence = `${lastGameResult} במשחק האחרון. ממוצע ${avgSign}${recentAvg}₪ ב${numGames} משחקים.`;
         break;
       case 2:
-        suggestedSentence = `${rankTonight === 1 ? 'מוביל את הטבלה' : `במקום ה-${rankTonight}`} ב${currentPeriodLabel}, ${lastGameResult} במשחק האחרון.`;
+        suggestedHighlight = `${rankText} ב${currentPeriodLabel}`;
+        suggestedSentence = `${lastGameResult} לאחרונה, עם ממוצע של ${avgSign}${recentAvg}₪. ${streakText ? streakText + '.' : ''}`;
         break;
       case 3:
-        suggestedSentence = `${p.name} ${comebackText ? 'חוזר אחרי היעדרות, ' : ''}הגיע עם ${lastGameResult} ו${rankText}.`;
+        suggestedHighlight = comebackText ? `חוזר אחרי היעדרות` : `ממוצע ${avgSign}${recentAvg}₪`;
+        suggestedSentence = `${lastGameResult} במשחק האחרון. ${rankText} בטבלת ${currentPeriodLabel}.`;
         break;
       case 4:
+        suggestedHighlight = trendText?.includes('📈') ? `מגמת שיפור` : (trendText?.includes('📉') ? `מגמת ירידה` : `${numGames} משחקים`);
         suggestedSentence = trendText 
-          ? `${trendText.includes('📈') ? 'מגמת שיפור:' : 'מגמת ירידה:'} מ-${allTimeAvg}₪ היסטורי ל-${recentAvg}₪ לאחרונה.`
-          : `ב${numGames} משחקי ${periodLabel}, ממוצע ${avgSign}${recentAvg}₪, ${lastGameResult} אחרון.`;
+          ? `ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪. ${lastGameResult} אחרון.`
+          : `ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}. ${lastGameResult} אחרון.`;
         break;
       case 5:
+        suggestedHighlight = (allTimeAvg < 0 && recentAvg > 0) ? `סימני שיפור` : `${lastGameResult}`;
         suggestedSentence = (allTimeAvg < 0 && recentAvg > 0)
-          ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${avgSign}${recentAvg}₪ - סימני שיפור.`
-          : `${lastGameResult} אחרון, ${rankText} עם ${avgSign}${recentAvg}₪ ממוצע.`;
+          ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${avgSign}${recentAvg}₪. ${rankText}.`
+          : `${rankText} עם ממוצע ${avgSign}${recentAvg}₪. ${streakText ? streakText + '.' : ''}`;
         break;
       default:
-        suggestedSentence = `הפורמה האחרונה: ${lastGameResult}, ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}.`;
+        suggestedHighlight = `ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}`;
+        suggestedSentence = `${lastGameResult} במשחק האחרון. ${rankText} בטבלת ${currentPeriodLabel}.`;
         break;
     }
     
     const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
-משפט_מוצע: "${suggestedSentence}"
+כותרת: "${suggestedHighlight}"
+משפט: "${suggestedSentence}"
 צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
     
     return line;
@@ -1355,14 +1365,14 @@ ${surpriseText}
 📋 הוראות
 ═══════════════════════════════════════════════════════════════════
 
-המשימה: השתמש במשפט_מוצע כבסיס. שפר את העברית והוסף צבע.
+המשימה: השתמש בכותרת ובמשפט המוכנים. שפר קלות את העברית.
 
 כללים:
 1. סכום כל ה-expectedProfit = 0 בדיוק
 2. השתמש בצפי מהנתונים (±30₪ גמישות)  
 3. מור = נקבה, שאר = זכר
-4. sentence מבוסס על משפט_מוצע - שמור על המבנה והעובדות!
-5. highlight = 5-10 מילים מתוך ה-sentence
+4. highlight = הכותרת המוכנה (שפר מעט אם צריך)
+5. sentence = המשפט המוכן (שפר מעט אם צריך)
 
 טון:
 • expectedProfit חיובי → אופטימי
@@ -1370,7 +1380,7 @@ ${surpriseText}
 • isSurprise=true רק עם expectedProfit חיובי
 
 פלט JSON בלבד:
-[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים", "sentence":"המשפט המוצע משופר", "isSurprise":boolean}]`;
+[{"name":"שם", "expectedProfit":מספר, "highlight":"הכותרת", "sentence":"המשפט", "isSurprise":boolean}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   

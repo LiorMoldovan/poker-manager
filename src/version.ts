@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.44.2';
+export const APP_VERSION = '4.44.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.44.3',
+    date: '2026-02-05',
+    changes: [
+      '🇮🇱 Hebrew: WON/LOST → רווח/הפסד',
+      '✅ Pre-built highlight + sentence (no duplication)',
+      '🎨 7 unique patterns with separate highlight and sentence',
+      '📝 AI just polishes, not generates'
+    ]
+  },
   {
     version: '4.44.2',
     date: '2026-02-05',
