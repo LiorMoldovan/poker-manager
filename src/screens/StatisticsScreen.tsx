@@ -62,10 +62,12 @@ const StatisticsScreen = () => {
   const [isSharingTop20, setIsSharingTop20] = useState(false);
   const [isSharingPodium, setIsSharingPodium] = useState(false);
   const [isSharingHallOfFame, setIsSharingHallOfFame] = useState(false);
+  const [isSharingRebuyStats, setIsSharingRebuyStats] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
   const podiumRef = useRef<HTMLDivElement>(null);
   const hallOfFameRef = useRef<HTMLDivElement>(null);
+  const rebuyStatsRef = useRef<HTMLDivElement>(null);
 
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
@@ -178,6 +180,55 @@ const StatisticsScreen = () => {
     } catch (error) {
       console.error('Error sharing top 20:', error);
       setIsSharingTop20(false);
+    }
+  };
+
+  // Share rebuy stats as screenshot
+  const handleShareRebuyStats = async () => {
+    if (!rebuyStatsRef.current) return;
+    
+    setIsSharingRebuyStats(true);
+    try {
+      const canvas = await html2canvas(rebuyStatsRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsSharingRebuyStats(false);
+          return;
+        }
+        
+        const file = new File([blob], 'poker-rebuy-stats.png', { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Poker Rebuy Stats',
+            });
+          } catch (err) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'poker-rebuy-stats.png';
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'poker-rebuy-stats.png';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingRebuyStats(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing rebuy stats:', error);
+      setIsSharingRebuyStats(false);
     }
   };
 
@@ -1899,7 +1950,7 @@ const StatisticsScreen = () => {
 
               {/* Rebuy Stats Table */}
               {rebuyStats.length > 0 && (
-                <div className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
+                <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
                   <div style={{ 
                     textAlign: 'center', 
                     fontSize: '0.85rem', 
@@ -1976,6 +2027,29 @@ const StatisticsScreen = () => {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {rebuyStats.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <button
+                    onClick={handleShareRebuyStats}
+                    disabled={isSharingRebuyStats}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.4rem 0.8rem',
+                      background: 'var(--surface)',
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isSharingRebuyStats ? '📸...' : '📤 שתף'}
+                  </button>
                 </div>
               )}
 
