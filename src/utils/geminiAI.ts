@@ -1393,9 +1393,9 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.85,  // Balanced: creative but accurate
-            topK: 40,
-            topP: 0.85,
+            temperature: 1.0,  // Maximum creativity
+            topK: 50,
+            topP: 0.95,
             maxOutputTokens: 2048,
           }
         })
@@ -1587,33 +1587,98 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
-        // ========== 7. GENERATE FALLBACK IF NEEDED ==========
-        if (correctedSentence.length < 20 || hadErrors) {
-          console.log(`⚠️ ${player.name}: Errors detected - ${errorDetails.join(', ')}`);
+        // ========== 7. REMOVE BORING PATTERNS ==========
+        // Strip out repetitive statistical filler
+        const boringPatterns = [
+          /,?\s*ומדורג\s*(?:ב)?מקום\s*(?:ה-?)?\d+/g,
+          /,?\s*מקום\s*\d+\s*מתוך\s*\d+\s*(?:הלילה|הערב)?/g,
+          /,?\s*מדורג\s*(?:ב)?מקום\s*\d+/g,
+          /,?\s*עם\s*ממוצע\s*(?:של\s*)?[+-]?\d+₪\s*ב-?\d+\s*משחקים/g,
+          /,?\s*ב-H[12]\s*20\d{2}/g,
+          /,?\s*מציג\s*ממוצע\s*(?:מרשים\s*)?(?:של\s*)?[+-]?\d+₪/g,
+        ];
+        
+        for (const pattern of boringPatterns) {
+          correctedSentence = correctedSentence.replace(pattern, '');
+        }
+        
+        // Clean up after removal
+        correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
+        correctedSentence = correctedSentence.replace(/,\s*\./g, '.');
+        correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
+        
+        // ========== 8. GENERATE CREATIVE FALLBACK IF NEEDED ==========
+        if (correctedSentence.length < 15 || hadErrors) {
+          console.log(`⚠️ ${player.name}: Needs creative fallback`);
           
-          // Generate engaging, factual fallback based on actual data
-          const fallbackSentences = [];
+          // Creative, varied fallbacks - no statistics!
+          const isFemale = player.isFemale;
+          const he = isFemale ? 'היא' : 'הוא';
+          const wants = isFemale ? 'רוצה' : 'רוצה';
+          const looking = isFemale ? 'מחפשת' : 'מחפש';
           
-          // Build sentence based on what's actually true
+          let fallback = '';
+          
           if (actualStreak >= 3) {
-            fallbackSentences.push(`רצף חם של ${actualStreak} נצחונות רצופים! ${yearGames > 0 ? `${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ב-${currentYear}.` : ''}`);
+            const opts = [
+              `בענק! ${actualStreak} נצחונות ברצף, קשה לעצור.`,
+              `הפורמה לוהטת, ${he} לא מתכוון לעצור.`,
+              `${actualStreak} ברצף! מי יעצור אותו?`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
           } else if (actualStreak <= -3) {
-            fallbackSentences.push(`רצף קשה של ${Math.abs(actualStreak)} הפסדים. מחפש לשבור את הרצף הלילה.`);
-          } else if (wonLastGame && lastGameProfit > 50) {
-            fallbackSentences.push(`נצחון גדול של +${Math.round(lastGameProfit)}₪ במשחק האחרון. מקום ${rankTonight} מתוך ${players.length} הלילה.`);
-          } else if (lostLastGame && lastGameProfit < -50) {
-            fallbackSentences.push(`הפסד של ${Math.round(lastGameProfit)}₪ במשחק האחרון. מחפש לחזור לנצחונות הלילה.`);
-          } else if (yearGames >= 3) {
-            const yearAvg = Math.round(yearProfit / yearGames);
-            fallbackSentences.push(`${yearGames} משחקים ב-${currentYear} עם ממוצע ${yearAvg >= 0 ? '+' : ''}${yearAvg}₪. מקום ${rankTonight}/${players.length} הלילה.`);
-          } else if (player.gamesPlayed >= 10) {
-            fallbackSentences.push(`${player.gamesPlayed} משחקים, ממוצע ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪. מקום ${rankTonight}/${players.length} בטבלה הלילה.`);
+            const opts = [
+              `חייב לשבור את הרצף השחור.`,
+              `${Math.abs(actualStreak)} הפסדים, הלילה זה משתנה.`,
+              `${looking} נקמה אחרי תקופה קשה.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
+          } else if (wonLastGame && lastGameProfit > 100) {
+            const opts = [
+              `נצחון גדול אחרון, הביטחון בשיא.`,
+              `+${Math.round(lastGameProfit)}₪ אחרון, ${he} חם.`,
+              `אחרי ערב מוצלח, ${wants} עוד.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
+          } else if (lostLastGame && lastGameProfit < -100) {
+            const opts = [
+              `${looking} לתקן את ההפסד הכואב.`,
+              `אחרי ערב קשה, הלילה שונה.`,
+              `${Math.round(lastGameProfit)}₪ כואב, זמן לנקמה.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
+          } else if (rankTonight === 1) {
+            const opts = [
+              `המלך על הכס, כולם רודפים.`,
+              `בראש הטבלה, ${he} המועדף.`,
+              `מוביל! אבל אין מנוחה לטובים.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
+          } else if (player.avgProfit > 50) {
+            const opts = [
+              `שחקן רווחי, תמיד מסוכן.`,
+              `ההיסטוריה בצד שלו.`,
+              `שקט אבל קטלני.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
+          } else if (player.avgProfit < -30) {
+            const opts = [
+              `${looking} להפוך את המגמה.`,
+              `ההיסטוריה לא משנה, רק הלילה.`,
+              `כל ערב הוא הזדמנות חדשה.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
           } else {
-            fallbackSentences.push(`מקום ${rankTonight}/${players.length} בטבלה הלילה. ${yearGames > 0 ? `${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ב-${currentYear}.` : `ממוצע ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪.`}`);
+            const opts = [
+              `ערב חדש, הכל פתוח.`,
+              `הקלפים יחליטו.`,
+              `מוכן להפתיע.`,
+            ];
+            fallback = opts[Math.floor(Math.random() * opts.length)];
           }
           
-          correctedSentence = fallbackSentences[0];
-          console.log(`🔧 ${player.name}: Replaced with factual fallback`);
+          correctedSentence = fallback;
+          console.log(`🔧 ${player.name}: Creative fallback applied`);
         }
         
         // ========== 8. FIX HIGHLIGHT ERRORS ==========
