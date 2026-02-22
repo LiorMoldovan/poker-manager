@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.46.0';
+export const APP_VERSION = '4.46.1';
 
 export interface ChangelogEntry {
   version: string;

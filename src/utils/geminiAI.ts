@@ -1350,6 +1350,11 @@ ${surpriseText}
 7. מספרים שלמים בלבד (בלי נקודה עשרונית)
 8. עברית בלבד, לשון זכר (חוץ ממור = נקבה)
 
+🚫 אסור להמציא עובדות:
+- אל תכתוב "הממוצע הגבוה ביותר" אלא אם הנתונים מראים שזה נכון
+- אל תכתוב "מוביל הטבלה" אלא אם הדירוג הוא מקום 1
+- השתמש רק במספרים שמופיעים בנתונים!
+
 פלט JSON בלבד:
 [{"name":"שם", "expectedProfit":מספר, "highlight":"כותרת קצרה", "sentence":"משפט מרתק", "isSurprise":boolean}]`;
 
@@ -1440,6 +1445,92 @@ ${surpriseText}
       }
       
       console.log('✅ AI generated complete forecasts');
+      
+      // ========== FACT-CHECK AI OUTPUT ==========
+      // Remove any false superlative claims the AI invented
+      console.log('🔍 Fact-checking AI output...');
+      
+      // Pre-calculate actual rankings for validation
+      const periodRankings = players.map(p => {
+        const halfGames = getHalfGames(p, currentYear, currentHalf);
+        const halfAvg = halfGames.length > 0 
+          ? halfGames.reduce((sum, g) => sum + g.profit, 0) / halfGames.length 
+          : 0;
+        const halfTotal = halfGames.reduce((sum, g) => sum + g.profit, 0);
+        return { name: p.name, avg: halfAvg, total: halfTotal, games: halfGames.length };
+      }).filter(p => p.games > 0);
+      
+      // Sort by average to find who actually has highest
+      const byAvg = [...periodRankings].sort((a, b) => b.avg - a.avg);
+      const highestAvgPlayer = byAvg[0]?.name;
+      
+      // Sort by total to find leader
+      const byTotal = [...periodRankings].sort((a, b) => b.total - a.total);
+      const leaderPlayer = byTotal[0]?.name;
+      
+      forecasts = forecasts.map(forecast => {
+        let sentence = forecast.sentence;
+        let highlight = forecast.highlight;
+        const playerName = forecast.name;
+        
+        // Check for false "highest average" claims
+        const highestAvgPatterns = [
+          /הממוצע הגבוה ביותר/g,
+          /ממוצע הגבוה ביותר/g,
+          /הכי גבוה/g,
+          /הממוצע הטוב ביותר/g,
+        ];
+        
+        for (const pattern of highestAvgPatterns) {
+          if (pattern.test(sentence) && playerName !== highestAvgPlayer) {
+            console.log(`⚠️ ${playerName}: False "highest average" claim removed`);
+            sentence = sentence.replace(pattern, 'ממוצע טוב');
+          }
+        }
+        
+        // Check for false "leader" claims
+        const leaderPatterns = [
+          /מוביל את הטבלה/g,
+          /מקום ראשון/g,
+          /בראש הטבלה/g,
+          /מוביל הטבלה/g,
+        ];
+        
+        for (const pattern of leaderPatterns) {
+          if ((pattern.test(sentence) || pattern.test(highlight)) && playerName !== leaderPlayer) {
+            const playerRank = byTotal.findIndex(p => p.name === playerName) + 1;
+            console.log(`⚠️ ${playerName}: False "leader" claim - actually #${playerRank}`);
+            sentence = sentence.replace(pattern, `במקום ${playerRank}`);
+            highlight = highlight.replace(pattern, `מקום ${playerRank}`);
+          }
+        }
+        
+        // Remove invented numbers that don't match our data
+        // Pattern: "X נצחונות רצופים" - verify streak
+        const streakMatch = sentence.match(/(\d+)\s*נצחונות\s*רצופים/);
+        if (streakMatch) {
+          const claimedStreak = parseInt(streakMatch[1]);
+          const player = players.find(p => p.name === playerName);
+          const actualStreak = player?.currentStreak || 0;
+          if (actualStreak < claimedStreak) {
+            console.log(`⚠️ ${playerName}: False streak ${claimedStreak} → ${actualStreak}`);
+            if (actualStreak > 0) {
+              sentence = sentence.replace(streakMatch[0], `${actualStreak} נצחונות רצופים`);
+            } else {
+              sentence = sentence.replace(streakMatch[0], '');
+            }
+          }
+        }
+        
+        return {
+          ...forecast,
+          sentence: sentence.trim(),
+          highlight: highlight.trim()
+        };
+      });
+      
+      console.log('✅ Fact-checking complete');
+      // ========== END FACT-CHECK ==========
       
       // Ensure the sum is 0
       const totalProfit = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
