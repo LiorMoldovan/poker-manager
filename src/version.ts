@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.45.0';
+export const APP_VERSION = '4.46.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.46.0',
+    date: '2026-02-05',
+    changes: [
+      '🎨 Rewrite: Clean AI prompt with few-shot examples',
+      '✨ Creative: AI generates engaging highlight + sentence',
+      '📊 Clear data: Clean player stats format for AI',
+      '🌡️ Temperature 0.9 for varied, creative output',
+      '💾 Backup: v4.43.9 saved as geminiAI.backup.v4.43.9.ts',
+    ]
+  },
   {
     version: '4.45.0',
     date: '2026-02-05',

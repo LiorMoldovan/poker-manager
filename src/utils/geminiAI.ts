@@ -1263,57 +1263,18 @@ export const generateAIForecasts = async (
       trendText = `📉 יורד: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
     }
     
-    // Build a SUGGESTED SENTENCE in code - AI just polishes it
-    // Use player index to force different opening patterns
-    const playerIndex = players.indexOf(p);
-    const numGames = periodGames?.length || 0;
+// Build clean data block for each player
     const avgSign = recentAvg >= 0 ? '+' : '';
-    const rankText = rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`;
-    
-    // Simple sentence patterns - pick based on player index
-    // Each pattern is unique and uses different facts
-    let suggestedSentence = '';
-    let suggestedHighlight = '';
-    
-    switch (playerIndex % 7) {
-      case 0:
-        suggestedHighlight = `${lastGameResult} אחרון`;
-        suggestedSentence = `${streakText ? streakText + ', ' : ''}ממוצע של ${avgSign}${recentAvg}₪ ב${periodLabel}. ${rankText} בטבלה.`;
-        break;
-      case 1:
-        suggestedHighlight = streakText || `${rankText} ב${currentPeriodLabel}`;
-        suggestedSentence = `${lastGameResult} במשחק האחרון. ממוצע ${avgSign}${recentAvg}₪ ב${numGames} משחקים.`;
-        break;
-      case 2:
-        suggestedHighlight = `${rankText} ב${currentPeriodLabel}`;
-        suggestedSentence = `${lastGameResult} לאחרונה, עם ממוצע של ${avgSign}${recentAvg}₪. ${streakText ? streakText + '.' : ''}`;
-        break;
-      case 3:
-        suggestedHighlight = comebackText ? `חוזר אחרי היעדרות` : `ממוצע ${avgSign}${recentAvg}₪`;
-        suggestedSentence = `${lastGameResult} במשחק האחרון. ${rankText} בטבלת ${currentPeriodLabel}.`;
-        break;
-      case 4:
-        suggestedHighlight = trendText?.includes('📈') ? `מגמת שיפור` : (trendText?.includes('📉') ? `מגמת ירידה` : `${numGames} משחקים`);
-        suggestedSentence = trendText 
-          ? `ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪. ${lastGameResult} אחרון.`
-          : `ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}. ${lastGameResult} אחרון.`;
-        break;
-      case 5:
-        suggestedHighlight = (allTimeAvg < 0 && recentAvg > 0) ? `סימני שיפור` : `${lastGameResult}`;
-        suggestedSentence = (allTimeAvg < 0 && recentAvg > 0)
-          ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${avgSign}${recentAvg}₪. ${rankText}.`
-          : `${rankText} עם ממוצע ${avgSign}${recentAvg}₪. ${streakText ? streakText + '.' : ''}`;
-        break;
-      default:
-        suggestedHighlight = `ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}`;
-        suggestedSentence = `${lastGameResult} במשחק האחרון. ${rankText} בטבלת ${currentPeriodLabel}.`;
-        break;
-    }
+    const rankText = rankTonight === 1 ? `מקום 1 מתוך ${rankTotalPlayers}` : `מקום ${rankTonight} מתוך ${rankTotalPlayers}`;
     
     const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
-כותרת: "${suggestedHighlight}"
-משפט: "${suggestedSentence}"
-צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+• משחק אחרון: ${lastGameResult}
+• רצף: ${actualStreak > 0 ? `${actualStreak} נצחונות` : actualStreak < 0 ? `${Math.abs(actualStreak)} הפסדים` : 'אין רצף'}
+• ממוצע ${currentPeriodLabel}: ${avgSign}${recentAvg}₪ (${periodGames.length} משחקים)
+• דירוג ${currentPeriodLabel}: ${rankText}
+${trendText ? `• מגמה: ${trendText}` : ''}
+${comebackText ? `• ${comebackText}` : ''}
+• צפי מוצע: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
     
     return line;
   }).join('\n\n');
@@ -1349,115 +1310,48 @@ export const generateAIForecasts = async (
     })
     .join('\n');
   
-  // Add random seed to force different outputs each time
-  const randomSeed = Math.random().toString(36).substring(2, 8);
-  const randomOrder = [...players].sort(() => Math.random() - 0.5).map(p => p.name).join(', ');
-  
-  // Build pre-made forecasts in code - AI only adjusts profits to sum to 0
-  const preMadeForecasts = players.map((p, idx) => {
-    const ps = playerSuggestions.find(s => s.name === p.name);
-    const suggested = ps?.suggested || 0;
-    const playerIndex = idx;
-    
-    // Calculate stats for this player
-    const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
-    const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
-    
-    // Use current period or fall back to previous
-    let periodGames = currentHalfGames;
-    if (currentHalfGames.length < 2 && prevHalfGames.length >= 2) {
-      periodGames = prevHalfGames;
-    }
-    
-    const numGames = periodGames.length;
-    const recentAvg = numGames > 0 
-      ? Math.round(periodGames.reduce((sum, g) => sum + g.profit, 0) / numGames)
-      : Math.round(p.avgProfit);
-    const avgSign = recentAvg >= 0 ? '+' : '';
-    
-    // Calculate ranking among active players in this period
-    const playersWithPeriodGames = players.map(pl => ({
-      name: pl.name,
-      periodTotal: getHalfGames(pl, currentYear, currentHalf).reduce((s, g) => s + g.profit, 0)
-    })).filter(pl => getHalfGames(players.find(pp => pp.name === pl.name)!, currentYear, currentHalf).length > 0);
-    
-    playersWithPeriodGames.sort((a, b) => b.periodTotal - a.periodTotal);
-    const rankTonight = playersWithPeriodGames.findIndex(pl => pl.name === p.name) + 1 || playersWithPeriodGames.length + 1;
-    const rankText = rankTonight === 1 ? 'מוביל' : `מקום ${rankTonight}`;
-    
-    // Last game result
-    const lastProfit = p.gameHistory[0]?.profit || 0;
-    const lastResult = lastProfit > 0 
-      ? `רווח +${Math.round(lastProfit)}₪` 
-      : lastProfit < 0 
-        ? `הפסד ${Math.round(lastProfit)}₪`
-        : `יצא בלי שינוי`;
-    
-    // Streak text
-    const streak = p.currentStreak;
-    let streakText = '';
-    if (streak >= 3) streakText = `רצף ${streak} נצחונות`;
-    else if (streak <= -3) streakText = `רצף ${Math.abs(streak)} הפסדים`;
-    
-    // Is surprise candidate?
-    const isSurprise = (recentAvg < 0 && lastProfit > 0) || (streak <= -3);
-    
-    // Different highlight and sentence per player
-    let highlight = '';
-    let sentence = '';
-    
-    switch (playerIndex % 7) {
-      case 0:
-        highlight = `${lastResult} אחרון`;
-        sentence = `${streakText ? streakText + '. ' : ''}ממוצע ${avgSign}${recentAvg}₪ ב-${numGames} משחקים. ${rankText} בטבלה.`;
-        break;
-      case 1:
-        highlight = streakText || `${rankText} בטבלה`;
-        sentence = `${lastResult} במשחק האחרון. ממוצע תקופתי ${avgSign}${recentAvg}₪.`;
-        break;
-      case 2:
-        highlight = `${rankText} ב${currentPeriodLabel}`;
-        sentence = `${lastResult} לאחרונה. ממוצע ${avgSign}${recentAvg}₪ בתקופה.`;
-        break;
-      case 3:
-        highlight = `ממוצע ${avgSign}${recentAvg}₪`;
-        sentence = `${lastResult} אחרון. ${rankText} בטבלת ${currentPeriodLabel}.`;
-        break;
-      case 4:
-        highlight = numGames > 1 ? `${numGames} משחקים בתקופה` : `משחק אחד בתקופה`;
-        sentence = `${lastResult}. ממוצע ${avgSign}${recentAvg}₪. ${rankText}.`;
-        break;
-      case 5:
-        highlight = lastProfit > 0 ? `ניצחון אחרון` : `מחפש לחזור`;
-        sentence = `${lastResult} במשחק האחרון. ${rankText} עם ממוצע ${avgSign}${recentAvg}₪.`;
-        break;
-      default:
-        highlight = `${rankText}`;
-        sentence = `ממוצע ${avgSign}${recentAvg}₪. ${lastResult} אחרון.`;
-        break;
-    }
-    
-    return {
-      name: p.name,
-      suggested,
-      highlight,
-      sentence,
-      isSurprise
-    };
-  });
+  // Build clean, focused prompt for AI
+  const prompt = `אתה פרשן פוקר מקצועי. כתוב תחזית מרתקת לכל שחקן.
 
-  const prompt = `חשב expectedProfit לכל שחקן. הסכום חייב להיות 0 בדיוק.
+📊 נתוני השחקנים:
+${playerDataText}
+${milestonesText ? `\n🎯 אבני דרך אפשריות:\n${milestonesText}` : ''}
+${surpriseText}
 
-שחקנים וצפי מוצע:
-${preMadeForecasts.map(f => `${f.name}: צפי ${f.suggested >= 0 ? '+' : ''}${f.suggested}₪`).join('\n')}
+═══════════════════════════════════════════════════════════════════
+📝 דוגמאות לפלט טוב (כל שחקן שונה!):
+═══════════════════════════════════════════════════════════════════
 
-כללים:
-1. סכום כל ה-expectedProfit = 0 בדיוק!
-2. גמישות ±30₪ מהצפי המוצע
-3. isSurprise=true רק אם expectedProfit > 0
+דוגמה 1 - שחקן חם:
+{"name":"דני", "expectedProfit":85, "highlight":"🔥 3 נצחונות רצופים!", "sentence":"הפורמה הלוהטת ממשיכה - ממוצע +92₪ בחודש האחרון. הלילה הוא הפייבוריט.", "isSurprise":false}
 
-פלט JSON בלבד (אני אוסיף את highlight ו-sentence):
-[{"name":"שם", "expectedProfit":מספר, "isSurprise":boolean}]`;
+דוגמה 2 - שחקן מתקשה:
+{"name":"יוסי", "expectedProfit":-60, "highlight":"מחפש לשבור את הרצף", "sentence":"3 הפסדים רצופים, אבל ההיסטוריה מראה שהוא יודע לחזור. ערב מאתגר.", "isSurprise":false}
+
+דוגמה 3 - הפתעה:
+{"name":"מיכל", "expectedProfit":45, "highlight":"⭐ הפתעת הערב?", "sentence":"למרות היסטוריה קשה, הפורמה האחרונה מדהימה. אולי הלילה הכל משתנה!", "isSurprise":true}
+
+דוגמה 4 - מוביל:
+{"name":"אבי", "expectedProfit":70, "highlight":"👑 מוביל הטבלה", "sentence":"מקום ראשון עם ממוצע +110₪. קשה להמר נגדו.", "isSurprise":false}
+
+דוגמה 5 - חוזר:
+{"name":"רון", "expectedProfit":-30, "highlight":"חוזר אחרי הפסקה", "sentence":"לא שיחק חודשיים. צריך זמן להתחמם מחדש.", "isSurprise":false}
+
+═══════════════════════════════════════════════════════════════════
+⚠️ כללים קריטיים:
+═══════════════════════════════════════════════════════════════════
+
+1. סכום כל ה-expectedProfit חייב להיות 0 בדיוק!
+2. השתמש בצפי המוצע (±30₪ גמישות)
+3. כל שחקן חייב highlight ו-sentence שונים לגמרי!
+4. highlight = 2-5 מילים, קצר וקולע
+5. sentence = משפט אחד מרתק עם תובנה
+6. isSurprise=true רק לשחקן עם היסטוריה גרועה אבל פורמה טובה
+7. מספרים שלמים בלבד (בלי נקודה עשרונית)
+8. עברית בלבד, לשון זכר (חוץ ממור = נקבה)
+
+פלט JSON בלבד:
+[{"name":"שם", "expectedProfit":מספר, "highlight":"כותרת קצרה", "sentence":"משפט מרתק", "isSurprise":boolean}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1479,7 +1373,7 @@ ${preMadeForecasts.map(f => `${f.name}: צפי ${f.suggested >= 0 ? '+' : ''}${f
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.7,  // Balanced: variety with accuracy
+            temperature: 0.9,  // Higher for creative, varied output
             topK: 40,
             topP: 0.85,
             maxOutputTokens: 2048,
@@ -1526,41 +1420,47 @@ ${preMadeForecasts.map(f => `${f.name}: צפי ${f.suggested >= 0 ? '+' : ''}${f
         jsonText = text.split('```')[1].split('```')[0];
       }
 
-      let aiProfits: { name: string; expectedProfit: number; isSurprise: boolean }[];
+      let forecasts: ForecastResult[];
       try {
-        aiProfits = JSON.parse(jsonText.trim());
-        console.log('✅ Parsed', aiProfits.length, 'profit values');
+        forecasts = JSON.parse(jsonText.trim());
+        console.log('✅ Parsed', forecasts.length, 'forecasts from AI');
       } catch (parseError) {
         console.error('❌ JSON parse error, trying next model');
         continue; // Try next model
       }
       
-      // ========== MERGE AI PROFITS WITH PRE-BUILT SENTENCES ==========
-      console.log('🔗 Merging AI profits with pre-built sentences...');
+      // Validate that we have all required fields
+      const validForecasts = forecasts.every(f => 
+        f.name && typeof f.expectedProfit === 'number' && f.highlight && f.sentence
+      );
       
-      let forecasts: ForecastResult[] = preMadeForecasts.map(preMade => {
-        const aiData = aiProfits.find(a => a.name === preMade.name);
-        return {
-          name: preMade.name,
-          expectedProfit: aiData?.expectedProfit ?? preMade.suggested,
-          highlight: preMade.highlight,
-          sentence: preMade.sentence,
-          isSurprise: aiData?.isSurprise ?? preMade.isSurprise
-        };
-      });
-      
-      // Skip fact-checking - our sentences are already correct
-      console.log('✅ Using pre-built sentences (no AI interpretation)');
-      
-      // Just verify the sum is 0
-      const totalProfit = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
-      if (totalProfit !== 0) {
-        // Adjust first player to balance
-        forecasts[0].expectedProfit -= totalProfit;
-        console.log(`⚖️ Balanced profits: adjusted ${forecasts[0].name} by ${-totalProfit}`);
+      if (!validForecasts) {
+        console.error('❌ Invalid forecast structure, trying next model');
+        continue;
       }
       
-      // SKIP the old fact-checking - go directly to return
+      console.log('✅ AI generated complete forecasts');
+      
+      // Ensure the sum is 0
+      const totalProfit = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
+      if (totalProfit !== 0 && forecasts.length > 0) {
+        // Distribute the adjustment
+        const adjustment = Math.round(totalProfit / forecasts.length);
+        forecasts.forEach((f, i) => {
+          if (i === 0) {
+            f.expectedProfit -= (totalProfit - adjustment * (forecasts.length - 1));
+          } else {
+            f.expectedProfit -= adjustment;
+          }
+        });
+        console.log(`⚖️ Balanced profits by ${-totalProfit}`);
+      }
+      
+      // Round all profits to integers
+      forecasts.forEach(f => {
+        f.expectedProfit = Math.round(f.expectedProfit);
+      });
+      
       return forecasts;
       
     } catch (fetchError) {
