@@ -1262,48 +1262,36 @@ export const generateAIForecasts = async (
       trendText = `📉 יורד: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
     }
     
-    // Build fact sheet - pre-written phrases AI can use directly
-    const facts: string[] = [];
+    // Build a SUGGESTED SENTENCE in code - AI just polishes it
+    // Use player index to force different opening patterns
+    const playerIndex = players.indexOf(p);
+    const patterns = [
+      // Pattern 0: Start with last game
+      () => `אחרי ${lastGameResult} במשחק האחרון, ${streakText ? streakText + ' ו' : ''}ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב${periodLabel}.`,
+      // Pattern 1: Start with streak or ranking
+      () => streakText 
+        ? `עם ${streakText}, ${p.name} ${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} ב${currentPeriodLabel}.`
+        : `${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} ב${currentPeriodLabel} עם ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪.`,
+      // Pattern 2: Start with ranking
+      () => `${rankTonight === 1 ? 'מוביל את הטבלה' : `במקום ה-${rankTonight}`} ב${currentPeriodLabel}, ${lastGameResult} במשחק האחרון.`,
+      // Pattern 3: Start with name
+      () => `${p.name} ${comebackText ? 'חוזר אחרי היעדרות, ' : ''}הגיע עם ${lastGameResult} ו${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`}.`,
+      // Pattern 4: Start with trend (if exists) or period
+      () => trendText 
+        ? `${trendText.includes('📈') ? 'מגמת שיפור:' : 'מגמת ירידה:'} מ-${allTimeAvg}₪ היסטורי ל-${recentAvg}₪ לאחרונה.`
+        : `ב${periodGames.length} משחקי ${periodLabel}, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪, ${lastGameResult} אחרון.`,
+      // Pattern 5: Start with "למרות" contrast
+      () => allTimeAvg < 0 && recentAvg > 0 
+        ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ - סימני שיפור.`
+        : `${lastGameResult} אחרון, ${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} עם ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ממוצע.`,
+      // Pattern 6: Start with form
+      () => `הפורמה האחרונה: ${lastGameResult}, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב${periodLabel}.`,
+    ];
     
-    // Fact 1: Last game
-    facts.push(`משחק_אחרון: "${lastGameResult}"`);
-    
-    // Fact 2: Streak (if exists)
-    if (streakText) facts.push(`רצף: "${streakText}"`);
-    
-    // Fact 3: Period average
-    if (periodGames.length === 1) {
-      facts.push(`תקופה: "במשחק היחיד ב-${periodLabel}: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪"`);
-    } else if (periodGames.length > 1) {
-      facts.push(`תקופה: "ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב-${periodGames.length} משחקי ${periodLabel}"`);
-    }
-    
-    // Fact 4: Ranking - pre-written phrase!
-    const rankPhrase = rankTonight === 1 
-      ? `מוביל את טבלת ${currentPeriodLabel}`
-      : rankTonight === 2 
-        ? `במקום השני בטבלת ${currentPeriodLabel}, שואף למקום הראשון`
-        : `במקום ה-${rankTonight} בטבלת ${currentPeriodLabel}`;
-    facts.push(`דירוג: "${rankPhrase}"`);
-    
-    // Fact 5: Trend (if exists)
-    if (trendText) {
-      const trendPhrase = trendText.includes('📈') 
-        ? `מגמת שיפור: ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪`
-        : `מגמת ירידה: ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪`;
-      facts.push(`מגמה: "${trendPhrase}"`);
-    }
-    
-    // Fact 6: Comeback
-    if (comebackText) facts.push(`חזרה: "🔙 ${comebackText}"`);
-    
-    // Fact 7: All-time notable
-    if (isActiveAllTime && allTimeRank <= 3) {
-      facts.push(`כללי: "מקום ${allTimeRank} בטבלה הכללית"`);
-    }
+    const suggestedSentence = patterns[playerIndex % patterns.length]();
     
     const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
-${facts.join('\n')}
+משפט_מוצע: "${suggestedSentence}"
 צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
     
     return line;
@@ -1356,14 +1344,14 @@ ${surpriseText}
 📋 הוראות
 ═══════════════════════════════════════════════════════════════════
 
-המשימה: בנה משפט מהעובדות המוכנות לכל שחקן.
+המשימה: השתמש במשפט_מוצע כבסיס. שפר את העברית והוסף צבע.
 
 כללים:
 1. סכום כל ה-expectedProfit = 0 בדיוק
-2. השתמש בצפי מהנתונים (±30₪ גמישות)
+2. השתמש בצפי מהנתונים (±30₪ גמישות)  
 3. מור = נקבה, שאר = זכר
-4. כל משפט מתחיל במילה שונה
-5. העתק את הניסוחים מהעובדות - הם מדויקים!
+4. sentence מבוסס על משפט_מוצע - שמור על המבנה והעובדות!
+5. highlight = 5-10 מילים מתוך ה-sentence
 
 טון:
 • expectedProfit חיובי → אופטימי
@@ -1371,7 +1359,7 @@ ${surpriseText}
 • isSurprise=true רק עם expectedProfit חיובי
 
 פלט JSON בלבד:
-[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים", "sentence":"25-40 מילים מהעובדות", "isSurprise":boolean}]`;
+[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים", "sentence":"המשפט המוצע משופר", "isSurprise":boolean}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
