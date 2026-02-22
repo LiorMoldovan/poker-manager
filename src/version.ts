@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.8';
+export const APP_VERSION = '4.43.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.9',
+    date: '2026-02-05',
+    changes: [
+      '🎲 Random seed + player order in prompt for unique outputs each run',
+      '🔥 Temperature 0.85 → 0.95 for maximum variety',
+      '✅ Each forecast request now truly different'
+    ]
+  },
   {
     version: '4.43.8',
     date: '2026-02-05',

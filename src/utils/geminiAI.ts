@@ -1335,7 +1335,12 @@ export const generateAIForecasts = async (
     })
     .join('\n');
   
+  // Add random seed to force different outputs each time
+  const randomSeed = Math.random().toString(36).substring(2, 8);
+  const randomOrder = [...players].sort(() => Math.random() - 0.5).map(p => p.name).join(', ');
+  
   const prompt = `תחזית פוקר להערב. פלט JSON בעברית בלבד.
+🎲 סידור אקראי להשראה: ${randomOrder} (seed: ${randomSeed})
 
 📊 נתוני שחקנים:
 ${playerDataText}
@@ -1409,7 +1414,7 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.85,  // Higher for variety in sentences
+            temperature: 0.95,  // High for maximum variety
             topK: 40,
             topP: 0.85,
             maxOutputTokens: 2048,
