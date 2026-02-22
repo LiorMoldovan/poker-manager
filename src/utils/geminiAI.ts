@@ -1262,47 +1262,52 @@ export const generateAIForecasts = async (
       trendText = `📉 יורד: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
     }
     
-    // Build concise player data block
-    const lines = [];
-    lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══`);
+    // Build fact sheet - pre-written phrases AI can use directly
+    const facts: string[] = [];
     
-    if (comebackText) lines.push(`🔙 ${comebackText}`);
+    // Fact 1: Last game
+    facts.push(`משחק_אחרון: "${lastGameResult}"`);
     
-    lines.push(`משחק אחרון: ${lastGameResult}`);
-    if (streakText) lines.push(`רצף: ${streakText}`);
+    // Fact 2: Streak (if exists)
+    if (streakText) facts.push(`רצף: "${streakText}"`);
     
-    // Show current period games (matches what players see in the table)
-    if (periodGames.length > 0) {
-      const periodNote = usingPrevPeriod ? ` (מתקופה קודמת - ${periodLabel})` : '';
-      // For single game, say "במשחק היחיד" not "ממוצע"
-      const avgOrSingle = periodGames.length === 1 
-        ? `במשחק היחיד: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`
-        : `${periodGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`;
-      lines.push(`${periodLabel}: ${periodGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${avgOrSingle})${periodNote}`);
-    } else if (currentHalfGames.length === 0 && prevHalfGames.length === 0) {
-      lines.push(`${currentPeriodLabel}: אין משחקים בתקופה הנוכחית או הקודמת`);
-    }
-    lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
-    
-    if (trendText) lines.push(trendText);
-    
-    // Show ranking - use global rank if available, otherwise rank among tonight's players
-    const rankContext = halfRank > 0 ? `${rankTotalPlayers} שחקנים פעילים` : `${players.length} שחקני הערב`;
-    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${rankContext} (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
-    
-    // Only show all-time rank if notable
-    if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {
-      let allTimeNote = `דירוג כללי: #${allTimeRank}/${allTimeTotalActive}`;
-      if (gapToAboveAllTime && gapToAboveAllTime <= 100) {
-        allTimeNote += ` (${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1})`;
-      }
-      lines.push(allTimeNote);
+    // Fact 3: Period average
+    if (periodGames.length === 1) {
+      facts.push(`תקופה: "במשחק היחיד ב-${periodLabel}: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪"`);
+    } else if (periodGames.length > 1) {
+      facts.push(`תקופה: "ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב-${periodGames.length} משחקי ${periodLabel}"`);
     }
     
-    lines.push(`צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
+    // Fact 4: Ranking - pre-written phrase!
+    const rankPhrase = rankTonight === 1 
+      ? `מוביל את טבלת ${currentPeriodLabel}`
+      : rankTonight === 2 
+        ? `במקום השני בטבלת ${currentPeriodLabel}, שואף למקום הראשון`
+        : `במקום ה-${rankTonight} בטבלת ${currentPeriodLabel}`;
+    facts.push(`דירוג: "${rankPhrase}"`);
     
-    return lines.join('\n');
-  }).join('\n');
+    // Fact 5: Trend (if exists)
+    if (trendText) {
+      const trendPhrase = trendText.includes('📈') 
+        ? `מגמת שיפור: ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪`
+        : `מגמת ירידה: ממוצע היסטורי ${allTimeAvg}₪, לאחרונה ${recentAvg}₪`;
+      facts.push(`מגמה: "${trendPhrase}"`);
+    }
+    
+    // Fact 6: Comeback
+    if (comebackText) facts.push(`חזרה: "🔙 ${comebackText}"`);
+    
+    // Fact 7: All-time notable
+    if (isActiveAllTime && allTimeRank <= 3) {
+      facts.push(`כללי: "מקום ${allTimeRank} בטבלה הכללית"`);
+    }
+    
+    const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
+${facts.join('\n')}
+צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+    
+    return line;
+  }).join('\n\n');
   
   // Calculate realistic profit ranges from player data
   const allProfits = players.flatMap(p => p.gameHistory.map(g => g.profit));
@@ -1351,54 +1356,22 @@ ${surpriseText}
 📋 הוראות
 ═══════════════════════════════════════════════════════════════════
 
-1️⃣ סכום כל ה-expectedProfit חייב להיות בדיוק 0
-2️⃣ השתמש בצפי מהנתונים (גמישות ±30₪)
-3️⃣ מור = לשון נקבה. שאר השחקנים = לשון זכר
-4️⃣ 🚨 קריטי: כל משפט (sentence) חייב להתחיל במילה שונה! אסור ששני משפטים יתחילו אותו דבר!
+המשימה: בנה משפט מהעובדות המוכנות לכל שחקן.
 
-🎯 התאמת טון:
-• expectedProfit חיובי → משפט אופטימי
-• expectedProfit שלילי → "מאתגר אך אפשרי" (לא מייאש!)
-• isSurprise=true רק כש-expectedProfit חיובי (הפתעה = ניצחון לא צפוי)
+כללים:
+1. סכום כל ה-expectedProfit = 0 בדיוק
+2. השתמש בצפי מהנתונים (±30₪ גמישות)
+3. מור = נקבה, שאר = זכר
+4. כל משפט מתחיל במילה שונה
+5. העתק את הניסוחים מהעובדות - הם מדויקים!
 
-📈 מגמות (עדיפות גבוהה! אם יש 📈 או 📉):
-• 📈 שיפור: חובה להזכיר את שני המספרים! "ממוצע היסטורי X₪ אבל לאחרונה Y₪"
-• 📉 ירידה: "ממוצע היסטורי X₪ אבל לאחרונה Y₪ - מחפש לחזור"
-• תמיד הזכר את ההשוואה - המספר ההיסטורי מול האחרון!
+טון:
+• expectedProfit חיובי → אופטימי
+• expectedProfit שלילי → מאתגר אך אפשרי
+• isSurprise=true רק עם expectedProfit חיובי
 
-✍️ פתיחות שונות לכל שחקן (חובה לגוון!):
-שחקן 1: "אחרי +X₪ במשחק האחרון..." 
-שחקן 2: "עם X ניצחונות רצופים..."
-שחקן 3: "במקום X בטבלה..."
-שחקן 4: "[שם] מגיע הערב עם..."
-שחקן 5: "רק X₪ מהמקום הבא..."
-שחקן 6: "למרות היסטוריה של X₪..."
-שחקן 7: "הפורמה האחרונה מראה..."
-
-עובדות לשלב: משחק אחרון, רצף, ממוצע, דירוג ב-${currentPeriodLabel}
-
-⚠️ חשוב מאוד - דיוק בדירוג:
-• אם הנתונים אומרים #2 - אסור לכתוב "מוביל" או "ראשון"!
-• "מוביל/מובילה" = רק למי שהוא #1 בנתונים
-• #2 = "במקום השני", "שואף למקום הראשון"
-• #3 = "במקום השלישי"
-
-⚠️ כללי:
-• השתמש רק במספרים ועובדות שמופיעים בנתונים - אל תמציא!
-• מספרים שלמים בלבד
-• משחק יחיד = "במשחק היחיד"
-
-🔙 שחקנים חוזרים (מסומנים 🔙) - חובה להזכיר את החזרה!
-
-❌ לא לעשות:
-• לכתוב את מספר ה-expectedProfit במשפט
-• משפטים גנריים בלי מספרים
-• להדגיש הפסדים גדולים בסכום
-
-📝 פלט:
-[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים עם נתון", "sentence":"25-40 מילים עם עובדות", "isSurprise":boolean}]
-
-סכום=0. JSON בלבד.`;
+פלט JSON בלבד:
+[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים", "sentence":"25-40 מילים מהעובדות", "isSurprise":boolean}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1420,7 +1393,7 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.9,  // High variety but controlled
+            temperature: 0.7,  // Balanced: variety with accuracy
             topK: 40,
             topP: 0.85,
             maxOutputTokens: 2048,
