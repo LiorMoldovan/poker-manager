@@ -1378,9 +1378,10 @@ ${surpriseText}
 עובדות לשלב: משחק אחרון, רצף, ממוצע, דירוג ב-${currentPeriodLabel}
 
 ⚠️ חשוב: 
-• השתמש רק במספרים שמופיעים בנתונים - אל תחשב בעצמך!
+• השתמש רק במספרים ועובדות שמופיעים בנתונים - אל תמציא!
 • מספרים שלמים בלבד (ללא נקודה עשרונית)
 • משחק יחיד = "במשחק היחיד" (לא "ממוצע")
+• highlight ו-sentence חייבים להתאים - אם הוא מקום 2, המשפט צריך לדבר על מקום 2
 
 🔙 שחקנים חוזרים (מסומנים 🔙) - חובה להזכיר את החזרה!
 
@@ -1414,7 +1415,7 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.95,  // High for maximum variety
+            temperature: 0.9,  // High variety but controlled
             topK: 40,
             topP: 0.85,
             maxOutputTokens: 2048,
