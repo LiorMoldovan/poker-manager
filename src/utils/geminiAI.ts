@@ -1265,30 +1265,41 @@ export const generateAIForecasts = async (
     // Build a SUGGESTED SENTENCE in code - AI just polishes it
     // Use player index to force different opening patterns
     const playerIndex = players.indexOf(p);
-    const patterns = [
-      // Pattern 0: Start with last game
-      () => `אחרי ${lastGameResult} במשחק האחרון, ${streakText ? streakText + ' ו' : ''}ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב${periodLabel}.`,
-      // Pattern 1: Start with streak or ranking
-      () => streakText 
-        ? `עם ${streakText}, ${p.name} ${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} ב${currentPeriodLabel}.`
-        : `${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} ב${currentPeriodLabel} עם ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪.`,
-      // Pattern 2: Start with ranking
-      () => `${rankTonight === 1 ? 'מוביל את הטבלה' : `במקום ה-${rankTonight}`} ב${currentPeriodLabel}, ${lastGameResult} במשחק האחרון.`,
-      // Pattern 3: Start with name
-      () => `${p.name} ${comebackText ? 'חוזר אחרי היעדרות, ' : ''}הגיע עם ${lastGameResult} ו${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`}.`,
-      // Pattern 4: Start with trend (if exists) or period
-      () => trendText 
-        ? `${trendText.includes('📈') ? 'מגמת שיפור:' : 'מגמת ירידה:'} מ-${allTimeAvg}₪ היסטורי ל-${recentAvg}₪ לאחרונה.`
-        : `ב${periodGames.length} משחקי ${periodLabel}, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪, ${lastGameResult} אחרון.`,
-      // Pattern 5: Start with "למרות" contrast
-      () => allTimeAvg < 0 && recentAvg > 0 
-        ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ - סימני שיפור.`
-        : `${lastGameResult} אחרון, ${rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`} עם ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ממוצע.`,
-      // Pattern 6: Start with form
-      () => `הפורמה האחרונה: ${lastGameResult}, ממוצע ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ ב${periodLabel}.`,
-    ];
+    const numGames = periodGames?.length || 0;
+    const avgSign = recentAvg >= 0 ? '+' : '';
+    const rankText = rankTonight === 1 ? 'מוביל' : `במקום ${rankTonight}`;
     
-    const suggestedSentence = patterns[playerIndex % patterns.length]();
+    // Simple sentence patterns - pick based on player index
+    let suggestedSentence = '';
+    switch (playerIndex % 7) {
+      case 0:
+        suggestedSentence = `אחרי ${lastGameResult} במשחק האחרון, ${streakText ? streakText + ' ו' : ''}ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}.`;
+        break;
+      case 1:
+        suggestedSentence = streakText 
+          ? `עם ${streakText}, ${p.name} ${rankText} ב${currentPeriodLabel}.`
+          : `${rankText} ב${currentPeriodLabel} עם ממוצע ${avgSign}${recentAvg}₪.`;
+        break;
+      case 2:
+        suggestedSentence = `${rankTonight === 1 ? 'מוביל את הטבלה' : `במקום ה-${rankTonight}`} ב${currentPeriodLabel}, ${lastGameResult} במשחק האחרון.`;
+        break;
+      case 3:
+        suggestedSentence = `${p.name} ${comebackText ? 'חוזר אחרי היעדרות, ' : ''}הגיע עם ${lastGameResult} ו${rankText}.`;
+        break;
+      case 4:
+        suggestedSentence = trendText 
+          ? `${trendText.includes('📈') ? 'מגמת שיפור:' : 'מגמת ירידה:'} מ-${allTimeAvg}₪ היסטורי ל-${recentAvg}₪ לאחרונה.`
+          : `ב${numGames} משחקי ${periodLabel}, ממוצע ${avgSign}${recentAvg}₪, ${lastGameResult} אחרון.`;
+        break;
+      case 5:
+        suggestedSentence = (allTimeAvg < 0 && recentAvg > 0)
+          ? `למרות היסטוריה של ${allTimeAvg}₪, לאחרונה ממוצע ${avgSign}${recentAvg}₪ - סימני שיפור.`
+          : `${lastGameResult} אחרון, ${rankText} עם ${avgSign}${recentAvg}₪ ממוצע.`;
+        break;
+      default:
+        suggestedSentence = `הפורמה האחרונה: ${lastGameResult}, ממוצע ${avgSign}${recentAvg}₪ ב${periodLabel}.`;
+        break;
+    }
     
     const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
 משפט_מוצע: "${suggestedSentence}"
