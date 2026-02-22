@@ -1587,118 +1587,149 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
-        // ========== 7. REMOVE BORING PATTERNS ==========
-        // Strip out repetitive statistical filler
-        const boringPatterns = [
-          /,?\s*ומדורג\s*(?:ב)?מקום\s*(?:ה-?)?\d+/g,
-          /,?\s*מקום\s*\d+\s*מתוך\s*\d+\s*(?:הלילה|הערב)?/g,
-          /,?\s*מדורג\s*(?:ב)?מקום\s*\d+/g,
-          /,?\s*עם\s*ממוצע\s*(?:של\s*)?[+-]?\d+₪\s*ב-?\d+\s*משחקים/g,
-          /,?\s*ב-H[12]\s*20\d{2}/g,
-          /,?\s*מציג\s*ממוצע\s*(?:מרשים\s*)?(?:של\s*)?[+-]?\d+₪/g,
-        ];
+        // ========== 7. ALWAYS USE CREATIVE SENTENCES ==========
+        // The AI keeps ignoring instructions, so we ALWAYS generate our own creative sentences
+        console.log(`🎨 ${player.name}: Generating creative sentence`);
         
-        for (const pattern of boringPatterns) {
-          correctedSentence = correctedSentence.replace(pattern, '');
+        const isFemale = player.isFemale;
+        const he = isFemale ? 'היא' : 'הוא';
+        const his = isFemale ? 'שלה' : 'שלו';
+        const looking = isFemale ? 'מחפשת' : 'מחפש';
+        const wants = isFemale ? 'רוצה' : 'רוצה';
+        const came = isFemale ? 'באה' : 'בא';
+        const hot = isFemale ? 'חמה' : 'חם';
+        const dangerous = isFemale ? 'מסוכנת' : 'מסוכן';
+        const ready = isFemale ? 'מוכנה' : 'מוכן';
+        
+        // Pick ONE creative sentence based on player's situation
+        const creativeOptions: string[] = [];
+        
+        // Hot streak
+        if (actualStreak >= 3) {
+          creativeOptions.push(
+            `${actualStreak} ברצף! מי יעצור את הרכבת?`,
+            `הפורמה לוהטת, ${he} לא מתכוון לעצור.`,
+            `בענק! קשה להמר נגדו עכשיו.`,
+            `רצף חם, הביטחון בשיא.`
+          );
+        }
+        // Cold streak  
+        else if (actualStreak <= -3) {
+          creativeOptions.push(
+            `חייב לשבור את הרצף השחור.`,
+            `${Math.abs(actualStreak)} הפסדים, הלילה זה משתנה.`,
+            `${looking} נקמה.`,
+            `הרצף הקשה חייב להיגמר.`
+          );
+        }
+        // Big win last game
+        else if (wonLastGame && lastGameProfit > 80) {
+          creativeOptions.push(
+            `נצחון גדול אחרון, הביטחון ${his} בשיא.`,
+            `${hot} אחרי +${Math.round(lastGameProfit)}₪.`,
+            `אחרי ערב מוצלח, ${wants} עוד.`,
+            `הניצחון האחרון נתן לו כנפיים.`
+          );
+        }
+        // Big loss last game
+        else if (lostLastGame && lastGameProfit < -80) {
+          creativeOptions.push(
+            `${looking} לתקן את הכאב.`,
+            `${came} עם חשבון פתוח.`,
+            `אחרי ערב קשה, ${ready} לנקמה.`,
+            `ההפסד האחרון צורב, הלילה שונה.`
+          );
+        }
+        // Leader
+        else if (rankTonight === 1) {
+          creativeOptions.push(
+            `על הכס, אבל כולם רודפים.`,
+            `${he} היעד של כולם הלילה.`,
+            `מוביל, אבל אין מנוחה למלך.`,
+            `כולם רוצים להפיל את המלך.`
+          );
+        }
+        // Strong player
+        else if (player.avgProfit > 40) {
+          creativeOptions.push(
+            `שקט אבל קטלני.`,
+            `תמיד ${dangerous} בשולחן.`,
+            `ההיסטוריה בצד ${his}.`,
+            `שחקן רווחי, לא לזלזל.`
+          );
+        }
+        // Struggling player
+        else if (player.avgProfit < -20 && player.gamesPlayed >= 5) {
+          creativeOptions.push(
+            `${looking} להפוך את המגמה.`,
+            `כל ערב הוא הזדמנות חדשה.`,
+            `ההיסטוריה לא קובעת, רק הלילה.`,
+            `${ready} להפתיע.`
+          );
+        }
+        // Returning player (check comeback)
+        else if (comebackDays && comebackDays > 30) {
+          creativeOptions.push(
+            `חוזר אחרי הפסקה, צריך לחמם מנועים.`,
+            `${comebackDays} ימים בחוץ, ${ready} לחזור.`,
+            `ההפסקה הייתה ארוכה, נראה מה יקרה.`,
+            `${came} רענן אחרי הפסקה.`
+          );
+        }
+        // Default - neutral/mixed situations
+        else {
+          creativeOptions.push(
+            `ערב חדש, הכל פתוח.`,
+            `הקלפים יחליטו.`,
+            `${ready} להפתיע.`,
+            `יכול לקחת את הערב.`,
+            `אף פעם לא יודעים איתו.`
+          );
         }
         
-        // Clean up after removal
-        correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
-        correctedSentence = correctedSentence.replace(/,\s*\./g, '.');
-        correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
+        // Pick a random option
+        correctedSentence = creativeOptions[Math.floor(Math.random() * creativeOptions.length)];
+        console.log(`✅ ${player.name}: "${correctedSentence}"`)
         
-        // ========== 8. GENERATE CREATIVE FALLBACK IF NEEDED ==========
-        if (correctedSentence.length < 15 || hadErrors) {
-          console.log(`⚠️ ${player.name}: Needs creative fallback`);
+        // ========== 8. GENERATE CREATIVE HIGHLIGHT ==========
+        // Also replace highlight with something factual and short
+        let creativeHighlight = correctedHighlight;
+        
+        // Remove boring patterns from highlight
+        if (creativeHighlight.includes('מוביל את טבלת') || 
+            creativeHighlight.includes('מקום') || 
+            creativeHighlight.includes('ממוצע') ||
+            creativeHighlight.includes('H1') ||
+            creativeHighlight.includes('H2')) {
           
-          // Creative, varied fallbacks - no statistics!
-          const isFemale = player.isFemale;
-          const he = isFemale ? 'היא' : 'הוא';
-          const wants = isFemale ? 'רוצה' : 'רוצה';
-          const looking = isFemale ? 'מחפשת' : 'מחפש';
-          
-          let fallback = '';
-          
+          // Generate clean highlight based on actual facts
           if (actualStreak >= 3) {
-            const opts = [
-              `בענק! ${actualStreak} נצחונות ברצף, קשה לעצור.`,
-              `הפורמה לוהטת, ${he} לא מתכוון לעצור.`,
-              `${actualStreak} ברצף! מי יעצור אותו?`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
+            creativeHighlight = `רצף ${actualStreak} נצחונות 🔥`;
           } else if (actualStreak <= -3) {
-            const opts = [
-              `חייב לשבור את הרצף השחור.`,
-              `${Math.abs(actualStreak)} הפסדים, הלילה זה משתנה.`,
-              `${looking} נקמה אחרי תקופה קשה.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
-          } else if (wonLastGame && lastGameProfit > 100) {
-            const opts = [
-              `נצחון גדול אחרון, הביטחון בשיא.`,
-              `+${Math.round(lastGameProfit)}₪ אחרון, ${he} חם.`,
-              `אחרי ערב מוצלח, ${wants} עוד.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
-          } else if (lostLastGame && lastGameProfit < -100) {
-            const opts = [
-              `${looking} לתקן את ההפסד הכואב.`,
-              `אחרי ערב קשה, הלילה שונה.`,
-              `${Math.round(lastGameProfit)}₪ כואב, זמן לנקמה.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
+            creativeHighlight = `${Math.abs(actualStreak)} הפסדים ברצף`;
+          } else if (wonLastGame && lastGameProfit > 80) {
+            creativeHighlight = `נצחון +${Math.round(lastGameProfit)}₪ אחרון`;
+          } else if (lostLastGame && lastGameProfit < -80) {
+            creativeHighlight = `הפסד ${Math.round(lastGameProfit)}₪ אחרון`;
           } else if (rankTonight === 1) {
-            const opts = [
-              `המלך על הכס, כולם רודפים.`,
-              `בראש הטבלה, ${he} המועדף.`,
-              `מוביל! אבל אין מנוחה לטובים.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
-          } else if (player.avgProfit > 50) {
-            const opts = [
-              `שחקן רווחי, תמיד מסוכן.`,
-              `ההיסטוריה בצד שלו.`,
-              `שקט אבל קטלני.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
-          } else if (player.avgProfit < -30) {
-            const opts = [
-              `${looking} להפוך את המגמה.`,
-              `ההיסטוריה לא משנה, רק הלילה.`,
-              `כל ערב הוא הזדמנות חדשה.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
+            creativeHighlight = `מוביל הטבלה 👑`;
+          } else if (comebackDays && comebackDays > 30) {
+            creativeHighlight = `חוזר אחרי ${comebackDays} ימים`;
+          } else if (player.avgProfit > 40) {
+            creativeHighlight = `ממוצע +${Math.round(player.avgProfit)}₪`;
+          } else if (wonLastGame) {
+            creativeHighlight = `נצחון אחרון +${Math.round(lastGameProfit)}₪`;
+          } else if (lostLastGame) {
+            creativeHighlight = `הפסד אחרון ${Math.round(lastGameProfit)}₪`;
           } else {
-            const opts = [
-              `ערב חדש, הכל פתוח.`,
-              `הקלפים יחליטו.`,
-              `מוכן להפתיע.`,
-            ];
-            fallback = opts[Math.floor(Math.random() * opts.length)];
-          }
-          
-          correctedSentence = fallback;
-          console.log(`🔧 ${player.name}: Creative fallback applied`);
-        }
-        
-        // ========== 8. FIX HIGHLIGHT ERRORS ==========
-        for (const pattern of [...streakPatterns, ...gameCountPatterns]) {
-          const matches = [...correctedHighlight.matchAll(pattern)];
-          for (const match of matches) {
-            const claimedNum = parseInt(match[1]);
-            const isStreak = match[0].includes('נצחונות') || match[0].includes('הפסדים');
-            const actualNum = isStreak ? Math.abs(actualStreak) : yearGames;
-            
-            if (claimedNum !== actualNum) {
-              correctedHighlight = correctedHighlight.replace(match[0], match[0].replace(match[1], String(actualNum)));
-            }
+            creativeHighlight = `${player.gamesPlayed} משחקים`;
           }
         }
         
         return {
           ...forecast,
           sentence: correctedSentence,
-          highlight: correctedHighlight
+          highlight: creativeHighlight
         };
       });
       
