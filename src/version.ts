@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.10';
+export const APP_VERSION = '4.43.11';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,24 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.11',
+    date: '2026-02-22',
+    changes: [
+      '🎰 Rebuy Stats table in Statistics page (avg, total, max, invested, ROI)',
+      '🔢 Rebuy sentences now match announced total buyins count',
+      '🗑️ Removed redundant/confusing rebuy sentences'
+    ]
+  },
+  {
+    version: '4.43.11',
+    date: '2026-02-05',
+    changes: [
+      '🚨 CRITICAL: "מוביל" only for #1 - if #2 cannot say "leads"',
+      '✅ Explicit mapping: #1=מוביל, #2=במקום השני, #3=במקום השלישי',
+      '🔧 Stricter ranking accuracy rules in prompt'
+    ]
+  },
   {
     version: '4.43.10',
     date: '2026-02-05',
