@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.47.0';
+export const APP_VERSION = '4.48.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.48.0',
+    date: '2026-02-05',
+    changes: [
+      '⏪ Rollback: Restored v4.43.9 AI prompt (proven working version)',
+      '🗑️ Removed experimental code-generated sentences',
+      '✅ Back to AI-generated content with proper constraints',
+    ]
+  },
   {
     version: '4.46.0',
     date: '2026-02-05',

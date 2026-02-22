@@ -14,13 +14,19 @@ const STORAGE_KEYS = {
 
 // Generate unique ID
 export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
 // Helper functions for localStorage
 const getItem = <T>(key: string, defaultValue: T): T => {
   const item = localStorage.getItem(key);
-  return item ? JSON.parse(item) : defaultValue;
+  if (!item) return defaultValue;
+  try {
+    return JSON.parse(item);
+  } catch {
+    console.warn(`Corrupted localStorage key "${key}", using default`);
+    return defaultValue;
+  }
 };
 
 const setItem = <T>(key: string, value: T): void => {

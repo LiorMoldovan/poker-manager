@@ -1108,12 +1108,11 @@ export const generateAIForecasts = async (
   
   // Build the prompt with FULL player data (in English for better AI reasoning)
   const playerDataText = playersWithYearStats.map((p, i) => {
-    // Get explicit last game result - in Hebrew
+    // Get explicit last game result
     const lastGame = p.gameHistory[0];
-    const lastGameProfit = lastGame ? Math.round(lastGame.profit) : 0;
     const lastGameResult = lastGame 
-      ? (lastGame.profit > 0 ? `רווח של +${lastGameProfit}₪` : 
-         lastGame.profit < 0 ? `הפסד של ${lastGameProfit}₪` : 'יצא בלי שינוי')
+      ? (lastGame.profit > 0 ? `WON +${Math.round(lastGame.profit)}₪` : 
+         lastGame.profit < 0 ? `LOST ${Math.round(lastGame.profit)}₪` : 'BREAK-EVEN')
       : 'No games';
     
     // Check for comeback after long absence (30+ days is notable)
@@ -1263,21 +1262,47 @@ export const generateAIForecasts = async (
       trendText = `📉 יורד: ממוצע אחרון ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`;
     }
     
-// Build clean data block for each player
-    const avgSign = recentAvg >= 0 ? '+' : '';
-    const rankText = rankTonight === 1 ? `מקום 1 מתוך ${rankTotalPlayers}` : `מקום ${rankTonight} מתוך ${rankTotalPlayers}`;
+    // Build concise player data block
+    const lines = [];
+    lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══`);
     
-    const line = `══ ${p.name} ${p.isFemale ? '(נקבה)' : ''} ══
-• משחק אחרון: ${lastGameResult}
-• רצף: ${actualStreak > 0 ? `${actualStreak} נצחונות` : actualStreak < 0 ? `${Math.abs(actualStreak)} הפסדים` : 'אין רצף'}
-• ממוצע ${currentPeriodLabel}: ${avgSign}${recentAvg}₪ (${periodGames.length} משחקים)
-• דירוג ${currentPeriodLabel}: ${rankText}
-${trendText ? `• מגמה: ${trendText}` : ''}
-${comebackText ? `• ${comebackText}` : ''}
-• צפי מוצע: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`;
+    if (comebackText) lines.push(`🔙 ${comebackText}`);
     
-    return line;
-  }).join('\n\n');
+    lines.push(`משחק אחרון: ${lastGameResult}`);
+    if (streakText) lines.push(`רצף: ${streakText}`);
+    
+    // Show current period games (matches what players see in the table)
+    if (periodGames.length > 0) {
+      const periodNote = usingPrevPeriod ? ` (מתקופה קודמת - ${periodLabel})` : '';
+      // For single game, say "במשחק היחיד" not "ממוצע"
+      const avgOrSingle = periodGames.length === 1 
+        ? `במשחק היחיד: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`
+        : `${periodGames.length} משחקים, ממוצע: ${recentAvg >= 0 ? '+' : ''}${recentAvg}₪`;
+      lines.push(`${periodLabel}: ${periodGames.map(g => `${g.profit >= 0 ? '+' : ''}${Math.round(g.profit)}`).join(', ')}₪ (${avgOrSingle})${periodNote}`);
+    } else if (currentHalfGames.length === 0 && prevHalfGames.length === 0) {
+      lines.push(`${currentPeriodLabel}: אין משחקים בתקופה הנוכחית או הקודמת`);
+    }
+    lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
+    
+    if (trendText) lines.push(trendText);
+    
+    // Show ranking - use global rank if available, otherwise rank among tonight's players
+    const rankContext = halfRank > 0 ? `${rankTotalPlayers} שחקנים פעילים` : `${players.length} שחקני הערב`;
+    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${rankContext} (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
+    
+    // Only show all-time rank if notable
+    if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {
+      let allTimeNote = `דירוג כללי: #${allTimeRank}/${allTimeTotalActive}`;
+      if (gapToAboveAllTime && gapToAboveAllTime <= 100) {
+        allTimeNote += ` (${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1})`;
+      }
+      lines.push(allTimeNote);
+    }
+    
+    lines.push(`צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
+    
+    return lines.join('\n');
+  }).join('\n');
   
   // Calculate realistic profit ranges from player data
   const allProfits = players.flatMap(p => p.gameHistory.map(g => g.profit));
@@ -1310,36 +1335,64 @@ ${comebackText ? `• ${comebackText}` : ''}
     })
     .join('\n');
   
-  // Build clean, focused prompt for AI
-  const prompt = `כתוב תחזית פוקר קצרה וקולעת. השתמש במספרים המדויקים מהנתונים!
+  // Add random seed to force different outputs each time
+  const randomSeed = Math.random().toString(36).substring(2, 8);
+  const randomOrder = [...players].sort(() => Math.random() - 0.5).map(p => p.name).join(', ');
+  
+  const prompt = `תחזית פוקר להערב. פלט JSON בעברית בלבד.
+🎲 סידור אקראי להשראה: ${randomOrder} (seed: ${randomSeed})
 
-📊 שחקנים:
+📊 נתוני שחקנים:
 ${playerDataText}
+${milestonesText ? `\n🎯 אבני דרך:\n${milestonesText}` : ''}
 ${surpriseText}
 
-📝 פורמט הפלט - לכל שחקן:
-• highlight: כותרת קצרה (2-4 מילים) - עם מספר מהנתונים!
-• sentence: משפט אחד עם עובדות מדויקות מהנתונים
+═══════════════════════════════════════════════════════════════════
+📋 הוראות
+═══════════════════════════════════════════════════════════════════
 
-דוגמאות טובות (שים לב למספרים המדויקים!):
-{"name":"דני", "expectedProfit":85, "highlight":"רצף 3 נצחונות", "sentence":"ממוצע +92₪ ב-5 משחקים, מקום 1. הפייבוריט הברור.", "isSurprise":false}
-{"name":"יוסי", "expectedProfit":-60, "highlight":"הפסד -45₪ אחרון", "sentence":"מקום 3, ממוצע +12₪. מחפש לחזור לנצחונות.", "isSurprise":false}
-{"name":"מיכל", "expectedProfit":45, "highlight":"חוזרת אחרי 60 יום", "sentence":"ממוצע -15₪ היסטורי, אבל ניצחה +80₪ לפני ההפסקה.", "isSurprise":true}
-{"name":"אבי", "expectedProfit":70, "highlight":"מקום 1, ממוצע +110₪", "sentence":"5 משחקים ברצף חיובי. קשה להמר נגדו.", "isSurprise":false}
-{"name":"רון", "expectedProfit":-30, "highlight":"2 הפסדים רצופים", "sentence":"ממוצע +25₪ בתקופה, מקום 4. צפוי להתאושש.", "isSurprise":false}
+1️⃣ סכום כל ה-expectedProfit חייב להיות בדיוק 0
+2️⃣ השתמש בצפי מהנתונים (גמישות ±30₪)
+3️⃣ מור = לשון נקבה. שאר השחקנים = לשון זכר
+4️⃣ 🚨 קריטי: כל משפט (sentence) חייב להתחיל במילה שונה! אסור ששני משפטים יתחילו אותו דבר!
 
-כללים:
-1. סכום expectedProfit = 0 בדיוק!
-2. צפי מוצע ±30₪ גמישות
-3. כל highlight ו-sentence שונים לחלוטין
-4. חובה: מספרים מדויקים מהנתונים (ממוצע, מקום, ימים, רצף)
-5. מקסימום שאלה אחת (?), השאר סיום חד
-6. עברית, זכר (מור = נקבה)
-7. isSurprise=true רק להיסטוריה גרועה + פורמה טובה
-8. אל תמציא עובדות - רק מה שמופיע בנתונים!
+🎯 התאמת טון:
+• expectedProfit חיובי → משפט אופטימי
+• expectedProfit שלילי → "מאתגר אך אפשרי" (לא מייאש!)
+• isSurprise=true רק כש-expectedProfit חיובי (הפתעה = ניצחון לא צפוי)
 
-פלט JSON בלבד:
-[{"name":"שם", "expectedProfit":מספר, "highlight":"כותרת", "sentence":"משפט", "isSurprise":bool}]`;
+📈 מגמות (עדיפות גבוהה! אם יש 📈 או 📉):
+• 📈 שיפור: חובה להזכיר את שני המספרים! "ממוצע היסטורי X₪ אבל לאחרונה Y₪"
+• 📉 ירידה: "ממוצע היסטורי X₪ אבל לאחרונה Y₪ - מחפש לחזור"
+• תמיד הזכר את ההשוואה - המספר ההיסטורי מול האחרון!
+
+✍️ פתיחות שונות לכל שחקן (חובה לגוון!):
+שחקן 1: "אחרי +X₪ במשחק האחרון..." 
+שחקן 2: "עם X ניצחונות רצופים..."
+שחקן 3: "במקום X בטבלה..."
+שחקן 4: "[שם] מגיע הערב עם..."
+שחקן 5: "רק X₪ מהמקום הבא..."
+שחקן 6: "למרות היסטוריה של X₪..."
+שחקן 7: "הפורמה האחרונה מראה..."
+
+עובדות לשלב: משחק אחרון, רצף, ממוצע, דירוג ב-${currentPeriodLabel}
+
+⚠️ חשוב: 
+• השתמש רק במספרים שמופיעים בנתונים - אל תחשב בעצמך!
+• מספרים שלמים בלבד (ללא נקודה עשרונית)
+• משחק יחיד = "במשחק היחיד" (לא "ממוצע")
+
+🔙 שחקנים חוזרים (מסומנים 🔙) - חובה להזכיר את החזרה!
+
+❌ לא לעשות:
+• לכתוב את מספר ה-expectedProfit במשפט
+• משפטים גנריים בלי מספרים
+• להדגיש הפסדים גדולים בסכום
+
+📝 פלט:
+[{"name":"שם", "expectedProfit":מספר, "highlight":"5-10 מילים עם נתון", "sentence":"25-40 מילים עם עובדות", "isSurprise":boolean}]
+
+סכום=0. JSON בלבד.`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1361,7 +1414,7 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.9,  // Higher for creative, varied output
+            temperature: 0.95,  // High for maximum variety
             topK: 40,
             topP: 0.85,
             maxOutputTokens: 2048,
@@ -1411,130 +1464,216 @@ ${surpriseText}
       let forecasts: ForecastResult[];
       try {
         forecasts = JSON.parse(jsonText.trim());
-        console.log('✅ Parsed', forecasts.length, 'forecasts from AI');
+        console.log('✅ Parsed', forecasts.length, 'forecasts');
       } catch (parseError) {
         console.error('❌ JSON parse error, trying next model');
         continue; // Try next model
       }
       
-      // Validate that we have all required fields
-      const validForecasts = forecasts.every(f => 
-        f.name && typeof f.expectedProfit === 'number' && f.highlight && f.sentence
-      );
-      
-      if (!validForecasts) {
-        console.error('❌ Invalid forecast structure, trying next model');
-        continue;
-      }
-      
-      console.log('✅ AI generated complete forecasts');
-      
-      // ========== FACT-CHECK AI OUTPUT ==========
-      // Remove any false superlative claims the AI invented
+      // ========== FACT-CHECK AND CORRECT AI OUTPUT ==========
       console.log('🔍 Fact-checking AI output...');
       
-      // Pre-calculate actual rankings for validation
-      const periodRankings = players.map(p => {
-        const halfGames = getHalfGames(p, currentYear, currentHalf);
-        const halfAvg = halfGames.length > 0 
-          ? halfGames.reduce((sum, g) => sum + g.profit, 0) / halfGames.length 
-          : 0;
-        const halfTotal = halfGames.reduce((sum, g) => sum + g.profit, 0);
-        return { name: p.name, avg: halfAvg, total: halfTotal, games: halfGames.length };
-      }).filter(p => p.games > 0);
-      
-      // Sort by average to find who actually has highest
-      const byAvg = [...periodRankings].sort((a, b) => b.avg - a.avg);
-      const highestAvgPlayer = byAvg[0]?.name;
-      
-      // Sort by total to find leader
-      const byTotal = [...periodRankings].sort((a, b) => b.total - a.total);
-      const leaderPlayer = byTotal[0]?.name;
-      
       forecasts = forecasts.map(forecast => {
-        let sentence = forecast.sentence;
-        let highlight = forecast.highlight;
-        const playerName = forecast.name;
+        const player = players.find(p => p.name === forecast.name);
+        if (!player) return forecast;
         
-        // Check for false "highest average" claims
-        const highestAvgPatterns = [
-          /הממוצע הגבוה ביותר/g,
-          /ממוצע הגבוה ביותר/g,
-          /הכי גבוה/g,
-          /הממוצע הטוב ביותר/g,
+        // Get actual year data
+        const thisYearGames = player.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+        const yearGames = thisYearGames.length;
+        const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
+        
+        // Calculate actual rankings (tonight's table only!)
+        const sortedTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
+        const rankTonight = sortedTonight.findIndex(p => p.name === player.name) + 1;
+        
+        // USE THE ACTUAL CURRENT STREAK (spans across years!)
+        const actualStreak = player.currentStreak;
+        
+        // Last game result
+        const lastGame = player.gameHistory[0];
+        const lastGameProfit = lastGame?.profit || 0;
+        const wonLastGame = lastGameProfit > 0;
+        const lostLastGame = lastGameProfit < 0;
+        
+        let correctedSentence = forecast.sentence;
+        let correctedHighlight = forecast.highlight;
+        let hadErrors = false;
+        let errorDetails: string[] = [];
+        
+        // ========== 1. FIX STREAK ERRORS ==========
+        const streakPatterns = [
+          /רצף\s*(?:של\s*)?(\d+)\s*נצחונות/g,
+          /(\d+)\s*נצחונות\s*רצופים/g,
+          /(\d+)\s*consecutive\s*wins/gi,
+          /רצף\s*(?:של\s*)?(\d+)\s*הפסדים/g,
+          /(\d+)\s*הפסדים\s*רצופים/g,
+          /(\d+)\s*wins?\s*in\s*a\s*row/gi,
+          /(\d+)\s*losses?\s*in\s*a\s*row/gi,
         ];
         
-        for (const pattern of highestAvgPatterns) {
-          if (pattern.test(sentence) && playerName !== highestAvgPlayer) {
-            console.log(`⚠️ ${playerName}: False "highest average" claim removed`);
-            sentence = sentence.replace(pattern, 'ממוצע טוב');
+        for (const pattern of streakPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedStreak = parseInt(match[1]);
+            const isWinPattern = match[0].includes('נצחונות') || match[0].toLowerCase().includes('wins');
+            const expectedStreak = isWinPattern ? Math.max(0, actualStreak) : Math.abs(Math.min(0, actualStreak));
+            
+            if (claimedStreak !== expectedStreak) {
+              errorDetails.push(`streak: claimed ${claimedStreak}, actual ${expectedStreak}`);
+              hadErrors = true;
+              
+              if (expectedStreak === 0) {
+                correctedSentence = correctedSentence.replace(match[0], '');
+              } else {
+                correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(expectedStreak)));
+              }
+            }
           }
         }
         
-        // Check for false "leader" claims
-        const leaderPatterns = [
-          /מוביל את הטבלה/g,
-          /מקום ראשון/g,
-          /בראש הטבלה/g,
-          /מוביל הטבלה/g,
+        // ========== 2. FIX RANKING ERRORS ==========
+        // Check if sentence claims #1 but player isn't #1 tonight
+        if ((correctedSentence.includes('מוביל') || correctedSentence.includes('בראש') || correctedSentence.includes('מקום ראשון') || correctedSentence.includes('מקום 1') || correctedSentence.includes('#1')) && rankTonight !== 1) {
+          errorDetails.push(`rank: claimed #1 but actually #${rankTonight}`);
+          hadErrors = true;
+          // Remove false #1 claims
+          correctedSentence = correctedSentence
+            .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
+            .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
+            .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
+            .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
+            .replace(/#1\b/g, `#${rankTonight}`);
+        }
+        
+        // ========== 3. FIX LAST GAME ERRORS ==========
+        // Check for contradictions about last game result
+        if (wonLastGame && correctedSentence.includes('הפסד') && correctedSentence.includes('אחרון')) {
+          errorDetails.push('last_game: claimed loss but actually won');
+          hadErrors = true;
+        }
+        if (lostLastGame && correctedSentence.includes('נצחון') && correctedSentence.includes('אחרון')) {
+          errorDetails.push('last_game: claimed win but actually lost');
+          hadErrors = true;
+        }
+        
+        // ========== 4. FIX GAME COUNT ERRORS ==========
+        const gameCountPatterns = [
+          /(\d+)\s*משחקים?\s*(?:ב)?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)/g,
+          /(\d+)\s*משחקים?\s*(?:ב)?-?(?:2026|2025|השנה)/g,
+          /(\d+)\s*games?\s*(?:in\s*)?(?:January|February|this year|2026)/gi,
         ];
         
-        for (const pattern of leaderPatterns) {
-          if ((pattern.test(sentence) || pattern.test(highlight)) && playerName !== leaderPlayer) {
-            const playerRank = byTotal.findIndex(p => p.name === playerName) + 1;
-            console.log(`⚠️ ${playerName}: False "leader" claim - actually #${playerRank}`);
-            sentence = sentence.replace(pattern, `במקום ${playerRank}`);
-            highlight = highlight.replace(pattern, `מקום ${playerRank}`);
+        for (const pattern of gameCountPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedGames = parseInt(match[1]);
+            const isYearMention = match[0].includes('2026') || match[0].includes('2025') || match[0].includes('השנה');
+            
+            let actualGames = yearGames;
+            if (!isYearMention) {
+              const thisMonthGames = player.gameHistory.filter(g => {
+                const d = parseGameDate(g.date);
+                return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+              });
+              actualGames = thisMonthGames.length;
+            }
+            
+            if (claimedGames !== actualGames) {
+              errorDetails.push(`games: claimed ${claimedGames}, actual ${actualGames}`);
+              hadErrors = true;
+              correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualGames)));
+            }
           }
         }
         
-        // Remove invented numbers that don't match our data
-        // Pattern: "X נצחונות רצופים" - verify streak
-        const streakMatch = sentence.match(/(\d+)\s*נצחונות\s*רצופים/);
-        if (streakMatch) {
-          const claimedStreak = parseInt(streakMatch[1]);
-          const player = players.find(p => p.name === playerName);
-          const actualStreak = player?.currentStreak || 0;
-          if (actualStreak < claimedStreak) {
-            console.log(`⚠️ ${playerName}: False streak ${claimedStreak} → ${actualStreak}`);
-            if (actualStreak > 0) {
-              sentence = sentence.replace(streakMatch[0], `${actualStreak} נצחונות רצופים`);
-            } else {
-              sentence = sentence.replace(streakMatch[0], '');
+        // ========== 5. FIX PROFIT DIRECTION ERRORS ==========
+        // If year profit is negative but sentence claims positive year
+        if (yearProfit < 0 && yearGames > 0) {
+          const positiveYearClaims = [
+            /שנה\s*(?:מצוינת|טובה|חיובית)/g,
+            /רווח\s*(?:השנה|ב-?2026)/g,
+            /\+.*₪\s*(?:השנה|ב-?2026)/g,
+          ];
+          for (const pattern of positiveYearClaims) {
+            if (pattern.test(correctedSentence)) {
+              errorDetails.push(`profit_direction: claimed positive year but year profit is ${yearProfit}`);
+              hadErrors = true;
+            }
+          }
+        }
+        
+        // ========== 6. CLEAN UP BROKEN TEXT ==========
+        correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
+        correctedSentence = correctedSentence.replace(/,\s*,/g, ',');
+        correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
+        correctedSentence = correctedSentence.replace(/\s+\./g, '.');
+        
+        // ========== 7. GENERATE FALLBACK IF NEEDED ==========
+        if (correctedSentence.length < 20 || hadErrors) {
+          console.log(`⚠️ ${player.name}: Errors detected - ${errorDetails.join(', ')}`);
+          
+          // Generate engaging, factual fallback based on actual data
+          const fallbackSentences = [];
+          
+          // Build sentence based on what's actually true
+          if (actualStreak >= 3) {
+            fallbackSentences.push(`רצף חם של ${actualStreak} נצחונות רצופים! ${yearGames > 0 ? `${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ב-${currentYear}.` : ''}`);
+          } else if (actualStreak <= -3) {
+            fallbackSentences.push(`רצף קשה של ${Math.abs(actualStreak)} הפסדים. מחפש לשבור את הרצף הלילה.`);
+          } else if (wonLastGame && lastGameProfit > 50) {
+            fallbackSentences.push(`נצחון גדול של +${Math.round(lastGameProfit)}₪ במשחק האחרון. מקום ${rankTonight} מתוך ${players.length} הלילה.`);
+          } else if (lostLastGame && lastGameProfit < -50) {
+            fallbackSentences.push(`הפסד של ${Math.round(lastGameProfit)}₪ במשחק האחרון. מחפש לחזור לנצחונות הלילה.`);
+          } else if (yearGames >= 3) {
+            const yearAvg = Math.round(yearProfit / yearGames);
+            fallbackSentences.push(`${yearGames} משחקים ב-${currentYear} עם ממוצע ${yearAvg >= 0 ? '+' : ''}${yearAvg}₪. מקום ${rankTonight}/${players.length} הלילה.`);
+          } else if (player.gamesPlayed >= 10) {
+            fallbackSentences.push(`${player.gamesPlayed} משחקים, ממוצע ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪. מקום ${rankTonight}/${players.length} בטבלה הלילה.`);
+          } else {
+            fallbackSentences.push(`מקום ${rankTonight}/${players.length} בטבלה הלילה. ${yearGames > 0 ? `${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪ ב-${currentYear}.` : `ממוצע ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪.`}`);
+          }
+          
+          correctedSentence = fallbackSentences[0];
+          console.log(`🔧 ${player.name}: Replaced with factual fallback`);
+        }
+        
+        // ========== 8. FIX HIGHLIGHT ERRORS ==========
+        for (const pattern of [...streakPatterns, ...gameCountPatterns]) {
+          const matches = [...correctedHighlight.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedNum = parseInt(match[1]);
+            const isStreak = match[0].includes('נצחונות') || match[0].includes('הפסדים');
+            const actualNum = isStreak ? Math.abs(actualStreak) : yearGames;
+            
+            if (claimedNum !== actualNum) {
+              correctedHighlight = correctedHighlight.replace(match[0], match[0].replace(match[1], String(actualNum)));
             }
           }
         }
         
         return {
           ...forecast,
-          sentence: sentence.trim(),
-          highlight: highlight.trim()
+          sentence: correctedSentence,
+          highlight: correctedHighlight
         };
       });
       
       console.log('✅ Fact-checking complete');
-      // ========== END FACT-CHECK ==========
+      // ========== END FACT-CHECKING ==========
       
-      // Ensure the sum is 0
-      const totalProfit = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
-      if (totalProfit !== 0 && forecasts.length > 0) {
-        // Distribute the adjustment
-        const adjustment = Math.round(totalProfit / forecasts.length);
+      // Validate and ensure zero-sum
+      let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
+      if (total !== 0 && forecasts.length > 0) {
+        const adjustment = Math.round(total / forecasts.length);
         forecasts.forEach((f, i) => {
           if (i === 0) {
-            f.expectedProfit -= (totalProfit - adjustment * (forecasts.length - 1));
+            f.expectedProfit -= (total - adjustment * (forecasts.length - 1));
           } else {
             f.expectedProfit -= adjustment;
           }
         });
-        console.log(`⚖️ Balanced profits by ${-totalProfit}`);
       }
-      
-      // Round all profits to integers
-      forecasts.forEach(f => {
-        f.expectedProfit = Math.round(f.expectedProfit);
-      });
-      
+
       return forecasts;
       
     } catch (fetchError) {
