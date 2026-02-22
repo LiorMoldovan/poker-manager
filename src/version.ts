@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.43.7';
+export const APP_VERSION = '4.43.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.43.8',
+    date: '2026-02-05',
+    changes: [
+      '🚨 CRITICAL: Each sentence MUST start with different word',
+      '✍️ Explicit opening patterns per player (1-7)',
+      '🎨 Stronger variety enforcement in prompt'
+    ]
+  },
   {
     version: '4.43.7',
     date: '2026-02-05',
