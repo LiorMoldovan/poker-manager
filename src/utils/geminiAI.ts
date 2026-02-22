@@ -1286,17 +1286,16 @@ export const generateAIForecasts = async (
     
     if (trendText) lines.push(trendText);
     
-    // Show ranking - use global rank if available, otherwise rank among tonight's players
-    const rankContext = halfRank > 0 ? `${rankTotalPlayers} שחקנים פעילים` : `${players.length} שחקני הערב`;
-    lines.push(`דירוג ${currentPeriodLabel}: #${rankTonight} מבין ${rankContext} (${yearProfit >= 0 ? '+' : ''}${Math.round(yearProfit)}₪)`);
+    // Show ranking only if notable (top 3 or close to next rank)
+    if (rankTonight <= 3) {
+      lines.push(`מקום #${rankTonight} ב${currentPeriodLabel}`);
+    } else if (gapToAboveTonight && gapToAboveTonight <= 80) {
+      lines.push(`מקום #${rankTonight}, ${gapToAboveTonight}₪ ממקום ${rankTonight - 1}`);
+    }
     
-    // Only show all-time rank if notable
-    if (isActiveAllTime && (allTimeRank <= 3 || (gapToAboveAllTime && gapToAboveAllTime <= 100))) {
-      let allTimeNote = `דירוג כללי: #${allTimeRank}/${allTimeTotalActive}`;
-      if (gapToAboveAllTime && gapToAboveAllTime <= 100) {
-        allTimeNote += ` (${gapToAboveAllTime}₪ ממקום ${allTimeRank - 1})`;
-      }
-      lines.push(allTimeNote);
+    // Only show all-time rank if top 3
+    if (isActiveAllTime && allTimeRank <= 3) {
+      lines.push(`מקום #${allTimeRank} בטבלה הכללית`);
     }
     
     lines.push(`צפי: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
@@ -1339,42 +1338,34 @@ export const generateAIForecasts = async (
   const randomSeed = Math.random().toString(36).substring(2, 8);
   const randomOrder = [...players].sort(() => Math.random() - 0.5).map(p => p.name).join(', ');
   
-  const prompt = `תחזית פוקר להערב. פלט JSON בעברית בלבד.
-🎲 סידור אקראי להשראה: ${randomOrder} (seed: ${randomSeed})
+  const prompt = `פרשן פוקר. כתוב תחזית קצרה ומעניינת לכל שחקן.
+🎲 ${randomSeed}
 
-📊 נתוני שחקנים:
+📊 שחקנים:
 ${playerDataText}
 ${milestonesText ? `\n🎯 אבני דרך:\n${milestonesText}` : ''}
 ${surpriseText}
 
-═══════════════════════════════════════════════════════════════════
-📋 הוראות - מבנה התחזית
-═══════════════════════════════════════════════════════════════════
+📝 הפלט לכל שחקן:
+• highlight = עובדה אחת מעניינת (3-5 מילים)
+• sentence = משפט קצר וקולע על הערב (עד 15 מילים)
 
-לכל שחקן יש 3 חלקים:
-1. highlight = העובדה הכי חשובה (3-5 מילים)
-2. sentence = שני משפטים:
-   • משפט ראשון: סטטיסטיקה קצרה (ממוצע, מקום, רצף)
-   • משפט שני: תיאור מילולי מעניין על הערב
+✨ דוגמאות טובות (שים לב לגיוון!):
+{"name":"דני", "highlight":"רצף 3 נצחונות 🔥", "sentence":"הפורמה הלוהטת ממשיכה, קשה להמר נגדו.", "expectedProfit":85, "isSurprise":false}
+{"name":"יוסי", "highlight":"חוזר אחרי 45 ימים", "sentence":"הפסקה ארוכה, צריך זמן להתחמם מחדש.", "expectedProfit":-40, "isSurprise":false}
+{"name":"מיכל", "highlight":"הפסד כואב אחרון", "sentence":"התקופה קשה אבל היא יודעת להפתיע.", "expectedProfit":30, "isSurprise":true}
+{"name":"אבי", "highlight":"מוביל הטבלה 👑", "sentence":"המלך ממשיך לשלוט, אבל כולם רוצים את הכתר.", "expectedProfit":60, "isSurprise":false}
+{"name":"רון", "highlight":"ממוצע +85₪ השנה", "sentence":"שקט אבל קטלני, אחד המסוכנים בשולחן.", "expectedProfit":50, "isSurprise":false}
 
-דוגמאות:
-{"name":"דני", "highlight":"רצף 3 נצחונות", "sentence":"ממוצע +92₪ ב-5 משחקים, מקום 2. הפורמה הלוהטת ממשיכה והוא הפייבוריט הברור.", "expectedProfit":85, "isSurprise":false}
-{"name":"יוסי", "highlight":"חוזר אחרי 45 ימים", "sentence":"ממוצע +15₪ ב-3 משחקים, מקום 4. אחרי הפסקה ארוכה, צריך זמן להתחמם.", "expectedProfit":-40, "isSurprise":false}
-{"name":"מיכל", "highlight":"הפסד -80₪ אחרון", "sentence":"ממוצע -12₪, מקום 5. למרות התקופה הקשה, ההיסטוריה מראה שהיא יודעת להפתיע.", "expectedProfit":30, "isSurprise":true}
-
-כללים:
+⚠️ כללים:
 • סכום expectedProfit = 0 בדיוק
-• צפי מהנתונים ±30₪
-• מור = נקבה, שאר = זכר
-• כל שחקן מתחיל אחרת!
-• isSurprise=true רק עם צפי חיובי
-
-❌ לא לעשות:
-• לא לחזור על הצפי בסוף המשפט
-• לא להמציא נתונים
+• צפי קרוב לנתונים (±30₪)
+• מור = נקבה
+• כל שחקן שונה לגמרי!
+• לא לחזור על מבנה משפט!
 
 📝 פלט JSON בלבד:
-[{"name":"שם", "expectedProfit":מספר, "highlight":"עובדה בולטת", "sentence":"סטטיסטיקה. תיאור מעניין.", "isSurprise":bool}]`;
+[{"name":"שם", "expectedProfit":מספר, "highlight":"עובדה קצרה", "sentence":"משפט קצר ומעניין", "isSurprise":bool}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
