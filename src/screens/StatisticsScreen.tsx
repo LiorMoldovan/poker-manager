@@ -1919,80 +1919,63 @@ const StatisticsScreen = () => {
                        `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][selectedMonth - 1]} ${selectedYear}`}
                     </div>
                   </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', minWidth: '400px' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>Player</th>
-                          <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Average buyins per game">Avg</th>
-                          <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Total buyins">Total</th>
-                          <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Max buyins in a single game">Max</th>
-                          <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Total invested">Invested</th>
-                          <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Return on investment">ROI</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rebuyStats.map((player, index) => {
-                          const avgBuyins = player.totalBuyins / player.gamesPlayed;
-                          const roi = player.totalInvested > 0 
-                            ? (player.totalProfit / player.totalInvested) * 100 
-                            : 0;
-                          return (
-                            <tr 
-                              key={index}
-                              style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
-                            >
-                              <td style={{ 
-                                padding: '0.3rem 0.2rem', 
-                                whiteSpace: 'nowrap',
-                                fontWeight: '500'
-                              }}>
-                                {player.playerName}
-                              </td>
-                              <td style={{ 
-                                textAlign: 'center', 
-                                padding: '0.3rem 0.2rem',
-                                color: avgBuyins >= 2.5 ? 'var(--danger)' : avgBuyins <= 1.3 ? 'var(--success)' : 'var(--text)',
-                                fontWeight: '600'
-                              }}>
-                                {avgBuyins.toFixed(1)}
-                              </td>
-                              <td style={{ 
-                                textAlign: 'center', 
-                                padding: '0.3rem 0.2rem',
-                                color: 'var(--text-muted)'
-                              }}>
-                                {cleanNumber(player.totalBuyins)}
-                              </td>
-                              <td style={{ 
-                                textAlign: 'center', 
-                                padding: '0.3rem 0.2rem',
-                                color: player.maxBuyinsInGame >= 5 ? 'var(--danger)' : 'var(--text-muted)',
-                                fontWeight: player.maxBuyinsInGame >= 5 ? '600' : '400'
-                              }}>
-                                {cleanNumber(player.maxBuyinsInGame)}
-                              </td>
-                              <td style={{ 
-                                textAlign: 'right', 
-                                padding: '0.3rem 0.2rem',
-                                color: 'var(--text-muted)'
-                              }}>
-                                ₪{cleanNumber(player.totalInvested)}
-                              </td>
-                              <td style={{ 
-                                textAlign: 'right', 
-                                padding: '0.3rem 0.2rem',
-                                color: roi >= 0 ? 'var(--success)' : 'var(--danger)',
-                                fontWeight: '600'
-                              }}>
-                                {roi >= 0 ? '+' : ''}{roi.toFixed(0)}%
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>Player</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Average buyins per game">Avg</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Total buyins">Total</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Max buyins in a single game">Max</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Games played">G</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rebuyStats.map((player, index) => {
+                        const avgBuyins = player.totalBuyins / player.gamesPlayed;
+                        return (
+                          <tr 
+                            key={index}
+                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                          >
+                            <td style={{ 
+                              padding: '0.3rem 0.2rem', 
+                              whiteSpace: 'nowrap',
+                              fontWeight: '500'
+                            }}>
+                              {player.playerName}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              fontWeight: '600'
+                            }}>
+                              {avgBuyins.toFixed(1)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {cleanNumber(player.totalBuyins)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem'
+                            }}>
+                              {cleanNumber(player.maxBuyinsInGame)}
+                            </td>
+                            <td style={{ 
+                              textAlign: 'center', 
+                              padding: '0.3rem 0.2rem',
+                              color: 'var(--text-muted)'
+                            }}>
+                              {player.gamesPlayed}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
