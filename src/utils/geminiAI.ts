@@ -4,8 +4,6 @@
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-import { generateForecastContent } from './forecastSentences';
-
 // API versions and models to try (based on actual available models Dec 2024)
 // Ordered by free tier quota (lite models have higher limits)
 const API_CONFIGS = [
@@ -1442,56 +1440,338 @@ ${surpriseText}
         continue; // Try next model
       }
       
-      // ========== GENERATE CONTENT WITH NEW SENTENCE SYSTEM ==========
-      console.log('🎨 Generating unique content for each player...');
+      // ========== FACT-CHECK AND CORRECT AI OUTPUT ==========
+      console.log('🔍 Fact-checking AI output...');
       
-      // Pre-calculate rankings
-      const sortedTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
-      
-      // Build player contexts for the sentence generator
-      const playerContexts = players.map((player, idx) => {
+      forecasts = forecasts.map(forecast => {
+        const player = players.find(p => p.name === forecast.name);
+        if (!player) return forecast;
+        
+        // Get actual year data
+        const thisYearGames = player.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+        const yearGames = thisYearGames.length;
+        const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
+        
+        // Calculate actual rankings (tonight's table only!)
+        const sortedTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
+        const rankTonight = sortedTonight.findIndex(p => p.name === player.name) + 1;
+        
+        // USE THE ACTUAL CURRENT STREAK (spans across years!)
+        const actualStreak = player.currentStreak;
+        
+        // Last game result
         const lastGame = player.gameHistory[0];
-        const currentHalfGames = getHalfGames(player, currentYear, currentHalf);
-        const periodAvg = currentHalfGames.length > 0 
-          ? currentHalfGames.reduce((sum, g) => sum + g.profit, 0) / currentHalfGames.length 
-          : player.avgProfit;
+        const lastGameProfit = lastGame?.profit || 0;
+        const wonLastGame = lastGameProfit > 0;
+        const lostLastGame = lastGameProfit < 0;
         
-        return {
-          name: player.name,
-          isFemale: player.isFemale,
-          gamesPlayed: player.gamesPlayed,
-          totalProfit: player.totalProfit,
-          avgProfit: player.avgProfit,
-          currentStreak: player.currentStreak,
-          lastGameProfit: lastGame?.profit || 0,
-          daysSinceLastGame: player.daysSinceLastGame,
-          rankTonight: sortedTonight.findIndex(p => p.name === player.name) + 1,
-          totalPlayers: players.length,
-          periodAvg: Math.round(periodAvg),
-          periodGames: currentHalfGames.length,
-          expectedProfit: forecasts.find(f => f.name === player.name)?.expectedProfit || 0,
-        };
-      });
-      
-      // Generate unique content for each player using the new system
-      forecasts = forecasts.map((forecast, playerIndex) => {
-        const ctx = playerContexts.find(c => c.name === forecast.name);
-        if (!ctx) return forecast;
+        let correctedSentence = forecast.sentence;
+        let correctedHighlight = forecast.highlight;
+        let hadErrors = false;
+        let errorDetails: string[] = [];
         
-        // Use the new sentence generator with player index for guaranteed variety
-        const content = generateForecastContent(ctx, playerIndex, playerContexts);
+        // ========== 1. FIX STREAK ERRORS ==========
+        const streakPatterns = [
+          /רצף\s*(?:של\s*)?(\d+)\s*נצחונות/g,
+          /(\d+)\s*נצחונות\s*רצופים/g,
+          /(\d+)\s*consecutive\s*wins/gi,
+          /רצף\s*(?:של\s*)?(\d+)\s*הפסדים/g,
+          /(\d+)\s*הפסדים\s*רצופים/g,
+          /(\d+)\s*wins?\s*in\s*a\s*row/gi,
+          /(\d+)\s*losses?\s*in\s*a\s*row/gi,
+        ];
         
-        console.log(`✅ ${forecast.name}: "${content.highlight}" | "${content.sentence}"`);
+        for (const pattern of streakPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedStreak = parseInt(match[1]);
+            const isWinPattern = match[0].includes('נצחונות') || match[0].toLowerCase().includes('wins');
+            const expectedStreak = isWinPattern ? Math.max(0, actualStreak) : Math.abs(Math.min(0, actualStreak));
+            
+            if (claimedStreak !== expectedStreak) {
+              errorDetails.push(`streak: claimed ${claimedStreak}, actual ${expectedStreak}`);
+              hadErrors = true;
+              
+              if (expectedStreak === 0) {
+                correctedSentence = correctedSentence.replace(match[0], '');
+              } else {
+                correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(expectedStreak)));
+              }
+            }
+          }
+        }
+        
+        // ========== 2. FIX RANKING ERRORS ==========
+        // Check if sentence claims #1 but player isn't #1 tonight
+        if ((correctedSentence.includes('מוביל') || correctedSentence.includes('בראש') || correctedSentence.includes('מקום ראשון') || correctedSentence.includes('מקום 1') || correctedSentence.includes('#1')) && rankTonight !== 1) {
+          errorDetails.push(`rank: claimed #1 but actually #${rankTonight}`);
+          hadErrors = true;
+          // Remove false #1 claims
+          correctedSentence = correctedSentence
+            .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
+            .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
+            .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
+            .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
+            .replace(/#1\b/g, `#${rankTonight}`);
+        }
+        
+        // ========== 3. FIX LAST GAME ERRORS ==========
+        // Check for contradictions about last game result
+        if (wonLastGame && correctedSentence.includes('הפסד') && correctedSentence.includes('אחרון')) {
+          errorDetails.push('last_game: claimed loss but actually won');
+          hadErrors = true;
+        }
+        if (lostLastGame && correctedSentence.includes('נצחון') && correctedSentence.includes('אחרון')) {
+          errorDetails.push('last_game: claimed win but actually lost');
+          hadErrors = true;
+        }
+        
+        // ========== 4. FIX GAME COUNT ERRORS ==========
+        const gameCountPatterns = [
+          /(\d+)\s*משחקים?\s*(?:ב)?(?:ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)/g,
+          /(\d+)\s*משחקים?\s*(?:ב)?-?(?:2026|2025|השנה)/g,
+          /(\d+)\s*games?\s*(?:in\s*)?(?:January|February|this year|2026)/gi,
+        ];
+        
+        for (const pattern of gameCountPatterns) {
+          const matches = [...correctedSentence.matchAll(pattern)];
+          for (const match of matches) {
+            const claimedGames = parseInt(match[1]);
+            const isYearMention = match[0].includes('2026') || match[0].includes('2025') || match[0].includes('השנה');
+            
+            let actualGames = yearGames;
+            if (!isYearMention) {
+              const thisMonthGames = player.gameHistory.filter(g => {
+                const d = parseGameDate(g.date);
+                return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+              });
+              actualGames = thisMonthGames.length;
+            }
+            
+            if (claimedGames !== actualGames) {
+              errorDetails.push(`games: claimed ${claimedGames}, actual ${actualGames}`);
+              hadErrors = true;
+              correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualGames)));
+            }
+          }
+        }
+        
+        // ========== 5. FIX PROFIT DIRECTION ERRORS ==========
+        // If year profit is negative but sentence claims positive year
+        if (yearProfit < 0 && yearGames > 0) {
+          const positiveYearClaims = [
+            /שנה\s*(?:מצוינת|טובה|חיובית)/g,
+            /רווח\s*(?:השנה|ב-?2026)/g,
+            /\+.*₪\s*(?:השנה|ב-?2026)/g,
+          ];
+          for (const pattern of positiveYearClaims) {
+            if (pattern.test(correctedSentence)) {
+              errorDetails.push(`profit_direction: claimed positive year but year profit is ${yearProfit}`);
+              hadErrors = true;
+            }
+          }
+        }
+        
+        // ========== 6. CLEAN UP BROKEN TEXT ==========
+        correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
+        correctedSentence = correctedSentence.replace(/,\s*,/g, ',');
+        correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
+        correctedSentence = correctedSentence.replace(/\s+\./g, '.');
+        
+        // ========== 7. ALWAYS USE CREATIVE SENTENCES ==========
+        // Build a pool of ALL applicable sentences, then pick randomly
+        console.log(`🎨 ${player.name}: Generating creative sentence`);
+        
+        const isFemale = player.isFemale;
+        const he = isFemale ? 'היא' : 'הוא';
+        const his = isFemale ? 'שלה' : 'שלו';
+        const looking = isFemale ? 'מחפשת' : 'מחפש';
+        const wants = isFemale ? 'רוצה' : 'רוצה';
+        const came = isFemale ? 'באה' : 'בא';
+        const hot = isFemale ? 'חמה' : 'חם';
+        const dangerous = isFemale ? 'מסוכנת' : 'מסוכן';
+        const ready = isFemale ? 'מוכנה' : 'מוכן';
+        const knows = isFemale ? 'יודעת' : 'יודע';
+        const plays = isFemale ? 'משחקת' : 'משחק';
+        
+        // Collect ALL applicable sentences (not mutually exclusive!)
+        const creativeOptions: string[] = [];
+        
+        // Hot streak (3+)
+        if (actualStreak >= 3) {
+          creativeOptions.push(
+            `${actualStreak} ברצף! מי יעצור את הרכבת?`,
+            `הפורמה לוהטת, קשה לעצור.`,
+            `בענק! המומנטום איתו.`,
+            `רצף חם, ${he} בתנופה.`,
+            `${actualStreak} נצחונות, הביטחון בשמיים.`
+          );
+        }
+        
+        // Cold streak (3+)
+        if (actualStreak <= -3) {
+          creativeOptions.push(
+            `חייב לשבור את הרצף השחור.`,
+            `${Math.abs(actualStreak)} הפסדים, הלילה זה משתנה.`,
+            `${looking} נקמה.`,
+            `הרצף חייב להיגמר מתישהו.`,
+            `התקופה קשה, אבל ${he} לוחם.`
+          );
+        }
+        
+        // Won last game
+        if (wonLastGame && lastGameProfit > 50) {
+          creativeOptions.push(
+            `נצחון אחרון, הביטחון גבוה.`,
+            `${hot} אחרי +${Math.round(lastGameProfit)}₪.`,
+            `${wants} להמשיך את הסיפור הטוב.`,
+            `הערב האחרון נתן רוח גבית.`,
+            `מגיע עם חיוך מהפעם הקודמת.`
+          );
+        }
+        
+        // Lost last game
+        if (lostLastGame && lastGameProfit < -50) {
+          creativeOptions.push(
+            `${looking} לתקן את הכאב.`,
+            `${came} עם חשבון פתוח.`,
+            `${ready} לנקמה.`,
+            `ההפסד צורב, הלילה שונה.`,
+            `יש מה להוכיח אחרי הפעם הקודמת.`
+          );
+        }
+        
+        // Leader
+        if (rankTonight === 1) {
+          creativeOptions.push(
+            `על הכס, כולם רודפים.`,
+            `${he} היעד של כולם.`,
+            `מוביל, אבל אין מנוחה למלך.`,
+            `כולם רוצים את הכתר.`,
+            `בראש, אבל הלחץ גדול.`
+          );
+        }
+        
+        // Top 3
+        if (rankTonight >= 2 && rankTonight <= 3) {
+          creativeOptions.push(
+            `קרוב לפסגה, ${wants} לטפס.`,
+            `במרחק נגיעה מהמקום הראשון.`,
+            `${plays} על הפודיום.`,
+            `בקרב על הצמרת.`
+          );
+        }
+        
+        // Strong history
+        if (player.avgProfit > 30) {
+          creativeOptions.push(
+            `שקט אבל קטלני.`,
+            `תמיד ${dangerous} בשולחן.`,
+            `ההיסטוריה מדברת בעדו.`,
+            `שחקן רווחי, תמיד באים מוכנים אליו.`,
+            `${knows} לנצח כשזה חשוב.`
+          );
+        }
+        
+        // Struggling
+        if (player.avgProfit < -15 && player.gamesPlayed >= 5) {
+          creativeOptions.push(
+            `${looking} להפוך את המגמה.`,
+            `כל ערב הוא הזדמנות.`,
+            `ההיסטוריה לא קובעת, רק הלילה.`,
+            `${ready} להפתיע את כולם.`,
+            `המזל חייב להשתנות.`
+          );
+        }
+        
+        // Returning after break
+        if (comebackDays && comebackDays > 20) {
+          creativeOptions.push(
+            `חוזר אחרי הפסקה, צריך לחמם.`,
+            `${comebackDays} ימים בחוץ, ${ready} לחזור.`,
+            `ההפסקה הייתה ארוכה, נראה.`,
+            `${came} רענן אחרי הפסקה.`,
+            `חזר למשחק, השאלה אם גם הפורמה.`
+          );
+        }
+        
+        // Many games experience
+        if (player.gamesPlayed >= 20) {
+          creativeOptions.push(
+            `ותיק, ${knows} את המשחק.`,
+            `הניסיון מדבר.`,
+            `לא מפתיעים אותו בקלות.`
+          );
+        }
+        
+        // Few games - newcomer
+        if (player.gamesPlayed <= 5) {
+          creativeOptions.push(
+            `עדיין לומד את השולחן.`,
+            `חדש יחסית, קשה לחזות.`,
+            `מעט ניסיון, הרבה פוטנציאל.`
+          );
+        }
+        
+        // If somehow no options (shouldn't happen), add defaults
+        if (creativeOptions.length === 0) {
+          creativeOptions.push(
+            `ערב חדש, הכל פתוח.`,
+            `הקלפים יחליטו.`,
+            `${ready} להפתיע.`,
+            `יכול לקחת את הערב.`,
+            `אף פעם לא יודעים.`
+          );
+        }
+        
+        // Pick a random option from ALL applicable ones
+        correctedSentence = creativeOptions[Math.floor(Math.random() * creativeOptions.length)];
+        console.log(`✅ ${player.name}: "${correctedSentence}" (from ${creativeOptions.length} options)`)
+        
+        // ========== 8. GENERATE CREATIVE HIGHLIGHT ==========
+        // Also replace highlight with something factual and short
+        let creativeHighlight = correctedHighlight;
+        
+        // Remove boring patterns from highlight
+        if (creativeHighlight.includes('מוביל את טבלת') || 
+            creativeHighlight.includes('מקום') || 
+            creativeHighlight.includes('ממוצע') ||
+            creativeHighlight.includes('H1') ||
+            creativeHighlight.includes('H2')) {
+          
+          // Generate clean highlight based on actual facts
+          if (actualStreak >= 3) {
+            creativeHighlight = `רצף ${actualStreak} נצחונות 🔥`;
+          } else if (actualStreak <= -3) {
+            creativeHighlight = `${Math.abs(actualStreak)} הפסדים ברצף`;
+          } else if (wonLastGame && lastGameProfit > 80) {
+            creativeHighlight = `נצחון +${Math.round(lastGameProfit)}₪ אחרון`;
+          } else if (lostLastGame && lastGameProfit < -80) {
+            creativeHighlight = `הפסד ${Math.round(lastGameProfit)}₪ אחרון`;
+          } else if (rankTonight === 1) {
+            creativeHighlight = `מוביל הטבלה 👑`;
+          } else if (comebackDays && comebackDays > 30) {
+            creativeHighlight = `חוזר אחרי ${comebackDays} ימים`;
+          } else if (player.avgProfit > 40) {
+            creativeHighlight = `ממוצע +${Math.round(player.avgProfit)}₪`;
+          } else if (wonLastGame) {
+            creativeHighlight = `נצחון אחרון +${Math.round(lastGameProfit)}₪`;
+          } else if (lostLastGame) {
+            creativeHighlight = `הפסד אחרון ${Math.round(lastGameProfit)}₪`;
+          } else {
+            creativeHighlight = `${player.gamesPlayed} משחקים`;
+          }
+        }
         
         return {
           ...forecast,
-          highlight: content.highlight,
-          sentence: content.sentence,
+          sentence: correctedSentence,
+          highlight: creativeHighlight
         };
       });
       
-      console.log('✅ Content generation complete');
-      // ========== END CONTENT GENERATION ==========
+      console.log('✅ Fact-checking complete');
+      // ========== END FACT-CHECKING ==========
       
       // Validate and ensure zero-sum
       let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
