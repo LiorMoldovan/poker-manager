@@ -1618,6 +1618,9 @@ ${surpriseText}
         // Win rate
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
+        // Days since last game (for comeback detection)
+        const comebackDays = player.daysSinceLastGame;
+        
         // Collect sentences with ACTUAL STATISTICS embedded
         const creativeOptions: string[] = [];
         

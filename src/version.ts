@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.61.1';
+export const APP_VERSION = '4.62.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,11 +14,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.61.1',
+    version: '4.62.0',
     date: '2026-02-05',
     changes: [
-      '🔧 Fixed "Generate Local Forecast" button - now actually generates local forecasts',
-      '📊 Button clears AI state and uses local algorithm when rate limited',
+      '🔧 Fixed undefined comebackDays in sentence generation - comeback sentences now work correctly',
+      '🔧 Fixed local forecast button to actually generate forecasts',
     ]
   },
   {
