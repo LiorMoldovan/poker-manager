@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.62.0';
+export const APP_VERSION = '4.63.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,11 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.62.0',
+    version: '4.63.0',
     date: '2026-02-05',
     changes: [
-      '🔧 Fixed undefined comebackDays in sentence generation - comeback sentences now work correctly',
-      '🔧 Fixed local forecast button to actually generate forecasts',
+      '📊 Every sentence now includes 2-3 real stats (ranking, win%, average, profit)',
+      '🎯 Stat-rich sentence filter: prefers sentences with 3+ numbers over generic ones',
+      '🚫 Removed all generic filler sentences (no more "X games of experience" without stats)',
+      '🔗 Forecast correlation now includes win%, ranking, and period average',
     ]
   },
   {
