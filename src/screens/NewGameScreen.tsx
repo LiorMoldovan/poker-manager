@@ -1874,10 +1874,15 @@ const NewGameScreen = () => {
                     <div style={{ marginTop: '0.5rem' }}>
                       <button
                         onClick={() => { 
-                          setShowForecast(false); 
+                          // Clear AI state and generate local forecast
+                          setAiForecasts(null);
                           setAiError(null);
                           setRetryCountdown(null);
                           if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+                          // Generate local forecasts
+                          const localForecasts = generateForecasts();
+                          setCachedForecasts(localForecasts);
+                          console.log('📊 Generated local forecast for', localForecasts.length, 'players');
                         }}
                         style={{
                           padding: '0.4rem 0.8rem',
@@ -1889,7 +1894,7 @@ const NewGameScreen = () => {
                           cursor: 'pointer'
                         }}
                       >
-                        Use Static Forecast Instead
+                        Generate Local Forecast Instead
                       </button>
                     </div>
                   </div>

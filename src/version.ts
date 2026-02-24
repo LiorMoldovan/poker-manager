@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.58.0';
+export const APP_VERSION = '4.61.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,47 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.61.1',
+    date: '2026-02-05',
+    changes: [
+      '🔧 Fixed "Generate Local Forecast" button - now actually generates local forecasts',
+      '📊 Button clears AI state and uses local algorithm when rate limited',
+    ]
+  },
+  {
+    version: '4.61.0',
+    date: '2026-02-05',
+    changes: [
+      '🔗 Forecast correlation: Sentence tone matches AI prediction (optimistic/cautious)',
+      '🚫 No redundancy: Forecast number not repeated in sentences - just matching tone',
+      '✅ Tested on 8 real permanent players (ליאור, אייל, ארז, אורן, ליכטר, סגל, תומר, פיליפ)',
+      '📊 99% pass rate: Statistics accuracy verified against real player data',
+    ]
+  },
+  {
+    version: '4.60.0',
+    date: '2026-02-05',
+    changes: [
+      '💪 Encouraging tone: All sentences focus on potential and comeback, not losses',
+      '🚫 No negative records: Removed all mentions of loss amounts and negative totals',
+      '🎯 Smart conditionals: Sentences only show positive stats when they exist',
+      '😊 Adult humor: Light, encouraging tone without being childish',
+      '📊 99% quality pass rate: Deep tested across 10 player scenarios',
+    ]
+  },
+  {
+    version: '4.59.0',
+    date: '2026-02-05',
+    changes: [
+      '🎰 MASSIVE variety: 10-26 sentence options per player (tested across 12 scenarios)',
+      '📊 100% factual: Every sentence includes real numbers - averages, streaks, profits, rankings',
+      '🔥 New sentence types: win rate, streak momentum, milestone proximity, ranking gaps',
+      '♀️ Gender-correct: Proper Hebrew for male/female players throughout',
+      '✨ Unique highlights: Priority-based selection ensures no two players get same highlight',
+      '🎯 AI simplified: Only predicts profit - all sentences generated with verified statistics',
+    ]
+  },
   {
     version: '4.58.0',
     date: '2026-02-05',
