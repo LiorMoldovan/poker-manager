@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.56.1';
+export const APP_VERSION = '4.57.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '4.57.0',
+    date: '2026-02-05',
+    changes: [
+      '🎯 Complete rewrite of forecast sentence system',
+      '📝 New: Each player gets unique "story type" (10 types: streak, last game, comeback, ranking, history, momentum, prediction, personality, challenge, rivalry)',
+      '🎨 Player index determines story type - guaranteed variety',
+      '🔢 All facts computed in code - no AI hallucinations',
+      '⚡ AI only handles profit predictions - text 100% code-generated',
+      '🇮🇱 Full Hebrew gender support throughout',
+    ]
+  },
   {
     version: '4.48.0',
     date: '2026-02-05',
