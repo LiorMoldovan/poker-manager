@@ -579,10 +579,6 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   return selected;
 };
 
-// Simple cache to reduce API calls (5 minute TTL)
-const forecastCache: { key: string; data: ForecastResult[]; timestamp: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
 /**
  * Generate AI-powered forecasts for selected players only
  */
@@ -594,21 +590,6 @@ export const generateAIForecasts = async (
   
   if (!apiKey) {
     throw new Error('NO_API_KEY');
-  }
-  
-  // Check cache - same players within 5 minutes = use cache
-  const cacheKey = players.map(p => p.name).sort().join(',');
-  const cached = localStorage.getItem('forecast_cache');
-  if (cached) {
-    try {
-      const { key, data, timestamp } = JSON.parse(cached);
-      if (key === cacheKey && Date.now() - timestamp < CACHE_TTL) {
-        console.log('📦 Using cached forecast (< 5 min old)');
-        return data;
-      }
-    } catch (e) {
-      // Invalid cache, continue
-    }
   }
 
   // Calculate ALL-TIME RECORDS for the group
@@ -1805,15 +1786,6 @@ ${surpriseText}
         });
       }
 
-      // Save to cache before returning
-      const cacheData = {
-        key: players.map(p => p.name).sort().join(','),
-        data: forecasts,
-        timestamp: Date.now()
-      };
-      localStorage.setItem('forecast_cache', JSON.stringify(cacheData));
-      console.log('💾 Cached forecast for 5 minutes');
-      
       return forecasts;
       
     } catch (fetchError) {
