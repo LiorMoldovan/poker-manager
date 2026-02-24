@@ -579,6 +579,10 @@ export const generateMilestones = (players: PlayerForecastData[]): MilestoneItem
   return selected;
 };
 
+// Simple cache to reduce API calls (5 minute TTL)
+const forecastCache: { key: string; data: ForecastResult[]; timestamp: number } | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Generate AI-powered forecasts for selected players only
  */
@@ -590,6 +594,21 @@ export const generateAIForecasts = async (
   
   if (!apiKey) {
     throw new Error('NO_API_KEY');
+  }
+  
+  // Check cache - same players within 5 minutes = use cache
+  const cacheKey = players.map(p => p.name).sort().join(',');
+  const cached = localStorage.getItem('forecast_cache');
+  if (cached) {
+    try {
+      const { key, data, timestamp } = JSON.parse(cached);
+      if (key === cacheKey && Date.now() - timestamp < CACHE_TTL) {
+        console.log('📦 Using cached forecast (< 5 min old)');
+        return data;
+      }
+    } catch (e) {
+      // Invalid cache, continue
+    }
   }
 
   // Calculate ALL-TIME RECORDS for the group
@@ -1579,7 +1598,7 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
         // ========== 7. ALWAYS USE CREATIVE SENTENCES ==========
-        // The AI keeps ignoring instructions, so we ALWAYS generate our own creative sentences
+        // Build a pool of ALL applicable sentences, then pick randomly
         console.log(`🎨 ${player.name}: Generating creative sentence`);
         
         const isFemale = player.isFemale;
@@ -1591,96 +1610,142 @@ ${surpriseText}
         const hot = isFemale ? 'חמה' : 'חם';
         const dangerous = isFemale ? 'מסוכנת' : 'מסוכן';
         const ready = isFemale ? 'מוכנה' : 'מוכן';
+        const knows = isFemale ? 'יודעת' : 'יודע';
+        const plays = isFemale ? 'משחקת' : 'משחק';
         
-        // Pick ONE creative sentence based on player's situation
+        // Collect ALL applicable sentences (not mutually exclusive!)
         const creativeOptions: string[] = [];
         
-        // Hot streak
+        // Hot streak (3+)
         if (actualStreak >= 3) {
           creativeOptions.push(
             `${actualStreak} ברצף! מי יעצור את הרכבת?`,
-            `הפורמה לוהטת, ${he} לא מתכוון לעצור.`,
-            `בענק! קשה להמר נגדו עכשיו.`,
-            `רצף חם, הביטחון בשיא.`
+            `הפורמה לוהטת, קשה לעצור.`,
+            `בענק! המומנטום איתו.`,
+            `רצף חם, ${he} בתנופה.`,
+            `${actualStreak} נצחונות, הביטחון בשמיים.`
           );
         }
-        // Cold streak  
-        else if (actualStreak <= -3) {
+        
+        // Cold streak (3+)
+        if (actualStreak <= -3) {
           creativeOptions.push(
             `חייב לשבור את הרצף השחור.`,
             `${Math.abs(actualStreak)} הפסדים, הלילה זה משתנה.`,
             `${looking} נקמה.`,
-            `הרצף הקשה חייב להיגמר.`
+            `הרצף חייב להיגמר מתישהו.`,
+            `התקופה קשה, אבל ${he} לוחם.`
           );
         }
-        // Big win last game
-        else if (wonLastGame && lastGameProfit > 80) {
+        
+        // Won last game
+        if (wonLastGame && lastGameProfit > 50) {
           creativeOptions.push(
-            `נצחון גדול אחרון, הביטחון ${his} בשיא.`,
+            `נצחון אחרון, הביטחון גבוה.`,
             `${hot} אחרי +${Math.round(lastGameProfit)}₪.`,
-            `אחרי ערב מוצלח, ${wants} עוד.`,
-            `הניצחון האחרון נתן לו כנפיים.`
+            `${wants} להמשיך את הסיפור הטוב.`,
+            `הערב האחרון נתן רוח גבית.`,
+            `מגיע עם חיוך מהפעם הקודמת.`
           );
         }
-        // Big loss last game
-        else if (lostLastGame && lastGameProfit < -80) {
+        
+        // Lost last game
+        if (lostLastGame && lastGameProfit < -50) {
           creativeOptions.push(
             `${looking} לתקן את הכאב.`,
             `${came} עם חשבון פתוח.`,
-            `אחרי ערב קשה, ${ready} לנקמה.`,
-            `ההפסד האחרון צורב, הלילה שונה.`
+            `${ready} לנקמה.`,
+            `ההפסד צורב, הלילה שונה.`,
+            `יש מה להוכיח אחרי הפעם הקודמת.`
           );
         }
+        
         // Leader
-        else if (rankTonight === 1) {
+        if (rankTonight === 1) {
           creativeOptions.push(
-            `על הכס, אבל כולם רודפים.`,
-            `${he} היעד של כולם הלילה.`,
+            `על הכס, כולם רודפים.`,
+            `${he} היעד של כולם.`,
             `מוביל, אבל אין מנוחה למלך.`,
-            `כולם רוצים להפיל את המלך.`
+            `כולם רוצים את הכתר.`,
+            `בראש, אבל הלחץ גדול.`
           );
         }
-        // Strong player
-        else if (player.avgProfit > 40) {
+        
+        // Top 3
+        if (rankTonight >= 2 && rankTonight <= 3) {
+          creativeOptions.push(
+            `קרוב לפסגה, ${wants} לטפס.`,
+            `במרחק נגיעה מהמקום הראשון.`,
+            `${plays} על הפודיום.`,
+            `בקרב על הצמרת.`
+          );
+        }
+        
+        // Strong history
+        if (player.avgProfit > 30) {
           creativeOptions.push(
             `שקט אבל קטלני.`,
             `תמיד ${dangerous} בשולחן.`,
-            `ההיסטוריה בצד ${his}.`,
-            `שחקן רווחי, לא לזלזל.`
+            `ההיסטוריה מדברת בעדו.`,
+            `שחקן רווחי, תמיד באים מוכנים אליו.`,
+            `${knows} לנצח כשזה חשוב.`
           );
         }
-        // Struggling player
-        else if (player.avgProfit < -20 && player.gamesPlayed >= 5) {
+        
+        // Struggling
+        if (player.avgProfit < -15 && player.gamesPlayed >= 5) {
           creativeOptions.push(
             `${looking} להפוך את המגמה.`,
-            `כל ערב הוא הזדמנות חדשה.`,
+            `כל ערב הוא הזדמנות.`,
             `ההיסטוריה לא קובעת, רק הלילה.`,
-            `${ready} להפתיע.`
+            `${ready} להפתיע את כולם.`,
+            `המזל חייב להשתנות.`
           );
         }
-        // Returning player (check comeback)
-        else if (comebackDays && comebackDays > 30) {
+        
+        // Returning after break
+        if (comebackDays && comebackDays > 20) {
           creativeOptions.push(
-            `חוזר אחרי הפסקה, צריך לחמם מנועים.`,
+            `חוזר אחרי הפסקה, צריך לחמם.`,
             `${comebackDays} ימים בחוץ, ${ready} לחזור.`,
-            `ההפסקה הייתה ארוכה, נראה מה יקרה.`,
-            `${came} רענן אחרי הפסקה.`
+            `ההפסקה הייתה ארוכה, נראה.`,
+            `${came} רענן אחרי הפסקה.`,
+            `חזר למשחק, השאלה אם גם הפורמה.`
           );
         }
-        // Default - neutral/mixed situations
-        else {
+        
+        // Many games experience
+        if (player.gamesPlayed >= 20) {
+          creativeOptions.push(
+            `ותיק, ${knows} את המשחק.`,
+            `הניסיון מדבר.`,
+            `לא מפתיעים אותו בקלות.`
+          );
+        }
+        
+        // Few games - newcomer
+        if (player.gamesPlayed <= 5) {
+          creativeOptions.push(
+            `עדיין לומד את השולחן.`,
+            `חדש יחסית, קשה לחזות.`,
+            `מעט ניסיון, הרבה פוטנציאל.`
+          );
+        }
+        
+        // If somehow no options (shouldn't happen), add defaults
+        if (creativeOptions.length === 0) {
           creativeOptions.push(
             `ערב חדש, הכל פתוח.`,
             `הקלפים יחליטו.`,
             `${ready} להפתיע.`,
             `יכול לקחת את הערב.`,
-            `אף פעם לא יודעים איתו.`
+            `אף פעם לא יודעים.`
           );
         }
         
-        // Pick a random option
+        // Pick a random option from ALL applicable ones
         correctedSentence = creativeOptions[Math.floor(Math.random() * creativeOptions.length)];
-        console.log(`✅ ${player.name}: "${correctedSentence}"`)
+        console.log(`✅ ${player.name}: "${correctedSentence}" (from ${creativeOptions.length} options)`)
         
         // ========== 8. GENERATE CREATIVE HIGHLIGHT ==========
         // Also replace highlight with something factual and short
@@ -1740,6 +1805,15 @@ ${surpriseText}
         });
       }
 
+      // Save to cache before returning
+      const cacheData = {
+        key: players.map(p => p.name).sort().join(','),
+        data: forecasts,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('forecast_cache', JSON.stringify(cacheData));
+      console.log('💾 Cached forecast for 5 minutes');
+      
       return forecasts;
       
     } catch (fetchError) {
