@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.57.1';
+export const APP_VERSION = '4.58.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,11 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '4.57.1',
+    version: '4.58.0',
     date: '2026-02-05',
     changes: [
-      '⏪ Rollback: Restored v4.56.1 (working version with AI-generated sentences)',
-      '❌ Reverted: Story type system was too minimal - sentences lacked statistics',
+      '📊 Rich sentences: Every sentence now includes actual statistics (averages, profits, rankings)',
+      '🎯 Highlight improvement: Shows most important fact with numbers (streak, last game, rank gap, etc.)',
+      '📈 Context-aware: Sentences include period stats, historical comparison, gaps to other players',
+      '🔢 Examples: "3 נצחונות ברצף! ממוצע +45₪ ב-5 משחקים אחרונים. מי יעצור אותו?"',
     ]
   },
   {
