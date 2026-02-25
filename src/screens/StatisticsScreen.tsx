@@ -516,8 +516,8 @@ const StatisticsScreen = () => {
         }
       });
       
-      // Minimum games to qualify = 20% of period games (min 3) - ensures they were ACTIVE
-      const minGames = Math.max(3, Math.ceil(periodGames.length * 0.2));
+      // Minimum games to qualify = 33% of period games - consistent with active players filter
+      const minGames = Math.ceil(periodGames.length * 0.33);
       
       // Filter to ACTIVE players (met min games) and sort by profit - return top 3
       return Object.values(playerProfits)
