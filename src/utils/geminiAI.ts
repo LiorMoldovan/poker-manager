@@ -1162,7 +1162,7 @@ export const generateAIForecasts = async (
     const lastGame = p.gameHistory[0];
     const lastGameResult = lastGame 
       ? (lastGame.profit > 0 ? `ניצח +${Math.round(lastGame.profit)}₪` : 
-         lastGame.profit < 0 ? `הפסיד ${Math.round(lastGame.profit)}₪` : 'יצא באפס')
+         lastGame.profit < 0 ? `הפסיד ${Math.abs(Math.round(lastGame.profit))}₪` : 'יצא באפס')
       : 'שחקן חדש';
     
     const actualStreak = p.currentStreak;
@@ -1494,15 +1494,16 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
-        // Remove negative shekel amounts (e.g. "-210₪", "הפסד של -672₪")
-        const negativePattern = /[-−]\s*\d+₪/g;
-        if (negativePattern.test(correctedSentence)) {
+        // Remove negative shekel amounts from sentence (safety net)
+        if (/[-−]\s*\d+₪/.test(correctedSentence)) {
           console.log(`🔧 ${player.name}: Stripping negative amounts from sentence`);
           correctedSentence = correctedSentence
             .replace(/הפסד\s*(כואב\s*)?(של\s*)?[-−]\s*\d+₪/g, 'הפסד במשחק הקודם')
+            .replace(/ממוצע\s*(של\s*)?[-−]\s*(\d+)₪/g, 'ממוצע היסטורי')
+            .replace(/סה"כ\s*[-−]\s*\d+₪/g, '')
             .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
             .replace(/[-−]\s*\d+₪/g, '')
-            .replace(/\s+/g, ' ').trim();
+            .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         }
         
         // ========== 7. VALIDATE AI SENTENCE (fallback if empty/short) ==========
