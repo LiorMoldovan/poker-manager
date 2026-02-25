@@ -1260,7 +1260,7 @@ ${surpriseText}
 • אסור להזכיר סה"כ הפסד מצטבר או הפסד כולל (לא סה"כ מינוס X₪). הפסד במשחק אחרון - מותר
 • דירוגים: השתמש רק בטבלת התקופה (⭐) - לא "מוביל" אם המקום הוא לא #1 בתקופה
 • כל שחקן חייב לקבל זווית שונה - עקוב אחרי הזווית המוצעת בכרטיס
-• גיוון סטטיסטי: אסור לפתוח 2 משפטים עם אותו סוג מספר! תחלוף בין: רצף, ממוצע, משחק אחרון, דירוג, פער, ימי היעדרות, אחוז נצחונות
+• גיוון סטטיסטי חובה! כל שחקן חייב לפתוח את המשפט עם מידע שונה. אם שחקן אחד פותח עם רצף, השני עם משחק אחרון, השלישי עם פער דירוג, הרביעי עם אחוז נצחונות וכו'. אסור ש-2 משפטים יתחילו באותה מילה או תבנית!
 • התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
 • highlight ו-sentence חייבים להיות עקביים - אותו דירוג, אותן עובדות!
 • הפתעה (isSurprise=true) רק כשהצפי חיובי משמעותית (לפחות +40₪)
@@ -1291,7 +1291,7 @@ ${surpriseText}
 • "הפסיד 200₪ במשחק האחרון" (מוקד שלילי)
 • "צפוי להרוויח 130₪ הערב" (חוזר על ה-expectedProfit)
 • "שחקן טוב עם ממוצע חיובי" (משעמם, לא ספציפי)
-• לכתוב לכולם "ממוצע +X₪ בתקופה" (חזרה על אותו תבנית = משעמם!)
+• לכתוב לכולם באותה תבנית כמו "ממוצע +X₪ בתקופה" או "ממוקם במקום X" (חזרה על אותו מבנה משפט = משעמם!)
 
 📤 פלט JSON בלבד:
 [{"name":"שם","expectedProfit":מספר,"highlight":"כותרת קצרה","sentence":"משפט בעברית","isSurprise":false}]`;
@@ -1398,6 +1398,7 @@ ${surpriseText}
         const lostLastGame = lastGameProfit < 0;
         
         let correctedSentence = forecast.sentence || '';
+        let correctedHighlight = forecast.highlight || '';
         let hadErrors = false;
         let errorDetails: string[] = [];
         
@@ -1440,6 +1441,18 @@ ${surpriseText}
           // Remove false #1 claims
           correctedSentence = correctedSentence
             .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
+            .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
+            .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
+            .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
+            .replace(/#1\b/g, `#${rankTonight}`);
+        }
+        
+        // ========== 2b. FIX RANKING ERRORS IN HIGHLIGHT ==========
+        if ((correctedHighlight.includes('מוביל') || correctedHighlight.includes('בראש') || correctedHighlight.includes('מקום ראשון') || correctedHighlight.includes('מקום 1') || correctedHighlight.includes('#1') || correctedHighlight.includes('ראשון')) && rankTonight !== 1) {
+          errorDetails.push(`highlight rank: claimed #1 but actually #${rankTonight}`);
+          hadErrors = true;
+          correctedHighlight = correctedHighlight
+            .replace(/מוביל את הטבלה/g, `מקום ${rankTonight} בטבלה`)
             .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
             .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
             .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
@@ -1535,7 +1548,7 @@ ${surpriseText}
         return {
           ...forecast,
           sentence: correctedSentence,
-          highlight: forecast.highlight || ''
+          highlight: correctedHighlight
         };
       });
       
