@@ -1162,7 +1162,7 @@ export const generateAIForecasts = async (
     const lastGame = p.gameHistory[0];
     const lastGameResult = lastGame 
       ? (lastGame.profit > 0 ? `ניצח +${Math.round(lastGame.profit)}₪` : 
-         lastGame.profit < 0 ? `הפסיד ${Math.abs(Math.round(lastGame.profit))}₪` : 'יצא באפס')
+         lastGame.profit < 0 ? `הפסיד ${Math.round(lastGame.profit)}₪` : 'יצא באפס')
       : 'שחקן חדש';
     
     const actualStreak = p.currentStreak;
@@ -1256,7 +1256,7 @@ ${surpriseText}
 ✍️ כללי sentence (קריטי!):
 • כל משפט חייב להכיל 2-3 מספרים אמיתיים מכרטיס השחקן בלבד
 • אסור בשום פנים להזכיר את מספר ה-expectedProfit (הוא מוצג בנפרד!)
-• אסור לכתוב מספרים שליליים (לא מינוס, לא הפסד של X₪, לא סה"כ הפסד). תמיד מסגרת חיובית!
+• אסור להזכיר סה"כ הפסד מצטבר או הפסד כולל (לא סה"כ מינוס X₪). הפסד במשחק אחרון - מותר
 • דירוגים: השתמש רק בטבלת התקופה (⭐) - לא "מוביל" אם המקום הוא לא #1 בתקופה
 • כל שחקן חייב לקבל זווית שונה - עקוב אחרי הזווית המוצעת בכרטיס
 • התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
@@ -1494,17 +1494,12 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
-        // Remove negative shekel amounts from sentence (safety net)
-        if (/[-−]\s*\d+₪/.test(correctedSentence)) {
-          console.log(`🔧 ${player.name}: Stripping negative amounts from sentence`);
-          correctedSentence = correctedSentence
-            .replace(/הפסד\s*(כואב\s*)?(של\s*)?[-−]\s*\d+₪/g, 'הפסד במשחק הקודם')
-            .replace(/ממוצע\s*(של\s*)?[-−]\s*(\d+)₪/g, 'ממוצע היסטורי')
-            .replace(/סה"כ\s*[-−]\s*\d+₪/g, '')
-            .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
-            .replace(/[-−]\s*\d+₪/g, '')
-            .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
-        }
+        // Strip large cumulative/total losses from sentence (not recent game results)
+        correctedSentence = correctedSentence
+          .replace(/סה"כ\s*(הפסד\s*(של\s*)?)?[-−]\s*\d+₪/g, '')
+          .replace(/(הפסד|מינוס)\s*(כולל|היסטורי|מצטבר)\s*(של\s*)?[-−]?\s*\d+₪/g, '')
+          .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
+          .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         
         // ========== 7. VALIDATE AI SENTENCE (fallback if empty/short) ==========
         const isFemale = player.isFemale;
