@@ -1276,13 +1276,13 @@ ${surpriseText}
 • "סוס אפל, פורמה אחרונה חיובית"
 כל highlight חייב להיות שונה מהאחרים!
 
-✅ דוגמאות sentence טובות:
-• רצף: "4 ברצף ועם ממוצע +42₪ בתקופה - מי יעצור את הרכבת הזו?"
+✅ דוגמאות sentence טובות (שים לב - כל אחת משתמשת בנתון מרכזי אחר!):
+• רצף: "4 ברצף! עם רוח גבית של +120₪ במשחק האחרון, מי יעצור את הרכבת?"
 • קרב דירוג: "רק 85₪ מהפסגה! אחרי +120₪ אחרון, המקום הראשון בטווח נגיעה"
-• קאמבק: "חוזר אחרי 45 ימים עם ממוצע היסטורי +15₪. חלודה או רעב?"
-• פורמה: "55% נצחונות ב-80 משחקים, אבל הפורמה? +67₪ ממוצע. תיזהרו"
+• קאמבק: "חוזר אחרי 45 ימים - בפעם האחרונה הרוויח +80₪. חלודה או רעב?"
+• פורמה: "55% נצחונות ב-80 משחקים, והפורמה רק עולה. תיזהרו ממנו"
 • אבן דרך: "+920₪ כולל. 80₪ מהאלף - הערב הזה יכול להיות היסטורי"
-• סוס אפל: "ממוצע היסטורי שלילי, אבל +45₪ ממוצע אחרון. מישהו כאן מתעורר"
+• סוס אפל: "ניסיון היסטורי לא מזהיר, אבל +45₪ אחרון מרמזים על שינוי כיוון"
 • ותיק: "120 משחקים ו-58% נצחונות. הניסיון הזה לא סתם - הוא מסוכן"
 
 ❌ דוגמאות רעות (אסור!):
@@ -1388,11 +1388,9 @@ ${surpriseText}
         const halfRankData = globalRankings?.currentHalf.rankings.find(r => r.name === player.name);
         const rankTonight = halfRankData?.rank || (
           [...players].sort((a, b) => {
-            const aGames = getHalfGames(a, currentYear, currentHalf);
-            const bGames = getHalfGames(b, currentYear, currentHalf);
-            const aAvg = aGames.length > 0 ? aGames.reduce((s, g) => s + g.profit, 0) / aGames.length : a.avgProfit;
-            const bAvg = bGames.length > 0 ? bGames.reduce((s, g) => s + g.profit, 0) / bGames.length : b.avgProfit;
-            return bAvg - aAvg;
+            const aProfit = getHalfGames(a, currentYear, currentHalf).reduce((s, g) => s + g.profit, 0);
+            const bProfit = getHalfGames(b, currentYear, currentHalf).reduce((s, g) => s + g.profit, 0);
+            return bProfit - aProfit;
           }).findIndex(p => p.name === player.name) + 1
         );
         
@@ -1456,7 +1454,7 @@ ${surpriseText}
         }
         
         // ========== 2b. FIX RANKING ERRORS IN HIGHLIGHT ==========
-        if ((correctedHighlight.includes('מוביל') || correctedHighlight.includes('בראש') || correctedHighlight.includes('מקום ראשון') || correctedHighlight.includes('מקום 1') || correctedHighlight.includes('#1') || correctedHighlight.includes('ראשון')) && rankTonight !== 1) {
+        if ((correctedHighlight.includes('מוביל') || correctedHighlight.includes('בראש') || correctedHighlight.includes('מקום ראשון') || correctedHighlight.includes('מקום 1') || correctedHighlight.includes('#1')) && rankTonight !== 1) {
           errorDetails.push(`highlight rank: claimed #1 but actually #${rankTonight}`);
           hadErrors = true;
           correctedHighlight = correctedHighlight
