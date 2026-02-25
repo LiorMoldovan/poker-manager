@@ -1245,8 +1245,9 @@ ${surpriseText}
 
 📝 מה לכתוב לכל שחקן:
 1. expectedProfit - חיזוי הרווח/הפסד בש"ח (סכום כולם = 0 בדיוק!)
-2. sentence - משפט תחזית אחד בעברית (15-30 מילים)
-3. isSurprise - true רק אם חוזים הפתעה חיובית (שחקן חלש שינצח)
+2. highlight - כותרת קצרה ומעניינת (3-6 מילים) שתופסת את העין - העובדה הכי מעניינת על השחקן
+3. sentence - משפט תחזית אחד בעברית (15-30 מילים)
+4. isSurprise - true רק אם חוזים הפתעה חיובית (שחקן חלש שינצח)
 
 🎯 כללי expectedProfit:
 • השתמש בצפי המוצע כבסיס, התאם לפי ניתוח שלך
@@ -1262,7 +1263,18 @@ ${surpriseText}
 • התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
 • הפתעה (isSurprise=true) רק כשהצפי חיובי משמעותית (לפחות +40₪)
 
-✅ דוגמאות טובות:
+🏷️ דוגמאות highlight טובות:
+• "מוביל את הטבלה עם ממוצע +97₪"
+• "נצחון ענק של +345₪ אחרון!"
+• "חוזר אחרי 143 ימים של הפסקה"
+• "5 ברצף! רכבת שלא נעצרת"
+• "רק 77₪ מהמקום הראשון"
+• "פורמה מטורפת, ממוצע +82₪"
+• "ותיק מנוסה עם 156 משחקים"
+• "סוס אפל, פורמה אחרונה חיובית"
+כל highlight חייב להיות שונה מהאחרים!
+
+✅ דוגמאות sentence טובות:
 • רצף: "4 ברצף ועם ממוצע +42₪ בתקופה - מי יעצור את הרכבת הזו?"
 • קרב דירוג: "רק 85₪ מהפסגה! אחרי +120₪ אחרון, המקום הראשון בטווח נגיעה"
 • קאמבק: "חוזר אחרי 45 ימים עם ממוצע היסטורי +15₪. חלודה או רעב?"
@@ -1279,7 +1291,7 @@ ${surpriseText}
 • "שחקן טוב עם ממוצע חיובי" (משעמם, לא ספציפי)
 
 📤 פלט JSON בלבד:
-[{"name":"שם","expectedProfit":מספר,"sentence":"משפט בעברית","isSurprise":false}]`;
+[{"name":"שם","expectedProfit":מספר,"highlight":"כותרת קצרה","sentence":"משפט בעברית","isSurprise":false}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1533,53 +1545,17 @@ ${surpriseText}
         
         // (Section 7 old code-generated sentences removed - AI generates sentences now)
         
-        // ========== 8. GENERATE HIGHLIGHT BASED ON ASSIGNED ANGLE ==========
-        let creativeHighlight = '';
-        const playerAngle = playerAngles.find(a => a.name === player.name)?.angle || 'default';
-        const playerWinRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
-        
-        switch (playerAngle) {
-          case 'streak':
-            creativeHighlight = actualStreak >= 3 
-              ? `🔥 ${actualStreak} נצחונות ברצף` 
-              : (isFemale ? `מחפשת קאמבק 💪` : `מחפש קאמבק 💪`);
-            break;
-          case 'ranking_battle':
-            creativeHighlight = gapToAbove > 0 ? `${gapToAbove}₪ מהמקום הבא 🎯` : `קרב על הדירוג 🎯`;
-            break;
-          case 'comeback':
-            creativeHighlight = isFemale 
-              ? `חוזרת אחרי ${comebackDays} ימים 🔙` 
-              : `חוזר אחרי ${comebackDays} ימים 🔙`;
-            break;
-          case 'milestone': {
-            const milestones = [500, 1000, 1500, 2000];
-            const near = milestones.find(m => m - Math.round(player.totalProfit) > 0 && m - Math.round(player.totalProfit) <= 150);
-            creativeHighlight = near ? `${near - Math.round(player.totalProfit)}₪ מ-${near}₪ 🏅` : `אבן דרך קרובה 🏅`;
-            break;
-          }
-          case 'form':
-            creativeHighlight = periodAvg >= 0 
-              ? `ממוצע תקופה: +${periodAvg}₪ 📈`
-              : (isFemale ? `מחפשת שיפור 📊` : `מחפש שיפור 📊`);
-            break;
-          case 'big_last_game':
-            creativeHighlight = wonLastGame 
-              ? `+${Math.round(lastGameProfit)}₪ אחרון 💰` 
-              : (isFemale ? `מוכנה לחזרה 💪` : `מוכן לחזרה 💪`);
-            break;
-          case 'veteran':
-            creativeHighlight = `${player.gamesPlayed} משחקים, ${playerWinRate}% נצחונות 🎖️`;
-            break;
-          case 'dark_horse':
-            creativeHighlight = `הפתעה אפשרית ⚡`;
-            break;
-          default:
-            if (wonLastGame && lastGameProfit > 50) creativeHighlight = `רווח +${Math.round(lastGameProfit)}₪ אחרון`;
-            else if (rankTonight <= 3) creativeHighlight = `מקום ${rankTonight} בתקופה`;
-            else if (playerWinRate >= 55) creativeHighlight = `${playerWinRate}% נצחונות`;
-            else creativeHighlight = `${player.gamesPlayed} משחקי ניסיון`;
-            break;
+        // ========== 8. USE AI HIGHLIGHT (fallback if empty) ==========
+        let creativeHighlight = forecast.highlight || '';
+        if (!creativeHighlight || creativeHighlight.length < 3 || creativeHighlight === 'X') {
+          if (actualStreak >= 3) creativeHighlight = `${actualStreak} נצחונות ברצף`;
+          else if (wonLastGame && lastGameProfit > 80) creativeHighlight = `+${Math.round(lastGameProfit)}₪ אחרון`;
+          else if (comebackDays && comebackDays >= 20) creativeHighlight = `חוזר אחרי ${comebackDays} ימים`;
+          else if (rankTonight <= 3) creativeHighlight = `מקום ${rankTonight} בתקופה`;
+          else creativeHighlight = `${player.gamesPlayed} משחקים`;
+          console.log(`⚠️ ${player.name}: Used fallback highlight (AI was empty)`);
+        } else {
+          console.log(`✅ ${player.name}: AI highlight: "${creativeHighlight}"`);
         }
         
         return {
