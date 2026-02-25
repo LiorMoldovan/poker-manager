@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '4.63.0';
+export const APP_VERSION = '5.0.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.0.0',
+    date: '2026-02-05',
+    changes: [
+      '🤖 AI Forecast Complete Overhaul - AI generates both profit prediction AND narrative sentences',
+      '📝 Rich prompt with structured stat cards, role, rules, good/bad examples in Hebrew',
+      '🎭 Unique narrative angle per player (streak, ranking battle, comeback, milestone, form, veteran, dark horse)',
+      '⚡ Quality-first model order: gemini-2.5-flash > 2.0-flash > lite variants',
+      '🎨 Higher creativity settings (temperature 0.7, topK 40, topP 0.95)',
+      '🧹 Removed 300+ lines of code-generated sentence templates',
+      '🛡️ Fallback sentence from stat card if AI returns empty/short response',
+      '✅ Code-generated highlights kept for factual accuracy',
+    ]
+  },
   {
     version: '4.63.0',
     date: '2026-02-05',
