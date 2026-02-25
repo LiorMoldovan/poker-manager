@@ -1133,25 +1133,25 @@ export const generateAIForecasts = async (
 
     if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
       const dir = p.currentStreak > 0 ? `${p.currentStreak} נצחונות ברצף` : `${Math.abs(p.currentStreak)} הפסדים - מחפש קאמבק`;
-      assign('streak', dir);
+      assign('streak', `${dir} ← התמקד בנתון הרצף, לא בממוצע!`);
     } else if (gapToAbove <= 120 && gapToAbove > 0 && halfRank > 1 && canUse('ranking_battle')) {
       const aboveName = tonightRanking[aboveIdx]?.name || '';
-      assign('ranking_battle', `${gapToAbove}₪ ממקום ${halfRank - 1} (${aboveName})`);
+      assign('ranking_battle', `${gapToAbove}₪ ממקום ${halfRank - 1} (${aboveName}) ← התמקד בפער הדירוג, לא בממוצע!`);
     } else if (p.daysSinceLastGame >= 20 && canUse('comeback')) {
-      assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים`);
+      assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים ← התמקד בימי ההיעדרות, לא בממוצע!`);
     } else if (nearMilestone && canUse('milestone')) {
-      assign('milestone', `${nearMilestone - Math.round(p.totalProfit)}₪ מ-${nearMilestone}₪ כולל`);
+      assign('milestone', `${nearMilestone - Math.round(p.totalProfit)}₪ מ-${nearMilestone}₪ כולל ← התמקד באבן הדרך, לא בממוצע!`);
     } else if (currentHalfGames.length >= 3 && Math.abs(periodAvg - allTimeAvg) > 20 && canUse('form')) {
       const dir = periodAvg > allTimeAvg ? 'פורמה עולה' : 'פורמה יורדת';
-      assign('form', `${dir}: ממוצע תקופה ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪`);
+      assign('form', `${dir}: תקופה ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪ ← התמקד בהשוואת המגמה!`);
     } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
-      assign('big_last_game', `משחק אחרון: ${lastGameProfit >= 0 ? '+' : ''}${Math.round(lastGameProfit)}₪`);
+      assign('big_last_game', `משחק אחרון: ${lastGameProfit >= 0 ? '+' : ''}${Math.round(lastGameProfit)}₪ ← התמקד בתוצאת המשחק האחרון, לא בממוצע!`);
     } else if (p.gamesPlayed >= 30 && canUse('veteran')) {
-      assign('veteran', `ותיק: ${p.gamesPlayed} משחקים, ${winRate}% נצחונות`);
+      assign('veteran', `ותיק: ${p.gamesPlayed} משחקים, ${winRate}% נצחונות ← התמקד בניסיון ואחוז נצחונות, לא בממוצע!`);
     } else if (p.avgProfit < -5 && periodAvg > 10 && canUse('dark_horse')) {
-      assign('dark_horse', `היסטוריה שלילית אבל פורמה אחרונה חיובית`);
+      assign('dark_horse', `היסטוריה שלילית אבל פורמה חיובית ← התמקד בשינוי המגמה, לא בממוצע!`);
     } else {
-      assign('default', `${p.gamesPlayed} משחקים, ${winRate}% נצחונות`);
+      assign('default', `${p.gamesPlayed} משחקים, ${winRate}% נצחונות ← התמקד באחוז נצחונות או תוצאה אחרונה, לא בממוצע!`);
     }
   });
 
@@ -1259,8 +1259,8 @@ ${surpriseText}
 • אסור בשום פנים להזכיר את מספר ה-expectedProfit (הוא מוצג בנפרד!)
 • אסור להזכיר סה"כ הפסד מצטבר או הפסד כולל (לא סה"כ מינוס X₪). הפסד במשחק אחרון - מותר
 • דירוגים: השתמש רק בטבלת התקופה (⭐) - לא "מוביל" אם המקום הוא לא #1 בתקופה
-• כל שחקן חייב לקבל זווית שונה - עקוב אחרי הזווית המוצעת בכרטיס
-• גיוון סטטיסטי חובה! כל שחקן חייב לפתוח את המשפט עם מידע שונה. אם שחקן אחד פותח עם רצף, השני עם משחק אחרון, השלישי עם פער דירוג, הרביעי עם אחוז נצחונות וכו'. אסור ש-2 משפטים יתחילו באותה מילה או תבנית!
+• כל שחקן חייב להתמקד בנתון השונה שמצוין בזווית שלו - זה הנתון המרכזי של המשפט! אסור להשתמש ב"ממוצע" כנתון מרכזי ליותר משחקן אחד!
+• גיוון נתונים: אם שחקן אחד מדבר על רצף, השני על משחק אחרון, השלישי על פער דירוג, הרביעי על אחוז נצחונות. כל שחקן = נתון מרכזי אחר!
 • התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
 • highlight ו-sentence חייבים להיות עקביים - אותו דירוג, אותן עובדות!
 • הפתעה (isSurprise=true) רק כשהצפי חיובי משמעותית (לפחות +40₪)
