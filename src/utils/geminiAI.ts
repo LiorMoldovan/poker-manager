@@ -1514,22 +1514,8 @@ ${surpriseText}
           .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         
         // ========== 7. VALIDATE AI SENTENCE (fallback if empty/short) ==========
-        const isFemale = player.isFemale;
         const allTimeAvg = Math.round(player.avgProfit);
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
-        const comebackDays = player.daysSinceLastGame;
-        
-        const currentHalfGames = player.gameHistory.filter(g => {
-          const d = parseGameDate(g.date);
-          const halfStart = currentHalf === 1 ? 0 : 6;
-          return d.getFullYear() === currentYear && d.getMonth() >= halfStart && d.getMonth() < halfStart + 6;
-        });
-        const periodGames = currentHalfGames.length;
-        const periodAvg = periodGames > 0 ? Math.round(currentHalfGames.reduce((sum, g) => sum + g.profit, 0) / periodGames) : 0;
-        
-        const sortedPlayers = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
-        const gapToAbove = rankTonight > 1 ? Math.round(sortedPlayers[rankTonight - 2].totalProfit - player.totalProfit) : 0;
-        const gapToBelow = rankTonight < players.length ? Math.round(player.totalProfit - sortedPlayers[rankTonight].totalProfit) : 0;
         
         // Use AI sentence - only generate fallback if AI sentence is missing or too short
         if (!correctedSentence || correctedSentence.length < 10 || correctedSentence === 'X') {
@@ -1543,25 +1529,10 @@ ${surpriseText}
           console.log(`✅ ${player.name}: AI sentence: "${correctedSentence}"`);
         }
         
-        // (Section 7 old code-generated sentences removed - AI generates sentences now)
-        
-        // ========== 8. USE AI HIGHLIGHT (fallback if empty) ==========
-        let creativeHighlight = forecast.highlight || '';
-        if (!creativeHighlight || creativeHighlight.length < 3 || creativeHighlight === 'X') {
-          if (actualStreak >= 3) creativeHighlight = `${actualStreak} נצחונות ברצף`;
-          else if (wonLastGame && lastGameProfit > 80) creativeHighlight = `+${Math.round(lastGameProfit)}₪ אחרון`;
-          else if (comebackDays && comebackDays >= 20) creativeHighlight = `חוזר אחרי ${comebackDays} ימים`;
-          else if (rankTonight <= 3) creativeHighlight = `מקום ${rankTonight} בתקופה`;
-          else creativeHighlight = `${player.gamesPlayed} משחקים`;
-          console.log(`⚠️ ${player.name}: Used fallback highlight (AI was empty)`);
-        } else {
-          console.log(`✅ ${player.name}: AI highlight: "${creativeHighlight}"`);
-        }
-        
         return {
           ...forecast,
           sentence: correctedSentence,
-          highlight: creativeHighlight
+          highlight: forecast.highlight || ''
         };
       });
       
