@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.0.0';
+export const APP_VERSION = '5.1.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.1.0',
+    date: '2026-02-05',
+    changes: [
+      '🎭 Highlights now match assigned angle (no more repetitive "פורמה" for everyone)',
+      '📊 Stat cards label rankings clearly (⭐ period table vs all-time) to prevent AI confusion',
+      '🚫 Stronger no-negative-numbers rule + post-processing strips negative ₪ amounts from sentences',
+      '🎯 Rankings instruction: AI only says "מוביל" if player is actually #1 in period table',
+      '⚡ Surprise flag only when forecast is +40₪ or more',
+      '🔙 Comeback threshold lowered from 30 to 20 days',
+    ]
+  },
   {
     version: '5.0.0',
     date: '2026-02-05',

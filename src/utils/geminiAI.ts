@@ -1137,7 +1137,7 @@ export const generateAIForecasts = async (
     } else if (gapToAbove <= 120 && gapToAbove > 0 && halfRank > 1 && canUse('ranking_battle')) {
       const aboveName = tonightRanking[aboveIdx]?.name || '';
       assign('ranking_battle', `${gapToAbove}₪ ממקום ${halfRank - 1} (${aboveName})`);
-    } else if (p.daysSinceLastGame >= 30 && canUse('comeback')) {
+    } else if (p.daysSinceLastGame >= 20 && canUse('comeback')) {
       assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים`);
     } else if (nearMilestone && canUse('milestone')) {
       assign('milestone', `${nearMilestone - Math.round(p.totalProfit)}₪ מ-${nearMilestone}₪ כולל`);
@@ -1213,19 +1213,19 @@ export const generateAIForecasts = async (
     lines.push(`משחק אחרון: ${lastGameResult} (${lastGame?.date || 'N/A'})`);
     lines.push(`רצף: ${streakText}`);
     if (periodGames.length > 0) {
-      lines.push(`תקופה (${periodLabel}): ${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪, מקום #${halfRank} מתוך ${halfTotalActive}`);
+      lines.push(`⭐ טבלת ${periodLabel}: מקום #${halfRank} מתוך ${halfTotalActive}, ${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪`);
     }
-    lines.push(`היסטוריה: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
-    if (allTimeRank > 0 && allTimeRank <= 5) {
-      lines.push(`דירוג כללי: #${allTimeRank} מתוך ${allTimeTotalActive}`);
+    lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
+    if (allTimeRank > 0 && allTimeRank <= 3) {
+      lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
     }
     if (gapAbove > 0 && halfRank > 1) {
-      lines.push(`פער: ${gapAbove}₪ מאחורי מקום ${halfRank - 1} (${aboveName})`);
+      lines.push(`פער בטבלת ${periodLabel}: ${gapAbove}₪ מאחורי מקום ${halfRank - 1} (${aboveName})`);
     }
     if (gapBelow > 0 && belowName) {
-      lines.push(`יתרון: ${gapBelow}₪ על מקום ${halfRank + 1} (${belowName})`);
+      lines.push(`יתרון בטבלת ${periodLabel}: ${gapBelow}₪ על מקום ${halfRank + 1} (${belowName})`);
     }
-    if (p.daysSinceLastGame >= 30) {
+    if (p.daysSinceLastGame >= 20) {
       lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
     }
     lines.push(`זווית מוצעת: ${angle?.angle || 'default'} - ${angle?.angleHint || ''}`);
@@ -1256,10 +1256,11 @@ ${surpriseText}
 ✍️ כללי sentence (קריטי!):
 • כל משפט חייב להכיל 2-3 מספרים אמיתיים מכרטיס השחקן בלבד
 • אסור בשום פנים להזכיר את מספר ה-expectedProfit (הוא מוצג בנפרד!)
-• אסור להזכיר הפסדים גדולים או סכומים שליליים (רווחים - כן, הפסדים - לא)
-• כל שחקן חייב לקבל זווית שונה (רצף, קרב דירוג, קאמבק, אבן דרך, פורמה, וכו')
-• התאם את הטון לכיוון החיזוי: חיזוי חיובי = ביטחון, חיזוי שלילי = אתגר/תקווה
-• הזווית המוצעת בכרטיס היא המלצה - עקוב אחריה
+• אסור לכתוב מספרים שליליים (לא מינוס, לא הפסד של X₪, לא סה"כ הפסד). תמיד מסגרת חיובית!
+• דירוגים: השתמש רק בטבלת התקופה (⭐) - לא "מוביל" אם המקום הוא לא #1 בתקופה
+• כל שחקן חייב לקבל זווית שונה - עקוב אחרי הזווית המוצעת בכרטיס
+• התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
+• הפתעה (isSurprise=true) רק כשהצפי חיובי משמעותית (לפחות +40₪)
 
 ✅ דוגמאות טובות:
 • רצף: "4 ברצף ועם ממוצע +42₪ בתקופה - מי יעצור את הרכבת הזו?"
@@ -1487,11 +1488,22 @@ ${surpriseText}
           }
         }
         
-        // ========== 6. CLEAN UP BROKEN TEXT ==========
+        // ========== 6. CLEAN UP BROKEN TEXT + STRIP NEGATIVES ==========
         correctedSentence = correctedSentence.replace(/\s+/g, ' ').trim();
         correctedSentence = correctedSentence.replace(/,\s*,/g, ',');
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
+        
+        // Remove negative shekel amounts (e.g. "-210₪", "הפסד של -672₪")
+        const negativePattern = /[-−]\s*\d+₪/g;
+        if (negativePattern.test(correctedSentence)) {
+          console.log(`🔧 ${player.name}: Stripping negative amounts from sentence`);
+          correctedSentence = correctedSentence
+            .replace(/הפסד\s*(כואב\s*)?(של\s*)?[-−]\s*\d+₪/g, 'הפסד במשחק הקודם')
+            .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
+            .replace(/[-−]\s*\d+₪/g, '')
+            .replace(/\s+/g, ' ').trim();
+        }
         
         // ========== 7. VALIDATE AI SENTENCE (fallback if empty/short) ==========
         const isFemale = player.isFemale;
@@ -1525,50 +1537,53 @@ ${surpriseText}
         
         // (Section 7 old code-generated sentences removed - AI generates sentences now)
         
-        // ========== 8. GENERATE HIGHLIGHT WITH KEY FACT ==========
-        // Highlight = most important/interesting fact for this player
+        // ========== 8. GENERATE HIGHLIGHT BASED ON ASSIGNED ANGLE ==========
         let creativeHighlight = '';
-        
-        // Win rate for some highlights
+        const playerAngle = playerAngles.find(a => a.name === player.name)?.angle || 'default';
         const playerWinRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
-        // Priority order: positive stats first, then neutral, avoid negative framing
-        if (actualStreak >= 3) {
-          creativeHighlight = `🔥 ${actualStreak} נצחונות ברצף`;
-        } else if (wonLastGame && lastGameProfit > 100) {
-          creativeHighlight = `+${Math.round(lastGameProfit)}₪ אחרון 💰`;
-        } else if (rankTonight === 1) {
-          creativeHighlight = `מוביל: +${Math.round(player.totalProfit)}₪ 👑`;
-        } else if (rankTonight === 2 && gapToAbove > 0 && gapToAbove <= 100) {
-          creativeHighlight = `${gapToAbove}₪ מהפסגה 🎯`;
-        } else if (actualStreak === 2) {
-          creativeHighlight = `2 נצחונות ברצף ✨`;
-        } else if (periodGames >= 3 && periodAvg > allTimeAvg + 25) {
-          creativeHighlight = `פורמה: +${periodAvg}₪ 📈`;
-        } else if (comebackDays && comebackDays >= 30) {
-          creativeHighlight = isFemale ? `חוזרת אחרי ${comebackDays} ימים 🔙` : `חוזר אחרי ${comebackDays} ימים 🔙`;
-        } else if (playerWinRate >= 60 && player.gamesPlayed >= 10) {
-          creativeHighlight = `${playerWinRate}% נצחונות 🏆`;
-        } else if (playerWinRate >= 50 && player.gamesPlayed >= 10) {
-          creativeHighlight = `${playerWinRate}% נצחונות`;
-        } else if (wonLastGame && lastGameProfit > 0) {
-          creativeHighlight = `+${Math.round(lastGameProfit)}₪ אחרון`;
-        } else if (player.totalProfit > 0 && player.avgProfit > 20) {
-          creativeHighlight = `ממוצע +${allTimeAvg}₪`;
-        } else if (rankTonight <= 3) {
-          creativeHighlight = `מקום ${rankTonight}`;
-        } else if (player.totalProfit > 0) {
-          creativeHighlight = `+${Math.round(player.totalProfit)}₪ כולל`;
-        } else if (player.gamesPlayed >= 20) {
-          creativeHighlight = `ותיק: ${player.gamesPlayed} משחקים`;
-        } else if (actualStreak <= -3 && allTimeAvg >= 0) {
-          // For cold streak, focus on potential comeback instead
-          creativeHighlight = isFemale ? `מוכנה לחזרה 💪` : `מוכן לחזרה 💪`;
-        } else if (player.totalProfit < 0 && player.totalProfit > -150) {
-          // Close to positive - encouraging
-          creativeHighlight = `${Math.abs(Math.round(player.totalProfit))}₪ מאיזון`;
-        } else {
-          creativeHighlight = `${player.gamesPlayed} משחקי ניסיון`;
+        switch (playerAngle) {
+          case 'streak':
+            creativeHighlight = actualStreak >= 3 
+              ? `🔥 ${actualStreak} נצחונות ברצף` 
+              : (isFemale ? `מחפשת קאמבק 💪` : `מחפש קאמבק 💪`);
+            break;
+          case 'ranking_battle':
+            creativeHighlight = gapToAbove > 0 ? `${gapToAbove}₪ מהמקום הבא 🎯` : `קרב על הדירוג 🎯`;
+            break;
+          case 'comeback':
+            creativeHighlight = isFemale 
+              ? `חוזרת אחרי ${comebackDays} ימים 🔙` 
+              : `חוזר אחרי ${comebackDays} ימים 🔙`;
+            break;
+          case 'milestone': {
+            const milestones = [500, 1000, 1500, 2000];
+            const near = milestones.find(m => m - Math.round(player.totalProfit) > 0 && m - Math.round(player.totalProfit) <= 150);
+            creativeHighlight = near ? `${near - Math.round(player.totalProfit)}₪ מ-${near}₪ 🏅` : `אבן דרך קרובה 🏅`;
+            break;
+          }
+          case 'form':
+            creativeHighlight = periodAvg >= 0 
+              ? `ממוצע תקופה: +${periodAvg}₪ 📈`
+              : (isFemale ? `מחפשת שיפור 📊` : `מחפש שיפור 📊`);
+            break;
+          case 'big_last_game':
+            creativeHighlight = wonLastGame 
+              ? `+${Math.round(lastGameProfit)}₪ אחרון 💰` 
+              : (isFemale ? `מוכנה לחזרה 💪` : `מוכן לחזרה 💪`);
+            break;
+          case 'veteran':
+            creativeHighlight = `${player.gamesPlayed} משחקים, ${playerWinRate}% נצחונות 🎖️`;
+            break;
+          case 'dark_horse':
+            creativeHighlight = `הפתעה אפשרית ⚡`;
+            break;
+          default:
+            if (wonLastGame && lastGameProfit > 50) creativeHighlight = `רווח +${Math.round(lastGameProfit)}₪ אחרון`;
+            else if (rankTonight <= 3) creativeHighlight = `מקום ${rankTonight} בתקופה`;
+            else if (playerWinRate >= 55) creativeHighlight = `${playerWinRate}% נצחונות`;
+            else creativeHighlight = `${player.gamesPlayed} משחקי ניסיון`;
+            break;
         }
         
         return {
