@@ -1384,9 +1384,17 @@ ${surpriseText}
         const yearGames = thisYearGames.length;
         const yearProfit = thisYearGames.reduce((sum, g) => sum + g.profit, 0);
         
-        // Calculate actual rankings (tonight's table only!)
-        const sortedTonight = [...players].sort((a, b) => b.totalProfit - a.totalProfit);
-        const rankTonight = sortedTonight.findIndex(p => p.name === player.name) + 1;
+        // Calculate period ranking (must match what we tell the AI in the stat card!)
+        const halfRankData = globalRankings?.currentHalf.rankings.find(r => r.name === player.name);
+        const rankTonight = halfRankData?.rank || (
+          [...players].sort((a, b) => {
+            const aGames = getHalfGames(a, currentYear, currentHalf);
+            const bGames = getHalfGames(b, currentYear, currentHalf);
+            const aAvg = aGames.length > 0 ? aGames.reduce((s, g) => s + g.profit, 0) / aGames.length : a.avgProfit;
+            const bAvg = bGames.length > 0 ? bGames.reduce((s, g) => s + g.profit, 0) / bGames.length : b.avgProfit;
+            return bAvg - aAvg;
+          }).findIndex(p => p.name === player.name) + 1
+        );
         
         // USE THE ACTUAL CURRENT STREAK (spans across years!)
         const actualStreak = player.currentStreak;
