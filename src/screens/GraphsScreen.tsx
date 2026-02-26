@@ -2002,7 +2002,7 @@ const GraphsScreen = () => {
               const roundedImpact = Math.round(row.impact);
               const isZero = roundedImpact === 0;
               const impactColor = isZero ? 'var(--text-muted)' : row.impact > 0 ? '#10B981' : '#EF4444';
-              const impactIcon = isZero ? '—' : row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact > 0 ? '↑' : '↓';
+              const impactIcon = row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : null;
               const avgWithRounded = Math.round(row.avgWith);
               const avgWithoutRounded = Math.round(row.avgWithout);
               const avgWithColor = avgWithRounded === 0 ? 'var(--text-muted)' : avgWithRounded > 0 ? '#10B981' : '#EF4444';
@@ -2042,7 +2042,7 @@ const GraphsScreen = () => {
                       background: row.impact > 0 ? 'rgba(16, 185, 129, 0.15)' : row.impact < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
                       borderRadius: '12px',
                     }}>
-                      <span style={{ fontSize: '0.9rem' }}>{impactIcon}</span>
+                      {impactIcon && <span style={{ fontSize: '0.9rem' }}>{impactIcon}</span>}
                       <span style={{ 
                         fontWeight: '700', 
                         fontSize: '0.95rem',
