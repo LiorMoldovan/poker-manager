@@ -564,68 +564,6 @@ const GraphsScreen = () => {
     return results;
   }, [impactPlayerId, filteredGames, gamePlayers, players, getPlayerColor]);
 
-  // Chemistry highlights - auto-discover top lucky charm & kryptonite pairs across all players
-  const chemistryHighlights = useMemo(() => {
-    const permanentPlayers = players.filter(p => p.type === 'permanent');
-    const allPairs: Array<{
-      playerName: string;
-      playerId: string;
-      otherName: string;
-      otherId: string;
-      impact: number;
-      avgWith: number;
-      avgWithout: number;
-      withGames: number;
-      withoutGames: number;
-    }> = [];
-
-    for (const player of permanentPlayers) {
-      for (const other of permanentPlayers) {
-        if (player.id === other.id) continue;
-
-        let withProfit = 0, withGames = 0;
-        let withoutProfit = 0, withoutGames = 0;
-
-        for (const game of filteredGames) {
-          const gps = gamePlayers.filter(gp => gp.gameId === game.id);
-          const playerGp = gps.find(gp => gp.playerId === player.id);
-          if (!playerGp) continue;
-
-          const otherPlayed = gps.some(gp => gp.playerId === other.id);
-          if (otherPlayed) {
-            withProfit += playerGp.profit;
-            withGames++;
-          } else {
-            withoutProfit += playerGp.profit;
-            withoutGames++;
-          }
-        }
-
-        if (withGames >= 5 && withoutGames >= 3) {
-          const avgWith = withProfit / withGames;
-          const avgWithout = withoutProfit / withoutGames;
-          allPairs.push({
-            playerName: player.name,
-            playerId: player.id,
-            otherName: other.name,
-            otherId: other.id,
-            impact: avgWith - avgWithout,
-            avgWith,
-            avgWithout,
-            withGames,
-            withoutGames,
-          });
-        }
-      }
-    }
-
-    allPairs.sort((a, b) => b.impact - a.impact);
-    const luckyCharms = allPairs.slice(0, 3);
-    const kryptonite = allPairs.slice(-3).reverse();
-
-    return { luckyCharms, kryptonite };
-  }, [filteredGames, gamePlayers, players]);
-
   // Get timeframe label
   const getTimeframeLabel = () => {
     if (timePeriod === 'all') return 'All Time';
@@ -2115,113 +2053,107 @@ const GraphsScreen = () => {
             </div>
           )}
 
-          {/* Chemistry Highlights */}
-          {(chemistryHighlights.luckyCharms.length > 0 || chemistryHighlights.kryptonite.length > 0) && (
-            <div className="card">
-              <h2 className="card-title mb-2">🍀 Chemistry</h2>
-              <div style={{ 
-                fontSize: '0.7rem', 
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-                marginBottom: '0.75rem' 
-              }}>
-                Who lifts you up — and who drags you down?
-              </div>
+          {/* Chemistry Summary - derived from impact data above */}
+          {impactData.length > 0 && (() => {
+            const luckyCharms = impactData.filter(r => r.impact > 0).slice(0, 3);
+            const kryptonite = impactData.filter(r => r.impact < 0).slice(-3).reverse();
+            const selectedName = getPlayerName(impactPlayerId);
+            if (luckyCharms.length === 0 && kryptonite.length === 0) return null;
+            return (
+              <div className="card">
+                <h2 className="card-title mb-2">🧪 {selectedName}'s Chemistry</h2>
+                <div style={{ 
+                  fontSize: '0.7rem', 
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                  marginBottom: '0.75rem' 
+                }}>
+                  Summary: who helps and who hurts
+                </div>
 
-              {chemistryHighlights.luckyCharms.length > 0 && (
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <div style={{ 
-                    fontSize: '0.7rem', 
-                    fontWeight: '700', 
-                    color: '#10B981', 
-                    marginBottom: '0.4rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                  }}>
-                    🍀 Lucky Charms
-                    <span style={{ fontSize: '0.6rem', fontWeight: '400', color: 'var(--text-muted)' }}>
-                      — performs better when they're around
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    {chemistryHighlights.luckyCharms.map((pair, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.4rem 0.5rem',
-                        background: 'rgba(16, 185, 129, 0.08)',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: '700' }}>{pair.playerName}</span>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                            when {pair.otherName} plays
+                {luckyCharms.length > 0 && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ 
+                      fontSize: '0.7rem', 
+                      fontWeight: '700', 
+                      color: '#10B981', 
+                      marginBottom: '0.4rem',
+                    }}>
+                      🍀 Lucky Charms
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {luckyCharms.map((row, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.4rem 0.5rem',
+                          background: 'rgba(16, 185, 129, 0.08)',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                              {' '}({row.withGames} games together)
+                            </span>
+                          </div>
+                          <span style={{ fontWeight: '700', color: '#10B981' }}>
+                            +₪{cleanNumber(row.impact)}
                           </span>
                         </div>
-                        <span style={{ fontWeight: '700', color: '#10B981' }}>
-                          +₪{cleanNumber(pair.impact)}/game
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {chemistryHighlights.kryptonite.length > 0 && (
-                <div>
-                  <div style={{ 
-                    fontSize: '0.7rem', 
-                    fontWeight: '700', 
-                    color: '#EF4444', 
-                    marginBottom: '0.4rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                  }}>
-                    💀 Kryptonite
-                    <span style={{ fontSize: '0.6rem', fontWeight: '400', color: 'var(--text-muted)' }}>
-                      — performs worse when they're around
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                    {chemistryHighlights.kryptonite.map((pair, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.4rem 0.5rem',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: '700' }}>{pair.playerName}</span>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                            when {pair.otherName} plays
+                {kryptonite.length > 0 && (
+                  <div>
+                    <div style={{ 
+                      fontSize: '0.7rem', 
+                      fontWeight: '700', 
+                      color: '#EF4444', 
+                      marginBottom: '0.4rem',
+                    }}>
+                      💀 Kryptonite
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {kryptonite.map((row, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.4rem 0.5rem',
+                          background: 'rgba(239, 68, 68, 0.08)',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                        }}>
+                          <div>
+                            <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                              {' '}({row.withGames} games together)
+                            </span>
+                          </div>
+                          <span style={{ fontWeight: '700', color: '#EF4444' }}>
+                            ₪{cleanNumber(row.impact)}
                           </span>
                         </div>
-                        <span style={{ fontWeight: '700', color: '#EF4444' }}>
-                          ₪{cleanNumber(pair.impact)}/game
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div style={{ 
-                fontSize: '0.55rem', 
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-                marginTop: '0.6rem',
-              }}>
-                Impact = avg profit when player is at table vs when they're not • {getTimeframeLabel()}
+                <div style={{ 
+                  fontSize: '0.55rem', 
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                  marginTop: '0.6rem',
+                }}>
+                  Impact = difference in avg profit per game • {getTimeframeLabel()}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </>
       )}
 
