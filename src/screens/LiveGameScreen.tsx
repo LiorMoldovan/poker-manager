@@ -784,7 +784,7 @@ const LiveGameScreen = () => {
           const totalSpent = totalRebuys2026 * settings.rebuyValue;
           messages.push(`${playerName} כבר שילם ${totalSpent} שקל על קניות מתחילת השנה, תודה על המימון`);
         } else if (totalRebuys2026 >= 15) {
-          messages.push(`${playerName} כבר ב${hebrewNum(totalRebuys2026, true)} קניות מתחילת השנה, קצב יפה`);
+          messages.push(`${playerName} כבר ${hebrewNum(totalRebuys2026, true)} קניות מתחילת השנה, קצב יפה`);
         }
       }
 
@@ -801,13 +801,13 @@ const LiveGameScreen = () => {
           messages.push(`אפילו ${playerWithMax.playerName} קנה פחות מ${playerName} הערב`);
         }
         if (currentGameRebuys >= 3 && playerWithMin && Math.ceil(minRebuysOther) <= 1) {
-          messages.push(`${playerName} כבר ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות בזמן ש${playerWithMin.playerName} עדיין בראשונה`);
+          messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות בזמן ש${playerWithMin.playerName} עדיין בראשונה`);
         }
 
         const rival = otherPlayers.find(p => Math.ceil(p.rebuys) === Math.ceil(currentGameRebuys));
         if (rival) {
           messages.push(`${playerName} ו${rival.playerName} שווים בקניות הערב, מי ישבור ראשון?`);
-          messages.push(`מרוץ קניות בין ${playerName} ל${rival.playerName}, שניהם ב${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
+          messages.push(`מרוץ קניות בין ${playerName} ל${rival.playerName}, שניהם עם ${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
         }
 
         // Historical rivalry with specific players at the table
@@ -829,7 +829,7 @@ const LiveGameScreen = () => {
 
           // Both on streaks in opposite directions
           if (stats.currentStreak >= 2 && otherStats.currentStreak <= -2) {
-            messages.push(`${playerName} ברצף של ${hebrewNum(stats.currentStreak, false)} נצחונות, ${other.playerName} ב${hebrewNum(Math.abs(otherStats.currentStreak), false)} הפסדים, אז מי צריך לקנות יותר?`);
+            messages.push(`${playerName} ברצף של ${hebrewNum(stats.currentStreak, false)} נצחונות, ${other.playerName} עם ${hebrewNum(Math.abs(otherStats.currentStreak), false)} הפסדים, אז מי צריך לקנות יותר?`);
           }
 
           // Similar avg rebuys — rebuy buddies
@@ -854,7 +854,7 @@ const LiveGameScreen = () => {
       if (otherPlayers.length > 0 && currentGameRebuys >= 2) {
         const stillOnFirst = otherPlayers.filter(p => p.rebuys === 1);
         if (stillOnFirst.length >= 2 && currentGameRebuys >= 3) {
-          messages.push(`${playerName} כבר ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות בזמן ש${hebrewNum(stillOnFirst.length, false)} שחקנים עדיין בראשונה`);
+          messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות בזמן ש${hebrewNum(stillOnFirst.length, false)} שחקנים עדיין בראשונה`);
         }
       }
 
@@ -907,9 +907,9 @@ const LiveGameScreen = () => {
       // --- High rebuy count personal messages with data ---
       const spentTonight = Math.ceil(currentGameRebuys) * settings.rebuyValue;
       if (currentGameRebuys >= 7) {
-        messages.push(`${playerName} כבר ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל בפנים, הספונסר הרשמי של הערב`);
+        messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל בפנים, הספונסר הרשמי של הערב`);
         messages.push(`הארנק של ${playerName} בוכה, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל ועולה`);
-        messages.push(`${playerName} ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, כולם אומרים תודה בלב`);
+        messages.push(`${playerName} עם ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, כולם אומרים תודה בלב`);
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ל${playerName}, ${spentTonight} שקל, נו, לפחות יש אופי`);
         messages.push(`${playerName} לא מוותר, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ועדיין מחייך`);
         if (stats.totalProfit > 0) {
@@ -918,18 +918,18 @@ const LiveGameScreen = () => {
           messages.push(`${playerName} במינוס של ${Math.round(Math.abs(stats.totalProfit))} שקל, ועכשיו עוד ${spentTonight} הערב`);
         }
       } else if (currentGameRebuys >= 5) {
-        messages.push(`${playerName} כבר ב${Math.ceil(currentGameRebuys)}, ${spentTonight} שקל, ערב יקר`);
+        messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, ערב יקר`);
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ל${playerName}, ${spentTonight} שקל, הקופה מודה`);
-        messages.push(`${playerName} ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הנדיבות לא נגמרת`);
+        messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הנדיבות לא נגמרת`);
         if (stats.winPercentage >= 50) {
           messages.push(`${playerName} מנצח ${Math.round(stats.winPercentage)} אחוז מהמשחקים, אז אולי עוד קנייה תעזור`);
         } else {
           messages.push(`${playerName} מנצח רק ${Math.round(stats.winPercentage)} אחוז, ${spentTonight} שקל לא ישנו את הסטטיסטיקה`);
         }
       } else if (currentGameRebuys >= 3) {
-        messages.push(`${playerName} כבר ב${Math.ceil(currentGameRebuys)}, ${spentTonight} שקל, תודה על התרומה`);
+        messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, תודה על התרומה`);
         messages.push(`מישהו שיעצור את ${playerName}, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות`);
-        messages.push(`${playerName} ב${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, מי אמר שכסף לא קונה אושר?`);
+        messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, מי אמר שכסף לא קונה אושר?`);
         if (stats.gamesPlayed >= 5) {
           messages.push(`${playerName} עם ${hebrewNum(stats.gamesPlayed, false)} משחקים ניסיון, ועדיין ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות הערב`);
         }
@@ -960,11 +960,11 @@ const LiveGameScreen = () => {
     const otherLeader = leaderNames.find(n => n !== playerName) || leaderNames[0];
     const count = Math.ceil(totalBuyins);
     const messages = [
-      `תיקו! ${playerName} ו${otherLeader} שניהם ב${hebrewNum(count, true)} קניות`,
-      `${playerName} ו${otherLeader} ראש בראש ב${hebrewNum(count, true)} קניות, מי ישבור ראשון?`,
-      `יש לנו תיקו ב${hebrewNum(count, true)} קניות בראש הטבלה!`,
-      `${playerName} לא נותן ל${otherLeader} לברוח, שניהם ב${hebrewNum(count, true)}`,
-      `מרוץ הקניות מתחמם! ${playerName} השווה ל${otherLeader} ב${hebrewNum(count, true)}`,
+      `תיקו! ${playerName} ו${otherLeader} שניהם עם ${hebrewNum(count, true)} קניות`,
+      `${playerName} ו${otherLeader} ראש בראש, ${hebrewNum(count, true)} קניות כל אחד, מי ישבור ראשון?`,
+      `יש לנו תיקו, ${hebrewNum(count, true)} קניות בראש הטבלה!`,
+      `${playerName} לא נותן ל${otherLeader} לברוח, שניהם עם ${hebrewNum(count, true)}`,
+      `מרוץ הקניות מתחמם! ${playerName} השווה ל${otherLeader}, שניהם ${hebrewNum(count, true)}`,
     ];
     return messages[Math.floor(Math.random() * messages.length)];
   };
@@ -995,7 +995,7 @@ const LiveGameScreen = () => {
         `${playerName} ממשיך להרחיק את השיא הקבוצתי! כבר ${hebrewNum(currentCount, true)} קניות`,
         `השיא עולה, כבר ${hebrewNum(currentCount, true)}! ${playerName} לא עוצר`,
         `${playerName} בעולם משלו, השיא כבר ${hebrewNum(currentCount, true)}`,
-        `עוד אחד לשיא! ${playerName} כבר ב${hebrewNum(currentCount, true)}`,
+        `עוד אחד לשיא! ${playerName} כבר ${hebrewNum(currentCount, true)} קניות`,
       ];
       return messages[Math.floor(Math.random() * messages.length)];
     }
@@ -1090,7 +1090,7 @@ const LiveGameScreen = () => {
         const leaderMessages = [
           `ויש לנו מוביל חדש בקניות הערב! ${playerName} עם ${hebrewNum(ceilBuyins, true)} קניות`,
           `${playerName} תפס את המקום הראשון בקניות, כבר ${hebrewNum(ceilBuyins, true)}!`,
-          `כל הכבוד ${playerName}, מוביל חדש ב${hebrewNum(ceilBuyins, true)} קניות`,
+          `כל הכבוד ${playerName}, מוביל חדש עם ${hebrewNum(ceilBuyins, true)} קניות`,
         ];
         extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
       } else if (rebuyThresholdMet && ctx.isTiedForLead) {
