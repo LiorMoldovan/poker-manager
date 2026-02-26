@@ -2033,15 +2033,6 @@ const GraphsScreen = () => {
                       }}>
                         {row.otherPlayerName}
                       </span>
-                      <span style={{ 
-                        fontSize: '0.65rem', 
-                        color: 'var(--text-muted)',
-                        background: 'rgba(255,255,255,0.05)',
-                        padding: '0.15rem 0.4rem',
-                        borderRadius: '10px',
-                      }}>
-                        {totalGames} games
-                      </span>
                     </div>
                     <div style={{ 
                       display: 'flex',
