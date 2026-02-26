@@ -2012,98 +2012,153 @@ const GraphsScreen = () => {
 
               return (
                 <div key={row.otherPlayerId} style={{
-                  padding: '0.5rem 0.6rem',
+                  padding: '0.75rem',
                   background: 'var(--surface)',
-                  borderRadius: '8px',
-                  borderRight: `3px solid ${impactColor}`,
+                  borderRadius: '10px',
+                  borderLeft: `4px solid ${impactColor}`,
                   opacity: isLimited ? 0.65 : 1,
                 }}>
-                  {/* Header: Name + Impact */}
+                  {/* Top row: Name + Impact badge */}
                   <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
-                    marginBottom: '0.3rem',
+                    marginBottom: '0.6rem',
                   }}>
-                    <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
-                      {row.otherPlayerName}
-                    </span>
-                    <span style={{ 
-                      fontWeight: '700', 
-                      fontSize: '0.9rem',
-                      color: impactColor,
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        color: row.otherColor, 
+                        fontSize: '1rem',
+                      }}>
+                        {row.otherPlayerName}
+                      </span>
+                      <span style={{ 
+                        fontSize: '0.65rem', 
+                        color: 'var(--text-muted)',
+                        background: 'rgba(255,255,255,0.05)',
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '10px',
+                      }}>
+                        {totalGames} games
+                      </span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      padding: '0.25rem 0.6rem',
+                      background: row.impact > 0 ? 'rgba(16, 185, 129, 0.15)' : row.impact < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
+                      borderRadius: '12px',
                     }}>
-                      {impactIcon} {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
-                    </span>
+                      <span style={{ fontSize: '0.9rem' }}>{impactIcon}</span>
+                      <span style={{ 
+                        fontWeight: '700', 
+                        fontSize: '0.95rem',
+                        color: impactColor,
+                      }}>
+                        {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
+                      </span>
+                    </div>
                   </div>
-                  {/* Balance bar */}
+                  
+                  {/* Two cards side by side */}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {/* WITH card */}
+                    <div style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      borderRadius: '8px',
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ 
+                        fontSize: '0.65rem', 
+                        color: '#10B981', 
+                        fontWeight: '600',
+                        marginBottom: '0.25rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                      }}>
+                        With ({row.withGames})
+                      </div>
+                      <div style={{ 
+                        fontWeight: '700', 
+                        fontSize: '1.1rem',
+                        color: avgWithColor,
+                        marginBottom: '0.15rem',
+                      }}>
+                        {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.7rem', 
+                        color: 'var(--text-muted)',
+                      }}>
+                        {Math.round(row.winRateWith)}% win rate
+                      </div>
+                    </div>
+                    
+                    {/* WITHOUT card */}
+                    <div style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      borderRadius: '8px',
+                      textAlign: 'center',
+                    }}>
+                      <div style={{ 
+                        fontSize: '0.65rem', 
+                        color: '#EF4444', 
+                        fontWeight: '600',
+                        marginBottom: '0.25rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                      }}>
+                        Without ({row.withoutGames})
+                      </div>
+                      <div style={{ 
+                        fontWeight: '700', 
+                        fontSize: '1.1rem',
+                        color: avgWithoutColor,
+                        marginBottom: '0.15rem',
+                      }}>
+                        {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.7rem', 
+                        color: 'var(--text-muted)',
+                      }}>
+                        {Math.round(row.winRateWithout)}% win rate
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Balance bar at bottom */}
                   <div style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: '0.3rem',
-                    marginBottom: '0.35rem',
+                    marginTop: '0.5rem',
                   }}>
-                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', minWidth: '18px', textAlign: 'right' }}>{row.withGames}</span>
                     <div style={{
                       flex: 1,
-                      height: '4px',
-                      background: 'rgba(255,255,255,0.08)',
+                      height: '3px',
+                      background: 'rgba(255,255,255,0.1)',
                       borderRadius: '2px',
                       overflow: 'hidden',
                       display: 'flex',
                     }}>
                       <div style={{ 
                         width: `${withPct}%`, 
-                        background: 'var(--primary)', 
+                        background: '#10B981', 
                         borderRadius: '2px 0 0 2px',
-                        opacity: 0.7,
                       }} />
                       <div style={{ 
                         width: `${100 - withPct}%`, 
-                        background: 'var(--text-muted)', 
+                        background: '#EF4444', 
                         borderRadius: '0 2px 2px 0',
-                        opacity: 0.3,
+                        opacity: 0.5,
                       }} />
-                    </div>
-                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', minWidth: '18px' }}>{row.withoutGames}</span>
-                  </div>
-                  {/* Two-column: With / Without */}
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <div style={{
-                      flex: 1,
-                      padding: '0.3rem 0.4rem',
-                      background: 'rgba(255,255,255,0.03)',
-                      borderRadius: '6px',
-                    }}>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>With</div>
-                      <div style={{ 
-                        fontWeight: '700', 
-                        fontSize: '0.8rem',
-                        color: avgWithColor,
-                      }}>
-                        {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
-                      </div>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                        {Math.round(row.winRateWith)}% wins
-                      </div>
-                    </div>
-                    <div style={{
-                      flex: 1,
-                      padding: '0.3rem 0.4rem',
-                      background: 'rgba(255,255,255,0.03)',
-                      borderRadius: '6px',
-                    }}>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Without</div>
-                      <div style={{ 
-                        fontWeight: '700', 
-                        fontSize: '0.8rem',
-                        color: avgWithoutColor,
-                      }}>
-                        {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
-                      </div>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                        {Math.round(row.winRateWithout)}% wins
-                      </div>
                     </div>
                   </div>
                 </div>
