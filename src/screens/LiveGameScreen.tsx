@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -609,29 +609,29 @@ const LiveGameScreen = () => {
     if (Math.random() > 0.3) return null;
 
     const roasts = [
-      `${playerName}, הכסף הזה כבר לא חוזר`,
-      `${playerName} תורם שוב לקופה הקבוצתית`,
-      `${playerName}, הארנק שלך בוכה`,
+      'הכסף הזה כבר לא חוזר',
+      'שוב תרומה לקופה הקבוצתית',
+      'הארנק בוכה',
       `מישהו שיעצור את ${playerName}`,
-      `${playerName}, גם הבנק לא היה מאשר את זה`,
-      `${playerName} שובר שיאים, לא את הטובים`,
-      `${playerName}, אולי תנסה שחמט`,
-      `${playerName}, הקלפים לא אוהבים אותך הלילה`,
-      `${playerName} מממן את הערב לכולם`,
-      `${playerName}, אתה הספונסר הרשמי של הלילה`,
-      `${playerName}, תודה על התרומה`,
-      `${playerName}, קיבלת נקודות נאמנות על זה`,
-      `${playerName}, אפשר גם להעביר ישירות`,
+      'גם הבנק לא היה מאשר את זה',
+      'שוברים פה שיאים, רק לא את הטובים',
+      'אולי לנסות שחמט',
+      'הקלפים לא אוהבים פה אף אחד הלילה',
+      'המימון של הערב בא מפה',
+      'הספונסר הרשמי של הלילה',
+      'תודה על התרומה',
+      'נקודות נאמנות על כל קנייה',
+      'אפשר גם להעביר ישירות',
     ];
 
     if (totalBuyins >= 5) {
       roasts.push(
-        `${playerName}, כבר שקלת קריירה אחרת?`,
-        `${playerName} בדרך לשיא עולמי`,
-        `${playerName}, אפילו הקלפים מרחמים עליך`,
-        `${playerName}, מי צריך חיסכון בכלל`,
-        `${playerName}, הילדים לא צריכים קורס שחייה`,
-        `${playerName}, תחשוב על זה כתרומה לקהילה`,
+        'אולי לשקול קריירה אחרת',
+        'בדרך לשיא עולמי',
+        'אפילו הקלפים מרחמים',
+        'מי צריך חיסכון בכלל',
+        'הילדים לא צריכים קורס שחייה',
+        'לחשוב על זה כתרומה לקהילה',
       );
     }
 
@@ -639,7 +639,7 @@ const LiveGameScreen = () => {
   };
 
   // Fun facts from historical data (25% chance)
-  const getFunFact = (playerName: string, playerId: string, currentGameRebuys: number): string | null => {
+  const getFunFact = (_playerName: string, playerId: string, currentGameRebuys: number): string | null => {
     if (Math.random() > 0.25) return null;
 
     try {
@@ -651,31 +651,31 @@ const LiveGameScreen = () => {
       const facts: string[] = [];
 
       const allTimeRebuys = stats.totalRebuys + currentGameRebuys;
-      facts.push(`זו הקנייה ה-${allTimeRebuys} שלך מאז ומעולם`);
-      facts.push(`ממוצע ${stats.avgRebuysPerGame.toFixed(1)} קניות למשחק, הלילה כבר ${currentGameRebuys}`);
-      facts.push(`שיחקת ${stats.gamesPlayed} משחקים עד היום`);
+      facts.push(`זו קנייה מספר ${allTimeRebuys} מאז ומעולם`);
+      facts.push(`בממוצע ${Math.round(stats.avgRebuysPerGame)} קניות למשחק, הלילה כבר ${currentGameRebuys}`);
+      facts.push(`${stats.gamesPlayed} משחקים עד היום`);
 
       if (stats.winPercentage > 0) {
-        facts.push(`אחוז הנצחונות שלך ${Math.round(stats.winPercentage)} אחוז`);
+        facts.push(`אחוז נצחונות של ${Math.round(stats.winPercentage)} אחוז`);
       }
       if (stats.longestWinStreak >= 3) {
-        facts.push(`שיא הנצחונות שלך ${stats.longestWinStreak} ברצף`);
+        facts.push(`שיא נצחונות ${stats.longestWinStreak} ברצף`);
       }
       if (stats.longestLossStreak >= 3) {
-        facts.push(`שיא ההפסדים שלך ${stats.longestLossStreak} ברצף`);
+        facts.push(`שיא הפסדים ${stats.longestLossStreak} ברצף`);
       }
       if (stats.biggestWin > 50) {
-        facts.push(`הנצחון הגדול שלך היה ${Math.round(stats.biggestWin)} שקל`);
+        facts.push(`הנצחון הכי גדול היה ${Math.round(stats.biggestWin)} שקל`);
       }
       if (stats.totalProfit > 0) {
         facts.push(`בסך הכל ברווח של ${Math.round(stats.totalProfit)} שקל`);
       }
 
       const totalSpent = allTimeRebuys * settings.rebuyValue;
-      facts.push(`סך הכל שילמת ${totalSpent} שקל על קניות`);
+      facts.push(`סך הכל ${totalSpent} שקל על קניות`);
 
       if (currentGameRebuys > stats.avgRebuysPerGame * 1.5 && currentGameRebuys >= 3) {
-        facts.push(`בקצב הזה תשבור את הממוצע שלך הלילה`);
+        facts.push(`בקצב הזה, הממוצע הולך להישבר הלילה`);
       }
 
       return facts[Math.floor(Math.random() * facts.length)];

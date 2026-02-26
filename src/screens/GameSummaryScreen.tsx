@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 
@@ -23,10 +23,12 @@ const GameSummaryScreen = () => {
   const [forecastComment, setForecastComment] = useState<string | null>(null);
   const [isLoadingComment, setIsLoadingComment] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
+  const [funStats, setFunStats] = useState<{ emoji: string; text: string }[]>([]);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
   const expenseSettlementsRef = useRef<HTMLDivElement>(null);
+  const funStatsRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player
   const getTotalChips = (player: GamePlayer): number => {
@@ -117,6 +119,78 @@ const GameSummaryScreen = () => {
       }
     }
     
+    // Calculate fun stats and shame section
+    const stats: { emoji: string; text: string }[] = [];
+    const totalRebuysTonight = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
+    const settings2 = getSettings();
+
+    stats.push({ emoji: '💰', text: `Total rebuys tonight: ${totalRebuysTonight}` });
+    stats.push({ emoji: '🏦', text: `Total pot: ₪${cleanNumber(totalRebuysTonight * settings2.rebuyValue)}` });
+
+    // Most rebuys (shame crown)
+    const maxRebuys = Math.max(...sortedPlayers.map(p => p.rebuys));
+    const rebuyKing = sortedPlayers.filter(p => p.rebuys === maxRebuys);
+    if (maxRebuys >= 3) {
+      const names = rebuyKing.map(p => p.playerName).join(' & ');
+      stats.push({ emoji: '👑', text: `Rebuy King: ${names} (${maxRebuys} buyins, ₪${cleanNumber(maxRebuys * settings2.rebuyValue)})` });
+    }
+
+    // Biggest winner
+    const bigWinner = sortedPlayers[0];
+    if (bigWinner && bigWinner.profit > 0) {
+      stats.push({ emoji: '🤑', text: `Biggest winner: ${bigWinner.playerName} (+₪${cleanNumber(bigWinner.profit)})` });
+    }
+
+    // Biggest loser
+    const bigLoser = sortedPlayers[sortedPlayers.length - 1];
+    if (bigLoser && bigLoser.profit < 0) {
+      stats.push({ emoji: '😭', text: `Biggest loser: ${bigLoser.playerName} (${formatCurrency(bigLoser.profit)})` });
+    }
+
+    // Historical context
+    try {
+      const allStats = getPlayerStats();
+      const totalGames = getAllGames().filter(g => g.status === 'completed').length;
+
+      // Check for streaks
+      for (const player of sortedPlayers) {
+        const pStats = allStats.find(s => s.playerId === player.playerId);
+        if (!pStats) continue;
+
+        if (pStats.currentStreak >= 3) {
+          stats.push({ emoji: '🔥', text: `${player.playerName}: ${pStats.currentStreak} wins in a row!` });
+        } else if (pStats.currentStreak <= -3) {
+          stats.push({ emoji: '❄️', text: `${player.playerName}: ${Math.abs(pStats.currentStreak)} losses in a row` });
+        }
+
+        // Check if this was their biggest win or loss ever
+        if (player.profit > 0 && player.profit >= pStats.biggestWin && pStats.gamesPlayed >= 3) {
+          stats.push({ emoji: '🏆', text: `${player.playerName}: Personal best win! (previous: ₪${cleanNumber(pStats.biggestWin)})` });
+        }
+        if (player.profit < 0 && player.profit <= pStats.biggestLoss && pStats.gamesPlayed >= 3) {
+          stats.push({ emoji: '📉', text: `${player.playerName}: Personal worst loss (previous: ${formatCurrency(pStats.biggestLoss)})` });
+        }
+      }
+
+      // Average rebuys comparison
+      const avgRebuysTonight = totalRebuysTonight / sortedPlayers.length;
+      const groupAvgRebuys = allStats.length > 0
+        ? allStats.reduce((sum, s) => sum + s.avgRebuysPerGame, 0) / allStats.length : 0;
+      if (groupAvgRebuys > 0) {
+        const diff = avgRebuysTonight - groupAvgRebuys;
+        if (diff > 0.5) {
+          stats.push({ emoji: '📊', text: `${avgRebuysTonight.toFixed(1)} rebuys/player (${diff > 0 ? '+' : ''}${diff.toFixed(1)} vs average)` });
+        }
+      }
+
+      if (totalGames > 0) {
+        stats.push({ emoji: '🎮', text: `Game #${totalGames} in group history` });
+      }
+    } catch {
+      // Stats unavailable, continue without historical context
+    }
+
+    setFunStats(stats);
     setIsLoading(false);
   };
   
@@ -235,6 +309,21 @@ const GameSummaryScreen = () => {
           expenseCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
         });
         files.push(new File([expenseBlob], 'poker-expenses.png', { type: 'image/png' }));
+      }
+      
+      // Capture the Fun Stats / Highlights section if it exists
+      if (funStatsRef.current && funStats.length > 0) {
+        const funStatsCanvas = await html2canvas(funStatsRef.current, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        
+        const funStatsBlob = await new Promise<Blob>((resolve) => {
+          funStatsCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        files.push(new File([funStatsBlob], 'poker-highlights.png', { type: 'image/png' }));
       }
       
       // Try native share first (works on mobile)
@@ -603,6 +692,41 @@ const GameSummaryScreen = () => {
             textAlign: 'center', 
             marginTop: '1rem', 
             fontSize: '0.75rem', 
+            color: 'var(--text-muted)',
+            opacity: 0.7
+          }}>
+            Poker Manager 🎲
+          </div>
+        </div>
+      )}
+
+      {/* Fun Stats & Shame Section - for screenshot */}
+      {funStats.length > 0 && (
+        <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card">
+            <h2 className="card-title mb-2">🎭 Tonight's Highlights</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {funStats.map((stat, idx) => (
+                <div key={idx} style={{
+                  padding: '0.4rem 0.6rem',
+                  background: 'rgba(100, 100, 100, 0.1)',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{ fontSize: '1rem' }}>{stat.emoji}</span>
+                  <span>{stat.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{
+            textAlign: 'center',
+            marginTop: '1rem',
+            fontSize: '0.75rem',
             color: 'var(--text-muted)',
             opacity: 0.7
           }}>

@@ -1456,8 +1456,8 @@ const NewGameScreen = () => {
           lossCount: stats?.lossCount || 0,
           winPercentage: stats?.winPercentage || 0,
           currentStreak: stats?.currentStreak || 0,
-          bestWin: stats?.bestWin || 0,
-          worstLoss: stats?.worstLoss || 0,
+          bestWin: stats?.biggestWin || 0,
+          worstLoss: stats?.biggestLoss || 0,
           gameHistory: (stats?.lastGameResults || []).map(g => {
             const d = new Date(g.date);
             const day = d.getDate().toString().padStart(2, '0');
@@ -1766,16 +1766,32 @@ const NewGameScreen = () => {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
         {isAdmin && (
           <>
             <button 
               className="btn btn-secondary"
               onClick={handleShowForecast}
               disabled={selectedIds.size < 2}
-              style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem' }}
+              style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem', minWidth: '0' }}
             >
               🔮 Forecast
+            </button>
+            <button 
+              className="btn"
+              onClick={handleShowSavageForecast}
+              disabled={selectedIds.size < 2}
+              style={{ 
+                padding: '0.6rem', 
+                flex: '1', 
+                fontSize: '0.85rem',
+                minWidth: '0',
+                background: 'linear-gradient(135deg, #dc2626, #991b1b)',
+                color: 'white',
+                border: 'none'
+              }}
+            >
+              🔥 Roast
             </button>
             <button 
               className="btn"
@@ -1785,6 +1801,7 @@ const NewGameScreen = () => {
                 padding: '0.6rem', 
                 flex: '1', 
                 fontSize: '0.85rem',
+                minWidth: '0',
                 background: 'linear-gradient(135deg, #f39c12, #e67e22)',
                 color: 'white',
                 border: 'none'
