@@ -450,13 +450,13 @@ const GameSummaryScreen = () => {
           `והתורם הרשמי של הלילה, ${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
           `${loser.playerName}, תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
           `ו${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
-          `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לקופה, גיבור אמיתי`,
+          `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן, גיבור אמיתי`,
           `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל, אבל מי סופר`,
           `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, הלילה לא היה שלו`,
           `ו${loser.playerName} שילם את החשבון הלילה, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
         ];
-        const potMessage = `הקופה הלילה: ${cleanNumber(pot)} שקל, ${cleanNumber(totalRebuys)} קניות.`;
+        const potMessage = `על השולחן הלילה: ${cleanNumber(pot)} שקל, ${cleanNumber(totalRebuys)} קניות.`;
 
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];

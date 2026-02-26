@@ -1109,8 +1109,8 @@ const LiveGameScreen = () => {
         const potValue = cleanNumber(ctx.totalGroupRebuys * rebuyValue);
         const milestoneMessages = [
           `כבר חזרו לקנות ${crossedMilestone} פעמים! הקופה על ${potValue} שקל`,
-          `${crossedMilestone} קניות נוספות על השולחן! ${potValue} שקל בקופה`,
-          `רגע של דממה, כבר ${crossedMilestone} קניות חוזרות, ${potValue} שקל בקופה`,
+          `${crossedMilestone} קניות נוספות על השולחן! ${potValue} שקל על השולחן`,
+          `רגע של דממה, כבר ${crossedMilestone} קניות חוזרות, ${potValue} שקל על השולחן`,
           `כבר ${crossedMilestone} קניות נוספות! ערב יקר`,
           `${crossedMilestone} פעמים חזרו לקנות, ${potValue} שקל, מי משלם את זה?`,
         ];
