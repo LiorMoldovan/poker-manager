@@ -1006,38 +1006,28 @@ const GameSummaryScreen = () => {
         <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
             <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {funStats.map((stat, idx) => (
                 <div 
                   key={idx} 
                   style={{ 
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '0.5rem 0.6rem',
+                    alignItems: 'flex-start',
+                    gap: '0.5rem',
+                    padding: '0.4rem 0.5rem',
                     background: 'rgba(255,255,255,0.03)',
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     direction: 'rtl',
                   }}
                 >
-                  <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{stat.emoji}</span>
+                  <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
                   <span style={{ 
-                    fontSize: '0.8rem', 
-                    fontWeight: 600, 
-                    color: 'var(--primary)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minWidth: '100px',
-                  }}>
-                    {stat.label}
-                  </span>
-                  <span style={{ 
-                    fontSize: '0.8rem', 
+                    fontSize: '0.75rem', 
+                    lineHeight: 1.4,
                     color: 'var(--text)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                   }}>
+                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
+                    {' — '}
                     {stat.detail}
                   </span>
                 </div>
