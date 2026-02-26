@@ -1377,14 +1377,14 @@ const StatisticsScreen = () => {
                       fontSize: '0.7rem',
                       borderRadius: '4px',
                       border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text)',
+                      background: '#1a1a2e',
+                      color: '#ffffff',
                       cursor: 'pointer',
                       minWidth: '60px'
                     }}
                   >
                     {getAvailableYears().map(year => (
-                      <option key={year} value={year}>{year}</option>
+                      <option key={year} value={year} style={{ background: '#1a1a2e', color: '#ffffff' }}>{year}</option>
                     ))}
                   </select>
                   {timePeriod === 'month' && (
@@ -1398,8 +1398,8 @@ const StatisticsScreen = () => {
                           fontSize: '0.7rem',
                           borderRadius: '4px',
                           border: '1px solid var(--border)',
-                          background: 'var(--surface)',
-                          color: 'var(--text)',
+                          background: '#1a1a2e',
+                          color: '#ffffff',
                           cursor: 'pointer',
                           minWidth: '70px'
                         }}
@@ -1418,7 +1418,7 @@ const StatisticsScreen = () => {
                           { value: 11, label: 'נובמבר' },
                           { value: 12, label: 'דצמבר' },
                         ].map(month => (
-                          <option key={month.value} value={month.value}>{month.label}</option>
+                          <option key={month.value} value={month.value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{month.label}</option>
                         ))}
                       </select>
                     </>
@@ -1813,14 +1813,14 @@ const StatisticsScreen = () => {
                   fontSize: '0.75rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text)',
+                  background: '#1a1a2e',
+                  color: '#ffffff',
                   cursor: 'pointer',
                 }}
               >
-                <option value="profit">💰 Profit</option>
-                <option value="games">🎮 Games</option>
-                <option value="winRate">📊 Win%</option>
+                <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>💰 Profit</option>
+                <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>🎮 Games</option>
+                <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>📊 Win%</option>
               </select>
               {viewMode === 'table' && (
                 <button

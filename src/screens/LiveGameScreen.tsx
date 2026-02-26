@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -23,6 +23,33 @@ const LiveGameScreen = () => {
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
+
+  // Cache historical rebuy records (computed once per session)
+  const rebuyRecordsRef = useRef<{ playerMax: Map<string, number>; groupMax: number } | null>(null);
+
+  const getRebuyRecords = () => {
+    if (rebuyRecordsRef.current) return rebuyRecordsRef.current;
+
+    const completedGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      const year = new Date(g.date || g.createdAt).getFullYear();
+      return year >= 2026;
+    });
+    const completedIds = new Set(completedGames.map(g => g.id));
+    const allGP = getAllGamePlayers().filter(gp => completedIds.has(gp.gameId));
+
+    const playerMax = new Map<string, number>();
+    let groupMax = 0;
+
+    for (const gp of allGP) {
+      const current = playerMax.get(gp.playerId) || 0;
+      if (gp.rebuys > current) playerMax.set(gp.playerId, gp.rebuys);
+      if (gp.rebuys > groupMax) groupMax = gp.rebuys;
+    }
+
+    rebuyRecordsRef.current = { playerMax, groupMax };
+    return rebuyRecordsRef.current;
+  };
   
   // Shared AudioContext to avoid creating too many instances (browsers have limits)
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -684,8 +711,74 @@ const LiveGameScreen = () => {
     }
   };
 
+  // Messages for tying with the rebuy leader
+  const getTiedForLeadMessage = (playerName: string, leaderNames: string[]): string => {
+    const otherLeader = leaderNames.find(n => n !== playerName) || leaderNames[0];
+    const messages = [
+      `תיקו! ${playerName} השווה את ${otherLeader}`,
+      `${playerName} ו${otherLeader} ראש בראש בקניות`,
+      `יש לנו תיקו בראש טבלת הקניות!`,
+      `${playerName} לא נותן ל${otherLeader} לברוח`,
+      `מרוץ הקניות מתחמם! ${playerName} משווה`,
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  // Messages for breaking personal rebuy record
+  const getPersonalRecordMessage = (playerName: string, previousRecord: number): string => {
+    const messages = [
+      `שיא אישי חדש ל${playerName}! השיא הקודם היה ${previousRecord} קניות`,
+      `${playerName} שובר שיא אישי! מעולם לא קנה כל כך הרבה במשחק`,
+      `רגע היסטורי! ${playerName} עם שיא אישי חדש`,
+      `${playerName} מתעלה על עצמו הלילה, שיא אישי חדש!`,
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  // Messages for breaking the group rebuy record
+  const getGroupRecordMessage = (playerName: string, previousRecord: number): string => {
+    const messages = [
+      `שיא קבוצתי חדש! ${playerName} שובר את השיא של ${previousRecord} קניות במשחק`,
+      `${playerName} נכנס לספר השיאים! אף אחד מעולם לא קנה כל כך הרבה`,
+      `היסטוריה נכתבת! ${playerName} עם שיא קבוצתי חדש`,
+      `${playerName}, מזל טוב! שיא שאף אחד לא רצה לשבור`,
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
+  // Messages for extending an existing record
+  const getExtendingRecordMessage = (playerName: string, isGroupRecord: boolean): string => {
+    if (isGroupRecord) {
+      const messages = [
+        `${playerName} ממשיך להרחיק את השיא הקבוצתי!`,
+        `השיא עולה שוב! ${playerName} לא עוצר`,
+        `${playerName} בעולם משלו, השיא ממשיך לטפס`,
+        `עוד אחד לשיא! ${playerName} כבר בשמיים`,
+      ];
+      return messages[Math.floor(Math.random() * messages.length)];
+    }
+    const messages = [
+      `${playerName} ממשיך לשבור את השיא האישי שלו!`,
+      `השיא האישי עולה שוב! ${playerName} לא מוותר`,
+      `${playerName} מגדיל את השיא האישי, מה הגבול?`,
+    ];
+    return messages[Math.floor(Math.random() * messages.length)];
+  };
+
   // Text-to-speech for buyin announcements - ALL HEBREW
-  const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, isNewRebuyLeader: boolean) => {
+  type RebuyContext = {
+    isNewRebuyLeader: boolean;
+    isTiedForLead: boolean;
+    tiedLeaderNames: string[];
+    isPersonalRecord: boolean;
+    previousPersonalRecord: number;
+    isGroupRecord: boolean;
+    previousGroupRecord: number;
+    isExtendingPersonalRecord: boolean;
+    isExtendingGroupRecord: boolean;
+  };
+
+  const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, ctx: RebuyContext) => {
     // Play mood-appropriate casino sound
     await playRebuyCasinoSound(totalBuyins);
     
@@ -789,11 +882,12 @@ const LiveGameScreen = () => {
     // Update last rebuy time
     lastRebuyTimeRef.current.set(player.id, now);
     
-    // Check if this player just became the sole rebuy leader
-    const maxRebuys = Math.max(...updatedPlayers.map(p => p.rebuys));
-    const isNewLeader = newRebuys === maxRebuys &&
-      newRebuys > 1 &&
-      updatedPlayers.filter(p => p.rebuys === maxRebuys).length === 1;
+    // Check if this player just became the sole rebuy leader (not if they already were)
+    const previousRebuys = newRebuys - amount;
+    const othersMax = Math.max(0, ...updatedPlayers.filter(p => p.id !== player.id).map(p => p.rebuys));
+    const wasAlreadyLeader = previousRebuys > othersMax && previousRebuys > 1;
+    const isNowSoleLeader = newRebuys > othersMax && newRebuys > 1;
+    const isNewLeader = isNowSoleLeader && !wasAlreadyLeader;
     
     // Announce in Hebrew with creative message
     const isHalfBuyin = amount === 0.5;
