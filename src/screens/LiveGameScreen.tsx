@@ -1122,7 +1122,7 @@ const LiveGameScreen = () => {
         const milestoneMessages = [
           `כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות הערב!`,
           `${hebrewNum(crossedMilestone, true)} קניות נוספות על השולחן!`,
-          `הגענו כבר ל ${hebrewNum(crossedMilestone, true)} קניות חוזרות, ערב יקר`,
+          `כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות, ערב יקר`,
           `${hebrewNum(crossedMilestone, true)} פעמים חזרו לקנות הערב!`,
           `וואו, כבר ${hebrewNum(crossedMilestone, true)} קניות נוספות!`,
         ];
