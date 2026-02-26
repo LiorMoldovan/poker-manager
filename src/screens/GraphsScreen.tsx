@@ -2126,7 +2126,7 @@ const GraphsScreen = () => {
                         cursor: 'pointer',
                       }}
                     >
-                      <span>⚠️ Limited Data ({limited.length})</span>
+                      <span>Rarely Apart ({limited.length})</span>
                       <span>{showLimitedData ? '▲' : '▼'}</span>
                     </button>
                     {showLimitedData && (
@@ -2140,10 +2140,15 @@ const GraphsScreen = () => {
             );
           })()}
 
-          {/* Chemistry Summary - derived from impact data above */}
+          {/* Chemistry Summary - derived from reliable impact data only */}
           {impactData.length > 0 && (() => {
-            const luckyCharms = impactData.filter(r => r.impact > 0).slice(0, 3);
-            const kryptonite = impactData.filter(r => r.impact < 0).slice(-3).reverse();
+            const reliableOnly = impactData.filter(r => {
+              const min = Math.min(r.withGames, r.withoutGames);
+              const max = Math.max(r.withGames, r.withoutGames);
+              return min > 5 && (min / max) >= 0.15;
+            });
+            const luckyCharms = reliableOnly.filter(r => r.impact > 0).slice(0, 3);
+            const kryptonite = reliableOnly.filter(r => r.impact < 0).slice(-3).reverse();
             const selectedName = getPlayerName(impactPlayerId);
             if (luckyCharms.length === 0 && kryptonite.length === 0) return null;
             return (
@@ -2155,7 +2160,7 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginBottom: '0.75rem' 
                 }}>
-                  Summary: who helps and who hurts
+                  Based on balanced samples only (6+ games on each side)
                 </div>
 
                 {luckyCharms.length > 0 && (
