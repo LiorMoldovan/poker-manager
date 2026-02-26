@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -74,6 +74,7 @@ const GraphsScreen = () => {
   // Impact view state
   const [impactPlayerId, setImpactPlayerId] = useState<string>('');
   const [showLimitedData, setShowLimitedData] = useState(false);
+  const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
   // Color mapping - stable by player order in permanent list
   const playerColorMap = useMemo(() => {
@@ -624,21 +625,41 @@ const GraphsScreen = () => {
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
             className={`btn btn-sm ${viewMode === 'cumulative' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('cumulative')}
+            onClick={() => {
+              if (viewMode === 'impact' && prevTimePeriodRef.current) {
+                setTimePeriod(prevTimePeriodRef.current.period);
+                setSelectedYear(prevTimePeriodRef.current.year);
+                prevTimePeriodRef.current = null;
+              }
+              setViewMode('cumulative');
+            }}
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             📈 Profit
           </button>
           <button 
             className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('headToHead')}
+            onClick={() => {
+              if (viewMode === 'impact' && prevTimePeriodRef.current) {
+                setTimePeriod(prevTimePeriodRef.current.period);
+                setSelectedYear(prevTimePeriodRef.current.year);
+                prevTimePeriodRef.current = null;
+              }
+              setViewMode('headToHead');
+            }}
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             🆚 Head-to-Head
           </button>
           <button 
             className={`btn btn-sm ${viewMode === 'impact' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('impact')}
+            onClick={() => {
+              if (viewMode !== 'impact') {
+                prevTimePeriodRef.current = { period: timePeriod, year: selectedYear };
+                setTimePeriod('all');
+              }
+              setViewMode('impact');
+            }}
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             🎯 Impact
