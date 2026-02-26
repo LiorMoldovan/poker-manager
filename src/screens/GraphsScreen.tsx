@@ -2155,11 +2155,12 @@ const GraphsScreen = () => {
                         borderRadius: '6px',
                         fontSize: '0.75rem',
                       }}>
-                        <span>
-                          <span style={{ fontWeight: '600' }}>{pair.playerName}</span>
-                          <span style={{ color: 'var(--text-muted)', margin: '0 0.3rem' }}>with</span>
-                          <span style={{ fontWeight: '600' }}>{pair.otherName}</span>
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: '700' }}>{pair.playerName}</span>
+                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                            when {pair.otherName} plays
+                          </span>
+                        </div>
                         <span style={{ fontWeight: '700', color: '#10B981' }}>
                           +₪{cleanNumber(pair.impact)}/game
                         </span>
@@ -2196,11 +2197,12 @@ const GraphsScreen = () => {
                         borderRadius: '6px',
                         fontSize: '0.75rem',
                       }}>
-                        <span>
-                          <span style={{ fontWeight: '600' }}>{pair.playerName}</span>
-                          <span style={{ color: 'var(--text-muted)', margin: '0 0.3rem' }}>with</span>
-                          <span style={{ fontWeight: '600' }}>{pair.otherName}</span>
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: '700' }}>{pair.playerName}</span>
+                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                            when {pair.otherName} plays
+                          </span>
+                        </div>
                         <span style={{ fontWeight: '700', color: '#EF4444' }}>
                           ₪{cleanNumber(pair.impact)}/game
                         </span>
