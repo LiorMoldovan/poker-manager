@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.1.7';
+export const APP_VERSION = '5.1.8';
 
 export interface ChangelogEntry {
   version: string;

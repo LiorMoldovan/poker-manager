@@ -12,7 +12,7 @@ import { Player, PlayerType, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 
-type ViewMode = 'cumulative' | 'headToHead';
+type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
 
 // Color palette for players - stable mapping by player ID
@@ -70,6 +70,9 @@ const GraphsScreen = () => {
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
   const [player2Id, setPlayer2Id] = useState<string>('');
+  
+  // Impact view state
+  const [impactPlayerId, setImpactPlayerId] = useState<string>('');
 
   // Color mapping - stable by player order in permanent list
   const playerColorMap = useMemo(() => {
@@ -106,6 +109,10 @@ const GraphsScreen = () => {
     if (permanentPlayerIds.length >= 2) {
       setPlayer1Id(permanentPlayerIds[0]);
       setPlayer2Id(permanentPlayerIds[1]);
+    }
+    
+    if (permanentPlayerIds.length >= 1) {
+      setImpactPlayerId(permanentPlayerIds[0]);
     }
   };
 
@@ -491,6 +498,134 @@ const GraphsScreen = () => {
     return playerStreaks;
   }, [filteredGames, gamePlayers, sortedPlayerIds, getPlayerName, getPlayerColor]);
 
+  // Impact data - for a selected player, how their avg changes with/without each other player
+  const impactData = useMemo(() => {
+    if (!impactPlayerId) return [];
+
+    const permanentPlayers = players.filter(p => p.type === 'permanent' && p.id !== impactPlayerId);
+    const results: Array<{
+      otherPlayerId: string;
+      otherPlayerName: string;
+      otherColor: string;
+      withGames: number;
+      withoutGames: number;
+      avgWith: number;
+      avgWithout: number;
+      impact: number;
+      winRateWith: number;
+      winRateWithout: number;
+      totalWith: number;
+      totalWithout: number;
+    }> = [];
+
+    for (const other of permanentPlayers) {
+      let withProfit = 0, withGames = 0, withWins = 0;
+      let withoutProfit = 0, withoutGames = 0, withoutWins = 0;
+
+      for (const game of filteredGames) {
+        const gps = gamePlayers.filter(gp => gp.gameId === game.id);
+        const selectedGp = gps.find(gp => gp.playerId === impactPlayerId);
+        if (!selectedGp) continue;
+
+        const otherPlayed = gps.some(gp => gp.playerId === other.id);
+
+        if (otherPlayed) {
+          withProfit += selectedGp.profit;
+          withGames++;
+          if (selectedGp.profit > 0) withWins++;
+        } else {
+          withoutProfit += selectedGp.profit;
+          withoutGames++;
+          if (selectedGp.profit > 0) withoutWins++;
+        }
+      }
+
+      if (withGames >= 3 && withoutGames >= 3) {
+        const avgWith = withProfit / withGames;
+        const avgWithout = withoutProfit / withoutGames;
+        results.push({
+          otherPlayerId: other.id,
+          otherPlayerName: other.name,
+          otherColor: getPlayerColor(other.id),
+          withGames,
+          withoutGames,
+          avgWith,
+          avgWithout,
+          impact: avgWith - avgWithout,
+          winRateWith: (withWins / withGames) * 100,
+          winRateWithout: (withoutWins / withoutGames) * 100,
+          totalWith: withProfit,
+          totalWithout: withoutProfit,
+        });
+      }
+    }
+
+    results.sort((a, b) => b.impact - a.impact);
+    return results;
+  }, [impactPlayerId, filteredGames, gamePlayers, players, getPlayerColor]);
+
+  // Chemistry highlights - auto-discover top lucky charm & kryptonite pairs across all players
+  const chemistryHighlights = useMemo(() => {
+    const permanentPlayers = players.filter(p => p.type === 'permanent');
+    const allPairs: Array<{
+      playerName: string;
+      playerId: string;
+      otherName: string;
+      otherId: string;
+      impact: number;
+      avgWith: number;
+      avgWithout: number;
+      withGames: number;
+      withoutGames: number;
+    }> = [];
+
+    for (const player of permanentPlayers) {
+      for (const other of permanentPlayers) {
+        if (player.id === other.id) continue;
+
+        let withProfit = 0, withGames = 0;
+        let withoutProfit = 0, withoutGames = 0;
+
+        for (const game of filteredGames) {
+          const gps = gamePlayers.filter(gp => gp.gameId === game.id);
+          const playerGp = gps.find(gp => gp.playerId === player.id);
+          if (!playerGp) continue;
+
+          const otherPlayed = gps.some(gp => gp.playerId === other.id);
+          if (otherPlayed) {
+            withProfit += playerGp.profit;
+            withGames++;
+          } else {
+            withoutProfit += playerGp.profit;
+            withoutGames++;
+          }
+        }
+
+        if (withGames >= 5 && withoutGames >= 3) {
+          const avgWith = withProfit / withGames;
+          const avgWithout = withoutProfit / withoutGames;
+          allPairs.push({
+            playerName: player.name,
+            playerId: player.id,
+            otherName: other.name,
+            otherId: other.id,
+            impact: avgWith - avgWithout,
+            avgWith,
+            avgWithout,
+            withGames,
+            withoutGames,
+          });
+        }
+      }
+    }
+
+    allPairs.sort((a, b) => b.impact - a.impact);
+    const luckyCharms = allPairs.slice(0, 3);
+    const kryptonite = allPairs.slice(-3).reverse();
+
+    return { luckyCharms, kryptonite };
+  }, [filteredGames, gamePlayers, players]);
+
   // Get timeframe label
   const getTimeframeLabel = () => {
     if (timePeriod === 'all') return 'All Time';
@@ -561,6 +696,13 @@ const GraphsScreen = () => {
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             🆚 Head-to-Head
+          </button>
+          <button 
+            className={`btn btn-sm ${viewMode === 'impact' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('impact')}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+          >
+            🎯 Impact
           </button>
         </div>
       </div>
@@ -1842,6 +1984,223 @@ const GraphsScreen = () => {
                 marginTop: '0.25rem' 
               }}>
                 Only includes games where both players participated
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* IMPACT VIEW */}
+      {viewMode === 'impact' && (
+        <>
+          {/* Player Selector */}
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '0.5rem' }}>
+              SELECT A PLAYER
+            </div>
+            <select
+              value={impactPlayerId}
+              onChange={(e) => setImpactPlayerId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                borderRadius: '8px',
+                border: '2px solid var(--primary)',
+                background: '#1a1a2e',
+                color: '#ffffff',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+              }}
+            >
+              {players.filter(p => p.type === 'permanent').map(p => (
+                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* With/Without Table */}
+          {impactData.length > 0 && (
+            <div className="card">
+              <h2 className="card-title mb-2">🎯 With vs Without</h2>
+              <div style={{ 
+                fontSize: '0.7rem', 
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginBottom: '0.75rem' 
+              }}>
+                How does {getPlayerName(impactPlayerId)}'s average change when each player is at the table?
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {impactData.map(row => {
+                  const impactColor = row.impact >= 0 ? '#10B981' : '#EF4444';
+                  const impactIcon = row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact >= 0 ? '↑' : '↓';
+                  return (
+                    <div key={row.otherPlayerId} style={{
+                      padding: '0.5rem',
+                      background: 'var(--surface)',
+                      borderRadius: '8px',
+                      borderRight: `3px solid ${impactColor}`,
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: '0.35rem',
+                      }}>
+                        <span style={{ fontWeight: '600', color: row.otherColor, fontSize: '0.85rem' }}>
+                          {row.otherPlayerName}
+                        </span>
+                        <span style={{ 
+                          fontWeight: '700', 
+                          fontSize: '0.9rem',
+                          color: impactColor,
+                        }}>
+                          {impactIcon} {row.impact >= 0 ? '+' : ''}₪{cleanNumber(row.impact)}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: '0.75rem',
+                        fontSize: '0.7rem',
+                        color: 'var(--text-muted)',
+                      }}>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>With: </span>
+                          <span style={{ 
+                            fontWeight: '600', 
+                            color: row.avgWith >= 0 ? '#10B981' : '#EF4444' 
+                          }}>
+                            {row.avgWith >= 0 ? '+' : ''}₪{cleanNumber(row.avgWith)}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', marginRight: '0.15rem' }}> ({row.withGames}g, {Math.round(row.winRateWith)}%W)</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)' }}>Without: </span>
+                          <span style={{ 
+                            fontWeight: '600', 
+                            color: row.avgWithout >= 0 ? '#10B981' : '#EF4444' 
+                          }}>
+                            {row.avgWithout >= 0 ? '+' : ''}₪{cleanNumber(row.avgWithout)}
+                          </span>
+                          <span style={{ color: 'var(--text-muted)', marginRight: '0.15rem' }}> ({row.withoutGames}g, {Math.round(row.winRateWithout)}%W)</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {impactData.length === 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>
+                  Not enough data (need 3+ games with and without each player)
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Chemistry Highlights */}
+          {(chemistryHighlights.luckyCharms.length > 0 || chemistryHighlights.kryptonite.length > 0) && (
+            <div className="card">
+              <h2 className="card-title mb-2">🍀 Chemistry</h2>
+              <div style={{ 
+                fontSize: '0.7rem', 
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginBottom: '0.75rem' 
+              }}>
+                Who lifts you up — and who drags you down?
+              </div>
+
+              {chemistryHighlights.luckyCharms.length > 0 && (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '700', 
+                    color: '#10B981', 
+                    marginBottom: '0.4rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                  }}>
+                    🍀 Lucky Charms
+                    <span style={{ fontSize: '0.6rem', fontWeight: '400', color: 'var(--text-muted)' }}>
+                      — performs better when they're around
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {chemistryHighlights.luckyCharms.map((pair, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.4rem 0.5rem',
+                        background: 'rgba(16, 185, 129, 0.08)',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                      }}>
+                        <span>
+                          <span style={{ fontWeight: '600' }}>{pair.playerName}</span>
+                          <span style={{ color: 'var(--text-muted)', margin: '0 0.3rem' }}>with</span>
+                          <span style={{ fontWeight: '600' }}>{pair.otherName}</span>
+                        </span>
+                        <span style={{ fontWeight: '700', color: '#10B981' }}>
+                          +₪{cleanNumber(pair.impact)}/game
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chemistryHighlights.kryptonite.length > 0 && (
+                <div>
+                  <div style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '700', 
+                    color: '#EF4444', 
+                    marginBottom: '0.4rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                  }}>
+                    💀 Kryptonite
+                    <span style={{ fontSize: '0.6rem', fontWeight: '400', color: 'var(--text-muted)' }}>
+                      — performs worse when they're around
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {chemistryHighlights.kryptonite.map((pair, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.4rem 0.5rem',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                      }}>
+                        <span>
+                          <span style={{ fontWeight: '600' }}>{pair.playerName}</span>
+                          <span style={{ color: 'var(--text-muted)', margin: '0 0.3rem' }}>with</span>
+                          <span style={{ fontWeight: '600' }}>{pair.otherName}</span>
+                        </span>
+                        <span style={{ fontWeight: '700', color: '#EF4444' }}>
+                          ₪{cleanNumber(pair.impact)}/game
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ 
+                fontSize: '0.55rem', 
+                color: 'var(--text-muted)',
+                textAlign: 'center',
+                marginTop: '0.6rem',
+              }}>
+                Impact = avg profit when player is at table vs when they're not • {getTimeframeLabel()}
               </div>
             </div>
           )}
