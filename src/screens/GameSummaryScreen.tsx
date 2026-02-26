@@ -9,11 +9,24 @@ import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 const hebrewNum = (n: number, feminine: boolean): string => {
   const abs = Math.round(Math.abs(n));
   if (abs === 0) return 'אפס';
-  if (abs > 10) return String(abs);
-  if (feminine) {
-    return ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'][abs];
+  const femOnes = ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+  const mascOnes = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+  const ones = feminine ? femOnes : mascOnes;
+  if (abs <= 10) return ones[abs];
+  if (abs <= 19) {
+    const unit = abs - 10;
+    const tenWord = feminine ? 'עשרה' : 'עשר';
+    return `${ones[unit]} ${tenWord}`;
   }
-  return ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'][abs];
+  if (abs <= 99) {
+    const tensWords = ['', '', 'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים'];
+    const ten = Math.floor(abs / 10);
+    const unit = abs % 10;
+    if (unit === 0) return tensWords[ten];
+    return `${tensWords[ten]} ו${ones[unit]}`;
+  }
+  if (abs === 100) return 'מאה';
+  return String(abs);
 };
 
 const GameSummaryScreen = () => {

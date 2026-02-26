@@ -837,7 +837,7 @@ const LiveGameScreen = () => {
           const myWp = Math.round(stats.winPercentage);
           const theirWp = Math.round(otherStats.winPercentage);
           if (myWp >= 55 && theirWp <= 35 && stats.gamesPlayed >= 5) {
-            messages.push(`${playerName} מנצח ${myWp} אחוז, ${other.playerName} רק ${theirWp} אחוז, אבל הערב שניהם קונים`);
+            messages.push(`${playerName} מנצח ${hebrewNum(myWp, false)} אחוז, ${other.playerName} רק ${hebrewNum(theirWp, false)} אחוז, אבל הערב שניהם קונים`);
           }
 
           // Both on streaks in opposite directions
@@ -859,7 +859,7 @@ const LiveGameScreen = () => {
         const totalTableSpent = allPlayers.reduce((sum, p) => sum + p.rebuys * settings.rebuyValue, 0);
         const mySharePercent = Math.round((mySpent / totalTableSpent) * 100);
         if (mySharePercent >= 25 && currentGameRebuys >= 3) {
-          messages.push(`${playerName} אחראי על ${mySharePercent} אחוז מהקופה הערב, תודה על התמיכה`);
+          messages.push(`${playerName} אחראי על ${hebrewNum(mySharePercent, false)} אחוז מהכסף הערב, תודה על התמיכה`);
         }
       }
 
@@ -935,9 +935,9 @@ const LiveGameScreen = () => {
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות של ${playerName}, ${spentTonight} שקל, תודה`);
         messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הנדיבות לא נגמרת`);
         if (stats.winPercentage >= 50) {
-          messages.push(`${playerName} מנצח ${Math.round(stats.winPercentage)} אחוז מהמשחקים, אז אולי עוד קנייה תעזור`);
+          messages.push(`${playerName} מנצח ${hebrewNum(Math.round(stats.winPercentage), false)} אחוז מהמשחקים, אז אולי עוד קנייה תעזור`);
         } else {
-          messages.push(`${playerName} מנצח רק ${Math.round(stats.winPercentage)} אחוז, ${spentTonight} שקל לא ישנו את הסטטיסטיקה`);
+          messages.push(`${playerName} מנצח רק ${hebrewNum(Math.round(stats.winPercentage), false)} אחוז, ${spentTonight} שקל לא ישנו את הסטטיסטיקה`);
         }
       } else if (currentGameRebuys >= 3) {
         messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, תודה על התרומה`);
