@@ -373,16 +373,17 @@ const ChipEntryScreen = () => {
     if (numpadPlayerId && currentChip) {
       updateChipCount(numpadPlayerId, currentChip.id, value);
       
-      // Check if this was the last chip
       if (numpadChipIndex >= chipValues.length - 1) {
-        // Last chip - mark player as done and return to player selection
         markPlayerDone(numpadPlayerId);
       } else {
-        // Advance to next chip (numpad stays open)
         setNumpadChipIndex(numpadChipIndex + 1);
       }
     }
   };
+
+  // Get current numpad chip
+  const numpadChip = chipValues[numpadChipIndex] || null;
+  const nextChip = chipValues[numpadChipIndex + 1] || null;
 
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
