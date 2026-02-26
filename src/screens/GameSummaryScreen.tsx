@@ -443,8 +443,19 @@ const GameSummaryScreen = () => {
 
         const winner = sortedPlayers[0];
         const loser = sortedPlayers[sortedPlayers.length - 1];
-        const totalRebuys = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
-        const pot = totalRebuys * settings.rebuyValue;
+        const totalBuyins = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
+        const totalRebuysOnly = totalBuyins - sortedPlayers.length;
+
+        // Format rebuy count with proper Hebrew for halves
+        const formatRebuysHebrew = (n: number): string => {
+          const hasHalf = Math.abs((n % 1) - 0.5) < 0.01;
+          const whole = Math.floor(n);
+          if (hasHalf) {
+            if (whole === 0) return 'חצי';
+            return `${hebrewNum(whole, true)} וחצי`;
+          }
+          return hebrewNum(whole, true);
+        };
 
         const winMessages = [
           `המנצח הגדול של הערב הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
@@ -466,7 +477,7 @@ const GameSummaryScreen = () => {
           `ו${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
         ];
-        const potMessage = `על השולחן הערב: ${cleanNumber(pot)} שקל, ${hebrewNum(totalRebuys, true)} קניות.`;
+        const potMessage = `סך הכל ${formatRebuysHebrew(totalRebuysOnly)} קניות חוזרות הערב.`;
 
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];

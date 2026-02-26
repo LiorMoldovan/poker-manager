@@ -509,7 +509,7 @@ const LiveGameScreen = () => {
       'וואו, זה היה מהיר',
       'שנייה, מה קרה שם',
       'קצב מרשים של קניות',
-      'הצ׳יפים נעלמים כמו קסם',
+      'הכסף נעלם כמו קסם',
       'וואלה, אפילו לא הספקנו לשתות',
       'מהיר, כמו כספומט אנושי',
       'יש פה מירוץ שאני לא יודעת עליו?',
@@ -671,7 +671,7 @@ const LiveGameScreen = () => {
       } else if (stats.currentStreak === 2) {
         messages.push(`${playerName} ניצח פעמיים ברצף, הערב יהיה שלישי?`);
       } else if (stats.currentStreak <= -4) {
-        messages.push(`${playerName} ב${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים ברצף, הקניות לא יפתרו את זה`);
+        messages.push(`${playerName} עם ${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים ברצף, הקניות לא יפתרו את זה`);
         messages.push(`${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים ברצף ל${playerName}, אין מילים`);
         messages.push(`${playerName} בבור של ${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים, הערב חייב להשתנות`);
       } else if (stats.currentStreak === -3) {
@@ -697,10 +697,10 @@ const LiveGameScreen = () => {
 
       // --- Overall profit/loss ---
       if (stats.totalProfit > 200) {
-        messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל בסך הכל, יש מאיפה לקנות`);
-        messages.push(`${playerName} עדיין ברווח של ${Math.round(stats.totalProfit)} שקל, אז מה זה עוד קנייה`);
+        messages.push(`${playerName} הרוויח ${Math.round(stats.totalProfit)} שקל בסך הכל, יש מאיפה לקנות`);
+        messages.push(`${playerName} עדיין בפלוס ${Math.round(stats.totalProfit)} שקל, אז מה זה עוד קנייה`);
       } else if (stats.totalProfit > 0 && stats.totalProfit <= 200) {
-        messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל, אבל זה מתכווץ`);
+        messages.push(`${playerName} עדיין בפלוס ${Math.round(stats.totalProfit)} שקל, אבל זה מתכווץ`);
       } else if (stats.totalProfit < -200) {
         messages.push(`${playerName} במינוס של ${Math.round(Math.abs(stats.totalProfit))} שקל בסך הכל, עוד קנייה זה טיפה בים`);
         messages.push(`${playerName} מנסה להחזיר ${Math.round(Math.abs(stats.totalProfit))} שקל מינוס, בהצלחה עם זה`);
@@ -817,7 +817,7 @@ const LiveGameScreen = () => {
 
           // Opposite profit trends
           if (stats.totalProfit > 100 && otherStats.totalProfit < -100) {
-            messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל, ${other.playerName} במינוס ${Math.round(Math.abs(otherStats.totalProfit))}, הערב הכל הפוך?`);
+            messages.push(`${playerName} בפלוס ${Math.round(stats.totalProfit)} שקל, ${other.playerName} במינוס ${Math.round(Math.abs(otherStats.totalProfit))}, הערב הכל הפוך?`);
           }
 
           // Win rate comparison
@@ -891,11 +891,11 @@ const LiveGameScreen = () => {
       if (isQuickRebuy && currentGameRebuys >= 3) {
         messages.push(`${playerName} קנה שוב תוך דקות, הכסף לא מחזיק`);
         messages.push(`${playerName} חוזר מהר, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות`);
-        messages.push(`הצ'יפים של ${playerName} נעלמים מהר, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות הערב`);
+        messages.push(`הכסף של ${playerName} נעלם מהר, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות הערב`);
         messages.push(`${playerName}, שנייה, עוד לא הספקנו לערבב את הקלפים`);
         messages.push(`${playerName} קונה כאילו יש מבצע, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} הערב`);
         if (stats.totalProfit > 100) {
-          messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל, אז מה אם זה מהר`);
+          messages.push(`${playerName} בפלוס ${Math.round(stats.totalProfit)} שקל, אז מה אם זה מהר`);
         } else if (stats.totalProfit < -100) {
           messages.push(`${playerName} מנסה להחזיר ${Math.round(Math.abs(stats.totalProfit))} שקל, ובמהירות`);
         }
@@ -913,7 +913,7 @@ const LiveGameScreen = () => {
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ל${playerName}, ${spentTonight} שקל, נו, לפחות יש אופי`);
         messages.push(`${playerName} לא מוותר, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ועדיין מחייך`);
         if (stats.totalProfit > 0) {
-          messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל בסך הכל, אז מה זה עוד ${spentTonight}?`);
+          messages.push(`${playerName} בפלוס ${Math.round(stats.totalProfit)} שקל בסך הכל, אז מה זה עוד ${spentTonight}?`);
         } else {
           messages.push(`${playerName} במינוס של ${Math.round(Math.abs(stats.totalProfit))} שקל, ועכשיו עוד ${spentTonight} הערב`);
         }
@@ -1119,13 +1119,12 @@ const LiveGameScreen = () => {
       const milestones = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 100];
       const crossedMilestone = milestones.find(m => prevRebuysOnly < m && totalRebuysOnly >= m);
       if (crossedMilestone) {
-        const potValue = cleanNumber(ctx.totalGroupRebuys * rebuyValue);
         const milestoneMessages = [
-          `כבר חזרו לקנות ${hebrewNum(crossedMilestone, true)} פעמים! הקופה על ${potValue} שקל`,
-          `${hebrewNum(crossedMilestone, true)} קניות נוספות על השולחן! ${potValue} שקל על השולחן`,
-          `רגע של דממה, כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות, ${potValue} שקל על השולחן`,
-          `כבר ${hebrewNum(crossedMilestone, true)} קניות נוספות! ערב יקר`,
-          `${hebrewNum(crossedMilestone, true)} פעמים חזרו לקנות, ${potValue} שקל, מי משלם את זה?`,
+          `כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות הערב!`,
+          `${hebrewNum(crossedMilestone, true)} קניות נוספות על השולחן!`,
+          `הגענו כבר ל ${hebrewNum(crossedMilestone, true)} קניות חוזרות, ערב יקר`,
+          `${hebrewNum(crossedMilestone, true)} פעמים חזרו לקנות הערב!`,
+          `וואו, כבר ${hebrewNum(crossedMilestone, true)} קניות נוספות!`,
         ];
         followUps.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
       }

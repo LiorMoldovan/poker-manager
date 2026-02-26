@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.2.5';
+export const APP_VERSION = '5.2.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.2.6',
+    date: '2026-02-26',
+    changes: [
+      '🐛 Fix Insights blank screen — variable used before definition',
+      '🔊 Fix rebuy sound stopping after multiple rebuys — reuse AudioContext',
+      '🎤 Added 80+ new rebuy voice messages for variety',
+      '🖥️ Fix all dropdown menus for PC — explicit colors for dark theme',
+      '🎨 Redesign Impact cards (With vs Without) — cleaner modern layout',
+      '🎭 Redesign "Moments of the Night" — single line per row, card style',
+      '🧹 Remove redundant arrows from impact badges',
+    ]
+  },
   {
     version: '5.2.0',
     date: '2026-02-26',
