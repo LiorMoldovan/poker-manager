@@ -862,14 +862,14 @@ const GraphsScreen = () => {
                 padding: '0.5rem',
                 borderRadius: '8px',
                 border: '2px solid #10B981',
-                background: 'rgba(16, 185, 129, 0.1)',
-                color: 'var(--text)',
+                background: '#1a1a2e',
+                color: '#ffffff',
                 fontSize: '0.9rem',
                 fontWeight: '600',
               }}
             >
               {players.filter(p => p.type === 'permanent').map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
             </select>
             <span style={{ fontSize: '1.2rem', fontWeight: '700' }}>🆚</span>
@@ -881,14 +881,14 @@ const GraphsScreen = () => {
                 padding: '0.5rem',
                 borderRadius: '8px',
                 border: '2px solid #3B82F6',
-                background: 'rgba(59, 130, 246, 0.1)',
-                color: 'var(--text)',
+                background: '#1a1a2e',
+                color: '#ffffff',
                 fontSize: '0.9rem',
                 fontWeight: '600',
               }}
             >
               {players.filter(p => p.type === 'permanent').map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
             </select>
           </div>
