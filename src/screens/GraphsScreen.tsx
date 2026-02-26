@@ -2037,18 +2037,19 @@ const GraphsScreen = () => {
                   const impactIcon = row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact >= 0 ? '↑' : '↓';
                   return (
                     <div key={row.otherPlayerId} style={{
-                      padding: '0.5rem',
+                      padding: '0.5rem 0.6rem',
                       background: 'var(--surface)',
                       borderRadius: '8px',
                       borderRight: `3px solid ${impactColor}`,
                     }}>
+                      {/* Header: Name + Impact */}
                       <div style={{ 
                         display: 'flex', 
                         justifyContent: 'space-between', 
                         alignItems: 'center',
-                        marginBottom: '0.35rem',
+                        marginBottom: '0.4rem',
                       }}>
-                        <span style={{ fontWeight: '600', color: row.otherColor, fontSize: '0.85rem' }}>
+                        <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
                           {row.otherPlayerName}
                         </span>
                         <span style={{ 
@@ -2059,31 +2060,46 @@ const GraphsScreen = () => {
                           {impactIcon} {row.impact >= 0 ? '+' : ''}₪{cleanNumber(row.impact)}
                         </span>
                       </div>
+                      {/* Two-column: With / Without */}
                       <div style={{ 
                         display: 'flex', 
-                        gap: '0.75rem',
-                        fontSize: '0.7rem',
-                        color: 'var(--text-muted)',
+                        gap: '0.4rem',
                       }}>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>With: </span>
-                          <span style={{ 
-                            fontWeight: '600', 
-                            color: row.avgWith >= 0 ? '#10B981' : '#EF4444' 
+                        <div style={{
+                          flex: 1,
+                          padding: '0.3rem 0.4rem',
+                          background: 'rgba(255,255,255,0.03)',
+                          borderRadius: '6px',
+                        }}>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>With</div>
+                          <div style={{ 
+                            fontWeight: '700', 
+                            fontSize: '0.8rem',
+                            color: row.avgWith >= 0 ? '#10B981' : '#EF4444',
                           }}>
                             {row.avgWith >= 0 ? '+' : ''}₪{cleanNumber(row.avgWith)}
-                          </span>
-                          <span style={{ color: 'var(--text-muted)', marginRight: '0.15rem' }}> ({row.withGames}g, {Math.round(row.winRateWith)}%W)</span>
+                          </div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                            {row.withGames}g · {Math.round(row.winRateWith)}%W
+                          </div>
                         </div>
-                        <div>
-                          <span style={{ color: 'var(--text-muted)' }}>Without: </span>
-                          <span style={{ 
-                            fontWeight: '600', 
-                            color: row.avgWithout >= 0 ? '#10B981' : '#EF4444' 
+                        <div style={{
+                          flex: 1,
+                          padding: '0.3rem 0.4rem',
+                          background: 'rgba(255,255,255,0.03)',
+                          borderRadius: '6px',
+                        }}>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Without</div>
+                          <div style={{ 
+                            fontWeight: '700', 
+                            fontSize: '0.8rem',
+                            color: row.avgWithout >= 0 ? '#10B981' : '#EF4444',
                           }}>
                             {row.avgWithout >= 0 ? '+' : ''}₪{cleanNumber(row.avgWithout)}
-                          </span>
-                          <span style={{ color: 'var(--text-muted)', marginRight: '0.15rem' }}> ({row.withoutGames}g, {Math.round(row.winRateWithout)}%W)</span>
+                          </div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                            {row.withoutGames}g · {Math.round(row.winRateWithout)}%W
+                          </div>
                         </div>
                       </div>
                     </div>
