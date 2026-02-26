@@ -1357,7 +1357,7 @@ const LiveGameScreen = () => {
         </div>
         <div>
           <div className="summary-title">Total Buyins</div>
-          <div className="summary-value">{cleanNumber(totalRebuys)}</div>
+          <div className="summary-value">{totalRebuys % 1 !== 0 ? totalRebuys.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : cleanNumber(totalRebuys)}</div>
         </div>
       </div>
 

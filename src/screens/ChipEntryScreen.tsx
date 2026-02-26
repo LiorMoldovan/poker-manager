@@ -381,10 +381,6 @@ const ChipEntryScreen = () => {
     }
   };
 
-  // Get current numpad chip
-  const numpadChip = chipValues[numpadChipIndex] || null;
-  const nextChip = chipValues[numpadChipIndex + 1] || null;
-
   // Get total chip points for a player
   const getPlayerChipPoints = (playerId: string): number => {
     return calculateChipTotal(chipCounts[playerId] || {}, chipValues);
