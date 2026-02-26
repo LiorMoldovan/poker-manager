@@ -1909,6 +1909,71 @@
       "status": "completed",
       "createdAt": "2026-02-19T18:59:36.908Z",
       "location": "סגל"
+    },
+    {
+      "id": "mm3epmd9kmm1xjw5eya",
+      "date": "2026-02-26T11:55:30.045Z",
+      "status": "completed",
+      "createdAt": "2026-02-26T11:55:30.045Z",
+      "location": "ליאור",
+      "forecasts": [
+        {
+          "playerName": "ליאור",
+          "expectedProfit": 113,
+          "highlight": "מקום #2, רק 77₪ מהפסגה!",
+          "sentence": "עם 76% נצחונות ו-2 ניצחונות רצופים, ליאור קרוב מתמיד למקום הראשון בטבלת H1 2026, רק 77₪ מתחת לחרדון.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אייל",
+          "expectedProfit": -68,
+          "highlight": "קאמבק לטבלה, 582₪ יתרון!",
+          "sentence": "לאחר 2 ניצחונות רצופים, אייל עם ממוצע של -6₪ ב-H1 2026, אך שומר על יתרון של 582₪ על סגל במקום האחרון.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "אורן",
+          "expectedProfit": 50,
+          "highlight": "סוס אפל, פורמה עולה!",
+          "sentence": "אורן מראה סימני התאוששות עם ממוצע של +24₪ ב-H1 2026, לעומת ממוצע היסטורי של -16₪, מה שמבטיח ערב מעניין.",
+          "isSurprise": true
+        },
+        {
+          "playerName": "ליכטר",
+          "expectedProfit": 130,
+          "highlight": "מקום #3, רק 8₪ מהמקום השני!",
+          "sentence": "עם ממוצע מדהים של +97₪ ב-H1 2026, ליכטר דולק אחרי ליאור במרחק של 8₪ בלבד, ומסמן את דרכו למעלה.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "סגל",
+          "expectedProfit": -133,
+          "highlight": "5 הפסדים ברצף - מחפש מהפך!",
+          "sentence": "סגל מתמודד עם רצף של 5 הפסדים, וממוצע של -105₪ ב-H1 2026, אך ערב כזה הוא בדיוק ההזדמנות לשינוי כיוון.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "תומר",
+          "expectedProfit": -68,
+          "highlight": "משחק אחרון דרמטי, שיפור ב-2026!",
+          "sentence": "לאחר הפסד של -210₪ במשחקו האחרון, תומר מראה שיפור משמעותי ב-2026 עם ממוצע +14₪, מקווה להמשיך את המגמה החיובית.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "פאבל",
+          "expectedProfit": -139,
+          "highlight": "חוזר אחרי 143 ימים, 3 הפסדים ברצף!",
+          "sentence": "פאבל חוזר אחרי חצי שנה של היעדרות, עם 3 הפסדים רצופים וניסיון לשבור את המומנטום השלילי מה-H2 2025.",
+          "isSurprise": false
+        },
+        {
+          "playerName": "חרדון",
+          "expectedProfit": 115,
+          "highlight": "מוביל את הטבלה עם ניצחון ענק!",
+          "sentence": "חרדון מוביל את טבלת H1 2026 עם ממוצע מרשים של +82₪, לאחר ניצחון של +345₪ במשחקו האחרון, מוכיח את יכולתו.",
+          "isSurprise": false
+        }
+      ]
     }
   ],
   "gamePlayers": [
@@ -18709,8 +18774,144 @@
       },
       "finalValue": 87.75,
       "profit": -2.25
+    },
+    {
+      "id": "mm3epmd93cxg9w0k8g2",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
+      "playerName": "ליאור",
+      "rebuys": 9,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 60
+      },
+      "finalValue": 900,
+      "profit": 630
+    },
+    {
+      "id": "mm3epmd98b0vxs6jh3w",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "b1ae0113-3ffc-41f5-a732-778d79c46286",
+      "playerName": "אייל",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -60
+    },
+    {
+      "id": "mm3epmd9xbhwp3xzb2",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
+      "playerName": "אורן",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mm3epmd9r10sqeit7dp",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
+      "playerName": "ליכטר",
+      "rebuys": 6,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -180
+    },
+    {
+      "id": "mm3epmd9ycqxnwv9or",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
+      "playerName": "סגל",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -60
+    },
+    {
+      "id": "mm3epmd9m801bahgpa",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "2cedc21c-7c0d-479c-ac04-483638d01881",
+      "playerName": "תומר",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
+    },
+    {
+      "id": "mm3epmd9a8bqbgb1pu",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "5c6c9fd8-b8c1-4500-9020-cb04ad83af22",
+      "playerName": "פאבל",
+      "rebuys": 2,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -60
+    },
+    {
+      "id": "mm3epmd9pxsf50lgjc",
+      "gameId": "mm3epmd9kmm1xjw5eya",
+      "playerId": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
+      "playerName": "חרדון",
+      "rebuys": 3,
+      "chipCounts": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0
+      },
+      "finalValue": 0,
+      "profit": -90
     }
   ],
-  "lastUpdated": "2026-02-21T13:48:54.990Z",
+  "lastUpdated": "2026-02-26T12:07:24.918Z",
   "updatedBy": "admin"
 }
