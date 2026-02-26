@@ -760,10 +760,10 @@ const LiveGameScreen = () => {
         const avgRebuys = stats2026.avgRebuysPerGame;
         if (currentGameRebuys > avgRebuys * 1.5 && currentGameRebuys >= 3) {
           messages.push(`${playerName} בממוצע קונה ${Math.round(avgRebuys)} למשחק, הלילה כבר ${currentGameRebuys}`);
-          messages.push(`${playerName} מעל הממוצע שלו הלילה, רגיל ל${Math.round(avgRebuys)} וכבר ${currentGameRebuys}`);
+          messages.push(`${playerName} מעל הממוצע שלו הלילה, רגיל קונה ${Math.round(avgRebuys)} וכבר ${currentGameRebuys}`);
         }
         if (currentGameRebuys <= 2 && avgRebuys >= 4) {
-          messages.push(`${playerName} רגיל ל${Math.round(avgRebuys)} קניות למשחק, אז עוד יבואו`);
+          messages.push(`${playerName} רגיל קונה ${Math.round(avgRebuys)} פעמים למשחק, אז עוד יבואו`);
         }
 
         const totalRebuys2026 = stats2026.totalRebuys + currentGameRebuys;
@@ -980,7 +980,7 @@ const LiveGameScreen = () => {
     if (isGroupRecord) {
       const messages = [
         `${playerName} ממשיך להרחיק את השיא הקבוצתי! כבר ${currentCount} קניות`,
-        `השיא עולה ל${currentCount}! ${playerName} לא עוצר`,
+        `השיא עולה, כבר ${currentCount}! ${playerName} לא עוצר`,
         `${playerName} בעולם משלו, השיא כבר ${currentCount}`,
         `עוד אחד לשיא! ${playerName} כבר ב${currentCount}`,
       ];
@@ -988,8 +988,8 @@ const LiveGameScreen = () => {
     }
     const messages = [
       `${playerName} ממשיך לשבור את השיא האישי, כבר ${currentCount} קניות!`,
-      `השיא האישי עולה ל${currentCount}! ${playerName} לא מוותר`,
-      `${playerName} מגדיל את השיא האישי ל${currentCount}, מה הגבול?`,
+      `השיא האישי עולה, כבר ${currentCount}! ${playerName} לא מוותר`,
+      `${playerName} מגדיל את השיא האישי, כבר ${currentCount}, מה הגבול?`,
     ];
     return messages[Math.floor(Math.random() * messages.length)];
   };
@@ -1111,7 +1111,7 @@ const LiveGameScreen = () => {
           `כבר חזרו לקנות ${crossedMilestone} פעמים! הקופה על ${potValue} שקל`,
           `${crossedMilestone} קניות נוספות על השולחן! ${potValue} שקל בקופה`,
           `רגע של דממה, כבר ${crossedMilestone} קניות חוזרות, ${potValue} שקל בקופה`,
-          `הגענו ל${crossedMilestone} קניות נוספות! ערב יקר`,
+          `כבר ${crossedMilestone} קניות נוספות! ערב יקר`,
           `${crossedMilestone} פעמים חזרו לקנות, ${potValue} שקל, מי משלם את זה?`,
         ];
         followUps.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
