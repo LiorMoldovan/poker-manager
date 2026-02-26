@@ -460,21 +460,21 @@ const GameSummaryScreen = () => {
         const winMessages = [
           `המנצח הגדול של הערב הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
           `${winner.playerName} לוקח הכל הערב! פלוס ${cleanNumber(winner.profit)} שקל`,
-          `ונצחון גדול ל${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל`,
+          `ונצחון גדול של ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל`,
           `${winner.playerName} הולך הביתה עם פלוס ${cleanNumber(winner.profit)} שקל, כל הכבוד!`,
           `${winner.playerName} שולט הערב, פלוס ${cleanNumber(winner.profit)} שקל`,
-          `הכסף הולך ל${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל בכיס`,
+          `הכסף הולך אל ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל בכיס`,
           `${winner.playerName} סוגר את הערב עם חיוך, פלוס ${cleanNumber(winner.profit)} שקל`,
-          `ו${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
+          `ו ${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
         ];
         const loseMessages = [
           `והתורם הרשמי של הערב, ${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
           `${loser.playerName}, תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
-          `ו${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
+          `ו ${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
           `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן, גיבור אמיתי`,
           `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל, אבל מי סופר`,
           `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, הערב לא היה שלו`,
-          `ו${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
+          `ו ${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
         ];
         const potMessage = `סך הכל ${formatRebuysHebrew(totalRebuysOnly)} קניות חוזרות הערב.`;
