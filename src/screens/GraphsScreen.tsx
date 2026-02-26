@@ -1971,14 +1971,24 @@ const GraphsScreen = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 {impactData.map(row => {
-                  const impactColor = row.impact >= 0 ? '#10B981' : '#EF4444';
-                  const impactIcon = row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact >= 0 ? '↑' : '↓';
+                  const roundedImpact = Math.round(row.impact);
+                  const isZero = roundedImpact === 0;
+                  const impactColor = isZero ? 'var(--text-muted)' : row.impact > 0 ? '#10B981' : '#EF4444';
+                  const impactIcon = isZero ? '—' : row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact > 0 ? '↑' : '↓';
+                  const minSample = Math.min(row.withGames, row.withoutGames);
+                  const maxSample = Math.max(row.withGames, row.withoutGames);
+                  const isLowConfidence = minSample <= 5 || (minSample / maxSample) < 0.15;
+                  const avgWithRounded = Math.round(row.avgWith);
+                  const avgWithoutRounded = Math.round(row.avgWithout);
+                  const avgWithColor = avgWithRounded === 0 ? 'var(--text-muted)' : avgWithRounded > 0 ? '#10B981' : '#EF4444';
+                  const avgWithoutColor = avgWithoutRounded === 0 ? 'var(--text-muted)' : avgWithoutRounded > 0 ? '#10B981' : '#EF4444';
                   return (
                     <div key={row.otherPlayerId} style={{
                       padding: '0.5rem 0.6rem',
                       background: 'var(--surface)',
                       borderRadius: '8px',
                       borderRight: `3px solid ${impactColor}`,
+                      opacity: isLowConfidence ? 0.6 : 1,
                     }}>
                       {/* Header: Name + Impact */}
                       <div style={{ 
@@ -1987,15 +1997,20 @@ const GraphsScreen = () => {
                         alignItems: 'center',
                         marginBottom: '0.4rem',
                       }}>
-                        <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
-                          {row.otherPlayerName}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
+                            {row.otherPlayerName}
+                          </span>
+                          {isLowConfidence && (
+                            <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }} title="Small sample on one side">⚠️</span>
+                          )}
+                        </div>
                         <span style={{ 
                           fontWeight: '700', 
                           fontSize: '0.9rem',
                           color: impactColor,
                         }}>
-                          {impactIcon} {row.impact >= 0 ? '+' : ''}₪{cleanNumber(row.impact)}
+                          {impactIcon} {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
                         </span>
                       </div>
                       {/* Two-column: With / Without */}
@@ -2013,9 +2028,9 @@ const GraphsScreen = () => {
                           <div style={{ 
                             fontWeight: '700', 
                             fontSize: '0.8rem',
-                            color: row.avgWith >= 0 ? '#10B981' : '#EF4444',
+                            color: avgWithColor,
                           }}>
-                            {row.avgWith >= 0 ? '+' : ''}₪{cleanNumber(row.avgWith)}
+                            {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
                           </div>
                           <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                             {row.withGames}g · {Math.round(row.winRateWith)}%W
@@ -2031,9 +2046,9 @@ const GraphsScreen = () => {
                           <div style={{ 
                             fontWeight: '700', 
                             fontSize: '0.8rem',
-                            color: row.avgWithout >= 0 ? '#10B981' : '#EF4444',
+                            color: avgWithoutColor,
                           }}>
-                            {row.avgWithout >= 0 ? '+' : ''}₪{cleanNumber(row.avgWithout)}
+                            {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
                           </div>
                           <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                             {row.withoutGames}g · {Math.round(row.winRateWithout)}%W
