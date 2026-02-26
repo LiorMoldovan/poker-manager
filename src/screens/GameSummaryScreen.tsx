@@ -1023,8 +1023,11 @@ const GameSummaryScreen = () => {
                   <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
                   <span style={{ 
                     fontSize: '0.75rem', 
-                    lineHeight: 1.4,
+                    lineHeight: 1.5,
                     color: 'var(--text)',
+                    flex: 1,
+                    minWidth: 0,
+                    wordBreak: 'break-word',
                   }}>
                     <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
                     {' — '}

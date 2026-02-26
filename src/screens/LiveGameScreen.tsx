@@ -485,15 +485,28 @@ const LiveGameScreen = () => {
 
   // Hebrew number with proper gender agreement for nouns
   // feminine=true for feminine nouns (קניות, פעמים, קנייה)
-  // feminine=false for masculine nouns (נצחונות, הפסדים, משחקים, שחקנים)
+  // feminine=false for masculine nouns (נצחונות, הפסדים, משחקים, שחקנים, אחוז)
   const hebrewNum = (n: number, feminine: boolean): string => {
     const abs = Math.round(Math.abs(n));
     if (abs === 0) return 'אפס';
-    if (abs > 10) return String(abs);
-    if (feminine) {
-      return ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'][abs];
+    const femOnes = ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+    const mascOnes = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+    const ones = feminine ? femOnes : mascOnes;
+    if (abs <= 10) return ones[abs];
+    if (abs <= 19) {
+      const unit = abs - 10;
+      const tenWord = feminine ? 'עשרה' : 'עשר';
+      return `${ones[unit]} ${tenWord}`;
     }
-    return ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'][abs];
+    if (abs <= 99) {
+      const tensWords = ['', '', 'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים'];
+      const ten = Math.floor(abs / 10);
+      const unit = abs % 10;
+      if (unit === 0) return tensWords[ten];
+      return `${tensWords[ten]} ו${ones[unit]}`;
+    }
+    if (abs === 100) return 'מאה';
+    return String(abs);
   };
 
   // Creative messages by total buyins count (including the initial buy-in)
@@ -684,15 +697,15 @@ const LiveGameScreen = () => {
       // --- Win percentage ---
       const wp = Math.round(stats.winPercentage);
       if (wp >= 65 && stats.gamesPlayed >= 5) {
-        messages.push(`${playerName} מנצח ${wp} אחוז מהמשחקים, אבל הערב הקניות אומרות אחרת`);
-        messages.push(`${wp} אחוז נצחונות של ${playerName}, בדרך כלל לא צריך לקנות ככה`);
+        messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז מהמשחקים, אבל הערב הקניות אומרות אחרת`);
+        messages.push(`${hebrewNum(wp, false)} אחוז נצחונות של ${playerName}, בדרך כלל לא צריך לקנות ככה`);
       } else if (wp >= 55 && stats.gamesPlayed >= 5) {
-        messages.push(`${playerName} מנצח ${wp} אחוז, מה קרה הערב?`);
+        messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז, מה קרה הערב?`);
       } else if (wp <= 30 && stats.gamesPlayed >= 5) {
-        messages.push(`${playerName} מנצח רק ${wp} אחוז מהמשחקים, הסטטיסטיקה מדברת`);
-        messages.push(`${wp} אחוז נצחונות של ${playerName}, לפחות עקבי`);
+        messages.push(`${playerName} מנצח רק ${hebrewNum(wp, false)} אחוז מהמשחקים, הסטטיסטיקה מדברת`);
+        messages.push(`${hebrewNum(wp, false)} אחוז נצחונות של ${playerName}, לפחות עקבי`);
       } else if (wp <= 40 && stats.gamesPlayed >= 8) {
-        messages.push(`${playerName} עם ${wp} אחוז נצחונות, צריך לשפר`);
+        messages.push(`${playerName} עם ${hebrewNum(wp, false)} אחוז נצחונות, צריך לשפר`);
       }
 
       // --- Overall profit/loss ---
