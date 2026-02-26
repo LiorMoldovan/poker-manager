@@ -23,7 +23,7 @@ const GameSummaryScreen = () => {
   const [forecastComment, setForecastComment] = useState<string | null>(null);
   const [isLoadingComment, setIsLoadingComment] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
-  const [funStats, setFunStats] = useState<{ emoji: string; text: string }[]>([]);
+  const [funStats, setFunStats] = useState<{ emoji: string; label: string; detail: string }[]>([]);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
@@ -119,7 +119,7 @@ const GameSummaryScreen = () => {
     }
     
     // Calculate highlights — prioritized, period-focused, always exactly 10
-    type Highlight = { emoji: string; text: string; priority: number };
+    type Highlight = { emoji: string; label: string; detail: string; priority: number };
     const bank: Highlight[] = [];
     const settings2 = getSettings();
     const totalRebuysTonight = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
@@ -133,20 +133,21 @@ const GameSummaryScreen = () => {
     const periodLabel = periodMonth <= 6 ? `H1 ${periodYear}` : `H2 ${periodYear}`;
 
     // --- Tonight's game highlights ---
+    const pLabel = periodLabel;
 
     // 1. Rebuy King
     const maxRebuys = Math.max(...sortedPlayers.map(p => p.rebuys));
     const rebuyKings = sortedPlayers.filter(p => p.rebuys === maxRebuys);
     if (maxRebuys >= 5) {
-      const names = rebuyKings.map(p => p.playerName).join(' & ');
-      bank.push({ emoji: '👑', text: `Rebuy King: ${names} (${maxRebuys} buyins, ₪${cleanNumber(maxRebuys * settings2.rebuyValue)})`, priority: 3 });
+      const names = rebuyKings.map(p => p.playerName).join(' ו');
+      bank.push({ emoji: '👑', label: 'מלך הקניות', detail: `${names} — ${maxRebuys} קניות (₪${cleanNumber(maxRebuys * settings2.rebuyValue)})`, priority: 3 });
     }
 
     // 2. Comeback Win
     const comebackWinners = sortedPlayers.filter(p => p.profit > 0 && p.rebuys >= 5);
     if (comebackWinners.length > 0) {
-      const names = comebackWinners.sort((a, b) => b.rebuys - a.rebuys).map(p => p.playerName).join(' & ');
-      bank.push({ emoji: '🔄', text: `Comeback: ${names} won despite ${comebackWinners.length > 1 ? '5+' : comebackWinners[0].rebuys} buyins`, priority: 2 });
+      const parts = comebackWinners.sort((a, b) => b.rebuys - a.rebuys).map(p => `${p.playerName} (${p.rebuys} קניות, +₪${cleanNumber(p.profit)})`);
+      bank.push({ emoji: '🔄', label: 'קאמבק', detail: parts.join(', '), priority: 2 });
     }
 
     // 3. Quiet Loser
@@ -156,7 +157,7 @@ const GameSummaryScreen = () => {
       if (minLoseRebuys <= 2) {
         const quietLoser = losers.find(p => p.rebuys === minLoseRebuys);
         if (quietLoser) {
-          bank.push({ emoji: '🤫', text: `Bad luck: ${quietLoser.playerName} lost ${formatCurrency(quietLoser.profit)} with only ${quietLoser.rebuys} buyins`, priority: 4 });
+          bank.push({ emoji: '🤫', label: 'חוסר מזל', detail: `${quietLoser.playerName} — ${formatCurrency(quietLoser.profit)} עם ${quietLoser.rebuys} קניות בלבד`, priority: 4 });
         }
       }
     }
@@ -170,7 +171,7 @@ const GameSummaryScreen = () => {
       }));
       const bestROI = [...withROI].sort((a, b) => b.roi - a.roi)[0];
       if (bestROI.roi >= 30) {
-        bank.push({ emoji: '📈', text: `Best ROI: ${bestROI.playerName} (${Math.round(bestROI.roi)}% return on investment)`, priority: 5 });
+        bank.push({ emoji: '📈', label: 'תשואה הכי גבוהה', detail: `${bestROI.playerName} — ${Math.round(bestROI.roi)}%`, priority: 5 });
       }
     }
 
@@ -188,16 +189,16 @@ const GameSummaryScreen = () => {
       const periodGameIds = new Set(periodGames.map(g => g.id));
       const periodPrevGP = previousGP.filter(gp => periodGameIds.has(gp.gameId));
 
-      // Collect candidates per highlight type, then combine into single lines
-      const periodBestWins: string[] = [];
-      const periodWorstLosses: string[] = [];
+      // Collect candidates per highlight type
+      const periodBestWins: { name: string; profit: number }[] = [];
+      const periodWorstLosses: { name: string; profit: number }[] = [];
       const streaks: { name: string; streak: number; type: 'win' | 'loss' }[] = [];
       const upsets: { name: string; wp: number; type: 'win' | 'loss' }[] = [];
       const periodMilestones: { name: string; num: number }[] = [];
       const welcomeBacks: { name: string; days: number }[] = [];
       const firstInPeriod: string[] = [];
       const periodProfitMilestones: { name: string; amount: number }[] = [];
-      const periodTurnarounds: string[] = [];
+      const periodTurnarounds: { name: string; newTotal: number }[] = [];
       const periodSpenders: { name: string; rebuys: number }[] = [];
       const highWinRates: { name: string; wp: number; record: string }[] = [];
       const lowWinRates: { name: string; wp: number; record: string }[] = [];
@@ -208,42 +209,36 @@ const GameSummaryScreen = () => {
         const allTimeStats = allStats.find(s => s.playerId === player.playerId);
         const playerPeriodPrevGames = periodPrevGP.filter(gp => gp.playerId === player.playerId);
 
-        // Period best win
         if (player.profit > 0 && playerPeriodPrevGames.length >= 1) {
           const prevBestWin = Math.max(0, ...playerPeriodPrevGames.map(gp => gp.profit));
           if (player.profit > prevBestWin && prevBestWin > 0) {
-            periodBestWins.push(player.playerName);
+            periodBestWins.push({ name: player.playerName, profit: player.profit });
           }
         }
 
-        // Period worst loss
         if (player.profit < 0 && playerPeriodPrevGames.length >= 1) {
           const prevWorstLoss = Math.min(0, ...playerPeriodPrevGames.map(gp => gp.profit));
           if (player.profit < prevWorstLoss && prevWorstLoss < 0) {
-            periodWorstLosses.push(player.playerName);
+            periodWorstLosses.push({ name: player.playerName, profit: player.profit });
           }
         }
 
-        // Streaks (4+ only)
         if (pStats && pStats.currentStreak >= 4) {
           streaks.push({ name: player.playerName, streak: pStats.currentStreak, type: 'win' });
         } else if (pStats && pStats.currentStreak <= -4) {
           streaks.push({ name: player.playerName, streak: Math.abs(pStats.currentStreak), type: 'loss' });
         }
 
-        // Upsets (win & loss combined)
         if (pStats && pStats.gamesPlayed >= 4) {
           const wp = Math.round(pStats.winPercentage);
           if (wp >= 60 && player.profit < 0) upsets.push({ name: player.playerName, wp, type: 'loss' });
           else if (wp <= 30 && player.profit > 0) upsets.push({ name: player.playerName, wp, type: 'win' });
         }
 
-        // Period game milestone
         if (pStats && [5, 10, 15, 20, 25].includes(pStats.gamesPlayed)) {
           periodMilestones.push({ name: player.playerName, num: pStats.gamesPlayed });
         }
 
-        // Welcome back
         if (allTimeStats && allTimeStats.lastGameResults.length >= 2) {
           const currentDate = new Date(allTimeStats.lastGameResults[0].date);
           const prevDate = new Date(allTimeStats.lastGameResults[1].date);
@@ -251,10 +246,8 @@ const GameSummaryScreen = () => {
           if (daysSince >= 30) welcomeBacks.push({ name: player.playerName, days: daysSince });
         }
 
-        // First game this period
         if (pStats && pStats.gamesPlayed === 1) firstInPeriod.push(player.playerName);
 
-        // Period profit milestone
         if (pStats && player.profit > 0) {
           const periodBefore = pStats.totalProfit - player.profit;
           for (const m of [250, 500, 1000, 1500, 2000]) {
@@ -265,13 +258,13 @@ const GameSummaryScreen = () => {
           }
         }
 
-        // Period turnaround
         if (pStats && player.profit > 0 && pStats.gamesPlayed >= 3) {
           const periodBefore = pStats.totalProfit - player.profit;
-          if (periodBefore < 0 && pStats.totalProfit > 0) periodTurnarounds.push(player.playerName);
+          if (periodBefore < 0 && pStats.totalProfit > 0) {
+            periodTurnarounds.push({ name: player.playerName, newTotal: pStats.totalProfit });
+          }
         }
 
-        // Period biggest spender
         if (pStats && pStats.totalRebuys > 0 && pStats.gamesPlayed >= 3) {
           const allPeriodRebuys = periodStats.filter(s => s.gamesPlayed >= 3);
           const maxPeriodRebuys = Math.max(...allPeriodRebuys.map(s => s.totalRebuys));
@@ -280,25 +273,22 @@ const GameSummaryScreen = () => {
           }
         }
 
-        // All-time plus milestone (individual — different amounts)
         if (allTimeStats && player.profit > 0) {
           const allTimeBefore = allTimeStats.totalProfit - player.profit;
           for (const m of [1000, 2000, 3000, 5000]) {
             if (allTimeBefore < m && allTimeStats.totalProfit >= m) {
-              bank.push({ emoji: '⭐', text: `${player.playerName} crossed +₪${m} all-time profit!`, priority: 1 });
+              bank.push({ emoji: '⭐', label: 'שיא כל הזמנים', detail: `${player.playerName} חצה +₪${m} רווח כולל!`, priority: 1 });
               break;
             }
           }
         }
 
-        // Period win rate milestones
         if (pStats && pStats.gamesPlayed >= 5) {
           const wp = Math.round(pStats.winPercentage);
           if (wp >= 70) highWinRates.push({ name: player.playerName, wp, record: `${pStats.winCount}/${pStats.gamesPlayed}` });
           else if (wp <= 20) lowWinRates.push({ name: player.playerName, wp, record: `${pStats.winCount}/${pStats.gamesPlayed}` });
         }
 
-        // Rebuys above period average
         if (pStats && pStats.gamesPlayed >= 3 && pStats.avgRebuysPerGame > 0) {
           if (player.rebuys / pStats.avgRebuysPerGame >= 2 && player.rebuys >= 4) {
             rebuysAboveAvg.push({ name: player.playerName, tonight: player.rebuys, avg: Math.round(pStats.avgRebuysPerGame) });
@@ -306,83 +296,85 @@ const GameSummaryScreen = () => {
         }
       }
 
-      // --- Build combined entries from collected candidates ---
+      // --- Build combined entries ---
 
       if (periodBestWins.length > 0) {
-        bank.push({ emoji: '🏆', text: `Best win in ${periodLabel}: ${periodBestWins.join(' & ')}!`, priority: 2 });
+        const parts = periodBestWins.map(w => `${w.name} (+₪${cleanNumber(w.profit)})`);
+        bank.push({ emoji: '🏆', label: `שיא נצחון ב${pLabel}`, detail: parts.join(', '), priority: 2 });
       }
       if (periodWorstLosses.length > 0) {
-        bank.push({ emoji: '📉', text: `Worst loss in ${periodLabel}: ${periodWorstLosses.join(' & ')}`, priority: 3 });
+        const parts = periodWorstLosses.map(w => `${w.name} (${formatCurrency(w.profit)})`);
+        bank.push({ emoji: '📉', label: `שיא הפסד ב${pLabel}`, detail: parts.join(', '), priority: 3 });
       }
       if (streaks.length > 0) {
         streaks.sort((a, b) => b.streak - a.streak);
         const parts = streaks.map(s => {
-          const label = s.type === 'win' ? 'W' : 'L';
-          return streaks.length > 1 ? `${s.name} (${s.streak}${label})` : `${s.name}: ${s.streak} ${s.type === 'win' ? 'wins' : 'losses'} in a row`;
+          const label = s.type === 'win' ? 'נצחונות' : 'הפסדים';
+          return `${s.name} — ${s.streak} ${label} ברצף`;
         });
-        const emoji = streaks[0].type === 'win' ? '🔥' : '❄️';
-        bank.push({ emoji, text: `${streaks.length > 1 ? 'Streaks: ' : ''}${parts.join(', ')}${streaks.length > 1 ? '' : '!'}`, priority: 2 });
+        bank.push({ emoji: streaks[0].type === 'win' ? '🔥' : '❄️', label: 'רצף', detail: parts.join(', '), priority: 2 });
       }
       if (upsets.length > 0) {
         const parts = upsets.map(u => {
-          const action = u.type === 'win' ? 'won' : 'lost';
+          const action = u.type === 'win' ? 'ניצח' : 'הפסיד';
           return `${u.name} (${u.wp}%) ${action}`;
         });
-        bank.push({ emoji: '🎯', text: `Upsets: ${parts.join(', ')}`, priority: 2 });
+        bank.push({ emoji: '🎯', label: 'הפתעות', detail: parts.join(', '), priority: 2 });
       }
       if (periodMilestones.length > 0) {
-        const text = periodMilestones.map(m => `${m.name} (#${m.num})`).join(', ');
-        bank.push({ emoji: '🎮', text: `${periodLabel} milestones: ${text}`, priority: 7 });
+        const parts = periodMilestones.map(m => `${m.name} — משחק #${m.num}`);
+        bank.push({ emoji: '🎮', label: `אבן דרך ב${pLabel}`, detail: parts.join(', '), priority: 7 });
       }
       if (welcomeBacks.length > 0) {
-        const text = welcomeBacks.map(w => welcomeBacks.length > 1 ? `${w.name} (${w.days}d)` : `${w.name}! (${w.days} days since last game)`).join(' & ');
-        bank.push({ emoji: '👋', text: `Welcome back ${text}`, priority: 3 });
+        const parts = welcomeBacks.map(w => `${w.name} (${w.days} יום)`);
+        bank.push({ emoji: '👋', label: 'חזרו לשולחן', detail: parts.join(', '), priority: 3 });
       }
       if (firstInPeriod.length > 0) {
-        bank.push({ emoji: '🆕', text: `First game in ${periodLabel}: ${firstInPeriod.join(' & ')}`, priority: 5 });
+        bank.push({ emoji: '🆕', label: `משחק ראשון ב${pLabel}`, detail: firstInPeriod.join(', '), priority: 5 });
       }
       if (periodProfitMilestones.length > 0) {
-        const text = periodProfitMilestones.map(m => `${m.name} (+₪${m.amount})`).join(', ');
-        bank.push({ emoji: '💰', text: `${periodLabel} milestone: ${text}`, priority: 2 });
+        const parts = periodProfitMilestones.map(m => `${m.name} — חצה +₪${m.amount}`);
+        bank.push({ emoji: '💰', label: `אבן דרך רווח ב${pLabel}`, detail: parts.join(', '), priority: 2 });
       }
       if (periodTurnarounds.length > 0) {
-        bank.push({ emoji: '↗️', text: `${periodTurnarounds.join(' & ')} turned positive in ${periodLabel}!`, priority: 3 });
+        const parts = periodTurnarounds.map(t => `${t.name} (+₪${cleanNumber(t.newTotal)})`);
+        bank.push({ emoji: '↗️', label: `עברו לרווח ב${pLabel}`, detail: parts.join(', '), priority: 3 });
       }
       if (periodSpenders.length > 0) {
-        const names = periodSpenders.map(s => s.name).join(' & ');
-        bank.push({ emoji: '🏧', text: `Most rebuys in ${periodLabel}: ${names} (${periodSpenders[0].rebuys} total)`, priority: 6 });
+        const names = periodSpenders.map(s => s.name).join(' ו');
+        bank.push({ emoji: '🏧', label: `הכי הרבה קניות ב${pLabel}`, detail: `${names} — ${periodSpenders[0].rebuys} סה״כ`, priority: 6 });
       }
       if (highWinRates.length > 0) {
-        const text = highWinRates.map(w => `${w.name} (${w.wp}%, ${w.record})`).join(', ');
-        bank.push({ emoji: '🎰', text: `Hot in ${periodLabel}: ${text}`, priority: 6 });
+        const parts = highWinRates.map(w => `${w.name} — ${w.wp}% (${w.record})`);
+        bank.push({ emoji: '🎰', label: `אחוז נצחון גבוה ב${pLabel}`, detail: parts.join(', '), priority: 6 });
       }
       if (lowWinRates.length > 0) {
-        const text = lowWinRates.map(w => `${w.name} (${w.wp}%, ${w.record})`).join(', ');
-        bank.push({ emoji: '🎰', text: `Struggling in ${periodLabel}: ${text}`, priority: 6 });
+        const parts = lowWinRates.map(w => `${w.name} — ${w.wp}% (${w.record})`);
+        bank.push({ emoji: '🎰', label: `אחוז נצחון נמוך ב${pLabel}`, detail: parts.join(', '), priority: 6 });
       }
       if (rebuysAboveAvg.length > 0) {
-        const text = rebuysAboveAvg.map(r => `${r.name} (${r.tonight} vs avg ${r.avg})`).join(', ');
-        bank.push({ emoji: '📊', text: `Above average buyins: ${text}`, priority: 6 });
+        const parts = rebuysAboveAvg.map(r => `${r.name} — ${r.tonight} (ממוצע ${r.avg})`);
+        bank.push({ emoji: '📊', label: 'מעל הממוצע בקניות', detail: parts.join(', '), priority: 6 });
       }
 
-      // --- Period leader (single entry) ---
+      // --- Period leader ---
       const periodRanked = [...periodStats].filter(s => s.gamesPlayed >= 2).sort((a, b) => b.totalProfit - a.totalProfit);
       if (periodRanked.length > 0) {
         const leader = periodRanked[0];
-        bank.push({ emoji: '🥇', text: `${periodLabel} leader: ${leader.playerName} (+₪${cleanNumber(leader.totalProfit)})`, priority: 2 });
+        bank.push({ emoji: '🥇', label: `מוביל ${pLabel}`, detail: `${leader.playerName} — +₪${cleanNumber(leader.totalProfit)}`, priority: 2 });
       }
 
       // --- Global records ---
 
       const historicalMaxRebuys = previousGP.length > 0 ? Math.max(...previousGP.map(gp => gp.rebuys)) : 0;
       if (maxRebuys > historicalMaxRebuys && historicalMaxRebuys > 0) {
-        bank.push({ emoji: '📛', text: `Group record: Most rebuys in a game! ${rebuyKings[0].playerName} with ${maxRebuys} (was ${historicalMaxRebuys})`, priority: 1 });
+        bank.push({ emoji: '📛', label: 'שיא קבוצתי — קניות', detail: `${rebuyKings[0].playerName} עם ${maxRebuys} (היה ${historicalMaxRebuys})`, priority: 1 });
       }
 
       const bigWinner = sortedPlayers[0];
       const historicalMaxProfit = previousGP.length > 0 ? Math.max(0, ...previousGP.map(gp => gp.profit)) : 0;
       if (bigWinner && bigWinner.profit > 0 && bigWinner.profit > historicalMaxProfit && historicalMaxProfit > 0) {
-        bank.push({ emoji: '🌟', text: `Group record: Biggest win ever! ${bigWinner.playerName} +₪${cleanNumber(bigWinner.profit)} (was +₪${cleanNumber(historicalMaxProfit)})`, priority: 1 });
+        bank.push({ emoji: '🌟', label: 'שיא קבוצתי — נצחון', detail: `${bigWinner.playerName} +₪${cleanNumber(bigWinner.profit)} (היה +₪${cleanNumber(historicalMaxProfit)})`, priority: 1 });
       }
 
       const allCompletedGames = getAllGames().filter(g => g.status === 'completed' && g.id !== gameId);
@@ -393,33 +385,33 @@ const GameSummaryScreen = () => {
         if (pot > historicalMaxPot) historicalMaxPot = pot;
       }
       if (tonightsPot > historicalMaxPot && historicalMaxPot > 0) {
-        bank.push({ emoji: '🏦', text: `Group record: Biggest pot ever! ₪${cleanNumber(tonightsPot)} (was ₪${cleanNumber(historicalMaxPot)})`, priority: 1 });
+        bank.push({ emoji: '🏦', label: 'שיא קבוצתי — קופה', detail: `₪${cleanNumber(tonightsPot)} (היה ₪${cleanNumber(historicalMaxPot)})`, priority: 1 });
       }
 
       if (periodPrevGP.length > 0) {
         const periodMaxProfit = Math.max(0, ...periodPrevGP.map(gp => gp.profit));
         const topWinner = sortedPlayers[0];
         if (topWinner && topWinner.profit > 0 && topWinner.profit > periodMaxProfit && periodMaxProfit > 0) {
-          bank.push({ emoji: '🌟', text: `Biggest win in ${periodLabel}! ${topWinner.playerName} +₪${cleanNumber(topWinner.profit)} (was +₪${cleanNumber(periodMaxProfit)})`, priority: 1 });
+          bank.push({ emoji: '🌟', label: `שיא ${pLabel} — נצחון`, detail: `${topWinner.playerName} +₪${cleanNumber(topWinner.profit)} (היה +₪${cleanNumber(periodMaxProfit)})`, priority: 1 });
         }
       }
 
-      // --- Fillers (always available, guarantee we reach 10) ---
+      // --- Fillers ---
 
-      bank.push({ emoji: '💵', text: `Tonight's pot: ₪${cleanNumber(tonightsPot)} (${totalRebuysTonight} total buyins)`, priority: 8 });
+      bank.push({ emoji: '💵', label: 'קופה הלילה', detail: `₪${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
 
       const topProfit = sortedPlayers[0]?.profit || 0;
       const bottomProfit = sortedPlayers[sortedPlayers.length - 1]?.profit || 0;
       if (topProfit > 0 && bottomProfit < 0) {
-        bank.push({ emoji: '📏', text: `Biggest gap: ₪${cleanNumber(topProfit - bottomProfit)} between ${sortedPlayers[0].playerName} and ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
+        bank.push({ emoji: '📏', label: 'פער הלילה', detail: `₪${cleanNumber(topProfit - bottomProfit)} — ${sortedPlayers[0].playerName} מול ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
       }
 
-      bank.push({ emoji: '🎲', text: `Game #${periodGames.length + 1} in ${periodLabel}`, priority: 9 });
+      bank.push({ emoji: '🎲', label: `מספר משחק ב${pLabel}`, detail: `#${periodGames.length + 1}`, priority: 9 });
 
       if (sortedPlayers[0] && sortedPlayers[0].profit > 0) {
         const winnerPeriod = periodStats.find(s => s.playerId === sortedPlayers[0].playerId);
         if (winnerPeriod && winnerPeriod.gamesPlayed >= 3) {
-          bank.push({ emoji: '📊', text: `${sortedPlayers[0].playerName} averages ${formatCurrency(Math.round(winnerPeriod.avgProfit))} per game in ${periodLabel}`, priority: 8 });
+          bank.push({ emoji: '📊', label: `ממוצע המנצח ב${pLabel}`, detail: `${sortedPlayers[0].playerName} — ${formatCurrency(Math.round(winnerPeriod.avgProfit))} למשחק`, priority: 8 });
         }
       }
     } catch {
@@ -428,7 +420,7 @@ const GameSummaryScreen = () => {
 
     // Sort by priority (1 = highest) and always output exactly 10
     bank.sort((a, b) => a.priority - b.priority);
-    setFunStats(bank.slice(0, 10).map(({ emoji, text }) => ({ emoji, text })));
+    setFunStats(bank.slice(0, 10).map(({ emoji, label, detail }) => ({ emoji, label, detail })));
     setIsLoading(false);
 
     // TTS game summary announcement
@@ -992,23 +984,21 @@ const GameSummaryScreen = () => {
       {funStats.length > 0 && (
         <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
-            <h2 className="card-title mb-2">🎭 Tonight's Highlights</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {funStats.map((stat, idx) => (
-                <div key={idx} style={{
-                  padding: '0.4rem 0.6rem',
-                  background: 'rgba(100, 100, 100, 0.1)',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}>
-                  <span style={{ fontSize: '1rem' }}>{stat.emoji}</span>
-                  <span>{stat.text}</span>
-                </div>
-              ))}
-            </div>
+            <h2 className="card-title mb-2">🎭 הרגעים של הלילה</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', textAlign: 'right' }}>
+              <tbody>
+                {funStats.map((stat, idx) => (
+                  <tr key={idx} style={{ borderBottom: idx < funStats.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                    <td style={{ padding: '0.45rem 0.3rem', fontSize: '0.85rem', whiteSpace: 'nowrap', color: 'var(--primary)', fontWeight: 600, verticalAlign: 'top' }}>
+                      {stat.emoji} {stat.label}
+                    </td>
+                    <td style={{ padding: '0.45rem 0.4rem', fontSize: '0.85rem', lineHeight: '1.35', color: 'var(--text-secondary)' }}>
+                      {stat.detail}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div style={{
