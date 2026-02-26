@@ -6,6 +6,16 @@ import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, ge
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 
+const hebrewNum = (n: number, feminine: boolean): string => {
+  const abs = Math.round(Math.abs(n));
+  if (abs === 0) return 'אפס';
+  if (abs > 10) return String(abs);
+  if (feminine) {
+    return ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'][abs];
+  }
+  return ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'][abs];
+};
+
 const GameSummaryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
@@ -456,7 +466,7 @@ const GameSummaryScreen = () => {
           `ו${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
         ];
-        const potMessage = `על השולחן הערב: ${cleanNumber(pot)} שקל, ${cleanNumber(totalRebuys)} קניות.`;
+        const potMessage = `על השולחן הערב: ${cleanNumber(pot)} שקל, ${hebrewNum(totalRebuys, true)} קניות.`;
 
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
@@ -985,20 +995,43 @@ const GameSummaryScreen = () => {
         <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
             <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', textAlign: 'right' }}>
-              <tbody>
-                {funStats.map((stat, idx) => (
-                  <tr key={idx} style={{ borderBottom: idx < funStats.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                    <td style={{ padding: '0.45rem 0.3rem', fontSize: '0.85rem', whiteSpace: 'nowrap', color: 'var(--primary)', fontWeight: 600, verticalAlign: 'top' }}>
-                      {stat.emoji} {stat.label}
-                    </td>
-                    <td style={{ padding: '0.45rem 0.4rem', fontSize: '0.85rem', lineHeight: '1.35', color: 'var(--text-secondary)' }}>
-                      {stat.detail}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {funStats.map((stat, idx) => (
+                <div 
+                  key={idx} 
+                  style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    padding: '0.5rem 0.6rem',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '8px',
+                    direction: 'rtl',
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{stat.emoji}</span>
+                  <span style={{ 
+                    fontSize: '0.8rem', 
+                    fontWeight: 600, 
+                    color: 'var(--primary)',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minWidth: '100px',
+                  }}>
+                    {stat.label}
+                  </span>
+                  <span style={{ 
+                    fontSize: '0.8rem', 
+                    color: 'var(--text)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {stat.detail}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{
