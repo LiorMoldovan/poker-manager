@@ -1980,10 +1980,11 @@ const GraphsScreen = () => {
 
           {/* With/Without Table */}
           {impactData.length > 0 && (() => {
+            const totalPeriodGames = filteredGames.length;
+            const minGamesThreshold = Math.max(3, Math.ceil(totalPeriodGames * 0.15));
             const isLowConf = (r: typeof impactData[0]) => {
               const min = Math.min(r.withGames, r.withoutGames);
-              const max = Math.max(r.withGames, r.withoutGames);
-              return min <= 5 || (min / max) < 0.15;
+              return min < minGamesThreshold;
             };
             const confidenceScore = (r: typeof impactData[0]) => {
               const min = Math.min(r.withGames, r.withoutGames);
@@ -2163,10 +2164,11 @@ const GraphsScreen = () => {
 
           {/* Chemistry Summary - derived from reliable impact data only */}
           {impactData.length > 0 && (() => {
+            const totalPeriodGames = filteredGames.length;
+            const minGamesThreshold = Math.max(3, Math.ceil(totalPeriodGames * 0.15));
             const reliableOnly = impactData.filter(r => {
               const min = Math.min(r.withGames, r.withoutGames);
-              const max = Math.max(r.withGames, r.withoutGames);
-              return min > 5 && (min / max) >= 0.15;
+              return min >= minGamesThreshold;
             });
             const luckyCharms = reliableOnly.filter(r => r.impact > 0).slice(0, 3);
             const kryptonite = reliableOnly.filter(r => r.impact < 0).slice(-3).reverse();
@@ -2181,7 +2183,7 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginBottom: '0.75rem' 
                 }}>
-                  Based on balanced samples only (6+ games on each side)
+                  Based on balanced samples only ({minGamesThreshold}+ games on each side)
                 </div>
 
                 {luckyCharms.length > 0 && (
