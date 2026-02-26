@@ -540,7 +540,7 @@ const GraphsScreen = () => {
         }
       }
 
-      if (withGames >= 3 && withoutGames >= 3) {
+      if (withGames >= 1 && withoutGames >= 1) {
         const avgWith = withProfit / withGames;
         const avgWithout = withoutProfit / withoutGames;
         results.push({
@@ -2109,7 +2109,7 @@ const GraphsScreen = () => {
 
               {impactData.length === 0 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>
-                  Not enough data (need 3+ games with and without each player)
+                  Not enough data (need at least 1 game with and without each player)
                 </div>
               )}
             </div>
