@@ -398,12 +398,12 @@ const GameSummaryScreen = () => {
 
       // --- Fillers ---
 
-      bank.push({ emoji: '💵', label: 'קופה הלילה', detail: `₪${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
+      bank.push({ emoji: '💵', label: 'קופה הערב', detail: `₪${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
 
       const topProfit = sortedPlayers[0]?.profit || 0;
       const bottomProfit = sortedPlayers[sortedPlayers.length - 1]?.profit || 0;
       if (topProfit > 0 && bottomProfit < 0) {
-        bank.push({ emoji: '📏', label: 'פער הלילה', detail: `₪${cleanNumber(topProfit - bottomProfit)} — ${sortedPlayers[0].playerName} מול ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
+        bank.push({ emoji: '📏', label: 'פער הערב', detail: `₪${cleanNumber(topProfit - bottomProfit)} — ${sortedPlayers[0].playerName} מול ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
       }
 
       bank.push({ emoji: '🎲', label: `מספר משחק ב${pLabel}`, detail: `#${periodGames.length + 1}`, priority: 9 });
@@ -437,26 +437,26 @@ const GameSummaryScreen = () => {
         const pot = totalRebuys * settings.rebuyValue;
 
         const winMessages = [
-          `המנצח הגדול של הלילה הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
-          `${winner.playerName} לוקח הכל הלילה! פלוס ${cleanNumber(winner.profit)} שקל`,
+          `המנצח הגדול של הערב הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
+          `${winner.playerName} לוקח הכל הערב! פלוס ${cleanNumber(winner.profit)} שקל`,
           `ונצחון גדול ל${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל`,
           `${winner.playerName} הולך הביתה עם פלוס ${cleanNumber(winner.profit)} שקל, כל הכבוד!`,
-          `${winner.playerName} שולט הלילה, פלוס ${cleanNumber(winner.profit)} שקל`,
+          `${winner.playerName} שולט הערב, פלוס ${cleanNumber(winner.profit)} שקל`,
           `הכסף הולך ל${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל בכיס`,
-          `${winner.playerName} סוגר את הלילה עם חיוך, פלוס ${cleanNumber(winner.profit)} שקל`,
+          `${winner.playerName} סוגר את הערב עם חיוך, פלוס ${cleanNumber(winner.profit)} שקל`,
           `ו${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
         ];
         const loseMessages = [
-          `והתורם הרשמי של הלילה, ${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
+          `והתורם הרשמי של הערב, ${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
           `${loser.playerName}, תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
           `ו${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
           `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן, גיבור אמיתי`,
           `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל, אבל מי סופר`,
-          `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, הלילה לא היה שלו`,
-          `ו${loser.playerName} שילם את החשבון הלילה, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
+          `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, הערב לא היה שלו`,
+          `ו${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
         ];
-        const potMessage = `על השולחן הלילה: ${cleanNumber(pot)} שקל, ${cleanNumber(totalRebuys)} קניות.`;
+        const potMessage = `על השולחן הערב: ${cleanNumber(pot)} שקל, ${cleanNumber(totalRebuys)} קניות.`;
 
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
@@ -984,7 +984,7 @@ const GameSummaryScreen = () => {
       {funStats.length > 0 && (
         <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
-            <h2 className="card-title mb-2">🎭 הרגעים של הלילה</h2>
+            <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
             <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', textAlign: 'right' }}>
               <tbody>
                 {funStats.map((stat, idx) => (
