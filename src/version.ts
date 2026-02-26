@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.1.8';
+export const APP_VERSION = '5.2.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.2.0',
+    date: '2026-02-26',
+    changes: [
+      '🎙️ TTS game summary announcement — winner & loser announced when game ends',
+      '📊 Pot milestone TTS — announces when total buyins cross 5/10/15/20+ milestones',
+      '🏆 Last man standing — announces the last player still on their first buyin',
+      '🎯 Improved quick rebuy messages — personalized with player stats',
+      '📋 Game highlights redesign — combines multiple players per line, exactly 10 highlights',
+      '🔥 Streaks simplified to 4+ only, hot & cold combined in one line',
+      '🎯 Upsets merged into single highlight (win & loss together)',
+      '👑 Rebuy King & Comeback thresholds raised to 5+ buyins',
+      '🧹 Removed unused state, fixed all lint warnings in GameSummaryScreen',
+    ]
+  },
   {
     version: '5.1.0',
     date: '2026-02-05',

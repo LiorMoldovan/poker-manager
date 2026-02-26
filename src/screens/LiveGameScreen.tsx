@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -26,6 +26,9 @@ const LiveGameScreen = () => {
 
   // Cache historical rebuy records (computed once per session)
   const rebuyRecordsRef = useRef<{ playerMax: Map<string, number>; groupMax: number } | null>(null);
+
+  // Track "last man standing" so it's only announced once per game
+  const lastManAnnouncedRef = useRef(false);
 
   const getRebuyRecords = () => {
     if (rebuyRecordsRef.current) return rebuyRecordsRef.current;
@@ -631,81 +634,216 @@ const LiveGameScreen = () => {
     return message;
   };
 
-  // Player-specific roasts (30% chance, Hebrew)
-  const getPlayerRoast = (playerName: string, totalBuyins: number): string | null => {
-    if (Math.random() > 0.3) return null;
-
-    const roasts = [
-      'הכסף הזה כבר לא חוזר',
-      'שוב תרומה לקופה הקבוצתית',
-      'הארנק בוכה',
-      `מישהו שיעצור את ${playerName}`,
-      'גם הבנק לא היה מאשר את זה',
-      'שוברים פה שיאים, רק לא את הטובים',
-      'אולי לנסות שחמט',
-      'הקלפים לא אוהבים פה אף אחד הלילה',
-      'המימון של הערב בא מפה',
-      'הספונסר הרשמי של הלילה',
-      'תודה על התרומה',
-      'נקודות נאמנות על כל קנייה',
-      'אפשר גם להעביר ישירות',
-    ];
-
-    if (totalBuyins >= 5) {
-      roasts.push(
-        'אולי לשקול קריירה אחרת',
-        'בדרך לשיא עולמי',
-        'אפילו הקלפים מרחמים',
-        'מי צריך חיסכון בכלל',
-        'הילדים לא צריכים קורס שחייה',
-        'לחשוב על זה כתרומה לקהילה',
-      );
-    }
-
-    return roasts[Math.floor(Math.random() * roasts.length)];
-  };
-
-  // Fun facts from historical data (25% chance)
-  const getFunFact = (_playerName: string, playerId: string, currentGameRebuys: number): string | null => {
-    if (Math.random() > 0.25) return null;
-
+  // Personalized messages using player stats, history, and table context
+  // Always tries to return something specific to the player; null only if no history
+  const getPersonalMessage = (
+    playerName: string,
+    playerId: string,
+    currentGameRebuys: number,
+    isQuickRebuy: boolean,
+    allPlayers: GamePlayer[]
+  ): string | null => {
     try {
       const allStats = getPlayerStats();
       const stats = allStats.find(s => s.playerId === playerId);
-      if (!stats || stats.gamesPlayed < 3) return null;
+      if (!stats || stats.gamesPlayed < 2) return null;
 
+      const stats2026 = getPlayerStats({ start: new Date('2026-01-01') }).find(s => s.playerId === playerId);
       const settings = getSettings();
-      const facts: string[] = [];
+      const messages: string[] = [];
 
-      const allTimeRebuys = stats.totalRebuys + currentGameRebuys;
-      facts.push(`זו קנייה מספר ${allTimeRebuys} מאז ומעולם`);
-      facts.push(`בממוצע ${Math.round(stats.avgRebuysPerGame)} קניות למשחק, הלילה כבר ${currentGameRebuys}`);
-      facts.push(`${stats.gamesPlayed} משחקים עד היום`);
-
-      if (stats.winPercentage > 0) {
-        facts.push(`אחוז נצחונות של ${Math.round(stats.winPercentage)} אחוז`);
-      }
-      if (stats.longestWinStreak >= 3) {
-        facts.push(`שיא נצחונות ${stats.longestWinStreak} ברצף`);
-      }
-      if (stats.longestLossStreak >= 3) {
-        facts.push(`שיא הפסדים ${stats.longestLossStreak} ברצף`);
-      }
-      if (stats.biggestWin > 50) {
-        facts.push(`הנצחון הכי גדול היה ${Math.round(stats.biggestWin)} שקל`);
-      }
-      if (stats.totalProfit > 0) {
-        facts.push(`בסך הכל ברווח של ${Math.round(stats.totalProfit)} שקל`);
-      }
-
-      const totalSpent = allTimeRebuys * settings.rebuyValue;
-      facts.push(`סך הכל ${totalSpent} שקל על קניות`);
-
-      if (currentGameRebuys > stats.avgRebuysPerGame * 1.5 && currentGameRebuys >= 3) {
-        facts.push(`בקצב הזה, הממוצע הולך להישבר הלילה`);
+      // --- Current streak ---
+      if (stats.currentStreak >= 4) {
+        messages.push(`${playerName} על רצף של ${stats.currentStreak} נצחונות, מתי זה ייגמר?`);
+        messages.push(`${stats.currentStreak} נצחונות ברצף ל${playerName}, אבל הקניות אומרות אחרת`);
+        messages.push(`${playerName} ברצף חם של ${stats.currentStreak}, הלילה ייבדק`);
+      } else if (stats.currentStreak === 3) {
+        messages.push(`${playerName} על רצף של 3 נצחונות, מעניין כמה זה יחזיק`);
+        messages.push(`3 נצחונות ברצף ל${playerName}, הקניות לא מסתדרות עם זה`);
+      } else if (stats.currentStreak === 2) {
+        messages.push(`${playerName} ניצח פעמיים ברצף, הלילה יהיה שלוש?`);
+      } else if (stats.currentStreak <= -4) {
+        messages.push(`${playerName} ב${Math.abs(stats.currentStreak)} הפסדים ברצף, הקניות לא יפתרו את זה`);
+        messages.push(`${Math.abs(stats.currentStreak)} הפסדים ברצף ל${playerName}, אין מילים`);
+        messages.push(`${playerName} בבור של ${Math.abs(stats.currentStreak)} הפסדים, הלילה חייב להשתנות`);
+      } else if (stats.currentStreak === -3) {
+        messages.push(`${playerName} ב3 הפסדים ברצף, אולי הלילה זה ישתנה`);
+        messages.push(`3 הפסדים ברצף ל${playerName}, הלילה מוכרח להיות אחר`);
+      } else if (stats.currentStreak === -2) {
+        messages.push(`${playerName} הפסיד פעמיים ברצף, הלילה צריך נצחון`);
       }
 
-      return facts[Math.floor(Math.random() * facts.length)];
+      // --- Win percentage ---
+      const wp = Math.round(stats.winPercentage);
+      if (wp >= 65 && stats.gamesPlayed >= 5) {
+        messages.push(`${playerName} מנצח ${wp} אחוז מהמשחקים, אבל הלילה הקניות אומרות אחרת`);
+        messages.push(`${wp} אחוז נצחונות ל${playerName}, בדרך כלל לא צריך לקנות ככה`);
+      } else if (wp >= 55 && stats.gamesPlayed >= 5) {
+        messages.push(`${playerName} מנצח ${wp} אחוז, מה קרה הלילה?`);
+      } else if (wp <= 30 && stats.gamesPlayed >= 5) {
+        messages.push(`${playerName} מנצח רק ${wp} אחוז מהמשחקים, הסטטיסטיקה מדברת`);
+        messages.push(`${wp} אחוז נצחונות ל${playerName}, לפחות עקבי`);
+      } else if (wp <= 40 && stats.gamesPlayed >= 8) {
+        messages.push(`${playerName} עם ${wp} אחוז נצחונות, צריך לשפר`);
+      }
+
+      // --- Overall profit/loss ---
+      if (stats.totalProfit > 200) {
+        messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל בסך הכל, יש מאיפה לקנות`);
+        messages.push(`${playerName} עדיין ברווח של ${Math.round(stats.totalProfit)} שקל, אז מה זה עוד קנייה`);
+      } else if (stats.totalProfit > 0 && stats.totalProfit <= 200) {
+        messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל, אבל זה מתכווץ`);
+      } else if (stats.totalProfit < -200) {
+        messages.push(`${playerName} במינוס של ${Math.round(Math.abs(stats.totalProfit))} שקל בסך הכל, עוד קנייה זה טיפה בים`);
+        messages.push(`${playerName} מנסה להחזיר ${Math.round(Math.abs(stats.totalProfit))} שקל מינוס, בהצלחה עם זה`);
+      } else if (stats.totalProfit < -50) {
+        messages.push(`${playerName} במינוס של ${Math.round(Math.abs(stats.totalProfit))} שקל, הקניות לא עוזרות`);
+      }
+
+      // --- Last game result ---
+      if (stats.lastGameResults.length > 0) {
+        const lastGame = stats.lastGameResults[0];
+        if (lastGame.profit > 100) {
+          messages.push(`${playerName} ניצח ${Math.round(lastGame.profit)} שקל במשחק האחרון, הלילה סיפור אחר`);
+          messages.push(`אחרי נצחון של ${Math.round(lastGame.profit)} במשחק הקודם, ${playerName} חוזר לקנות`);
+        } else if (lastGame.profit > 0) {
+          messages.push(`${playerName} ניצח ${Math.round(lastGame.profit)} במשחק האחרון, היום קצת אחרת`);
+        } else if (lastGame.profit < -100) {
+          messages.push(`${playerName} הפסיד ${Math.round(Math.abs(lastGame.profit))} במשחק האחרון, מנסה להחזיר`);
+          messages.push(`אחרי הפסד של ${Math.round(Math.abs(lastGame.profit))} במשחק הקודם, ${playerName} ממשיך לקנות`);
+        } else if (lastGame.profit < 0) {
+          messages.push(`${playerName} הפסיד ${Math.round(Math.abs(lastGame.profit))} במשחק הקודם, הלילה לא מתחיל טוב יותר`);
+        }
+      }
+
+      // --- Avg profit per game ---
+      if (stats.avgProfit > 50 && stats.gamesPlayed >= 5) {
+        messages.push(`ממוצע של פלוס ${Math.round(stats.avgProfit)} למשחק ל${playerName}, הלילה מוריד את הממוצע`);
+      } else if (stats.avgProfit < -50 && stats.gamesPlayed >= 5) {
+        messages.push(`ממוצע של מינוס ${Math.round(Math.abs(stats.avgProfit))} למשחק ל${playerName}, הלילה ממשיך את המגמה`);
+      }
+
+      // --- Games played milestones ---
+      if (stats.gamesPlayed >= 50) {
+        messages.push(`${playerName} ותיק עם ${stats.gamesPlayed} משחקים, הניסיון לא עוזר הלילה`);
+        messages.push(`${stats.gamesPlayed} משחקים ל${playerName}, ועדיין קונה`);
+      } else if (stats.gamesPlayed >= 30) {
+        messages.push(`${playerName} כבר ${stats.gamesPlayed} משחקים, ולא מפסיק לקנות`);
+      } else if (stats.gamesPlayed >= 15) {
+        messages.push(`${stats.gamesPlayed} משחקים ל${playerName}, כבר מכיר את הדרך לארנק`);
+      } else if (stats.gamesPlayed <= 5) {
+        messages.push(`${playerName} עם רק ${stats.gamesPlayed} משחקים, עדיין לומד לשלם`);
+      }
+
+      // --- Biggest win/loss references ---
+      if (stats.biggestWin > 100) {
+        messages.push(`הנצחון הגדול של ${playerName} היה ${Math.round(stats.biggestWin)} שקל, הלילה בינתיים ההפך`);
+      }
+      if (stats.biggestLoss < -100) {
+        messages.push(`ההפסד הגדול של ${playerName} היה ${Math.round(Math.abs(stats.biggestLoss))} שקל, מקווים שהלילה לא שם`);
+      }
+
+      // --- Longest streaks ---
+      if (stats.longestWinStreak >= 4) {
+        messages.push(`השיא של ${playerName} הוא ${stats.longestWinStreak} נצחונות ברצף, היום לא נראה שזה קורה`);
+      }
+      if (stats.longestLossStreak >= 4) {
+        messages.push(`${playerName} פעם הפסיד ${stats.longestLossStreak} ברצף, אז מה עוד קנייה`);
+      }
+
+      // --- Avg win vs avg loss ---
+      if (stats.avgWin > 0 && stats.avgLoss > 0) {
+        if (stats.avgWin > stats.avgLoss * 1.5) {
+          messages.push(`כש${playerName} מנצח, זה בגדול, הבעיה היא להגיע לשם`);
+        } else if (stats.avgLoss > stats.avgWin * 1.5) {
+          messages.push(`${playerName} מפסיד בגדול ומנצח בקטן, קלאסי`);
+        }
+      }
+
+      // --- Rebuy-related (2026 data only) ---
+      if (stats2026 && stats2026.gamesPlayed >= 2) {
+        const avgRebuys = stats2026.avgRebuysPerGame;
+        if (currentGameRebuys > avgRebuys * 1.5 && currentGameRebuys >= 3) {
+          messages.push(`${playerName} בממוצע קונה ${Math.round(avgRebuys)} למשחק, הלילה כבר ${currentGameRebuys}`);
+          messages.push(`${playerName} מעל הממוצע שלו הלילה, רגיל ל${Math.round(avgRebuys)} וכבר ${currentGameRebuys}`);
+        }
+        if (currentGameRebuys <= 2 && avgRebuys >= 4) {
+          messages.push(`${playerName} רגיל ל${Math.round(avgRebuys)} קניות למשחק, אז עוד יבואו`);
+        }
+
+        const totalRebuys2026 = stats2026.totalRebuys + currentGameRebuys;
+        if (totalRebuys2026 >= 30) {
+          const totalSpent = totalRebuys2026 * settings.rebuyValue;
+          messages.push(`${playerName} כבר שילם ${totalSpent} שקל על קניות מתחילת השנה, תודה על המימון`);
+        } else if (totalRebuys2026 >= 15) {
+          messages.push(`${playerName} כבר ב${totalRebuys2026} קניות מתחילת השנה, קצב יפה`);
+        }
+      }
+
+      // --- Comparison with other players at the table tonight ---
+      const otherPlayers = allPlayers.filter(p => p.playerId !== playerId && p.rebuys > 0);
+      if (otherPlayers.length > 0) {
+        const maxRebuysOther = Math.max(...otherPlayers.map(p => p.rebuys));
+        const minRebuysOther = Math.min(...otherPlayers.map(p => p.rebuys));
+        const playerWithMax = otherPlayers.find(p => p.rebuys === maxRebuysOther);
+        const playerWithMin = otherPlayers.find(p => p.rebuys === minRebuysOther);
+
+        if (currentGameRebuys > maxRebuysOther && playerWithMax && currentGameRebuys >= 3) {
+          messages.push(`${playerName} עקף את ${playerWithMax.playerName} בקניות הלילה`);
+          messages.push(`אפילו ${playerWithMax.playerName} קנה פחות מ${playerName} הלילה`);
+        }
+        if (currentGameRebuys >= 3 && playerWithMin && Math.ceil(minRebuysOther) <= 1) {
+          messages.push(`${playerName} כבר ב${Math.ceil(currentGameRebuys)} קניות בזמן ש${playerWithMin.playerName} עדיין בראשונה`);
+        }
+
+        // Find a rival with similar rebuys
+        const rival = otherPlayers.find(p => Math.ceil(p.rebuys) === Math.ceil(currentGameRebuys));
+        if (rival) {
+          messages.push(`${playerName} ו${rival.playerName} שווים בקניות הלילה, מי ישבור ראשון?`);
+          messages.push(`מרוץ קניות בין ${playerName} ל${rival.playerName}, שניהם ב${Math.ceil(currentGameRebuys)}`);
+        }
+
+        // Historical rivalry: check if someone at the table has opposite profit trend
+        if (stats.totalProfit > 100) {
+          const losingRival = otherPlayers.find(p => {
+            const rivalStats = allStats.find(s => s.playerId === p.playerId);
+            return rivalStats && rivalStats.totalProfit < -100;
+          });
+          if (losingRival) {
+            messages.push(`${playerName} בדרך כלל ברווח, ${losingRival.playerName} בדרך כלל במינוס, אבל הלילה הכל הפוך?`);
+          }
+        }
+      }
+
+      // --- Quick rebuy (personalized) ---
+      if (isQuickRebuy && currentGameRebuys >= 3) {
+        messages.push(`${playerName} קנה שוב תוך דקות, הכסף לא מחזיק`);
+        messages.push(`${playerName} חוזר מהר, אין סבלנות הלילה`);
+        messages.push(`הצ'יפים של ${playerName} נעלמים מהר הלילה`);
+        messages.push(`${playerName}, שנייה, עוד לא הספקנו לערבב את הקלפים`);
+        messages.push(`${playerName} קונה כאילו יש מבצע, מהר לפני שנגמר`);
+        if (stats.totalProfit > 100) {
+          messages.push(`${playerName} ברווח של ${Math.round(stats.totalProfit)} שקל, אז מה אם זה מהר`);
+        } else if (stats.totalProfit < -100) {
+          messages.push(`${playerName} מנסה להחזיר ${Math.round(Math.abs(stats.totalProfit))} שקל, ובמהירות`);
+        }
+        if (stats2026 && stats2026.avgRebuysPerGame > 0 && currentGameRebuys > stats2026.avgRebuysPerGame) {
+          messages.push(`${playerName} כבר עבר את הממוצע ובקצב שיא`);
+        }
+      }
+
+      // --- High rebuy count personal roasts ---
+      if (currentGameRebuys >= 5) {
+        messages.push(`${playerName} כבר ב${Math.ceil(currentGameRebuys)} קניות, הספונסר הרשמי של הלילה`);
+        messages.push(`${playerName}, מי צריך חיסכון בכלל`);
+        messages.push(`הארנק של ${playerName} בוכה, ${Math.ceil(currentGameRebuys)} קניות ועולה`);
+      } else if (currentGameRebuys >= 3) {
+        messages.push(`${playerName} כבר ב${Math.ceil(currentGameRebuys)}, תודה על התרומה`);
+        messages.push(`מישהו שיעצור את ${playerName}, כבר ${Math.ceil(currentGameRebuys)} קניות`);
+      }
+
+      if (messages.length === 0) return null;
+      return messages[Math.floor(Math.random() * messages.length)];
     } catch {
       return null;
     }
@@ -776,6 +914,10 @@ const LiveGameScreen = () => {
     previousGroupRecord: number;
     isExtendingPersonalRecord: boolean;
     isExtendingGroupRecord: boolean;
+    allPlayers: GamePlayer[];
+    totalGroupRebuys: number;
+    previousTotalGroupRebuys: number;
+    lastManStanding: string | null;
   };
 
   const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, ctx: RebuyContext) => {
@@ -829,16 +971,22 @@ const LiveGameScreen = () => {
       let extraMessage: string;
       const ceilBuyins = Math.ceil(totalBuyins);
 
-      if (isNewRebuyLeader && totalBuyins >= 2) {
+      if (ctx.isGroupRecord) {
+        extraMessage = getGroupRecordMessage(playerName, ctx.previousGroupRecord);
+      } else if (ctx.isExtendingGroupRecord) {
+        extraMessage = getExtendingRecordMessage(playerName, true);
+      } else if (ctx.isPersonalRecord) {
+        extraMessage = getPersonalRecordMessage(playerName, ctx.previousPersonalRecord);
+      } else if (ctx.isExtendingPersonalRecord) {
+        extraMessage = getExtendingRecordMessage(playerName, false);
+      } else if (ctx.isNewRebuyLeader && totalBuyins >= 2) {
         extraMessage = `ויש לנו מוביל חדש בקניות הלילה! כל הכבוד ${playerName}`;
+      } else if (ctx.isTiedForLead && totalBuyins >= 2) {
+        extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames);
       } else {
-        const funFact = getFunFact(playerName, playerId, ceilBuyins);
-        if (funFact) {
-          extraMessage = funFact;
-        } else {
-          const roast = ceilBuyins >= 3 ? getPlayerRoast(playerName, ceilBuyins) : null;
-          extraMessage = roast || getBuyinMessage(ceilBuyins, isQuickRebuy);
-        }
+        // Personal message first — only fall back to generic if no player history
+        const personal = getPersonalMessage(playerName, playerId, ceilBuyins, isQuickRebuy, ctx.allPlayers);
+        extraMessage = personal || getBuyinMessage(ceilBuyins, isQuickRebuy);
       }
 
       const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${extraMessage}`;
@@ -846,9 +994,55 @@ const LiveGameScreen = () => {
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
       if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.9;   // Natural pace
-      utterance.pitch = 1.0;  // Natural pitch for female voice
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
       utterance.volume = 1;
+      
+      // Build chain of follow-up announcements
+      const followUps: string[] = [];
+
+      // Pot milestone (from 5th total buyin)
+      const milestones = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 100];
+      const crossedMilestone = milestones.find(m => ctx.previousTotalGroupRebuys < m && ctx.totalGroupRebuys >= m);
+      if (crossedMilestone) {
+        const potValue = cleanNumber(ctx.totalGroupRebuys * rebuyValue);
+        const milestoneMessages = [
+          `עברנו ${crossedMilestone} קניות! הקופה כבר על ${potValue} שקל`,
+          `${crossedMilestone} קניות על השולחן! ${potValue} שקל בקופה`,
+          `רגע של דממה, ${crossedMilestone} קניות, ${potValue} שקל בקופה`,
+          `הגענו ל${crossedMilestone} קניות! ערב יקר`,
+          `${crossedMilestone} קניות, ${potValue} שקל, מי משלם את זה?`,
+        ];
+        followUps.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
+      }
+
+      // Last man standing
+      if (ctx.lastManStanding) {
+        const lastManMessages = [
+          `${ctx.lastManStanding} האחרון שעוד מחזיק מהקנייה הראשונה!`,
+          `רק ${ctx.lastManStanding} נשאר בלי ריבאי, כל השאר כבר קנו`,
+          `${ctx.lastManStanding} עדיין על הראשונה, כל הכבוד`,
+          `כולם כבר קנו חוץ מ${ctx.lastManStanding}, מי יחזיק יותר?`,
+          `${ctx.lastManStanding} האחרון על הקנייה הראשונה, לחץ!`,
+        ];
+        followUps.push(lastManMessages[Math.floor(Math.random() * lastManMessages.length)]);
+      }
+
+      // Chain follow-ups sequentially via onend
+      const speakChain = (utt: SpeechSynthesisUtterance, msgs: string[]) => {
+        if (msgs.length === 0) return;
+        utt.onend = () => {
+          const next = new SpeechSynthesisUtterance(msgs[0]);
+          next.lang = 'he-IL';
+          if (hebrewVoice) next.voice = hebrewVoice;
+          next.rate = 0.9;
+          next.pitch = 1.0;
+          next.volume = 1;
+          speakChain(next, msgs.slice(1));
+          window.speechSynthesis.speak(next);
+        };
+      };
+      speakChain(utterance, followUps);
       
       window.speechSynthesis.speak(utterance);
     }
@@ -882,16 +1076,63 @@ const LiveGameScreen = () => {
     // Update last rebuy time
     lastRebuyTimeRef.current.set(player.id, now);
     
-    // Check if this player just became the sole rebuy leader (not if they already were)
+    // Detect leadership changes
     const previousRebuys = newRebuys - amount;
     const othersMax = Math.max(0, ...updatedPlayers.filter(p => p.id !== player.id).map(p => p.rebuys));
     const wasAlreadyLeader = previousRebuys > othersMax && previousRebuys > 1;
     const isNowSoleLeader = newRebuys > othersMax && newRebuys > 1;
     const isNewLeader = isNowSoleLeader && !wasAlreadyLeader;
-    
+
+    // Detect tied for lead (just matched someone else's max, creating a tie)
+    const wasBehind = previousRebuys < othersMax;
+    const isNowTied = newRebuys === othersMax && newRebuys > 1 && othersMax > 0;
+    const isTiedForLead = wasBehind && isNowTied;
+    const tiedLeaderNames = isTiedForLead
+      ? updatedPlayers.filter(p => p.rebuys === newRebuys).map(p => p.playerName)
+      : [];
+
+    // Detect personal and group rebuy records (since 2026)
+    const ceilNewRebuys = Math.ceil(newRebuys);
+    const records = getRebuyRecords();
+    const personalBest = records.playerMax.get(player.playerId) || 0;
+    const groupBest = records.groupMax;
+    const ceilPrevious = Math.ceil(previousRebuys);
+
+    const isPersonalRecord = ceilNewRebuys > personalBest && personalBest > 0 && ceilPrevious <= personalBest;
+    const isExtendingPersonalRecord = ceilNewRebuys > personalBest && personalBest > 0 && ceilPrevious > personalBest;
+
+    const isGroupRecord = ceilNewRebuys > groupBest && groupBest > 0 && ceilPrevious <= groupBest;
+    const isExtendingGroupRecord = ceilNewRebuys > groupBest && groupBest > 0 && ceilPrevious > groupBest;
+
+    // Detect last man standing (only one player still on initial buyin)
+    let lastManStanding: string | null = null;
+    if (!lastManAnnouncedRef.current && updatedPlayers.length >= 3) {
+      const noRebuyPlayers = updatedPlayers.filter(p => p.rebuys === 1);
+      if (noRebuyPlayers.length === 1) {
+        lastManStanding = noRebuyPlayers[0].playerName;
+        lastManAnnouncedRef.current = true;
+      }
+    }
+
+    const ctx: RebuyContext = {
+      isNewRebuyLeader: isNewLeader,
+      isTiedForLead,
+      tiedLeaderNames,
+      isPersonalRecord,
+      previousPersonalRecord: personalBest,
+      isGroupRecord,
+      previousGroupRecord: groupBest,
+      isExtendingPersonalRecord,
+      isExtendingGroupRecord,
+      allPlayers: updatedPlayers,
+      totalGroupRebuys: updatedPlayers.reduce((sum, p) => sum + p.rebuys, 0),
+      previousTotalGroupRebuys: updatedPlayers.reduce((sum, p) => sum + p.rebuys, 0) - amount,
+      lastManStanding,
+    };
+
     // Announce in Hebrew with creative message
     const isHalfBuyin = amount === 0.5;
-    speakBuyin(player.playerName, player.playerId, newRebuys, isQuickRebuy, isHalfBuyin, isNewLeader);
+    speakBuyin(player.playerName, player.playerId, newRebuys, isQuickRebuy, isHalfBuyin, ctx);
   };
 
   // Voice notification for undo
