@@ -73,6 +73,7 @@ const GraphsScreen = () => {
   
   // Impact view state
   const [impactPlayerId, setImpactPlayerId] = useState<string>('');
+  const [showLimitedData, setShowLimitedData] = useState(false);
 
   // Color mapping - stable by player order in permanent list
   const playerColorMap = useMemo(() => {
@@ -1957,116 +1958,187 @@ const GraphsScreen = () => {
           </div>
 
           {/* With/Without Table */}
-          {impactData.length > 0 && (
-            <div className="card">
-              <h2 className="card-title mb-2">🎯 With vs Without</h2>
-              <div style={{ 
-                fontSize: '0.7rem', 
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-                marginBottom: '0.75rem' 
-              }}>
-                How does {getPlayerName(impactPlayerId)}'s average change when each player is at the table?
-              </div>
+          {impactData.length > 0 && (() => {
+            const isLowConf = (r: typeof impactData[0]) => {
+              const min = Math.min(r.withGames, r.withoutGames);
+              const max = Math.max(r.withGames, r.withoutGames);
+              return min <= 5 || (min / max) < 0.15;
+            };
+            const confidenceScore = (r: typeof impactData[0]) => {
+              const min = Math.min(r.withGames, r.withoutGames);
+              const max = Math.max(r.withGames, r.withoutGames);
+              return Math.abs(r.impact) * (min / max) * Math.sqrt(min);
+            };
+            const reliable = impactData
+              .filter(r => !isLowConf(r))
+              .sort((a, b) => confidenceScore(b) - confidenceScore(a));
+            const limited = impactData
+              .filter(r => isLowConf(r))
+              .sort((a, b) => confidenceScore(b) - confidenceScore(a));
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {impactData.map(row => {
-                  const roundedImpact = Math.round(row.impact);
-                  const isZero = roundedImpact === 0;
-                  const impactColor = isZero ? 'var(--text-muted)' : row.impact > 0 ? '#10B981' : '#EF4444';
-                  const impactIcon = isZero ? '—' : row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact > 0 ? '↑' : '↓';
-                  const minSample = Math.min(row.withGames, row.withoutGames);
-                  const maxSample = Math.max(row.withGames, row.withoutGames);
-                  const isLowConfidence = minSample <= 5 || (minSample / maxSample) < 0.15;
-                  const avgWithRounded = Math.round(row.avgWith);
-                  const avgWithoutRounded = Math.round(row.avgWithout);
-                  const avgWithColor = avgWithRounded === 0 ? 'var(--text-muted)' : avgWithRounded > 0 ? '#10B981' : '#EF4444';
-                  const avgWithoutColor = avgWithoutRounded === 0 ? 'var(--text-muted)' : avgWithoutRounded > 0 ? '#10B981' : '#EF4444';
-                  return (
-                    <div key={row.otherPlayerId} style={{
-                      padding: '0.5rem 0.6rem',
-                      background: 'var(--surface)',
-                      borderRadius: '8px',
-                      borderRight: `3px solid ${impactColor}`,
-                      opacity: isLowConfidence ? 0.6 : 1,
+            const renderRow = (row: typeof impactData[0], isLimited: boolean) => {
+              const roundedImpact = Math.round(row.impact);
+              const isZero = roundedImpact === 0;
+              const impactColor = isZero ? 'var(--text-muted)' : row.impact > 0 ? '#10B981' : '#EF4444';
+              const impactIcon = isZero ? '—' : row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : row.impact > 0 ? '↑' : '↓';
+              const avgWithRounded = Math.round(row.avgWith);
+              const avgWithoutRounded = Math.round(row.avgWithout);
+              const avgWithColor = avgWithRounded === 0 ? 'var(--text-muted)' : avgWithRounded > 0 ? '#10B981' : '#EF4444';
+              const avgWithoutColor = avgWithoutRounded === 0 ? 'var(--text-muted)' : avgWithoutRounded > 0 ? '#10B981' : '#EF4444';
+              const totalGames = row.withGames + row.withoutGames;
+              const withPct = totalGames > 0 ? (row.withGames / totalGames) * 100 : 50;
+
+              return (
+                <div key={row.otherPlayerId} style={{
+                  padding: '0.5rem 0.6rem',
+                  background: 'var(--surface)',
+                  borderRadius: '8px',
+                  borderRight: `3px solid ${impactColor}`,
+                  opacity: isLimited ? 0.65 : 1,
+                }}>
+                  {/* Header: Name + Impact */}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '0.3rem',
+                  }}>
+                    <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
+                      {row.otherPlayerName}
+                    </span>
+                    <span style={{ 
+                      fontWeight: '700', 
+                      fontSize: '0.9rem',
+                      color: impactColor,
                     }}>
-                      {/* Header: Name + Impact */}
+                      {impactIcon} {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
+                    </span>
+                  </div>
+                  {/* Balance bar */}
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.3rem',
+                    marginBottom: '0.35rem',
+                  }}>
+                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', minWidth: '18px', textAlign: 'right' }}>{row.withGames}</span>
+                    <div style={{
+                      flex: 1,
+                      height: '4px',
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: '2px',
+                      overflow: 'hidden',
+                      display: 'flex',
+                    }}>
                       <div style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        marginBottom: '0.4rem',
+                        width: `${withPct}%`, 
+                        background: 'var(--primary)', 
+                        borderRadius: '2px 0 0 2px',
+                        opacity: 0.7,
+                      }} />
+                      <div style={{ 
+                        width: `${100 - withPct}%`, 
+                        background: 'var(--text-muted)', 
+                        borderRadius: '0 2px 2px 0',
+                        opacity: 0.3,
+                      }} />
+                    </div>
+                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', minWidth: '18px' }}>{row.withoutGames}</span>
+                  </div>
+                  {/* Two-column: With / Without */}
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <div style={{
+                      flex: 1,
+                      padding: '0.3rem 0.4rem',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '6px',
+                    }}>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>With</div>
+                      <div style={{ 
+                        fontWeight: '700', 
+                        fontSize: '0.8rem',
+                        color: avgWithColor,
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <span style={{ fontWeight: '700', color: row.otherColor, fontSize: '0.9rem' }}>
-                            {row.otherPlayerName}
-                          </span>
-                          {isLowConfidence && (
-                            <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }} title="Small sample on one side">⚠️</span>
-                          )}
-                        </div>
-                        <span style={{ 
-                          fontWeight: '700', 
-                          fontSize: '0.9rem',
-                          color: impactColor,
-                        }}>
-                          {impactIcon} {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
-                        </span>
+                        {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
                       </div>
-                      {/* Two-column: With / Without */}
-                      <div style={{ 
-                        display: 'flex', 
-                        gap: '0.4rem',
-                      }}>
-                        <div style={{
-                          flex: 1,
-                          padding: '0.3rem 0.4rem',
-                          background: 'rgba(255,255,255,0.03)',
-                          borderRadius: '6px',
-                        }}>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>With</div>
-                          <div style={{ 
-                            fontWeight: '700', 
-                            fontSize: '0.8rem',
-                            color: avgWithColor,
-                          }}>
-                            {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
-                          </div>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                            {row.withGames}g · {Math.round(row.winRateWith)}%W
-                          </div>
-                        </div>
-                        <div style={{
-                          flex: 1,
-                          padding: '0.3rem 0.4rem',
-                          background: 'rgba(255,255,255,0.03)',
-                          borderRadius: '6px',
-                        }}>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Without</div>
-                          <div style={{ 
-                            fontWeight: '700', 
-                            fontSize: '0.8rem',
-                            color: avgWithoutColor,
-                          }}>
-                            {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
-                          </div>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                            {row.withoutGames}g · {Math.round(row.winRateWithout)}%W
-                          </div>
-                        </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                        {Math.round(row.winRateWith)}% wins
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {impactData.length === 0 && (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', padding: '1rem' }}>
-                  Not enough data (need at least 1 game with and without each player)
+                    <div style={{
+                      flex: 1,
+                      padding: '0.3rem 0.4rem',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '6px',
+                    }}>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Without</div>
+                      <div style={{ 
+                        fontWeight: '700', 
+                        fontSize: '0.8rem',
+                        color: avgWithoutColor,
+                      }}>
+                        {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
+                      </div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                        {Math.round(row.winRateWithout)}% wins
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              );
+            };
+
+            return (
+              <div className="card">
+                <h2 className="card-title mb-2">🎯 With vs Without</h2>
+                <div style={{ 
+                  fontSize: '0.7rem', 
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                  marginBottom: '0.75rem' 
+                }}>
+                  How does {getPlayerName(impactPlayerId)}'s average change when each player is at the table?
+                </div>
+
+                {/* Reliable results */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {reliable.map(row => renderRow(row, false))}
+                </div>
+
+                {/* Limited data section */}
+                {limited.length > 0 && (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowLimitedData(!showLimitedData)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.3rem',
+                        width: '100%',
+                        padding: '0.4rem',
+                        background: 'none',
+                        border: '1px dashed var(--border)',
+                        borderRadius: '6px',
+                        color: 'var(--text-muted)',
+                        fontSize: '0.65rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>⚠️ Limited Data ({limited.length})</span>
+                      <span>{showLimitedData ? '▲' : '▼'}</span>
+                    </button>
+                    {showLimitedData && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        {limited.map(row => renderRow(row, true))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Chemistry Summary - derived from impact data above */}
           {impactData.length > 0 && (() => {
