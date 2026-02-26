@@ -5,7 +5,7 @@ import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem, GlobalRankingContext } from '../utils/geminiAI';
+import { generateAIForecasts, generateSavageAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem, GlobalRankingContext } from '../utils/geminiAI';
 
 // Default location options
 const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
@@ -1420,6 +1420,68 @@ const NewGameScreen = () => {
         sentence: f.sentence
       }));
       savePendingForecast(Array.from(selectedIds), forecastsToSave);
+    }
+  };
+
+  const handleShowSavageForecast = async () => {
+    if (selectedIds.size < 2) {
+      setError('Select at least 2 players');
+      return;
+    }
+
+    const hasAIKey = !!getGeminiApiKey();
+    if (!hasAIKey) {
+      setError('Roast mode requires AI (Gemini API key in settings)');
+      return;
+    }
+
+    setShowForecast(true);
+    setIsLoadingAI(true);
+    setAiError(null);
+    setAiForecasts(null);
+
+    try {
+      const selectedPlayers = players.filter(p => selectedIds.has(p.id));
+      const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
+        const stats = getStatsForPlayer(player.id);
+        const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
+
+        return {
+          name: player.name,
+          isFemale: isFemale(player.name),
+          gamesPlayed: stats?.gamesPlayed || 0,
+          totalProfit: stats?.totalProfit || 0,
+          avgProfit: stats?.avgProfit || 0,
+          winCount: stats?.winCount || 0,
+          lossCount: stats?.lossCount || 0,
+          winPercentage: stats?.winPercentage || 0,
+          currentStreak: stats?.currentStreak || 0,
+          bestWin: stats?.bestWin || 0,
+          worstLoss: stats?.worstLoss || 0,
+          gameHistory: (stats?.lastGameResults || []).map(g => {
+            const d = new Date(g.date);
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const year = d.getFullYear();
+            return { profit: g.profit, date: `${day}/${month}/${year}`, gameId: g.gameId };
+          }),
+          daysSinceLastGame: daysSince,
+          isActive: daysSince <= 60
+        };
+      });
+
+      const globalRankings = calculateGlobalRankings();
+      const forecasts = await generateSavageAIForecasts(playerData, globalRankings);
+      setAiForecasts(forecasts);
+      setIsLoadingAI(false);
+    } catch (err: any) {
+      console.error('Savage forecast error:', err);
+      setIsLoadingAI(false);
+      if (err.message?.includes('rate limit') || err.message?.includes('unavailable')) {
+        setAiError('⏳ Rate limit. Wait a minute and try again.');
+      } else {
+        setAiError(`Roast AI error: ${err.message}`);
+      }
     }
   };
 

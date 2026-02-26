@@ -1587,6 +1587,176 @@ ${surpriseText}
   throw new Error('All AI models are rate limited or unavailable. Try again in a few minutes.');
 };
 
+/**
+ * Generate SAVAGE/ROAST AI forecasts - same data, brutal tone
+ */
+export const generateSavageAIForecasts = async (
+  players: PlayerForecastData[],
+  globalRankings?: GlobalRankingContext
+): Promise<ForecastResult[]> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const parseGameDate = (dateStr: string): Date => {
+    let parts = dateStr.split('/');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    parts = dateStr.split('.');
+    if (parts.length >= 3) {
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]) - 1;
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentHalf = now.getMonth() < 6 ? 1 : 2;
+
+  const getHalfGames = (player: typeof players[0], year: number, half: 1 | 2) => {
+    const startMonth = half === 1 ? 0 : 6;
+    const endMonth = half === 1 ? 5 : 11;
+    return player.gameHistory.filter(g => {
+      const d = parseGameDate(g.date);
+      return d.getFullYear() === year && d.getMonth() >= startMonth && d.getMonth() <= endMonth;
+    });
+  };
+
+  const playersWithYearStats = players.map(p => {
+    const thisYearGames = p.gameHistory.filter(g => parseGameDate(g.date).getFullYear() === currentYear);
+    return {
+      ...p,
+      yearProfit: thisYearGames.reduce((sum, g) => sum + g.profit, 0),
+      yearGames: thisYearGames.length
+    };
+  });
+
+  const tonightRanking = [...playersWithYearStats].sort((a, b) => b.yearProfit - a.yearProfit);
+
+  const playerDataText = playersWithYearStats.map(p => {
+    const lastGame = p.gameHistory[0];
+    const lastGameResult = lastGame
+      ? (lastGame.profit > 0 ? `ניצח +${Math.round(lastGame.profit)}₪` : lastGame.profit < 0 ? `הפסיד ${Math.round(lastGame.profit)}₪` : 'יצא באפס')
+      : 'שחקן חדש';
+
+    const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
+    const periodAvg = currentHalfGames.length > 0
+      ? Math.round(currentHalfGames.reduce((sum, g) => sum + g.profit, 0) / currentHalfGames.length) : 0;
+
+    const halfRankData = globalRankings?.currentHalf.rankings.find(r => r.name === p.name);
+    const halfRank = halfRankData?.rank || tonightRanking.findIndex(sp => sp.name === p.name) + 1;
+    const winRate = p.gamesPlayed > 0 ? Math.round((p.winCount / p.gamesPlayed) * 100) : 0;
+    const allTimeAvg = Math.round(p.avgProfit);
+
+    const lines: string[] = [];
+    lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : '(זכר)'} ══`);
+    lines.push(`משחק אחרון: ${lastGameResult}`);
+    lines.push(`רצף: ${p.currentStreak > 0 ? `${p.currentStreak} נצחונות` : p.currentStreak < 0 ? `${Math.abs(p.currentStreak)} הפסדים` : 'אין'}`);
+    lines.push(`תקופה: מקום #${halfRank}, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪`);
+    lines.push(`כולל: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
+    lines.push(`שיא נצחון: +${Math.round(p.bestWin)}₪ | שיא הפסד: ${Math.round(p.worstLoss)}₪`);
+    return lines.join('\n');
+  }).join('\n\n');
+
+  const prompt = `אתה קומיקאי ישראלי חסר רחמים שמנתח פוקר. כתוב תחזית שצורבת ומצחיקה - בשביל לשלוח בוואטסאפ ולגרום לכולם למות מצחוק.
+
+📊 כרטיסי שחקנים:
+${playerDataText}
+
+📝 מה לכתוב לכל שחקן:
+1. expectedProfit - חיזוי הרווח/הפסד בש"ח (סכום כולם = 0 בדיוק!)
+2. highlight - כותרת ציניקית קצרה (3-6 מילים) - העלבה עדינה או קומפלימנט מוסווה
+3. sentence - משפט תחזית אחד בעברית (15-30 מילים) - ציני, שנון, עוקצני אבל מצחיק
+4. isSurprise - true אם חוזים הפתעה חיובית
+
+🔥 כללי הרוסטינג:
+• כל משפט חייב להיות מצחיק, ציני ועוקצני - כמו סטנדאפ ישראלי
+• תשתמש בנתונים אמיתיים מכרטיס השחקן כדי לצרוב - מספרים עושים את ההעלבה אמיתית
+• אל תהיה נחמד! זה רוסט! אבל בטעם טוב - הומור ישראלי, לא אכזריות
+• מי שמפסיד - תקבור אותו. מי שמנצח - תן לו שיהיה לו קשה עם ההצלחה
+• אסור לחזור על אותו סוג בדיחה פעמיים
+• סכום כל ה-expectedProfit חייב להיות 0 בדיוק!
+• טווח: -200₪ עד +200₪
+
+✅ דוגמאות טובות:
+• highlight: "ממהר להפסיד" | sentence: "3 הפסדים ברצף ועדיין חוזר - ההגדרה של טירוף. אולי הפעם ישתנה, אבל כנראה שלא"
+• highlight: "הבנקאי של הקבוצה" | sentence: "ממוצע -45₪ ב-80 משחקים. תודה על המימון, הקבוצה מעריכה"
+• highlight: "מנצח בדלת אחורית" | sentence: "48% נצחונות אבל +800₪ כולל - מנצח רק כשזה על כסף גדול. סוחר שוק"
+• highlight: "חזר מחופשה" | sentence: "45 ימים בלי הפסד - פשוט לא שיחק. אסטרטגיה מבריקה, חבל שנגמרה"
+
+📤 פלט JSON בלבד:
+[{"name":"שם","expectedProfit":מספר,"highlight":"כותרת ציניקית","sentence":"משפט עוקצני בעברית","isSurprise":false}]`;
+
+  for (const config of API_CONFIGS) {
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.9,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 4096,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 429 || response.status === 404) continue;
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API_ERROR: ${response.status} - ${errorData?.error?.message || ''}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) continue;
+
+      let jsonText = text;
+      if (text.includes('```json')) {
+        jsonText = text.split('```json')[1].split('```')[0];
+      } else if (text.includes('```')) {
+        jsonText = text.split('```')[1].split('```')[0];
+      }
+
+      let forecasts: ForecastResult[];
+      try {
+        forecasts = JSON.parse(jsonText.trim());
+      } catch {
+        continue;
+      }
+
+      // Ensure zero-sum
+      let total = forecasts.reduce((sum, f) => sum + f.expectedProfit, 0);
+      if (total !== 0 && forecasts.length > 0) {
+        const adjustment = Math.round(total / forecasts.length);
+        forecasts.forEach((f, i) => {
+          if (i === 0) f.expectedProfit -= (total - adjustment * (forecasts.length - 1));
+          else f.expectedProfit -= adjustment;
+        });
+      }
+
+      return forecasts;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error('All AI models are rate limited or unavailable. Try again in a few minutes.');
+};
+
 // Store working config
 let workingConfig: { version: string; model: string } | null = null;
 

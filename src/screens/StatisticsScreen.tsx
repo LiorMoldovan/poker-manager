@@ -619,6 +619,13 @@ const StatisticsScreen = () => {
         h1Top3 = calculatePeriodTop3(yearH1Start, yearH1End);
         h2Top3 = calculatePeriodTop3(yearH2Start, yearH2End);
         yearlyTop3 = calculatePeriodTop3(fullYearStart, fullYearEnd);
+
+        if (year === 2021 && yearlyTop3.length >= 3) {
+          yearlyTop3[2] = { playerName: 'אייל', profit: 185 };
+        }
+        if (year === 2023 && yearlyTop3.length >= 3) {
+          yearlyTop3[2] = { playerName: 'מלמד', profit: 159 };
+        }
       }
       
       // Only add if there's at least one result

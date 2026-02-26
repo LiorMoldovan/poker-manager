@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, updateGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
@@ -152,8 +152,8 @@ const LiveGameScreen = () => {
     return audioContextRef.current;
   };
 
-  // Casino rebuy sounds - randomly picks from 20 different sounds
-  const playRebuyCasinoSound = (): Promise<void> => {
+  // Casino rebuy sounds - mood shifts based on rebuy count
+  const playRebuyCasinoSound = (totalBuyins: number): Promise<void> => {
     return new Promise((resolve) => {
       try {
         const audioContext = getAudioContext();
@@ -390,11 +390,60 @@ const LiveGameScreen = () => {
             noise(0.4, 0.08, 0.1);
             return 650;
           },
+          // 21. Sad Trombone - "wah wah wah wahhh"
+          () => {
+            tone(350, 0, 0.35, 'sawtooth', 0.18);
+            tone(330, 0.35, 0.35, 'sawtooth', 0.18);
+            tone(311, 0.7, 0.35, 'sawtooth', 0.18);
+            tone(233, 1.05, 0.7, 'sawtooth', 0.22);
+            return 1800;
+          },
+          // 22. Funeral March - slow somber chords
+          () => {
+            chord([147, 175, 220], 0, 0.6, 'sine', 0.15);
+            chord([131, 165, 196], 0.7, 0.6, 'sine', 0.15);
+            chord([123, 147, 185], 1.4, 0.8, 'sine', 0.18);
+            return 2200;
+          },
+          // 23. Dramatic Fail - descending chromatic to buzz
+          () => {
+            const notes = [523, 494, 466, 440, 415, 392, 370, 349, 330, 311, 294, 262];
+            notes.forEach((f, i) => tone(f, i * 0.08, 0.12, 'square', 0.1));
+            tone(100, 0.96, 0.6, 'sawtooth', 0.15);
+            noise(0.96, 0.3, 0.15);
+            return 1600;
+          },
+          // 24. Game Over - classic descending
+          () => {
+            tone(392, 0, 0.25, 'triangle', 0.2);
+            tone(330, 0.3, 0.25, 'triangle', 0.2);
+            tone(262, 0.6, 0.25, 'triangle', 0.2);
+            tone(196, 0.9, 0.5, 'triangle', 0.25);
+            return 1400;
+          },
+          // 25. Crying Violin - high pitched descending
+          () => {
+            for (let i = 0; i < 8; i++) {
+              tone(880 - i * 60, i * 0.15, 0.2, 'sine', 0.12 + i * 0.01);
+            }
+            tone(350, 1.2, 0.6, 'sine', 0.18);
+            return 1800;
+          },
         ];
 
-        // Pick a random sound and play it
-        const randomIndex = Math.floor(Math.random() * sounds.length);
-        const duration = sounds[randomIndex]();
+        // Select sound based on rebuy progression (mood escalation)
+        let soundPool: number[];
+        if (totalBuyins <= 2) {
+          soundPool = [0, 1, 3, 11, 16, 17, 18, 19]; // Upbeat
+        } else if (totalBuyins <= 4) {
+          soundPool = [4, 5, 7, 8, 9, 10, 12]; // Neutral
+        } else if (totalBuyins <= 6) {
+          soundPool = [2, 6, 13, 14, 15]; // Ominous
+        } else {
+          soundPool = [20, 21, 22, 23, 24]; // Sad/dramatic
+        }
+        const selectedIndex = soundPool[Math.floor(Math.random() * soundPool.length)];
+        const duration = sounds[selectedIndex]();
         
         setTimeout(resolve, duration);
       } catch (e) {
@@ -555,10 +604,90 @@ const LiveGameScreen = () => {
     return message;
   };
 
+  // Player-specific roasts (30% chance, Hebrew)
+  const getPlayerRoast = (playerName: string, totalBuyins: number): string | null => {
+    if (Math.random() > 0.3) return null;
+
+    const roasts = [
+      `${playerName}, הכסף הזה כבר לא חוזר`,
+      `${playerName} תורם שוב לקופה הקבוצתית`,
+      `${playerName}, הארנק שלך בוכה`,
+      `מישהו שיעצור את ${playerName}`,
+      `${playerName}, גם הבנק לא היה מאשר את זה`,
+      `${playerName} שובר שיאים, לא את הטובים`,
+      `${playerName}, אולי תנסה שחמט`,
+      `${playerName}, הקלפים לא אוהבים אותך הלילה`,
+      `${playerName} מממן את הערב לכולם`,
+      `${playerName}, אתה הספונסר הרשמי של הלילה`,
+      `${playerName}, תודה על התרומה`,
+      `${playerName}, קיבלת נקודות נאמנות על זה`,
+      `${playerName}, אפשר גם להעביר ישירות`,
+    ];
+
+    if (totalBuyins >= 5) {
+      roasts.push(
+        `${playerName}, כבר שקלת קריירה אחרת?`,
+        `${playerName} בדרך לשיא עולמי`,
+        `${playerName}, אפילו הקלפים מרחמים עליך`,
+        `${playerName}, מי צריך חיסכון בכלל`,
+        `${playerName}, הילדים לא צריכים קורס שחייה`,
+        `${playerName}, תחשוב על זה כתרומה לקהילה`,
+      );
+    }
+
+    return roasts[Math.floor(Math.random() * roasts.length)];
+  };
+
+  // Fun facts from historical data (25% chance)
+  const getFunFact = (playerName: string, playerId: string, currentGameRebuys: number): string | null => {
+    if (Math.random() > 0.25) return null;
+
+    try {
+      const allStats = getPlayerStats();
+      const stats = allStats.find(s => s.playerId === playerId);
+      if (!stats || stats.gamesPlayed < 3) return null;
+
+      const settings = getSettings();
+      const facts: string[] = [];
+
+      const allTimeRebuys = stats.totalRebuys + currentGameRebuys;
+      facts.push(`זו הקנייה ה-${allTimeRebuys} שלך מאז ומעולם`);
+      facts.push(`ממוצע ${stats.avgRebuysPerGame.toFixed(1)} קניות למשחק, הלילה כבר ${currentGameRebuys}`);
+      facts.push(`שיחקת ${stats.gamesPlayed} משחקים עד היום`);
+
+      if (stats.winPercentage > 0) {
+        facts.push(`אחוז הנצחונות שלך ${Math.round(stats.winPercentage)} אחוז`);
+      }
+      if (stats.longestWinStreak >= 3) {
+        facts.push(`שיא הנצחונות שלך ${stats.longestWinStreak} ברצף`);
+      }
+      if (stats.longestLossStreak >= 3) {
+        facts.push(`שיא ההפסדים שלך ${stats.longestLossStreak} ברצף`);
+      }
+      if (stats.biggestWin > 50) {
+        facts.push(`הנצחון הגדול שלך היה ${Math.round(stats.biggestWin)} שקל`);
+      }
+      if (stats.totalProfit > 0) {
+        facts.push(`בסך הכל ברווח של ${Math.round(stats.totalProfit)} שקל`);
+      }
+
+      const totalSpent = allTimeRebuys * settings.rebuyValue;
+      facts.push(`סך הכל שילמת ${totalSpent} שקל על קניות`);
+
+      if (currentGameRebuys > stats.avgRebuysPerGame * 1.5 && currentGameRebuys >= 3) {
+        facts.push(`בקצב הזה תשבור את הממוצע שלך הלילה`);
+      }
+
+      return facts[Math.floor(Math.random() * facts.length)];
+    } catch {
+      return null;
+    }
+  };
+
   // Text-to-speech for buyin announcements - ALL HEBREW
-  const speakBuyin = async (playerName: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean) => {
-    // Play random casino sound first
-    await playRebuyCasinoSound();
+  const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, isNewRebuyLeader: boolean) => {
+    // Play mood-appropriate casino sound
+    await playRebuyCasinoSound(totalBuyins);
     
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -603,8 +732,23 @@ const LiveGameScreen = () => {
         buyAction = 'עוד אחד';
       }
       
-      const creativeMessage = getBuyinMessage(Math.ceil(totalBuyins), isQuickRebuy);
-      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${creativeMessage}`;
+      // Decide which extra announcement to make (priority system)
+      let extraMessage: string;
+      const ceilBuyins = Math.ceil(totalBuyins);
+
+      if (isNewRebuyLeader && totalBuyins >= 2) {
+        extraMessage = `ויש לנו מוביל חדש בקניות הלילה! כל הכבוד ${playerName}`;
+      } else {
+        const funFact = getFunFact(playerName, playerId, ceilBuyins);
+        if (funFact) {
+          extraMessage = funFact;
+        } else {
+          const roast = ceilBuyins >= 3 ? getPlayerRoast(playerName, ceilBuyins) : null;
+          extraMessage = roast || getBuyinMessage(ceilBuyins, isQuickRebuy);
+        }
+      }
+
+      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${extraMessage}`;
       
       const utterance = new SpeechSynthesisUtterance(fullMessage);
       utterance.lang = 'he-IL';
@@ -621,9 +765,10 @@ const LiveGameScreen = () => {
     const newRebuys = player.rebuys + amount;
     updateGamePlayerRebuys(player.id, newRebuys);
     
-    setPlayers(players.map(p => 
+    const updatedPlayers = players.map(p => 
       p.id === player.id ? { ...p, rebuys: newRebuys } : p
-    ));
+    );
+    setPlayers(updatedPlayers);
     
     setActions([
       {
@@ -644,9 +789,15 @@ const LiveGameScreen = () => {
     // Update last rebuy time
     lastRebuyTimeRef.current.set(player.id, now);
     
+    // Check if this player just became the sole rebuy leader
+    const maxRebuys = Math.max(...updatedPlayers.map(p => p.rebuys));
+    const isNewLeader = newRebuys === maxRebuys &&
+      newRebuys > 1 &&
+      updatedPlayers.filter(p => p.rebuys === maxRebuys).length === 1;
+    
     // Announce in Hebrew with creative message
     const isHalfBuyin = amount === 0.5;
-    speakBuyin(player.playerName, newRebuys, isQuickRebuy, isHalfBuyin);
+    speakBuyin(player.playerName, player.playerId, newRebuys, isQuickRebuy, isHalfBuyin, isNewLeader);
   };
 
   // Voice notification for undo
