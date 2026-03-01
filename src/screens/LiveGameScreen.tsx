@@ -30,6 +30,9 @@ const LiveGameScreen = () => {
   // Track "last man standing" so it's only announced once per game
   const lastManAnnouncedRef = useRef(false);
 
+  // Track used TTS messages to avoid repetition within a game session
+  const usedMessagesRef = useRef<Set<string>>(new Set());
+
   const getRebuyRecords = () => {
     if (rebuyRecordsRef.current) return rebuyRecordsRef.current;
 
@@ -655,6 +658,21 @@ const LiveGameScreen = () => {
     return message;
   };
 
+  // Personal traits for permanent players — used to generate unique flavor messages
+  const playerTraits: Record<string, { team?: string; job?: string; style: string[]; nickname?: string; quirks: string[] }> = {
+    p1: { job: 'הייטק', team: 'מכבי הרצליה', style: ['מחושב'], quirks: ['מנצח עם מעט קניות', 'שחקן אסטרטגי'] },
+    p2: { job: 'פיננסים', team: 'הפועל פתח תקווה', style: ['אגרסיבי', 'בלופר'], quirks: ['אמרגן הקבוצה', 'מתאם את המשחקים', 'הולך למשחקים של הפועל פתח תקווה למרות שלא באמת אוהד'] },
+    p3: { job: 'מהנדס בטיחות', style: ['מחושב', 'אגרסיבי'], quirks: ['צנח חופשי', 'מהנדס בטיחות שמסתכן'] },
+    p4: { job: 'מס הכנסה', team: 'הפועל כפר סבא', style: ['אגרסיבי', 'מזלן'], quirks: ['אבא לתינוק חדש', 'תמיד עייף', 'טוען שאין לו מזל'] },
+    p5: { job: 'רואה חשבון', team: 'הפועל כפר סבא', style: ['בלופר', 'אגרסיבי'], quirks: ['אוהב נרגילה'] },
+    p6: { job: 'בוחן תוכנה', nickname: 'איוון סטיבן', style: ['שמרני'], quirks: ['תמיד יוצא באפס', 'לאחרונה התחיל להפסיד', 'שחקן הכי שמרני בשולחן'] },
+    p7: { team: 'הפועל פתח תקווה', style: ['מזלן'], quirks: ['מהלכים מוזרים', 'אוהב חטיפים ועוגות', 'אף אחד לא מבין את המשחק שלו'] },
+    p8: { job: 'מנהל מוצר', team: 'באיירן מינכן', style: ['בלופר', 'מזלן', 'רגשי'], quirks: ['מחפש עסקאות מפוקפקות', 'רגשי על השולחן'] },
+    p9: { team: 'מכבי תל אביב', style: ['מחושב', 'אגרסיבי'], quirks: ['אבא לתינוק חדש'] },
+    p10: { job: 'IT', style: ['רגשי', 'בלופר', 'מזלן'], quirks: ['אוהב לעשן'] },
+    p11: { job: 'הייטק', style: ['מחושב'], quirks: ['משחק כדורעף', 'משחק פוקר כמו מחשבון'] },
+  };
+
   // Personalized messages using player stats, history, and table context
   // Always tries to return something specific to the player; null only if no history
   const getPersonalMessage = (
@@ -674,24 +692,40 @@ const LiveGameScreen = () => {
       const messages: string[] = [];
 
       // --- Current streak ---
-      if (stats.currentStreak >= 4) {
-        messages.push(`${playerName} על רצף של ${hebrewNum(stats.currentStreak, false)} נצחונות, מתי זה יגמר?`);
-        messages.push(`${hebrewNum(stats.currentStreak, false)} נצחונות רצף של ${playerName}, אבל הקניות אומרות אחרת`);
-        messages.push(`${playerName} על רצף חם של ${hebrewNum(stats.currentStreak, false)}, הערב יבדק`);
-      } else if (stats.currentStreak === 3) {
+      const streak = stats.currentStreak;
+      const absStreak = Math.abs(streak);
+      if (streak >= 4) {
+        messages.push(`${playerName} על רצף של ${hebrewNum(streak, false)} נצחונות, מתי זה יגמר?`);
+        messages.push(`${hebrewNum(streak, false)} נצחונות רצוף של ${playerName}, אבל הקניות אומרות אחרת`);
+        messages.push(`${playerName} על רצף חם של ${hebrewNum(streak, false)}, הערב יבדק`);
+        messages.push(`${playerName} שולט, ${hebrewNum(streak, false)} נצחונות רצוף, הערב יראה אם זה ממשיך`);
+        messages.push(`רצף של ${hebrewNum(streak, false)} של ${playerName}, אבל הקניות מספרות סיפור אחר`);
+        messages.push(`${playerName} לא מפסיק לנצח, כבר ${hebrewNum(streak, false)} רצוף, הערב נראה קצת אחרת`);
+      } else if (streak === 3) {
         messages.push(`${playerName} על רצף של שלושה נצחונות, מעניין כמה זה יחזיק`);
-        messages.push(`שלושה נצחונות רצף של ${playerName}, הקניות לא מסתדרות עם זה`);
-      } else if (stats.currentStreak === 2) {
+        messages.push(`שלושה נצחונות רצוף של ${playerName}, הקניות לא מסתדרות עם זה`);
+        messages.push(`${playerName} ניצח שלושה רצוף, אז למה קונה?`);
+        messages.push(`שלושה רצוף של ${playerName}, מסתבר שגם מנצחים קונים`);
+      } else if (streak === 2) {
         messages.push(`${playerName} ניצח פעמיים רצוף, הערב יהיה שלישי?`);
-      } else if (stats.currentStreak <= -4) {
-        messages.push(`${playerName} עם ${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים רצוף, הקניות לא יפתרו את זה`);
-        messages.push(`${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים רצוף של ${playerName}, אין מילים`);
-        messages.push(`${playerName} עם ${hebrewNum(Math.abs(stats.currentStreak), false)} הפסדים, הערב חייב להשתנות`);
-      } else if (stats.currentStreak === -3) {
+        messages.push(`${playerName} על רצף קטן, פעמיים רצוף, נראה מה הערב יביא`);
+        messages.push(`פעמיים רצוף של ${playerName}, אבל הערב נראה קצת אחרת`);
+      } else if (streak <= -4) {
+        messages.push(`${playerName} עם ${hebrewNum(absStreak, false)} הפסדים רצוף, הקניות לא יפתרו את זה`);
+        messages.push(`${hebrewNum(absStreak, false)} הפסדים רצוף של ${playerName}, אין מילים`);
+        messages.push(`${playerName} עם ${hebrewNum(absStreak, false)} הפסדים, הערב חייב להשתנות`);
+        messages.push(`${playerName}, ${hebrewNum(absStreak, false)} הפסדים רצוף, הגיע הזמן לשבור את הרצף`);
+        messages.push(`עוד הפסד של ${playerName}, כבר ${hebrewNum(absStreak, false)} רצוף, מתי זה נגמר?`);
+        messages.push(`${hebrewNum(absStreak, false)} רצוף של ${playerName}, הסטטיסטיקה לא לטובתו`);
+      } else if (streak === -3) {
         messages.push(`${playerName} עם שלושה הפסדים רצוף, אולי הערב זה ישתנה`);
         messages.push(`שלושה הפסדים רצוף של ${playerName}, הערב מוכרח להיות אחר`);
-      } else if (stats.currentStreak === -2) {
+        messages.push(`${playerName} הפסיד שלושה רצוף, הערב חייב להיות שונה`);
+        messages.push(`שלושה רצוף של ${playerName}, הסטטיסטיקה אומרת שמגיע לו נצחון`);
+      } else if (streak === -2) {
         messages.push(`${playerName} הפסיד פעמיים רצוף, הערב צריך נצחון`);
+        messages.push(`${playerName} עם שני הפסדים רצוף, הערב אמור להיות אחר`);
+        messages.push(`פעמיים רצוף של ${playerName}, הגיע הזמן לשנות כיוון`);
       }
 
       // --- Win percentage ---
@@ -699,86 +733,174 @@ const LiveGameScreen = () => {
       if (wp >= 65 && stats.gamesPlayed >= 5) {
         messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז מהמשחקים, אבל הערב הקניות אומרות אחרת`);
         messages.push(`${hebrewNum(wp, false)} אחוז נצחונות של ${playerName}, בדרך כלל לא צריך לקנות ככה`);
+        messages.push(`${playerName} עם ${hebrewNum(wp, false)} אחוז נצחונות, הערב חריג`);
+        messages.push(`מנצח ${hebrewNum(wp, false)} אחוז ועדיין קונה, ${playerName} הערב לא בקטע`);
       } else if (wp >= 55 && stats.gamesPlayed >= 5) {
         messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז, מה קרה הערב?`);
+        messages.push(`${hebrewNum(wp, false)} אחוז של ${playerName}, אבל הערב לא עובד`);
+        messages.push(`${playerName} רגיל לנצח, ${hebrewNum(wp, false)} אחוז, אז מה קרה?`);
       } else if (wp <= 30 && stats.gamesPlayed >= 5) {
         messages.push(`${playerName} מנצח רק ${hebrewNum(wp, false)} אחוז מהמשחקים, הסטטיסטיקה מדברת`);
         messages.push(`${hebrewNum(wp, false)} אחוז נצחונות של ${playerName}, לפחות עקבי`);
+        messages.push(`${playerName} עם ${hebrewNum(wp, false)} אחוז, הקניות לא מפתיעות`);
+        messages.push(`רק ${hebrewNum(wp, false)} אחוז נצחונות, ${playerName} לפחות נהנה מהדרך`);
       } else if (wp <= 40 && stats.gamesPlayed >= 8) {
         messages.push(`${playerName} עם ${hebrewNum(wp, false)} אחוז נצחונות, צריך לשפר`);
+        messages.push(`${hebrewNum(wp, false)} אחוז של ${playerName}, יש מקום לשיפור`);
+        messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז, הקניות לא עוזרות לסטטיסטיקה`);
       }
 
       // --- Overall profit/loss ---
-      if (stats.totalProfit > 200) {
-        messages.push(`${playerName} הרוויח ${Math.round(stats.totalProfit)} שקל סך הכל, יש מאיפה לקנות`);
-        messages.push(`${playerName} עדיין פלוס ${Math.round(stats.totalProfit)} שקל, אז מה זה עוד קנייה`);
+      const profit = Math.round(stats.totalProfit);
+      const absProfit = Math.round(Math.abs(stats.totalProfit));
+      if (stats.totalProfit > 500) {
+        messages.push(`${playerName} הרוויח ${profit} שקל סך הכל, יש מאיפה לקנות`);
+        messages.push(`${playerName} עדיין פלוס ${profit} שקל, אז מה זה עוד קנייה`);
+        messages.push(`פלוס ${profit} סך הכל של ${playerName}, הקניות לא מדאיגות`);
+        messages.push(`${playerName} פלוס ${profit} שקל, כסף קטן בשבילו`);
+      } else if (stats.totalProfit > 200) {
+        messages.push(`${playerName} הרוויח ${profit} שקל סך הכל, יש מאיפה לקנות`);
+        messages.push(`${playerName} עדיין פלוס ${profit} שקל, אז מה זה עוד קנייה`);
+        messages.push(`${playerName} פלוס ${profit}, עדיין יש רווח לאבד`);
       } else if (stats.totalProfit > 0 && stats.totalProfit <= 200) {
-        messages.push(`${playerName} עדיין פלוס ${Math.round(stats.totalProfit)} שקל, אבל זה מתכווץ`);
+        messages.push(`${playerName} עדיין פלוס ${profit} שקל, אבל זה מתכווץ`);
+        messages.push(`${playerName} עם פלוס קטן של ${profit} שקל, הערב יקבע`);
+        messages.push(`פלוס ${profit} של ${playerName} הולך ומתכווץ`);
+      } else if (stats.totalProfit < -500) {
+        messages.push(`${playerName} מינוס ${absProfit} שקל סך הכל, עוד קנייה זה טיפה בים`);
+        messages.push(`${playerName} מנסה להחזיר ${absProfit} שקל מינוס, דרך ארוכה`);
+        messages.push(`מינוס ${absProfit} סך הכל של ${playerName}, הערב לא ישנה הרבה`);
+        messages.push(`${playerName} מינוס ${absProfit} שקל, עוד קנייה לא תורגש`);
       } else if (stats.totalProfit < -200) {
-        messages.push(`${playerName} מינוס ${Math.round(Math.abs(stats.totalProfit))} שקל סך הכל, עוד קנייה זה טיפה בים`);
-        messages.push(`${playerName} מנסה להחזיר ${Math.round(Math.abs(stats.totalProfit))} שקל מינוס, הצלחה עם זה`);
+        messages.push(`${playerName} מינוס ${absProfit} שקל סך הכל, עוד קנייה זה טיפה בים`);
+        messages.push(`${playerName} מנסה להחזיר ${absProfit} שקל, הצלחה עם זה`);
+        messages.push(`${playerName} מינוס ${absProfit}, הערב עוד הזדמנות`);
       } else if (stats.totalProfit < -50) {
-        messages.push(`${playerName} מינוס ${Math.round(Math.abs(stats.totalProfit))} שקל, הקניות לא עוזרות`);
+        messages.push(`${playerName} מינוס ${absProfit} שקל, הקניות לא עוזרות`);
+        messages.push(`מינוס ${absProfit} של ${playerName}, הערב צריך שינוי מגמה`);
+        messages.push(`${playerName} מינוס ${absProfit} שקל, נראה אם הערב ישפר`);
       }
 
       // --- Last game result ---
       if (stats.lastGameResults.length > 0) {
         const lastGame = stats.lastGameResults[0];
-        if (lastGame.profit > 100) {
-          messages.push(`${playerName} ניצח ${Math.round(lastGame.profit)} שקל במשחק האחרון, הערב סיפור אחר`);
-          messages.push(`אחרי נצחון של ${Math.round(lastGame.profit)} במשחק הקודם, ${playerName} חוזר לקנות`);
+        const lastProfit = Math.round(lastGame.profit);
+        const lastAbsProfit = Math.round(Math.abs(lastGame.profit));
+        if (lastGame.profit > 200) {
+          messages.push(`${playerName} ניצח ${lastProfit} שקל במשחק האחרון, הערב סיפור אחר`);
+          messages.push(`אחרי נצחון של ${lastProfit} במשחק הקודם, ${playerName} חוזר לקנות`);
+          messages.push(`${playerName} הגיע עם ביטחון אחרי ${lastProfit} שקל, אבל הערב לא פשוט`);
+          messages.push(`נצחון גדול של ${lastProfit} במשחק הקודם, ${playerName} הערב מחזיר`);
         } else if (lastGame.profit > 0) {
-          messages.push(`${playerName} ניצח ${Math.round(lastGame.profit)} במשחק האחרון, היום קצת אחרת`);
-        } else if (lastGame.profit < -100) {
-          messages.push(`${playerName} הפסיד ${Math.round(Math.abs(lastGame.profit))} במשחק האחרון, מנסה להחזיר`);
-          messages.push(`אחרי הפסד של ${Math.round(Math.abs(lastGame.profit))} במשחק הקודם, ${playerName} ממשיך לקנות`);
+          messages.push(`${playerName} ניצח ${lastProfit} במשחק האחרון, היום קצת אחרת`);
+          messages.push(`אחרי פלוס ${lastProfit} במשחק הקודם, ${playerName} מתקשה הערב`);
+          messages.push(`${playerName} ניצח ${lastProfit} שקל בפעם הקודמת, הערב הכיוון הפוך`);
+        } else if (lastGame.profit < -200) {
+          messages.push(`${playerName} הפסיד ${lastAbsProfit} במשחק האחרון, מנסה להחזיר`);
+          messages.push(`אחרי הפסד של ${lastAbsProfit} במשחק הקודם, ${playerName} ממשיך לקנות`);
+          messages.push(`${playerName} עם מינוס ${lastAbsProfit} מהפעם הקודמת, הערב ממשיך`);
+          messages.push(`הפסד כבד של ${lastAbsProfit} בפעם הקודמת, ${playerName} לא מוותר`);
+        } else if (lastGame.profit < -50) {
+          messages.push(`${playerName} הפסיד ${lastAbsProfit} במשחק הקודם, הערב לא מתחיל טוב יותר`);
+          messages.push(`מינוס ${lastAbsProfit} בפעם הקודמת של ${playerName}, הערב אותו דבר`);
+          messages.push(`${playerName} הפסיד ${lastAbsProfit} במשחק הקודם, ועדיין קונה`);
         } else if (lastGame.profit < 0) {
-          messages.push(`${playerName} הפסיד ${Math.round(Math.abs(lastGame.profit))} במשחק הקודם, הערב לא מתחיל טוב יותר`);
+          messages.push(`${playerName} סיים מינוס קטן בפעם הקודמת, הערב מקווה לטוב יותר`);
         }
       }
 
       // --- Avg profit per game ---
-      if (stats.avgProfit > 50 && stats.gamesPlayed >= 5) {
+      if (stats.avgProfit > 80 && stats.gamesPlayed >= 5) {
         messages.push(`ממוצע של פלוס ${Math.round(stats.avgProfit)} למשחק של ${playerName}, הערב מוריד את הממוצע`);
-      } else if (stats.avgProfit < -50 && stats.gamesPlayed >= 5) {
+        messages.push(`${playerName} מרוויח ממוצע ${Math.round(stats.avgProfit)} שקל, הערב לא עוזר`);
+        messages.push(`ממוצע פלוס ${Math.round(stats.avgProfit)} של ${playerName}, הערב חריג`);
+      } else if (stats.avgProfit > 30 && stats.gamesPlayed >= 5) {
+        messages.push(`ממוצע של פלוס ${Math.round(stats.avgProfit)} למשחק של ${playerName}, הערב מוריד את הממוצע`);
+        messages.push(`${playerName} ממוצע פלוס ${Math.round(stats.avgProfit)} למשחק, הערב משנה את המספרים`);
+      } else if (stats.avgProfit < -80 && stats.gamesPlayed >= 5) {
         messages.push(`ממוצע של מינוס ${Math.round(Math.abs(stats.avgProfit))} למשחק של ${playerName}, הערב ממשיך את המגמה`);
+        messages.push(`${playerName} מפסיד ממוצע ${Math.round(Math.abs(stats.avgProfit))} שקל, לפחות עקבי`);
+        messages.push(`מינוס ${Math.round(Math.abs(stats.avgProfit))} ממוצע של ${playerName}, הערב לא עוזר`);
+      } else if (stats.avgProfit < -30 && stats.gamesPlayed >= 5) {
+        messages.push(`ממוצע של מינוס ${Math.round(Math.abs(stats.avgProfit))} למשחק של ${playerName}, הערב ממשיך את המגמה`);
+        messages.push(`${playerName} ממוצע מינוס ${Math.round(Math.abs(stats.avgProfit))} למשחק, הערב לא משפר`);
       }
 
       // --- Games played milestones ---
-      if (stats.gamesPlayed >= 50) {
-        messages.push(`${playerName} ותיק עם ${hebrewNum(stats.gamesPlayed, false)} משחקים, הניסיון לא עוזר הערב`);
-        messages.push(`${hebrewNum(stats.gamesPlayed, false)} משחקים של ${playerName}, ועדיין קונה`);
-      } else if (stats.gamesPlayed >= 30) {
-        messages.push(`${playerName} כבר ${hebrewNum(stats.gamesPlayed, false)} משחקים, ולא מפסיק לקנות`);
-      } else if (stats.gamesPlayed >= 15) {
-        messages.push(`${hebrewNum(stats.gamesPlayed, false)} משחקים של ${playerName}, כבר מכיר את הדרך לארנק`);
-      } else if (stats.gamesPlayed <= 5) {
-        messages.push(`${playerName} עם רק ${hebrewNum(stats.gamesPlayed, false)} משחקים, עדיין לומד לשלם`);
+      const gp = stats.gamesPlayed;
+      if (gp >= 50) {
+        messages.push(`${playerName} ותיק עם ${hebrewNum(gp, false)} משחקים, הניסיון לא עוזר הערב`);
+        messages.push(`${hebrewNum(gp, false)} משחקים של ${playerName}, ועדיין קונה`);
+        messages.push(`${playerName} כבר ${hebrewNum(gp, false)} משחקים, מכיר כל קלף ועדיין קונה`);
+        messages.push(`ותיק של ${hebrewNum(gp, false)} משחקים, ${playerName} לא לומד מטעויות`);
+      } else if (gp >= 30) {
+        messages.push(`${playerName} כבר ${hebrewNum(gp, false)} משחקים, ולא מפסיק לקנות`);
+        messages.push(`${hebrewNum(gp, false)} משחקים ו ${playerName} עדיין מממן את השולחן`);
+        messages.push(`${playerName} עם ${hebrewNum(gp, false)} משחקים, הניסיון לא מונע קניות`);
+      } else if (gp >= 15) {
+        messages.push(`${hebrewNum(gp, false)} משחקים של ${playerName}, כבר מכיר את הדרך לארנק`);
+        messages.push(`${playerName} עם ${hebrewNum(gp, false)} משחקים, כבר שחקן מנוסה`);
+        messages.push(`${hebrewNum(gp, false)} משחקים ו ${playerName} עדיין לא למד`);
+      } else if (gp >= 8) {
+        messages.push(`${playerName} עם ${hebrewNum(gp, false)} משחקים, עוד לומד את השולחן`);
+        messages.push(`${hebrewNum(gp, false)} משחקים של ${playerName}, עדיין צובר ניסיון`);
+      } else if (gp <= 5) {
+        messages.push(`${playerName} עם רק ${hebrewNum(gp, false)} משחקים, עדיין לומד לשלם`);
+        messages.push(`${playerName} חדש יחסית, רק ${hebrewNum(gp, false)} משחקים`);
+        messages.push(`רק ${hebrewNum(gp, false)} משחקים של ${playerName}, הניסיון יבוא`);
       }
 
       // --- Biggest win/loss references ---
-      if (stats.biggestWin > 100) {
+      if (stats.biggestWin > 200) {
         messages.push(`הנצחון הגדול של ${playerName} היה ${Math.round(stats.biggestWin)} שקל, הערב בכיוון ההפוך`);
+        messages.push(`${playerName} פעם ניצח ${Math.round(stats.biggestWin)} שקל, הערב זוכרים את זה`);
+        messages.push(`שיא נצחון של ${Math.round(stats.biggestWin)} שקל, ${playerName} הערב רחוק מזה`);
+      } else if (stats.biggestWin > 100) {
+        messages.push(`הנצחון הגדול של ${playerName} היה ${Math.round(stats.biggestWin)} שקל, הערב בכיוון ההפוך`);
+        messages.push(`${playerName} יודע לנצח, פעם לקח ${Math.round(stats.biggestWin)} שקל, הערב קצת אחרת`);
       }
-      if (stats.biggestLoss < -100) {
+      if (stats.biggestLoss < -200) {
         messages.push(`ההפסד הגדול של ${playerName} היה ${Math.round(Math.abs(stats.biggestLoss))} שקל, מקווים שהערב לא שם`);
+        messages.push(`${playerName} פעם הפסיד ${Math.round(Math.abs(stats.biggestLoss))} שקל, הערב בדרך לשם?`);
+        messages.push(`שיא הפסד של ${Math.round(Math.abs(stats.biggestLoss))} של ${playerName}, הערב עוד לא שם`);
+      } else if (stats.biggestLoss < -100) {
+        messages.push(`ההפסד הגדול של ${playerName} היה ${Math.round(Math.abs(stats.biggestLoss))} שקל, מקווים שהערב לא שם`);
+        messages.push(`${playerName} פעם הפסיד ${Math.round(Math.abs(stats.biggestLoss))}, הערב מנסה לא לחזור על זה`);
       }
 
       // --- Longest streaks ---
       if (stats.longestWinStreak >= 4) {
         messages.push(`השיא של ${playerName} הוא ${hebrewNum(stats.longestWinStreak, false)} נצחונות רצוף, היום לא נראה שזה קורה`);
+        messages.push(`${playerName} פעם ניצח ${hebrewNum(stats.longestWinStreak, false)} רצוף, הערב קצת אחרת`);
+        messages.push(`רצף שיא של ${hebrewNum(stats.longestWinStreak, false)} נצחונות, ${playerName} הערב לא שם`);
       }
       if (stats.longestLossStreak >= 4) {
         messages.push(`${playerName} פעם הפסיד ${hebrewNum(stats.longestLossStreak, false)} רצוף, אז מה עוד קנייה`);
+        messages.push(`שיא הפסדים של ${hebrewNum(stats.longestLossStreak, false)} רצוף, ${playerName} מכיר תקופות קשות`);
+        messages.push(`${playerName} שרד ${hebrewNum(stats.longestLossStreak, false)} הפסדים רצוף, עוד קנייה לא תשבור אותו`);
       }
 
       // --- Avg win vs avg loss ---
       if (stats.avgWin > 0 && stats.avgLoss > 0) {
         if (stats.avgWin > stats.avgLoss * 1.5) {
           messages.push(`כאשר ${playerName} מנצח, זה גדול, ממוצע של ${Math.round(stats.avgWin)} שקל, הבעיה היא להגיע לשם`);
+          messages.push(`${playerName} מנצח ממוצע ${Math.round(stats.avgWin)} שקל, חבל שזה לא קורה הערב`);
+          messages.push(`ממוצע נצחון של ${Math.round(stats.avgWin)} שקל, ${playerName} צריך רק הזדמנות אחת`);
         } else if (stats.avgLoss > stats.avgWin * 1.5) {
           messages.push(`${playerName} מפסיד ממוצע ${Math.round(stats.avgLoss)} שקל ומנצח רק ${Math.round(stats.avgWin)}, נו, לפחות עקבי`);
+          messages.push(`${playerName} מפסיד גדול ומנצח קטן, ממוצע מינוס ${Math.round(stats.avgLoss)} למשחק`);
+          messages.push(`הפסד ממוצע של ${Math.round(stats.avgLoss)} מול נצחון ממוצע של ${Math.round(stats.avgWin)}, ${playerName} צריך לשנות משהו`);
         }
+      }
+
+      // --- Win count facts ---
+      if (stats.winCount >= 10 && stats.gamesPlayed >= 15) {
+        messages.push(`${playerName} ניצח ${hebrewNum(stats.winCount, false)} משחקים סך הכל, הערב לא אחד מהם`);
+        messages.push(`${hebrewNum(stats.winCount, false)} נצחונות של ${playerName}, אבל הערב מוסיף לצד השני`);
+      }
+      if (stats.winCount <= 3 && stats.gamesPlayed >= 10) {
+        messages.push(`${playerName} ניצח רק ${hebrewNum(stats.winCount, false)} מתוך ${hebrewNum(gp, false)} משחקים, הקניות לא מפתיעות`);
+        messages.push(`רק ${hebrewNum(stats.winCount, false)} נצחונות של ${playerName} מתוך ${hebrewNum(gp, false)}, הסטטיסטיקה מדברת`);
       }
 
       // --- Rebuy-related (2026 data only) ---
@@ -787,17 +909,30 @@ const LiveGameScreen = () => {
         if (currentGameRebuys > avgRebuys * 1.5 && currentGameRebuys >= 3) {
           messages.push(`${playerName} ממוצע ${hebrewNum(Math.round(avgRebuys), true)} קניות למשחק, הערב כבר ${hebrewNum(currentGameRebuys, true)}`);
           messages.push(`${playerName} מעל הממוצע שלו הערב, רגיל קונה ${hebrewNum(Math.round(avgRebuys), true)} וכבר ${hebrewNum(currentGameRebuys, true)}`);
+          messages.push(`ממוצע של ${hebrewNum(Math.round(avgRebuys), true)} קניות למשחק, ${playerName} הערב שובר שיאים`);
+          messages.push(`${playerName} רגיל ${hebrewNum(Math.round(avgRebuys), true)} למשחק, הערב עובר את זה הרבה`);
+        } else if (currentGameRebuys > avgRebuys && currentGameRebuys >= 2) {
+          messages.push(`${playerName} עבר את הממוצע שלו של ${hebrewNum(Math.round(avgRebuys), true)} למשחק`);
+          messages.push(`מעל הממוצע של ${playerName}, רגיל קונה ${hebrewNum(Math.round(avgRebuys), true)} וכבר ${hebrewNum(currentGameRebuys, true)}`);
         }
         if (currentGameRebuys <= 2 && avgRebuys >= 4) {
           messages.push(`${playerName} רגיל קונה ${hebrewNum(Math.round(avgRebuys), true)} פעמים למשחק, אז עוד יבואו`);
+          messages.push(`ממוצע של ${hebrewNum(Math.round(avgRebuys), true)} קניות של ${playerName}, עוד רחוק מהשיא`);
+          messages.push(`${playerName} ממוצע ${hebrewNum(Math.round(avgRebuys), true)} למשחק, הערב עוד בהתחלה`);
         }
 
         const totalRebuys2026 = stats2026.totalRebuys + currentGameRebuys;
-        if (totalRebuys2026 >= 30) {
+        if (totalRebuys2026 >= 50) {
+          const totalSpent = totalRebuys2026 * settings.rebuyValue;
+          messages.push(`${playerName} כבר שילם ${totalSpent} שקל על קניות מתחילת השנה, הבנקאי של הקבוצה`);
+          messages.push(`${totalSpent} שקל על קניות של ${playerName} השנה, תודה על המימון`);
+        } else if (totalRebuys2026 >= 30) {
           const totalSpent = totalRebuys2026 * settings.rebuyValue;
           messages.push(`${playerName} כבר שילם ${totalSpent} שקל על קניות מתחילת השנה, תודה על המימון`);
+          messages.push(`${playerName} עם ${hebrewNum(totalRebuys2026, true)} קניות השנה, נדיב כרגיל`);
         } else if (totalRebuys2026 >= 15) {
           messages.push(`${playerName} כבר ${hebrewNum(totalRebuys2026, true)} קניות מתחילת השנה, קצב יפה`);
+          messages.push(`${hebrewNum(totalRebuys2026, true)} קניות של ${playerName} השנה, מגמה ברורה`);
         }
       }
 
@@ -812,54 +947,61 @@ const LiveGameScreen = () => {
         if (currentGameRebuys > maxRebuysOther && playerWithMax && currentGameRebuys >= 3) {
           messages.push(`${playerName} עקף את ${playerWithMax.playerName} בקניות הערב`);
           messages.push(`אפילו ${playerWithMax.playerName} קנה פחות מאשר ${playerName} הערב`);
+          messages.push(`${playerName} מוביל בקניות, עקף את ${playerWithMax.playerName}`);
+          messages.push(`אף אחד לא קנה כמו ${playerName} הערב, אפילו לא ${playerWithMax.playerName}`);
         }
         if (currentGameRebuys >= 3 && playerWithMin && Math.ceil(minRebuysOther) <= 1) {
           messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ו ${playerWithMin.playerName} עדיין על הראשונה`);
+          messages.push(`${playerWithMin.playerName} עדיין על הראשונה, ${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)}, פער גדול`);
         }
 
         const rival = otherPlayers.find(p => Math.ceil(p.rebuys) === Math.ceil(currentGameRebuys));
         if (rival) {
           messages.push(`${playerName} ו ${rival.playerName} שווים בקניות הערב, מי ישבור ראשון?`);
           messages.push(`מרוץ קניות בין ${playerName} לבין ${rival.playerName}, שניהם עם ${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
+          messages.push(`${playerName} ו ${rival.playerName} ראש בראש, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות כל אחד`);
+          messages.push(`תיקו בקניות, ${playerName} ו ${rival.playerName} שניהם ${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
         }
 
-        // Historical rivalry with specific players at the table
         for (const other of otherPlayers) {
           const otherStats = allStats.find(s => s.playerId === other.playerId);
           if (!otherStats || otherStats.gamesPlayed < 5) continue;
 
-          // Opposite profit trends
           if (stats.totalProfit > 100 && otherStats.totalProfit < -100) {
             messages.push(`${playerName} פלוס ${Math.round(stats.totalProfit)} שקל, ${other.playerName} מינוס ${Math.round(Math.abs(otherStats.totalProfit))}, הערב הכל הפוך?`);
+            messages.push(`${playerName} מרוויח ו ${other.playerName} מפסיד, אבל הערב שניהם קונים`);
           }
 
-          // Win rate comparison
           const myWp = Math.round(stats.winPercentage);
           const theirWp = Math.round(otherStats.winPercentage);
           if (myWp >= 55 && theirWp <= 35 && stats.gamesPlayed >= 5) {
             messages.push(`${playerName} מנצח ${hebrewNum(myWp, false)} אחוז, ${other.playerName} רק ${hebrewNum(theirWp, false)} אחוז, אבל הערב שניהם קונים`);
+            messages.push(`${hebrewNum(myWp, false)} אחוז מול ${hebrewNum(theirWp, false)} אחוז, ${playerName} ו ${other.playerName} שונים, אבל הערב דומים`);
           }
 
-          // Both on streaks in opposite directions
           if (stats.currentStreak >= 2 && otherStats.currentStreak <= -2) {
             messages.push(`${playerName} על רצף של ${hebrewNum(stats.currentStreak, false)} נצחונות, ${other.playerName} עם ${hebrewNum(Math.abs(otherStats.currentStreak), false)} הפסדים, אז מי צריך לקנות יותר?`);
           }
 
-          // Similar avg rebuys — rebuy buddies
           if (stats2026 && stats2026.avgRebuysPerGame >= 3) {
             const otherStats2026 = getPlayerStats({ start: new Date('2026-01-01') }).find(s => s.playerId === other.playerId);
             if (otherStats2026 && otherStats2026.avgRebuysPerGame >= 3) {
               messages.push(`${playerName} ו ${other.playerName} שניהם ממוצע של ${hebrewNum(Math.round(stats2026.avgRebuysPerGame), true)} קניות למשחק, השותפים הכי נדיבים`);
+              messages.push(`שני הנדיבים של השולחן, ${playerName} ו ${other.playerName}, ממוצע ${hebrewNum(Math.round(stats2026.avgRebuysPerGame), true)} קניות`);
             }
           }
         }
 
-        // Total money spent tonight comparison
         const mySpent = currentGameRebuys * settings.rebuyValue;
         const totalTableSpent = allPlayers.reduce((sum, p) => sum + p.rebuys * settings.rebuyValue, 0);
         const mySharePercent = Math.round((mySpent / totalTableSpent) * 100);
-        if (mySharePercent >= 25 && currentGameRebuys >= 3) {
+        if (mySharePercent >= 30 && currentGameRebuys >= 3) {
           messages.push(`${playerName} אחראי על ${hebrewNum(mySharePercent, false)} אחוז מהכסף הערב, תודה על התמיכה`);
+          messages.push(`${hebrewNum(mySharePercent, false)} אחוז מהכסף על השולחן שייך של ${playerName}, נדיבות`);
+          messages.push(`${playerName} מממן ${hebrewNum(mySharePercent, false)} אחוז מהקופה הערב, כל הכבוד`);
+        } else if (mySharePercent >= 20 && currentGameRebuys >= 3) {
+          messages.push(`${playerName} אחראי על ${hebrewNum(mySharePercent, false)} אחוז מהכסף הערב, תודה על התמיכה`);
+          messages.push(`${playerName} תורם ${hebrewNum(mySharePercent, false)} אחוז מהכסף הערב`);
         }
       }
 
@@ -868,24 +1010,35 @@ const LiveGameScreen = () => {
         const stillOnFirst = otherPlayers.filter(p => p.rebuys === 1);
         if (stillOnFirst.length >= 2 && currentGameRebuys >= 3) {
           messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ו ${hebrewNum(stillOnFirst.length, false)} שחקנים עדיין על הראשונה`);
+          messages.push(`${hebrewNum(stillOnFirst.length, false)} שחקנים עוד על הראשונה, ${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
         }
       }
 
       // --- Spending personality ---
       if (stats.gamesPlayed >= 5) {
         const totalSpentAllTime = stats.totalRebuys * settings.rebuyValue;
-        if (totalSpentAllTime >= 2000) {
+        if (totalSpentAllTime >= 3000) {
           messages.push(`${playerName} שילם כבר ${totalSpentAllTime} שקל על קניות סך הכל, הבנקאי של הקבוצה`);
+          messages.push(`${totalSpentAllTime} שקל על קניות של ${playerName}, הספונסר הלא רשמי`);
+          messages.push(`${playerName} שם ${totalSpentAllTime} שקל על קניות, הכסף חייב לחזור בסוף`);
+        } else if (totalSpentAllTime >= 1500) {
+          messages.push(`${playerName} שילם כבר ${totalSpentAllTime} שקל על קניות סך הכל, נדיב`);
+          messages.push(`${totalSpentAllTime} שקל על קניות של ${playerName}, סכום יפה`);
         }
         if (stats.totalGains > 0 && stats.totalLosses > 0) {
           const volatility = stats.totalGains + stats.totalLosses;
-          if (volatility > stats.gamesPlayed * 150) {
+          if (volatility > stats.gamesPlayed * 200) {
             messages.push(`${playerName} שחקן קיצוני, ${Math.round(stats.totalGains)} שקל נצחונות ו ${Math.round(stats.totalLosses)} שקל הפסדים`);
+            messages.push(`${playerName} הכל או כלום, ${Math.round(stats.totalGains)} שקל למעלה ו ${Math.round(stats.totalLosses)} למטה`);
+            messages.push(`סך הכל ${Math.round(stats.totalGains)} שקל נצחונות ו ${Math.round(stats.totalLosses)} הפסדים של ${playerName}, רכבת הרים`);
+          } else if (volatility > stats.gamesPlayed * 120) {
+            messages.push(`${playerName} שחקן קיצוני, ${Math.round(stats.totalGains)} שקל נצחונות ו ${Math.round(stats.totalLosses)} שקל הפסדים`);
+            messages.push(`${playerName} לא משעמם, ההיסטוריה שלו מלאה עליות וירידות`);
           }
         }
       }
 
-      // --- "This day" style facts ---
+      // --- "Last few games" style facts ---
       if (stats.lastGameResults.length >= 3) {
         const last3 = stats.lastGameResults.slice(0, 3);
         const all3Lost = last3.every(g => g.profit < 0);
@@ -893,10 +1046,25 @@ const LiveGameScreen = () => {
         if (all3Lost) {
           const totalLoss3 = Math.round(last3.reduce((sum, g) => sum + Math.abs(g.profit), 0));
           messages.push(`${playerName} הפסיד שלושה משחקים אחרונים, מינוס ${totalLoss3} שקל, הערב חייב להשתנות`);
+          messages.push(`שלושה הפסדים אחרונים של ${playerName}, סך הכל מינוס ${totalLoss3}, הערב אמור להיות שונה`);
+          messages.push(`${playerName} מינוס ${totalLoss3} שקל, שלושה משחקים אחרונים, הערב חייב קאמבק`);
         }
         if (all3Won) {
           const totalWin3 = Math.round(last3.reduce((sum, g) => sum + g.profit, 0));
           messages.push(`${playerName} ניצח שלושה משחקים אחרונים, פלוס ${totalWin3} שקל, אבל הקניות לא מסתדרות עם זה`);
+          messages.push(`שלושה נצחונות אחרונים של ${playerName}, פלוס ${totalWin3} שקל, הערב סיפור אחר`);
+          messages.push(`${playerName} פלוס ${totalWin3} שקל, שלושה אחרונים, אבל הערב שונה`);
+        }
+      }
+      if (stats.lastGameResults.length >= 5) {
+        const last5 = stats.lastGameResults.slice(0, 5);
+        const wins5 = last5.filter(g => g.profit > 0).length;
+        const losses5 = last5.filter(g => g.profit < 0).length;
+        if (wins5 >= 4) {
+          messages.push(`${playerName} ניצח ${hebrewNum(wins5, false)} מתוך חמישה אחרונים, הערב מנסה לשנות את זה`);
+        } else if (losses5 >= 4) {
+          messages.push(`${playerName} הפסיד ${hebrewNum(losses5, false)} מתוך חמישה אחרונים, הערב ממשיך`);
+          messages.push(`${hebrewNum(losses5, false)} הפסדים מתוך חמישה אחרונים של ${playerName}, לא פשוט`);
         }
       }
 
@@ -907,6 +1075,10 @@ const LiveGameScreen = () => {
         messages.push(`הכסף של ${playerName} נעלם מהר, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות הערב`);
         messages.push(`${playerName}, שנייה, עוד לא הספקנו לערבב את הקלפים`);
         messages.push(`${playerName} קונה כאילו יש מבצע, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} הערב`);
+        messages.push(`${playerName} לא מבזבז זמן, ישר קנייה חדשה`);
+        messages.push(`מהיר, ${playerName} חזר לקנות, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)}`);
+        messages.push(`${playerName} קונה כמו שקונים במכולת, מהר ובלי לחשוב`);
+        messages.push(`עוד אחד של ${playerName}, הקלפים לא הספיקו להתקרר`);
         if (stats.totalProfit > 100) {
           messages.push(`${playerName} פלוס ${Math.round(stats.totalProfit)} שקל, אז מה אם זה מהר`);
         } else if (stats.totalProfit < -100) {
@@ -925,6 +1097,9 @@ const LiveGameScreen = () => {
         messages.push(`${playerName} עם ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, כולם אומרים תודה בלב`);
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות של ${playerName}, ${spentTonight} שקל, נו, לפחות יש אופי`);
         messages.push(`${playerName} לא מוותר, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ועדיין מחייך`);
+        messages.push(`${playerName} שם ${spentTonight} שקל על השולחן הערב, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ועולה`);
+        messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, ${playerName} לא עוצר`);
+        messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הערב יזכר`);
         if (stats.totalProfit > 0) {
           messages.push(`${playerName} פלוס ${Math.round(stats.totalProfit)} שקל סך הכל, אז מה זה עוד ${spentTonight}?`);
         } else {
@@ -934,6 +1109,9 @@ const LiveGameScreen = () => {
         messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, ערב יקר`);
         messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות של ${playerName}, ${spentTonight} שקל, תודה`);
         messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הנדיבות לא נגמרת`);
+        messages.push(`${playerName} שם ${spentTonight} שקל הערב, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות`);
+        messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות ו ${spentTonight} שקל, ${playerName} לא חוסך`);
+        messages.push(`${playerName} עם ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, הערב לא זול`);
         if (stats.winPercentage >= 50) {
           messages.push(`${playerName} מנצח ${hebrewNum(Math.round(stats.winPercentage), false)} אחוז מהמשחקים, אז אולי עוד קנייה תעזור`);
         } else {
@@ -943,27 +1121,181 @@ const LiveGameScreen = () => {
         messages.push(`${playerName} כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל, תודה על התרומה`);
         messages.push(`מישהו שיעצור את ${playerName}, כבר ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות`);
         messages.push(`${playerName}, ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, מי אמר שכסף לא קונה אושר?`);
+        messages.push(`${playerName} עם ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות, ${spentTonight} שקל על השולחן`);
+        messages.push(`${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות של ${playerName}, הערב מתחמם`);
+        messages.push(`${playerName} כבר ${spentTonight} שקל הערב, ועדיין ממשיך`);
         if (stats.gamesPlayed >= 5) {
           messages.push(`${playerName} עם ${hebrewNum(stats.gamesPlayed, false)} משחקים ניסיון, ועדיין ${hebrewNum(Math.ceil(currentGameRebuys), true)} קניות הערב`);
         }
       }
 
-      // --- Guaranteed personal fallback — always have something with player data ---
-      if (messages.length === 0) {
-        const spent = currentGameRebuys * settings.rebuyValue;
-        messages.push(`${playerName} עם ${hebrewNum(stats.gamesPlayed, false)} משחקים מאחוריו, הערב כבר ${spent} שקל בפנים`);
-        messages.push(`${playerName} ניצח ${hebrewNum(stats.winCount, false)} מתוך ${hebrewNum(stats.gamesPlayed, false)} משחקים, הערב עדיין לא מוסיף לסטטיסטיקה`);
-        if (stats.biggestWin > 0) {
-          messages.push(`${playerName} פעם ניצח ${Math.round(stats.biggestWin)} שקל, הערב קצת אחרת`);
+      // --- Player-specific trait messages (one punch per sentence, mixed with stats) ---
+      const traits = playerTraits[playerId];
+      if (traits) {
+        const cr = hebrewNum(Math.ceil(currentGameRebuys), true);
+
+        // ליאור (p1)
+        if (playerId === 'p1') {
+          messages.push(`האסטרטג של השולחן עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName} בדרך כלל לא צריך הרבה קניות, הערב כבר ${cr}`);
+          messages.push(`הערב יש באג באלגוריתם של ${playerName}, כבר ${cr} קניות`);
+          messages.push(`מכבי הרצליה לא עוזרת הערב, כבר ${cr} קניות`);
+          messages.push(`${playerName} שובר שיטה, בדרך כלל יעיל עם הקניות`);
+          messages.push(`איש ההייטק הכי מחושב בשולחן, הערב כבר ${cr}`);
+          messages.push(`${playerName} רגיל לנצח עם מינימום, הערב לא ככה`);
+          messages.push(`${playerName} צריך לעדכן את התוכנית, כבר ${cr} קניות`);
         }
-        if (stats.avgProfit !== 0) {
-          const avgDir = stats.avgProfit > 0 ? 'פלוס' : 'מינוס';
-          messages.push(`ממוצע של ${avgDir} ${Math.round(Math.abs(stats.avgProfit))} למשחק של ${playerName}, נראה איך הערב ישפיע`);
+
+        // אייל (p2)
+        if (playerId === 'p2') {
+          messages.push(`האמרגן של הקבוצה ארגן לעצמו עוד קנייה`);
+          messages.push(`${playerName} מתאם משחקים ומתאם קניות, כבר ${cr}`);
+          messages.push(`איש הפיננסים עם עוד השקעה, כבר ${cr} קניות`);
+          messages.push(`${playerName}, עדיף שתתאם פחות משחקים, כבר ${cr}`);
+          messages.push(`הבלופן הגדול עם עוד קנייה, ${playerName} כבר ${cr}`);
+          messages.push(`${playerName} הולך לפתח תקווה בלי לאהוד, ומשחק פוקר בלי לנצח`);
+          messages.push(`האמרגן קונה עוד אחד, כבר ${cr} הערב`);
+          messages.push(`התשואה של ${playerName} הערב שלילית, כבר ${cr} קניות`);
         }
-        messages.push(`${playerName} כבר ${hebrewNum(currentGameRebuys, true)} קניות הערב, יאללה בהצלחה`);
+
+        // ארז (p3)
+        if (playerId === 'p3') {
+          messages.push(`הצנחן קופץ שוב, ${playerName} כבר ${cr} קניות`);
+          messages.push(`מהנדס בטיחות שלא שומר על הארנק, כבר ${cr}`);
+          messages.push(`${playerName} מחשב סיכונים בעבודה אבל לא בפוקר`);
+          messages.push(`צניחה חופשית לכיוון הארנק, ${playerName} כבר ${cr}`);
+          messages.push(`${playerName} קופץ בלי מצנח, כבר ${cr} קניות`);
+          messages.push(`בפוקר אין מצנח, ${playerName} כבר ${cr} קניות`);
+          messages.push(`נחיתה קשה של ${playerName}, כבר ${cr} קניות`);
+          messages.push(`מהנדס בטיחות שמסתכן הערב, עוד קנייה`);
+        }
+
+        // אורן (p4)
+        if (playerId === 'p4') {
+          messages.push(`${playerName} עייף מהתינוק ועייף מהקניות, כבר ${cr}`);
+          messages.push(`${playerName} גובה מיסים ביום ומשלם קניות בערב`);
+          messages.push(`${playerName} טוען שאין לו מזל, ${cr} קניות מוכיחות את זה`);
+          messages.push(`התינוק בבית בוכה ו ${playerName} בשולחן קונה`);
+          messages.push(`${playerName} אמר שאין לו מזל, אולי הוא צודק`);
+          messages.push(`אוהד הפועל כפר סבא עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName} עם אפס שעות שינה, כבר ${cr} קניות`);
+          messages.push(`איש מס הכנסה קונה עוד אחד, הפעם בלי קבלה`);
+        }
+
+        // ליכטר (p5)
+        if (playerId === 'p5') {
+          messages.push(`רואה החשבון קונה עוד אחד, החשבון לא מסתדר`);
+          messages.push(`${playerName} רואה חשבון שלא יודע לספור, כבר ${cr}`);
+          messages.push(`הבלופן הרשמי של השולחן עם עוד קנייה`);
+          messages.push(`${playerName} מעשן נרגילה ושורף כסף, כבר ${cr}`);
+          messages.push(`אוהד הפועל כפר סבא עם ${cr} קניות, גם שם ככה`);
+          messages.push(`${playerName} בלופר מקצועי, כבר ${cr} קניות`);
+          messages.push(`הנרגילה לא עוזרת לריכוז של ${playerName}, כבר ${cr}`);
+          messages.push(`${playerName} שורף כסף, עוד קנייה`);
+        }
+
+        // סגל (p6)
+        if (playerId === 'p6') {
+          messages.push(`איוון סטיבן קנה עוד אחד, סוף עידן האפסים?`);
+          messages.push(`${playerName} בדרך כלל יוצא באפס, הערב לא נראה ככה`);
+          messages.push(`השמרן הגדול של השולחן עם ${cr} קניות, מה קרה?`);
+          messages.push(`איוון סטיבן הפך לאיוון קניות, כבר ${cr}`);
+          messages.push(`בוחן התוכנה מצא באג בשמרנות שלו, כבר ${cr}`);
+          messages.push(`${playerName} פתאום פראי, ${cr} קניות, לא רגיל`);
+          messages.push(`${playerName} יוצא מהאפס, כבר ${cr} קניות`);
+          messages.push(`איוון סטיבן לא כל כך סטיבן הערב`);
+        }
+
+        // תומר (p7)
+        if (playerId === 'p7') {
+          messages.push(`עוד מהלך מוזר של ${playerName}, קנייה מספר ${cr}`);
+          messages.push(`אף אחד לא מבין את המשחק של ${playerName}, כבר ${cr}`);
+          messages.push(`${playerName} עם עוד מהלך שאף אחד לא מבין`);
+          messages.push(`לפחות יש חטיפים, ${playerName} כבר ${cr} קניות`);
+          messages.push(`המזלן של השולחן עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName}, תביא עוד עוגה, כבר ${cr} קניות`);
+          messages.push(`גם בפתח תקווה לא תמיד מבינים מה קורה, כבר ${cr}`);
+          messages.push(`${playerName} אוכל חטיפים וקונה קניות, כבר ${cr}`);
+        }
+
+        // פיליפ (p8)
+        if (playerId === 'p8') {
+          messages.push(`${playerName} מציע עוד עסקה מפוקפקת, כבר ${cr}`);
+          messages.push(`מנהל המוצר מחפש עסקה, כבר ${cr} קניות`);
+          messages.push(`${playerName} רגשי כמו תמיד, עוד קנייה`);
+          messages.push(`אוהד באיירן מינכן עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName} מחפש עסקאות מפוקפקות, כבר ${cr}`);
+          messages.push(`לפחות באיירן מנצחים, ${playerName} כבר ${cr} קניות`);
+          messages.push(`הבלופן הרגשי עם עוד קנייה`);
+          messages.push(`${playerName} לא מנהל את הכסף הערב, כבר ${cr}`);
+        }
+
+        // אסף (p9)
+        if (playerId === 'p9') {
+          messages.push(`אוהד מכבי תל אביב עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName} אבא חדש, כבר ${cr} קניות, התינוק עולה פחות`);
+          messages.push(`${playerName} מחושב אבל הערב האגרסיביות ניצחה, כבר ${cr}`);
+          messages.push(`${playerName} אוהד מכבי ומפסיד בפוקר, ערב קלאסי`);
+          messages.push(`אבא טרי עם ${cr} קניות, החיתולים זולים יותר`);
+          messages.push(`התינוק בבית ו ${playerName} כאן קונה, כבר ${cr}`);
+          messages.push(`גם מכבי תל אביב לא תמיד מנצחת, כבר ${cr} קניות`);
+          messages.push(`${playerName} אבא חדש עם הוצאות חדשות, עוד קנייה`);
+        }
+
+        // פבל (p10)
+        if (playerId === 'p10') {
+          messages.push(`${playerName} יצא לעשן וחזר לקנות, כבר ${cr}`);
+          messages.push(`המערכת קרסה הערב, ${playerName} כבר ${cr} קניות`);
+          messages.push(`${playerName} רגשי כמו תמיד, עוד קנייה`);
+          messages.push(`המזל יבוא אחרי הסיגריה הבאה, ${playerName} כבר ${cr}`);
+          messages.push(`${playerName} מתקן מחשבים ביום ושובר קופה בערב`);
+          messages.push(`הבלופן ${playerName} עם עוד קנייה, כבר ${cr}`);
+          messages.push(`עדיף לקנות סיגריות, ${playerName} כבר ${cr} קניות`);
+          messages.push(`אפילו המזל יצא לעשן, ${playerName} כבר ${cr}`);
+        }
+
+        // מלמד (p11)
+        if (playerId === 'p11') {
+          messages.push(`המחשבון שיבר את החישוב, ${playerName} כבר ${cr}`);
+          messages.push(`${playerName} משחק כמו מחשבון, הערב טעות חישוב`);
+          messages.push(`שחקן הכדורעף עם עוד קנייה, כבר ${cr}`);
+          messages.push(`${playerName} מדויק כמו מחשבון, אבל לא הערב`);
+          messages.push(`הכדור לא נחת נכון, ${playerName} כבר ${cr} קניות`);
+          messages.push(`המחשבון צריך עדכון, ${playerName} כבר ${cr}`);
+          messages.push(`גם בכדורעף לפעמים מפסידים, ${playerName} כבר ${cr}`);
+          messages.push(`${playerName} חישב ולא יצא, עוד קנייה`);
+        }
       }
 
-      return messages[Math.floor(Math.random() * messages.length)];
+      // --- Always-applicable mixed-stat messages (broad pool for any player with history) ---
+      const spent = currentGameRebuys * settings.rebuyValue;
+      const wc = stats.winCount;
+      const lc = stats.gamesPlayed - stats.winCount;
+      messages.push(`${playerName} עם ${hebrewNum(wc, false)} נצחונות ו ${hebrewNum(lc, false)} הפסדים, הערב עוד משחק`);
+      messages.push(`${playerName}, ${hebrewNum(gp, false)} משחקים, ${hebrewNum(wc, false)} נצחונות, הערב צריך עוד אחד`);
+      messages.push(`${playerName} שם ${spent} שקל הערב, נראה אם זה ישתלם`);
+      messages.push(`עוד קנייה של ${playerName}, כבר ${hebrewNum(currentGameRebuys, true)} הערב`);
+      messages.push(`${playerName} ממשיך להאמין, ${hebrewNum(currentGameRebuys, true)} קניות ולא עוצר`);
+      messages.push(`${playerName} ניצח ${hebrewNum(wc, false)} מתוך ${hebrewNum(gp, false)}, הערב מוסיף עוד קנייה`);
+      if (stats.biggestWin > 50) {
+        messages.push(`${playerName} יודע לנצח, פעם לקח ${Math.round(stats.biggestWin)} שקל, הערב מחכה להזדמנות`);
+        messages.push(`שיא של ${Math.round(stats.biggestWin)} שקל של ${playerName}, הערב עדיין מחפש את הרגע`);
+      }
+      if (stats.avgProfit !== 0) {
+        const dir = stats.avgProfit > 0 ? 'פלוס' : 'מינוס';
+        messages.push(`${playerName} ממוצע ${dir} ${Math.round(Math.abs(stats.avgProfit))} למשחק, הערב נראה איך זה ישפיע`);
+      }
+      if (wp >= 40 && wp <= 60) {
+        messages.push(`${playerName} מנצח ${hebrewNum(wp, false)} אחוז, שחקן ממוצע שקונה מעל הממוצע`);
+        messages.push(`${hebrewNum(wp, false)} אחוז נצחונות של ${playerName}, הערב צריך לשפר את המספר`);
+      }
+
+      // Filter out already-used messages, pick from unused first
+      const unused = messages.filter(m => !usedMessagesRef.current.has(m));
+      const pool = unused.length > 0 ? unused : messages;
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      usedMessagesRef.current.add(chosen);
+      return chosen;
     } catch {
       return null;
     }
@@ -1133,11 +1465,11 @@ const LiveGameScreen = () => {
       const crossedMilestone = milestones.find(m => prevRebuysOnly < m && totalRebuysOnly >= m);
       if (crossedMilestone) {
         const milestoneMessages = [
-          `כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות הערב!`,
-          `${hebrewNum(crossedMilestone, true)} קניות נוספות על השולחן!`,
-          `כבר ${hebrewNum(crossedMilestone, true)} קניות חוזרות!`,
-          `${hebrewNum(crossedMilestone, true)} פעמים חזרו לקנות הערב!`,
-          `וואו, כבר ${hebrewNum(crossedMilestone, true)} קניות נוספות!`,
+          `סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+          `כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+          `${hebrewNum(crossedMilestone, true)} קניות על השולחן הערב!`,
+          `וואו, סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+          `הגענו כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
         ];
         followUps.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
       }

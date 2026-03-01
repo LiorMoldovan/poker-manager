@@ -18,113 +18,131 @@ export const calculateProfitLoss = (
   return finalValue - (rebuys * rebuyValue);
 };
 
-export const calculateSettlement = (
-  players: GamePlayer[],
+// ---------------------------------------------------------------------------
+// Optimized settlement engine
+// ---------------------------------------------------------------------------
+
+type BalanceEntry = { name: string; balance: number };
+
+/**
+ * Partition players into the maximum number of independent zero-sum groups.
+ * Each group of k members needs at most k-1 transfers, so more groups →
+ * fewer total transfers.  Uses bitmask DP; O(3^n) which is fast for n ≤ 15.
+ */
+function findMaxZeroSumPartition(balances: BalanceEntry[]): BalanceEntry[][] {
+  const n = balances.length;
+  if (n === 0) return [];
+  if (n > 15) return [balances.map(b => ({ ...b }))];
+
+  const totalMask = (1 << n) - 1;
+
+  const subsetSum: number[] = new Array(1 << n).fill(0);
+  for (let mask = 1; mask <= totalMask; mask++) {
+    const lowestBit = mask & (-mask);
+    const bitIdx = Math.round(Math.log2(lowestBit));
+    subsetSum[mask] = subsetSum[mask ^ lowestBit] + balances[bitIdx].balance;
+  }
+
+  const dp: number[] = new Array(1 << n).fill(-1);
+  const pick: number[] = new Array(1 << n).fill(0);
+  dp[0] = 0;
+
+  for (let mask = 1; mask <= totalMask; mask++) {
+    let sub = mask;
+    while (sub > 0) {
+      if (Math.abs(subsetSum[sub]) < 0.01 && dp[mask ^ sub] >= 0) {
+        if (dp[mask ^ sub] + 1 > dp[mask]) {
+          dp[mask] = dp[mask ^ sub] + 1;
+          pick[mask] = sub;
+        }
+      }
+      sub = (sub - 1) & mask;
+    }
+  }
+
+  const groups: BalanceEntry[][] = [];
+  let remaining = totalMask;
+  while (remaining > 0) {
+    const groupMask = pick[remaining];
+    if (groupMask === 0) {
+      const group: BalanceEntry[] = [];
+      for (let i = 0; i < n; i++) {
+        if (remaining & (1 << i)) group.push({ ...balances[i] });
+      }
+      groups.push(group);
+      break;
+    }
+    const group: BalanceEntry[] = [];
+    for (let i = 0; i < n; i++) {
+      if (groupMask & (1 << i)) group.push({ ...balances[i] });
+    }
+    groups.push(group);
+    remaining ^= groupMask;
+  }
+
+  return groups;
+}
+
+/**
+ * Settle one zero-sum group using largest-first greedy matching.
+ * Produces exactly k-1 transfers for k members (optimal within a group).
+ * Big amounts are matched first so small remainders stay at the tail end.
+ */
+function settleGroup(group: BalanceEntry[]): Settlement[] {
+  const transfers: Settlement[] = [];
+  const balances = group.map(b => ({ ...b }));
+
+  for (;;) {
+    const creditors = balances
+      .filter(b => b.balance > 0.001)
+      .sort((a, b) => b.balance - a.balance);
+    const debtors = balances
+      .filter(b => b.balance < -0.001)
+      .sort((a, b) => a.balance - b.balance);
+
+    if (creditors.length === 0 || debtors.length === 0) break;
+
+    const creditor = creditors[0];
+    const debtor = debtors[0];
+
+    const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
+    if (amount < 0.001) break;
+
+    transfers.push({ from: debtor.name, to: creditor.name, amount });
+    creditor.balance -= amount;
+    debtor.balance += amount;
+  }
+
+  return transfers;
+}
+
+/**
+ * Core settlement: partition → settle each group → filter small transfers.
+ * Called by both poker-only and combined (poker + expenses) flows.
+ */
+function optimizedSettle(
+  balances: BalanceEntry[],
   minTransfer: number
-): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
-  // Optimized settlement algorithm that AVOIDS small transfers
-  // Key insight: When splitting is needed, ensure BOTH parts are >= minTransfer
-  // Strategy: For small creditors, use a larger debtor who can pay them fully
-  // with a substantial remainder for the main creditor
-  
-  const balances = players
-    .filter(p => Math.abs(p.profit) > 0.001) // Filter out zero balances
-    .map(p => ({ name: p.playerName, balance: p.profit }));
+): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } {
+  const active = balances.filter(b => Math.abs(b.balance) > 0.001);
+  if (active.length === 0) return { settlements: [], smallTransfers: [] };
+
+  const groups = findMaxZeroSumPartition(active);
 
   const allTransfers: Settlement[] = [];
-
-  // Step 1: Find exact matches first (minimizes transactions)
-  for (let i = 0; i < balances.length; i++) {
-    if (Math.abs(balances[i].balance) < 0.001) continue;
-    
-    for (let j = i + 1; j < balances.length; j++) {
-      if (Math.abs(balances[j].balance) < 0.001) continue;
-      
-      // Check if they cancel each other out (one positive, one negative, same absolute value)
-      const sum = balances[i].balance + balances[j].balance;
-      if (Math.abs(sum) < 0.01) {
-        const [debtor, creditor] = balances[i].balance < 0 
-          ? [balances[i], balances[j]] 
-          : [balances[j], balances[i]];
-        
-        const amount = Math.abs(debtor.balance);
-        allTransfers.push({ from: debtor.name, to: creditor.name, amount });
-        
-        balances[i].balance = 0;
-        balances[j].balance = 0;
-      }
-    }
+  for (const group of groups) {
+    allTransfers.push(...settleGroup(group));
   }
 
-  // Step 2: Process creditors from SMALLEST to LARGEST
-  // For small creditors, find a larger debtor who can pay them completely
-  // This avoids creating small "leftover" payments
-  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => a.balance - b.balance);
-  const debtors = balances.filter(b => b.balance < -0.001);
-
-  for (const creditor of creditors) {
-    while (creditor.balance > 0.001) {
-      // FIRST PRIORITY: Find a debtor who can pay the FULL remaining creditor amount
-      // AND whose remainder after paying would also be >= minTransfer (avoiding small splits)
-      const goodSplitDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .filter(d => Math.abs(d.balance) >= creditor.balance + minTransfer) // Can pay full + substantial remainder
-        .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance))[0]; // Smallest that qualifies
-      
-      if (goodSplitDebtor) {
-        const amount = creditor.balance;
-        allTransfers.push({ from: goodSplitDebtor.name, to: creditor.name, amount });
-        goodSplitDebtor.balance += amount; // Reduce debt (balance is negative)
-        creditor.balance = 0;
-        continue;
-      }
-      
-      // SECOND PRIORITY: Find a debtor whose ENTIRE debt fits within creditor's remaining need
-      // (No split needed for this debtor - they pay their full amount)
-      const perfectFitDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .filter(d => Math.abs(d.balance) <= creditor.balance + 0.001)
-        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))[0]; // Largest that fits
-      
-      if (perfectFitDebtor) {
-        const amount = Math.abs(perfectFitDebtor.balance);
-        allTransfers.push({ from: perfectFitDebtor.name, to: creditor.name, amount });
-        creditor.balance -= amount;
-        perfectFitDebtor.balance = 0;
-        continue;
-      }
-      
-      // FALLBACK: No ideal option - use standard greedy matching
-      // This may create small transfers, but we tried to avoid them
-      const anyDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .sort((a, b) => a.balance - b.balance)[0]; // Largest debt first
-      
-      if (anyDebtor) {
-        const amount = Math.min(creditor.balance, Math.abs(anyDebtor.balance));
-        if (amount > 0.001) {
-          allTransfers.push({ from: anyDebtor.name, to: creditor.name, amount });
-          creditor.balance -= amount;
-          anyDebtor.balance += amount;
-        }
-      } else {
-        break; // No more debtors
-      }
-    }
-  }
-
-  // Separate into regular settlements and small transfers
   const settlements = allTransfers.filter(t => t.amount >= minTransfer);
   const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
 
-  // Sort settlements: first by payer name, then by amount (largest first)
   settlements.sort((a, b) => {
     const nameCompare = a.from.localeCompare(b.from);
     if (nameCompare !== 0) return nameCompare;
     return b.amount - a.amount;
   });
 
-  // Sort small transfers the same way
   smallTransfers.sort((a, b) => {
     const nameCompare = a.from.localeCompare(b.from);
     if (nameCompare !== 0) return nameCompare;
@@ -132,6 +150,19 @@ export const calculateSettlement = (
   });
 
   return { settlements, smallTransfers };
+}
+
+// ---------------------------------------------------------------------------
+
+export const calculateSettlement = (
+  players: GamePlayer[],
+  minTransfer: number
+): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
+  const balances = players
+    .filter(p => Math.abs(p.profit) > 0.001)
+    .map(p => ({ name: p.playerName, balance: p.profit }));
+
+  return optimizedSettle(balances, minTransfer);
 };
 
 // Clean up floating-point artifacts, round to whole numbers, and add thousand separators (e.g., 30.7 -> 31, 1234 -> 1,234)
@@ -228,139 +259,45 @@ export const calculateExpenseSettlements = (
 };
 
 // Calculate COMBINED settlements (poker + expenses)
-// This merges poker profit/loss with expense balances into a single settlement
+// Merges poker profit/loss with expense balances, then uses the optimized engine.
 export const calculateCombinedSettlement = (
   players: GamePlayer[],
   expenses: SharedExpense[],
   minTransfer: number
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
-  // Start with poker balances
   const balanceMap = new Map<string, { name: string; balance: number }>();
-  
+
   // Add poker profit/loss
   for (const player of players) {
     if (Math.abs(player.profit) > 0.001) {
-      balanceMap.set(player.playerId, { 
-        name: player.playerName, 
-        balance: player.profit 
+      balanceMap.set(player.playerId, {
+        name: player.playerName,
+        balance: player.profit
       });
     }
   }
-  
-  // Add expense balances
+
+  // Add expense balances (pizza, food, etc.)
   for (const expense of expenses) {
     const perPerson = expense.amount / expense.participants.length;
-    
-    // Person who paid receives money from everyone
+
     const payerData = balanceMap.get(expense.paidBy) || { name: expense.paidByName, balance: 0 };
-    payerData.balance += expense.amount; // They paid the full amount
+    payerData.balance += expense.amount;
     balanceMap.set(expense.paidBy, payerData);
-    
-    // Each participant owes their share
+
     for (let i = 0; i < expense.participants.length; i++) {
       const participantId = expense.participants[i];
       const participantName = expense.participantNames[i];
       const data = balanceMap.get(participantId) || { name: participantName, balance: 0 };
-      data.balance -= perPerson; // They owe their share
+      data.balance -= perPerson;
       balanceMap.set(participantId, data);
     }
   }
-  
-  // Convert to array for settlement calculation
+
   const balances = Array.from(balanceMap.entries())
     .filter(([_, data]) => Math.abs(data.balance) > 0.001)
     .map(([_, data]) => ({ name: data.name, balance: data.balance }));
 
-  const allTransfers: Settlement[] = [];
-
-  // Step 1: Find exact matches first (minimizes transactions)
-  for (let i = 0; i < balances.length; i++) {
-    if (Math.abs(balances[i].balance) < 0.001) continue;
-    
-    for (let j = i + 1; j < balances.length; j++) {
-      if (Math.abs(balances[j].balance) < 0.001) continue;
-      
-      const sum = balances[i].balance + balances[j].balance;
-      if (Math.abs(sum) < 0.01) {
-        const [debtor, creditor] = balances[i].balance < 0 
-          ? [balances[i], balances[j]] 
-          : [balances[j], balances[i]];
-        
-        const amount = Math.abs(debtor.balance);
-        allTransfers.push({ from: debtor.name, to: creditor.name, amount });
-        
-        balances[i].balance = 0;
-        balances[j].balance = 0;
-      }
-    }
-  }
-
-  // Step 2: Process remaining balances
-  const creditors = balances.filter(b => b.balance > 0.001).sort((a, b) => a.balance - b.balance);
-  const debtors = balances.filter(b => b.balance < -0.001);
-
-  for (const creditor of creditors) {
-    while (creditor.balance > 0.001) {
-      const goodSplitDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .filter(d => Math.abs(d.balance) >= creditor.balance + minTransfer)
-        .sort((a, b) => Math.abs(a.balance) - Math.abs(b.balance))[0];
-      
-      if (goodSplitDebtor) {
-        const amount = creditor.balance;
-        allTransfers.push({ from: goodSplitDebtor.name, to: creditor.name, amount });
-        goodSplitDebtor.balance += amount;
-        creditor.balance = 0;
-        continue;
-      }
-      
-      const perfectFitDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .filter(d => Math.abs(d.balance) <= creditor.balance + 0.001)
-        .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))[0];
-      
-      if (perfectFitDebtor) {
-        const amount = Math.abs(perfectFitDebtor.balance);
-        allTransfers.push({ from: perfectFitDebtor.name, to: creditor.name, amount });
-        creditor.balance -= amount;
-        perfectFitDebtor.balance = 0;
-        continue;
-      }
-      
-      const anyDebtor = debtors
-        .filter(d => Math.abs(d.balance) > 0.001)
-        .sort((a, b) => a.balance - b.balance)[0];
-      
-      if (anyDebtor) {
-        const amount = Math.min(creditor.balance, Math.abs(anyDebtor.balance));
-        if (amount > 0.001) {
-          allTransfers.push({ from: anyDebtor.name, to: creditor.name, amount });
-          creditor.balance -= amount;
-          anyDebtor.balance += amount;
-        }
-      } else {
-        break;
-      }
-    }
-  }
-
-  // Separate into regular settlements and small transfers
-  const settlements = allTransfers.filter(t => t.amount >= minTransfer);
-  const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
-
-  // Sort settlements
-  settlements.sort((a, b) => {
-    const nameCompare = a.from.localeCompare(b.from);
-    if (nameCompare !== 0) return nameCompare;
-    return b.amount - a.amount;
-  });
-
-  smallTransfers.sort((a, b) => {
-    const nameCompare = a.from.localeCompare(b.from);
-    if (nameCompare !== 0) return nameCompare;
-    return b.amount - a.amount;
-  });
-
-  return { settlements, smallTransfers };
+  return optimizedSettle(balances, minTransfer);
 };
 
