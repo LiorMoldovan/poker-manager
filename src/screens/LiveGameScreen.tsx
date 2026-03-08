@@ -684,114 +684,114 @@ const LiveGameScreen = () => {
     const msgs: string[] = [];
 
     if (playerId === 'p1') {
-      msgs.push(`האסטרטג של השולחן עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName} בדרך כלל לא צריך הרבה קניות, הערב כבר ${cr}`);
-      msgs.push(`הערב יש באג באלגוריתם של ${playerName}, כבר ${cr} קניות`);
-      msgs.push(`מכבי הרצליה לא עוזרת הערב, כבר ${cr} קניות`);
-      msgs.push(`${playerName} שובר שיטה, בדרך כלל יעיל עם הקניות`);
-      msgs.push(`איש ההייטק הכי מחושב בשולחן, הערב כבר ${cr}`);
-      msgs.push(`${playerName} רגיל לנצח עם מינימום, הערב לא ככה`);
-      msgs.push(`${playerName} צריך לעדכן את התוכנית, כבר ${cr} קניות`);
+      msgs.push(`בדרך כלל ${playerName} עושה את זה עם מינימום קניות, הערב משהו השתבש`);
+      msgs.push(`מכבי הרצליה מפסידה ו ${playerName} קונה, ערב קשה`);
+      msgs.push(`יש באג בקוד של ${playerName} הערב, כבר ${cr} קניות`);
+      msgs.push(`${playerName} מחשב כל צעד, אבל הערב התוכנה קרסה`);
+      msgs.push(`איש ההייטק רגיל ליעילות, הערב זה לא יעיל`);
+      msgs.push(`${playerName} האסטרטג, כבר ${cr}, מישהו ישנה את האלגוריתם`);
+      msgs.push(`מחושב ומדויק, חוץ מהערב, כבר ${cr} קניות`);
+      msgs.push(`${playerName} רגיל לסגור עם מעט קניות, מה קרה הפעם?`);
     }
     if (playerId === 'p2') {
-      msgs.push(`האמרגן של הקבוצה ארגן לעצמו עוד קנייה`);
-      msgs.push(`${playerName} מתאם משחקים ומתאם קניות, כבר ${cr}`);
-      msgs.push(`איש הפיננסים עם עוד השקעה, כבר ${cr} קניות`);
-      msgs.push(`${playerName}, עדיף שתתאם פחות משחקים, כבר ${cr}`);
-      msgs.push(`הבלופן הגדול עם עוד קנייה, ${playerName} כבר ${cr}`);
+      msgs.push(`האמרגן ארגן לעצמו עוד קנייה, כל הכבוד ${playerName}`);
+      msgs.push(`${playerName} מתאם את המשחקים ומממן אותם, כבר ${cr}`);
+      msgs.push(`איש הפיננסים עם תשואה שלילית הערב`);
       msgs.push(`${playerName} הולך לפתח תקווה בלי לאהוד, ומשחק פוקר בלי לנצח`);
-      msgs.push(`האמרגן קונה עוד אחד, כבר ${cr} הערב`);
-      msgs.push(`התשואה של ${playerName} הערב שלילית, כבר ${cr} קניות`);
+      msgs.push(`${playerName} מתאם משחקים טוב יותר ממה שהוא משחק, כבר ${cr}`);
+      msgs.push(`ההשקעה של ${playerName} הערב עדיין לא מחזירה את עצמה`);
+      msgs.push(`האמרגן של הקבוצה, תמיד דואג שיהיה כסף על השולחן`);
+      msgs.push(`${playerName} יודע לארגן ערב, אבל לא יודע לנצח בו`);
     }
     if (playerId === 'p3') {
-      msgs.push(`הצנחן קופץ שוב, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`מהנדס בטיחות שלא שומר על הארנק, כבר ${cr}`);
-      msgs.push(`${playerName} מחשב סיכונים בעבודה אבל לא בפוקר`);
-      msgs.push(`צניחה חופשית לכיוון הארנק, ${playerName} כבר ${cr}`);
-      msgs.push(`${playerName} קופץ בלי מצנח, כבר ${cr} קניות`);
-      msgs.push(`בפוקר אין מצנח, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`נחיתה קשה של ${playerName}, כבר ${cr} קניות`);
-      msgs.push(`מהנדס בטיחות שמסתכן הערב, עוד קנייה`);
+      msgs.push(`מהנדס בטיחות בעבודה, מהנדס סיכון בפוקר`);
+      msgs.push(`${playerName} צונח מהמטוס ומהכיסא, כבר ${cr} קניות`);
+      msgs.push(`${playerName} מחשב סיכונים כל היום, חוץ מבפוקר`);
+      msgs.push(`הצנחן של השולחן, נחיתה קשה הערב`);
+      msgs.push(`${playerName} קופץ ממטוסים ולא פוחד, אבל מהקלפים צריך לפחד`);
+      msgs.push(`בצניחה יש מצנח, בפוקר אין, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} עושה בדיקות בטיחות לכולם חוץ מלארנק שלו`);
+      msgs.push(`מהנדס הבטיחות לא בדק את הסיכון הערב, כבר ${cr} קניות`);
     }
     if (playerId === 'p4') {
-      msgs.push(`${playerName} עייף מהתינוק ועייף מהקניות, כבר ${cr}`);
-      msgs.push(`${playerName} גובה מיסים ביום ומשלם קניות בערב`);
-      msgs.push(`${playerName} טוען שאין לו מזל, ${cr} קניות מוכיחות את זה`);
-      msgs.push(`התינוק בבית בוכה ו ${playerName} בשולחן קונה`);
-      msgs.push(`${playerName} אמר שאין לו מזל, אולי הוא צודק`);
-      msgs.push(`אוהד הפועל כפר סבא עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName} עם אפס שעות שינה, כבר ${cr} קניות`);
+      msgs.push(`${playerName} גובה מיסים מכולם חוץ מעצמו, כבר ${cr} קניות`);
+      msgs.push(`התינוק ישן סוף סוף, ו ${playerName} עדיין ער ומשלם`);
+      msgs.push(`${playerName} טוען שאין לו מזל, וקשה להתווכח עם ${cr} קניות`);
       msgs.push(`איש מס הכנסה קונה עוד אחד, הפעם בלי קבלה`);
+      msgs.push(`${playerName} עייף מהתינוק, עייף מהקלפים, אבל ממשיך`);
+      msgs.push(`גם הפועל כפר סבא לא עוזרת ל ${playerName} הערב`);
+      msgs.push(`${playerName} עם אפס שעות שינה ו ${cr} קניות, ערב קלאסי`);
+      msgs.push(`במס הכנסה לוקחים, בפוקר ${playerName} נותן`);
     }
     if (playerId === 'p5') {
-      msgs.push(`רואה החשבון קונה עוד אחד, החשבון לא מסתדר`);
-      msgs.push(`${playerName} רואה חשבון שלא יודע לספור, כבר ${cr}`);
-      msgs.push(`הבלופן הרשמי של השולחן עם עוד קנייה`);
-      msgs.push(`${playerName} מעשן נרגילה ושורף כסף, כבר ${cr}`);
-      msgs.push(`אוהד הפועל כפר סבא עם ${cr} קניות, גם שם ככה`);
-      msgs.push(`${playerName} בלופר מקצועי, כבר ${cr} קניות`);
-      msgs.push(`הנרגילה לא עוזרת לריכוז של ${playerName}, כבר ${cr}`);
-      msgs.push(`${playerName} שורף כסף, עוד קנייה`);
+      msgs.push(`רואה חשבון שהחשבון שלו לא מסתדר הערב`);
+      msgs.push(`${playerName} סופר כסף כל היום, הערב הוא סופר קניות`);
+      msgs.push(`${playerName} מעשן נרגילה ושורף כסף, הערב שניהם ביחד`);
+      msgs.push(`הבלפן הרשמי של השולחן, ${playerName} כבר ${cr} קניות`);
+      msgs.push(`גם הפועל כפר סבא לא מנצחת, ${playerName} מתחבר לתחושה`);
+      msgs.push(`${playerName} רגיל לעשן ולבלף, הערב שניהם לא עוזרים`);
+      msgs.push(`רואה חשבון ביום, בלפן בערב, ${playerName} כבר ${cr}`);
+      msgs.push(`הנרגילה לא משפרת את הריכוז של ${playerName} הערב`);
     }
     if (playerId === 'p6') {
       msgs.push(`איוון סטיבן קנה עוד אחד, סוף עידן האפסים?`);
-      msgs.push(`${playerName} בדרך כלל יוצא באפס, הערב לא נראה ככה`);
-      msgs.push(`השמרן הגדול של השולחן עם ${cr} קניות, מה קרה?`);
-      msgs.push(`איוון סטיבן הפך לאיוון קניות, כבר ${cr}`);
-      msgs.push(`בוחן התוכנה מצא באג בשמרנות שלו, כבר ${cr}`);
-      msgs.push(`${playerName} פתאום פראי, ${cr} קניות, לא רגיל`);
-      msgs.push(`${playerName} יוצא מהאפס, כבר ${cr} קניות`);
-      msgs.push(`איוון סטיבן לא כל כך סטיבן הערב`);
+      msgs.push(`${playerName} תמיד יוצא באפס, הערב נראה שזה ישתנה`);
+      msgs.push(`בוחן תוכנה ביום, בוחן מזל בערב, ${playerName} כבר ${cr}`);
+      msgs.push(`איוון סטיבן הפך לאיוון קניות הערב`);
+      msgs.push(`השמרן הכי גדול בשולחן פתאום משתולל, מה קרה ${playerName}?`);
+      msgs.push(`${playerName} מוצא באגים כל יום, הערב הבאג בקלפים`);
+      msgs.push(`${playerName} שובר את השיטה שלו, כבר ${cr} קניות, לא רגיל`);
+      msgs.push(`אפס זה היה פעם, ${playerName} הערב בכיוון אחר`);
     }
     if (playerId === 'p7') {
-      msgs.push(`עוד מהלך מוזר של ${playerName}, קנייה מספר ${cr}`);
-      msgs.push(`אף אחד לא מבין את המשחק של ${playerName}, כבר ${cr}`);
-      msgs.push(`${playerName} עם עוד מהלך שאף אחד לא מבין`);
-      msgs.push(`לפחות יש חטיפים, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`המזלן של השולחן עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName}, תביא עוד עוגה, כבר ${cr} קניות`);
-      msgs.push(`גם בפתח תקווה לא תמיד מבינים מה קורה, כבר ${cr}`);
-      msgs.push(`${playerName} אוכל חטיפים וקונה קניות, כבר ${cr}`);
+      msgs.push(`עוד מהלך שאף אחד לא מבין מ ${playerName}, קנייה מספר ${cr}`);
+      msgs.push(`אף אחד לא יודע מה התוכנית של ${playerName}, כולל ${playerName}`);
+      msgs.push(`לפחות יש חטיפים על השולחן, ${playerName} כבר ${cr} קניות`);
+      msgs.push(`${playerName} משחק לפי חוקים שרק הוא מכיר`);
+      msgs.push(`${playerName}, כבר ${cr} קניות, תביא עוד עוגה לפחות`);
+      msgs.push(`בפתח תקווה גם לא תמיד מבינים מה קורה, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} אוכל חטיפים וקונה קניות, שני הדברים לא נגמרים`);
+      msgs.push(`המהלכים של ${playerName} מוזרים כמו תמיד, כבר ${cr}`);
     }
     if (playerId === 'p8') {
-      msgs.push(`${playerName} מציע עוד עסקה מפוקפקת, כבר ${cr}`);
-      msgs.push(`מנהל המוצר מחפש עסקה, כבר ${cr} קניות`);
-      msgs.push(`${playerName} רגשי כמו תמיד, עוד קנייה`);
-      msgs.push(`אוהד באיירן מינכן עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName} מחפש עסקאות מפוקפקות, כבר ${cr}`);
-      msgs.push(`לפחות באיירן מנצחים, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`הבלופן הרגשי עם עוד קנייה`);
-      msgs.push(`${playerName} לא מנהל את הכסף הערב, כבר ${cr}`);
+      msgs.push(`${playerName} מציע עוד עסקה מפוקפקת, הפעם לעצמו`);
+      msgs.push(`מנהל מוצר ביום, מנהל הפסדים בערב, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} רגשי על השולחן כמו תמיד, עוד קנייה`);
+      msgs.push(`לפחות באיירן מינכן מנצחים, ${playerName} לא`);
+      msgs.push(`${playerName} מחפש עסקה טובה, כבר ${cr} קניות ועדיין לא מצא`);
+      msgs.push(`אוהד באיירן ${playerName} עם עוד קנייה, בגרמניה היו מנצחים`);
+      msgs.push(`${playerName} משיק מוצר חדש הערב, נקרא הפסד`);
+      msgs.push(`${playerName} עושה עסקאות מפוקפקות גם בפוקר, כבר ${cr}`);
     }
     if (playerId === 'p9') {
-      msgs.push(`אוהד מכבי תל אביב עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName} אבא חדש, כבר ${cr} קניות, התינוק עולה פחות`);
-      msgs.push(`${playerName} מחושב אבל הערב האגרסיביות ניצחה, כבר ${cr}`);
-      msgs.push(`${playerName} אוהד מכבי ומפסיד בפוקר, ערב קלאסי`);
-      msgs.push(`אבא טרי עם ${cr} קניות, החיתולים זולים יותר`);
-      msgs.push(`התינוק בבית ו ${playerName} כאן קונה, כבר ${cr}`);
-      msgs.push(`גם מכבי תל אביב לא תמיד מנצחת, כבר ${cr} קניות`);
-      msgs.push(`${playerName} אבא חדש עם הוצאות חדשות, עוד קנייה`);
+      msgs.push(`${playerName} אבא טרי, החיתולים עולים פחות מהקניות הערב`);
+      msgs.push(`גם מכבי תל אביב לא תמיד מנצחת, ${playerName} מתחבר`);
+      msgs.push(`${playerName} מחושב ואגרסיבי, הערב יותר אגרסיבי, כבר ${cr}`);
+      msgs.push(`אוהד מכבי ואבא חדש, ${playerName} לא ישן ולא מנצח`);
+      msgs.push(`${playerName} אבא חדש, הוצאות חדשות, כבר ${cr} קניות`);
+      msgs.push(`התינוק בבית ו ${playerName} כאן משלם, כבר ${cr}`);
+      msgs.push(`${playerName} אוהד מכבי ומפסיד בפוקר, ערב רגיל`);
+      msgs.push(`כסף החיתולים של ${playerName} על השולחן הערב`);
     }
     if (playerId === 'p10') {
-      msgs.push(`${playerName} יצא לעשן וחזר לקנות, כבר ${cr}`);
-      msgs.push(`המערכת קרסה הערב, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`${playerName} רגשי כמו תמיד, עוד קנייה`);
-      msgs.push(`המזל יבוא אחרי הסיגריה הבאה, ${playerName} כבר ${cr}`);
-      msgs.push(`${playerName} מתקן מחשבים ביום ושובר קופה בערב`);
-      msgs.push(`הבלופן ${playerName} עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`עדיף לקנות סיגריות, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`אפילו המזל יצא לעשן, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} יצא לעשן וחזר עם עוד קנייה, כבר ${cr}`);
+      msgs.push(`איש ה IT, הערב המערכת שלו קרסה`);
+      msgs.push(`${playerName} מתקן מחשבים כל היום, הערב שום דבר לא מתוקן`);
+      msgs.push(`הסיגריה לא עזרה, ${playerName} חזר וקנה עוד אחד`);
+      msgs.push(`${playerName} רגשי על השולחן, כבר ${cr} קניות, אבל ממשיך`);
+      msgs.push(`הבלפן ${playerName} לא מבלף טוב הערב, כבר ${cr}`);
+      msgs.push(`${playerName} שורף סיגריות ושורף כסף, כבר ${cr} קניות`);
+      msgs.push(`עוד סיגריה לא תשנה את המזל, ${playerName} כבר ${cr}`);
     }
     if (playerId === 'p11') {
-      msgs.push(`המחשבון שיבר את החישוב, ${playerName} כבר ${cr}`);
-      msgs.push(`${playerName} משחק כמו מחשבון, הערב טעות חישוב`);
-      msgs.push(`שחקן הכדורעף עם עוד קנייה, כבר ${cr}`);
-      msgs.push(`${playerName} מדויק כמו מחשבון, אבל לא הערב`);
-      msgs.push(`הכדור לא נחת נכון, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`המחשבון צריך עדכון, ${playerName} כבר ${cr}`);
-      msgs.push(`גם בכדורעף לפעמים מפסידים, ${playerName} כבר ${cr}`);
-      msgs.push(`${playerName} חישב ולא יצא, עוד קנייה`);
+      msgs.push(`${playerName} משחק כמו מחשבון, הערב טעות בחישוב`);
+      msgs.push(`שחקן כדורעף שהכדור לא נוחת לו הערב, כבר ${cr} קניות`);
+      msgs.push(`${playerName} מדויק כמו מחשבון, חוץ מהערב`);
+      msgs.push(`איש ההייטק עם טעות במערכת, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} עושה חישובים כל היום, הערב החישוב לא עבד`);
+      msgs.push(`בכדורעף יש סט שני, בפוקר יש קנייה שנייה, ${playerName} כבר ${cr}`);
+      msgs.push(`${playerName} מחשב כמו מכונה, אבל המכונה תקועה הערב`);
+      msgs.push(`${playerName} בדרך כלל מדויק, הערב האחוזים לא לטובתו`);
     }
     return msgs;
   };

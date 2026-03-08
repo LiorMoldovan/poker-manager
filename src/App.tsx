@@ -65,9 +65,10 @@ function App() {
     if (role && role !== 'viewer') {
       setSyncStatus({ syncing: true, message: 'Syncing...' });
       syncFromCloud().then(result => {
-        if (result.success && result.synced && result.gamesChanged && result.gamesChanged > 0) {
+        const hasChanges = result.success && result.synced && 
+          ((result.gamesChanged && result.gamesChanged > 0) || (result.playersChanged && result.playersChanged > 0));
+        if (hasChanges) {
           setSyncStatus({ syncing: false, message: `☁️ ${result.message}` });
-          // Reload page after showing message to pick up new data
           setTimeout(() => {
             window.location.reload();
           }, 1500);

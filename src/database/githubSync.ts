@@ -3,9 +3,9 @@
  * Handles uploading and downloading poker data to/from GitHub
  * 
  * Sync behavior:
- * - Admin uploads full data after game end or deletion
+ * - Admin uploads full data after game end, deletion, or player changes
  * - Users get full replacement on app open (if cloud version is newer)
- * - Players are NOT synced (kept local, auto-created from game data if missing)
+ * - Players are synced: types, names, additions from cloud are authoritative
  * - Version tracking prevents unnecessary syncs
  */
 
@@ -289,10 +289,10 @@ export const getLocalSyncData = (): SyncData => {
   };
 };
 
-// Full replacement of games (players synced with ID matching for proper stats)
+// Full replacement of games and players from cloud (cloud is authoritative)
 const replaceGamesWithRemote = (
   remoteData: SyncData
-): { gamesChanged: number; deletedGames: number; newPlayers: number } => {
+): { gamesChanged: number; deletedGames: number; newPlayers: number; playersChanged: number } => {
   const localGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
   const localPlayers: Player[] = JSON.parse(localStorage.getItem('poker_players') || '[]');
   
@@ -304,48 +304,73 @@ const replaceGamesWithRemote = (
   const deletedGames = localGames.filter(g => !remoteGameIds.has(g.id)).length;
   const gamesChanged = newGamesCount + deletedGames;
   
-  // Build a map of remote players for quick lookup by name
-  const remotePlayerMap = new Map(remoteData.players.map(p => [p.name.toLowerCase(), p]));
-  
   // Build a map of local players by name for quick lookup
   const localPlayerByName = new Map(localPlayers.map(p => [p.name.toLowerCase(), p]));
   
-  // Sync players: update existing player IDs to match remote, or create new players
-  // This is CRITICAL for stats to work - gamePlayers reference playerId, so local players
-  // must have the same IDs as what's in gamePlayers
+  // Sync players: remote player list is authoritative for types, IDs, and membership.
+  // gamePlayers reference playerId, so local players must have matching IDs.
   let newPlayers = 0;
+  let playersChanged = 0;
   const syncedPlayerNames = new Set<string>();
   
+  // First pass: sync players referenced in gamePlayers (ensures ID alignment)
   for (const gp of remoteData.gamePlayers) {
     const playerNameLower = gp.playerName.toLowerCase();
     
     if (syncedPlayerNames.has(playerNameLower)) {
-      continue; // Already processed this player
+      continue;
     }
     syncedPlayerNames.add(playerNameLower);
     
     const localPlayer = localPlayerByName.get(playerNameLower);
-    const remotePlayer = remotePlayerMap.get(playerNameLower);
+    const remotePlayer = remoteData.players.find(p => p.name.toLowerCase() === playerNameLower);
     
     if (localPlayer) {
-      // Player exists locally - update their ID to match remote data
-      // This ensures gamePlayers references match
       if (localPlayer.id !== gp.playerId) {
         localPlayer.id = gp.playerId;
+        playersChanged++;
       }
-      // Also update type from remote if available
-      if (remotePlayer?.type) {
+      if (remotePlayer?.type && localPlayer.type !== remotePlayer.type) {
         localPlayer.type = remotePlayer.type;
+        playersChanged++;
       }
     } else {
-      // Player doesn't exist locally - create new
       localPlayers.push({
         id: gp.playerId,
         name: gp.playerName,
         createdAt: remotePlayer?.createdAt || new Date().toISOString(),
-        type: remotePlayer?.type || 'permanent' // Default to permanent for synced players
+        type: remotePlayer?.type || 'permanent'
       });
       localPlayerByName.set(playerNameLower, localPlayers[localPlayers.length - 1]);
+      newPlayers++;
+    }
+  }
+  
+  // Second pass: sync ALL players from remote (covers players without completed games)
+  for (const remotePlayer of remoteData.players) {
+    const nameKey = remotePlayer.name.toLowerCase();
+    if (syncedPlayerNames.has(nameKey)) {
+      continue;
+    }
+    syncedPlayerNames.add(nameKey);
+    
+    const localPlayer = localPlayerByName.get(nameKey);
+    if (localPlayer) {
+      if (localPlayer.id !== remotePlayer.id) {
+        localPlayer.id = remotePlayer.id;
+        playersChanged++;
+      }
+      if (remotePlayer.type && localPlayer.type !== remotePlayer.type) {
+        localPlayer.type = remotePlayer.type;
+        playersChanged++;
+      }
+    } else {
+      localPlayers.push({
+        id: remotePlayer.id,
+        name: remotePlayer.name,
+        createdAt: remotePlayer.createdAt || new Date().toISOString(),
+        type: remotePlayer.type || 'permanent'
+      });
       newPlayers++;
     }
   }
@@ -355,7 +380,7 @@ const replaceGamesWithRemote = (
   localStorage.setItem('poker_games', JSON.stringify(remoteData.games));
   localStorage.setItem('poker_game_players', JSON.stringify(remoteData.gamePlayers));
   
-  return { gamesChanged, deletedGames, newPlayers };
+  return { gamesChanged, deletedGames, newPlayers, playersChanged };
 };
 
 // Sync from cloud - full replacement, but only if version is different
@@ -364,6 +389,7 @@ export const syncFromCloud = async (): Promise<{
   message: string;
   synced: boolean;
   gamesChanged?: number;
+  playersChanged?: number;
 }> => {
   try {
     const remoteData = await fetchFromGitHub();
@@ -376,7 +402,7 @@ export const syncFromCloud = async (): Promise<{
     // Check if we already have this version
     const lastSyncedVersion = getLastSyncedVersion();
     console.log('Sync check - local version:', lastSyncedVersion, 'remote version:', remoteData.lastUpdated);
-    console.log('Remote has', remoteData.games?.length, 'games');
+    console.log('Remote has', remoteData.games?.length, 'games,', remoteData.players?.length, 'players');
     
     if (lastSyncedVersion === remoteData.lastUpdated) {
       console.log('Already synced to latest version');
@@ -386,15 +412,16 @@ export const syncFromCloud = async (): Promise<{
     console.log('New version available - syncing...');
     
     // New version available - do full replacement
-    const { gamesChanged, deletedGames, newPlayers } = replaceGamesWithRemote(remoteData);
-    console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers);
+    const { gamesChanged, deletedGames, newPlayers, playersChanged } = replaceGamesWithRemote(remoteData);
+    console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers, 'playersChanged:', playersChanged);
     
     // Save the synced version
     saveLastSyncedVersion(remoteData.lastUpdated);
     
     // Build message
+    const totalPlayerChanges = newPlayers + playersChanged;
     let message = '';
-    if (gamesChanged === 0 && newPlayers === 0) {
+    if (gamesChanged === 0 && totalPlayerChanges === 0) {
       message = 'Synced (no changes)';
     } else {
       const parts: string[] = [];
@@ -408,6 +435,9 @@ export const syncFromCloud = async (): Promise<{
       if (newPlayers > 0) {
         parts.push(`${newPlayers} new players`);
       }
+      if (playersChanged > 0) {
+        parts.push(`${playersChanged} players updated`);
+      }
       message = parts.join(', ');
     }
     
@@ -416,6 +446,7 @@ export const syncFromCloud = async (): Promise<{
       message,
       synced: true,
       gamesChanged,
+      playersChanged: totalPlayerChanges,
     };
   } catch (error) {
     console.error('Sync error:', error);

@@ -75,6 +75,15 @@ const SettingsScreen = () => {
   const canDeletePlayers = hasPermission('player:delete');
   const canAddPlayers = hasPermission('player:add');
 
+  const syncPlayersToCloud = () => {
+    if (role === 'admin' || role === 'memberSync') {
+      const useMemberSyncToken = role === 'memberSync';
+      syncToCloud(useMemberSyncToken).then(result => {
+        console.log('Player sync:', result.message);
+      });
+    }
+  };
+
   // Determine default tab based on permissions: players for admin/member, backup for viewer
   const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' => {
     if (canAddPlayers) return 'players';  // Admin or Member
@@ -145,12 +154,14 @@ const SettingsScreen = () => {
     setNewPlayerType('permanent');
     setShowAddPlayer(false);
     setError('');
+    syncPlayersToCloud();
   };
 
   const handlePlayerTypeChange = (playerId: string, type: PlayerType) => {
     updatePlayerType(playerId, type);
     setPlayers(sortPlayersByType(players.map(p => p.id === playerId ? { ...p, type } : p)));
     showSaved();
+    syncPlayersToCloud();
   };
 
   const openEditPlayer = (player: { id: string; name: string; type: PlayerType }) => {
@@ -187,12 +198,14 @@ const SettingsScreen = () => {
     setEditPlayerName('');
     setError('');
     showSaved();
+    syncPlayersToCloud();
   };
 
   const handleDeletePlayer = (id: string) => {
     deletePlayer(id);
     setPlayers(players.filter(p => p.id !== id));
     setDeletePlayerConfirm(null);
+    syncPlayersToCloud();
   };
 
   const handleAddChip = () => {
@@ -837,7 +850,9 @@ const SettingsScreen = () => {
                       text: result.success ? `✅ ${result.message}` : `❌ ${result.message}` 
                     });
                     setIsSyncing(false);
-                    if (result.synced && result.gamesChanged && result.gamesChanged > 0) {
+                    const hasChanges = result.synced && 
+                      ((result.gamesChanged && result.gamesChanged > 0) || (result.playersChanged && result.playersChanged > 0));
+                    if (hasChanges) {
                       setTimeout(() => window.location.reload(), 1500);
                     } else {
                       setTimeout(() => setSyncMessage(null), 3000);
