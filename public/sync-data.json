@@ -100,7 +100,7 @@
       "id": "bce0db4f-e093-42a4-871f-a029f284e3bf",
       "name": "דן מאן",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent"
     },
     {
       "id": "ec59faa2-e881-459d-9207-8939f22fe60f",
@@ -196,7 +196,7 @@
       "id": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
       "name": "שגיא אחיין",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "34c57744-7869-4b00-933b-6729698f2467",
@@ -220,7 +220,7 @@
       "id": "10049f06-364a-4796-9598-0c96a2b0faf8",
       "name": "אסף מוזס",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent"
+      "type": "permanent_guest"
     },
     {
       "id": "c61774b7-0432-4c83-b69f-a52a56f23469",
@@ -19139,6 +19139,6 @@
       "profit": -210
     }
   ],
-  "lastUpdated": "2026-03-05T23:56:09.988Z",
+  "lastUpdated": "2026-03-08T07:54:14.129Z",
   "updatedBy": "admin"
 }
