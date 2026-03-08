@@ -672,7 +672,7 @@ const LiveGameScreen = () => {
     p7: { team: 'הפועל פתח תקווה', style: ['מזלן'], quirks: ['מהלכים מוזרים', 'אוהב חטיפים ועוגות', 'אף אחד לא מבין את המשחק שלו'] },
     p8: { job: 'מנהל מוצר', team: 'באיירן מינכן', style: ['בלופר', 'מזלן', 'רגשי'], quirks: ['מחפש עסקאות מפוקפקות', 'רגשי על השולחן'] },
     p9: { team: 'מכבי תל אביב', style: ['מחושב', 'אגרסיבי'], quirks: ['אבא לתינוק חדש'] },
-    p10: { job: 'IT', style: ['רגשי', 'בלופר', 'מזלן'], quirks: ['אוהב לעשן'] },
+    p10: { job: 'IT', style: ['רגשי', 'בלופר', 'מזלן'], quirks: ['אוהב לעשן', 'מכוניות מרוץ'] },
     p11: { job: 'הייטק', style: ['מחושב'], quirks: ['משחק כדורעף', 'משחק פוקר כמו מחשבון'] },
   };
 
@@ -744,14 +744,14 @@ const LiveGameScreen = () => {
       msgs.push(`אפס זה היה פעם, ${playerName} הערב בכיוון אחר`);
     }
     if (playerId === 'p7') {
-      msgs.push(`עוד מהלך שאף אחד לא מבין מ ${playerName}, קנייה מספר ${cr}`);
       msgs.push(`אף אחד לא יודע מה התוכנית של ${playerName}, כולל ${playerName}`);
+      msgs.push(`${playerName} משחק כמו הפועל פתח תקווה, אף אחד לא מבין את הטקטיקה`);
       msgs.push(`לפחות יש חטיפים על השולחן, ${playerName} כבר ${cr} קניות`);
-      msgs.push(`${playerName} משחק לפי חוקים שרק הוא מכיר`);
+      msgs.push(`${playerName} משחק לפי חוקים שרק הוא מכיר, כמו בפתח תקווה`);
       msgs.push(`${playerName}, כבר ${cr} קניות, תביא עוד עוגה לפחות`);
-      msgs.push(`בפתח תקווה גם לא תמיד מבינים מה קורה, ${playerName} כבר ${cr}`);
+      msgs.push(`בפתח תקווה רגילים להפסיד, ${playerName} מרגיש בבית`);
       msgs.push(`${playerName} אוכל חטיפים וקונה קניות, שני הדברים לא נגמרים`);
-      msgs.push(`המהלכים של ${playerName} מוזרים כמו תמיד, כבר ${cr}`);
+      msgs.push(`המהלכים של ${playerName} מוזרים כמו המשחק של פתח תקווה, כבר ${cr}`);
     }
     if (playerId === 'p8') {
       msgs.push(`${playerName} מציע עוד עסקה מפוקפקת, הפעם לעצמו`);
@@ -777,11 +777,11 @@ const LiveGameScreen = () => {
       msgs.push(`${playerName} יצא לעשן וחזר עם עוד קנייה, כבר ${cr}`);
       msgs.push(`איש ה IT, הערב המערכת שלו קרסה`);
       msgs.push(`${playerName} מתקן מחשבים כל היום, הערב שום דבר לא מתוקן`);
-      msgs.push(`הסיגריה לא עזרה, ${playerName} חזר וקנה עוד אחד`);
+      msgs.push(`${playerName} נוהג מהר במכוניות מרוץ, הערב הכסף נוסע עוד יותר מהר`);
       msgs.push(`${playerName} רגשי על השולחן, כבר ${cr} קניות, אבל ממשיך`);
       msgs.push(`הבלפן ${playerName} לא מבלף טוב הערב, כבר ${cr}`);
+      msgs.push(`${playerName} במכוניות מרוץ עוקף את כולם, בפוקר כולם עוקפים אותו`);
       msgs.push(`${playerName} שורף סיגריות ושורף כסף, כבר ${cr} קניות`);
-      msgs.push(`עוד סיגריה לא תשנה את המזל, ${playerName} כבר ${cr}`);
     }
     if (playerId === 'p11') {
       msgs.push(`${playerName} משחק כמו מחשבון, הערב טעות בחישוב`);
