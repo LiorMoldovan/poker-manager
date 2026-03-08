@@ -1,6 +1,6 @@
 {
-  "id": "mmhgh9j9bc62wmck4wc",
-  "date": "2026-03-08T07:53:45.861Z",
+  "id": "mmhgi8c1eh46svpv3p7",
+  "date": "2026-03-08T07:54:30.961Z",
   "type": "manual",
   "players": [
     {
@@ -199,7 +199,7 @@
       "id": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
       "name": "שגיא אחיין",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "permanent_guest"
     },
     {
       "id": "34c57744-7869-4b00-933b-6729698f2467",
@@ -19185,5 +19185,5 @@
     "chipsPerRebuy": 10000,
     "minTransfer": 5
   },
-  "uploadedAt": "2026-03-08T07:53:46.938Z"
+  "uploadedAt": "2026-03-08T07:54:31.648Z"
 }
