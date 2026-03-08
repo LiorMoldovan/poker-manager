@@ -1,17 +1,16 @@
 /**
  * Google Gemini AI Integration for Poker Forecasts
- * Free tier: 15 requests/minute (gemini-1.5-flash)
+ * Free tier: gemini-2.5-pro (100 RPD), gemini-2.5-flash (250 RPD)
  * Get your API key at: https://aistudio.google.com/app/apikey
  */
 
-// API versions and models to try - ordered by quality (best first, lite as fallback)
+// Models ordered by quality - Pro for best text quality, Flash as reliable fallback
 const API_CONFIGS = [
+  { version: 'v1beta', model: 'gemini-2.5-pro' },
   { version: 'v1beta', model: 'gemini-2.5-flash' },
   { version: 'v1beta', model: 'gemini-2.0-flash' },
   { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
   { version: 'v1beta', model: 'gemini-2.0-flash-lite' },
-  { version: 'v1beta', model: 'gemini-2.0-flash-001' },
-  { version: 'v1', model: 'gemini-2.0-flash' },
 ];
 
 // Store API key in localStorage
@@ -986,107 +985,218 @@ export const generateAIForecasts = async (
   const prevPeriod = getPreviousPeriod();
 
   // Calculate SUGGESTED expected profit for each player
-  // Use AMPLIFIED predictions for more interesting forecasts
+  // Uses three-layer weighting, regression to mean, volatility, and probabilistic variety
   const playerSuggestions = players.map(p => {
-    // Use CURRENT HALF games first (matches the visible table!)
     const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
     const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
     
-    // Determine which period to use
     let periodGames = currentHalfGames;
-    let usingPrevPeriod = false;
-    
     if (currentHalfGames.length < 2 && prevHalfGames.length >= 2) {
-      // Fall back to previous period
       periodGames = prevHalfGames;
-      usingPrevPeriod = true;
     }
     
     const periodAvg = periodGames.length > 0 
       ? periodGames.reduce((sum, g) => sum + g.profit, 0) / periodGames.length 
       : 0;
     
-    // Weighted score: 70% current period, 30% all-time (if has period data)
-    let suggested = p.gamesPlayed === 0 ? 0 : 
-      periodGames.length >= 2 ? (periodAvg * 0.7) + (p.avgProfit * 0.3) : p.avgProfit;
+    // Last 3 games average - captures very recent momentum
+    const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
+    const last3Avg = last3.length > 0 ? last3.reduce((sum, g) => sum + g.profit, 0) / last3.length : 0;
     
-    // Apply streak modifiers
-    if (p.currentStreak >= 4) suggested *= 1.5;
-    else if (p.currentStreak >= 3) suggested *= 1.35;
-    else if (p.currentStreak >= 2) suggested *= 1.2;
-    else if (p.currentStreak <= -4) suggested *= 0.5;
-    else if (p.currentStreak <= -3) suggested *= 0.65;
-    else if (p.currentStreak <= -2) suggested *= 0.8;
+    // When recent form CONTRADICTS history, averaging cancels them out (boring).
+    // Instead: pick a direction - either "momentum continues" or "regression to mean"
+    const formContradiction = last3.length >= 3 && p.gamesPlayed >= 5 &&
+      ((last3Avg > 15 && p.avgProfit < -10) || (last3Avg < -15 && p.avgProfit > 10));
     
-    // AMPLIFY: Multiply by 2-3x to get more interesting ranges (typical game swings are ±50-150)
-    suggested *= 2.5;
+    let suggested: number;
+    if (p.gamesPlayed === 0) {
+      suggested = 0;
+    } else if (formContradiction) {
+      if (Math.random() < 0.6) {
+        // 60%: Follow recent momentum - trust the recent form heavily
+        suggested = last3Avg * 0.85 + p.avgProfit * 0.15;
+      } else {
+        // 40%: Regress to historical mean - recent form is noise
+        suggested = p.avgProfit * 0.85 + last3Avg * 0.15;
+      }
+    } else if (last3.length >= 3 && periodGames.length >= 2) {
+      // Normal three-layer: 40% last-3, 35% half-period, 25% all-time
+      suggested = (last3Avg * 0.40) + (periodAvg * 0.35) + (p.avgProfit * 0.25);
+    } else if (periodGames.length >= 2) {
+      suggested = (periodAvg * 0.65) + (p.avgProfit * 0.35);
+    } else if (last3.length >= 2) {
+      suggested = (last3Avg * 0.50) + (p.avgProfit * 0.50);
+    } else {
+      suggested = p.avgProfit;
+    }
     
-    // Ensure minimum meaningful prediction (at least ±30₪ unless truly neutral)
-    if (suggested > 0 && suggested < 30) suggested = 30;
-    if (suggested < 0 && suggested > -30) suggested = -30;
+    // Calculate player volatility (stdDev of recent games)
+    const recentGames = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length));
+    const recentProfits = recentGames.map(g => g.profit);
+    let stdDev = 50;
+    if (recentProfits.length >= 3) {
+      const mean = recentProfits.reduce((a, b) => a + b, 0) / recentProfits.length;
+      const vari = recentProfits.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentProfits.length;
+      stdDev = Math.sqrt(vari);
+    }
     
-    return { name: p.name, suggested: Math.round(suggested) };
+    // STREAK HANDLING: Probabilistic regression vs continuation
+    // Longer streaks are more likely to break (regression to mean)
+    const streakLength = Math.abs(p.currentStreak);
+    if (streakLength >= 2) {
+      const regressionProb = streakLength >= 4 ? 0.75 : streakLength >= 3 ? 0.60 : 0.40;
+      const regresses = Math.random() < regressionProb;
+      
+      if (regresses) {
+        const regressionFactor = streakLength >= 4 ? 0.3 : streakLength >= 3 ? 0.5 : 0.75;
+        suggested *= regressionFactor;
+      } else {
+        const continuationFactor = streakLength >= 4 ? 1.25 : streakLength >= 3 ? 1.15 : 1.1;
+        suggested *= continuationFactor;
+      }
+    }
+    
+    // Amplification for game-night scale (typical swings are ±50-150₪)
+    suggested *= 1.8;
+    
+    // Add volatility-scaled random shift to break ranking correlation
+    const randomShift = (Math.random() - 0.5) * stdDev * 0.5;
+    suggested += randomShift;
+    
+    // New/infrequent players: push toward 0 with high uncertainty
+    if (p.gamesPlayed <= 3) {
+      suggested *= 0.3;
+    } else if (p.gamesPlayed <= 6) {
+      suggested *= 0.6;
+    }
+    
+    // Lower minimum threshold (allows near-zero predictions for better accuracy)
+    if (suggested > 0 && suggested < 15) suggested = 15;
+    if (suggested < 0 && suggested > -15) suggested = -15;
+    
+    return { name: p.name, suggested: Math.round(suggested), stdDev: Math.round(stdDev) };
   });
   
-  // Balance suggestions to zero-sum
+  // Shuffle adjacent predictions occasionally to break ranking mirror
+  for (let i = 0; i < playerSuggestions.length - 1; i++) {
+    const a = playerSuggestions[i];
+    const b = playerSuggestions[i + 1];
+    if (Math.abs(a.suggested - b.suggested) < 30 && Math.random() < 0.35) {
+      const temp = a.suggested;
+      a.suggested = b.suggested;
+      b.suggested = temp;
+    }
+  }
+  
+  // Balance suggestions to zero-sum (no post-balance minimum - allows natural near-zero predictions)
   const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
   const adjustment = totalSuggested / playerSuggestions.length;
   playerSuggestions.forEach(p => {
     p.suggested = Math.round(p.suggested - adjustment);
-    // After balancing, re-apply minimum threshold
-    if (p.suggested > 0 && p.suggested < 25) p.suggested = 25;
-    if (p.suggested < 0 && p.suggested > -25) p.suggested = -25;
   });
   
-  // Re-balance after minimum threshold (small adjustment)
+  // Final zero-sum correction for rounding
   const finalTotal = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
   if (finalTotal !== 0) {
-    // Adjust the player closest to 0 to balance
     const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
     sortedByAbs[0].suggested -= finalTotal;
   }
   
-  // Pre-select SURPRISE candidates (bad all-time history but good CURRENT PERIOD = surprise WIN expected)
-  const surpriseCandidates = players.filter(p => {
-    if (p.gamesPlayed < 5) return false;
+  // Pre-select SURPRISE candidates - MULTIPLE TYPES for variety and realism
+  type SurpriseType = 'underdog_rise' | 'top_dog_fall' | 'wild_card' | 'breakout';
+  const surpriseCandidatesTyped: { name: string; type: SurpriseType; boost: number; description: string }[] = [];
+  
+  players.forEach(p => {
+    if (p.gamesPlayed < 5) return;
     
-    // Use CURRENT HALF games for "recent" performance
     const halfGames = getHalfGames(p, currentYear, currentHalf);
-    if (halfGames.length < 2) return false;
+    if (halfGames.length < 2) return;
     
     const halfAvg = halfGames.reduce((sum, g) => sum + g.profit, 0) / halfGames.length;
+    const suggestion = playerSuggestions.find(s => s.name === p.name);
+    const playerStdDev = suggestion?.stdDev || 50;
     
-    // SURPRISE = bad all-time history but good CURRENT PERIOD (unexpected WIN)
-    // This ensures surprise always means POSITIVE prediction
-    return p.avgProfit < -5 && halfAvg > 10;
+    // Type 1: Underdog rise - bad all-time but good recent form → positive surprise
+    if (p.avgProfit < -5 && halfAvg > 10) {
+      surpriseCandidatesTyped.push({
+        name: p.name, type: 'underdog_rise',
+        boost: Math.max(50, Math.round(halfAvg * 1.5)),
+        description: `היסטוריה שלילית (ממוצע ${Math.round(p.avgProfit)}₪) אבל פורמה חיובית (${Math.round(halfAvg)}₪) - צפי לניצחון מפתיע!`
+      });
+    }
+    // Type 2: Top dog fall - good all-time but bad recent form → negative surprise
+    if (p.avgProfit > 15 && halfAvg < -5) {
+      surpriseCandidatesTyped.push({
+        name: p.name, type: 'top_dog_fall',
+        boost: Math.min(-40, Math.round(halfAvg * 1.5)),
+        description: `שחקן חזק (ממוצע ${Math.round(p.avgProfit)}₪) אבל פורמה שלילית (${Math.round(halfAvg)}₪) - צפי להפסד מפתיע!`
+      });
+    }
+    // Type 3: Wild card - very high volatility, unpredictable player
+    if (playerStdDev > 80 && Math.abs(p.avgProfit) < 20) {
+      const wildDirection = Math.random() > 0.5 ? 1 : -1;
+      surpriseCandidatesTyped.push({
+        name: p.name, type: 'wild_card',
+        boost: wildDirection * Math.round(playerStdDev * 0.6),
+        description: `שחקן תנודתי (סטיית תקן ${playerStdDev}₪) - יכול להפתיע לכל כיוון!`
+      });
+    }
+    // Type 4: Breakout - mid-table player on winning streak
+    if (Math.abs(p.avgProfit) < 15 && p.currentStreak >= 2 && halfAvg > 15) {
+      surpriseCandidatesTyped.push({
+        name: p.name, type: 'breakout',
+        boost: Math.max(50, Math.round(halfAvg * 2)),
+        description: `שחקן ממוצע ברצף ${p.currentStreak} נצחונות עם ממוצע ${Math.round(halfAvg)}₪ - פריצה צפויה!`
+      });
+    }
   });
   
-  // Pick 0-1 surprise (only if good candidate exists)
-  const selectedSurprises = surpriseCandidates.length > 0 
-    ? [surpriseCandidates.sort((a, b) => {
-        const aHalfGames = getHalfGames(a, currentYear, currentHalf);
-        const bHalfGames = getHalfGames(b, currentYear, currentHalf);
-        const aHalfAvg = aHalfGames.length > 0 ? aHalfGames.reduce((sum, g) => sum + g.profit, 0) / aHalfGames.length : 0;
-        const bHalfAvg = bHalfGames.length > 0 ? bHalfGames.reduce((sum, g) => sum + g.profit, 0) / bHalfGames.length : 0;
-        return bHalfAvg - aHalfAvg; // Pick the one with best current period form
-      })[0].name]
-    : [];
+  // Pick 0-2 surprises from different types for variety
+  const selectedSurprises: typeof surpriseCandidatesTyped = [];
+  const usedSurpriseTypes = new Set<SurpriseType>();
+  const usedSurpriseNames = new Set<string>();
+  const shuffledSurprises = [...surpriseCandidatesTyped].sort(() => Math.random() - 0.5);
+  const maxSurpriseCount = Math.min(2, Math.ceil(players.length / 4));
   
-  // If we have a surprise, ensure their suggestion is POSITIVE
-  if (selectedSurprises.length > 0) {
-    const surprisePlayer = playerSuggestions.find(p => p.name === selectedSurprises[0]);
-    if (surprisePlayer && surprisePlayer.suggested < 50) {
-      // Boost surprise player to positive
-      const oldValue = surprisePlayer.suggested;
-      surprisePlayer.suggested = Math.max(50, Math.abs(oldValue) + 30);
-      // Re-balance by reducing from highest positive player
-      const highest = playerSuggestions.filter(p => p.name !== selectedSurprises[0]).sort((a, b) => b.suggested - a.suggested)[0];
-      if (highest) highest.suggested -= (surprisePlayer.suggested - oldValue);
-    }
+  for (const candidate of shuffledSurprises) {
+    if (selectedSurprises.length >= maxSurpriseCount) break;
+    if (usedSurpriseTypes.has(candidate.type) || usedSurpriseNames.has(candidate.name)) continue;
+    selectedSurprises.push(candidate);
+    usedSurpriseTypes.add(candidate.type);
+    usedSurpriseNames.add(candidate.name);
   }
   
+  // Apply surprise effects to suggested profits
+  for (const surprise of selectedSurprises) {
+    const surprisePlayer = playerSuggestions.find(p => p.name === surprise.name);
+    if (!surprisePlayer) continue;
+    
+    const oldValue = surprisePlayer.suggested;
+    let newValue: number;
+    
+    if (surprise.type === 'top_dog_fall') {
+      newValue = Math.min(oldValue, surprise.boost);
+    } else {
+      newValue = Math.max(oldValue, surprise.boost);
+    }
+    
+    surprisePlayer.suggested = Math.round(newValue);
+    const diff = newValue - oldValue;
+    
+    // Re-balance by adjusting the player furthest in opposite direction
+    const balanceTarget = playerSuggestions
+      .filter(p => p.name !== surprise.name)
+      .sort((a, b) => diff > 0 ? b.suggested - a.suggested : a.suggested - b.suggested)[0];
+    if (balanceTarget) balanceTarget.suggested -= Math.round(diff);
+  }
+  
+  console.log('🎲 Surprise candidates:', surpriseCandidatesTyped.map(s => `${s.name}(${s.type})`).join(', '));
+  console.log('🎲 Selected surprises:', selectedSurprises.map(s => `${s.name}(${s.type}: ${s.boost >= 0 ? '+' : ''}${s.boost})`).join(', '));
+  
   const surpriseText = selectedSurprises.length > 0 
-    ? `\n🎲 הפתעה: ${selectedSurprises.join(', ')} (היסטוריה שלילית אבל פורמה אחרונה חיובית - צפי לניצחון מפתיע!)`
+    ? `\n🎲 הפתעות:\n` + selectedSurprises.map(s =>
+        `- ${s.name}: ${s.description}`
+      ).join('\n')
     : '';
   
   // Pre-calculate year profit for all players to sort by 2026 ranking
@@ -1229,72 +1339,57 @@ export const generateAIForecasts = async (
       lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
     }
     lines.push(`זווית מוצעת: ${angle?.angle || 'default'} - ${angle?.angleHint || ''}`);
-    lines.push(`צפי מוצע: ${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
+    lines.push(`🔒 חיזוי סופי (נעול): ${suggestion >= 0 ? '+' : ''}${suggestion}₪ ← המשפט חייב להתאים לכיוון ולעוצמה הזו!`);
 
     console.log(`🔍 ${p.name}: angle=${angle?.angle}, suggestion=${suggestion >= 0 ? '+' : ''}${suggestion}₪`);
 
     return lines.join('\n');
   }).join('\n\n');
 
-  const prompt = `אתה מנתח פוקר ישראלי שנון וקולע. כתוב תחזית מרתקת לכל שחקן - כזו ששווה לשלוח בוואטסאפ.
+  const prompt = `אתה מנתח פוקר ישראלי שנון וקולע. לכל שחקן יש חיזוי רווח/הפסד שכבר נקבע (🔒). התפקיד שלך: לכתוב טקסט מרתק שמתאים בדיוק לחיזוי.
 
-📊 כרטיסי שחקנים:
+📊 כרטיסי שחקנים (החיזוי הסופי מסומן ב-🔒):
 ${playerDataText}
-${milestonesText ? `\n🎯 אבני דרך מעניינות:\n${milestonesText}` : ''}
+${milestonesText ? `\n🎯 אבני דרך:\n${milestonesText}` : ''}
 ${surpriseText}
 
-📝 מה לכתוב לכל שחקן:
-1. expectedProfit - חיזוי הרווח/הפסד בש"ח (סכום כולם = 0 בדיוק!)
-2. highlight - כותרת קצרה ומעניינת (3-6 מילים) שתופסת את העין - העובדה הכי מעניינת על השחקן
-3. sentence - משפט תחזית אחד בעברית (15-30 מילים)
-4. isSurprise - true רק אם חוזים הפתעה חיובית (שחקן חלש שינצח)
+📝 לכל שחקן כתוב:
+1. highlight - כותרת קצרה (3-6 מילים) - העובדה הכי מעניינת מהכרטיס
+2. sentence - משפט תחזית אחד בעברית (15-30 מילים) עם 2-3 מספרים אמיתיים מהכרטיס
+3. isSurprise - true רק אם החיזוי מנוגד להיסטוריה (פער ≥40₪ מהממוצע ההיסטורי)
 
-🎯 כללי expectedProfit:
-• השתמש בצפי המוצע כבסיס, התאם לפי ניתוח שלך
-• טווח: -200₪ עד +200₪
-• סכום כל ה-expectedProfit חייב להיות 0 בדיוק!
+⚡ הכלל החשוב ביותר - התאמת טקסט לחיזוי:
+• חיזוי חיובי גדול (+50₪+) → טון בטוח, אופטימי, "הולך לנצח", "מסוכן"
+• חיזוי חיובי קטן (+15-49₪) → טון זהיר-חיובי, "יתרון קל", "סיכוי טוב"
+• חיזוי שלילי קטן (-15 עד -49₪) → טון מאתגר, "צריך להוכיח", "לא קל"
+• חיזוי שלילי גדול (-50₪ ומטה) → הומור, "ספונסר", "תורם", "יום קשה צפוי"
+• אם החיזוי שלילי - אסור לכתוב משפט אופטימי! ולהיפך!
 
-✍️ כללי sentence (קריטי!):
-• כל משפט חייב להכיל 2-3 מספרים אמיתיים מכרטיס השחקן בלבד
-• אסור בשום פנים להזכיר את מספר ה-expectedProfit (הוא מוצג בנפרד!)
-• אסור להזכיר סה"כ הפסד מצטבר או הפסד כולל (לא סה"כ מינוס X₪). הפסד במשחק אחרון - מותר
-• דירוגים: השתמש רק בטבלת התקופה (⭐) - לא "מוביל" אם המקום הוא לא #1 בתקופה
-• כל שחקן חייב להתמקד בנתון השונה שמצוין בזווית שלו - זה הנתון המרכזי של המשפט! אסור להשתמש ב"ממוצע" כנתון מרכזי ליותר משחקן אחד!
-• גיוון נתונים: אם שחקן אחד מדבר על רצף, השני על משחק אחרון, השלישי על פער דירוג, הרביעי על אחוז נצחונות. כל שחקן = נתון מרכזי אחר!
-• התאם את הטון לכיוון החיזוי: חיובי = ביטחון, שלילי = אתגר/תקווה/הומור
-• highlight ו-sentence חייבים להיות עקביים - אותו דירוג, אותן עובדות!
-• הפתעה (isSurprise=true) רק כשהצפי חיובי משמעותית (לפחות +40₪)
+✍️ כללי כתיבה:
+• כל שחקן = נתון מרכזי אחר! (רצף / משחק אחרון / פער דירוג / אחוז נצחונות / פורמה / ותק)
+• השתמש בזווית המוצעת כבסיס - זה הנתון המרכזי של המשפט
+• אסור להזכיר את מספר החיזוי עצמו (מוצג בנפרד)
+• אסור להזכיר הפסד מצטבר/כולל (הפסד במשחק אחרון - מותר)
+• דירוגים: רק מטבלת התקופה (⭐)
+• highlight ו-sentence חייבים להיות עקביים
+• כל highlight שונה מהאחרים!
 
-🏷️ דוגמאות highlight טובות:
-• "מוביל את הטבלה עם ממוצע +97₪"
-• "נצחון ענק של +345₪ אחרון!"
-• "חוזר אחרי 143 ימים של הפסקה"
-• "5 ברצף! רכבת שלא נעצרת"
-• "רק 77₪ מהמקום הראשון"
-• "פורמה מטורפת, ממוצע +82₪"
-• "ותיק מנוסה עם 156 משחקים"
-• "סוס אפל, פורמה אחרונה חיובית"
-כל highlight חייב להיות שונה מהאחרים!
+✅ דוגמאות (שים לב: הטון תואם את כיוון החיזוי!):
+• חיזוי +80₪: "4 ברצף! עם +120₪ אחרון, מי יעצור את הרכבת הזו?"
+• חיזוי +40₪: "55% נצחונות ב-80 משחקים, הפורמה רק עולה. יתרון קל אבל אמיתי"
+• חיזוי -30₪: "חוזר אחרי 45 ימים - חלודה או רעב? הנתונים אומרים חלודה"
+• חיזוי -70₪: "ניסיון של 120 משחקים לא עוזר כשהמזל מפנה גב. ערב מאתגר צפוי"
+• הפתעה +60₪: "ממוצע היסטורי שלילי, אבל +45₪ אחרון ורצף 2! שינוי כיוון מסתמן"
+• הפתעה -50₪: "שחקן חזק בדרך כלל, אבל 3 הפסדים ברצף - גם האלופים נופלים"
 
-✅ דוגמאות sentence טובות (שים לב - כל אחת משתמשת בנתון מרכזי אחר!):
-• רצף: "4 ברצף! עם רוח גבית של +120₪ במשחק האחרון, מי יעצור את הרכבת?"
-• קרב דירוג: "רק 85₪ מהפסגה! אחרי +120₪ אחרון, המקום הראשון בטווח נגיעה"
-• קאמבק: "חוזר אחרי 45 ימים - בפעם האחרונה הרוויח +80₪. חלודה או רעב?"
-• פורמה: "55% נצחונות ב-80 משחקים, והפורמה רק עולה. תיזהרו ממנו"
-• אבן דרך: "+920₪ כולל. 80₪ מהאלף - הערב הזה יכול להיות היסטורי"
-• סוס אפל: "ניסיון היסטורי לא מזהיר, אבל +45₪ אחרון מרמזים על שינוי כיוון"
-• ותיק: "120 משחקים ו-58% נצחונות. הניסיון הזה לא סתם - הוא מסוכן"
+❌ אסור:
+• טון אופטימי עם חיזוי שלילי (חוסר התאמה!)
+• אותו מבנה משפט לכולם
+• רשימת מספרים יבשה בלי סיפור
+• "שחקן טוב" / "ערב טוב" (גנרי)
 
-❌ דוגמאות רעות (אסור!):
-• "117 משחקים, 55% נצחונות, מקום 3" (רשימת מספרים יבשה - לא סיפור)
-• "מצופה לערב טוב" (גנרי, בלי מספרים)
-• "הפסיד 200₪ במשחק האחרון" (מוקד שלילי)
-• "צפוי להרוויח 130₪ הערב" (חוזר על ה-expectedProfit)
-• "שחקן טוב עם ממוצע חיובי" (משעמם, לא ספציפי)
-• לכתוב לכולם באותה תבנית כמו "ממוצע +X₪ בתקופה" או "ממוקם במקום X" (חזרה על אותו מבנה משפט = משעמם!)
-
-📤 פלט JSON בלבד:
-[{"name":"שם","expectedProfit":מספר,"highlight":"כותרת קצרה","sentence":"משפט בעברית","isSurprise":false}]`;
+📤 פלט JSON בלבד (בלי expectedProfit - הוא כבר נקבע):
+[{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1316,10 +1411,11 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.4,
             topK: 40,
             topP: 0.95,
             maxOutputTokens: 4096,
+            responseMimeType: 'application/json',
           }
         })
       });
@@ -1363,14 +1459,29 @@ ${surpriseText}
         jsonText = text.split('```')[1].split('```')[0];
       }
 
-      let forecasts: ForecastResult[];
+      let aiOutput: { name: string; highlight: string; sentence: string; isSurprise: boolean }[];
       try {
-        forecasts = JSON.parse(jsonText.trim());
-        console.log('✅ Parsed', forecasts.length, 'forecasts');
+        aiOutput = JSON.parse(jsonText.trim());
+        console.log('✅ Parsed', aiOutput.length, 'forecasts from AI');
       } catch (parseError) {
         console.error('❌ JSON parse error, trying next model');
         continue; // Try next model
       }
+      
+      // Merge AI text with our locked expectedProfit values
+      let forecasts: ForecastResult[] = players.map(p => {
+        const aiEntry = aiOutput.find(a => a.name === p.name);
+        const suggestion = playerSuggestions.find(s => s.name === p.name);
+        return {
+          name: p.name,
+          expectedProfit: suggestion?.suggested || 0,
+          highlight: aiEntry?.highlight || '',
+          sentence: aiEntry?.sentence || '',
+          isSurprise: aiEntry?.isSurprise || false,
+        };
+      });
+      
+      console.log('🔗 Merged AI text with locked predictions:', forecasts.map(f => `${f.name}: ${f.expectedProfit >= 0 ? '+' : ''}${f.expectedProfit}₪`).join(', '));
       
       // ========== FACT-CHECK AND CORRECT AI OUTPUT ==========
       console.log('🔍 Fact-checking AI output...');
@@ -1535,18 +1646,44 @@ ${surpriseText}
           .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
           .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         
-        // ========== 7. VALIDATE AI SENTENCE (fallback if empty/short) ==========
+        // ========== 7. TEXT-NUMBER CONSISTENCY CHECK ==========
+        const predictedProfit = forecast.expectedProfit;
         const allTimeAvg = Math.round(player.avgProfit);
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
-        // Use AI sentence - only generate fallback if AI sentence is missing or too short
+        // Detect optimistic text for negative predictions
+        const optimisticWords = ['ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה'];
+        const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה'];
+        
+        const hasOptimistic = optimisticWords.some(w => correctedSentence.includes(w));
+        const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
+        
+        // Flag severe mismatches (optimistic text + negative prediction, or vice versa)
+        if (predictedProfit <= -40 && hasOptimistic && !hasPessimistic) {
+          errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit}₪`);
+          hadErrors = true;
+          console.log(`⚠️ ${player.name}: Tone mismatch - optimistic text but predicted ${predictedProfit}₪`);
+        }
+        if (predictedProfit >= 40 && hasPessimistic && !hasOptimistic) {
+          errorDetails.push(`tone_mismatch: pessimistic text but predicted +${predictedProfit}₪`);
+          hadErrors = true;
+          console.log(`⚠️ ${player.name}: Tone mismatch - pessimistic text but predicted +${predictedProfit}₪`);
+        }
+        
+        // ========== 8. VALIDATE AI SENTENCE (fallback if empty/short) ==========
         if (!correctedSentence || correctedSentence.length < 10 || correctedSentence === 'X') {
-          const fb: string[] = [];
-          if (actualStreak >= 3) fb.push(`${actualStreak} נצחונות ברצף, ממוצע +${allTimeAvg}₪ ב-${player.gamesPlayed} משחקים.`);
-          else if (allTimeAvg >= 0 && player.gamesPlayed >= 5) fb.push(`ממוצע +${allTimeAvg}₪ ב-${player.gamesPlayed} משחקים, ${winRate}% נצחונות.`);
-          else fb.push(`${player.gamesPlayed} משחקים, ${winRate}% נצחונות, מקום ${rankTonight}.`);
-          correctedSentence = fb[0];
-          console.log(`⚠️ ${player.name}: Used fallback sentence (AI sentence was empty/short)`);
+          // Generate direction-appropriate fallback
+          if (predictedProfit >= 40) {
+            if (actualStreak >= 3) correctedSentence = `${actualStreak} נצחונות ברצף, ממוצע +${allTimeAvg}₪ ב-${player.gamesPlayed} משחקים. הרוח בגב!`;
+            else correctedSentence = `ממוצע +${allTimeAvg}₪ ב-${player.gamesPlayed} משחקים, ${winRate}% נצחונות. ערב טוב צפוי`;
+          } else if (predictedProfit <= -40) {
+            correctedSentence = `${player.gamesPlayed} משחקים ו-${winRate}% נצחונות, אבל הנתונים לא מבשרים טובות. ערב מאתגר`;
+          } else if (predictedProfit > 0) {
+            correctedSentence = `${winRate}% נצחונות ב-${player.gamesPlayed} משחקים, מקום ${rankTonight}. יתרון קל הלילה`;
+          } else {
+            correctedSentence = `${player.gamesPlayed} משחקים, ${winRate}% נצחונות. צריך לעבוד קשה הלילה`;
+          }
+          console.log(`⚠️ ${player.name}: Used direction-appropriate fallback sentence`);
         } else {
           console.log(`✅ ${player.name}: AI sentence: "${correctedSentence}"`);
         }

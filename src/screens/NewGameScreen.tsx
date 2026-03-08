@@ -908,28 +908,52 @@ const NewGameScreen = () => {
         gamesCount: 0, trend: 'stable' as const, highlights: '' 
       };
       
-      // WEIGHTED SCORE: 70% recent performance, 30% overall (if enough recent data)
-      // Recent form is a much better predictor than long-term average
-      let weightedAvg: number;
+      // Three-layer weighting with form-contradiction handling
+      const last3 = stats?.lastGameResults?.slice(0, 3) || [];
+      const last3Avg = last3.length > 0 ? last3.reduce((sum, r) => sum + r.profit, 0) / last3.length : 0;
       const hasRecentData = stats?.lastGameResults && stats.lastGameResults.length >= 3;
       
+      // When recent form contradicts history, pick a direction instead of averaging to zero
+      const formContradiction = last3.length >= 3 && gamesPlayed >= 5 &&
+        ((last3Avg > 15 && avgProfit < -10) || (last3Avg < -15 && avgProfit > 10));
+      
+      let weightedAvg: number;
       if (gamesPlayed === 0) {
         weightedAvg = 0;
+      } else if (formContradiction) {
+        if (Math.random() < 0.6) {
+          weightedAvg = last3Avg * 0.85 + avgProfit * 0.15;
+        } else {
+          weightedAvg = avgProfit * 0.85 + last3Avg * 0.15;
+        }
+      } else if (last3.length >= 3 && hasRecentData) {
+        weightedAvg = (last3Avg * 0.40) + (recent.recentAvg * 0.35) + (avgProfit * 0.25);
       } else if (hasRecentData) {
-        // Weight recent performance HEAVILY
-        weightedAvg = (recent.recentAvg * 0.7) + (avgProfit * 0.3);
+        weightedAvg = (recent.recentAvg * 0.65) + (avgProfit * 0.35);
       } else {
-        // Not enough recent data, use overall
         weightedAvg = avgProfit;
       }
       
-      // Apply streak bonuses/penalties - STRONGER impact
-      if (stats && stats.currentStreak >= 4) weightedAvg *= 1.5; // Very hot streak
-      else if (stats && stats.currentStreak >= 3) weightedAvg *= 1.35;
-      else if (stats && stats.currentStreak >= 2) weightedAvg *= 1.2;
-      else if (stats && stats.currentStreak <= -4) weightedAvg *= 0.5; // Very cold streak
-      else if (stats && stats.currentStreak <= -3) weightedAvg *= 0.65;
-      else if (stats && stats.currentStreak <= -2) weightedAvg *= 0.8;
+      // New/infrequent players: push toward 0
+      if (gamesPlayed <= 3) weightedAvg *= 0.3;
+      else if (gamesPlayed <= 6) weightedAvg *= 0.6;
+      
+      // Streak handling: probabilistic regression vs continuation
+      // Longer streaks are more likely to break (regression to mean)
+      if (stats) {
+        const streakLen = Math.abs(stats.currentStreak);
+        if (streakLen >= 2) {
+          const regressionProb = streakLen >= 4 ? 0.75 : streakLen >= 3 ? 0.60 : 0.40;
+          const regresses = Math.random() < regressionProb;
+          if (regresses) {
+            const regressionFactor = streakLen >= 4 ? 0.3 : streakLen >= 3 ? 0.5 : 0.75;
+            weightedAvg *= regressionFactor;
+          } else {
+            const continuationFactor = streakLen >= 4 ? 1.25 : streakLen >= 3 ? 1.15 : 1.1;
+            weightedAvg *= continuationFactor;
+          }
+        }
+      }
       
       // Determine tendency based on weighted average
       // Thresholds adjusted based on actual player distribution analysis
@@ -994,20 +1018,28 @@ const NewGameScreen = () => {
     const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
     shuffled.slice(0, numSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
 
-    // Step 3: Calculate expected values with CONTROLLED variance
+    // Step 3: Calculate expected values with volatility-scaled variance
     const withExpected = playerAnalysis.map(p => {
       const isSurprise = surprisePlayerIds.has(p.player.id);
       let expectedValue = p.rawExpected;
       
+      // Calculate player volatility from recent results
+      const lastResults = p.stats?.lastGameResults || [];
+      let playerStdDev = 50;
+      if (lastResults.length >= 3) {
+        const profits = lastResults.map(r => r.profit);
+        const mean = profits.reduce((a, b) => a + b, 0) / profits.length;
+        const vari = profits.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / profits.length;
+        playerStdDev = Math.sqrt(vari);
+      }
+      
       if (isSurprise) {
-        // Flip the expected value based on recent contradicting trend
         expectedValue = -expectedValue * (0.5 + Math.random() * 0.3);
       } else {
-        // REDUCED variance - keep predictions closer to actual data
-        // Small variance ±10, plus tighter multiplier 0.85-1.15
-        const variance = (Math.random() - 0.5) * 20;
-        const multiplier = 0.85 + Math.random() * 0.3;
-        expectedValue = (expectedValue * multiplier) + variance;
+        // Volatility-scaled variance: high-variance players get bigger random swings
+        const randomShift = (Math.random() - 0.5) * playerStdDev * 0.4;
+        const multiplier = 0.9 + Math.random() * 0.2;
+        expectedValue = (expectedValue * multiplier) + randomShift;
       }
       
       return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
