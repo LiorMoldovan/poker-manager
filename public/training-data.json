@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 5,
+  "totalDecisions": 6,
   "bestDecisions": 2,
   "goodDecisions": 1,
   "byCategory": {
@@ -9,18 +9,18 @@
       "good": 1
     },
     "missed_draw": {
-      "total": 2,
+      "total": 3,
       "best": 1,
       "good": 0
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 5,
+      "total": 6,
       "best": 2,
       "good": 1
     }
   },
   "sessions": [],
-  "lastSynced": "2026-03-11T19:06:02.337Z"
+  "lastSynced": "2026-03-11T19:06:51.262Z"
 }
