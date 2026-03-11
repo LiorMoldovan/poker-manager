@@ -26,6 +26,21 @@
       "good": 2
     }
   },
-  "sessions": [],
-  "lastSynced": "2026-03-11T19:11:18.410Z"
+  "sessions": [
+    {
+      "date": "2026-03-11T19:11:28.427Z",
+      "handsPlayed": 3,
+      "totalDecisions": 10,
+      "bestDecisions": 4,
+      "goodDecisions": 2,
+      "categories": [
+        "flush_draw",
+        "missed_draw",
+        "set_mining"
+      ],
+      "difficulty": "hard",
+      "accuracy": 60
+    }
+  ],
+  "lastSynced": "2026-03-11T19:11:33.428Z"
 }
