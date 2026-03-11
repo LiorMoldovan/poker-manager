@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Player, PlayerType, ChipValue, Settings } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
@@ -31,6 +32,7 @@ import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 
 const SettingsScreen = () => {
+  const navigate = useNavigate();
   const { role, hasPermission } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
@@ -154,13 +156,6 @@ const SettingsScreen = () => {
     setNewPlayerType('permanent');
     setShowAddPlayer(false);
     setError('');
-    syncPlayersToCloud();
-  };
-
-  const handlePlayerTypeChange = (playerId: string, type: PlayerType) => {
-    updatePlayerType(playerId, type);
-    setPlayers(sortPlayersByType(players.map(p => p.id === playerId ? { ...p, type } : p)));
-    showSaved();
     syncPlayersToCloud();
   };
 
@@ -347,6 +342,37 @@ const SettingsScreen = () => {
           </span>
         )}
       </div>
+
+      {/* Poker Training - Admin Only */}
+      {role === 'admin' && (
+        <button
+          onClick={() => navigate('/training')}
+          style={{
+            width: '100%',
+            padding: '0.75rem 1rem',
+            borderRadius: '12px',
+            border: '1px solid rgba(99, 102, 241, 0.3)',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12))',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            marginBottom: '0.75rem',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <span style={{ fontSize: '1.5rem' }}>🎯</span>
+          <div style={{ textAlign: 'right', flex: 1 }}>
+            <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#a78bfa' }}>
+              אימון פוקר
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+              תרגול סיטואציות מותאם לשולחן שלך
+            </div>
+          </div>
+          <span style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>›</span>
+        </button>
+      )}
 
       {/* Tabs */}
       <div className="card" style={{ padding: '0.75rem' }}>

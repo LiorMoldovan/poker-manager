@@ -1,7 +1,7 @@
 import { useEffect, useState, createContext, useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { initializeStorage, getStorageUsage, formatStorageSize, StorageUsage } from './database/storage';
-import { syncFromCloud } from './database/githubSync';
+import { syncFromCloud, restoreTrainingFromGitHub } from './database/githubSync';
 import { PermissionRole } from './types';
 import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
 import Navigation from './components/Navigation';
@@ -15,6 +15,8 @@ import GameDetailsScreen from './screens/GameDetailsScreen';
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import GraphsScreen from './screens/GraphsScreen';
+import TrainingScreen from './screens/TrainingScreen';
+import TrainingHandScreen from './screens/TrainingHandScreen';
 
 // Permission context
 interface PermissionContextType {
@@ -78,6 +80,12 @@ function App() {
       }).catch(() => {
         setSyncStatus({ syncing: false, message: null });
       });
+
+      if (role === 'admin') {
+        restoreTrainingFromGitHub().catch(err =>
+          console.warn('Training restore failed:', err)
+        );
+      }
     }
   }, [role]);
 
@@ -191,7 +199,7 @@ function App() {
 
   // Admin and Member - full/partial access
   // Hide navigation on game flow screens
-  const hideNav = ['/live-game', '/chip-entry', '/game-summary'].some(path => 
+  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play'].some(path => 
     location.pathname.startsWith(path)
   );
 
@@ -299,6 +307,9 @@ function App() {
             <Route path="/settings" element={<SettingsScreen />} />
             {/* Graphs page - admin and member only */}
             {(role === 'admin' || role === 'member') && <Route path="/graphs" element={<GraphsScreen />} />}
+            {/* Training - admin only */}
+            {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
+            {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
             {/* Catch-all route - redirect unknown URLs to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

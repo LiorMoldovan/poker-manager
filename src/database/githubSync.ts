@@ -17,6 +17,7 @@ const GITHUB_OWNER = 'LiorMoldovan';
 const GITHUB_REPO = 'poker-manager';
 const GITHUB_FILE_PATH = 'public/sync-data.json';
 const GITHUB_BACKUP_PATH = 'public/full-backup.json';  // Full backup file
+const GITHUB_TRAINING_PATH = 'public/training-data.json';  // Training progress (admin only)
 const GITHUB_BRANCH = 'main';
 
 // Storage keys
@@ -190,7 +191,7 @@ export interface FullBackupData {
   gamePlayers: GamePlayer[];
   chipValues: unknown[];
   settings: unknown;
-  uploadedAt: string;
+  uploadedAt?: string;
 }
 
 // Upload full backup to GitHub (separate from sync data)
@@ -471,4 +472,134 @@ export const syncToCloud = async (useMemberSyncToken: boolean = false): Promise<
   
   const data = getLocalSyncData();
   return await uploadToGitHub(token, data);
+};
+
+// ════════════════════════════════════════════════════════════
+// TRAINING DATA SYNC (Admin only)
+// ════════════════════════════════════════════════════════════
+
+const TRAINING_STORAGE_KEY = 'poker_training_progress';
+
+export const uploadTrainingToGitHub = async (): Promise<{ success: boolean; message: string }> => {
+  const token = getEffectiveToken(false);
+  if (!token) {
+    return { success: false, message: 'No GitHub token' };
+  }
+
+  const raw = localStorage.getItem(TRAINING_STORAGE_KEY);
+  if (!raw) {
+    return { success: false, message: 'No training data to sync' };
+  }
+
+  try {
+    const trainingData = JSON.parse(raw);
+    const payload = {
+      ...trainingData,
+      lastSynced: new Date().toISOString(),
+    };
+
+    const getFileUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_TRAINING_PATH}`;
+    let fileSha: string | undefined;
+
+    const getResponse = await fetch(getFileUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (getResponse.ok) {
+      const fileInfo = await getResponse.json();
+      fileSha = fileInfo.sha;
+    }
+
+    const content = JSON.stringify(payload, null, 2);
+    const contentBase64 = btoa(unescape(encodeURIComponent(content)));
+
+    const putResponse = await fetch(getFileUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: `Training data sync - ${new Date().toLocaleString()}`,
+        content: contentBase64,
+        sha: fileSha,
+        branch: GITHUB_BRANCH,
+      }),
+    });
+
+    if (!putResponse.ok) {
+      const error = await putResponse.json();
+      throw new Error(error.message || 'Training upload failed');
+    }
+
+    console.log('✅ Training data synced to GitHub');
+    return { success: true, message: 'Training data saved to cloud' };
+  } catch (error) {
+    console.error('Error uploading training data:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Training sync failed',
+    };
+  }
+};
+
+export const fetchTrainingFromGitHub = async (): Promise<Record<string, unknown> | null> => {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_TRAINING_PATH}?ref=${GITHUB_BRANCH}`;
+
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`GitHub fetch failed: ${response.status}`);
+    }
+
+    const fileInfo = await response.json();
+    const base64Clean = fileInfo.content.replace(/\n/g, '');
+    const binaryString = atob(base64Clean);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const content = new TextDecoder('utf-8').decode(bytes);
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('Error fetching training data from GitHub:', error);
+    return null;
+  }
+};
+
+export const restoreTrainingFromGitHub = async (): Promise<{ success: boolean; restored: boolean; message: string }> => {
+  try {
+    const remoteData = await fetchTrainingFromGitHub();
+    if (!remoteData) {
+      return { success: true, restored: false, message: 'No cloud training data' };
+    }
+
+    const localRaw = localStorage.getItem(TRAINING_STORAGE_KEY);
+    const localData = localRaw ? JSON.parse(localRaw) : null;
+
+    const localSessions = localData?.sessions?.length || 0;
+    const remoteSessions = (remoteData.sessions as unknown[])?.length || 0;
+    const localDecisions = localData?.totalDecisions || 0;
+    const remoteDecisions = (remoteData.totalDecisions as number) || 0;
+
+    if (remoteDecisions > localDecisions || remoteSessions > localSessions) {
+      const { lastSynced: _, ...dataToRestore } = remoteData;
+      localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(dataToRestore));
+      console.log(`✅ Training data restored from cloud (${remoteSessions} sessions, ${remoteDecisions} decisions)`);
+      return { success: true, restored: true, message: `Training data restored (${remoteSessions} sessions)` };
+    }
+
+    return { success: true, restored: false, message: 'Local training data is up to date' };
+  } catch (error) {
+    console.error('Error restoring training data:', error);
+    return { success: false, restored: false, message: 'Failed to restore training data' };
+  }
 };

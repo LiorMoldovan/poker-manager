@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { usePermissions } from '../App';
 
 const Navigation = () => {
-  const { role, hasPermission } = usePermissions();
+  const { hasPermission, role } = usePermissions();
   const canCreateGame = hasPermission('game:create');
   const canViewGraphs = role === 'admin' || role === 'member';
 

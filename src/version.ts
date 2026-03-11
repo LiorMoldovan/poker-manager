@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.3.5';
+export const APP_VERSION = '5.4.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.4.0',
+    date: '2026-03-11',
+    changes: [
+      '🎯 Poker Training — AI-powered training scenarios tailored to your table dynamics',
+      '🧠 24 scenario categories covering draws, hand strength, bet sizing, reads, and structure',
+      '📊 Training progress tracking with accuracy trends, session history, and weak spot detection',
+      '☁️ Training data cloud sync to GitHub (admin only)',
+      '🔧 Fix FullBackupData type mismatch in cloud sync',
+      '🧹 Remove unused handlePlayerTypeChange from Settings',
+    ]
+  },
   {
     version: '5.2.6',
     date: '2026-02-26',
