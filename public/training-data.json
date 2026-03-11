@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 8,
+  "totalDecisions": 9,
   "bestDecisions": 3,
   "goodDecisions": 2,
   "byCategory": {
@@ -14,18 +14,18 @@
       "good": 0
     },
     "set_mining": {
-      "total": 1,
+      "total": 2,
       "best": 0,
       "good": 1
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 8,
+      "total": 9,
       "best": 3,
       "good": 2
     }
   },
   "sessions": [],
-  "lastSynced": "2026-03-11T19:08:59.794Z"
+  "lastSynced": "2026-03-11T19:10:39.422Z"
 }
