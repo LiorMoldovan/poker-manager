@@ -1,6 +1,6 @@
 {
-  "totalDecisions": 6,
-  "bestDecisions": 2,
+  "totalDecisions": 7,
+  "bestDecisions": 3,
   "goodDecisions": 1,
   "byCategory": {
     "flush_draw": {
@@ -9,18 +9,18 @@
       "good": 1
     },
     "missed_draw": {
-      "total": 3,
-      "best": 1,
+      "total": 4,
+      "best": 2,
       "good": 0
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 6,
-      "best": 2,
+      "total": 7,
+      "best": 3,
       "good": 1
     }
   },
   "sessions": [],
-  "lastSynced": "2026-03-11T19:06:51.262Z"
+  "lastSynced": "2026-03-11T19:07:36.010Z"
 }
