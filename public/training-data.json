@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 11,
+  "totalDecisions": 12,
   "bestDecisions": 5,
   "goodDecisions": 2,
   "byCategory": {
@@ -22,11 +22,16 @@
       "total": 1,
       "best": 1,
       "good": 0
+    },
+    "wet_board_top_pair": {
+      "total": 1,
+      "best": 0,
+      "good": 0
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 11,
+      "total": 12,
       "best": 5,
       "good": 2
     }
@@ -47,5 +52,5 @@
       "accuracy": 60
     }
   ],
-  "lastSynced": "2026-03-12T10:46:09.208Z"
+  "lastSynced": "2026-03-12T10:46:41.918Z"
 }
