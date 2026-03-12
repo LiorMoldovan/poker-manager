@@ -1056,11 +1056,11 @@ export const generateAIForecasts = async (
       }
     }
     
-    // Amplification for game-night scale (typical swings are ±50-150₪)
-    suggested *= 1.8;
+    // Amplification for game-night scale
+    suggested *= 1.5;
     
     // Add volatility-scaled random shift to break ranking correlation
-    const randomShift = (Math.random() - 0.5) * stdDev * 0.5;
+    const randomShift = (Math.random() - 0.5) * stdDev * 0.4;
     suggested += randomShift;
     
     // New/infrequent players: push toward 0 with high uncertainty
@@ -1070,9 +1070,17 @@ export const generateAIForecasts = async (
       suggested *= 0.6;
     }
     
+    // Cap predictions based on player's ACTUAL historical range
+    // Predictions should not exceed what this player has realistically achieved
+    if (p.gamesPlayed >= 3) {
+      const maxPositive = Math.max(p.bestWin * 0.75, stdDev * 1.5, 30);
+      const maxNegative = Math.min(p.worstLoss * 0.75, -stdDev * 1.5, -30);
+      suggested = Math.max(maxNegative, Math.min(maxPositive, suggested));
+    }
+    
     // Lower minimum threshold (allows near-zero predictions for better accuracy)
-    if (suggested > 0 && suggested < 15) suggested = 15;
-    if (suggested < 0 && suggested > -15) suggested = -15;
+    if (suggested > 0 && suggested < 10) suggested = 10;
+    if (suggested < 0 && suggested > -10) suggested = -10;
     
     return { name: p.name, suggested: Math.round(suggested), stdDev: Math.round(stdDev) };
   });
@@ -1241,13 +1249,16 @@ export const generateAIForecasts = async (
     const canUse = (a: AngleType) => (angleUsed.get(a) || 0) < maxPerAngle;
     const assign = (a: AngleType, hint: string) => { angleUsed.set(a, (angleUsed.get(a) || 0) + 1); playerAngles.push({ name: p.name, angle: a, angleHint: hint }); };
 
-    if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
+    const isNewPlayer = p.gamesPlayed === 0 || p.gameHistory.length === 0;
+    if (isNewPlayer) {
+      assign('default', `שחקן חדש לגמרי - אין נתונים! ← התמקד בזה שהוא חדש, אל תמציא סטטיסטיקות!`);
+    } else if (Math.abs(p.currentStreak) >= 3 && canUse('streak')) {
       const dir = p.currentStreak > 0 ? `${p.currentStreak} נצחונות ברצף` : `${Math.abs(p.currentStreak)} הפסדים - מחפש קאמבק`;
       assign('streak', `${dir} ← התמקד בנתון הרצף, לא בממוצע!`);
     } else if (gapToAbove <= 120 && gapToAbove > 0 && halfRank > 1 && canUse('ranking_battle')) {
       const aboveName = tonightRanking[aboveIdx]?.name || '';
       assign('ranking_battle', `${gapToAbove}₪ ממקום ${halfRank - 1} (${aboveName}) ← התמקד בפער הדירוג, לא בממוצע!`);
-    } else if (p.daysSinceLastGame >= 20 && canUse('comeback')) {
+    } else if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900 && canUse('comeback')) {
       assign('comeback', `חוזר אחרי ${p.daysSinceLastGame} ימים ← התמקד בימי ההיעדרות, לא בממוצע!`);
     } else if (nearMilestone && canUse('milestone')) {
       assign('milestone', `${nearMilestone - Math.round(p.totalProfit)}₪ מ-${nearMilestone}₪ כולל ← התמקד באבן הדרך, לא בממוצע!`);
@@ -1270,10 +1281,11 @@ export const generateAIForecasts = async (
   // ========== BUILD STAT CARDS ==========
   const playerDataText = playersWithYearStats.map(p => {
     const lastGame = p.gameHistory[0];
+    const isNewPlayer = p.gamesPlayed === 0 || p.gameHistory.length === 0;
     const lastGameResult = lastGame 
       ? (lastGame.profit > 0 ? `ניצח +${Math.round(lastGame.profit)}₪` : 
          lastGame.profit < 0 ? `הפסיד ${Math.round(lastGame.profit)}₪` : 'יצא באפס')
-      : 'שחקן חדש';
+      : 'שחקן חדש - אין היסטוריה';
     
     const actualStreak = p.currentStreak;
     let streakText = '';
@@ -1320,23 +1332,27 @@ export const generateAIForecasts = async (
 
     const lines: string[] = [];
     lines.push(`══ ${p.name} ${p.isFemale ? '(נקבה)' : '(זכר)'} ══`);
-    lines.push(`משחק אחרון: ${lastGameResult} (${lastGame?.date || 'N/A'})`);
-    lines.push(`רצף: ${streakText}`);
-    if (periodGames.length > 0) {
-      lines.push(`⭐ טבלת ${periodLabel}: מקום #${halfRank} מתוך ${halfTotalActive}, ${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪`);
-    }
-    lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
-    if (allTimeRank > 0 && allTimeRank <= 3) {
-      lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
-    }
-    if (gapAbove > 0 && halfRank > 1) {
-      lines.push(`פער בטבלת ${periodLabel}: ${gapAbove}₪ מאחורי מקום ${halfRank - 1} (${aboveName})`);
-    }
-    if (gapBelow > 0 && belowName) {
-      lines.push(`יתרון בטבלת ${periodLabel}: ${gapBelow}₪ על מקום ${halfRank + 1} (${belowName})`);
-    }
-    if (p.daysSinceLastGame >= 20) {
-      lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
+    if (isNewPlayer) {
+      lines.push(`🆕 שחקן חדש! אין היסטוריית משחקים. אין נתונים סטטיסטיים.`);
+    } else {
+      lines.push(`משחק אחרון: ${lastGameResult} (${lastGame?.date || 'N/A'})`);
+      lines.push(`רצף: ${streakText}`);
+      if (periodGames.length > 0) {
+        lines.push(`⭐ טבלת ${periodLabel}: מקום #${halfRank} מתוך ${halfTotalActive}, ${periodGames.length} משחקים, ממוצע ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪`);
+      }
+      lines.push(`היסטוריה כוללת: ${p.gamesPlayed} משחקים, ממוצע ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪, ${winRate}% נצחונות, סה"כ ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
+      if (allTimeRank > 0 && allTimeRank <= 3) {
+        lines.push(`דירוג כללי (כל הזמנים): #${allTimeRank} מתוך ${allTimeTotalActive}`);
+      }
+      if (gapAbove > 0 && halfRank > 1) {
+        lines.push(`פער בטבלת ${periodLabel}: ${gapAbove}₪ מאחורי מקום ${halfRank - 1} (${aboveName})`);
+      }
+      if (gapBelow > 0 && belowName) {
+        lines.push(`יתרון בטבלת ${periodLabel}: ${gapBelow}₪ על מקום ${halfRank + 1} (${belowName})`);
+      }
+      if (p.daysSinceLastGame >= 20 && p.daysSinceLastGame < 900) {
+        lines.push(`חזרה: אחרי ${p.daysSinceLastGame} ימים`);
+      }
     }
     lines.push(`זווית מוצעת: ${angle?.angle || 'default'} - ${angle?.angleHint || ''}`);
     lines.push(`🔒 חיזוי סופי (נעול): ${suggestion >= 0 ? '+' : ''}${suggestion}₪ ← המשפט חייב להתאים לכיוון ולעוצמה הזו!`);
@@ -1365,28 +1381,40 @@ ${surpriseText}
 • חיזוי שלילי גדול (-50₪ ומטה) → הומור, "ספונסר", "תורם", "יום קשה צפוי"
 • אם החיזוי שלילי - אסור לכתוב משפט אופטימי! ולהיפך!
 
+🎯 כל שחקן = עובדה ייחודית שונה (חובה!):
+• לכל שחקן, השתמש בזווית המוצעת כבסיס - זו העובדה שצריכה לבלוט
+• אסור שלשני שחקנים יהיה אותו סוג נתון מרכזי! אם כתבת על רצף לשחקן אחד - לאחרים כתוב על דבר אחר
+• העדיפויות: רצף, פער דירוג מהשחקן מעל, תוצאת משחק אחרון, אחוז נצחונות, ממוצע תקופה vs היסטורי, ותק (מספר משחקים), ימי היעדרות
+• שחקן חדש (בלי היסטוריה) → כתוב שהוא חדש, אל תמציא מספרים!
+
+📏 התאמת עוצמת מילים למספרים (קריטי!):
+• הבדל/שיפור קטן (עד 20₪) → "שיפור קל", "מגמה עדינה", "צעד קטן"
+• הבדל בינוני (20-50₪) → "מגמה ברורה", "שינוי משמעותי"
+• הבדל גדול (50₪+) → "פורמה מרשימה", "קפיצה דרמטית"
+• מילים כמו "מטורף", "מדהים", "היסטורי", "חסר תקדים" → רק לנתונים באמת חריגים (רצף 5+, פער 100₪+, שיא אישי)
+• אם שחקן השתפר ב-15₪ → אל תכתוב "שיפור מדהים". תכתוב "מגמה חיובית קלה"
+• אם שחקן במקום 3 → אל תכתוב "שולט" או "מוביל". תהיה מדויק
+
 ✍️ כללי כתיבה:
-• כל שחקן = נתון מרכזי אחר! (רצף / משחק אחרון / פער דירוג / אחוז נצחונות / פורמה / ותק)
-• השתמש בזווית המוצעת כבסיס - זה הנתון המרכזי של המשפט
 • אסור להזכיר את מספר החיזוי עצמו (מוצג בנפרד)
 • אסור להזכיר הפסד מצטבר/כולל (הפסד במשחק אחרון - מותר)
 • דירוגים: רק מטבלת התקופה (⭐)
 • highlight ו-sentence חייבים להיות עקביים
-• כל highlight שונה מהאחרים!
+• כל highlight שונה מהאחרים - גם במילים וגם במבנה!
+• כל משפט במבנה שונה - לא להתחיל כולם באותו תבנית
 
-✅ דוגמאות (שים לב: הטון תואם את כיוון החיזוי!):
-• חיזוי +80₪: "4 ברצף! עם +120₪ אחרון, מי יעצור את הרכבת הזו?"
-• חיזוי +40₪: "55% נצחונות ב-80 משחקים, הפורמה רק עולה. יתרון קל אבל אמיתי"
-• חיזוי -30₪: "חוזר אחרי 45 ימים - חלודה או רעב? הנתונים אומרים חלודה"
-• חיזוי -70₪: "ניסיון של 120 משחקים לא עוזר כשהמזל מפנה גב. ערב מאתגר צפוי"
-• הפתעה +60₪: "ממוצע היסטורי שלילי, אבל +45₪ אחרון ורצף 2! שינוי כיוון מסתמן"
-• הפתעה -50₪: "שחקן חזק בדרך כלל, אבל 3 הפסדים ברצף - גם האלופים נופלים"
+❌ דוגמאות למה שאסור (תבניות חוזרות):
+• "X עם Y משחקים ו-Z% נצחונות" ← אם כתבת את זה לשחקן אחד, אסור לאחרים
+• "X צפוי ל..." לכל שחקן ← תבנית חוזרת
+• "קרב דירוג" ו"קרב דירוג" לשני שחקנים ← אותו highlight
+• "שנה חיובית" ו"שנה טובה" ← אותה אמירה
 
-❌ אסור:
-• טון אופטימי עם חיזוי שלילי (חוסר התאמה!)
-• אותו מבנה משפט לכולם
-• רשימת מספרים יבשה בלי סיפור
-• "שחקן טוב" / "ערב טוב" (גנרי)
+✅ דוגמאות טובות (שים לב: כל שחקן = נתון אחר + טון תואם!):
+• שחקן A (חיזוי +80₪, רצף 4): highlight "4 ברצף!", sentence "מי יעצור את הרכבת? עם +120₪ במשחק האחרון, המומנטום ברור"
+• שחקן B (חיזוי +30₪, מקום 3): highlight "76₪ ממקום 2", sentence "הפער מצטמצם, 55% נצחונות, ונצחון הלילה יכול לסגור את הפער"
+• שחקן C (חיזוי -25₪, חוזר אחרי 40 יום): highlight "40 יום בלי קלפים", sentence "חלודה של 40 ימים לא נעלמת ביום אחד, גם עם ניסיון של 50 משחקים"
+• שחקן D (חיזוי -60₪, הפסד אחרון גדול): highlight "הפסיד 95₪ אחרון", sentence "אחרי -95₪ במשחק האחרון וממוצע שלילי השנה, הסטטיסטיקה לא לצידו"
+• שחקן חדש (חיזוי 0₪): highlight "דף חלק", sentence "בלי אף משחק בהיסטוריה, הכל פתוח - השאלה אם הוא הפתעה או לא"
 
 📤 פלט JSON בלבד (בלי expectedProfit - הוא כבר נקבע):
 [{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]`;
@@ -1652,8 +1680,27 @@ ${surpriseText}
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
         // Detect optimistic text for negative predictions
-        const optimisticWords = ['ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה'];
+        const optimisticWords = ['ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה', 'שולט', 'דומיננטי'];
         const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה'];
+        const superlativeWords = ['מטורף', 'מדהים', 'היסטורי', 'חסר תקדים', 'מושלם', 'אגדי', 'פנומנלי'];
+        
+        // Flag superlative words used for modest predictions (±15-40₪)
+        if (Math.abs(predictedProfit) <= 40) {
+          for (const word of superlativeWords) {
+            if (correctedSentence.includes(word)) {
+              errorDetails.push(`intensity_mismatch: "${word}" used for modest prediction ${predictedProfit}₪`);
+              hadErrors = true;
+              correctedSentence = correctedSentence
+                .replace('מטורף', predictedProfit > 0 ? 'ברור' : 'לא פשוט')
+                .replace('מדהים', predictedProfit > 0 ? 'משמעותי' : 'בולט')
+                .replace('היסטורי', 'ברור')
+                .replace('חסר תקדים', 'יוצא דופן')
+                .replace('מושלם', 'טוב')
+                .replace('אגדי', 'מרשים')
+                .replace('פנומנלי', 'משמעותי');
+            }
+          }
+        }
         
         const hasOptimistic = optimisticWords.some(w => correctedSentence.includes(w));
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));

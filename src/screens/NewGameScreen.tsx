@@ -284,8 +284,8 @@ const NewGameScreen = () => {
         lossCount: stats?.lossCount || 0,
         winPercentage: stats?.winPercentage || 0,
         currentStreak: stats?.currentStreak || 0,
-        bestWin: stats?.bestWin || 0,
-        worstLoss: stats?.worstLoss || 0,
+        bestWin: stats?.biggestWin || 0,
+        worstLoss: stats?.biggestLoss ? -Math.abs(stats.biggestLoss) : 0,
         gameHistory: (stats?.lastGameResults || []).map(g => {
           const d = new Date(g.date);
           const day = d.getDate().toString().padStart(2, '0');
@@ -630,9 +630,9 @@ const NewGameScreen = () => {
     const isActive = daysSinceLastGame <= 60;
     
     if (gamesCount === 0) {
-      return { 
-        recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0, 
-        gamesCount: 0, trend: 'stable', highlights: '', daysSinceLastGame: 999, isActive: false
+      return {
+        recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0,
+        gamesCount: 0, trend: 'stable', highlights: 'שחקן חדש', daysSinceLastGame: 0, isActive: false
       };
     }
     
@@ -1042,6 +1042,15 @@ const NewGameScreen = () => {
         expectedValue = (expectedValue * multiplier) + randomShift;
       }
       
+      // Cap predictions based on player's actual historical range
+      const bestWin = p.stats?.biggestWin || 100;
+      const worstLoss = p.stats?.biggestLoss ? -Math.abs(p.stats.biggestLoss) : -100;
+      if (p.stats && p.stats.gamesPlayed >= 3) {
+        const maxPositive = Math.max(bestWin * 0.75, playerStdDev * 1.5, 30);
+        const maxNegative = Math.min(worstLoss * 0.75, -playerStdDev * 1.5, -30);
+        expectedValue = Math.max(maxNegative, Math.min(maxPositive, expectedValue));
+      }
+      
       return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
     });
 
@@ -1371,8 +1380,8 @@ const NewGameScreen = () => {
             lossCount: stats?.lossCount || 0,
             winPercentage: stats?.winPercentage || 0,
             currentStreak: stats?.currentStreak || 0,
-            bestWin: stats?.bestWin || 0,
-            worstLoss: stats?.worstLoss || 0,
+            bestWin: stats?.biggestWin || 0,
+            worstLoss: stats?.biggestLoss ? -Math.abs(stats.biggestLoss) : 0,
             // Convert dates to DD/MM/YYYY format for parseGameDate!
             gameHistory: (stats?.lastGameResults || []).map(g => {
               const d = new Date(g.date);
