@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 15,
+  "totalDecisions": 16,
   "bestDecisions": 6,
   "goodDecisions": 2,
   "byCategory": {
@@ -32,11 +32,16 @@
       "total": 1,
       "best": 0,
       "good": 0
+    },
+    "cbet": {
+      "total": 1,
+      "best": 0,
+      "good": 0
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 15,
+      "total": 16,
       "best": 6,
       "good": 2
     }
@@ -57,5 +62,5 @@
       "accuracy": 60
     }
   ],
-  "lastSynced": "2026-03-12T10:48:59.084Z"
+  "lastSynced": "2026-03-12T10:49:28.732Z"
 }
