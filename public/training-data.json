@@ -104,7 +104,26 @@
       ],
       "difficulty": "hard",
       "accuracy": 37.5
+    },
+    {
+      "date": "2026-03-12T10:56:18.204Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 5,
+      "goodDecisions": 0,
+      "categories": [
+        "check_raise",
+        "cbet",
+        "bluff_catching",
+        "flush_draw",
+        "second_pair",
+        "missed_draw",
+        "set_mining",
+        "wet_board_top_pair"
+      ],
+      "difficulty": "hard",
+      "accuracy": 62.5
     }
   ],
-  "lastSynced": "2026-03-12T10:55:39.184Z"
+  "lastSynced": "2026-03-12T10:56:23.205Z"
 }
