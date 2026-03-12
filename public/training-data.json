@@ -123,7 +123,19 @@
       ],
       "difficulty": "hard",
       "accuracy": 62.5
+    },
+    {
+      "date": "2026-03-12T10:58:27.410Z",
+      "handsPlayed": 1,
+      "totalDecisions": 3,
+      "bestDecisions": 2,
+      "goodDecisions": 0,
+      "categories": [
+        "missed_draw"
+      ],
+      "difficulty": "hard",
+      "accuracy": 66.66666666666666
     }
   ],
-  "lastSynced": "2026-03-12T10:58:24.129Z"
+  "lastSynced": "2026-03-12T10:58:32.410Z"
 }
