@@ -714,28 +714,28 @@ export const generateAIForecasts = async (
     };
   });
   
-  // ===== 1. ALL-TIME LEADERBOARD PASSING =====
+  // ===== 1. עקיפה בטבלה הכללית =====
   for (let i = 1; i < sortedByTotalProfit.length; i++) {
     const chaser = sortedByTotalProfit[i];
     const leader = sortedByTotalProfit[i - 1];
     const gap = leader.totalProfit - chaser.totalProfit;
     if (gap > 0 && gap <= 250) {
-      milestones.push(`📈 ALL-TIME LEADERBOARD: ${chaser.name} (#${i + 1}, ${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪ כולל) can PASS ${leader.name} (#${i}, ${leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit}₪) with a +${gap}₪ win tonight!`);
+      milestones.push(`📈 טבלה כללית: ${chaser.name} (מקום ${i + 1}, ${chaser.totalProfit >= 0 ? '+' : ''}${chaser.totalProfit}₪) יכול לעקוף את ${leader.name} (מקום ${i}, ${leader.totalProfit >= 0 ? '+' : ''}${leader.totalProfit}₪) עם נצחון של +${gap}₪ הלילה!`);
     }
   }
   
-  // ===== 2. THIS YEAR LEADERBOARD =====
+  // ===== 2. טבלת השנה =====
   const sortedByYearProfit = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
   for (let i = 1; i < sortedByYearProfit.length && i <= 3; i++) {
     const chaser = sortedByYearProfit[i];
     const leader = sortedByYearProfit[i - 1];
     const gap = leader.yearProfit - chaser.yearProfit;
     if (gap > 0 && gap <= 200 && chaser.yearGames >= 2) {
-      milestones.push(`📅 THIS YEAR (${currentYear}): ${chaser.name} is #${i + 1} this year with ${chaser.yearProfit >= 0 ? '+' : ''}${chaser.yearProfit}₪. A +${gap}₪ win tonight would move them past ${leader.name} to #${i}!`);
+      milestones.push(`📅 טבלת ${currentYear}: ${chaser.name} במקום ${i + 1} עם ${chaser.yearProfit >= 0 ? '+' : ''}${chaser.yearProfit}₪. נצחון של +${gap}₪ = עקיפת ${leader.name} למקום ${i}!`);
     }
   }
   
-  // ===== 3. THIS HALF LEADERBOARD =====
+  // ===== 3. טבלת חצי שנה =====
   const halfName = currentHalf === 1 ? 'H1' : 'H2';
   const sortedByHalfProfit = [...playerPeriodStats].sort((a, b) => b.halfProfit - a.halfProfit);
   for (let i = 1; i < sortedByHalfProfit.length && i <= 3; i++) {
@@ -743,175 +743,169 @@ export const generateAIForecasts = async (
     const leader = sortedByHalfProfit[i - 1];
     const gap = leader.halfProfit - chaser.halfProfit;
     if (gap > 0 && gap <= 150 && chaser.halfGames >= 2) {
-      milestones.push(`📊 THIS HALF (${halfName} ${currentYear}): ${chaser.name} is at ${chaser.halfProfit >= 0 ? '+' : ''}${chaser.halfProfit}₪ this half. +${gap}₪ tonight = passing ${leader.name} for #${i}!`);
+      milestones.push(`📊 טבלת ${halfName} ${currentYear}: ${chaser.name} על ${chaser.halfProfit >= 0 ? '+' : ''}${chaser.halfProfit}₪. עוד +${gap}₪ = עקיפת ${leader.name} למקום ${i}!`);
     }
   }
   
-  // ===== 4. MONTHLY MILESTONES =====
+  // ===== 4. חודש נוכחי =====
   const sortedByMonthProfit = [...playerPeriodStats].sort((a, b) => b.monthProfit - a.monthProfit);
   if (sortedByMonthProfit[0]?.monthGames >= 1) {
     const monthLeader = sortedByMonthProfit[0];
-    // Check if someone can become "Player of the Month"
     for (let i = 1; i < sortedByMonthProfit.length && i <= 2; i++) {
       const chaser = sortedByMonthProfit[i];
       const gap = monthLeader.monthProfit - chaser.monthProfit;
       if (gap > 0 && gap <= 150 && chaser.monthGames >= 1) {
-        milestones.push(`🗓️ ${monthNames[currentMonth].toUpperCase()}: ${chaser.name} is ${gap}₪ behind ${monthLeader.name} for "Player of the Month"! A big win tonight could claim the title.`);
+        milestones.push(`🗓️ ${monthNames[currentMonth]}: ${chaser.name} רק ${gap}₪ מאחורי ${monthLeader.name} על התואר! נצחון גדול הלילה = שחקן החודש.`);
       }
     }
   }
   
-  // ===== 5. ALL-TIME ROUND NUMBERS =====
+  // ===== 5. אבני דרך כלליות =====
   const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
   players.forEach(p => {
     for (const milestone of roundNumbers) {
       const distance = milestone - p.totalProfit;
       if (distance > 0 && distance <= 200) {
-        milestones.push(`🎯 ALL-TIME MILESTONE: ${p.name} is at ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪ כולל. Only ${distance}₪ more to cross +${milestone}₪ all-time!`);
+        milestones.push(`🎯 אבן דרך: ${p.name} על ${p.totalProfit >= 0 ? '+' : ''}${p.totalProfit}₪ כולל. עוד ${distance}₪ = חציית רף +${milestone}₪!`);
         break;
       }
       const negDistance = p.totalProfit - (-milestone);
       if (p.totalProfit < 0 && negDistance > 0 && negDistance <= 200) {
-        milestones.push(`⚠️ DANGER ZONE: ${p.name} is at ${p.totalProfit}₪ כולל. A ${negDistance}₪ loss = dropping to -${milestone}₪ all-time!`);
+        milestones.push(`⚠️ אזור סכנה: ${p.name} על ${p.totalProfit}₪ כולל. הפסד של ${negDistance}₪ = ירידה ל-${milestone}₪!`);
         break;
       }
     }
   });
   
-  // ===== 6. YEARLY ROUND NUMBERS =====
+  // ===== 6. אבני דרך שנתיות =====
   playerPeriodStats.forEach(p => {
     if (p.yearGames >= 3) {
       for (const milestone of [500, 1000]) {
         const distance = milestone - p.yearProfit;
         if (distance > 0 && distance <= 150) {
-          milestones.push(`📅 ${currentYear} MILESTONE: ${p.name} is at ${p.yearProfit >= 0 ? '+' : ''}${p.yearProfit}₪ this year. ${distance}₪ more = +${milestone}₪ for the year!`);
+          milestones.push(`📅 יעד ${currentYear}: ${p.name} על ${p.yearProfit >= 0 ? '+' : ''}${p.yearProfit}₪ השנה. עוד ${distance}₪ = +${milestone}₪ שנתי!`);
           break;
         }
       }
     }
   });
   
-  // ===== 7. STREAK RECORDS =====
+  // ===== 7. שיאי רצף =====
   const groupWinStreakRecord = Math.max(...players.map(p => p.currentStreak), 0);
   const groupLoseStreakRecord = Math.min(...players.map(p => p.currentStreak), 0);
   
   players.forEach(p => {
     if (p.currentStreak >= 3 && p.currentStreak >= groupWinStreakRecord) {
-      milestones.push(`🔥 WINNING STREAK RECORD: ${p.name} is on ${p.currentStreak} wins in a row (tied for group record!). Win tonight = NEW ALL-TIME RECORD of ${p.currentStreak + 1}!`);
+      milestones.push(`🔥 שיא רצף: ${p.name} עם ${p.currentStreak} נצחונות ברצף (שיא קבוצתי!). נצחון הלילה = שיא חדש של ${p.currentStreak + 1}!`);
     }
     if (p.currentStreak <= -3 && p.currentStreak <= groupLoseStreakRecord) {
-      milestones.push(`❄️ LOSING STREAK RECORD: ${p.name} is on ${Math.abs(p.currentStreak)} losses in a row (worst in group!). Another loss = new unfortunate record of ${Math.abs(p.currentStreak) + 1}!`);
+      milestones.push(`❄️ רצף שלילי: ${p.name} עם ${Math.abs(p.currentStreak)} הפסדים ברצף (הגרוע בקבוצה!). עוד הפסד = שיא שלילי של ${Math.abs(p.currentStreak) + 1}!`);
     }
   });
   
-  // ===== 8. SINGLE-NIGHT WIN RECORD =====
+  // ===== 8. שיא נצחון בערב =====
   const biggestWinRecord = Math.max(...players.map(p => p.bestWin));
   const recordHolder = players.find(p => p.bestWin === biggestWinRecord);
   players.forEach(p => {
     if (p.currentStreak >= 2 && p.bestWin < biggestWinRecord && biggestWinRecord - p.bestWin <= 150) {
-      milestones.push(`💰 WIN RECORD: Group record is +${biggestWinRecord}₪ by ${recordHolder?.name}. ${p.name}'s best is +${p.bestWin}₪. A +${biggestWinRecord + 1}₪ night = NEW RECORD!`);
+      milestones.push(`💰 שיא רווח: שיא הקבוצה +${biggestWinRecord}₪ של ${recordHolder?.name}. השיא של ${p.name}: +${p.bestWin}₪. ערב של +${biggestWinRecord + 1}₪ = שיא חדש!`);
     }
   });
   
-  // ===== 9. COMEBACK OPPORTUNITIES =====
+  // ===== 9. קאמבק =====
   players.forEach(p => {
     if (p.currentStreak <= -2 && p.totalProfit > 0) {
-      milestones.push(`💪 COMEBACK: ${p.name} has ${Math.abs(p.currentStreak)} losses in a row, but still +${p.totalProfit}₪ all-time. Time for revenge!`);
+      milestones.push(`💪 קאמבק: ${p.name} עם ${Math.abs(p.currentStreak)} הפסדים ברצף, אבל עדיין +${p.totalProfit}₪ כולל. זמן נקמה!`);
     }
   });
   
-  // ===== 10. FORM COMPARISON (Recent vs Historical) =====
+  // ===== 10. השוואת פורמה =====
   playerPeriodStats.forEach(p => {
     if (p.yearGames >= 5 && p.gamesPlayed >= 10) {
       const yearAvg = p.yearProfit / p.yearGames;
       const allTimeAvg = p.avgProfit;
       if (yearAvg > allTimeAvg + 30) {
-        milestones.push(`📈 HOT YEAR: ${p.name}'s ${currentYear} average is +${Math.round(yearAvg)}₪/game vs +${Math.round(allTimeAvg)}₪ all-time. Best year ever?`);
+        milestones.push(`📈 שנה חמה: ממוצע ${p.name} ב-${currentYear}: +${Math.round(yearAvg)}₪ למשחק לעומת +${Math.round(allTimeAvg)}₪ היסטורי. השנה הכי טובה?`);
       } else if (yearAvg < allTimeAvg - 30) {
-        milestones.push(`📉 TOUGH YEAR: ${p.name}'s ${currentYear} average is ${Math.round(yearAvg)}₪/game vs +${Math.round(allTimeAvg)}₪ all-time. Turnaround tonight?`);
+        milestones.push(`📉 שנה קשה: ממוצע ${p.name} ב-${currentYear}: ${Math.round(yearAvg)}₪ למשחק לעומת +${Math.round(allTimeAvg)}₪ היסטורי. מהפך הלילה?`);
       }
     }
   });
   
-  // ===== 11. GAMES MILESTONE (ALL-TIME) =====
+  // ===== 11. אבן דרך משחקים =====
   const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
   players.forEach(p => {
     for (const gm of gamesMilestones) {
       if (p.gamesPlayed === gm - 1) {
-        milestones.push(`🎮 GAMES MILESTONE: Tonight is ${p.name}'s ${gm}th game ever with the group!`);
+        milestones.push(`🎮 אבן דרך: הלילה המשחק ה-${gm} של ${p.name} בקבוצה!`);
         break;
       }
     }
   });
   
-  // ===== 12. YEARLY PARTICIPATION MILESTONES =====
+  // ===== 12. השתתפות שנתית =====
   const yearGamesMilestones = [10, 20, 30, 40, 50];
   playerPeriodStats.forEach(p => {
     for (const gm of yearGamesMilestones) {
       if (p.yearGames === gm - 1) {
-        milestones.push(`📅 PARTICIPATION: Tonight is ${p.name}'s ${gm}th game of ${currentYear}!`);
+        milestones.push(`📅 השתתפות: הלילה המשחק ה-${gm} של ${p.name} ב-${currentYear}!`);
         break;
       }
     }
   });
   
-  // ===== 13. WIN RATE MILESTONES =====
+  // ===== 13. אחוז נצחונות =====
   const winRateMilestones = [50, 60, 70];
   players.filter(p => p.gamesPlayed >= 10).forEach(p => {
     const currentWinRate = p.winPercentage;
     for (const targetRate of winRateMilestones) {
-      // Calculate: if they win tonight, what would their new win rate be?
       const winsNeeded = Math.ceil((targetRate / 100) * (p.gamesPlayed + 1));
       if (p.winCount === winsNeeded - 1 && currentWinRate < targetRate) {
-        milestones.push(`🎯 WIN RATE: ${p.name} is at ${Math.round(currentWinRate)}% win rate. A win tonight = crossing ${targetRate}%!`);
+        milestones.push(`🎯 אחוז נצחונות: ${p.name} על ${Math.round(currentWinRate)}%. נצחון הלילה = חציית ${targetRate}%!`);
         break;
       }
     }
   });
   
-  // ===== 14. CLOSE BATTLES (players very close to each other) =====
+  // ===== 14. קרבות צמודים =====
   for (let i = 0; i < sortedByTotalProfit.length; i++) {
     for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
       const higher = sortedByTotalProfit[i];
       const lower = sortedByTotalProfit[j];
       const gap = Math.abs(higher.totalProfit - lower.totalProfit);
       if (gap <= 30 && gap > 0) {
-        milestones.push(`⚔️ CLOSE BATTLE: ${higher.name} (${higher.totalProfit >= 0 ? '+' : ''}${higher.totalProfit}₪) and ${lower.name} (${lower.totalProfit >= 0 ? '+' : ''}${lower.totalProfit}₪) are only ${gap}₪ apart all-time! Tonight decides who's ahead.`);
+        milestones.push(`⚔️ קרב צמוד: ${higher.name} (${higher.totalProfit >= 0 ? '+' : ''}${higher.totalProfit}₪) ו${lower.name} (${lower.totalProfit >= 0 ? '+' : ''}${lower.totalProfit}₪) רק ${gap}₪ הפרש! הלילה יכריע.`);
       }
     }
   }
   
-  // ===== 15. PASSING ANYONE IN THE TABLE (not just adjacent) =====
+  // ===== 15. קפיצה בטבלה =====
   sortedByTotalProfit.forEach((p, idx) => {
-    // Look at players 2-3 positions ahead
     for (let ahead = 2; ahead <= 3; ahead++) {
       if (idx >= ahead) {
         const target = sortedByTotalProfit[idx - ahead];
         const gap = target.totalProfit - p.totalProfit;
         if (gap > 0 && gap <= 180) {
-          milestones.push(`🚀 JUMP: ${p.name} (#${idx + 1}) can jump ${ahead} places and pass ${target.name} (#${idx + 1 - ahead}) with a +${gap}₪ win!`);
+          milestones.push(`🚀 קפיצה: ${p.name} (מקום ${idx + 1}) יכול לקפוץ ${ahead} מקומות ולעקוף את ${target.name} (מקום ${idx + 1 - ahead}) עם +${gap}₪!`);
           break;
         }
       }
     }
   });
   
-  // ===== 16. RECOVERY TO POSITIVE (year/half) =====
+  // ===== 16. חזרה לפלוס =====
   playerPeriodStats.forEach(p => {
-    // Recovery to positive this year
     if (p.yearProfit < 0 && p.yearProfit > -150 && p.yearGames >= 3) {
-      milestones.push(`🔄 RECOVERY: ${p.name} is at ${p.yearProfit}₪ for ${currentYear}. A +${Math.abs(p.yearProfit)}₪ win = back to positive for the year!`);
+      milestones.push(`🔄 חזרה לפלוס: ${p.name} על ${p.yearProfit}₪ ב-${currentYear}. נצחון של +${Math.abs(p.yearProfit)}₪ = חזרה לפלוס שנתי!`);
     }
-    // Recovery to positive this half
     if (p.halfProfit < 0 && p.halfProfit > -120 && p.halfGames >= 2) {
-      milestones.push(`🔄 HALF RECOVERY: ${p.name} is at ${p.halfProfit}₪ for ${halfName}. A +${Math.abs(p.halfProfit)}₪ win = positive half!`);
+      milestones.push(`🔄 חצי שנה: ${p.name} על ${p.halfProfit}₪ ב-${halfName}. נצחון של +${Math.abs(p.halfProfit)}₪ = חצי שנה חיובי!`);
     }
   });
   
-  // ===== 17. PERSONAL BEST MONTH POTENTIAL =====
+  // ===== 17. שיא חודשי =====
   playerPeriodStats.forEach(p => {
     if (p.monthGames >= 2) {
-      // Find their best month ever from history
       const monthlyProfits: { [key: string]: number } = {};
       p.gameHistory.forEach(g => {
         const d = parseGameDate(g.date);
@@ -921,24 +915,23 @@ export const generateAIForecasts = async (
       const bestMonth = Math.max(...Object.values(monthlyProfits), 0);
       if (bestMonth > 0 && p.monthProfit > bestMonth - 150 && p.monthProfit < bestMonth) {
         const needed = bestMonth - p.monthProfit + 1;
-        milestones.push(`🏆 BEST MONTH: ${p.name} is at ${p.monthProfit >= 0 ? '+' : ''}${p.monthProfit}₪ for ${monthNames[currentMonth]}. +${needed}₪ more = personal best month ever!`);
+        milestones.push(`🏆 שיא חודשי: ${p.name} על ${p.monthProfit >= 0 ? '+' : ''}${p.monthProfit}₪ ב${monthNames[currentMonth]}. עוד +${needed}₪ = החודש הכי טוב אי פעם!`);
       }
     }
   });
   
-  // ===== 18. EXACT TIES =====
+  // ===== 18. תיקו מדויק =====
   for (let i = 0; i < sortedByTotalProfit.length; i++) {
     for (let j = i + 1; j < sortedByTotalProfit.length; j++) {
       if (sortedByTotalProfit[i].totalProfit === sortedByTotalProfit[j].totalProfit && sortedByTotalProfit[i].totalProfit !== 0) {
-        milestones.push(`🤝 TIED: ${sortedByTotalProfit[i].name} and ${sortedByTotalProfit[j].name} are EXACTLY tied at ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${sortedByTotalProfit[i].totalProfit}₪ all-time! Tonight breaks the tie.`);
+        milestones.push(`🤝 תיקו: ${sortedByTotalProfit[i].name} ו${sortedByTotalProfit[j].name} בדיוק שווים על ${sortedByTotalProfit[i].totalProfit >= 0 ? '+' : ''}${sortedByTotalProfit[i].totalProfit}₪! הלילה שובר את השוויון.`);
       }
     }
   }
   
-  // ===== 19. CONSECUTIVE GAMES PLAYED (attendance streak) =====
+  // ===== 19. נוכחות רציפה =====
   players.forEach(p => {
     if (p.daysSinceLastGame <= 14 && p.gameHistory.length >= 5) {
-      // Check if they played in last 5 games (assuming games are weekly-ish)
       const recentGames = p.gameHistory.slice(0, 5);
       const gamesInLast2Months = recentGames.filter(g => {
         const d = parseGameDate(g.date);
@@ -946,17 +939,17 @@ export const generateAIForecasts = async (
         return daysDiff <= 60;
       }).length;
       if (gamesInLast2Months >= 5) {
-        milestones.push(`🎯 ATTENDANCE: ${p.name} has played ${gamesInLast2Months} of the last 5 games - most consistent player!`);
+        milestones.push(`🎯 נוכחות: ${p.name} שיחק ${gamesInLast2Months} מתוך 5 משחקים אחרונים - השחקן הכי עקבי!`);
       }
     }
   });
   
-  // ===== 20. THIS MONTH GAMES COUNT =====
+  // ===== 20. משחקים החודש =====
   playerPeriodStats.forEach(p => {
     if (p.monthGames === 2) {
-      milestones.push(`📅 ${monthNames[currentMonth].toUpperCase()}: Tonight is ${p.name}'s 3rd game this month!`);
+      milestones.push(`📅 ${monthNames[currentMonth]}: הלילה המשחק ה-3 של ${p.name} החודש!`);
     } else if (p.monthGames === 4) {
-      milestones.push(`📅 ${monthNames[currentMonth].toUpperCase()}: Tonight is ${p.name}'s 5th game this month - busiest month!`);
+      milestones.push(`📅 ${monthNames[currentMonth]}: הלילה המשחק ה-5 של ${p.name} החודש - החודש הכי עמוס!`);
     }
   });
   
@@ -985,7 +978,7 @@ export const generateAIForecasts = async (
   const prevPeriod = getPreviousPeriod();
 
   // Calculate SUGGESTED expected profit for each player
-  // Uses three-layer weighting, regression to mean, volatility, and probabilistic variety
+  // Uses three-layer weighting with recency-weighted history (recent games matter more)
   const playerSuggestions = players.map(p => {
     const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
     const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
@@ -1003,31 +996,44 @@ export const generateAIForecasts = async (
     const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
     const last3Avg = last3.length > 0 ? last3.reduce((sum, g) => sum + g.profit, 0) / last3.length : 0;
     
+    // Recency-weighted historical average (exponential decay: recent games count more)
+    // Game 1 (most recent) = weight 1.0, game 2 = 0.92, game 3 = 0.85, etc.
+    let histAvg = p.avgProfit;
+    if (p.gameHistory.length >= 3) {
+      const decay = 0.92;
+      let weightedSum = 0;
+      let totalWeight = 0;
+      for (let i = 0; i < p.gameHistory.length; i++) {
+        const w = Math.pow(decay, i);
+        weightedSum += p.gameHistory[i].profit * w;
+        totalWeight += w;
+      }
+      histAvg = weightedSum / totalWeight;
+    }
+    
     // When recent form CONTRADICTS history, averaging cancels them out (boring).
     // Instead: pick a direction - either "momentum continues" or "regression to mean"
     const formContradiction = last3.length >= 3 && p.gamesPlayed >= 5 &&
-      ((last3Avg > 15 && p.avgProfit < -10) || (last3Avg < -15 && p.avgProfit > 10));
+      ((last3Avg > 15 && histAvg < -10) || (last3Avg < -15 && histAvg > 10));
     
     let suggested: number;
     if (p.gamesPlayed === 0) {
       suggested = 0;
     } else if (formContradiction) {
       if (Math.random() < 0.6) {
-        // 60%: Follow recent momentum - trust the recent form heavily
-        suggested = last3Avg * 0.85 + p.avgProfit * 0.15;
+        suggested = last3Avg * 0.85 + histAvg * 0.15;
       } else {
-        // 40%: Regress to historical mean - recent form is noise
-        suggested = p.avgProfit * 0.85 + last3Avg * 0.15;
+        suggested = histAvg * 0.85 + last3Avg * 0.15;
       }
     } else if (last3.length >= 3 && periodGames.length >= 2) {
-      // Normal three-layer: 40% last-3, 35% half-period, 25% all-time
-      suggested = (last3Avg * 0.40) + (periodAvg * 0.35) + (p.avgProfit * 0.25);
+      // Three-layer: 40% last-3, 35% half-period, 25% recency-weighted history
+      suggested = (last3Avg * 0.40) + (periodAvg * 0.35) + (histAvg * 0.25);
     } else if (periodGames.length >= 2) {
-      suggested = (periodAvg * 0.65) + (p.avgProfit * 0.35);
+      suggested = (periodAvg * 0.65) + (histAvg * 0.35);
     } else if (last3.length >= 2) {
-      suggested = (last3Avg * 0.50) + (p.avgProfit * 0.50);
+      suggested = (last3Avg * 0.50) + (histAvg * 0.50);
     } else {
-      suggested = p.avgProfit;
+      suggested = histAvg;
     }
     
     // Calculate player volatility (stdDev of recent games)
@@ -1191,11 +1197,20 @@ export const generateAIForecasts = async (
     surprisePlayer.suggested = Math.round(newValue);
     const diff = newValue - oldValue;
     
-    // Re-balance by adjusting the player furthest in opposite direction
-    const balanceTarget = playerSuggestions
-      .filter(p => p.name !== surprise.name)
-      .sort((a, b) => diff > 0 ? b.suggested - a.suggested : a.suggested - b.suggested)[0];
-    if (balanceTarget) balanceTarget.suggested -= Math.round(diff);
+    // Spread the balance adjustment across all non-surprise players proportionally
+    const others = playerSuggestions.filter(p => p.name !== surprise.name && !usedSurpriseNames.has(p.name));
+    if (others.length > 0) {
+      const totalAbsOthers = others.reduce((sum, p) => sum + Math.abs(p.suggested) + 10, 0);
+      let distributed = 0;
+      for (let i = 0; i < others.length; i++) {
+        const weight = (Math.abs(others[i].suggested) + 10) / totalAbsOthers;
+        const share = i === others.length - 1
+          ? Math.round(diff) - distributed
+          : Math.round(diff * weight);
+        others[i].suggested -= share;
+        distributed += share;
+      }
+    }
   }
   
   console.log('🎲 Surprise candidates:', surpriseCandidatesTyped.map(s => `${s.name}(${s.type})`).join(', '));
@@ -1922,46 +1937,36 @@ export const generateForecastComparison = async (
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  // Build comparison data with gap-based accuracy
   const comparisons = forecasts.map(f => {
     const actual = actualResults.find(a => a.playerName === f.playerName);
     const actualProfit = actual?.profit || 0;
     const gap = Math.abs(actualProfit - f.expectedProfit);
+    const directionCorrect = (f.expectedProfit >= 0 && actualProfit >= 0) || (f.expectedProfit < 0 && actualProfit < 0);
     
-    // Accuracy based on gap: ≤30 = accurate, 31-60 = close, >60 = missed
     let accuracyLevel: 'accurate' | 'close' | 'missed';
     if (gap <= 30) accuracyLevel = 'accurate';
     else if (gap <= 60) accuracyLevel = 'close';
     else accuracyLevel = 'missed';
     
-    return {
-      name: f.playerName,
-      forecast: f.expectedProfit,
-      actual: actualProfit,
-      gap,
-      accuracyLevel
-    };
+    return { name: f.playerName, forecast: f.expectedProfit, actual: actualProfit, gap, accuracyLevel, directionCorrect };
   });
 
-  // Count accuracy levels
   const accurate = comparisons.filter(c => c.accuracyLevel === 'accurate').length;
   const close = comparisons.filter(c => c.accuracyLevel === 'close').length;
   const missed = comparisons.filter(c => c.accuracyLevel === 'missed').length;
   const total = comparisons.length;
+  const directionHits = comparisons.filter(c => c.directionCorrect).length;
   
-  // Calculate overall score (accurate=2pts, close=1pt, missed=0pts)
   const score = (accurate * 2 + close * 1);
   const maxScore = total * 2;
   const scorePercent = Math.round((score / maxScore) * 100);
   
-  // Determine rating
   let rating: string;
   if (scorePercent >= 80) rating = 'מעולה';
   else if (scorePercent >= 60) rating = 'טוב';
   else if (scorePercent >= 40) rating = 'סביר';
   else rating = 'חלש';
   
-  // Find best and worst predictions
   const sortedByGap = [...comparisons].sort((a, b) => a.gap - b.gap);
   const bestPrediction = sortedByGap[0];
   const worstPrediction = sortedByGap[sortedByGap.length - 1];
@@ -1970,13 +1975,14 @@ export const generateForecastComparison = async (
 
 נתונים:
 - ציון כולל: ${score}/${maxScore} (${scorePercent}%) - ${rating}
+- כיוון נכון (רווח/הפסד): ${directionHits}/${total}
 - מדויק (פער ≤30): ${accurate}/${total}
 - קרוב (פער 31-60): ${close}/${total}  
 - החטאה (פער >60): ${missed}/${total}
 - תחזית מדויקת ביותר: ${bestPrediction.name} (פער ${bestPrediction.gap})
 - תחזית רחוקה ביותר: ${worstPrediction.name} (פער ${worstPrediction.gap})
 
-כתוב משפט סיכום שכולל את הדירוג הכולל ("${rating}") ותובנה על התחזית. לא להיות מצחיק. כתוב רק את המשפט.`;
+כתוב משפט סיכום שכולל את אחוז הכיוון (${directionHits}/${total}) ותובנה על התחזית. לא להיות מצחיק. כתוב רק את המשפט.`;
 
   const config = getWorkingConfig();
   

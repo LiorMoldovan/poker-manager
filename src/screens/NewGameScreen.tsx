@@ -908,30 +908,43 @@ const NewGameScreen = () => {
         gamesCount: 0, trend: 'stable' as const, highlights: '' 
       };
       
-      // Three-layer weighting with form-contradiction handling
+      // Three-layer weighting with recency-weighted history
       const last3 = stats?.lastGameResults?.slice(0, 3) || [];
       const last3Avg = last3.length > 0 ? last3.reduce((sum, r) => sum + r.profit, 0) / last3.length : 0;
       const hasRecentData = stats?.lastGameResults && stats.lastGameResults.length >= 3;
       
-      // When recent form contradicts history, pick a direction instead of averaging to zero
+      // Recency-weighted average (recent games count more via exponential decay)
+      let histAvg = avgProfit;
+      const allResults = stats?.lastGameResults || [];
+      if (allResults.length >= 3) {
+        const decay = 0.92;
+        let wSum = 0, wTotal = 0;
+        for (let i = 0; i < allResults.length; i++) {
+          const w = Math.pow(decay, i);
+          wSum += allResults[i].profit * w;
+          wTotal += w;
+        }
+        histAvg = wSum / wTotal;
+      }
+      
       const formContradiction = last3.length >= 3 && gamesPlayed >= 5 &&
-        ((last3Avg > 15 && avgProfit < -10) || (last3Avg < -15 && avgProfit > 10));
+        ((last3Avg > 15 && histAvg < -10) || (last3Avg < -15 && histAvg > 10));
       
       let weightedAvg: number;
       if (gamesPlayed === 0) {
         weightedAvg = 0;
       } else if (formContradiction) {
         if (Math.random() < 0.6) {
-          weightedAvg = last3Avg * 0.85 + avgProfit * 0.15;
+          weightedAvg = last3Avg * 0.85 + histAvg * 0.15;
         } else {
-          weightedAvg = avgProfit * 0.85 + last3Avg * 0.15;
+          weightedAvg = histAvg * 0.85 + last3Avg * 0.15;
         }
       } else if (last3.length >= 3 && hasRecentData) {
-        weightedAvg = (last3Avg * 0.40) + (recent.recentAvg * 0.35) + (avgProfit * 0.25);
+        weightedAvg = (last3Avg * 0.40) + (recent.recentAvg * 0.35) + (histAvg * 0.25);
       } else if (hasRecentData) {
-        weightedAvg = (recent.recentAvg * 0.65) + (avgProfit * 0.35);
+        weightedAvg = (recent.recentAvg * 0.65) + (histAvg * 0.35);
       } else {
-        weightedAvg = avgProfit;
+        weightedAvg = histAvg;
       }
       
       // New/infrequent players: push toward 0

@@ -906,10 +906,13 @@ export const getForecastComparison = (gameId: string): {
     actual: number;
     gap: number;
     accuracyPercent: number;
+    directionCorrect: boolean;
   }>;
   overallAccuracy: number;
-  missingFromGame: string[];  // Forecasted but didn't play
-  missingFromForecast: string[];  // Played but wasn't forecasted
+  directionHits: number;
+  directionTotal: number;
+  missingFromGame: string[];
+  missingFromForecast: string[];
 } | null => {
   const game = getGame(gameId);
   if (!game || !game.forecasts || game.forecasts.length === 0) {
@@ -927,28 +930,27 @@ export const getForecastComparison = (gameId: string): {
     actual: number;
     gap: number;
     accuracyPercent: number;
+    directionCorrect: boolean;
   }> = [];
   
   const forecastNames = new Set(game.forecasts.map(f => f.playerName));
   const gamePlayerNames = new Set(gamePlayers.map(p => p.playerName));
   
-  // Players who were forecasted but didn't play
   const missingFromGame = game.forecasts
     .filter(f => !gamePlayerNames.has(f.playerName))
     .map(f => f.playerName);
   
-  // Players who played but weren't forecasted
   const missingFromForecast = gamePlayers
     .filter(p => !forecastNames.has(p.playerName))
     .map(p => p.playerName);
   
-  // Calculate comparisons for matching players
   for (const forecast of game.forecasts) {
     const gamePlayer = gamePlayers.find(p => p.playerName === forecast.playerName);
     if (gamePlayer) {
       const gap = Math.abs(forecast.expectedProfit - gamePlayer.profit);
-      // Calculate accuracy: 100% if exact, decreases by 1% per 5₪ gap
       const accuracyPercent = Math.max(0, 100 - (gap / 5));
+      const directionCorrect = (forecast.expectedProfit >= 0 && gamePlayer.profit >= 0) ||
+                               (forecast.expectedProfit < 0 && gamePlayer.profit < 0);
       
       comparisons.push({
         playerName: forecast.playerName,
@@ -956,21 +958,101 @@ export const getForecastComparison = (gameId: string): {
         actual: gamePlayer.profit,
         gap,
         accuracyPercent,
+        directionCorrect,
       });
     }
   }
   
-  // Calculate overall accuracy
   const overallAccuracy = comparisons.length > 0
     ? comparisons.reduce((sum, c) => sum + c.accuracyPercent, 0) / comparisons.length
     : 0;
+  
+  const directionHits = comparisons.filter(c => c.directionCorrect).length;
   
   return {
     hasComparison: true,
     comparisons,
     overallAccuracy,
+    directionHits,
+    directionTotal: comparisons.length,
     missingFromGame,
     missingFromForecast,
+  };
+};
+
+// Save forecast accuracy data on a game record (called after game completes)
+export const saveForecastAccuracy = (gameId: string): void => {
+  const comparison = getForecastComparison(gameId);
+  if (!comparison || !comparison.hasComparison) return;
+  
+  const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex === -1) return;
+  
+  const { comparisons, directionHits, directionTotal } = comparison;
+  const avgGap = comparisons.length > 0 
+    ? Math.round(comparisons.reduce((sum, c) => sum + c.gap, 0) / comparisons.length)
+    : 0;
+  
+  const accurate = comparisons.filter(c => c.gap <= 30).length;
+  const close = comparisons.filter(c => c.gap > 30 && c.gap <= 60).length;
+  const maxScore = comparisons.length * 2;
+  const score = maxScore > 0 ? Math.round(((accurate * 2 + close * 1) / maxScore) * 100) : 0;
+  
+  games[gameIndex].forecastAccuracy = {
+    directionHits,
+    totalPlayers: directionTotal,
+    avgGap,
+    score,
+  };
+  
+  setItem(STORAGE_KEYS.GAMES, games);
+};
+
+// Save forecast AI comment on game record (so it's not re-generated)
+export const saveForecastComment = (gameId: string, comment: string): void => {
+  const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    games[gameIndex].forecastComment = comment;
+    setItem(STORAGE_KEYS.GAMES, games);
+  }
+};
+
+// Get aggregate forecast accuracy across all games
+export const getOverallForecastAccuracy = (): {
+  totalGames: number;
+  avgScore: number;
+  avgDirectionRate: number;
+  avgGap: number;
+  totalDirectionHits: number;
+  totalDirectionAttempts: number;
+} => {
+  const games = getAllGames().filter(g => g.status === 'completed' && g.forecastAccuracy);
+  if (games.length === 0) {
+    return { totalGames: 0, avgScore: 0, avgDirectionRate: 0, avgGap: 0, totalDirectionHits: 0, totalDirectionAttempts: 0 };
+  }
+  
+  let totalScore = 0;
+  let totalDirectionHits = 0;
+  let totalDirectionAttempts = 0;
+  let totalGap = 0;
+  
+  for (const game of games) {
+    const acc = game.forecastAccuracy!;
+    totalScore += acc.score;
+    totalDirectionHits += acc.directionHits;
+    totalDirectionAttempts += acc.totalPlayers;
+    totalGap += acc.avgGap;
+  }
+  
+  return {
+    totalGames: games.length,
+    avgScore: Math.round(totalScore / games.length),
+    avgDirectionRate: totalDirectionAttempts > 0 ? Math.round((totalDirectionHits / totalDirectionAttempts) * 100) : 0,
+    avgGap: Math.round(totalGap / games.length),
+    totalDirectionHits,
+    totalDirectionAttempts,
   };
 };
 

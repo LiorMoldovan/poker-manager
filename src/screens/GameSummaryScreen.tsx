@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, saveForecastAccuracy, saveForecastComment } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
 
@@ -127,12 +127,20 @@ const GameSummaryScreen = () => {
     if (game.forecasts && game.forecasts.length > 0) {
       setForecasts(game.forecasts);
       
-      // Generate AI comment about forecast accuracy
-      if (getGeminiApiKey()) {
+      // Compute and persist accuracy data if not already done
+      if (!game.forecastAccuracy && game.status === 'completed') {
+        saveForecastAccuracy(game.id);
+      }
+      
+      // Use cached comment if available, otherwise generate and cache
+      if (game.forecastComment) {
+        setForecastComment(game.forecastComment);
+      } else if (getGeminiApiKey()) {
         setIsLoadingComment(true);
         try {
           const comment = await generateForecastComparison(game.forecasts, sortedPlayers);
           setForecastComment(comment);
+          saveForecastComment(game.id, comment);
         } catch (err) {
           console.error('Error generating forecast comment:', err);
         } finally {
@@ -921,6 +929,35 @@ const GameSummaryScreen = () => {
               </tbody>
             </table>
             
+            {/* Direction accuracy + gap summary */}
+            {(() => {
+              const matched = forecasts
+                .map(f => {
+                  const actual = players.find(p => p.playerName === f.playerName);
+                  if (!actual) return null;
+                  const dirOk = (f.expectedProfit >= 0 && actual.profit >= 0) || (f.expectedProfit < 0 && actual.profit < 0);
+                  const gap = Math.abs(actual.profit - f.expectedProfit);
+                  return { dirOk, gap };
+                })
+                .filter(Boolean) as { dirOk: boolean; gap: number }[];
+              const dirHits = matched.filter(m => m.dirOk).length;
+              const avgGap = matched.length > 0 ? Math.round(matched.reduce((s, m) => s + m.gap, 0) / matched.length) : 0;
+              return (
+                <div style={{
+                  marginTop: '0.5rem',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '1rem',
+                  fontSize: '0.75rem',
+                  color: 'var(--text-muted)',
+                  direction: 'rtl'
+                }}>
+                  <span>🎯 כיוון: <span style={{ color: dirHits >= matched.length * 0.6 ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>{dirHits}/{matched.length}</span></span>
+                  <span>📊 פער ממוצע: <span style={{ color: avgGap <= 40 ? 'var(--success)' : avgGap <= 70 ? 'var(--warning)' : 'var(--danger)', fontWeight: 600 }}>{avgGap}₪</span></span>
+                </div>
+              );
+            })()}
+
             {/* AI Summary - always show area */}
             <div style={{ 
               marginTop: '0.5rem', 

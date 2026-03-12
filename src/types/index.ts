@@ -69,6 +69,13 @@ export interface Game {
   chipGap?: number; // Gap in money value (positive = extra chips, negative = missing chips)
   chipGapPerPlayer?: number; // How much each player's profit was adjusted
   forecasts?: GameForecast[]; // Forecasts made before the game started
+  forecastComment?: string; // Cached AI summary comment for forecast vs reality
+  forecastAccuracy?: {
+    directionHits: number; // How many players' win/loss direction was predicted correctly
+    totalPlayers: number;  // Total players compared
+    avgGap: number;        // Average gap between forecast and actual
+    score: number;         // 0-100 score (accurate=2, close=1, missed=0)
+  };
   sharedExpenses?: SharedExpense[]; // Shared expenses (food, etc.) during the game
 }
 
@@ -134,8 +141,8 @@ export interface PlayerStats {
   currentStreak: number;      // Positive = wins, negative = losses
   longestWinStreak: number;
   longestLossStreak: number;
-  // Recent history
-  lastGameResults: { profit: number; date: string; gameId: string }[];  // Last 6 game results (most recent first)
+  // Full game history (most recent first) - recent games weighted higher in forecasts
+  lastGameResults: { profit: number; date: string; gameId: string }[];
   // Additional stats
   avgRebuysPerGame: number;
   avgWin: number;             // Average profit when winning
