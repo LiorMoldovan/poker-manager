@@ -17,6 +17,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import GraphsScreen from './screens/GraphsScreen';
 import TrainingScreen from './screens/TrainingScreen';
 import TrainingHandScreen from './screens/TrainingHandScreen';
+import QuickTrainingScreen from './screens/QuickTrainingScreen';
 
 // Permission context
 interface PermissionContextType {
@@ -310,6 +311,7 @@ function App() {
             {/* Training - admin only */}
             {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
             {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
+            {role === 'admin' && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
             {/* Catch-all route - redirect unknown URLs to home */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

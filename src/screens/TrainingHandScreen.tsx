@@ -10,6 +10,7 @@ import {
   recordDecision,
   saveSession,
   CategoryInfo,
+  HERO_NAME,
 } from '../utils/pokerTraining';
 
 // ════════════════════════════════════════════════════════════
@@ -94,6 +95,113 @@ const BoardDisplay = ({ board, revealCount }: { board: string[]; revealCount: nu
     })}
   </div>
 );
+
+// ════════════════════════════════════════════════════════════
+// TABLE POSITION MAP
+// ════════════════════════════════════════════════════════════
+
+const POSITION_ORDER = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'BTN'];
+
+const TablePositionMap = ({ heroPosition, heroName, heroStack, opponents }: {
+  heroPosition: string;
+  heroName: string;
+  heroStack: number;
+  opponents: { name: string; position: string; style: string; stack: number }[];
+}) => {
+  const allSeats = [
+    { name: heroName, position: heroPosition, stack: heroStack, isHero: true, style: '' },
+    ...opponents.map(o => ({ ...o, isHero: false })),
+  ].sort((a, b) => {
+    const ai = POSITION_ORDER.indexOf(a.position);
+    const bi = POSITION_ORDER.indexOf(b.position);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  const positionLabels: Record<string, string> = {
+    'SB': 'בליינד קטן',
+    'BB': 'בליינד גדול',
+    'UTG': 'ראשון',
+    'UTG+1': 'שני',
+    'MP': 'אמצע',
+    'MP+1': 'אמצע',
+    'HJ': 'לפני אחרון',
+    'CO': 'לפני הכפתור',
+    'BTN': 'כפתור (אחרון)',
+  };
+
+  return (
+    <div style={{
+      marginTop: '0.5rem',
+      padding: '0.6rem',
+      borderRadius: '12px',
+      background: 'rgba(16, 100, 50, 0.12)',
+      border: '1px solid rgba(34, 197, 94, 0.15)',
+    }}>
+      <div style={{
+        fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: '600',
+        marginBottom: '0.4rem', textAlign: 'center',
+      }}>
+        סדר משחק ←
+      </div>
+      <div style={{
+        display: 'flex', gap: '0.35rem', overflowX: 'auto',
+        paddingBottom: '0.2rem',
+      }}>
+        {allSeats.map((seat, i) => (
+          <div key={i} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            minWidth: '54px', flex: '0 0 auto',
+          }}>
+            {/* Arrow between seats */}
+            {i > 0 && (
+              <div style={{
+                position: 'absolute', left: '-0.3rem', top: '50%',
+                color: 'rgba(34, 197, 94, 0.3)', fontSize: '0.6rem',
+                transform: 'translateY(-50%)',
+              }}>
+              </div>
+            )}
+            <div style={{
+              width: '42px', height: '42px',
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.95rem',
+              background: seat.isHero
+                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3))'
+                : 'rgba(255,255,255,0.06)',
+              border: seat.isHero
+                ? '2px solid rgba(139, 92, 246, 0.6)'
+                : '1px solid rgba(255,255,255,0.1)',
+              boxShadow: seat.isHero ? '0 0 8px rgba(139, 92, 246, 0.3)' : 'none',
+            }}>
+              {seat.isHero ? '👤' : '🎭'}
+            </div>
+            <div style={{
+              fontSize: '0.65rem', fontWeight: '700', marginTop: '0.2rem',
+              color: seat.isHero ? '#a78bfa' : 'var(--text)',
+              maxWidth: '54px', overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap', textAlign: 'center',
+            }}>
+              {seat.isHero ? 'אתה' : seat.name}
+            </div>
+            <div style={{
+              fontSize: '0.55rem', color: 'var(--text-muted)',
+              textAlign: 'center', lineHeight: 1.2,
+            }}>
+              {positionLabels[seat.position] || seat.position}
+            </div>
+            <div style={{
+              fontSize: '0.55rem', color: 'rgba(245, 158, 11, 0.8)',
+              fontWeight: '600',
+            }}>
+              {seat.stack.toLocaleString()}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 // ════════════════════════════════════════════════════════════
 // RATING HELPERS
@@ -647,23 +755,13 @@ const TrainingHandScreen = () => {
         </div>
       )}
 
-      {/* Opponents */}
-      <div style={{
-        display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap',
-      }}>
-        {hand.setup.opponents.map((opp, i) => (
-          <div key={i} style={{
-            padding: '0.4rem 0.6rem', borderRadius: '8px',
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            fontSize: '0.75rem', flex: '1 1 auto', minWidth: '120px',
-          }}>
-            <div style={{ fontWeight: '700' }}>{opp.name}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
-              {opp.position} | {opp.style} | {opp.stack.toLocaleString()}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Table Position Map */}
+      <TablePositionMap
+        heroPosition={hand.setup.yourPosition}
+        heroName={HERO_NAME}
+        heroStack={hand.setup.yourStack}
+        opponents={hand.setup.opponents}
+      />
 
       {/* Street Progress */}
       <div style={{

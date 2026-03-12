@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.4.0';
+export const APP_VERSION = '5.4.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.4.1',
+    date: '2026-03-11',
+    changes: [
+      '⚡ Quick Training mode — fast text-based poker quiz with batch generation',
+      '🗺️ Table position map — visual seating layout with position labels',
+      '🇮🇱 Full Hebrew localization for all scenario categories and AI prompts',
+      '🃏 Card validation — duplicate/invalid card detection in generated hands',
+      '📝 Improved AI prompt with stricter card-context consistency rules',
+    ]
+  },
   {
     version: '5.4.0',
     date: '2026-03-11',

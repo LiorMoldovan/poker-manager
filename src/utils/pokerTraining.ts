@@ -101,6 +101,20 @@ export interface PlayerProfile {
   avgRebuys: number;
 }
 
+export interface QuickScenario {
+  id: number;
+  situation: string;
+  yourCards: string;
+  options: {
+    id: string;
+    text: string;
+    isCorrect: boolean;
+    explanation: string;
+  }[];
+  category: string;
+  categoryId: string;
+}
+
 // ════════════════════════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════════════════════════
@@ -109,36 +123,36 @@ export const HERO_NAME = 'ליאור';
 const STORAGE_KEY = 'poker_training_progress';
 
 export const SCENARIO_CATEGORIES: CategoryInfo[] = [
-  // Draw & Board Texture
-  { id: 'wet_board_top_pair', name: 'Top Pair על בורד רטוב', description: 'TPTK כשיש flush/straight draws על הבורד', icon: '🌊' },
-  { id: 'flush_draw', name: 'Flush Draw', description: '4 לצבע אחרי הפלופ - semi-bluff? check-call?', icon: '♠️' },
-  { id: 'straight_draw', name: 'Straight Draw', description: 'OESD או gutshot - אגרסיביות או זהירות?', icon: '🔗' },
-  { id: 'missed_draw', name: 'Missed Draw בריבר', description: 'רדפת draw ופספסת - bluff או ויתור?', icon: '💨' },
-  // Hand Strength Decisions
-  { id: 'medium_pairs', name: 'זוגות בינוניים', description: '77-TT כשקלפים גבוהים יורדים', icon: '🎯' },
-  { id: 'dominated_hands', name: 'ידיים דומיננטיות', description: 'A9o, KJo, QTo - יכולות להיות שניות', icon: '⚠️' },
-  { id: 'set_mining', name: 'Set Mining', description: '22-66 מול raise - call לset value או fold?', icon: '⛏️' },
-  { id: 'second_pair', name: 'זוג שני / אמצעי', description: 'פגעת זוג אמצעי - מספיק טוב? מתי לוותר?', icon: '🥈' },
-  { id: 'two_pair_plus', name: 'יד חזקה על בורד מסוכן', description: 'Two pair או set כשיש draws - להגן או לצמוח?', icon: '🛡️' },
-  // Bet Sizing & Aggression
-  { id: 'cbet', name: 'C-Bet', description: 'עשית raise לפני הflop - מתי להמשיך להמר ומתי לוותר?', icon: '🎪' },
-  { id: 'thin_value', name: 'Thin Value בריבר', description: 'יד שולית - לחלוב value או check-behind?', icon: '🪙' },
-  { id: 'slow_play', name: 'Slow Play', description: 'יד מפלצתית - לשחק מהר או ללכוד עם check?', icon: '🐌' },
-  { id: 'overbet', name: 'Overbet', description: 'הימור מעל גודל הקופה - פולרייז מקסימלי', icon: '💥' },
-  // Reading & Reacting
-  { id: 'bluff_catching', name: 'Bluff Catching', description: 'הימור גדול על קלף מפחיד - hero call?', icon: '🕵️' },
-  { id: 'pot_odds', name: 'Pot Odds', description: 'facing bet עם draw - המתמטיקה אומרת call?', icon: '🔢' },
-  { id: 'check_raise', name: 'Check-Raise', description: 'מתי ללכוד עם check-raise ומתי להוביל', icon: '🪤' },
-  // Structural Spots
-  { id: 'multiway_pots', name: 'Multi-Way Pots', description: 'אותה יד משתנה ב-4-way vs heads-up', icon: '👥' },
-  { id: 'three_bet_pots', name: '3-Bet Pots', description: 'קופות מנופחות עם ranges צרים', icon: '💣' },
-  { id: 'squeeze_isolation', name: 'Squeeze & Isolation', description: '3+ limpers/callers - מתי לעשות squeeze?', icon: '🗜️' },
-  { id: 'blind_defense', name: 'הגנה מהבליינד', description: 'raise מול ה-BB/SB שלך - call, 3-bet או fold?', icon: '🏰' },
-  { id: 'stack_depth', name: 'Stack Depth', description: 'short stack vs deep stack - שינוי אסטרטגיה', icon: '📏' },
-  { id: 'position_play', name: 'ניצול פוזיציה', description: 'IP vs OOP - איך הפוזיציה משנה את ההחלטה?', icon: '📍' },
-  // Preflop
-  { id: 'preflop_open', name: 'פתיחה Preflop', description: 'מה לפתוח מכל פוזיציה, כמה להעלות, ומתי לוותר על ידיים שוליות כמו KTo, A8o, QJs', icon: '🚪' },
-  { id: 'preflop_vs_raise', name: 'Facing Raise Preflop', description: 'מישהו raise ואולי עוד callers - מה לעשות עם זוג נמוך, יד פרימיום, suited connectors, ידיים בינוניות כמו AJo/KQo? call, 3-bet, fold?', icon: '🤔' },
+  // לוח וקלפים משותפים
+  { id: 'wet_board_top_pair', name: 'זוג עליון על לוח מסוכן', description: 'יש לך את הזוג הכי גבוה אבל על השולחן יש אפשרות לצבע או סדרה', icon: '🌊' },
+  { id: 'flush_draw', name: 'חסר קלף לצבע', description: 'יש לך 4 קלפים מאותו צבע - להמר? לחכות?', icon: '♠️' },
+  { id: 'straight_draw', name: 'חסר קלף לסדרה', description: 'חסר לך קלף אחד לסדרה - להיות אגרסיבי או זהיר?', icon: '🔗' },
+  { id: 'missed_draw', name: 'פספסת את הקלף', description: 'חיכית לצבע או סדרה ולא הגיע - לבלוף או לוותר?', icon: '💨' },
+  // חוזק היד
+  { id: 'medium_pairs', name: 'זוגות בינוניים', description: 'יש לך זוג כמו 77-1010 וירדו קלפים גבוהים על השולחן', icon: '🎯' },
+  { id: 'dominated_hands', name: 'ידיים שנראות טוב אבל מסוכנות', description: 'ידיים כמו A-9, K-J, Q-10 שיכולות להפסיד ליד דומה אבל חזקה יותר', icon: '⚠️' },
+  { id: 'set_mining', name: 'חיפוש שלישייה', description: 'יש לך זוג נמוך (22-66) ומישהו העלה - לקרוא בשביל לתפוס שלישייה?', icon: '⛏️' },
+  { id: 'second_pair', name: 'זוג שני', description: 'עשית זוג עם הקלף השני בגובהו על השולחן - מספיק טוב? מתי לוותר?', icon: '🥈' },
+  { id: 'two_pair_plus', name: 'יד חזקה על לוח מסוכן', description: 'יש לך שני זוגות או שלישייה אבל על השולחן יש אפשרויות לידיים חזקות יותר', icon: '🛡️' },
+  // גודל הימור ואגרסיביות
+  { id: 'cbet', name: 'המשך הימור', description: 'העלית לפני הקלפים המשותפים - להמשיך להמר או לעצור?', icon: '🎪' },
+  { id: 'thin_value', name: 'סחיטת ערך', description: 'יש לך יד לא רעה - להמר סכום קטן לרווח או לא להסתכן?', icon: '🪙' },
+  { id: 'slow_play', name: 'משחק איטי', description: 'יש לך יד מפלצתית - להמר חזק מיד או להעמיד פנים ולצוד?', icon: '🐌' },
+  { id: 'overbet', name: 'הימור ענק', description: 'להמר יותר מהקופה - מתי זה עובד ומתי זה טעות?', icon: '💥' },
+  // קריאת יריבים
+  { id: 'bluff_catching', name: 'לתפוס בלוף', description: 'היריב מהמר גדול על קלף מפחיד - הוא מבלף או שיש לו?', icon: '🕵️' },
+  { id: 'pot_odds', name: 'האם כדאי לקרוא?', description: 'היריב מהמר ויש לך סיכוי להשתפר - המתמטיקה אומרת לקרוא?', icon: '🔢' },
+  { id: 'check_raise', name: 'צ\'ק ואז העלאה', description: 'מתי לעשות צ\'ק כדי לצוד את היריב ואז להעלות?', icon: '🪤' },
+  // מבנה היד
+  { id: 'multiway_pots', name: 'הרבה שחקנים בקופה', description: 'אותה יד משתנה כשיש 4 שחקנים לעומת אחד מולך', icon: '👥' },
+  { id: 'three_bet_pots', name: 'קופות עם העלאה חוזרת', description: 'מישהו העלה, אתה העלית שוב - קופה גדולה עם ידיים חזקות', icon: '💣' },
+  { id: 'squeeze_isolation', name: 'לחיצה ובידוד', description: 'כמה שחקנים נכנסו בזול - מתי להעלות חזק כדי לבודד?', icon: '🗜️' },
+  { id: 'blind_defense', name: 'הגנה מהבליינד', description: 'אתה בבליינד ומישהו העלה - לקרוא, להעלות חזרה, או לוותר?', icon: '🏰' },
+  { id: 'stack_depth', name: 'גודל הערימה', description: 'כשיש לך הרבה צ\'יפים לעומת מעט - איך זה משנה את המשחק?', icon: '📏' },
+  { id: 'position_play', name: 'ניצול מיקום', description: 'כשאתה אחרון לדבר לעומת ראשון - איך זה משנה את ההחלטה?', icon: '📍' },
+  // לפני הקלפים המשותפים
+  { id: 'preflop_open', name: 'פתיחה לפני הפלופ', description: 'עם מה לפתוח מכל מיקום, כמה להעלות, ומתי לוותר על ידיים בינוניות', icon: '🚪' },
+  { id: 'preflop_vs_raise', name: 'מישהו העלה לפניך', description: 'מישהו העלה ואולי עוד קראו - מה לעשות עם זוג נמוך, יד חזקה, או יד בינונית?', icon: '🤔' },
 ];
 
 // ════════════════════════════════════════════════════════════
@@ -379,65 +393,88 @@ const buildPrompt = (
     ? `Hero (${HERO_NAME}): ${hero.style} | ${hero.gamesPlayed} משחקים, ${hero.winRate.toFixed(0)}% נצחונות, ממוצע ${hero.avgProfit >= 0 ? '+' : ''}₪${hero.avgProfit.toFixed(0)}`
     : '';
 
-  const diffGuide: Record<string, string> = {
-    medium: 'האופציה הטובה ביותר ברורה לשחקן חושב, אבל יש מלכודת מפתה. 60-70% יצליחו.',
-    hard: 'שתי אופציות קרובות מאוד ב-EV. ההבדל בא מ-reads ספציפיים או חישוב מדויק. 40-50% יצליחו.',
-    expert: 'המהלך הטוב ביותר counter-intuitive או דורש חשיבה מרובת רמות. גם מנוסים חלוקים. 20-30% יבחרו נכון.',
+  const difficultyHeb: Record<string, string> = {
+    medium: 'בינוני - התשובה הנכונה ברורה למי שחושב, אבל יש מלכודת',
+    hard: 'קשה - שתי אופציות קרובות מאוד, ההבדל בא מהכרת היריב או חישוב',
+    expert: 'מומחה - המהלך הנכון לא אינטואיטיבי, גם מנוסים יתקשו',
   };
 
-  return `אתה מאמן פוקר מקצועי ברמה גבוהה מאוד. תכין יד תרגול שלמה עבור משחק ביתי ספציפי.
+  return `אתה בונה תרגיל פוקר. המטרה: ליצור סיטואציה ריאליסטית מהמשחק הביתי שלנו.
+
+הכל חייב להיות **בעברית פשוטה**. הקורא הוא שחקן חובב.
+מילים מותרות: קופה, בליינד, העלאה, קריאה, ויתור, צ'ק, בלוף, שלישייה, זוג, סדרה, צבע, אול-אין, פלופ, טרן, ריבר.
+**אסור** להשתמש במונחים באנגלית כמו: equity, EV, SPR, implied odds, range, c-bet, semi-bluff, value bet, OESD, gutshot, TPTK, LAG.
+אם צריך להסביר מושג - הסבר במילים פשוטות (למשל: "הסיכוי שלך לנצח" ולא "equity").
+
+---
 
 ${TABLE_DYNAMICS}
 
-${sortedOpponents.length > 0 ? `## יריבים אפשריים (בחר 1-3 מהרשימה)
-**חשוב: העדף תמיד שחקנים קבועים כיריבים!** הנתונים שלהם עשירים ומעודכנים - השתמש בסגנון המשחק שלהם (aggressive/passive, tight/loose, bluff frequency) כדי לבנות תרחיש ריאליסטי. שחקנים נוספים (אורחים) רק לגיוון מדי פעם.
-${opponents}` : `## יריבים
-אין נתוני שחקנים זמינים עדיין. צור יריבים גנריים עם סגנונות משחק מגוונים (tight, loose, aggressive, passive) שמתאימים למשחק ביתי.`}
+---
 
-${heroLine ? `## ה-Hero\n${heroLine}\n` : ''}
+${sortedOpponents.length > 0 ? `## שחקנים (בחר 1-3 יריבים, העדף שחקנים קבועים)
+${opponents}` : `## שחקנים
+אין נתונים - צור יריבים עם סגנונות שונים (אגרסיבי, שמרני, חופשי) שמתאימים למשחק ביתי.`}
 
-## המשימה
-צור יד פוקר שלמה ומאתגרת.
-קטגוריה: **${category.name}** - ${category.description}
-רמת קושי: **${difficulty}** - ${diffGuide[difficulty]}
+${heroLine ? `## השחקן שלנו\n${heroLine}\n` : ''}
 
-## כללי מבנה
-1. ה-hero הוא תמיד **${HERO_NAME}**
-2. חייבים להיות **2-3 streets** עם נקודות החלטה (לא 1, לא 4)
-3. בחר 1-3 יריבים מהרשימה - פעולותיהם חייבות להתאים לסגנונם:
-   • שחקן aggressive → מעלה, מהמר, 3-bet
-   • שחקן tight-passive → call או fold, לא מעלה בלי יד חזקה
-   • שחקן LAG → פותח range רחב, מעלה הרבה
-4. **בדיוק 3 או 4 אופציות** לכל street
-5. בדיוק **אחד 'best'** לכל street, לפחות אחד **'bad'**
-6. אחרי ה-flop, ה-context של כל street מספר מה קרה (כאילו ה-hero שיחק את ה-best מהstreet הקודם)
+---
 
-## ריאליזם חובה (מבוסס נתוני אמת מעודכנים!)
-- Raises: 400-1000 pre-flop (3x-10x BB)
-- Stacks: 8,000-25,000 צ'יפים (1-2.5 buy-ins)
-- Board texture חייב ליצור את המתח של הקטגוריה (${category.id})
-- ידיים ריאליסטיות, לא נדירות
-- סכומים שמתאימים ל-pot ול-stacks
+## מה לבנות
+נושא: **${category.name}** - ${category.description}
+רמת קושי: **${difficultyHeb[difficulty]}**
+${weakCategories.length > 0 ? `שים דגש על הנקודות החלשות של ${HERO_NAME}: ${weakCategories.join(', ')}\n` : ''}
 
-## הסברים מקצועיים (הכי חשוב!)
-כל explanation חייב לכלול:
-- מושג ספציפי: pot odds עם %, equity מדויק, SPR, implied odds
-- התייחסות ליריב: "נגד [שם] שהוא [סגנון], ה-range שלו כאן כולל..."
-- התאמה לשולחן: "בשולחן שלנו..." / "נגד שחקנים כאלה..."
-- **לא עצות גנריות!** הכל מותאם ליריבים ולדינמיקה
-- הסבר למה האופציות האחרות פחות טובות
+---
 
-## שפה
-- עברית עם מונחי פוקר באנגלית: c-bet, pot odds, equity, check-raise, fold, call, raise, all-in, semi-bluff, value bet, range, SPR, implied odds, EV
-- ה-context של כל street כתוב כסיפור קצר וקולח
+## חוקים קריטיים לעקביות (חשוב מאוד!)
 
-## Key Lesson
-- משפט מסכם מעשי ואפליקטיבי: "בשולחן שלנו כש..." / "נגד שחקן [סגנון]..."
-- לא גנרי! ספציפי לסיטואציה
+### קלפים
+- פורמט: דרגה + סמל. דרגות: A, K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2. סמלים: ♠, ♥, ♦, ♣.
+- דוגמאות תקינות: "A♠", "K♥", "10♦", "7♣"
+- כל קלף מופיע פעם אחת בלבד! אם A♠ זה קלף של השחקן, הוא לא יכול להופיע על השולחן.
+- הפלופ = בדיוק 3 קלפים חדשים. הטרן = בדיוק קלף 1 חדש. הריבר = בדיוק קלף 1 חדש.
 
-${weakCategories.length > 0 ? `## הערה: הקטגוריות החלשות של ${HERO_NAME}: ${weakCategories.join(', ')} - שים דגש על הטעויות הנפוצות בתחום\n` : ''}
+### עקביות בין הקלפים לטקסט (הכי חשוב!)
+- הקלפים שמופיעים ב-"board" חייבים להיות **בדיוק** אותם קלפים שמתוארים ב-"context".
+- אם ב-board כתוב ["K♥", "9♠", "4♦"] אז ב-context חייב לכתוב "ירדו K♥ 9♠ 4♦" - בדיוק אותם קלפים, באותו סדר.
+- ב-context של הטרן, תאר רק את הקלף החדש. ב-context של הריבר, תאר רק את הקלף החדש.
+- אל תמציא קלפים ב-context שלא מופיעים ב-board ולהיפך!
+- **בדוק את עצמך**: אחרי שבנית את ה-JSON, עבור קלף-קלף וודא שהכל תואם.
 
-## פורמט Output - JSON בלבד, בדיוק במבנה הזה:
+### אופציות
+- כל אופציה חייבת להתאים למצב: אם הקופה היא 5,000 אז אופציה "העלאה ל-2,000" לא הגיונית.
+- הסכומים באופציות חייבים להיות הגיוניים ביחס לקופה ולערימה.
+- כל אופציה כתובה בעברית פשוטה: "קריאה 800", "העלאה ל-2,400", "ויתור", "צ'ק", "אול-אין".
+
+---
+
+## מבנה
+- השחקן שלנו: **${HERO_NAME}**
+- בדיוק **2 או 3 רחובות** (שלבים) עם נקודות החלטה
+- בכל רחוב: **3 או 4 אופציות**
+- בכל רחוב: בדיוק אופציה אחת "best" ולפחות אחת "bad"
+- כל רחוב אחרי הראשון מניח שהשחקן בחר את האופציה הטובה ביותר ברחוב הקודם
+- פעולות היריבים חייבות להתאים לסגנונם (שחקן אגרסיבי מעלה, שחקן שמרני קורא או מוותר)
+
+## הסברים
+כל הסבר (explanation) חייב:
+- להתייחס לקלפים הספציפיים שעל השולחן ולקלפים של השחקן
+- לתת סיבה מספרית פשוטה כשרלוונטי (כמה בקופה, כמה עולה, מה הסיכוי)
+- להזכיר את היריב בשם ולהתייחס לסגנון שלו
+- להסביר למה האופציות האחרות פחות טובות
+- הכל בעברית פשוטה!
+
+## לקח מרכזי (keyLesson)
+- משפט מסכם פשוט ומעשי, ספציפי לסיטואציה
+- בעברית פשוטה
+
+## מושגים (concepts)
+- רשימה של 2-3 מושגים **בעברית** שהיד לימדה (למשל: "גודל הימור", "קריאת יריב", "מיקום", "בלוף")
+
+---
+
+## פורמט - JSON בלבד, בדיוק ככה:
 {
   "category": "${category.name}",
   "categoryId": "${category.id}",
@@ -448,35 +485,38 @@ ${weakCategories.length > 0 ? `## הערה: הקטגוריות החלשות של
     "yourStack": 12000,
     "potBefore": 150,
     "opponents": [
-      { "name": "שם מהרשימה", "position": "UTG", "style": "סגנון", "stack": 15000 }
+      { "name": "שם", "position": "UTG", "style": "תיאור קצר בעברית", "stack": 15000 }
     ]
   },
   "streets": [
     {
       "name": "preflop",
       "potSize": 1750,
-      "context": "תיאור מה קרה עד עכשיו",
+      "context": "תיאור בעברית של מה שקרה. כל הסכומים חייבים להסתכם נכון.",
       "options": [
-        { "id": "A", "action": "Call 800", "rating": "good", "explanation": "הסבר מקצועי מפורט" },
-        { "id": "B", "action": "Raise ל-2,400", "rating": "best", "explanation": "הסבר מקצועי מפורט" },
-        { "id": "C", "action": "Fold", "rating": "ok", "explanation": "הסבר" },
-        { "id": "D", "action": "All-in", "rating": "bad", "explanation": "הסבר למה זה רע" }
+        { "id": "A", "action": "קריאה 800", "rating": "good", "explanation": "הסבר בעברית פשוטה עם מספרים" },
+        { "id": "B", "action": "העלאה ל-2,400", "rating": "best", "explanation": "הסבר בעברית פשוטה" },
+        { "id": "C", "action": "ויתור", "rating": "bad", "explanation": "הסבר למה זה לא טוב פה" }
       ]
     },
     {
       "name": "flop",
       "board": ["K♥", "9♠", "4♦"],
       "potSize": 5000,
-      "context": "הפלופ יורד K♥ 9♠ 4♦. יש לך top pair...",
+      "context": "ירדו K♥ 9♠ 4♦. יש לך זוג תשיעיות עם A. [שם היריב] מהמר 2,500.",
+      "options": [...]
+    },
+    {
+      "name": "turn",
+      "board": ["7♣"],
+      "potSize": 10000,
+      "context": "הקלף הרביעי הוא 7♣. [תיאור מה קרה]",
       "options": [...]
     }
   ],
-  "keyLesson": "לקח מרכזי מעשי",
-  "concepts": ["pot odds", "semi-bluff", "position"]
-}
-
-קלפים: A/K/Q/J/10/9/8/7/6/5/4/3/2 + ♠/♥/♦/♣
-Board: flop = 3 קלפים, turn = 1 חדש, river = 1 חדש`;
+  "keyLesson": "לקח מרכזי בעברית פשוטה",
+  "concepts": ["מושג 1 בעברית", "מושג 2 בעברית"]
+}`;
 };
 
 export const generateTrainingHand = async (
@@ -587,6 +627,49 @@ export const generateTrainingHand = async (
         continue;
       }
 
+      // Validate and fix card consistency
+      const validRanks = new Set(['A','K','Q','J','10','9','8','7','6','5','4','3','2']);
+      const validSuits = new Set(['♠','♥','♦','♣']);
+      const isValidCard = (c: string) => {
+        const suit = c.slice(-1);
+        const rank = c.slice(0, -1);
+        return validRanks.has(rank) && validSuits.has(suit);
+      };
+
+      const allUsedCards = new Set<string>();
+      let cardsValid = true;
+
+      // Validate hero cards
+      for (const c of hand.setup.yourCards) {
+        if (!isValidCard(c)) { cardsValid = false; break; }
+        allUsedCards.add(c);
+      }
+
+      // Validate board cards - no duplicates with hero cards or between streets
+      if (cardsValid) {
+        for (const street of hand.streets) {
+          if (street.board) {
+            for (const c of street.board) {
+              if (!isValidCard(c) || allUsedCards.has(c)) { cardsValid = false; break; }
+              allUsedCards.add(c);
+            }
+          }
+          if (!cardsValid) break;
+
+          // Validate each street has options with exactly one best
+          const bestCount = street.options?.filter(o => o.rating === 'best').length || 0;
+          if (bestCount !== 1) {
+            console.warn(`Training [${config.model}]: street "${street.name}" has ${bestCount} best options`);
+          }
+        }
+      }
+
+      if (!cardsValid) {
+        console.warn(`Training [${config.model}]: card validation failed`, hand);
+        lastError = 'Card consistency error';
+        continue;
+      }
+
       hand.categoryId = selectedCategory.id;
       hand.difficulty = difficulty;
 
@@ -597,6 +680,221 @@ export const generateTrainingHand = async (
       }
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`Training [${config.model}]:`, msg);
+      lastError = msg;
+      continue;
+    }
+  }
+
+  throw new Error(`ALL_MODELS_FAILED:${lastError}`);
+};
+
+// ════════════════════════════════════════════════════════════
+// QUICK TRAINING (batch generation)
+// ════════════════════════════════════════════════════════════
+
+const buildQuickPrompt = (
+  playerProfiles: PlayerProfile[],
+  count: number,
+  categories: CategoryInfo[],
+  weakCategories: string[]
+): string => {
+  const allPlayers = getAllPlayers();
+  const permNames = new Set(
+    allPlayers.filter(p => p.type === 'permanent').map(p => p.name)
+  );
+
+  const opponentLines = playerProfiles
+    .filter(p => p.name !== HERO_NAME)
+    .sort((a, b) => {
+      const aP = permNames.has(a.name) ? 0 : 1;
+      const bP = permNames.has(b.name) ? 0 : 1;
+      if (aP !== bP) return aP - bP;
+      return b.gamesPlayed - a.gamesPlayed;
+    })
+    .map(p => `- ${p.name}: ${p.style} | ${p.description}`)
+    .join('\n');
+
+  const categoryList = categories.map(c => `- ${c.name}: ${c.description}`).join('\n');
+
+  return `אתה בונה ${count} שאלות אימון פוקר מהירות למשחק הביתי שלנו.
+
+## כללים
+- כל שאלה עומדת בפני עצמה - נקודת החלטה אחת בלבד
+- הכל בעברית פשוטה וברורה. אסור מונחים באנגלית כמו equity, EV, SPR, range, c-bet וכו'
+- מילים מותרות: קופה, בליינד, העלאה, קריאה, ויתור, צ'ק, בלוף, שלישייה, זוג, סדרה, צבע, אול-אין, פלופ, טרן, ריבר
+- השחקן שלנו הוא תמיד **${HERO_NAME}**
+- השתמש בשחקנים אמיתיים מהרשימה (העדף שחקנים קבועים)
+- בדיוק 3 אופציות לכל שאלה, בדיוק אחת נכונה
+
+${TABLE_DYNAMICS}
+
+## שחקנים
+${opponentLines || 'אין נתונים - השתמש בשמות גנריים'}
+
+## נושאים (גוון בין הנושאים!)
+${categoryList}
+${weakCategories.length > 0 ? `\nנקודות חלשות של ${HERO_NAME}: ${weakCategories.join(', ')} - תן להן דגש` : ''}
+
+## מבנה כל שאלה
+- situation: תיאור קצר (2-3 משפטים) של הסיטואציה - מה קרה, מה על השולחן, מה עשו היריבים. כולל סכומים.
+- yourCards: הקלפים שלך כטקסט (למשל "K♥ 9♠")
+- 3 אופציות עם הסבר קצר (2-3 משפטים) למה נכון או לא
+- category: שם הנושא מהרשימה
+
+## הסברים
+- קצרים אבל ברורים - מספרים, סיבה, התייחסות ליריב
+- הסבר למה הנכונה עדיפה ולמה האחרות פחות טובות
+
+## פורמט - JSON בלבד, מערך של ${count} אובייקטים:
+[
+  {
+    "id": 1,
+    "situation": "אתה בכפתור (אחרון לדבר) עם ערימה של 12,000. אייל (ראשון) מעלה ל-800 ועוד שניים קוראים. בקופה יש 2,550.",
+    "yourCards": "8♠ 8♦",
+    "options": [
+      { "id": "A", "text": "קריאה 800", "isCorrect": false, "explanation": "קריאה לא מנצלת את המיקום הטוב שלך ואת הזוג. עם 3 שחקנים בקופה, העלאה תבודד ותבנה קופה גדולה יותר." },
+      { "id": "B", "text": "העלאה ל-3,000", "isCorrect": true, "explanation": "במיקום האחרון עם זוג שמונות ו-3 שחקנים שנכנסו, העלאה חזקה מבודדת את היריב החלש ובונה קופה. אם תתפוס שלישייה בפלופ, הקופה כבר גדולה." },
+      { "id": "C", "text": "ויתור", "isCorrect": false, "explanation": "זוג שמונות מהכפתור זו יד טובה מדי לוותר עליה, במיוחד כשאתה אחרון לדבר ויש כסף בקופה." }
+    ],
+    "category": "מישהו העלה לפניך",
+    "categoryId": "preflop_vs_raise"
+  }
+]`;
+};
+
+export const generateQuickBatch = async (
+  count: number = 8,
+  categoryIds?: string[],
+): Promise<QuickScenario[]> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const allStats = getPlayerStats();
+  const allPlayersData = getAllPlayers();
+  const permanentIds = new Set(
+    allPlayersData.filter(p => p.type === 'permanent').map(p => p.name)
+  );
+
+  const profiles = allStats
+    .filter(s => {
+      if (permanentIds.has(s.playerName)) return s.gamesPlayed >= 3;
+      return s.gamesPlayed >= 15;
+    })
+    .sort((a, b) => {
+      const aIsPerm = permanentIds.has(a.playerName) ? 0 : 1;
+      const bIsPerm = permanentIds.has(b.playerName) ? 0 : 1;
+      if (aIsPerm !== bIsPerm) return aIsPerm - bIsPerm;
+      return b.gamesPlayed - a.gamesPlayed;
+    })
+    .map(inferPlayerStyle);
+
+  const weakCats = getWeakCategories();
+
+  let categories: CategoryInfo[];
+  if (categoryIds && categoryIds.length > 0) {
+    categories = SCENARIO_CATEGORIES.filter(c => categoryIds.includes(c.id));
+    if (categories.length === 0) categories = SCENARIO_CATEGORIES;
+  } else {
+    categories = SCENARIO_CATEGORIES;
+  }
+
+  const prompt = buildQuickPrompt(profiles, count, categories, weakCats);
+  let lastError = '';
+
+  for (const config of API_CONFIGS) {
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.9,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const msg = err?.error?.message || `HTTP ${response.status}`;
+        console.warn(`QuickTraining [${config.model}]: ${msg}`);
+        if (response.status === 400 && msg.includes('API key')) {
+          throw new Error('INVALID_API_KEY');
+        }
+        lastError = msg;
+        continue;
+      }
+
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+
+      if (candidate?.finishReason === 'SAFETY') {
+        lastError = 'Safety filter';
+        continue;
+      }
+
+      const text = candidate?.content?.parts?.[0]?.text;
+      if (!text) {
+        lastError = 'Empty response';
+        continue;
+      }
+
+      let jsonText = text;
+      if (text.includes('```json')) {
+        jsonText = text.split('```json')[1].split('```')[0];
+      } else if (text.includes('```')) {
+        jsonText = text.split('```')[1].split('```')[0];
+      }
+
+      const scenarios: QuickScenario[] = JSON.parse(jsonText.trim());
+
+      if (!Array.isArray(scenarios) || scenarios.length === 0) {
+        lastError = 'Invalid response structure';
+        continue;
+      }
+
+      // Validate each scenario
+      const valid = scenarios.filter(s =>
+        s.situation && typeof s.situation === 'string' &&
+        s.yourCards && typeof s.yourCards === 'string' &&
+        Array.isArray(s.options) && s.options.length >= 2 &&
+        s.options.every(o => o.id && typeof o.text === 'string' && o.text) &&
+        s.options.some(o => o.isCorrect) &&
+        s.options.filter(o => o.isCorrect).length === 1
+      );
+
+      if (valid.length === 0) {
+        lastError = 'No valid scenarios';
+        continue;
+      }
+
+      // Assign categoryId from category name if missing
+      valid.forEach((s, i) => {
+        s.id = i + 1;
+        if (!s.categoryId && s.category) {
+          const match = SCENARIO_CATEGORIES.find(c => c.name === s.category);
+          if (match) s.categoryId = match.id;
+        }
+        if (!s.categoryId) {
+          s.categoryId = SCENARIO_CATEGORIES[0].id;
+        }
+      });
+
+      console.log(`QuickTraining [${config.model}]: generated ${valid.length} scenarios`);
+      return valid;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'INVALID_API_KEY') {
+        throw error;
+      }
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`QuickTraining [${config.model}]:`, msg);
       lastError = msg;
       continue;
     }

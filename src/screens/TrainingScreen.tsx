@@ -182,26 +182,73 @@ const TrainingScreen = () => {
         </div>
       )}
 
-      {/* Session length */}
+      {/* Two training modes */}
       <div style={{
-        display: 'flex',
-        gap: '0.4rem',
-        marginBottom: '0.5rem',
+        display: 'flex', gap: '0.5rem',
+        marginBottom: '0.75rem',
       }}>
+        {/* Quick mode */}
+        <button
+          onClick={() => {
+            const params = new URLSearchParams({
+              ...(selectedCategories.length > 0 ? { categories: selectedCategories.join(',') } : {}),
+            });
+            navigate(`/training/quick?${params.toString()}`);
+          }}
+          style={{
+            flex: 1, padding: '0.75rem 0.5rem',
+            borderRadius: '14px', border: 'none',
+            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            color: 'white', cursor: 'pointer',
+            textAlign: 'center',
+            boxShadow: '0 3px 12px rgba(99, 102, 241, 0.3)',
+          }}
+        >
+          <div style={{ fontSize: '1.3rem', marginBottom: '0.2rem' }}>⚡</div>
+          <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>אימון מהיר</div>
+          <div style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.15rem' }}>שאלות טקסט מהירות</div>
+        </button>
+
+        {/* Full mode */}
+        <button
+          onClick={() => startSession()}
+          style={{
+            flex: 1, padding: '0.75rem 0.5rem',
+            borderRadius: '14px', border: 'none',
+            background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
+            color: 'white', cursor: 'pointer',
+            textAlign: 'center',
+            boxShadow: '0 3px 12px rgba(16, 185, 129, 0.3)',
+          }}
+        >
+          <div style={{ fontSize: '1.3rem', marginBottom: '0.2rem' }}>🎴</div>
+          <div style={{ fontWeight: '700', fontSize: '0.85rem' }}>אימון מלא</div>
+          <div style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.15rem' }}>סימולציה עם קלפים</div>
+        </button>
+      </div>
+
+      {/* Session length (for full mode) */}
+      <div style={{
+        display: 'flex', gap: '0.3rem', alignItems: 'center',
+        marginBottom: '0.75rem',
+      }}>
+        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '600', whiteSpace: 'nowrap' }}>
+          אימון מלא:
+        </span>
         {SESSION_OPTIONS.map(opt => (
           <button
             key={opt.id}
             onClick={() => setSessionLength(opt.id)}
             style={{
               flex: 1,
-              padding: '0.5rem',
-              borderRadius: '10px',
+              padding: '0.35rem',
+              borderRadius: '8px',
               border: sessionLength === opt.id ? '2px solid var(--primary)' : '1px solid var(--border)',
               background: sessionLength === opt.id ? 'rgba(16, 185, 129, 0.12)' : 'var(--surface)',
               color: sessionLength === opt.id ? 'var(--primary)' : 'var(--text-muted)',
               cursor: 'pointer',
               fontWeight: '600',
-              fontSize: '0.8rem',
+              fontSize: '0.7rem',
               transition: 'all 0.15s ease',
             }}
           >
@@ -209,26 +256,6 @@ const TrainingScreen = () => {
           </button>
         ))}
       </div>
-
-      {/* Start button */}
-      <button
-        onClick={() => startSession()}
-        style={{
-          width: '100%',
-          padding: '0.85rem',
-          borderRadius: '14px',
-          border: 'none',
-          background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
-          color: 'white',
-          fontWeight: '700',
-          fontSize: '1rem',
-          cursor: 'pointer',
-          boxShadow: '0 3px 12px rgba(16, 185, 129, 0.3)',
-          marginBottom: '0.75rem',
-        }}
-      >
-        התחל אימון
-      </button>
 
       {/* Weak Spots */}
       {weakCats.length > 0 && (
