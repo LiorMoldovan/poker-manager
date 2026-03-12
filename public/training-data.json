@@ -70,7 +70,26 @@
       ],
       "difficulty": "hard",
       "accuracy": 60
+    },
+    {
+      "date": "2026-03-12T10:50:59.575Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 3,
+      "goodDecisions": 0,
+      "categories": [
+        "blind_defense",
+        "wet_board_top_pair",
+        "flush_draw",
+        "missed_draw",
+        "medium_pairs",
+        "cbet",
+        "two_pair_plus",
+        "overbet"
+      ],
+      "difficulty": "hard",
+      "accuracy": 37.5
     }
   ],
-  "lastSynced": "2026-03-12T10:50:54.836Z"
+  "lastSynced": "2026-03-12T10:51:04.576Z"
 }
