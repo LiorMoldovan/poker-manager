@@ -1,6 +1,6 @@
 {
-  "totalDecisions": 37,
-  "bestDecisions": 16,
+  "totalDecisions": 38,
+  "bestDecisions": 17,
   "goodDecisions": 4,
   "byCategory": {
     "flush_draw": {
@@ -9,8 +9,8 @@
       "good": 1
     },
     "missed_draw": {
-      "total": 14,
-      "best": 5,
+      "total": 15,
+      "best": 6,
       "good": 1
     },
     "set_mining": {
@@ -71,8 +71,8 @@
   },
   "byDifficulty": {
     "hard": {
-      "total": 37,
-      "best": 16,
+      "total": 38,
+      "best": 17,
       "good": 4
     }
   },
@@ -142,5 +142,5 @@
       "accuracy": 66.66666666666666
     }
   ],
-  "lastSynced": "2026-03-12T13:55:00.327Z"
+  "lastSynced": "2026-03-12T13:55:41.096Z"
 }
