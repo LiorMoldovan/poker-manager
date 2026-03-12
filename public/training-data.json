@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 35,
+  "totalDecisions": 36,
   "bestDecisions": 16,
   "goodDecisions": 3,
   "byCategory": {
@@ -9,7 +9,7 @@
       "good": 1
     },
     "missed_draw": {
-      "total": 12,
+      "total": 13,
       "best": 5,
       "good": 0
     },
@@ -71,7 +71,7 @@
   },
   "byDifficulty": {
     "hard": {
-      "total": 35,
+      "total": 36,
       "best": 16,
       "good": 3
     }
@@ -142,5 +142,5 @@
       "accuracy": 66.66666666666666
     }
   ],
-  "lastSynced": "2026-03-12T13:53:31.251Z"
+  "lastSynced": "2026-03-12T13:54:37.501Z"
 }
