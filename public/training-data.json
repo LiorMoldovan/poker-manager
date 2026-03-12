@@ -1,5 +1,5 @@
 {
-  "totalDecisions": 33,
+  "totalDecisions": 34,
   "bestDecisions": 15,
   "goodDecisions": 3,
   "byCategory": {
@@ -64,14 +64,14 @@
       "good": 0
     },
     "position_play": {
-      "total": 1,
+      "total": 2,
       "best": 0,
       "good": 1
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 33,
+      "total": 34,
       "best": 15,
       "good": 3
     }
@@ -142,5 +142,5 @@
       "accuracy": 66.66666666666666
     }
   ],
-  "lastSynced": "2026-03-12T13:51:47.273Z"
+  "lastSynced": "2026-03-12T13:52:35.299Z"
 }
