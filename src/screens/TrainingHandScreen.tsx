@@ -242,21 +242,44 @@ const TrainingHandScreen = () => {
   const [currentHandDecisions, setCurrentHandDecisions] = useState<{ streetName: string; chosenRating: string }[]>([]);
   const [showSummary, setShowSummary] = useState(false);
   const [showHandComplete, setShowHandComplete] = useState(false);
+  const [prefetchedHand, setPrefetchedHand] = useState<TrainingHand | null>(null);
+  const [isPrefetching, setIsPrefetching] = useState(false);
 
   const pickCategory = (): CategoryInfo | undefined => {
     if (categoryPool.length === 0) return undefined;
     return categoryPool[Math.floor(Math.random() * categoryPool.length)];
   };
 
-  const loadHand = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setHand(null);
+  const prefetchNext = useCallback(() => {
+    if (isPrefetching || prefetchedHand) return;
+    setIsPrefetching(true);
+    const cat = categoryPool.length > 0
+      ? categoryPool[Math.floor(Math.random() * categoryPool.length)]
+      : undefined;
+    generateTrainingHand(cat, difficulty)
+      .then(h => setPrefetchedHand(h))
+      .catch(() => {})
+      .finally(() => setIsPrefetching(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryPool, difficulty, isPrefetching, prefetchedHand]);
+
+  const loadHand = useCallback(async (usePrefetched?: boolean) => {
     setCurrentStreetIdx(0);
     setSelectedOption(null);
     setShowFeedback(false);
     setCurrentHandDecisions([]);
     setShowHandComplete(false);
+
+    if (usePrefetched && prefetchedHand) {
+      setHand(prefetchedHand);
+      setPrefetchedHand(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setHand(null);
 
     try {
       const handCategory = pickCategory();
@@ -278,11 +301,19 @@ const TrainingHandScreen = () => {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoriesParam, difficulty]);
+  }, [categoriesParam, difficulty, prefetchedHand]);
 
   useEffect(() => {
     loadHand();
   }, [loadHand]);
+
+  // Start pre-fetching the next hand once the current one is loaded
+  useEffect(() => {
+    if (hand && !loading && !showSummary && !prefetchedHand && !isPrefetching) {
+      const timer = setTimeout(prefetchNext, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [hand, loading, showSummary, prefetchedHand, isPrefetching, prefetchNext]);
 
   // Collect all board cards revealed up to current street
   const getAllBoardCards = (): string[] => {
@@ -342,7 +373,7 @@ const TrainingHandScreen = () => {
       return;
     }
     setHandNumber(prev => prev + 1);
-    loadHand();
+    loadHand(true);
   };
 
   const concludeSession = () => {
@@ -411,7 +442,7 @@ const TrainingHandScreen = () => {
         <h2 style={{ marginBottom: '0.5rem' }}>שגיאה</h2>
         <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{error}</p>
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-          <button className="btn btn-primary" onClick={loadHand}>נסה שוב</button>
+          <button className="btn btn-primary" onClick={() => loadHand()}>נסה שוב</button>
           <button className="btn btn-secondary" onClick={() => navigate('/training')}>חזרה</button>
         </div>
       </div>
@@ -449,7 +480,7 @@ const TrainingHandScreen = () => {
             {accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪'}
           </div>
           <h2 style={{ marginBottom: '0.3rem' }}>סיכום סשן</h2>
-          <p className="text-muted">{sessionHands.length} ידיים | {difficulty}</p>
+          <p className="text-muted">{sessionHands.length} ידיים | {{ medium: 'בינוני', hard: 'קשה', expert: 'מומחה' }[difficulty] || difficulty}</p>
         </div>
 
         {/* Score Card */}
@@ -588,7 +619,7 @@ const TrainingHandScreen = () => {
                 const worstStreet = Object.entries(streetCounts).sort((a, b) => b[1] - a[1])[0];
                 if (worstStreet) {
                   const streetHeb: Record<string, string> = {
-                    preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River',
+                    preflop: 'לפני הפלופ', flop: 'פלופ', turn: 'טרן', river: 'ריבר',
                   };
                   insights.push(`רוב הטעויות ב-${streetHeb[worstStreet[0]] || worstStreet[0]} - שווה לשים לב לדפוס.`);
                 }
@@ -707,7 +738,7 @@ const TrainingHandScreen = () => {
             padding: '0.2rem 0.5rem', borderRadius: '8px',
             fontSize: '0.7rem', fontWeight: '700',
           }}>
-            {difficulty}
+            {{ medium: 'בינוני', hard: 'קשה', expert: 'מומחה' }[difficulty] || difficulty}
           </span>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '600' }}>
             יד {handNumber}{maxHands ? `/${maxHands}` : ''}
@@ -741,7 +772,7 @@ const TrainingHandScreen = () => {
           </div>
         </div>
         <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '600' }}>Stack</div>
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '600' }}>ערימה</div>
           <div style={{ fontWeight: '700', fontSize: '1rem' }}>
             {hand.setup.yourStack.toLocaleString()}
           </div>
@@ -786,9 +817,9 @@ const TrainingHandScreen = () => {
                 ? (currentHandDecisions[i]
                   ? RATING_CONFIG[currentHandDecisions[i].chosenRating]?.emoji || '?'
                   : '✓')
-                : street.name === 'preflop' ? 'PF'
-                  : street.name === 'flop' ? 'F'
-                    : street.name === 'turn' ? 'T' : 'R'}
+                : street.name === 'preflop' ? 'פר'
+                  : street.name === 'flop' ? 'פ'
+                    : street.name === 'turn' ? 'ט' : 'ר'}
             </div>
             {i < hand.streets.length - 1 && (
               <div style={{
@@ -807,17 +838,17 @@ const TrainingHandScreen = () => {
           marginBottom: '0.5rem',
         }}>
           <span style={{
-            fontWeight: '700', fontSize: '0.8rem', textTransform: 'capitalize',
+            fontWeight: '700', fontSize: '0.8rem',
             color: 'var(--primary)',
           }}>
-            {currentStreet.name}
+            {{ preflop: 'לפני הפלופ', flop: 'פלופ', turn: 'טרן', river: 'ריבר' }[currentStreet.name] || currentStreet.name}
           </span>
           <span style={{
             fontWeight: '700', fontSize: '0.85rem',
             background: 'rgba(245, 158, 11, 0.15)',
             color: '#f59e0b', padding: '0.2rem 0.6rem', borderRadius: '8px',
           }}>
-            Pot: {currentStreet.potSize.toLocaleString()}
+            קופה: {currentStreet.potSize.toLocaleString()}
           </span>
         </div>
         <p style={{
@@ -894,15 +925,13 @@ const TrainingHandScreen = () => {
                   )}
                 </div>
 
-                {/* Explanation */}
-                {showFeedback && (
+                {/* Explanation - show for all options after answering */}
+                {showFeedback && option.explanation && (
                   <div style={{
                     marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.5,
                     color: isSelected ? 'var(--text)' : 'var(--text-muted)',
                     paddingRight: '2rem',
-                    maxHeight: isSelected ? '200px' : '0',
-                    overflow: 'hidden',
-                    transition: 'max-height 0.3s ease',
+                    direction: 'rtl',
                   }}>
                     {option.explanation}
                   </div>
@@ -911,11 +940,6 @@ const TrainingHandScreen = () => {
             );
           })}
         </div>
-      )}
-
-      {/* Show all explanations button */}
-      {showFeedback && !showHandComplete && (
-        <AllExplanationsToggle options={currentStreet.options} selectedId={selectedOption} />
       )}
 
       {/* Continue / Next Street Button */}
@@ -1023,66 +1047,6 @@ const TrainingHandScreen = () => {
               </button>
             )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Toggle to show all option explanations (not just selected)
-const AllExplanationsToggle = ({ options, selectedId }: {
-  options: TrainingOption[];
-  selectedId: string | null;
-}) => {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div style={{ marginTop: '0.5rem' }}>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        style={{
-          background: 'none', border: 'none',
-          color: 'var(--primary)', fontSize: '0.8rem',
-          fontWeight: '600', cursor: 'pointer',
-          padding: '0.3rem 0',
-        }}
-      >
-        {expanded ? 'הסתר הסברים ▲' : 'הצג את כל ההסברים ▼'}
-      </button>
-      {expanded && (
-        <div style={{
-          display: 'flex', flexDirection: 'column', gap: '0.4rem',
-          marginTop: '0.3rem',
-        }}>
-          {options.filter(o => o.id !== selectedId).map(option => {
-            const cfg = RATING_CONFIG[option.rating] || RATING_CONFIG.ok;
-            return (
-              <div key={option.id} style={{
-                padding: '0.6rem 0.75rem', borderRadius: '8px',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                fontSize: '0.8rem',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.3rem',
-                }}>
-                  <span style={{
-                    fontWeight: '700', color: cfg.color, fontSize: '0.75rem',
-                  }}>
-                    {option.id}. {option.action}
-                  </span>
-                  <span style={{
-                    fontSize: '0.6rem', fontWeight: '700', color: cfg.color,
-                    background: cfg.bg, padding: '0.1rem 0.3rem', borderRadius: '4px',
-                  }}>
-                    {cfg.label}
-                  </span>
-                </div>
-                <div style={{ color: 'var(--text-muted)', lineHeight: 1.5, direction: 'rtl' }}>
-                  {option.explanation}
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
     </div>

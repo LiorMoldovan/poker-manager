@@ -156,29 +156,62 @@ const TrainingScreen = () => {
         </div>
       )}
 
-      {/* Mini trend chart */}
+      {/* Session accuracy trend */}
       {trend.length >= 3 && (
         <div style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          gap: '3px',
-          height: '35px',
           marginBottom: '0.75rem',
-          padding: '0 0.25rem',
+          padding: '0.5rem 0.6rem',
+          borderRadius: '10px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
         }}>
-          {trend.map((acc, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                height: `${Math.max(10, acc)}%`,
-                background: `${getAccuracyColor(acc)}80`,
-                borderRadius: '3px 3px 0 0',
-                transition: 'height 0.3s ease',
-                minHeight: '4px',
-              }}
-            />
-          ))}
+          <div style={{
+            fontSize: '0.65rem',
+            color: 'var(--text-muted)',
+            fontWeight: '600',
+            marginBottom: '0.4rem',
+            textAlign: 'right',
+          }}>
+            דיוק לפי סשן (אחרונים)
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: '3px',
+            height: '32px',
+          }}>
+            {trend.map((acc, i) => (
+              <div
+                key={i}
+                title={`סשן ${i + 1}: ${acc.toFixed(0)}%`}
+                style={{
+                  flex: 1,
+                  height: `${Math.max(12, acc)}%`,
+                  background: getAccuracyColor(acc),
+                  borderRadius: '3px 3px 0 0',
+                  opacity: 0.75,
+                  transition: 'height 0.3s ease',
+                  minHeight: '4px',
+                  position: 'relative',
+                }}
+              />
+            ))}
+          </div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: '0.25rem',
+            fontSize: '0.55rem',
+            color: 'var(--text-muted)',
+          }}>
+            <span>ראשון</span>
+            <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 2, background: '#ef4444' }} /> &lt;50%
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 2, background: '#f59e0b' }} /> 50-70%
+              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 2, background: '#22c55e' }} /> 70%+
+            </span>
+            <span>אחרון</span>
+          </div>
         </div>
       )}
 
