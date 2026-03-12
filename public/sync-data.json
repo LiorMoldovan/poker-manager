@@ -239,6 +239,12 @@
       "name": "יהודה",
       "createdAt": "2025-12-18T09:24:22.578Z",
       "type": "guest"
+    },
+    {
+      "id": "mmnc5cwwiwabk8rhj9",
+      "name": "שי",
+      "createdAt": "2026-03-12T10:39:08.960Z",
+      "type": "guest"
     }
   ],
   "games": [
@@ -19139,6 +19145,6 @@
       "profit": -210
     }
   ],
-  "lastUpdated": "2026-03-08T07:54:14.129Z",
+  "lastUpdated": "2026-03-12T10:39:08.966Z",
   "updatedBy": "admin"
 }
