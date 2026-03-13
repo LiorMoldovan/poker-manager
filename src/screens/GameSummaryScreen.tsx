@@ -6,6 +6,7 @@ import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, ge
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload } from '../utils/geminiAI';
 import { speakHebrew } from '../utils/tts';
+import { usePermissions } from '../App';
 
 const hebrewNum = (n: number, feminine: boolean): string => {
   const abs = Math.round(Math.abs(n));
@@ -33,6 +34,7 @@ const hebrewNum = (n: number, feminine: boolean): string => {
 const GameSummaryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const { role } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -50,6 +52,7 @@ const GameSummaryScreen = () => {
   const [funStats, setFunStats] = useState<{ emoji: string; label: string; detail: string }[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
+  const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
@@ -58,6 +61,15 @@ const GameSummaryScreen = () => {
   const standingsRef = useRef<HTMLDivElement>(null);
   const [standingsData, setStandingsData] = useState<PlayerStats[]>([]);
   const [standingsLabel, setStandingsLabel] = useState('');
+
+  const handleRegenerateAiSummary = () => {
+    if (!gameId) return;
+    saveGameAiSummary(gameId, '');
+    setAiSummary(null);
+    setIsLoadingAiSummary(false);
+    forceGenerateRef.current = true;
+    loadData();
+  };
 
   // Calculate total chips for a player
   const getTotalChips = (player: GamePlayer): number => {
@@ -499,9 +511,12 @@ const GameSummaryScreen = () => {
     const cachedSummary = game.aiSummary;
     const isCachedValid = cachedSummary && cachedSummary.length > 80;
 
+    const shouldGenerate = gameInCurrentPeriod || forceGenerateRef.current;
+    forceGenerateRef.current = false;
+
     if (isCachedValid) {
       setAiSummary(cachedSummary);
-    } else if (getGeminiApiKey() && game.status === 'completed' && gameInCurrentPeriod) {
+    } else if (getGeminiApiKey() && game.status === 'completed' && shouldGenerate) {
       setIsLoadingAiSummary(true);
 
       // Build payload from already-computed data
@@ -1217,22 +1232,46 @@ const GameSummaryScreen = () => {
           <div className="card">
             {aiSummary ? (
               <>
-                <h2 className="card-title mb-2">🎭 סיכום הערב</h2>
-                <p style={{
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 className="card-title" style={{ margin: 0 }}>🎭 סיכום הערב</h2>
+                  {role === 'admin' && (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: 'rgba(168, 85, 247, 0.15)',
+                        color: '#A855F7',
+                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                        fontSize: '0.7rem',
+                        padding: '0.2rem 0.5rem',
+                      }}
+                      onClick={handleRegenerateAiSummary}
+                      disabled={isLoadingAiSummary}
+                    >
+                      🔄 צור מחדש
+                    </button>
+                  )}
+                </div>
+                <div style={{
                   direction: 'rtl',
                   fontSize: '0.85rem',
                   lineHeight: 1.8,
                   color: 'var(--text)',
                   padding: '0.75rem',
-                  margin: 0,
                   background: 'rgba(168, 85, 247, 0.06)',
                   borderRadius: '8px',
                   borderRight: '3px solid var(--primary)',
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
                 }}>
-                  {aiSummary}
-                </p>
+                  {aiSummary.split('\n').filter(line => line.trim()).map((paragraph, i) => (
+                    <p key={i} style={{
+                      margin: i === 0 ? 0 : '0.75rem 0 0 0',
+                      textAlign: 'right',
+                    }}>
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
               </>
             ) : isLoadingAiSummary ? (
               <>
@@ -1250,7 +1289,24 @@ const GameSummaryScreen = () => {
               </>
             ) : (
               <>
-                <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <h2 className="card-title" style={{ margin: 0 }}>🎭 הרגעים של הערב</h2>
+                  {role === 'admin' && getGeminiApiKey() && (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: 'linear-gradient(135deg, #A855F7, #EC4899)',
+                        color: 'white',
+                        fontSize: '0.7rem',
+                        padding: '0.2rem 0.5rem',
+                      }}
+                      onClick={handleRegenerateAiSummary}
+                      disabled={isLoadingAiSummary}
+                    >
+                      ✨ צור סיכום AI
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   {funStats.map((stat, idx) => (
                     <div
@@ -1310,9 +1366,28 @@ const GameSummaryScreen = () => {
               color: 'var(--text-muted)',
               marginBottom: '0.5rem',
               paddingBottom: '0.3rem',
-              borderBottom: '1px solid var(--border)'
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '0.75rem',
             }}>
-              📊 שחקנים פעילים • כולל המשחק האחרון
+              <span>📊 שחקנים פעילים • כולל המשחק האחרון</span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '2px',
+                  background: 'rgba(168, 85, 247, 0.25)',
+                  border: '1px solid rgba(168, 85, 247, 0.5)',
+                }} />
+                שיחק הערב
+              </span>
             </div>
             <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
               <thead>
@@ -1331,7 +1406,8 @@ const GameSummaryScreen = () => {
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isInThisGame ? 'rgba(168, 85, 247, 0.08)' : undefined,
+                      background: isInThisGame ? 'rgba(168, 85, 247, 0.15)' : undefined,
+                      borderRight: isInThisGame ? '3px solid rgba(168, 85, 247, 0.6)' : '3px solid transparent',
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {index + 1}

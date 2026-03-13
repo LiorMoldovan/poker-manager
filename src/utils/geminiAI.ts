@@ -1241,7 +1241,7 @@ export const generateAIForecasts = async (
   console.log(`📖 Storylines: ${pickedStorylines.length} picked from ${allStorylines.length} available`);
 
   // ========== SIMPLIFIED PREDICTION ALGORITHM ==========
-  // Simple, data-informed: direction from recent form, magnitude from real game outcomes
+  // Robust, data-informed: uses median magnitude + group-level clamping to avoid outliers
 
   // Helper: Get games for a specific half-year period
   const getHalfGames = (player: typeof players[0], year: number, half: 1 | 2) => {
@@ -1259,17 +1259,29 @@ export const generateAIForecasts = async (
   const currentPeriodLabel = `H${currentHalf} ${currentYear}`;
   const prevPeriod = getPreviousPeriod();
 
+  // Calculate group-level realistic bounds from ALL players' recent results
+  const allRecentResults = players.flatMap(p =>
+    p.gameHistory.slice(0, Math.min(15, p.gameHistory.length)).map(g => g.profit)
+  );
+  const sortedAllResults = [...allRecentResults].sort((a, b) => a - b);
+  const groupFloor = sortedAllResults.length > 0
+    ? sortedAllResults[Math.floor(sortedAllResults.length * 0.10)] : -200;
+  const groupCeiling = sortedAllResults.length > 0
+    ? sortedAllResults[Math.floor(sortedAllResults.length * 0.90)] : 300;
+
   const playerSuggestions = players.map(p => {
     if (p.gamesPlayed === 0) {
-      return { name: p.name, suggested: Math.round((Math.random() - 0.5) * 120) };
+      return { name: p.name, suggested: Math.round((Math.random() - 0.5) * 100) };
     }
 
-    // Use ACTUAL game results, not averages -- real nights have 3-digit swings
     const recentResults = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length)).map(g => g.profit);
+    const sortedRecent = [...recentResults].sort((a, b) => a - b);
 
-    // Pick a random real game result as the magnitude reference
-    const sampleResult = recentResults[Math.floor(Math.random() * recentResults.length)];
-    const sampleMagnitude = Math.abs(sampleResult);
+    // Use median of recent results as the magnitude base (robust against outliers)
+    const medianIdx = Math.floor(sortedRecent.length / 2);
+    const median = sortedRecent.length % 2 === 0
+      ? (sortedRecent[medianIdx - 1] + sortedRecent[medianIdx]) / 2
+      : sortedRecent[medianIdx];
 
     // Direction from recent trend, with flip chance for variety
     const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
@@ -1278,14 +1290,20 @@ export const generateAIForecasts = async (
     let direction = blended >= 0 ? 1 : -1;
     if (Math.random() < 0.20) direction *= -1;
 
-    // Scale the sampled magnitude: 0.6-1.1x of the real result
-    let suggested = direction * sampleMagnitude * (0.6 + Math.random() * 0.5);
+    // Magnitude: blend of absolute median and average, with bounded random scaling
+    const medianMag = Math.abs(median);
+    const avgMag = Math.abs(p.avgProfit);
+    const baseMagnitude = medianMag * 0.6 + avgMag * 0.4;
+    let suggested = direction * baseMagnitude * (0.7 + Math.random() * 0.6);
 
-    // Add noise proportional to the sample (not the average)
-    suggested += (Math.random() - 0.5) * sampleMagnitude * 0.3;
+    // Add small bounded noise
+    suggested += (Math.random() - 0.5) * baseMagnitude * 0.3;
 
     // New players: moderate dampening
     if (p.gamesPlayed <= 3) suggested *= 0.7;
+
+    // Clamp to group-realistic range (P10-P90 of all recent results)
+    suggested = Math.max(groupFloor, Math.min(groupCeiling, suggested));
 
     return { name: p.name, suggested: Math.round(suggested) };
   });
@@ -1360,22 +1378,23 @@ export const generateAIForecasts = async (
     usedSurpriseNames.add(candidate.name);
   }
 
-  // Apply surprise: use a real game result to set a realistic magnitude
+  // Apply surprise: use median-based magnitude, clamped to group range
   for (const surprise of selectedSurprises) {
     const sp = playerSuggestions.find(p => p.name === surprise.name);
     if (!sp) continue;
     const playerData = players.find(p => p.name === surprise.name)!;
-    const recent = playerData.gameHistory.slice(0, 10);
-    // Pick a random real result for realistic scale
-    const sample = recent[Math.floor(Math.random() * recent.length)];
-    const mag = Math.abs(sample?.profit || 50) * (0.7 + Math.random() * 0.4);
+    const recent = playerData.gameHistory.slice(0, 10).map(g => g.profit);
+    const sortedR = [...recent].sort((a, b) => a - b);
+    const medianR = sortedR.length > 0 ? sortedR[Math.floor(sortedR.length / 2)] : 50;
+    const mag = Math.abs(medianR) * (0.8 + Math.random() * 0.5);
 
     if (surprise.type === 'top_dog_fall') {
-      sp.suggested = -Math.abs(mag);
+      sp.suggested = Math.max(groupFloor, -Math.abs(mag));
     } else if (surprise.type === 'streak_breaker') {
-      sp.suggested = playerData.currentStreak > 0 ? -Math.abs(mag) : Math.abs(mag);
+      const raw = playerData.currentStreak > 0 ? -Math.abs(mag) : Math.abs(mag);
+      sp.suggested = Math.max(groupFloor, Math.min(groupCeiling, raw));
     } else {
-      sp.suggested = Math.abs(mag);
+      sp.suggested = Math.min(groupCeiling, Math.abs(mag));
     }
     sp.suggested = Math.round(sp.suggested);
   }
@@ -1389,6 +1408,11 @@ export const generateAIForecasts = async (
     const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
     sortedByAbs[0].suggested -= finalTotal;
   }
+
+  // Final clamp: ensure zero-sum adjustments didn't push predictions beyond realistic bounds
+  playerSuggestions.forEach(p => {
+    p.suggested = Math.max(groupFloor, Math.min(groupCeiling, p.suggested));
+  });
 
   console.log('🎲 Surprises:', selectedSurprises.map(s => `${s.name}(${s.type})`).join(', '));
   console.log('📊 Predictions:', playerSuggestions.map(s => `${s.name}: ${s.suggested >= 0 ? '+' : ''}${s.suggested}`).join(', '));
@@ -1465,6 +1489,28 @@ export const generateAIForecasts = async (
       assign('default', `${p.gamesPlayed} משחקים, ${winRate}% נצחונות ← התמקד באחוז נצחונות או תוצאה אחרונה, לא בממוצע!`);
     }
   });
+
+  // ========== RECONCILE ANGLES WITH PREDICTIONS ==========
+  // Optimistic angles (ranking_battle, milestone, breakout) must not pair with large negative predictions
+  const optimisticAngles: AngleType[] = ['ranking_battle', 'milestone', 'breakout'];
+  const pessimisticAngles: AngleType[] = ['dark_horse']; // dark_horse implies positive surprise
+
+  for (const pa of playerAngles) {
+    const prediction = playerSuggestions.find(s => s.name === pa.name)?.suggested || 0;
+    const player = playersWithYearStats.find(p => p.name === pa.name);
+    if (!player) continue;
+
+    const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
+
+    if (prediction <= -30 && optimisticAngles.includes(pa.angle)) {
+      pa.angle = 'default';
+      pa.angleHint = `חיזוי שלילי (${prediction}₪) — ${player.gamesPlayed} משחקים, ${winRate}% נצחונות ← כתוב בטון מאתגר/הומוריסטי, לא אופטימי!`;
+    }
+    if (prediction >= 30 && pessimisticAngles.includes(pa.angle)) {
+      pa.angle = 'form';
+      pa.angleHint = `חיזוי חיובי (+${prediction}₪) עם מגמה עולה ← כתוב בטון בטוח/חיובי!`;
+    }
+  }
 
   console.log('🎭 Assigned angles:', playerAngles.map(a => `${a.name}: ${a.angle}`).join(', '));
 
@@ -1564,13 +1610,14 @@ ${surpriseText}
 📤 פלט JSON בפורמט הבא:
 {"groupIntro":"משפט פתיחה אחד לכל הערב","players":[{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]}
 
-🌟 groupIntro - משפט פתיחה לערב (חובה!):
-• משפט אחד בעברית (15-30 מילים) שמתאר את הערב הספציפי הזה
-• חובה: לפחות 2 שמות שחקנים ועובדה ספציפית אחת מהנתונים!
+🌟 groupIntro - פתיחה לערב (חובה!):
+• 1-2 משפטים בעברית (30-50 מילים) שמתארים את הערב הספציפי הזה
+• חובה: לפחות 3 שמות שחקנים ו-2 עובדות ספציפיות מהנתונים (מספרים, רצפים, תוצאות)!
 • אסור משפט גנרי! אסור "ערב של חשבונות פתוחים" או "יריבויות עתיקות" - חייב פרטים ספציפיים
-• דוגמאות טובות: "חרדון עם 4 ברצף נגד אייל שהפסיד 240₪ אחרון - ותומר מגיע ברקע עם ממוצע +21₪ השנה"
-• "ליאור עם 179 משחקים מארח, אורן צריך קאמבק אחרי -180₪, וחרדון על רצף חם - ערב מבטיח"
-• הטון: כמו פרשן ספורט שמציג את הדמויות לפני המשחק
+• דוגמאות טובות: "חרדון עם 4 ברצף מגיע חם נגד אייל שהפסיד 240₪ אחרון, ותומר עם ממוצע +21₪ השנה מלטף שפם - בינתיים סגל ואורן צריכים קאמבק רציני"
+• "ליאור עם 179 משחקים מארח את אייל שחזר אחרי 40 יום הפסקה. חרדון ברצף חם, אורן צריך קאמבק אחרי -180₪, וסגל מנסה לשבור את הממוצע השלילי"
+• הטון: כמו פרשן ספורט שמציג את הדמויות לפני המשחק - ככל שיותר שחקנים מוזכרים, יותר טוב!
+• אל תחזור על אותה עובדה גם ב-groupIntro וגם ב-sentence של השחקן! פזר עובדות שונות
 
 📝 לכל שחקן כתוב:
 1. highlight - כותרת קצרה (3-6 מילים) - העובדה הכי מעניינת ומשעשעת
@@ -1605,6 +1652,12 @@ ${surpriseText}
 • כל highlight שונה מהאחרים! כל משפט במבנה שונה!
 • כל משפט מתחיל ומסתיים אחרת - גיוון מלא!
 
+🏅 דירוגים — הבנה נכונה:
+• מקום 1 = הכי טוב, מקום 2 = שני הכי טוב, וכו'. מקום גבוה יותר = טוב יותר!
+• "מחפש לעלות ממקום 3 ל-2" ✓ | "מנסה להתרחק ממקום 2" ✗ (מקום 2 זה טוב!)
+• "מוביל" = מקום 1 | "רודף" = מנסה לעלות | "שומר על מקום X" = מגן על הדירוג
+• אם שחקן במקום 2 — הוא "רודף אחרי המקום הראשון" או "שומר על המקום השני", לא "מנסה להתרחק ממקום 2"
+
 ✅ דוגמאות טובות (סיפורים, לא סטטיסטיקה!):
 • highlight "5:2 מול אייל", sentence "בחמישה משחקים אחרונים ביחד, ליאור שלט באייל עם 5 נצחונות מול 2. הלילה האם הסדרה תימשך או שאייל מכין נקמה?"
 • highlight "הספונסר של הקבוצה", sentence "הפסיד 350₪ סך הכל לשחקני הערב, רובם הלכו לכיסו של סגל. הלילה או שהכל מתהפך או שהוא ממשיך לממן"
@@ -1635,7 +1688,7 @@ ${surpriseText}
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 8192,
             responseMimeType: 'application/json',
           }
         })
@@ -1789,13 +1842,22 @@ ${surpriseText}
         if ((correctedSentence.includes('מוביל') || correctedSentence.includes('בראש') || correctedSentence.includes('מקום ראשון') || correctedSentence.includes('מקום 1') || correctedSentence.includes('#1')) && rankTonight !== 1) {
           errorDetails.push(`rank: claimed #1 but actually #${rankTonight}`);
 
-          // Remove false #1 claims
           correctedSentence = correctedSentence
             .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
             .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
             .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
             .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
             .replace(/#1\b/g, `#${rankTonight}`);
+        }
+        
+        // Fix "king/ruler of rankings" for non-#1 players
+        if (rankTonight !== 1) {
+          if (/מלך\s*ה(דירוג|טבלה)/.test(correctedSentence) || /שולט\s*ב(דירוג|טבלה)/.test(correctedSentence)) {
+            errorDetails.push(`rank_title: "מלך/שולט" used for #${rankTonight}`);
+            correctedSentence = correctedSentence
+              .replace(/מלך\s*ה(דירוג|טבלה)/g, `מקום ${rankTonight} ב$1`)
+              .replace(/שולט\s*ב(דירוג|טבלה)/g, `במקום ${rankTonight} ב$1`);
+          }
         }
         
         // ========== 2b. FIX RANKING ERRORS IN HIGHLIGHT ==========
@@ -1808,6 +1870,16 @@ ${surpriseText}
             .replace(/מקום ראשון/g, `מקום ${rankTonight}`)
             .replace(/מקום 1\b/g, `מקום ${rankTonight}`)
             .replace(/#1\b/g, `#${rankTonight}`);
+        }
+        
+        // Fix "king/ruler" in highlight for non-#1
+        if (rankTonight !== 1) {
+          if (/מלך\s*ה(דירוג|טבלה)/.test(correctedHighlight) || /שולט\s*ב(דירוג|טבלה)/.test(correctedHighlight)) {
+            errorDetails.push(`highlight rank_title: "מלך/שולט" used for #${rankTonight}`);
+            correctedHighlight = correctedHighlight
+              .replace(/מלך\s*ה(דירוג|טבלה)/g, `מקום ${rankTonight} ב$1`)
+              .replace(/שולט\s*ב(דירוג|טבלה)/g, `במקום ${rankTonight} ב$1`);
+          }
         }
         
         // ========== 3. FIX LAST GAME ERRORS ==========
@@ -1874,12 +1946,18 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
         // Strip cumulative/total losses from sentence (game-last losses are OK)
+        // Leading prepositions (ל/מ/ב) are captured to avoid dangling letters
+        // Pattern 4 runs first to match full phrases like "לא לרדת להפסד מצטבר של 500₪"
         correctedSentence = correctedSentence
+          .replace(/(?:כדי\s*)?(?:לא\s*לרדת|להימנע\s*מ[-−]?ירידה)\s*(?:מתחת\s*)?(?:[למב][-−]?\s*)?(?:(?:הפסד|מינוס)\s*(?:כולל|מצטבר|היסטורי)?\s*(?:של\s*)?)?[-−]?\s*\d+₪\s*(?:הפסד\s*)?(?:כולל|מצטבר)?/g, '')
           .replace(/סה"כ\s*(הפסד\s*(של\s*)?)?[-−]?\s*\d+₪/g, '')
-          .replace(/(הפסד|מינוס)\s*(כולל|היסטורי|מצטבר)\s*(של\s*)?[-−]?\s*\d+₪/g, '')
+          .replace(/(?:[למב][-−]?\s*)?(הפסד|מינוס)\s*(כולל|היסטורי|מצטבר)\s*(של\s*)?[-−]?\s*\d+₪/g, '')
           .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
-          .replace(/לא\s*לרדת\s*(מתחת\s*ל?)?[-−]?\s*\d+₪\s*(הפסד\s*)?(כולל|מצטבר)?/g, '')
-          .replace(/[-−]?\d{3,}₪\s*(הפסד\s*)?(כולל|מצטבר|היסטורי)/g, '')
+          .replace(/(?:[למב][-−]?\s*)?[-−]?\d{3,}₪\s*(הפסד\s*)?(כולל|מצטבר|היסטורי)/g, '')
+          // Clean up dangling prepositions and incomplete phrases after stripping
+          .replace(/\s+[למב][-−]?\s*\./g, '.')
+          .replace(/\s+[למב][-−]?\s*$/g, '')
+          .replace(/\s*(?:כדי\s*(?:לא\s*)?(?:לרדת\s*)?|בשביל\s*ל?\s*)\.?$/g, '.')
           .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         
         // ========== 6b. STRIP FORECAST NUMBER FROM SENTENCE ==========
@@ -1901,6 +1979,34 @@ ${surpriseText}
             }
           }
           correctedSentence = correctedSentence.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').replace(/\.\s*\./g, '.').trim();
+        }
+        
+        // ========== 6c. REMOVE DUPLICATE PHRASES ==========
+        {
+          const sentenceWords = correctedSentence.split(/\s+/);
+          if (sentenceWords.length >= 8) {
+            for (let phraseLen = Math.min(8, Math.floor(sentenceWords.length / 2)); phraseLen >= 4; phraseLen--) {
+              let found = false;
+              for (let i = 0; i <= sentenceWords.length - phraseLen * 2; i++) {
+                const phrase = sentenceWords.slice(i, i + phraseLen).join(' ');
+                for (let j = i + phraseLen; j <= sentenceWords.length - phraseLen; j++) {
+                  const candidate = sentenceWords.slice(j, j + phraseLen).join(' ');
+                  if (phrase === candidate) {
+                    sentenceWords.splice(j, phraseLen);
+                    errorDetails.push(`duplicate_phrase: removed repeated "${phrase}"`);
+                    found = true;
+                    break;
+                  }
+                }
+                if (found) break;
+              }
+              if (found) {
+                correctedSentence = sentenceWords.join(' ');
+                correctedSentence = correctedSentence.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
+                break;
+              }
+            }
+          }
         }
         
         // ========== 7. TEXT-NUMBER CONSISTENCY CHECK ==========
@@ -1933,15 +2039,22 @@ ${surpriseText}
         const hasOptimistic = optimisticWords.some(w => correctedSentence.includes(w));
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
         
-        // Only flag severe direction mismatches
+        // Flag and fix severe direction mismatches by replacing with fallback
         if (predictedProfit <= -40 && hasOptimistic && !hasPessimistic) {
-          errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit}₪`);
-
+          errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit}₪ — replacing`);
+          correctedSentence = '';
         }
         if (predictedProfit >= 40 && hasPessimistic && !hasOptimistic) {
-          errorDetails.push(`tone_mismatch: pessimistic text but predicted +${predictedProfit}₪`);
-
+          errorDetails.push(`tone_mismatch: pessimistic text but predicted +${predictedProfit}₪ — replacing`);
+          correctedSentence = '';
         }
+        
+        // ========== FINAL CLEANUP ==========
+        // Remove dangling prepositions at end of sentence from any prior stripping
+        correctedSentence = correctedSentence
+          .replace(/\s+[למב][-−]?\s*\./g, '.')
+          .replace(/\s+[למב][-−]?\s*$/g, '')
+          .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').replace(/\.\s*\./g, '.').trim();
         
         // ========== 8. VALIDATE AI SENTENCE (fallback if empty/short) ==========
         if (!correctedSentence || correctedSentence.length < 10 || correctedSentence === 'X') {
@@ -2304,6 +2417,8 @@ export const generateGameNightSummary = async (
 
   const prompt = `אתה המספר הרשמי של קבוצת פוקר שבועית בין חברים. כתוב סיכום קצר וכיפי של ערב המשחק שישותף בקבוצת הוואטסאפ.
 
+שים לב: "${periodLabel}" הוא שם התקופה (מחצית ראשונה/שנייה של השנה), לא שם מקום או מועדון. אם אתה מזכיר את התקופה, כתוב למשל "בתקופת ${periodLabel}" או "במחצית הנוכחית".
+
 נתוני הערב (משחק #${gameNumberInPeriod} ב${periodLabel}):
 קופה: ${totalPot}₪ (${totalRebuys} קניות סה״כ)
 מנצח: ${winner.name} (+${winner.profit}₪)
@@ -2323,7 +2438,8 @@ ${standingsLines}${contextBlock}
 - שלב עובדות היסטוריות בצורה טבעית בתוך הסיפור (רצפים, שיאים, שינויים בטבלה) — לא כרשימה.
 - אורך: 60-120 מילים. אם הלילה היה דרמטי (שיאים, קאמבקים, הפתעות) — קרוב ל-120. אם שקט — קרוב ל-60.
 - סיים עם משפט חזק — פאנץ׳ליין, עקיצה, או הצצה למשחק הבא.
-- לא לכתוב רשימה עם נקודות או מספרים. הסיכום צריך לזרום כטקסט אחד.
+- לא לכתוב רשימה עם נקודות או מספרים. הסיכום צריך לזרום כטקסט סיפורי.
+- חלק את הטקסט ל-2 עד 3 פסקאות קצרות עם שורה ריקה ביניהן. כל פסקה 2-4 משפטים. זה חשוב לקריאות.
 - לא להתחיל ב״ערב של דרמות״ או ״לילה של...״ — תתחיל ישר עם תוכן.
 
 כתוב רק את הסיכום, בלי כותרת ובלי הקדמה.`;

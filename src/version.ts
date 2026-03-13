@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.5.1';
+export const APP_VERSION = '5.5.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.5.2',
+    date: '2026-03-13',
+    changes: [
+      '🔄 Regenerate AI summary button for admins on game summary screen',
+      '🔮 Robust forecast algorithm — median-based magnitude with group-level clamping',
+      '📜 History screen UI enhancements with action buttons',
+    ]
+  },
   {
     version: '5.5.1',
     date: '2026-03-13',
