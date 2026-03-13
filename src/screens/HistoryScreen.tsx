@@ -152,47 +152,54 @@ const HistoryScreen = () => {
               </div>
 
               {/* Actions row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.75rem', alignItems: 'center' }}>
+                <button 
+                  className="btn btn-sm"
+                  style={{ 
+                    background: 'var(--primary)', 
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    fontSize: '0.75rem',
+                    padding: '0.3rem 0.5rem',
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/game/${game.id}`);
+                  }}
+                >
+                  📊 פרטים
+                </button>
+                {role === 'admin' && (
                   <button 
                     className="btn btn-sm"
                     style={{ 
-                      background: 'var(--primary)', 
-                      color: 'white',
+                      background: game.aiSummary ? 'rgba(168, 85, 247, 0.15)' : 'linear-gradient(135deg, #A855F7, #EC4899)',
+                      color: game.aiSummary ? '#A855F7' : 'white',
+                      border: game.aiSummary ? '1px solid rgba(168, 85, 247, 0.3)' : 'none',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.3rem'
+                      gap: '0.3rem',
+                      fontSize: '0.75rem',
+                      padding: '0.3rem 0.5rem',
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/game/${game.id}`);
+                      navigate(`/game-summary/${game.id}`);
                     }}
                   >
-                    📊 פרטים מלאים
+                    🎭 סיכום
                   </button>
-                  {role === 'admin' && (
-                    <button 
-                      className="btn btn-sm"
-                      style={{ 
-                        background: game.aiSummary ? 'rgba(168, 85, 247, 0.15)' : 'linear-gradient(135deg, #A855F7, #EC4899)',
-                        color: game.aiSummary ? '#A855F7' : 'white',
-                        border: game.aiSummary ? '1px solid rgba(168, 85, 247, 0.3)' : 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.3rem'
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/game-summary/${game.id}`);
-                      }}
-                    >
-                      🎭 {game.aiSummary ? 'סיכום' : 'צור סיכום'}
-                    </button>
-                  )}
-                </div>
+                )}
                 {canDeleteGames && (
                   <button 
                     className="btn btn-sm btn-danger"
+                    style={{
+                      fontSize: '0.75rem',
+                      padding: '0.3rem 0.5rem',
+                      marginLeft: 'auto',
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setDeleteConfirm(game.id);

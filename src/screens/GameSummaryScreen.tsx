@@ -52,6 +52,7 @@ const GameSummaryScreen = () => {
   const [funStats, setFunStats] = useState<{ emoji: string; label: string; detail: string }[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
+  const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
@@ -66,6 +67,7 @@ const GameSummaryScreen = () => {
     if (!gameId) return;
     saveGameAiSummary(gameId, '');
     setAiSummary(null);
+    setAiSummaryError(null);
     setIsLoadingAiSummary(false);
     forceGenerateRef.current = true;
     loadData();
@@ -611,13 +613,23 @@ const GameSummaryScreen = () => {
         gameNumberInPeriod: periodGameCount,
       };
 
+      setAiSummaryError(null);
       generateGameNightSummary(summaryPayload)
         .then(summary => {
           setAiSummary(summary);
+          setAiSummaryError(null);
           saveGameAiSummary(game.id, summary);
         })
         .catch(err => {
           console.error('AI summary generation failed:', err);
+          const msg = err?.message || String(err);
+          if (msg.includes('quota') || msg.includes('429') || msg.includes('rate')) {
+            setAiSummaryError('מכסת ה-AI נגמרה. נסה שוב מאוחר יותר');
+          } else if (msg.includes('NO_API_KEY')) {
+            setAiSummaryError('מפתח Gemini לא מוגדר. הוסף אותו בהגדרות');
+          } else {
+            setAiSummaryError('שגיאה ביצירת הסיכום. נסה שוב');
+          }
         })
         .finally(() => {
           setIsLoadingAiSummary(false);
@@ -1307,6 +1319,21 @@ const GameSummaryScreen = () => {
                     </button>
                   )}
                 </div>
+                {aiSummaryError && (
+                  <div style={{
+                    direction: 'rtl',
+                    padding: '0.6rem 0.75rem',
+                    marginBottom: '0.5rem',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    color: '#f87171',
+                    textAlign: 'center',
+                  }}>
+                    ⚠️ {aiSummaryError}
+                  </div>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   {funStats.map((stat, idx) => (
                     <div

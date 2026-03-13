@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.5.2';
+export const APP_VERSION = '5.5.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.5.3',
+    date: '2026-03-13',
+    changes: [
+      '⚠️ AI summary error handling with user-friendly Hebrew messages',
+      '📜 History screen button layout and styling improvements',
+    ]
+  },
   {
     version: '5.5.2',
     date: '2026-03-13',
