@@ -891,222 +891,75 @@ const NewGameScreen = () => {
   };
 
 
-  // Generate forecasts for all selected players - WEIGHTED RECENT PERFORMANCE
+  // Simple fallback forecast when AI is unavailable
   const generateForecasts = () => {
-    // Step 1: Analyze all players with recent performance
     const playerAnalysis = Array.from(selectedIds).map(playerId => {
       const player = players.find(p => p.id === playerId);
       if (!player) return null;
-      
       const stats = getStatsForPlayer(playerId);
       const gamesPlayed = stats?.gamesPlayed || 0;
       const avgProfit = stats?.avgProfit || 0;
-      
-      // Get recent analysis (last 10 games or whatever available)
-      const recent = stats ? analyzeRecent(stats) : { 
-        recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0, 
-        gamesCount: 0, trend: 'stable' as const, highlights: '' 
+      const recent = stats ? analyzeRecent(stats) : {
+        recentWins: 0, recentLosses: 0, recentProfit: 0, recentAvg: 0,
+        gamesCount: 0, trend: 'stable' as const, highlights: ''
       };
-      
-      // Three-layer weighting with recency-weighted history
+
+      // Simple: direction from recent form blended with overall, magnitude from real swings
       const last3 = stats?.lastGameResults?.slice(0, 3) || [];
-      const last3Avg = last3.length > 0 ? last3.reduce((sum, r) => sum + r.profit, 0) / last3.length : 0;
-      const hasRecentData = stats?.lastGameResults && stats.lastGameResults.length >= 3;
-      
-      // Recency-weighted average (recent games count more via exponential decay)
-      let histAvg = avgProfit;
-      const allResults = stats?.lastGameResults || [];
-      if (allResults.length >= 3) {
-        const decay = 0.92;
-        let wSum = 0, wTotal = 0;
-        for (let i = 0; i < allResults.length; i++) {
-          const w = Math.pow(decay, i);
-          wSum += allResults[i].profit * w;
-          wTotal += w;
-        }
-        histAvg = wSum / wTotal;
-      }
-      
-      const formContradiction = last3.length >= 3 && gamesPlayed >= 5 &&
-        ((last3Avg > 15 && histAvg < -10) || (last3Avg < -15 && histAvg > 10));
-      
-      let weightedAvg: number;
+      const last3Avg = last3.length > 0 ? last3.reduce((s, r) => s + r.profit, 0) / last3.length : 0;
+
+      const lastResults = stats?.lastGameResults || [];
+      const typicalMag = lastResults.length >= 2
+        ? lastResults.slice(0, 10).reduce((s, r) => s + Math.abs(r.profit), 0) / Math.min(10, lastResults.length)
+        : 50;
+
+      let expectedValue: number;
       if (gamesPlayed === 0) {
-        weightedAvg = 0;
-      } else if (formContradiction) {
-        if (Math.random() < 0.6) {
-          weightedAvg = last3Avg * 0.85 + histAvg * 0.15;
-        } else {
-          weightedAvg = histAvg * 0.85 + last3Avg * 0.15;
-        }
-      } else if (last3.length >= 3 && hasRecentData) {
-        weightedAvg = (last3Avg * 0.40) + (recent.recentAvg * 0.35) + (histAvg * 0.25);
-      } else if (hasRecentData) {
-        weightedAvg = (recent.recentAvg * 0.65) + (histAvg * 0.35);
+        expectedValue = Math.round((Math.random() - 0.5) * 60);
       } else {
-        weightedAvg = histAvg;
+        const blended = last3Avg * 0.6 + avgProfit * 0.4;
+        const direction = blended >= 0 ? 1 : -1;
+        expectedValue = direction * typicalMag * (0.3 + Math.random() * 0.4);
+        expectedValue += (Math.random() - 0.5) * typicalMag * 0.25;
+        if (gamesPlayed <= 3) expectedValue *= 0.6;
       }
-      
-      // New/infrequent players: push toward 0
-      if (gamesPlayed <= 3) weightedAvg *= 0.3;
-      else if (gamesPlayed <= 6) weightedAvg *= 0.6;
-      
-      // Streak handling: probabilistic regression vs continuation
-      // Longer streaks are more likely to break (regression to mean)
-      if (stats) {
-        const streakLen = Math.abs(stats.currentStreak);
-        if (streakLen >= 2) {
-          const regressionProb = streakLen >= 4 ? 0.75 : streakLen >= 3 ? 0.60 : 0.40;
-          const regresses = Math.random() < regressionProb;
-          if (regresses) {
-            const regressionFactor = streakLen >= 4 ? 0.3 : streakLen >= 3 ? 0.5 : 0.75;
-            weightedAvg *= regressionFactor;
-          } else {
-            const continuationFactor = streakLen >= 4 ? 1.25 : streakLen >= 3 ? 1.15 : 1.1;
-            weightedAvg *= continuationFactor;
-          }
-        }
-      }
-      
-      // Determine tendency based on weighted average
-      // Thresholds adjusted based on actual player distribution analysis
-      let tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new' = 'new';
-      if (gamesPlayed === 0) {
-        tendency = 'new';
-      } else if (weightedAvg > 30) {
-        tendency = 'strong_winner';
-      } else if (weightedAvg > 5) {
-        tendency = 'winner';
-      } else if (weightedAvg >= -12) {
-        tendency = 'neutral';
-      } else if (weightedAvg >= -35) {
-        tendency = 'loser';
-      } else {
-        tendency = 'strong_loser';
-      }
-      
-      return {
-        player,
-        stats,
-        gamesPlayed,
-        avgProfit,
-        recent,
-        tendency,
-        rawExpected: weightedAvg
-      };
+      expectedValue = Math.round(expectedValue);
+
+      return { player, stats, gamesPlayed, avgProfit, recent, expectedValue };
     }).filter(Boolean) as {
-      player: Player;
-      stats: PlayerStats | undefined;
-      gamesPlayed: number;
-      avgProfit: number;
-      recent: RecentAnalysis;
-      tendency: 'strong_winner' | 'winner' | 'neutral' | 'loser' | 'strong_loser' | 'new';
-      rawExpected: number;
+      player: Player; stats: PlayerStats | undefined; gamesPlayed: number;
+      avgProfit: number; recent: RecentAnalysis; expectedValue: number;
     }[];
 
-    // Step 2: Smart surprise selection - UP TO 25% (not forced!)
-    // Only when recent trend CONTRADICTS overall history
-    const eligibleForSurprise = playerAnalysis.filter(p => {
-      if (p.gamesPlayed < 5) return false;
-      // Surprise when overall is positive but recent is negative, or vice versa
-      const overallPositive = p.avgProfit > 10;
-      const overallNegative = p.avgProfit < -10;
-      const recentPositive = p.recent.recentAvg > 10;
-      const recentNegative = p.recent.recentAvg < -10;
-      
-      return (overallPositive && recentNegative) || (overallNegative && recentPositive);
-    });
-    
-    const maxSurprises = Math.min(
-      Math.ceil(playerAnalysis.length * 0.35), // Max 35% - more surprises!
-      eligibleForSurprise.length
-    );
-    
-    // At least 1 surprise if there are eligible players, up to max
-    const minSurprises = eligibleForSurprise.length > 0 ? 1 : 0;
-    const numSurprises = minSurprises + Math.floor(Math.random() * (maxSurprises - minSurprises + 1));
-    
-    // Randomly pick which players get surprised
-    const surprisePlayerIds = new Set<string>();
-    const shuffled = [...eligibleForSurprise].sort(() => Math.random() - 0.5);
-    shuffled.slice(0, numSurprises).forEach(p => surprisePlayerIds.add(p.player.id));
+    // Zero-sum balance
+    const total = playerAnalysis.reduce((s, p) => s + p.expectedValue, 0);
+    const adj = total / playerAnalysis.length;
+    playerAnalysis.forEach(p => { p.expectedValue = Math.round(p.expectedValue - adj); });
 
-    // Step 3: Calculate expected values with volatility-scaled variance
-    const withExpected = playerAnalysis.map(p => {
-      const isSurprise = surprisePlayerIds.has(p.player.id);
-      let expectedValue = p.rawExpected;
-      
-      // Calculate player volatility from recent results
-      const lastResults = p.stats?.lastGameResults || [];
-      let playerStdDev = 50;
-      if (lastResults.length >= 3) {
-        const profits = lastResults.map(r => r.profit);
-        const mean = profits.reduce((a, b) => a + b, 0) / profits.length;
-        const vari = profits.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / profits.length;
-        playerStdDev = Math.sqrt(vari);
-      }
-      
-      if (isSurprise) {
-        expectedValue = -expectedValue * (0.5 + Math.random() * 0.3);
-      } else {
-        // Volatility-scaled variance: high-variance players get bigger random swings
-        const randomShift = (Math.random() - 0.5) * playerStdDev * 0.4;
-        const multiplier = 0.9 + Math.random() * 0.2;
-        expectedValue = (expectedValue * multiplier) + randomShift;
-      }
-      
-      // Cap predictions based on player's actual historical range
-      const bestWin = p.stats?.biggestWin || 100;
-      const worstLoss = p.stats?.biggestLoss ? -Math.abs(p.stats.biggestLoss) : -100;
-      if (p.stats && p.stats.gamesPlayed >= 3) {
-        const maxPositive = Math.max(bestWin * 0.75, playerStdDev * 1.5, 30);
-        const maxNegative = Math.min(worstLoss * 0.75, -playerStdDev * 1.5, -30);
-        expectedValue = Math.max(maxNegative, Math.min(maxPositive, expectedValue));
-      }
-      
-      return { ...p, expectedValue: Math.round(expectedValue), isSurprise };
-    });
-
-    // Step 4: Balance to zero-sum
-    const totalExpected = withExpected.reduce((sum, p) => sum + p.expectedValue, 0);
-    const totalWeight = withExpected.reduce((sum, p) => sum + Math.abs(p.expectedValue) + 10, 0);
-    
-    const balanced = withExpected.map(f => {
-      const weight = (Math.abs(f.expectedValue) + 10) / totalWeight;
-      const adjustment = -totalExpected * weight;
-      const balancedExpected = Math.round(f.expectedValue + adjustment);
-      
-      // Determine outcome category - adjusted to match actual game profit ranges
+    return playerAnalysis.map(f => {
       let outcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss';
-      if (balancedExpected > 60) outcome = 'big_win';
-      else if (balancedExpected > 25) outcome = 'win';
-      else if (balancedExpected > 5) outcome = 'slight_win';
-      else if (balancedExpected >= -5) outcome = 'neutral';
-      else if (balancedExpected >= -25) outcome = 'slight_loss';
-      else if (balancedExpected >= -60) outcome = 'loss';
+      if (f.expectedValue > 100) outcome = 'big_win';
+      else if (f.expectedValue > 40) outcome = 'win';
+      else if (f.expectedValue > 10) outcome = 'slight_win';
+      else if (f.expectedValue >= -10) outcome = 'neutral';
+      else if (f.expectedValue >= -40) outcome = 'slight_loss';
+      else if (f.expectedValue >= -100) outcome = 'loss';
       else outcome = 'big_loss';
-      
-      // Generate creative sentence (fun, no stats - stats go in highlights)
-      let sentence: string;
-      
-      if (f.gamesPlayed === 0) {
-        sentence = getNewPlayerSentence(f.player.name);
-      } else {
-        sentence = generateCreativeSentence(f.player.name, f.stats!, f.recent, outcome, f.isSurprise);
-      }
-      
+
+      const sentence = f.gamesPlayed === 0
+        ? getNewPlayerSentence(f.player.name)
+        : generateCreativeSentence(f.player.name, f.stats!, f.recent, outcome, false);
+
       return {
         player: f.player,
-        expected: balancedExpected,
+        expected: f.expectedValue,
         sentence,
-        highlights: f.recent.highlights, // Stats summary from last games
+        highlights: f.recent.highlights,
         gamesPlayed: f.gamesPlayed,
-        isSurprise: f.isSurprise,
+        isSurprise: false,
         recent: f.recent
       };
-    });
-
-    return balanced.sort((a, b) => b.expected - a.expected);
+    }).sort((a, b) => b.expected - a.expected);
   };
 
   // Share forecast as screenshot to WhatsApp (splits into multiple images if many players)
@@ -1132,7 +985,7 @@ const NewGameScreen = () => {
       });
       
       // Split sorted forecasts into chunks
-      const chunks: typeof forecasts[] = [];
+      const chunks: any[][] = [];
       for (let i = 0; i < sortedForecasts.length; i += PLAYERS_PER_PAGE) {
         chunks.push(sortedForecasts.slice(i, i + PLAYERS_PER_PAGE));
       }
@@ -1156,6 +1009,10 @@ const NewGameScreen = () => {
             ${isAI ? '<div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>' : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
+          ${chunkIndex === 0 && isAI && aiForecasts?.[0]?.groupIntro ? `
+          <div style="padding: 0.6rem 0.8rem; margin-bottom: 0.75rem; border-radius: 8px; background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid rgba(168, 85, 247, 0.25); text-align: center; direction: rtl;">
+            <div style="font-size: 0.85rem; color: #f1f5f9; line-height: 1.5; font-style: italic;">${aiForecasts[0].groupIntro}</div>
+          </div>` : ''}
           <div style="margin-bottom: 1rem;">
             ${chunk.map((forecast: any, index: number) => {
               const isFirst = chunkIndex === 0 && index === 0;
@@ -1976,6 +1833,23 @@ const NewGameScreen = () => {
                     {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </div>
                 </div>
+
+                {/* Group intro banner */}
+                {aiForecasts[0]?.groupIntro && (
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    marginBottom: '1rem',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.12))',
+                    border: '1px solid rgba(168, 85, 247, 0.25)',
+                    textAlign: 'center',
+                    direction: 'rtl',
+                  }}>
+                    <div style={{ fontSize: '1rem', color: 'var(--text)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                      {aiForecasts[0].groupIntro}
+                    </div>
+                  </div>
+                )}
 
                 {/* AI Player forecasts - sorted by expected profit (highest first) */}
                 <div style={{ marginBottom: '1rem' }}>

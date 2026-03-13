@@ -194,6 +194,37 @@ export interface FullBackupData {
   uploadedAt?: string;
 }
 
+// Fetch full backup from GitHub (no auth needed for public repo)
+export const fetchBackupFromGitHub = async (): Promise<FullBackupData | null> => {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_BACKUP_PATH}?ref=${GITHUB_BRANCH}`;
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`GitHub fetch failed: ${response.status}`);
+    }
+
+    const fileInfo = await response.json();
+    const base64Clean = fileInfo.content.replace(/\n/g, '');
+    const binaryString = atob(base64Clean);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const content = new TextDecoder('utf-8').decode(bytes);
+    const data = JSON.parse(content);
+
+    console.log('Fetched backup from GitHub:', data.games?.length, 'games');
+    return data as FullBackupData;
+  } catch (error) {
+    console.error('Error fetching backup from GitHub:', error);
+    return null;
+  }
+};
+
 // Upload full backup to GitHub (separate from sync data)
 export const uploadBackupToGitHub = async (
   backup: FullBackupData,
@@ -400,11 +431,26 @@ export const syncFromCloud = async (): Promise<{
       return { success: true, message: 'No cloud data available yet', synced: false };
     }
     
-    // Check if we already have this version
     const lastSyncedVersion = getLastSyncedVersion();
+    const localSyncData = getLocalSyncData();
+    const localCompletedCount = localSyncData.games.length;
+    const remoteCompletedCount = remoteData.games?.length || 0;
+
     console.log('Sync check - local version:', lastSyncedVersion, 'remote version:', remoteData.lastUpdated);
-    console.log('Remote has', remoteData.games?.length, 'games,', remoteData.players?.length, 'players');
+    console.log(`Local: ${localCompletedCount} completed games, Remote: ${remoteCompletedCount} completed games`);
     
+    // If local has more completed games than remote, push local data up
+    // This handles the case where a game was saved locally but sync failed (e.g. no reception)
+    if (localCompletedCount > remoteCompletedCount) {
+      console.log(`Local has ${localCompletedCount - remoteCompletedCount} more games than cloud - pushing local data up`);
+      const token = getEffectiveToken(true);
+      if (token) {
+        await uploadToGitHub(token, localSyncData);
+        console.log('✅ Pushed local data to cloud');
+      }
+      return { success: true, message: `${localCompletedCount - remoteCompletedCount} new games pushed to cloud`, synced: true, gamesChanged: 0 };
+    }
+
     if (lastSyncedVersion === remoteData.lastUpdated) {
       console.log('Already synced to latest version');
       return { success: true, message: 'Already up to date', synced: false };
@@ -412,14 +458,11 @@ export const syncFromCloud = async (): Promise<{
     
     console.log('New version available - syncing...');
     
-    // New version available - do full replacement
     const { gamesChanged, deletedGames, newPlayers, playersChanged } = replaceGamesWithRemote(remoteData);
     console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers, 'playersChanged:', playersChanged);
     
-    // Save the synced version
     saveLastSyncedVersion(remoteData.lastUpdated);
     
-    // Build message
     const totalPlayerChanges = newPlayers + playersChanged;
     let message = '';
     if (gamesChanged === 0 && totalPlayerChanges === 0) {
@@ -575,26 +618,47 @@ export const fetchTrainingFromGitHub = async (): Promise<Record<string, unknown>
   }
 };
 
+const TRAINING_LAST_SYNC_KEY = 'poker_training_last_sync';
+const TRAINING_SYNCED_DECISIONS_KEY = 'poker_training_synced_decisions';
+const SYNC_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
+const MIN_NEW_DECISIONS_TO_SYNC = 30;
+
 export const restoreTrainingFromGitHub = async (): Promise<{ success: boolean; restored: boolean; message: string }> => {
   try {
     const remoteData = await fetchTrainingFromGitHub();
-    if (!remoteData) {
-      return { success: true, restored: false, message: 'No cloud training data' };
-    }
 
     const localRaw = localStorage.getItem(TRAINING_STORAGE_KEY);
     const localData = localRaw ? JSON.parse(localRaw) : null;
 
     const localSessions = localData?.sessions?.length || 0;
-    const remoteSessions = (remoteData.sessions as unknown[])?.length || 0;
     const localDecisions = localData?.totalDecisions || 0;
-    const remoteDecisions = (remoteData.totalDecisions as number) || 0;
 
-    if (remoteDecisions > localDecisions || remoteSessions > localSessions) {
-      const { lastSynced: _, ...dataToRestore } = remoteData;
-      localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(dataToRestore));
-      console.log(`✅ Training data restored from cloud (${remoteSessions} sessions, ${remoteDecisions} decisions)`);
-      return { success: true, restored: true, message: `Training data restored (${remoteSessions} sessions)` };
+    if (remoteData) {
+      const remoteSessions = (remoteData.sessions as unknown[])?.length || 0;
+      const remoteDecisions = (remoteData.totalDecisions as number) || 0;
+
+      if (remoteDecisions > localDecisions || remoteSessions > localSessions) {
+        const { lastSynced: _, ...dataToRestore } = remoteData;
+        localStorage.setItem(TRAINING_STORAGE_KEY, JSON.stringify(dataToRestore));
+        console.log(`✅ Training data restored from cloud (${remoteSessions} sessions, ${remoteDecisions} decisions)`);
+        return { success: true, restored: true, message: `Training data restored (${remoteSessions} sessions)` };
+      }
+    }
+
+    if (localDecisions > 0) {
+      const lastSync = Number(localStorage.getItem(TRAINING_LAST_SYNC_KEY) || '0');
+      const syncedDecisions = Number(localStorage.getItem(TRAINING_SYNCED_DECISIONS_KEY) || '0');
+      const newDecisions = localDecisions - syncedDecisions;
+      const enoughTime = Date.now() - lastSync > SYNC_INTERVAL_MS;
+      const enoughData = newDecisions >= MIN_NEW_DECISIONS_TO_SYNC;
+
+      if (enoughTime && enoughData) {
+        uploadTrainingToGitHub().then(() => {
+          localStorage.setItem(TRAINING_LAST_SYNC_KEY, String(Date.now()));
+          localStorage.setItem(TRAINING_SYNCED_DECISIONS_KEY, String(localDecisions));
+          console.log(`✅ Training sync completed (${newDecisions} new decisions)`);
+        }).catch(err => console.warn('Training sync failed:', err));
+      }
     }
 
     return { success: true, restored: false, message: 'Local training data is up to date' };

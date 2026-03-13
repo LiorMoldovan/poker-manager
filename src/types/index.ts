@@ -77,6 +77,7 @@ export interface Game {
     score: number;         // 0-100 score (accurate=2, close=1, missed=0)
   };
   sharedExpenses?: SharedExpense[]; // Shared expenses (food, etc.) during the game
+  aiSummary?: string; // Cached AI-generated game night narrative summary
 }
 
 export interface GamePlayer {

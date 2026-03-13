@@ -18,6 +18,7 @@ import {
   getLastBackupDate,
   createBackupWithCloudSync,
   restoreFromBackup,
+  restoreFromCloudBackup,
   downloadBackup,
   importBackupFromFile,
   BackupData,
@@ -753,17 +754,31 @@ const SettingsScreen = () => {
             <p style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               Restore Data
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  setBackupMessage({ type: 'success', text: 'מוריד גיבוי מהענן...' });
+                  const result = await restoreFromCloudBackup();
+                  setBackupMessage({ type: result.success ? 'success' : 'error', text: result.message });
+                  if (result.success) {
+                    setTimeout(() => window.location.reload(), 1500);
+                  }
+                }}
+                style={{ flex: 1, minWidth: '120px' }}
+              >
+                ☁️ From Cloud
+              </button>
               <button 
                 className="btn btn-secondary" 
                 onClick={() => setShowRestoreModal(true)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: '120px' }}
               >
-                🔄 From Backup
+                🔄 From Local
               </button>
               <label 
                 className="btn btn-secondary" 
-                style={{ flex: 1, textAlign: 'center', cursor: 'pointer', margin: 0 }}
+                style={{ flex: 1, minWidth: '120px', textAlign: 'center', cursor: 'pointer', margin: 0 }}
               >
                 📤 From File
                 <input 

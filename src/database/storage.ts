@@ -1,5 +1,5 @@
 import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
-import { uploadBackupToGitHub } from './githubSync';
+import { uploadBackupToGitHub, syncToCloud, fetchBackupFromGitHub } from './githubSync';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -663,11 +663,14 @@ export const createBackupWithCloudSync = async (
   trigger?: 'friday' | 'game-end',
   useMemberSyncToken: boolean = false
 ): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
-  // First create the local backup
   const backup = createBackup(type, trigger);
   
-  // Then try to upload to GitHub (use embedded token if memberSync role)
   const cloudResult = await uploadBackupToGitHub(backup, useMemberSyncToken);
+
+  // Also update sync-data.json so other users get the latest data
+  syncToCloud(useMemberSyncToken).catch(err =>
+    console.warn('Sync after backup failed:', err)
+  );
   
   return { backup, cloudResult };
 };
@@ -699,6 +702,35 @@ export const restoreFromBackup = (backupId: string): boolean => {
   setItem(STORAGE_KEYS.SETTINGS, backup.settings);
   
   return true;
+};
+
+// Restore from cloud backup (full-backup.json on GitHub)
+export const restoreFromCloudBackup = async (): Promise<{ success: boolean; message: string; gamesCount?: number }> => {
+  try {
+    const backup = await fetchBackupFromGitHub();
+    if (!backup) {
+      return { success: false, message: 'לא נמצא גיבוי בענן' };
+    }
+
+    if (!backup.games || !backup.players || !backup.gamePlayers) {
+      return { success: false, message: 'הגיבוי בענן פגום' };
+    }
+
+    setItem(STORAGE_KEYS.PLAYERS, backup.players);
+    setItem(STORAGE_KEYS.GAMES, backup.games);
+    setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
+    if (backup.chipValues) setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
+    if (backup.settings) setItem(STORAGE_KEYS.SETTINGS, backup.settings);
+
+    return {
+      success: true,
+      message: `שוחזרו ${backup.games.length} משחקים מהגיבוי בענן`,
+      gamesCount: backup.games.length,
+    };
+  } catch (error) {
+    console.error('Cloud backup restore failed:', error);
+    return { success: false, message: 'שגיאה בשחזור מהענן' };
+  }
 };
 
 // Download backup as JSON file
@@ -1015,6 +1047,16 @@ export const saveForecastComment = (gameId: string, comment: string): void => {
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex].forecastComment = comment;
+    setItem(STORAGE_KEYS.GAMES, games);
+  }
+};
+
+// Save AI-generated game night summary on game record (so it's not re-generated)
+export const saveGameAiSummary = (gameId: string, summary: string): void => {
+  const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  const gameIndex = games.findIndex(g => g.id === gameId);
+  if (gameIndex !== -1) {
+    games[gameIndex].aiSummary = summary;
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };

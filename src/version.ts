@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.4.2';
+export const APP_VERSION = '5.5.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.5.0',
+    date: '2026-03-13',
+    changes: [
+      '🤖 AI game night summary with head-to-head storylines and group narratives',
+      '📊 Half-year standings table on game summary screen',
+      '☁️ Restore from cloud backup button in settings',
+      '🔮 Simplified forecast algorithm — cleaner direction + magnitude logic',
+      '⚡ Smart deploy: data syncs no longer trigger Vercel rebuilds',
+      '💾 Training sync reduced to once every 3 days with minimum threshold',
+    ]
+  },
   {
     version: '5.4.2',
     date: '2026-03-12',

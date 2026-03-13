@@ -1,6 +1,5 @@
 import { getGeminiApiKey } from './geminiAI';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
-import { uploadTrainingToGitHub } from '../database/githubSync';
 import { PlayerStats } from '../types';
 
 // ════════════════════════════════════════════════════════════
@@ -249,20 +248,8 @@ export const getTrainingProgress = (): TrainingProgress => {
   }
 };
 
-let _syncTimer: ReturnType<typeof setTimeout> | null = null;
-
-const debouncedSyncToGitHub = () => {
-  if (_syncTimer) clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(() => {
-    uploadTrainingToGitHub().catch(err =>
-      console.warn('Training cloud sync failed:', err)
-    );
-  }, 5000);
-};
-
 export const saveTrainingProgress = (progress: TrainingProgress): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-  debouncedSyncToGitHub();
 };
 
 export const recordDecision = (

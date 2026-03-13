@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, saveForecastAccuracy, saveForecastComment } from '../database/storage';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats } from '../types';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
-import { generateForecastComparison, getGeminiApiKey } from '../utils/geminiAI';
+import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload } from '../utils/geminiAI';
 
 const hebrewNum = (n: number, feminine: boolean): string => {
   const abs = Math.round(Math.abs(n));
@@ -47,11 +47,16 @@ const GameSummaryScreen = () => {
   const [isLoadingComment, setIsLoadingComment] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const [funStats, setFunStats] = useState<{ emoji: string; label: string; detail: string }[]>([]);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
   const expenseSettlementsRef = useRef<HTMLDivElement>(null);
   const funStatsRef = useRef<HTMLDivElement>(null);
+  const standingsRef = useRef<HTMLDivElement>(null);
+  const [standingsData, setStandingsData] = useState<PlayerStats[]>([]);
+  const [standingsLabel, setStandingsLabel] = useState('');
 
   // Calculate total chips for a player
   const getTotalChips = (player: GamePlayer): number => {
@@ -452,6 +457,153 @@ const GameSummaryScreen = () => {
     // Sort by priority (1 = highest) and always output exactly 10
     bank.sort((a, b) => a.priority - b.priority);
     setFunStats(bank.slice(0, 10).map(({ emoji, label, detail }) => ({ emoji, label, detail })));
+
+    // Compute standings table for the current half-year period
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const halfStart = new Date(currentYear, currentMonth <= 6 ? 0 : 6, 1);
+    const halfEnd = new Date(currentYear, currentMonth <= 6 ? 6 : 12, 0, 23, 59, 59);
+    const halfLabel = currentMonth <= 6 ? `H1 ${currentYear}` : `H2 ${currentYear}`;
+
+    const halfStats = getPlayerStats({ start: halfStart, end: halfEnd });
+    const allPlayers = getAllPlayers();
+
+    const halfGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      const gd = new Date(g.date || g.createdAt);
+      return gd >= halfStart && gd <= halfEnd;
+    });
+    const totalHalfGames = halfGames.length;
+    const activeThreshold = Math.ceil(totalHalfGames * 0.33);
+
+    const tonightPlayerIds = new Set(sortedPlayers.map(p => p.playerId));
+
+    const activeStats = halfStats
+      .filter(s => {
+        const player = allPlayers.find(p => p.id === s.playerId);
+        return player && (player.type === 'permanent' || player.type === 'permanent_guest' || player.type === 'guest');
+      })
+      .filter(s => s.gamesPlayed >= activeThreshold || tonightPlayerIds.has(s.playerId))
+      .sort((a, b) => b.totalProfit - a.totalProfit);
+
+    setStandingsData(activeStats);
+    setStandingsLabel(halfLabel);
+
+    // --- AI Game Night Summary ---
+    // Only auto-generate for games within the current half-year period (avoid stale data for old games)
+    const gameDateObj = new Date(game.date || game.createdAt);
+    const gameInCurrentPeriod = gameDateObj >= halfStart && gameDateObj <= halfEnd;
+
+    if (game.aiSummary) {
+      setAiSummary(game.aiSummary);
+    } else if (getGeminiApiKey() && game.status === 'completed' && gameInCurrentPeriod) {
+      setIsLoadingAiSummary(true);
+
+      // Build payload from already-computed data
+      const aiTonightResults = sortedPlayers.map((p, i) => ({
+        name: p.playerName,
+        profit: Math.round(p.profit),
+        rebuys: p.rebuys,
+        rank: i + 1,
+      }));
+
+      // Include top 5 + all tonight's players for full context
+      const aiPeriodStandings = activeStats
+        .filter((s, idx) => idx < 5 || tonightPlayerIds.has(s.playerId))
+        .map((s) => {
+          const overallRank = activeStats.findIndex(a => a.playerId === s.playerId) + 1;
+          return {
+            name: s.playerName,
+            periodRank: overallRank,
+            totalProfit: Math.round(s.totalProfit),
+            gamesPlayed: s.gamesPlayed,
+            winPct: s.winPercentage,
+            currentStreak: s.currentStreak,
+          };
+        });
+
+      const aiRecords: string[] = [];
+      const aiStreaks: string[] = [];
+      const aiUpsets: string[] = [];
+      const aiMilestones: string[] = [];
+      const aiWelcomeBacks: string[] = [];
+      const aiRankingShifts: string[] = [];
+
+      // Extract from the already-computed highlight bank
+      for (const h of bank) {
+        if (h.label.includes('שיא') && h.priority <= 2) {
+          aiRecords.push(`${h.emoji} ${h.detail}`);
+        }
+        if (h.label === 'רצף') {
+          aiStreaks.push(h.detail);
+        }
+        if (h.label === 'הפתעות') {
+          aiUpsets.push(h.detail);
+        }
+        if (h.label.includes('אבן דרך') || h.label.includes('עברו לרווח') || h.label.includes('משחק ראשון')) {
+          aiMilestones.push(`${h.label}: ${h.detail}`);
+        }
+        if (h.label === 'חזרו לשולחן') {
+          aiWelcomeBacks.push(h.detail);
+        }
+      }
+
+      // Compute ranking shifts: who overtook whom because of tonight
+      try {
+        const beforeTonight = activeStats.map(s => {
+          const tonightPlayer = sortedPlayers.find(p => p.playerId === s.playerId);
+          const tonightProfit = tonightPlayer ? tonightPlayer.profit : 0;
+          return { ...s, totalProfit: s.totalProfit - tonightProfit };
+        }).sort((a, b) => b.totalProfit - a.totalProfit);
+
+        const afterTonight = [...activeStats];
+
+        for (const player of sortedPlayers) {
+          const newRank = afterTonight.findIndex(s => s.playerId === player.playerId) + 1;
+          const oldRank = beforeTonight.findIndex(s => s.playerId === player.playerId) + 1;
+          if (newRank > 0 && oldRank > 0 && newRank < oldRank) {
+            const passedPlayers = beforeTonight
+              .slice(newRank - 1, oldRank - 1)
+              .filter(s => s.playerId !== player.playerId)
+              .map(s => s.playerName);
+            if (passedPlayers.length > 0) {
+              aiRankingShifts.push(`${player.playerName} עקף את ${passedPlayers.join(' ואת ')} ועלה למקום ${newRank}`);
+            }
+          }
+        }
+      } catch {}
+
+      // Count games in period (for "game #X")
+      const periodGameCount = halfGames.length;
+
+      const summaryPayload: GameNightSummaryPayload = {
+        tonight: aiTonightResults,
+        totalRebuys: totalRebuysTonight,
+        totalPot: Math.round(tonightsPot),
+        periodLabel: halfLabel,
+        periodStandings: aiPeriodStandings,
+        recordsBroken: aiRecords,
+        notableStreaks: aiStreaks,
+        upsets: aiUpsets,
+        milestones: aiMilestones,
+        welcomeBacks: aiWelcomeBacks,
+        rankingShifts: aiRankingShifts,
+        gameNumberInPeriod: periodGameCount,
+      };
+
+      generateGameNightSummary(summaryPayload)
+        .then(summary => {
+          setAiSummary(summary);
+          saveGameAiSummary(game.id, summary);
+        })
+        .catch(err => {
+          console.error('AI summary generation failed:', err);
+        })
+        .finally(() => {
+          setIsLoadingAiSummary(false);
+        });
+    }
+
     setIsLoading(false);
 
     // TTS game summary announcement
@@ -646,6 +798,21 @@ const GameSummaryScreen = () => {
           funStatsCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
         });
         files.push(new File([funStatsBlob], 'poker-highlights.png', { type: 'image/png' }));
+      }
+
+      // Capture the Updated Standings table if it exists
+      if (standingsRef.current && standingsData.length > 0) {
+        const standingsCanvas = await html2canvas(standingsRef.current, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+
+        const standingsBlob = await new Promise<Blob>((resolve) => {
+          standingsCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        files.push(new File([standingsBlob], 'poker-standings.png', { type: 'image/png' }));
       }
       
       // Try native share first (works on mobile)
@@ -1051,41 +1218,76 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
-      {/* Fun Stats & Shame Section - for screenshot */}
-      {funStats.length > 0 && (
+      {/* Game Night Summary Section - for screenshot */}
+      {(aiSummary || isLoadingAiSummary || funStats.length > 0) && (
         <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card">
-            <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {funStats.map((stat, idx) => (
-                <div 
-                  key={idx} 
-                  style={{ 
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.5rem',
-                    padding: '0.4rem 0.5rem',
-                    background: 'rgba(255,255,255,0.03)',
-                    borderRadius: '6px',
-                    direction: 'rtl',
-                  }}
-                >
-                  <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
-                  <span style={{ 
-                    fontSize: '0.75rem', 
-                    lineHeight: 1.5,
-                    color: 'var(--text)',
-                    flex: 1,
-                    minWidth: 0,
-                    wordBreak: 'break-word',
-                  }}>
-                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
-                    {' — '}
-                    {stat.detail}
-                  </span>
+            {aiSummary ? (
+              <>
+                <h2 className="card-title mb-2">🎭 סיכום הערב</h2>
+                <div style={{
+                  direction: 'rtl',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.8,
+                  color: 'var(--text)',
+                  padding: '0.5rem',
+                  background: 'rgba(168, 85, 247, 0.06)',
+                  borderRadius: '8px',
+                  borderRight: '3px solid var(--primary)',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {aiSummary}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : isLoadingAiSummary ? (
+              <>
+                <h2 className="card-title mb-2">🎭 סיכום הערב</h2>
+                <div style={{
+                  direction: 'rtl',
+                  textAlign: 'center',
+                  padding: '1.5rem',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.85rem',
+                }}>
+                  <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>✍️</div>
+                  הסיכום נכתב...
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="card-title mb-2">🎭 הרגעים של הערב</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {funStats.map((stat, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '0.5rem',
+                        padding: '0.4rem 0.5rem',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '6px',
+                        direction: 'rtl',
+                      }}
+                    >
+                      <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
+                      <span style={{
+                        fontSize: '0.75rem',
+                        lineHeight: 1.5,
+                        color: 'var(--text)',
+                        flex: 1,
+                        minWidth: 0,
+                        wordBreak: 'break-word',
+                      }}>
+                        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
+                        {' — '}
+                        {stat.detail}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div style={{
@@ -1100,6 +1302,102 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
+      {/* Updated Standings Table - for screenshot */}
+      {standingsData.length > 0 && (
+        <div ref={standingsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <h2 className="card-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>
+              🏆 טבלה מעודכנת — {standingsLabel}
+            </h2>
+            <div style={{
+              textAlign: 'center',
+              fontSize: '0.65rem',
+              color: 'var(--text-muted)',
+              marginBottom: '0.5rem',
+              paddingBottom: '0.3rem',
+              borderBottom: '1px solid var(--border)'
+            }}>
+              📊 שחקנים פעילים • כולל המשחק האחרון
+            </div>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Profit</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Avg</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>G</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standingsData.map((player, index) => {
+                  const isInThisGame = players.some(p => p.playerId === player.playerId);
+                  return (
+                    <tr key={player.playerId} style={{
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      background: isInThisGame ? 'rgba(168, 85, 247, 0.08)' : undefined,
+                    }}>
+                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                        {index + 1}
+                        {index === 0 && ' 🥇'}
+                        {index === 1 && ' 🥈'}
+                        {index === 2 && ' 🥉'}
+                      </td>
+                      <td style={{
+                        fontWeight: isInThisGame ? '700' : '500',
+                        padding: '0.25rem 0.2rem',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {player.playerName}
+                      </td>
+                      <td style={{
+                        textAlign: 'right',
+                        padding: '0.25rem 0.3rem',
+                        whiteSpace: 'nowrap',
+                        fontWeight: '700',
+                        color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                      }}>
+                        {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                      </td>
+                      <td style={{
+                        textAlign: 'right',
+                        padding: '0.25rem 0.3rem',
+                        whiteSpace: 'nowrap',
+                        color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                      }}>
+                        {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                        {player.gamesPlayed}
+                      </td>
+                      <td style={{
+                        textAlign: 'center',
+                        padding: '0.25rem 0.2rem',
+                        whiteSpace: 'nowrap',
+                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                        fontWeight: '600',
+                      }}>
+                        {Math.round(player.winPercentage)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{
+              textAlign: 'center',
+              marginTop: '0.5rem',
+              fontSize: '0.75rem',
+              color: 'var(--text-muted)',
+              opacity: 0.7
+            }}>
+              Poker Manager 🎲
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
         <button className="btn btn-secondary btn-lg" onClick={() => navigate('/')}>
@@ -1108,9 +1406,9 @@ const GameSummaryScreen = () => {
         <button 
           className="btn btn-primary btn-lg" 
           onClick={handleShare}
-          disabled={isSharing}
+          disabled={isSharing || isLoadingAiSummary}
         >
-          {isSharing ? '📸 Capturing...' : '📤 Share'}
+          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ ממתין לסיכום...' : '📤 Share'}
         </button>
       </div>
     </div>

@@ -52,6 +52,7 @@ export interface ForecastResult {
   highlight: string;
   sentence: string;
   isSurprise: boolean;
+  groupIntro?: string;
 }
 
 export interface MilestoneItem {
@@ -640,8 +641,8 @@ export const generateAIForecasts = async (
     allTimeRecords.push(`❄️ Cold Streak: ${longestLoseStreak.name} is on a ${Math.abs(longestLoseStreak.streak)}-game losing streak`);
   }
   
-  const allTimeRecordsText = allTimeRecords.join('\n');
-  
+  const allTimeRecordsText = allTimeRecords.length > 0 ? allTimeRecords.join('\n') : '';
+
   // ========== CALCULATE MILESTONES ==========
   const milestones: string[] = [];
   
@@ -955,6 +956,293 @@ export const generateAIForecasts = async (
   
   const milestonesText = milestones.length > 0 ? milestones.join('\n') : '';
 
+  // ========== TONIGHT'S STORYLINES - Deep pool of head-to-head matchups & narratives ==========
+  const storylines: string[] = [];
+
+  // Build a map: gameId → list of { name, profit } for tonight's players
+  const gameParticipation: Record<string, { name: string; profit: number }[]> = {};
+  for (const p of players) {
+    for (const g of p.gameHistory) {
+      if (!gameParticipation[g.gameId]) gameParticipation[g.gameId] = [];
+      gameParticipation[g.gameId].push({ name: p.name, profit: g.profit });
+    }
+  }
+
+  // Head-to-head: for each pair, compute shared game records + money flow + consecutive wins
+  const h2hResults: {
+    a: string; b: string; aWins: number; bWins: number; sharedGames: number;
+    aTotalProfit: number; bTotalProfit: number;
+    aAvgWhenTogether: number; bAvgWhenTogether: number;
+    aConsecutiveWins: number; bConsecutiveWins: number;
+    lastGameAProfit: number; lastGameBProfit: number;
+  }[] = [];
+
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      const pA = players[i], pB = players[j];
+      const aGameIds = new Set(pA.gameHistory.map(g => g.gameId));
+      const sharedGameIds = pB.gameHistory.filter(g => aGameIds.has(g.gameId)).map(g => g.gameId);
+      if (sharedGameIds.length < 2) continue;
+
+      let aWins = 0, bWins = 0, aTotalProfit = 0, bTotalProfit = 0;
+      const results: { aWon: boolean; bWon: boolean; aProfit: number; bProfit: number; date: string }[] = [];
+
+      for (const gid of sharedGameIds) {
+        const aGame = pA.gameHistory.find(g => g.gameId === gid);
+        const bGame = pB.gameHistory.find(g => g.gameId === gid);
+        if (!aGame || !bGame) continue;
+        const aWon = aGame.profit > bGame.profit;
+        const bWon = bGame.profit > aGame.profit;
+        if (aWon) aWins++;
+        if (bWon) bWins++;
+        aTotalProfit += aGame.profit;
+        bTotalProfit += bGame.profit;
+        results.push({ aWon, bWon, aProfit: aGame.profit, bProfit: bGame.profit, date: aGame.date });
+      }
+
+      // Sort by date (most recent first) and compute consecutive wins
+      results.sort((a, b) => parseGameDate(b.date).getTime() - parseGameDate(a.date).getTime());
+      let aConsec = 0, bConsec = 0;
+      for (const r of results) {
+        if (r.aWon) { aConsec++; } else break;
+      }
+      if (aConsec === 0) {
+        for (const r of results) {
+          if (r.bWon) { bConsec++; } else break;
+        }
+      }
+
+      h2hResults.push({
+        a: pA.name, b: pB.name, aWins, bWins,
+        sharedGames: sharedGameIds.length,
+        aTotalProfit, bTotalProfit,
+        aAvgWhenTogether: Math.round(aTotalProfit / sharedGameIds.length),
+        bAvgWhenTogether: Math.round(bTotalProfit / sharedGameIds.length),
+        aConsecutiveWins: aConsec, bConsecutiveWins: bConsec,
+        lastGameAProfit: results[0]?.aProfit || 0,
+        lastGameBProfit: results[0]?.bProfit || 0,
+      });
+    }
+  }
+
+  // === STORYLINE TYPE 1: Dominance ===
+  const dominance = h2hResults
+    .filter(h => h.sharedGames >= 4 && (h.aWins >= h.sharedGames * 0.7 || h.bWins >= h.sharedGames * 0.7))
+    .sort((a, b) => Math.max(b.aWins, b.bWins) / b.sharedGames - Math.max(a.aWins, a.bWins) / a.sharedGames);
+  for (const d of dominance.slice(0, 2)) {
+    const winner = d.aWins > d.bWins ? d.a : d.b;
+    const loser = d.aWins > d.bWins ? d.b : d.a;
+    const wins = Math.max(d.aWins, d.bWins);
+    storylines.push(`🥊 שליטה: ${winner} ניצח את ${loser} ב-${wins} מתוך ${d.sharedGames} משחקים משותפים`);
+  }
+
+  // === STORYLINE TYPE 2: Close rivalry ===
+  const rivalries = h2hResults
+    .filter(h => h.sharedGames >= 5 && Math.abs(h.aWins - h.bWins) <= 1)
+    .sort((a, b) => b.sharedGames - a.sharedGames);
+  for (const r of rivalries.slice(0, 2)) {
+    storylines.push(`⚔️ יריבות: ${r.a} ו${r.b} כמעט שווים - ${r.aWins}:${r.bWins} ב-${r.sharedGames} משחקים משותפים. הלילה שובר שוויון!`);
+  }
+
+  // === STORYLINE TYPE 3: Revenge game ===
+  for (const h of h2hResults) {
+    if (h.sharedGames < 3) continue;
+    const profitDiff = Math.abs(h.lastGameAProfit - h.lastGameBProfit);
+    if (profitDiff >= 80) {
+      const loser = h.lastGameAProfit < h.lastGameBProfit ? h.a : h.b;
+      const winner = h.lastGameAProfit < h.lastGameBProfit ? h.b : h.a;
+      const loss = Math.round(Math.min(h.lastGameAProfit, h.lastGameBProfit));
+      storylines.push(`🔥 נקמה: ${loser} הפסיד ${loss}₪ במשחק האחרון מול ${winner} - הלילה משחק הנקמה?`);
+    }
+  }
+
+  // === STORYLINE TYPE 4: Lucky charm / bad luck ===
+  for (const p of players) {
+    if (p.gamesPlayed < 5) continue;
+    for (const other of players) {
+      if (other.name === p.name) continue;
+      const h = h2hResults.find(r =>
+        (r.a === p.name && r.b === other.name) || (r.b === p.name && r.a === other.name)
+      );
+      if (!h || h.sharedGames < 4) continue;
+      const avgTogether = h.a === p.name ? h.aAvgWhenTogether : h.bAvgWhenTogether;
+      const diff = avgTogether - p.avgProfit;
+      if (diff >= 25) {
+        storylines.push(`🍀 קמע: ${p.name} מרוויח בממוצע ${avgTogether >= 0 ? '+' : ''}${avgTogether}₪ כש${other.name} משחק (לעומת ${Math.round(p.avgProfit) >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪ בד"כ)`);
+      } else if (diff <= -25) {
+        storylines.push(`😈 עין הרע: ${p.name} בממוצע ${avgTogether}₪ כש${other.name} בשולחן (לעומת ${Math.round(p.avgProfit) >= 0 ? '+' : ''}${Math.round(p.avgProfit)}₪ בד"כ)`);
+      }
+    }
+  }
+
+  // === STORYLINE TYPE 5: Group dynamics ===
+  for (const p of players) {
+    if (p.gamesPlayed < 8) continue;
+    const fewOverlap: number[] = [], manyOverlap: number[] = [];
+    for (const g of p.gameHistory) {
+      const count = gameParticipation[g.gameId]?.length || 1;
+      if (count <= 3) fewOverlap.push(g.profit);
+      else if (count >= 5) manyOverlap.push(g.profit);
+    }
+    if (fewOverlap.length >= 3 && manyOverlap.length >= 3) {
+      const fewAvg = Math.round(fewOverlap.reduce((a, b) => a + b, 0) / fewOverlap.length);
+      const manyAvg = Math.round(manyOverlap.reduce((a, b) => a + b, 0) / manyOverlap.length);
+      if (Math.abs(fewAvg - manyAvg) >= 30) {
+        const better = manyAvg > fewAvg;
+        storylines.push(`📊 ${better ? 'חברה טובה' : 'צר בשולחן'}: ${p.name} בממוצע ${better ? (manyAvg >= 0 ? '+' : '') + manyAvg : (fewAvg >= 0 ? '+' : '') + fewAvg}₪ ${better ? 'כשרוב החבר\'ה ביחד' : 'עם פחות שחקנים'} לעומת ${better ? (fewAvg >= 0 ? '+' : '') + fewAvg : (manyAvg >= 0 ? '+' : '') + manyAvg}₪`);
+      }
+    }
+  }
+
+  // === STORYLINE TYPE 6: Nemesis (total money flow between two players) ===
+  for (const h of h2hResults) {
+    if (h.sharedGames < 4) continue;
+    const moneyFlow = h.aTotalProfit - h.bTotalProfit;
+    if (Math.abs(moneyFlow) >= 200) {
+      const winner = moneyFlow > 0 ? h.a : h.b;
+      const loser = moneyFlow > 0 ? h.b : h.a;
+      storylines.push(`💸 נמסיס: ${loser} הפסיד סה"כ ${Math.abs(Math.round(moneyFlow))}₪ ל${winner} לאורך ${h.sharedGames} משחקים משותפים`);
+    }
+  }
+
+  // === STORYLINE TYPE 7: H2H win streak ===
+  for (const h of h2hResults) {
+    const consec = Math.max(h.aConsecutiveWins, h.bConsecutiveWins);
+    if (consec >= 3) {
+      const streaker = h.aConsecutiveWins > h.bConsecutiveWins ? h.a : h.b;
+      const victim = h.aConsecutiveWins > h.bConsecutiveWins ? h.b : h.a;
+      storylines.push(`🔥 רצף מול: ${streaker} ניצח את ${victim} ${consec} פעמים ברצף! ישבור את הרצף הלילה?`);
+    }
+  }
+
+  // === STORYLINE TYPE 8: First encounter ===
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      if (players[i].gamesPlayed === 0 || players[j].gamesPlayed === 0) continue;
+      const hasH2H = h2hResults.some(h =>
+        (h.a === players[i].name && h.b === players[j].name) ||
+        (h.b === players[i].name && h.a === players[j].name)
+      );
+      if (!hasH2H) {
+        const aIds = new Set(players[i].gameHistory.map(g => g.gameId));
+        const shared = players[j].gameHistory.filter(g => aIds.has(g.gameId));
+        if (shared.length === 0) {
+          storylines.push(`🤝 פגישה ראשונה: ${players[i].name} ו${players[j].name} מעולם לא שיחקו ביחד! ערב היסטורי`);
+        }
+      }
+    }
+  }
+
+  // === STORYLINE TYPE 9: Ranking duel ===
+  const sortedByYearProfitStory = [...playerPeriodStats].sort((a, b) => b.yearProfit - a.yearProfit);
+  for (let i = 0; i < sortedByYearProfitStory.length - 1; i++) {
+    const gap = sortedByYearProfitStory[i].yearProfit - sortedByYearProfitStory[i + 1].yearProfit;
+    if (gap >= 0 && gap <= 50 && sortedByYearProfitStory[i].yearGames >= 2) {
+      storylines.push(`🏆 קרב דירוג: ${sortedByYearProfitStory[i].name} ו${sortedByYearProfitStory[i + 1].name} רק ${gap}₪ הפרש בטבלת ${currentYear}! הלילה מכריע מי מקום ${i + 1}`);
+    }
+  }
+
+  // === STORYLINE TYPE 10: Comeback trail ===
+  for (const p of players) {
+    if (p.gamesPlayed < 8 || p.totalProfit >= 0) continue;
+    const last5 = p.gameHistory.slice(0, 5);
+    const last5Profit = last5.reduce((s, g) => s + g.profit, 0);
+    if (last5Profit > 50 && p.totalProfit < -100) {
+      storylines.push(`💪 קאמבק: ${p.name} על ${Math.round(p.totalProfit)}₪ כולל, אבל ב-5 משחקים אחרונים +${Math.round(last5Profit)}₪. המגמה מתהפכת!`);
+    }
+  }
+
+  // === STORYLINE TYPE 11: Host effect ===
+  // Requires location data on games (not available in gameHistory); skipped for now
+
+  // === STORYLINE TYPE 12: Milestone chase ===
+  for (const p of players) {
+    if (p.gamesPlayed < 5) continue;
+    const currentWinRate = p.winPercentage;
+    if (currentWinRate >= 45 && currentWinRate < 50) {
+      const winsNeeded = Math.ceil(0.50 * (p.gamesPlayed + 1)) - p.winCount;
+      if (winsNeeded === 1) {
+        storylines.push(`🎯 אבן דרך: ${p.name} על ${Math.round(currentWinRate)}% נצחונות - עוד נצחון אחד = חציית 50%!`);
+      }
+    }
+    if (p.currentStreak >= 3) {
+      storylines.push(`📈 שיא אישי: ${p.name} ברצף של ${p.currentStreak} נצחונות. עוד נצחון = ${p.currentStreak + 1} ברצף!`);
+    }
+  }
+
+  // === STORYLINE TYPE 13: Polar opposites ===
+  const playersWithVolatility = players.filter(p => p.gamesPlayed >= 5).map(p => {
+    const recent = p.gameHistory.slice(0, 10).map(g => g.profit);
+    const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+    const variance = recent.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / recent.length;
+    return { name: p.name, stdDev: Math.sqrt(variance), avgProfit: p.avgProfit };
+  }).sort((a, b) => b.stdDev - a.stdDev);
+  if (playersWithVolatility.length >= 2) {
+    const wildest = playersWithVolatility[0];
+    const calmest = playersWithVolatility[playersWithVolatility.length - 1];
+    if (wildest.stdDev > calmest.stdDev * 2) {
+      storylines.push(`🎭 ניגודים: ${wildest.name} תנודתי (סטייה ${Math.round(wildest.stdDev)}₪) מול ${calmest.name} יציב (סטייה ${Math.round(calmest.stdDev)}₪) - שני סגנונות שונים לגמרי`);
+    }
+  }
+
+  // === STORYLINE TYPE 14: Money magnet (biggest contributor to tonight's group) ===
+  const totalContributions = players.filter(p => p.gamesPlayed >= 3).map(p => {
+    let contributed = 0;
+    for (const h of h2hResults) {
+      if (h.a === p.name) contributed += h.aTotalProfit;
+      else if (h.b === p.name) contributed += h.bTotalProfit;
+    }
+    return { name: p.name, contributed: Math.round(contributed) };
+  }).sort((a, b) => a.contributed - b.contributed);
+  if (totalContributions.length >= 2 && totalContributions[0].contributed < -150) {
+    storylines.push(`🧲 ספונסר: ${totalContributions[0].name} הפסיד ${Math.abs(totalContributions[0].contributed)}₪ סך הכל לשחקני הלילה. הכסף הולך בעיקר אל ${totalContributions[totalContributions.length - 1].name} (+${totalContributions[totalContributions.length - 1].contributed}₪)`);
+  }
+
+  // === STORYLINE TYPE 15: Hot/cold group trend ===
+  const groupLast3 = players.filter(p => p.gameHistory.length >= 3);
+  if (groupLast3.length >= 4) {
+    const onHotStreak = groupLast3.filter(p => p.currentStreak >= 2).length;
+    const onColdStreak = groupLast3.filter(p => p.currentStreak <= -2).length;
+    if (onHotStreak >= 3) {
+      const names = groupLast3.filter(p => p.currentStreak >= 2).map(p => p.name).join(', ');
+      storylines.push(`🌡️ גל חום: ${onHotStreak} שחקנים ברצף נצחונות (${names}) - ערב של מנצחים!`);
+    } else if (onColdStreak >= 3) {
+      const names = groupLast3.filter(p => p.currentStreak <= -2).map(p => p.name).join(', ');
+      storylines.push(`❄️ גל קור: ${onColdStreak} שחקנים ברצף הפסדים (${names}) - מי ישבור את הסדרה?`);
+    }
+  }
+
+  // Shuffle and pick up to 8 storylines, trying to cover as many players as possible
+  const allStorylines = [...storylines];
+  const pickedStorylines: string[] = [];
+  const coveredPlayers = new Set<string>();
+  const shuffled = allStorylines.sort(() => Math.random() - 0.5);
+  const maxStorylines = Math.min(8, Math.max(players.length, 5));
+
+  // First pass: pick storylines that cover uncovered players
+  for (const s of shuffled) {
+    if (pickedStorylines.length >= maxStorylines) break;
+    const mentionedPlayers = players.filter(p => s.includes(p.name));
+    const coversNew = mentionedPlayers.some(p => !coveredPlayers.has(p.name));
+    if (coversNew) {
+      pickedStorylines.push(s);
+      mentionedPlayers.forEach(p => coveredPlayers.add(p.name));
+    }
+  }
+  // Second pass: fill remaining slots
+  for (const s of shuffled) {
+    if (pickedStorylines.length >= maxStorylines) break;
+    if (!pickedStorylines.includes(s)) {
+      pickedStorylines.push(s);
+    }
+  }
+
+  const storylinesText = pickedStorylines.length > 0 ? pickedStorylines.join('\n') : '';
+  console.log(`📖 Storylines: ${pickedStorylines.length} picked from ${allStorylines.length} available`);
+
+  // ========== SIMPLIFIED PREDICTION ALGORITHM ==========
+  // Simple, data-informed: direction from recent form, magnitude from real game outcomes
+
   // Helper: Get games for a specific half-year period
   const getHalfGames = (player: typeof players[0], year: number, half: 1 | 2) => {
     const startMonth = half === 1 ? 0 : 6;
@@ -964,214 +1252,106 @@ export const generateAIForecasts = async (
       return d.getFullYear() === year && d.getMonth() >= startMonth && d.getMonth() <= endMonth;
     });
   };
-  
-  // Helper: Get previous period (H1->prev year H2, H2->same year H1)
   const getPreviousPeriod = () => {
-    if (currentHalf === 1) {
-      return { year: currentYear - 1, half: 2 as const, label: `H2 ${currentYear - 1}` };
-    } else {
-      return { year: currentYear, half: 1 as const, label: `H1 ${currentYear}` };
-    }
+    if (currentHalf === 1) return { year: currentYear - 1, half: 2 as const, label: `H2 ${currentYear - 1}` };
+    return { year: currentYear, half: 1 as const, label: `H1 ${currentYear}` };
   };
-  
   const currentPeriodLabel = `H${currentHalf} ${currentYear}`;
   const prevPeriod = getPreviousPeriod();
 
-  // Calculate SUGGESTED expected profit for each player
-  // Uses three-layer weighting with recency-weighted history (recent games matter more)
   const playerSuggestions = players.map(p => {
-    const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
-    const prevHalfGames = getHalfGames(p, prevPeriod.year, prevPeriod.half);
-    
-    let periodGames = currentHalfGames;
-    if (currentHalfGames.length < 2 && prevHalfGames.length >= 2) {
-      periodGames = prevHalfGames;
-    }
-    
-    const periodAvg = periodGames.length > 0 
-      ? periodGames.reduce((sum, g) => sum + g.profit, 0) / periodGames.length 
-      : 0;
-    
-    // Last 3 games average - captures very recent momentum
-    const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
-    const last3Avg = last3.length > 0 ? last3.reduce((sum, g) => sum + g.profit, 0) / last3.length : 0;
-    
-    // Recency-weighted historical average (exponential decay: recent games count more)
-    // Game 1 (most recent) = weight 1.0, game 2 = 0.92, game 3 = 0.85, etc.
-    let histAvg = p.avgProfit;
-    if (p.gameHistory.length >= 3) {
-      const decay = 0.92;
-      let weightedSum = 0;
-      let totalWeight = 0;
-      for (let i = 0; i < p.gameHistory.length; i++) {
-        const w = Math.pow(decay, i);
-        weightedSum += p.gameHistory[i].profit * w;
-        totalWeight += w;
-      }
-      histAvg = weightedSum / totalWeight;
-    }
-    
-    // When recent form CONTRADICTS history, averaging cancels them out (boring).
-    // Instead: pick a direction - either "momentum continues" or "regression to mean"
-    const formContradiction = last3.length >= 3 && p.gamesPlayed >= 5 &&
-      ((last3Avg > 15 && histAvg < -10) || (last3Avg < -15 && histAvg > 10));
-    
-    let suggested: number;
     if (p.gamesPlayed === 0) {
-      suggested = 0;
-    } else if (formContradiction) {
-      if (Math.random() < 0.6) {
-        suggested = last3Avg * 0.85 + histAvg * 0.15;
-      } else {
-        suggested = histAvg * 0.85 + last3Avg * 0.15;
-      }
-    } else if (last3.length >= 3 && periodGames.length >= 2) {
-      // Three-layer: 40% last-3, 35% half-period, 25% recency-weighted history
-      suggested = (last3Avg * 0.40) + (periodAvg * 0.35) + (histAvg * 0.25);
-    } else if (periodGames.length >= 2) {
-      suggested = (periodAvg * 0.65) + (histAvg * 0.35);
-    } else if (last3.length >= 2) {
-      suggested = (last3Avg * 0.50) + (histAvg * 0.50);
-    } else {
-      suggested = histAvg;
+      return { name: p.name, suggested: Math.round((Math.random() - 0.5) * 60) };
     }
-    
-    // Calculate player volatility (stdDev of recent games)
-    const recentGames = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length));
-    const recentProfits = recentGames.map(g => g.profit);
-    let stdDev = 50;
-    if (recentProfits.length >= 3) {
-      const mean = recentProfits.reduce((a, b) => a + b, 0) / recentProfits.length;
-      const vari = recentProfits.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recentProfits.length;
-      stdDev = Math.sqrt(vari);
-    }
-    
-    // STREAK HANDLING: Probabilistic regression vs continuation
-    // Longer streaks are more likely to break (regression to mean)
-    const streakLength = Math.abs(p.currentStreak);
-    if (streakLength >= 2) {
-      const regressionProb = streakLength >= 4 ? 0.75 : streakLength >= 3 ? 0.60 : 0.40;
-      const regresses = Math.random() < regressionProb;
-      
-      if (regresses) {
-        const regressionFactor = streakLength >= 4 ? 0.3 : streakLength >= 3 ? 0.5 : 0.75;
-        suggested *= regressionFactor;
-      } else {
-        const continuationFactor = streakLength >= 4 ? 1.25 : streakLength >= 3 ? 1.15 : 1.1;
-        suggested *= continuationFactor;
-      }
-    }
-    
-    // Amplification for game-night scale
-    suggested *= 1.5;
-    
-    // Add volatility-scaled random shift to break ranking correlation
-    const randomShift = (Math.random() - 0.5) * stdDev * 0.4;
-    suggested += randomShift;
-    
-    // New/infrequent players: push toward 0 with high uncertainty
-    if (p.gamesPlayed <= 3) {
-      suggested *= 0.3;
-    } else if (p.gamesPlayed <= 6) {
-      suggested *= 0.6;
-    }
-    
-    // Cap predictions based on player's ACTUAL historical range
-    // Predictions should not exceed what this player has realistically achieved
-    if (p.gamesPlayed >= 3) {
-      const maxPositive = Math.max(p.bestWin * 0.75, stdDev * 1.5, 30);
-      const maxNegative = Math.min(p.worstLoss * 0.75, -stdDev * 1.5, -30);
-      suggested = Math.max(maxNegative, Math.min(maxPositive, suggested));
-    }
-    
-    // Lower minimum threshold (allows near-zero predictions for better accuracy)
-    if (suggested > 0 && suggested < 10) suggested = 10;
-    if (suggested < 0 && suggested > -10) suggested = -10;
-    
-    return { name: p.name, suggested: Math.round(suggested), stdDev: Math.round(stdDev) };
+
+    // Typical game magnitude: how much this player actually swings per game
+    const recent10 = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length));
+    const typicalMagnitude = recent10.length >= 2
+      ? recent10.reduce((sum, g) => sum + Math.abs(g.profit), 0) / recent10.length
+      : 50;
+
+    // Direction from blended recent form + overall tendency
+    const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
+    const last3Avg = last3.reduce((sum, g) => sum + g.profit, 0) / last3.length;
+    const blended = last3Avg * 0.6 + p.avgProfit * 0.4;
+    const direction = blended >= 0 ? 1 : -1;
+
+    // Magnitude: random fraction of their real swing range
+    const magnitude = typicalMagnitude * (0.3 + Math.random() * 0.4);
+
+    let suggested = direction * magnitude;
+
+    // Add some noise to avoid mirroring the ranking
+    suggested += (Math.random() - 0.5) * typicalMagnitude * 0.25;
+
+    // New players: smaller predictions
+    if (p.gamesPlayed <= 3) suggested *= 0.6;
+
+    return { name: p.name, suggested: Math.round(suggested) };
   });
-  
-  // Shuffle adjacent predictions occasionally to break ranking mirror
-  for (let i = 0; i < playerSuggestions.length - 1; i++) {
-    const a = playerSuggestions[i];
-    const b = playerSuggestions[i + 1];
-    if (Math.abs(a.suggested - b.suggested) < 30 && Math.random() < 0.35) {
-      const temp = a.suggested;
-      a.suggested = b.suggested;
-      b.suggested = temp;
-    }
-  }
-  
-  // Balance suggestions to zero-sum (no post-balance minimum - allows natural near-zero predictions)
-  const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
-  const adjustment = totalSuggested / playerSuggestions.length;
-  playerSuggestions.forEach(p => {
-    p.suggested = Math.round(p.suggested - adjustment);
-  });
-  
-  // Final zero-sum correction for rounding
-  const finalTotal = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
-  if (finalTotal !== 0) {
-    const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
-    sortedByAbs[0].suggested -= finalTotal;
-  }
-  
-  // Pre-select SURPRISE candidates - MULTIPLE TYPES for variety and realism
-  type SurpriseType = 'underdog_rise' | 'top_dog_fall' | 'wild_card' | 'breakout';
-  const surpriseCandidatesTyped: { name: string; type: SurpriseType; boost: number; description: string }[] = [];
-  
-  players.forEach(p => {
-    if (p.gamesPlayed < 5) return;
-    
-    const halfGames = getHalfGames(p, currentYear, currentHalf);
-    if (halfGames.length < 2) return;
-    
-    const halfAvg = halfGames.reduce((sum, g) => sum + g.profit, 0) / halfGames.length;
+
+  // ========== SURPRISE SYSTEM ==========
+  // Multiple surprise types to prevent forecasts from mirroring the ranking table
+  type SurpriseType = 'underdog_rise' | 'top_dog_fall' | 'wild_card' | 'breakout' | 'streak_breaker' | 'dark_horse';
+  const surpriseCandidates: { name: string; type: SurpriseType; description: string }[] = [];
+
+  const halfGamesMap = new Map(players.map(p => {
+    const hg = getHalfGames(p, currentYear, currentHalf);
+    const avg = hg.length > 0 ? hg.reduce((s, g) => s + g.profit, 0) / hg.length : 0;
+    return [p.name, { games: hg, avg }];
+  }));
+
+  for (const p of players) {
+    if (p.gamesPlayed < 3) continue;
+    const halfData = halfGamesMap.get(p.name);
+    const halfAvg = halfData?.avg || 0;
     const suggestion = playerSuggestions.find(s => s.name === p.name);
-    const playerStdDev = suggestion?.stdDev || 50;
-    
-    // Type 1: Underdog rise - bad all-time but good recent form → positive surprise
+    if (!suggestion) continue;
+
+    // Underdog rise: bad overall but recent form is good
     if (p.avgProfit < -5 && halfAvg > 10) {
-      surpriseCandidatesTyped.push({
-        name: p.name, type: 'underdog_rise',
-        boost: Math.max(50, Math.round(halfAvg * 1.5)),
-        description: `היסטוריה שלילית (ממוצע ${Math.round(p.avgProfit)}₪) אבל פורמה חיובית (${Math.round(halfAvg)}₪) - צפי לניצחון מפתיע!`
-      });
+      surpriseCandidates.push({ name: p.name, type: 'underdog_rise',
+        description: `היסטוריה שלילית (${Math.round(p.avgProfit)}₪) אבל פורמה חיובית (${Math.round(halfAvg)}₪) - הפתעה חיובית!` });
     }
-    // Type 2: Top dog fall - good all-time but bad recent form → negative surprise
+    // Top dog fall: strong overall but recent slump
     if (p.avgProfit > 15 && halfAvg < -5) {
-      surpriseCandidatesTyped.push({
-        name: p.name, type: 'top_dog_fall',
-        boost: Math.min(-40, Math.round(halfAvg * 1.5)),
-        description: `שחקן חזק (ממוצע ${Math.round(p.avgProfit)}₪) אבל פורמה שלילית (${Math.round(halfAvg)}₪) - צפי להפסד מפתיע!`
-      });
+      surpriseCandidates.push({ name: p.name, type: 'top_dog_fall',
+        description: `שחקן חזק (ממוצע ${Math.round(p.avgProfit)}₪) בפורמה שלילית (${Math.round(halfAvg)}₪) - הפתעה שלילית!` });
     }
-    // Type 3: Wild card - very high volatility, unpredictable player
-    if (playerStdDev > 80 && Math.abs(p.avgProfit) < 20) {
-      const wildDirection = Math.random() > 0.5 ? 1 : -1;
-      surpriseCandidatesTyped.push({
-        name: p.name, type: 'wild_card',
-        boost: wildDirection * Math.round(playerStdDev * 0.6),
-        description: `שחקן תנודתי (סטיית תקן ${playerStdDev}₪) - יכול להפתיע לכל כיוון!`
-      });
+    // Wild card: high volatility
+    if (p.gamesPlayed >= 5) {
+      const recent = p.gameHistory.slice(0, 10).map(g => g.profit);
+      const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+      const stdDev = Math.sqrt(recent.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / recent.length);
+      if (stdDev > 80) {
+        surpriseCandidates.push({ name: p.name, type: 'wild_card',
+          description: `שחקן תנודתי (סטייה ${Math.round(stdDev)}₪) - יכול להפתיע לכל כיוון!` });
+      }
     }
-    // Type 4: Breakout - mid-table player on winning streak
+    // Breakout: average player on a streak
     if (Math.abs(p.avgProfit) < 15 && p.currentStreak >= 2 && halfAvg > 15) {
-      surpriseCandidatesTyped.push({
-        name: p.name, type: 'breakout',
-        boost: Math.max(50, Math.round(halfAvg * 2)),
-        description: `שחקן ממוצע ברצף ${p.currentStreak} נצחונות עם ממוצע ${Math.round(halfAvg)}₪ - פריצה צפויה!`
-      });
+      surpriseCandidates.push({ name: p.name, type: 'breakout',
+        description: `${p.currentStreak} נצחונות ברצף עם ממוצע ${Math.round(halfAvg)}₪ - פריצה צפויה!` });
     }
-  });
-  
-  // Pick 0-2 surprises from different types for variety
-  const selectedSurprises: typeof surpriseCandidatesTyped = [];
+    // Streak breaker: long streak predicted to end
+    if (Math.abs(p.currentStreak) >= 3) {
+      surpriseCandidates.push({ name: p.name, type: 'streak_breaker',
+        description: `רצף של ${Math.abs(p.currentStreak)} ${p.currentStreak > 0 ? 'נצחונות' : 'הפסדים'} - סטטיסטית הרצף צפוי להישבר!` });
+    }
+    // Dark horse: infrequent player with decent results
+    if (p.gamesPlayed >= 3 && p.gamesPlayed <= 8 && p.avgProfit > 10) {
+      surpriseCandidates.push({ name: p.name, type: 'dark_horse',
+        description: `שחקן לא קבוע (${p.gamesPlayed} משחקים) עם ממוצע +${Math.round(p.avgProfit)}₪ - סוס שחור!` });
+    }
+  }
+
+  // Pick up to 3 surprises from different types
+  const selectedSurprises: typeof surpriseCandidates = [];
   const usedSurpriseTypes = new Set<SurpriseType>();
   const usedSurpriseNames = new Set<string>();
-  const shuffledSurprises = [...surpriseCandidatesTyped].sort(() => Math.random() - 0.5);
-  const maxSurpriseCount = Math.min(2, Math.ceil(players.length / 4));
-  
+  const shuffledSurprises = [...surpriseCandidates].sort(() => Math.random() - 0.5);
+  const maxSurpriseCount = Math.min(3, Math.ceil(players.length / 3));
+
   for (const candidate of shuffledSurprises) {
     if (selectedSurprises.length >= maxSurpriseCount) break;
     if (usedSurpriseTypes.has(candidate.type) || usedSurpriseNames.has(candidate.name)) continue;
@@ -1179,47 +1359,43 @@ export const generateAIForecasts = async (
     usedSurpriseTypes.add(candidate.type);
     usedSurpriseNames.add(candidate.name);
   }
-  
-  // Apply surprise effects to suggested profits
+
+  // Apply surprise: flip or significantly adjust the prediction
   for (const surprise of selectedSurprises) {
-    const surprisePlayer = playerSuggestions.find(p => p.name === surprise.name);
-    if (!surprisePlayer) continue;
-    
-    const oldValue = surprisePlayer.suggested;
-    let newValue: number;
-    
+    const sp = playerSuggestions.find(p => p.name === surprise.name);
+    if (!sp) continue;
+    const playerData = players.find(p => p.name === surprise.name)!;
+    const recent10 = playerData.gameHistory.slice(0, 10);
+    const typicalMag = recent10.length >= 2
+      ? recent10.reduce((s, g) => s + Math.abs(g.profit), 0) / recent10.length : 50;
+    const mag = typicalMag * (0.4 + Math.random() * 0.3);
+
     if (surprise.type === 'top_dog_fall') {
-      newValue = Math.min(oldValue, surprise.boost);
+      sp.suggested = -Math.abs(mag);
+    } else if (surprise.type === 'streak_breaker') {
+      // Breaking a winning streak = negative; breaking a losing streak = positive
+      sp.suggested = playerData.currentStreak > 0 ? -Math.abs(mag) : Math.abs(mag);
     } else {
-      newValue = Math.max(oldValue, surprise.boost);
+      sp.suggested = Math.abs(mag);
     }
-    
-    surprisePlayer.suggested = Math.round(newValue);
-    const diff = newValue - oldValue;
-    
-    // Spread the balance adjustment across all non-surprise players proportionally
-    const others = playerSuggestions.filter(p => p.name !== surprise.name && !usedSurpriseNames.has(p.name));
-    if (others.length > 0) {
-      const totalAbsOthers = others.reduce((sum, p) => sum + Math.abs(p.suggested) + 10, 0);
-      let distributed = 0;
-      for (let i = 0; i < others.length; i++) {
-        const weight = (Math.abs(others[i].suggested) + 10) / totalAbsOthers;
-        const share = i === others.length - 1
-          ? Math.round(diff) - distributed
-          : Math.round(diff * weight);
-        others[i].suggested -= share;
-        distributed += share;
-      }
-    }
+    sp.suggested = Math.round(sp.suggested);
   }
-  
-  console.log('🎲 Surprise candidates:', surpriseCandidatesTyped.map(s => `${s.name}(${s.type})`).join(', '));
-  console.log('🎲 Selected surprises:', selectedSurprises.map(s => `${s.name}(${s.type}: ${s.boost >= 0 ? '+' : ''}${s.boost})`).join(', '));
-  
+
+  // Zero-sum balance
+  const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
+  const adj = playerSuggestions.length > 0 ? totalSuggested / playerSuggestions.length : 0;
+  playerSuggestions.forEach(p => { p.suggested = Math.round(p.suggested - adj); });
+  const finalTotal = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
+  if (finalTotal !== 0) {
+    const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
+    sortedByAbs[0].suggested -= finalTotal;
+  }
+
+  console.log('🎲 Surprises:', selectedSurprises.map(s => `${s.name}(${s.type})`).join(', '));
+  console.log('📊 Predictions:', playerSuggestions.map(s => `${s.name}: ${s.suggested >= 0 ? '+' : ''}${s.suggested}`).join(', '));
+
   const surpriseText = selectedSurprises.length > 0 
-    ? `\n🎲 הפתעות:\n` + selectedSurprises.map(s =>
-        `- ${s.name}: ${s.description}`
-      ).join('\n')
+    ? `\n🎲 הפתעות:\n` + selectedSurprises.map(s => `- ${s.name}: ${s.description}`).join('\n')
     : '';
   
   // Pre-calculate year profit for all players to sort by 2026 ranking
@@ -1377,62 +1553,61 @@ export const generateAIForecasts = async (
     return lines.join('\n');
   }).join('\n\n');
 
-  const prompt = `אתה מנתח פוקר ישראלי שנון וקולע. לכל שחקן יש חיזוי רווח/הפסד שכבר נקבע (🔒). התפקיד שלך: לכתוב טקסט מרתק שמתאים בדיוק לחיזוי.
+  const prompt = `אתה פרשן ספורט ישראלי שנון, קולע ומשעשע. התפקיד שלך: ליצור חוויה מהנה לפני ערב פוקר. לכל שחקן יש חיזוי רווח/הפסד שכבר נקבע (🔒) - אתה כותב את הטקסט המלווה.
 
-📊 כרטיסי שחקנים (החיזוי הסופי מסומן ב-🔒):
+📊 כרטיסי שחקנים:
 ${playerDataText}
+${allTimeRecordsText ? `\n🏅 שיאי הקבוצה (שחקני הלילה בלבד):\n${allTimeRecordsText}` : ''}
+${storylinesText ? `\n📖 סיפורי הערב - עובדות מעניינות בין השחקנים (חומר גלם מעולה למשפטים!):\n${storylinesText}` : ''}
 ${milestonesText ? `\n🎯 אבני דרך:\n${milestonesText}` : ''}
 ${surpriseText}
 
+📤 פלט JSON בפורמט הבא:
+{"groupIntro":"משפט פתיחה אחד לכל הערב","players":[{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]}
+
+🌟 groupIntro - משפט פתיחה לערב (חובה!):
+• משפט אחד בעברית (15-25 מילים) שמתאר את האווירה של הערב
+• השתמש בסיפורי הערב (📖) אם יש - הם מוסיפים דרמה!
+• דוגמאות: "ערב של חשבונות פתוחים - 3 יריבויות, משחק נקמה, ושחקן חדש שאף אחד לא מכיר"
+• "7 שחקנים, 4 ברצף נצחונות, וספונסר אחד שמממן את כולם - יהיה מעניין"
+• הטון: כמו פרשן ספורט לפני משחק גדול
+
 📝 לכל שחקן כתוב:
-1. highlight - כותרת קצרה (3-6 מילים) - העובדה הכי מעניינת מהכרטיס
-2. sentence - משפט תחזית אחד בעברית (15-30 מילים) עם 2-3 מספרים אמיתיים מהכרטיס
+1. highlight - כותרת קצרה (3-6 מילים) - העובדה הכי מעניינת ומשעשעת
+2. sentence - משפט אחד בעברית (20-40 מילים) - סיפור מרתק עם 2-3 מספרים אמיתיים מהכרטיס
 3. isSurprise - true רק אם החיזוי מנוגד להיסטוריה (פער ≥40₪ מהממוצע ההיסטורי)
 
-⚡ הכלל החשוב ביותר - התאמת טקסט לחיזוי:
-• חיזוי חיובי גדול (+50₪+) → טון בטוח, אופטימי, "הולך לנצח", "מסוכן"
-• חיזוי חיובי קטן (+15-49₪) → טון זהיר-חיובי, "יתרון קל", "סיכוי טוב"
-• חיזוי שלילי קטן (-15 עד -49₪) → טון מאתגר, "צריך להוכיח", "לא קל"
-• חיזוי שלילי גדול (-50₪ ומטה) → הומור, "ספונסר", "תורם", "יום קשה צפוי"
-• אם החיזוי שלילי - אסור לכתוב משפט אופטימי! ולהיפך!
+⭐ הכלל הכי חשוב - בידור מעל הכל:
+• סיפורי ערב (📖) הם הזהב שלך! אם יש יריבות, נקמה, קמע, נמסיס - תשתמש בהם!
+• אם שחקן מוזכר בסיפור ערב, העדף את הסיפור על פני סטטיסטיקה יבשה
+• כתוב כמו פרשן ספורט: דרמטי, שנון, עם הומור כשמתאים
+• כל משפט צריך לספר סיפור, לא רק לפלוט מספרים
 
-🎯 כל שחקן = עובדה ייחודית שונה (חובה!):
-• לכל שחקן, השתמש בזווית המוצעת כבסיס - זו העובדה שצריכה לבלוט
-• אסור שלשני שחקנים יהיה אותו סוג נתון מרכזי! אם כתבת על רצף לשחקן אחד - לאחרים כתוב על דבר אחר
-• העדיפויות: רצף, פער דירוג מהשחקן מעל, תוצאת משחק אחרון, אחוז נצחונות, ממוצע תקופה vs היסטורי, ותק (מספר משחקים), ימי היעדרות
+🎯 כל שחקן = סיפור ייחודי (חובה!):
+• לכל שחקן זווית מוצעת - השתמש בה כבסיס
+• אסור שלשני שחקנים יהיה אותו סוג נתון מרכזי!
+• העדיפויות: סיפורי ערב (יריבויות/נקמות/נמסיס) ← רצפים ← קרבות דירוג ← תוצאה אחרונה ← אחוז נצחונות ← ותק
 • שחקן חדש (בלי היסטוריה) → כתוב שהוא חדש, אל תמציא מספרים!
 
-📏 התאמת עוצמת מילים למספרים (קריטי!):
-• הבדל/שיפור קטן (עד 20₪) → "שיפור קל", "מגמה עדינה", "צעד קטן"
-• הבדל בינוני (20-50₪) → "מגמה ברורה", "שינוי משמעותי"
-• הבדל גדול (50₪+) → "פורמה מרשימה", "קפיצה דרמטית"
-• מילים כמו "מטורף", "מדהים", "היסטורי", "חסר תקדים" → רק לנתונים באמת חריגים (רצף 5+, פער 100₪+, שיא אישי)
-• אם שחקן השתפר ב-15₪ → אל תכתוב "שיפור מדהים". תכתוב "מגמה חיובית קלה"
-• אם שחקן במקום 3 → אל תכתוב "שולט" או "מוביל". תהיה מדויק
+⚡ התאמת טון לחיזוי:
+• חיזוי חיובי → טון חיובי/בטוח (אבל לא מוגזם לחיזוי קטן)
+• חיזוי שלילי → טון מאתגר/הומוריסטי (אסור לכתוב אופטימי!)
+• מילים כמו "מטורף", "מדהים", "היסטורי" → רק לנתונים באמת חריגים (רצף 5+, פער 150₪+)
 
 ✍️ כללי כתיבה:
 • אסור להזכיר את מספר החיזוי עצמו (מוצג בנפרד)
 • אסור להזכיר הפסד מצטבר/כולל (הפסד במשחק אחרון - מותר)
 • דירוגים: רק מטבלת התקופה (⭐)
 • highlight ו-sentence חייבים להיות עקביים
-• כל highlight שונה מהאחרים - גם במילים וגם במבנה!
-• כל משפט במבנה שונה - לא להתחיל כולם באותו תבנית
+• כל highlight שונה מהאחרים! כל משפט במבנה שונה!
+• לא להתחיל כל המשפטים באותו תבנית
 
-❌ דוגמאות למה שאסור (תבניות חוזרות):
-• "X עם Y משחקים ו-Z% נצחונות" ← אם כתבת את זה לשחקן אחד, אסור לאחרים
-• "X צפוי ל..." לכל שחקן ← תבנית חוזרת
-• "קרב דירוג" ו"קרב דירוג" לשני שחקנים ← אותו highlight
-• "שנה חיובית" ו"שנה טובה" ← אותה אמירה
-
-✅ דוגמאות טובות (שים לב: כל שחקן = נתון אחר + טון תואם!):
-• שחקן A (חיזוי +80₪, רצף 4): highlight "4 ברצף!", sentence "מי יעצור את הרכבת? עם +120₪ במשחק האחרון, המומנטום ברור"
-• שחקן B (חיזוי +30₪, מקום 3): highlight "76₪ ממקום 2", sentence "הפער מצטמצם, 55% נצחונות, ונצחון הלילה יכול לסגור את הפער"
-• שחקן C (חיזוי -25₪, חוזר אחרי 40 יום): highlight "40 יום בלי קלפים", sentence "חלודה של 40 ימים לא נעלמת ביום אחד, גם עם ניסיון של 50 משחקים"
-• שחקן D (חיזוי -60₪, הפסד אחרון גדול): highlight "הפסיד 95₪ אחרון", sentence "אחרי -95₪ במשחק האחרון וממוצע שלילי השנה, הסטטיסטיקה לא לצידו"
-• שחקן חדש (חיזוי 0₪): highlight "דף חלק", sentence "בלי אף משחק בהיסטוריה, הכל פתוח - השאלה אם הוא הפתעה או לא"
-
-📤 פלט JSON בלבד (בלי expectedProfit - הוא כבר נקבע):
-[{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]`;
+✅ דוגמאות טובות (סיפורים, לא סטטיסטיקה!):
+• highlight "5:2 מול אייל", sentence "בחמישה משחקים אחרונים ביחד, ליאור שלט באייל עם 5 נצחונות מול 2. הלילה האם הסדרה תימשך או שאייל מכין נקמה?"
+• highlight "הספונסר של הקבוצה", sentence "הפסיד 350₪ סך הכל לשחקני הערב, רובם הלכו לכיסו של סגל. הלילה או שהכל מתהפך או שהוא ממשיך לממן"
+• highlight "3 ברצף!", sentence "רכבת שאף אחד לא עוצר - אחרי +120₪ במשחק האחרון, הממוצע השנתי קפץ ל-+45₪ למשחק. מי יעז לעמוד בדרך?"
+• highlight "40 יום בלי קלפים", sentence "חלודה של 40 ימים לא נעלמת ביום אחד - אבל עם 55% נצחונות היסטורי, הניסיון לא נעלם"
+• highlight "דף חלק", sentence "שחקן חדש לגמרי, בלי אף משחק בהיסטוריה. הקלפים יגידו את המילה הראשונה הלילה"`;
 
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
@@ -1503,14 +1678,25 @@ ${surpriseText}
       }
 
       let aiOutput: { name: string; highlight: string; sentence: string; isSurprise: boolean }[];
+      let groupIntro = '';
       try {
-        aiOutput = JSON.parse(jsonText.trim());
+        const parsed = JSON.parse(jsonText.trim());
+        // Handle both new format { groupIntro, players: [...] } and old format [...]
+        if (Array.isArray(parsed)) {
+          aiOutput = parsed;
+        } else if (parsed.players && Array.isArray(parsed.players)) {
+          aiOutput = parsed.players;
+          groupIntro = parsed.groupIntro || '';
+        } else {
+          throw new Error('Unexpected JSON format');
+        }
         console.log('✅ Parsed', aiOutput.length, 'forecasts from AI');
+        if (groupIntro) console.log('🌟 Group intro:', groupIntro);
       } catch (parseError) {
         console.error('❌ JSON parse error, trying next model');
         continue; // Try next model
       }
-      
+
       // Merge AI text with our locked expectedProfit values
       let forecasts: ForecastResult[] = players.map(p => {
         const aiEntry = aiOutput.find(a => a.name === p.name);
@@ -1521,8 +1707,13 @@ ${surpriseText}
           highlight: aiEntry?.highlight || '',
           sentence: aiEntry?.sentence || '',
           isSurprise: aiEntry?.isSurprise || false,
+          groupIntro: '',
         };
       });
+      // Attach groupIntro to the first forecast entry
+      if (groupIntro && forecasts.length > 0) {
+        forecasts[0].groupIntro = groupIntro;
+      }
       
       console.log('🔗 Merged AI text with locked predictions:', forecasts.map(f => `${f.name}: ${f.expectedProfit >= 0 ? '+' : ''}${f.expectedProfit}₪`).join(', '));
       
@@ -1559,7 +1750,6 @@ ${surpriseText}
         
         let correctedSentence = forecast.sentence || '';
         let correctedHighlight = forecast.highlight || '';
-        let hadErrors = false;
         let errorDetails: string[] = [];
         
         // ========== 1. FIX STREAK ERRORS ==========
@@ -1582,8 +1772,6 @@ ${surpriseText}
             
             if (claimedStreak !== expectedStreak) {
               errorDetails.push(`streak: claimed ${claimedStreak}, actual ${expectedStreak}`);
-              hadErrors = true;
-              
               if (expectedStreak === 0) {
                 correctedSentence = correctedSentence.replace(match[0], '');
               } else {
@@ -1597,7 +1785,7 @@ ${surpriseText}
         // Check if sentence claims #1 but player isn't #1 tonight
         if ((correctedSentence.includes('מוביל') || correctedSentence.includes('בראש') || correctedSentence.includes('מקום ראשון') || correctedSentence.includes('מקום 1') || correctedSentence.includes('#1')) && rankTonight !== 1) {
           errorDetails.push(`rank: claimed #1 but actually #${rankTonight}`);
-          hadErrors = true;
+
           // Remove false #1 claims
           correctedSentence = correctedSentence
             .replace(/מוביל את הטבלה/g, `נמצא במקום ${rankTonight}`)
@@ -1610,7 +1798,7 @@ ${surpriseText}
         // ========== 2b. FIX RANKING ERRORS IN HIGHLIGHT ==========
         if ((correctedHighlight.includes('מוביל') || correctedHighlight.includes('בראש') || correctedHighlight.includes('מקום ראשון') || correctedHighlight.includes('מקום 1') || correctedHighlight.includes('#1')) && rankTonight !== 1) {
           errorDetails.push(`highlight rank: claimed #1 but actually #${rankTonight}`);
-          hadErrors = true;
+
           correctedHighlight = correctedHighlight
             .replace(/מוביל את הטבלה/g, `מקום ${rankTonight} בטבלה`)
             .replace(/בראש הטבלה/g, `במקום ${rankTonight}`)
@@ -1623,11 +1811,11 @@ ${surpriseText}
         // Check for contradictions about last game result
         if (wonLastGame && correctedSentence.includes('הפסד') && correctedSentence.includes('אחרון')) {
           errorDetails.push('last_game: claimed loss but actually won');
-          hadErrors = true;
+
         }
         if (lostLastGame && correctedSentence.includes('נצחון') && correctedSentence.includes('אחרון')) {
           errorDetails.push('last_game: claimed win but actually lost');
-          hadErrors = true;
+
         }
         
         // ========== 4. FIX GAME COUNT ERRORS ==========
@@ -1654,7 +1842,7 @@ ${surpriseText}
             
             if (claimedGames !== actualGames) {
               errorDetails.push(`games: claimed ${claimedGames}, actual ${actualGames}`);
-              hadErrors = true;
+
               correctedSentence = correctedSentence.replace(match[0], match[0].replace(match[1], String(actualGames)));
             }
           }
@@ -1671,7 +1859,7 @@ ${surpriseText}
           for (const pattern of positiveYearClaims) {
             if (pattern.test(correctedSentence)) {
               errorDetails.push(`profit_direction: claimed positive year but year profit is ${yearProfit}`);
-              hadErrors = true;
+
             }
           }
         }
@@ -1699,20 +1887,20 @@ ${surpriseText}
         const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה'];
         const superlativeWords = ['מטורף', 'מדהים', 'היסטורי', 'חסר תקדים', 'מושלם', 'אגדי', 'פנומנלי'];
         
-        // Flag superlative words used for modest predictions (±15-40₪)
-        if (Math.abs(predictedProfit) <= 40) {
+        // Only flag superlatives for truly tiny predictions (±20₪ or less)
+        if (Math.abs(predictedProfit) <= 20) {
           for (const word of superlativeWords) {
             if (correctedSentence.includes(word)) {
-              errorDetails.push(`intensity_mismatch: "${word}" used for modest prediction ${predictedProfit}₪`);
-              hadErrors = true;
+              errorDetails.push(`intensity_mismatch: "${word}" used for tiny prediction ${predictedProfit}₪`);
+
               correctedSentence = correctedSentence
                 .replace('מטורף', predictedProfit > 0 ? 'ברור' : 'לא פשוט')
-                .replace('מדהים', predictedProfit > 0 ? 'משמעותי' : 'בולט')
+                .replace('מדהים', predictedProfit > 0 ? 'סביר' : 'בולט')
                 .replace('היסטורי', 'ברור')
                 .replace('חסר תקדים', 'יוצא דופן')
                 .replace('מושלם', 'טוב')
-                .replace('אגדי', 'מרשים')
-                .replace('פנומנלי', 'משמעותי');
+                .replace('אגדי', 'מעניין')
+                .replace('פנומנלי', 'סביר');
             }
           }
         }
@@ -1720,16 +1908,14 @@ ${surpriseText}
         const hasOptimistic = optimisticWords.some(w => correctedSentence.includes(w));
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
         
-        // Flag severe mismatches (optimistic text + negative prediction, or vice versa)
+        // Only flag severe direction mismatches
         if (predictedProfit <= -40 && hasOptimistic && !hasPessimistic) {
           errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit}₪`);
-          hadErrors = true;
-          console.log(`⚠️ ${player.name}: Tone mismatch - optimistic text but predicted ${predictedProfit}₪`);
+
         }
         if (predictedProfit >= 40 && hasPessimistic && !hasOptimistic) {
           errorDetails.push(`tone_mismatch: pessimistic text but predicted +${predictedProfit}₪`);
-          hadErrors = true;
-          console.log(`⚠️ ${player.name}: Tone mismatch - pessimistic text but predicted +${predictedProfit}₪`);
+
         }
         
         // ========== 8. VALIDATE AI SENTENCE (fallback if empty/short) ==========
@@ -2010,4 +2196,146 @@ export const generateForecastComparison = async (
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
   
   return text.trim() || `${accurate} מדויקים, ${close} קרובים, ${missed} החטאות מתוך ${total} תחזיות`;
+};
+
+// ─── AI Game Night Summary ──────────────────────────────────────────────────
+
+export interface GameNightPlayerResult {
+  name: string;
+  profit: number;
+  rebuys: number;
+  rank: number; // 1 = biggest winner
+}
+
+export interface GameNightPeriodStanding {
+  name: string;
+  periodRank: number;
+  totalProfit: number;
+  gamesPlayed: number;
+  winPct: number;
+  currentStreak: number; // positive = wins, negative = losses
+}
+
+export interface GameNightSummaryPayload {
+  tonight: GameNightPlayerResult[];
+  totalRebuys: number;
+  totalPot: number;
+  periodLabel: string; // e.g. "H1 2026"
+  periodStandings: GameNightPeriodStanding[];
+  recordsBroken: string[];   // pre-formatted Hebrew strings
+  notableStreaks: string[];   // e.g. "דוד — 5 נצחונות ברצף"
+  upsets: string[];           // e.g. "אורי (75%) הפסיד"
+  milestones: string[];       // e.g. "דוד — משחק #20 בתקופה"
+  welcomeBacks: string[];     // e.g. "משה חזר אחרי 45 יום"
+  rankingShifts: string[];    // e.g. "ליאור עקף את דוד ועלה למקום 3"
+  gameNumberInPeriod: number;
+}
+
+export const generateGameNightSummary = async (
+  payload: GameNightSummaryPayload
+): Promise<string> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod } = payload;
+
+  const winner = tonight[0];
+  const loser = tonight[tonight.length - 1];
+
+  const tonightLines = tonight.map(p =>
+    `${p.rank}. ${p.name}: ${p.profit >= 0 ? '+' : ''}${p.profit}₪ (${p.rebuys} קניות)`
+  ).join('\n');
+
+  const standingsLines = periodStandings.map(s =>
+    `מקום ${s.periodRank}: ${s.name} — ${s.totalProfit >= 0 ? '+' : ''}${s.totalProfit}₪, ${s.gamesPlayed} משחקים, ${Math.round(s.winPct)}% נצחונות${s.currentStreak !== 0 ? `, רצף ${s.currentStreak > 0 ? s.currentStreak + ' נצחונות' : Math.abs(s.currentStreak) + ' הפסדים'}` : ''}`
+  ).join('\n');
+
+  const contextSections: string[] = [];
+
+  if (recordsBroken.length > 0) {
+    contextSections.push(`שיאים שנשברו הערב:\n${recordsBroken.join('\n')}`);
+  }
+  if (notableStreaks.length > 0) {
+    contextSections.push(`רצפים בולטים:\n${notableStreaks.join('\n')}`);
+  }
+  if (upsets.length > 0) {
+    contextSections.push(`הפתעות:\n${upsets.join('\n')}`);
+  }
+  if (milestones.length > 0) {
+    contextSections.push(`אבני דרך:\n${milestones.join('\n')}`);
+  }
+  if (welcomeBacks.length > 0) {
+    contextSections.push(`חזרו לשולחן:\n${welcomeBacks.join('\n')}`);
+  }
+  if (rankingShifts.length > 0) {
+    contextSections.push(`שינויים בטבלה:\n${rankingShifts.join('\n')}`);
+  }
+
+  const contextBlock = contextSections.length > 0
+    ? `\n\nאירועים מיוחדים הערב:\n${contextSections.join('\n\n')}`
+    : '';
+
+  const prompt = `אתה המספר הרשמי של קבוצת פוקר שבועית בין חברים. כתוב סיכום קצר וכיפי של ערב המשחק שישותף בקבוצת הוואטסאפ.
+
+נתוני הערב (משחק #${gameNumberInPeriod} ב${periodLabel}):
+קופה: ${totalPot}₪ (${totalRebuys} קניות סה״כ)
+מנצח: ${winner.name} (+${winner.profit}₪)
+מפסיד גדול: ${loser.name} (${loser.profit}₪)
+
+תוצאות מלאות:
+${tonightLines}
+
+טבלת ${periodLabel} (מעודכנת):
+${standingsLines}${contextBlock}
+
+הנחיות כתיבה:
+- עברית בלבד, שפה טבעית וזורמת. בלי מונחים באנגלית.
+- חובה להזכיר את כל ${tonight.length} השחקנים בשמם לפחות פעם אחת.
+- טון: מיקס של פרשנות ספורט, סיפור, ועקיצות חבריות. קצ׳ אבל חם.
+- מותר להמציא כינויים או תארים מצחיקים לשחקנים אם זה מתאים לנתונים (למשל ״מלך הקאמבקים״ למי שקנה הרבה וסיים ברווח, ״תורם הערב הרשמי״ למפסיד הגדול).
+- שלב עובדות היסטוריות בצורה טבעית בתוך הסיפור (רצפים, שיאים, שינויים בטבלה) — לא כרשימה.
+- אורך: 60-120 מילים. אם הלילה היה דרמטי (שיאים, קאמבקים, הפתעות) — קרוב ל-120. אם שקט — קרוב ל-60.
+- סיים עם משפט חזק — פאנץ׳ליין, עקיצה, או הצצה למשחק הבא.
+- לא לכתוב רשימה עם נקודות או מספרים. הסיכום צריך לזרום כטקסט אחד.
+- לא להתחיל ב״ערב של דרמות״ או ״לילה של...״ — תתחיל ישר עם תוכן.
+
+כתוב רק את הסיכום, בלי כותרת ובלי הקדמה.`;
+
+  for (const config of API_CONFIGS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/${config.version}/models/${config.model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.9,
+              maxOutputTokens: 400,
+              topP: 0.95,
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        console.warn(`AI summary: ${config.model} failed:`, errData?.error?.message || response.status);
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (text && text.length > 20) {
+        console.log(`AI summary generated via ${config.model} (${text.length} chars)`);
+        return text;
+      }
+      console.warn(`AI summary: ${config.model} returned empty/short response`);
+    } catch (err) {
+      console.warn(`AI summary: ${config.model} error:`, err);
+    }
+  }
+
+  throw new Error('All AI models failed to generate game summary');
 };
