@@ -23,8 +23,8 @@ const NewGameScreen = () => {
   const [showPermanentGuests, setShowPermanentGuests] = useState(false);
   const [showGuests, setShowGuests] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
-  const [showSharePrompt, setShowSharePrompt] = useState(false);
-  const [pendingGameId, setPendingGameId] = useState<string | null>(null);
+  const [showSharePrompt, _setShowSharePrompt] = useState(false);
+  const [pendingGameId, _setPendingGameId] = useState<string | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
@@ -48,7 +48,7 @@ const NewGameScreen = () => {
   const [isSharingMilestones, setIsSharingMilestones] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
   const milestonesRef = useRef<HTMLDivElement>(null);
-  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadPlayers();
@@ -456,7 +456,6 @@ const NewGameScreen = () => {
     const overallAvg = Math.round(stats.avgProfit);
     const streak = stats.currentStreak;
     const winPct = Math.round(stats.winPercentage);
-    const recentWinPct = Math.round((recentWins / gamesCount) * 100);
     const totalProfit = Math.round(stats.totalProfit);
     const totalGames = stats.gamesPlayed;
     
@@ -466,7 +465,6 @@ const NewGameScreen = () => {
     
     // Determine time context
     const isActive = daysSince <= 60; // played in last 2 months
-    const isRecent = daysSince <= 30; // played in last month
     const monthsAgo = Math.floor(daysSince / 30);
     
     // Collect all possible insights with CORRECT time context
@@ -660,7 +658,7 @@ const NewGameScreen = () => {
   // Generate CREATIVE forecast sentence - LONGER and more engaging with GENDER SUPPORT
   const generateCreativeSentence = (
     name: string, 
-    stats: PlayerStats,
+    _stats: PlayerStats,
     recent: RecentAnalysis,
     expectedOutcome: 'big_win' | 'win' | 'slight_win' | 'neutral' | 'slight_loss' | 'loss' | 'big_loss',
     isSurprise: boolean
@@ -909,19 +907,23 @@ const NewGameScreen = () => {
       const last3Avg = last3.length > 0 ? last3.reduce((s, r) => s + r.profit, 0) / last3.length : 0;
 
       const lastResults = stats?.lastGameResults || [];
-      const typicalMag = lastResults.length >= 2
-        ? lastResults.slice(0, 10).reduce((s, r) => s + Math.abs(r.profit), 0) / Math.min(10, lastResults.length)
-        : 50;
 
       let expectedValue: number;
       if (gamesPlayed === 0) {
-        expectedValue = Math.round((Math.random() - 0.5) * 60);
+        expectedValue = Math.round((Math.random() - 0.5) * 120);
       } else {
+        // Sample a real game result for realistic magnitude
+        const recent10 = lastResults.slice(0, 10);
+        const sample = recent10[Math.floor(Math.random() * recent10.length)];
+        const sampleMag = Math.abs(sample?.profit || 50);
+
         const blended = last3Avg * 0.6 + avgProfit * 0.4;
-        const direction = blended >= 0 ? 1 : -1;
-        expectedValue = direction * typicalMag * (0.3 + Math.random() * 0.4);
-        expectedValue += (Math.random() - 0.5) * typicalMag * 0.25;
-        if (gamesPlayed <= 3) expectedValue *= 0.6;
+        let direction = blended >= 0 ? 1 : -1;
+        if (Math.random() < 0.20) direction *= -1;
+
+        expectedValue = direction * sampleMag * (0.6 + Math.random() * 0.5);
+        expectedValue += (Math.random() - 0.5) * sampleMag * 0.3;
+        if (gamesPlayed <= 3) expectedValue *= 0.7;
       }
       expectedValue = Math.round(expectedValue);
 
@@ -1010,8 +1012,9 @@ const NewGameScreen = () => {
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
           ${chunkIndex === 0 && isAI && aiForecasts?.[0]?.groupIntro ? `
-          <div style="padding: 0.6rem 0.8rem; margin-bottom: 0.75rem; border-radius: 8px; background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid rgba(168, 85, 247, 0.25); text-align: center; direction: rtl;">
-            <div style="font-size: 0.85rem; color: #f1f5f9; line-height: 1.5; font-style: italic;">${aiForecasts[0].groupIntro}</div>
+          <div style="padding: 0.7rem 0.8rem; margin-bottom: 0.75rem; border-radius: 8px; background: linear-gradient(135deg, rgba(234, 179, 8, 0.10), rgba(249, 115, 22, 0.10)); border: 1px solid rgba(234, 179, 8, 0.30); text-align: center; direction: rtl;">
+            <div style="font-size: 0.7rem; margin-bottom: 0.2rem; opacity: 0.6;">📣</div>
+            <div style="font-size: 0.85rem; color: #fbbf24; line-height: 1.5; font-weight: 500;">${aiForecasts[0].groupIntro}</div>
           </div>` : ''}
           <div style="margin-bottom: 1rem;">
             ${chunk.map((forecast: any, index: number) => {
@@ -1837,15 +1840,16 @@ const NewGameScreen = () => {
                 {/* Group intro banner */}
                 {aiForecasts[0]?.groupIntro && (
                   <div style={{
-                    padding: '0.75rem 1rem',
-                    marginBottom: '1rem',
+                    padding: '0.85rem 1rem',
+                    marginBottom: '1.25rem',
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(59, 130, 246, 0.12))',
-                    border: '1px solid rgba(168, 85, 247, 0.25)',
+                    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.10), rgba(249, 115, 22, 0.10))',
+                    border: '1px solid rgba(234, 179, 8, 0.30)',
                     textAlign: 'center',
                     direction: 'rtl',
                   }}>
-                    <div style={{ fontSize: '1rem', color: 'var(--text)', lineHeight: 1.5, fontStyle: 'italic' }}>
+                    <div style={{ fontSize: '0.8rem', marginBottom: '0.3rem', opacity: 0.6 }}>📣</div>
+                    <div style={{ fontSize: '0.95rem', color: '#fbbf24', lineHeight: 1.6, fontWeight: 500 }}>
                       {aiForecasts[0].groupIntro}
                     </div>
                   </div>

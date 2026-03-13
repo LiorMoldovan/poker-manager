@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
+import { numberToHebrewTTS, speakHebrew } from '../utils/tts';
+import { getGeminiApiKey } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
 
@@ -1373,155 +1375,100 @@ const LiveGameScreen = () => {
     // Play mood-appropriate casino sound
     await playRebuyCasinoSound(totalBuyins);
     
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      
-      // Get available voices - prefer Hebrew female voice for natural sound
-      const voices = window.speechSynthesis.getVoices();
-      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('female')) 
-        || voices.find(v => v.lang.startsWith('he'))
-        || null;
-      
-      // Check if total has half (0.5) - use tolerance for floating point
-      const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
-      const whole = Math.floor(totalBuyins);
-      
-      // Hebrew numbers - feminine forms matching feminine noun קניות (buyins)
-      const hebrewNumbers = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
-      
-      // Format total in Hebrew
-      let totalText: string;
-      if (hasHalf) {
-        if (whole === 0) {
-          totalText = 'חצי';
-        } else if (whole <= 10) {
-          totalText = `${hebrewNumbers[whole]} וחצי`;
-        } else {
-          totalText = `${whole} וחצי`;
-        }
-      } else {
-        if (whole <= 10) {
-          totalText = hebrewNumbers[whole];
-        } else {
-          totalText = String(whole);
-        }
-      }
-      
-      // Use neutral "לקח/לקחה" (took) instead of gendered "קנה/קנתה"
-      // Or use simple "עוד" (another) for natural flow
-      let buyAction: string;
-      if (isHalfBuyin) {
-        buyAction = 'עוד חצי';
-      } else {
-        buyAction = 'עוד אחד';
-      }
-      
-      // Decide which extra announcement to make (priority system)
-      // Rebuy leader/tied/record announcements only kick in at 4+ rebuys (totalBuyins >= 5)
-      // to avoid repetitive announcements early in the game
-      let extraMessage: string;
-      const ceilBuyins = Math.ceil(totalBuyins);
-      const rebuyThresholdMet = totalBuyins >= 5;
+    // Check if total has half (0.5) - use tolerance for floating point
+    const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
+    const whole = Math.floor(totalBuyins);
 
-      if (rebuyThresholdMet && ctx.isGroupRecord) {
-        extraMessage = getGroupRecordMessage(playerName, ctx.previousGroupRecord, ceilBuyins);
-      } else if (rebuyThresholdMet && ctx.isExtendingGroupRecord) {
-        extraMessage = getExtendingRecordMessage(playerName, true, ceilBuyins);
-      } else if (rebuyThresholdMet && ctx.isPersonalRecord) {
-        extraMessage = getPersonalRecordMessage(playerName, ctx.previousPersonalRecord, ceilBuyins);
-      } else if (rebuyThresholdMet && ctx.isExtendingPersonalRecord) {
-        extraMessage = getExtendingRecordMessage(playerName, false, ceilBuyins);
-      } else if (rebuyThresholdMet && ctx.isNewRebuyLeader) {
-        const leaderMessages = [
-          `ויש לנו מוביל חדש בקניות הערב! ${playerName} עם ${hebrewNum(ceilBuyins, true)} קניות`,
-          `${playerName} תפס את המקום הראשון בקניות, כבר ${hebrewNum(ceilBuyins, true)}!`,
-          `כל הכבוד ${playerName}, מוביל חדש עם ${hebrewNum(ceilBuyins, true)} קניות`,
-        ];
-        extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
-      } else if (rebuyThresholdMet && ctx.isTiedForLead) {
-        extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames, totalBuyins);
-      } else {
-        const personal = getPersonalMessage(playerName, playerId, ceilBuyins, isQuickRebuy, ctx.allPlayers);
-        extraMessage = personal || getBuyinMessage(ceilBuyins, isQuickRebuy);
-      }
-
-      // Force a trait message at least once per player per game
-      // Uses player NAME for matching (robust across any ID scheme)
-      if (playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
-        const rebuysCount = ceilBuyins - 1;
-        const shouldForce = rebuysCount >= 2 || (rebuysCount === 1 && Math.random() < 0.5);
-        if (shouldForce) {
-          const traitPool = generateTraitMessages(playerName, ceilBuyins);
-          const unusedTraits = traitPool.filter(m => !usedMessagesRef.current.has(m));
-          const pool = unusedTraits.length > 0 ? unusedTraits : traitPool;
-          if (pool.length > 0) {
-            const chosen = pool[Math.floor(Math.random() * pool.length)];
-            usedMessagesRef.current.add(chosen);
-            extraMessage = chosen;
-            traitSpokenRef.current.add(playerName);
-          }
-        }
-      }
-
-      const fullMessage = `${playerName}, ${buyAction}. סך הכל ${totalText}. ${extraMessage}`;
-      
-      const utterance = new SpeechSynthesisUtterance(fullMessage);
-      utterance.lang = 'he-IL';
-      if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      utterance.volume = 1;
-      
-      // Build chain of follow-up announcements
-      const followUps: string[] = [];
-
-      // Rebuy milestone (initial buyins don't count — subtract player count)
-      const playerCount = ctx.allPlayers.length;
-      const totalRebuysOnly = ctx.totalGroupRebuys - playerCount;
-      const prevRebuysOnly = ctx.previousTotalGroupRebuys - playerCount;
-      const milestones = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 100];
-      const crossedMilestone = milestones.find(m => prevRebuysOnly < m && totalRebuysOnly >= m);
-      if (crossedMilestone) {
-        const milestoneMessages = [
-          `סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
-          `כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
-          `${hebrewNum(crossedMilestone, true)} קניות על השולחן הערב!`,
-          `וואו, סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
-          `הגענו כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
-        ];
-        followUps.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
-      }
-
-      // Last man standing
-      if (ctx.lastManStanding) {
-        const lastManMessages = [
-          `${ctx.lastManStanding} האחרון שעוד מחזיק מהקנייה הראשונה!`,
-          `רק ${ctx.lastManStanding} נשאר בלי קנייה נוספת, כל השאר כבר קנו`,
-          `${ctx.lastManStanding} עדיין על הראשונה, כל הכבוד`,
-          `כולם כבר קנו חוץ מאשר ${ctx.lastManStanding}, מי יחזיק יותר?`,
-          `${ctx.lastManStanding} האחרון על הקנייה הראשונה, לחץ!`,
-        ];
-        followUps.push(lastManMessages[Math.floor(Math.random() * lastManMessages.length)]);
-      }
-
-      // Chain follow-ups sequentially via onend
-      const speakChain = (utt: SpeechSynthesisUtterance, msgs: string[]) => {
-        if (msgs.length === 0) return;
-        utt.onend = () => {
-          const next = new SpeechSynthesisUtterance(msgs[0]);
-          next.lang = 'he-IL';
-          if (hebrewVoice) next.voice = hebrewVoice;
-          next.rate = 0.9;
-          next.pitch = 1.0;
-          next.volume = 1;
-          speakChain(next, msgs.slice(1));
-          window.speechSynthesis.speak(next);
-        };
-      };
-      speakChain(utterance, followUps);
-      
-      window.speechSynthesis.speak(utterance);
+    // Format total in Hebrew words (feminine for קניות)
+    let totalText: string;
+    if (hasHalf) {
+      totalText = whole === 0 ? 'חצי' : `${hebrewNum(whole, true)} וחצי`;
+    } else {
+      totalText = whole <= 10 ? hebrewNum(whole, true) : numberToHebrewTTS(whole);
     }
+
+    const buyAction = isHalfBuyin ? 'עוד חצי' : 'עוד אחד';
+
+    // Decide which extra announcement to make (priority system)
+    // Rebuy leader/tied/record announcements only kick in at 4+ rebuys (totalBuyins >= 5)
+    let extraMessage: string;
+    const ceilBuyins = Math.ceil(totalBuyins);
+    const rebuyThresholdMet = totalBuyins >= 5;
+
+    if (rebuyThresholdMet && ctx.isGroupRecord) {
+      extraMessage = getGroupRecordMessage(playerName, ctx.previousGroupRecord, ceilBuyins);
+    } else if (rebuyThresholdMet && ctx.isExtendingGroupRecord) {
+      extraMessage = getExtendingRecordMessage(playerName, true, ceilBuyins);
+    } else if (rebuyThresholdMet && ctx.isPersonalRecord) {
+      extraMessage = getPersonalRecordMessage(playerName, ctx.previousPersonalRecord, ceilBuyins);
+    } else if (rebuyThresholdMet && ctx.isExtendingPersonalRecord) {
+      extraMessage = getExtendingRecordMessage(playerName, false, ceilBuyins);
+    } else if (rebuyThresholdMet && ctx.isNewRebuyLeader) {
+      const leaderMessages = [
+        `ויש לנו מוביל חדש בקניות הערב! ${playerName} עם ${hebrewNum(ceilBuyins, true)} קניות`,
+        `${playerName} תפס את המקום הראשון בקניות. כבר ${hebrewNum(ceilBuyins, true)}!`,
+        `כל הכבוד ${playerName}. מוביל חדש עם ${hebrewNum(ceilBuyins, true)} קניות`,
+      ];
+      extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
+    } else if (rebuyThresholdMet && ctx.isTiedForLead) {
+      extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames, totalBuyins);
+    } else {
+      const personal = getPersonalMessage(playerName, playerId, ceilBuyins, isQuickRebuy, ctx.allPlayers);
+      extraMessage = personal || getBuyinMessage(ceilBuyins, isQuickRebuy);
+    }
+
+    // Force a trait message at least once per player per game
+    if (playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
+      const rebuysCount = ceilBuyins - 1;
+      const shouldForce = rebuysCount >= 2 || (rebuysCount === 1 && Math.random() < 0.5);
+      if (shouldForce) {
+        const traitPool = generateTraitMessages(playerName, ceilBuyins);
+        const unusedTraits = traitPool.filter(m => !usedMessagesRef.current.has(m));
+        const pool = unusedTraits.length > 0 ? unusedTraits : traitPool;
+        if (pool.length > 0) {
+          const chosen = pool[Math.floor(Math.random() * pool.length)];
+          usedMessagesRef.current.add(chosen);
+          extraMessage = chosen;
+          traitSpokenRef.current.add(playerName);
+        }
+      }
+    }
+
+    const fullMessage = `${playerName}. ${buyAction}. סך הכל ${totalText}. ${extraMessage}`;
+
+    // Build follow-up announcements
+    const allMessages: string[] = [fullMessage];
+
+    // Rebuy milestone (initial buyins don't count — subtract player count)
+    const playerCount = ctx.allPlayers.length;
+    const totalRebuysOnly = ctx.totalGroupRebuys - playerCount;
+    const prevRebuysOnly = ctx.previousTotalGroupRebuys - playerCount;
+    const milestones = [5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 75, 100];
+    const crossedMilestone = milestones.find(m => prevRebuysOnly < m && totalRebuysOnly >= m);
+    if (crossedMilestone) {
+      const milestoneMessages = [
+        `סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+        `כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+        `${hebrewNum(crossedMilestone, true)} קניות על השולחן הערב!`,
+        `וואו. סך הכל ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+        `הגענו כבר ${hebrewNum(crossedMilestone, true)} קניות הערב!`,
+      ];
+      allMessages.push(milestoneMessages[Math.floor(Math.random() * milestoneMessages.length)]);
+    }
+
+    // Last man standing
+    if (ctx.lastManStanding) {
+      const lastManMessages = [
+        `${ctx.lastManStanding} האחרון שעוד מחזיק מהקנייה הראשונה!`,
+        `רק ${ctx.lastManStanding} נשאר בלי קנייה נוספת. כל השאר כבר קנו`,
+        `${ctx.lastManStanding} עדיין על הראשונה. כל הכבוד`,
+        `כולם כבר קנו חוץ מ${ctx.lastManStanding}. מי יחזיק יותר?`,
+        `${ctx.lastManStanding} האחרון על הקנייה הראשונה. לחץ!`,
+      ];
+      allMessages.push(lastManMessages[Math.floor(Math.random() * lastManMessages.length)]);
+    }
+
+    speakHebrew(allMessages, getGeminiApiKey());
   };
 
   const handleRebuy = (player: GamePlayer, amount: number = 1) => {
@@ -1613,50 +1560,19 @@ const LiveGameScreen = () => {
 
   // Voice notification for undo
   const speakUndo = (playerName: string, undoAmount: number, newTotal: number) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      
-      const voices = window.speechSynthesis.getVoices();
-      const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('female')) 
-        || voices.find(v => v.lang.startsWith('he'))
-        || null;
-      
-      // Hebrew numbers
-      const hebrewNumbers = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
-      
-      // Format new total
-      const hasHalf = Math.abs((newTotal % 1) - 0.5) < 0.01;
-      const whole = Math.floor(newTotal);
-      let totalText: string;
-      if (hasHalf) {
-        if (whole === 0) {
-          totalText = 'חצי';
-        } else if (whole <= 10) {
-          totalText = `${hebrewNumbers[whole]} וחצי`;
-        } else {
-          totalText = `${whole} וחצי`;
-        }
-      } else {
-        if (whole <= 10) {
-          totalText = hebrewNumbers[whole];
-        } else {
-          totalText = String(whole);
-        }
-      }
-      
-      // Undo message
-      const undoText = undoAmount === 0.5 ? 'חצי' : 'אחד';
-      const message = `ביטול. ${playerName} מינוס ${undoText}. סך הכל ${totalText}.`;
-      
-      const utterance = new SpeechSynthesisUtterance(message);
-      utterance.lang = 'he-IL';
-      if (hebrewVoice) utterance.voice = hebrewVoice;
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      utterance.volume = 1;
-      
-      window.speechSynthesis.speak(utterance);
+    const hasHalf = Math.abs((newTotal % 1) - 0.5) < 0.01;
+    const whole = Math.floor(newTotal);
+    let totalText: string;
+    if (hasHalf) {
+      totalText = whole === 0 ? 'חצי' : `${hebrewNum(whole, true)} וחצי`;
+    } else {
+      totalText = whole <= 10 ? hebrewNum(whole, true) : numberToHebrewTTS(whole);
     }
+
+    const undoText = undoAmount === 0.5 ? 'חצי' : 'אחד';
+    const message = `ביטול. ${playerName} מינוס ${undoText}. סך הכל ${totalText}.`;
+
+    speakHebrew([message], getGeminiApiKey());
   };
 
   const handleUndo = () => {

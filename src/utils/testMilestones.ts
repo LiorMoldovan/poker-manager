@@ -32,6 +32,8 @@ function createTestPlayer(overrides: Partial<PlayerForecastData> & { name: strin
     bestWin: overrides.bestWin ?? 100,
     worstLoss: overrides.worstLoss ?? -100,
     gameHistory: overrides.gameHistory ?? [],
+    daysSinceLastGame: overrides.daysSinceLastGame ?? 7,
+    isActive: overrides.isActive ?? true,
   };
 }
 
@@ -197,7 +199,7 @@ export function testYearProfitCalculation(): TestResult[] {
       ]
     });
     
-    const milestones = generateMilestones([player]);
+    void generateMilestones([player]);
     
     // Check debug output for year profit
     // Should show yearProfit = -300, NOT +1000

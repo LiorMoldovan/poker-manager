@@ -8,7 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { Player, PlayerType, Game, GamePlayer } from '../types';
+import { Player, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 
@@ -374,37 +374,6 @@ const GraphsScreen = () => {
       volatility: { p1: p1Volatility, p2: p2Volatility },
     };
   }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
-
-  // Monthly profit data - aggregates all selected players' profits by month
-  const monthlyData = useMemo(() => {
-    const monthlyTotals: Record<string, { month: string; profit: number; games: number; sortKey: string }> = {};
-    
-    // Hebrew month names
-    const hebrewMonths = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
-    
-    filteredGames.forEach(game => {
-      const gameDate = new Date(game.date);
-      const monthKey = `${gameDate.getFullYear()}-${String(gameDate.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = `${hebrewMonths[gameDate.getMonth()]} ${gameDate.getFullYear().toString().slice(-2)}`;
-      
-      if (!monthlyTotals[monthKey]) {
-        monthlyTotals[monthKey] = { month: monthLabel, profit: 0, games: 0, sortKey: monthKey };
-      }
-      
-      // Sum up profits from selected players only
-      selectedPlayers.forEach(playerId => {
-        const gp = gamePlayers.find(g => g.gameId === game.id && g.playerId === playerId);
-        if (gp) {
-          monthlyTotals[monthKey].profit += gp.profit;
-        }
-      });
-      
-      monthlyTotals[monthKey].games++;
-    });
-    
-    // Sort by date and return array
-    return Object.values(monthlyTotals).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-  }, [filteredGames, gamePlayers, selectedPlayers]);
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -847,7 +816,7 @@ const GraphsScreen = () => {
         </div>
 
         {/* Player Filter - Only show for cumulative view */}
-        {(viewMode === 'cumulative' || viewMode === 'monthly') && (
+        {viewMode === 'cumulative' && (
           <>
             <button 
               type="button"
@@ -1149,109 +1118,6 @@ const GraphsScreen = () => {
             marginTop: '0.5rem',
           }}>
             W = Win (profit &gt; 0) • L = Loss (profit &lt; 0) • T = Tie (break even)
-          </div>
-        </div>
-      )}
-
-      {/* MONTHLY PROFIT CHART */}
-      {viewMode === 'monthly' && monthlyData.length > 0 && (
-        <div className="card">
-          <h2 className="card-title mb-2">📊 Monthly Profit</h2>
-          <div style={{ 
-            fontSize: '0.7rem', 
-            color: 'var(--text-muted)',
-            textAlign: 'center',
-            marginBottom: '0.5rem' 
-          }}>
-            {getTimeframeLabel()} • Combined profit of selected players
-          </div>
-          <div style={{ 
-            width: '100%', 
-            height: '300px',
-            marginLeft: '-10px',
-          }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                data={monthlyData} 
-                margin={{ top: 10, right: 10, left: 0, bottom: 40 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-                <XAxis 
-                  dataKey="month" 
-                  stroke="var(--text-muted)" 
-                  fontSize={9}
-                  tickLine={false}
-                  angle={-45}
-                  textAnchor="end"
-                  height={50}
-                />
-                <YAxis 
-                  stroke="var(--text-muted)" 
-                  fontSize={10}
-                  tickFormatter={(value) => `₪${cleanNumber(value)}`}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
-                  {monthlyData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.profit >= 0 ? '#10B981' : '#EF4444'} 
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          {/* Monthly summary */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-around', 
-            marginTop: '0.5rem',
-            padding: '0.5rem',
-            background: 'var(--surface)',
-            borderRadius: '8px',
-            fontSize: '0.75rem',
-          }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Best Month</div>
-              <div style={{ fontWeight: '700', color: 'var(--success)' }}>
-                {monthlyData.length > 0 ? (
-                  <>
-                    {monthlyData.reduce((best, m) => m.profit > best.profit ? m : best, monthlyData[0]).month}
-                    <br />
-                    +₪{cleanNumber(Math.max(...monthlyData.map(m => m.profit)))}
-                  </>
-                ) : '-'}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Worst Month</div>
-              <div style={{ fontWeight: '700', color: 'var(--danger)' }}>
-                {monthlyData.length > 0 ? (
-                  <>
-                    {monthlyData.reduce((worst, m) => m.profit < worst.profit ? m : worst, monthlyData[0]).month}
-                    <br />
-                    ₪{cleanNumber(Math.min(...monthlyData.map(m => m.profit)))}
-                  </>
-                ) : '-'}
-              </div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Avg/Month</div>
-              <div style={{ 
-                fontWeight: '700', 
-                color: monthlyData.reduce((sum, m) => sum + m.profit, 0) / monthlyData.length >= 0 
-                  ? 'var(--success)' 
-                  : 'var(--danger)' 
-              }}>
-                {monthlyData.length > 0 
-                  ? `₪${cleanNumber(monthlyData.reduce((sum, m) => sum + m.profit, 0) / monthlyData.length)}`
-                  : '-'
-                }
-              </div>
-            </div>
           </div>
         </div>
       )}

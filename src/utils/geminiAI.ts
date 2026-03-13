@@ -1261,31 +1261,31 @@ export const generateAIForecasts = async (
 
   const playerSuggestions = players.map(p => {
     if (p.gamesPlayed === 0) {
-      return { name: p.name, suggested: Math.round((Math.random() - 0.5) * 60) };
+      return { name: p.name, suggested: Math.round((Math.random() - 0.5) * 120) };
     }
 
-    // Typical game magnitude: how much this player actually swings per game
-    const recent10 = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length));
-    const typicalMagnitude = recent10.length >= 2
-      ? recent10.reduce((sum, g) => sum + Math.abs(g.profit), 0) / recent10.length
-      : 50;
+    // Use ACTUAL game results, not averages -- real nights have 3-digit swings
+    const recentResults = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length)).map(g => g.profit);
 
-    // Direction from blended recent form + overall tendency
+    // Pick a random real game result as the magnitude reference
+    const sampleResult = recentResults[Math.floor(Math.random() * recentResults.length)];
+    const sampleMagnitude = Math.abs(sampleResult);
+
+    // Direction from recent trend, with flip chance for variety
     const last3 = p.gameHistory.slice(0, Math.min(3, p.gameHistory.length));
     const last3Avg = last3.reduce((sum, g) => sum + g.profit, 0) / last3.length;
     const blended = last3Avg * 0.6 + p.avgProfit * 0.4;
-    const direction = blended >= 0 ? 1 : -1;
+    let direction = blended >= 0 ? 1 : -1;
+    if (Math.random() < 0.20) direction *= -1;
 
-    // Magnitude: random fraction of their real swing range
-    const magnitude = typicalMagnitude * (0.3 + Math.random() * 0.4);
+    // Scale the sampled magnitude: 0.6-1.1x of the real result
+    let suggested = direction * sampleMagnitude * (0.6 + Math.random() * 0.5);
 
-    let suggested = direction * magnitude;
+    // Add noise proportional to the sample (not the average)
+    suggested += (Math.random() - 0.5) * sampleMagnitude * 0.3;
 
-    // Add some noise to avoid mirroring the ranking
-    suggested += (Math.random() - 0.5) * typicalMagnitude * 0.25;
-
-    // New players: smaller predictions
-    if (p.gamesPlayed <= 3) suggested *= 0.6;
+    // New players: moderate dampening
+    if (p.gamesPlayed <= 3) suggested *= 0.7;
 
     return { name: p.name, suggested: Math.round(suggested) };
   });
@@ -1360,20 +1360,19 @@ export const generateAIForecasts = async (
     usedSurpriseNames.add(candidate.name);
   }
 
-  // Apply surprise: flip or significantly adjust the prediction
+  // Apply surprise: use a real game result to set a realistic magnitude
   for (const surprise of selectedSurprises) {
     const sp = playerSuggestions.find(p => p.name === surprise.name);
     if (!sp) continue;
     const playerData = players.find(p => p.name === surprise.name)!;
-    const recent10 = playerData.gameHistory.slice(0, 10);
-    const typicalMag = recent10.length >= 2
-      ? recent10.reduce((s, g) => s + Math.abs(g.profit), 0) / recent10.length : 50;
-    const mag = typicalMag * (0.4 + Math.random() * 0.3);
+    const recent = playerData.gameHistory.slice(0, 10);
+    // Pick a random real result for realistic scale
+    const sample = recent[Math.floor(Math.random() * recent.length)];
+    const mag = Math.abs(sample?.profit || 50) * (0.7 + Math.random() * 0.4);
 
     if (surprise.type === 'top_dog_fall') {
       sp.suggested = -Math.abs(mag);
     } else if (surprise.type === 'streak_breaker') {
-      // Breaking a winning streak = negative; breaking a losing streak = positive
       sp.suggested = playerData.currentStreak > 0 ? -Math.abs(mag) : Math.abs(mag);
     } else {
       sp.suggested = Math.abs(mag);
@@ -1566,11 +1565,12 @@ ${surpriseText}
 {"groupIntro":"משפט פתיחה אחד לכל הערב","players":[{"name":"שם","highlight":"כותרת","sentence":"משפט","isSurprise":false}]}
 
 🌟 groupIntro - משפט פתיחה לערב (חובה!):
-• משפט אחד בעברית (15-25 מילים) שמתאר את האווירה של הערב
-• השתמש בסיפורי הערב (📖) אם יש - הם מוסיפים דרמה!
-• דוגמאות: "ערב של חשבונות פתוחים - 3 יריבויות, משחק נקמה, ושחקן חדש שאף אחד לא מכיר"
-• "7 שחקנים, 4 ברצף נצחונות, וספונסר אחד שמממן את כולם - יהיה מעניין"
-• הטון: כמו פרשן ספורט לפני משחק גדול
+• משפט אחד בעברית (15-30 מילים) שמתאר את הערב הספציפי הזה
+• חובה: לפחות 2 שמות שחקנים ועובדה ספציפית אחת מהנתונים!
+• אסור משפט גנרי! אסור "ערב של חשבונות פתוחים" או "יריבויות עתיקות" - חייב פרטים ספציפיים
+• דוגמאות טובות: "חרדון עם 4 ברצף נגד אייל שהפסיד 240₪ אחרון - ותומר מגיע ברקע עם ממוצע +21₪ השנה"
+• "ליאור עם 179 משחקים מארח, אורן צריך קאמבק אחרי -180₪, וחרדון על רצף חם - ערב מבטיח"
+• הטון: כמו פרשן ספורט שמציג את הדמויות לפני המשחק
 
 📝 לכל שחקן כתוב:
 1. highlight - כותרת קצרה (3-6 מילים) - העובדה הכי מעניינת ומשעשעת
@@ -1594,13 +1594,16 @@ ${surpriseText}
 • חיזוי שלילי → טון מאתגר/הומוריסטי (אסור לכתוב אופטימי!)
 • מילים כמו "מטורף", "מדהים", "היסטורי" → רק לנתונים באמת חריגים (רצף 5+, פער 150₪+)
 
+🚫 איסורים מוחלטים (הפרה = פסילה!):
+• אסור להזכיר את מספר החיזוי ב-sentence! המספר כבר מוצג בכרטיס. אסור "רווח של X₪", "הפסד של X₪", "יעד של X₪", "מכוון ל-X₪" כשX הוא מספר החיזוי!
+• אסור להזכיר הפסד מצטבר/כולל/היסטורי! אסור "2000₪ הפסד כולל" או "סה"כ מינוס". הפסד במשחק אחרון - מותר
+• אסור לסיים כמה משפטים באותה תבנית! אם כתבת "והלילה הוא מכוון ל..." לשחקן אחד - אסור לאחרים!
+
 ✍️ כללי כתיבה:
-• אסור להזכיר את מספר החיזוי עצמו (מוצג בנפרד)
-• אסור להזכיר הפסד מצטבר/כולל (הפסד במשחק אחרון - מותר)
 • דירוגים: רק מטבלת התקופה (⭐)
 • highlight ו-sentence חייבים להיות עקביים
 • כל highlight שונה מהאחרים! כל משפט במבנה שונה!
-• לא להתחיל כל המשפטים באותו תבנית
+• כל משפט מתחיל ומסתיים אחרת - גיוון מלא!
 
 ✅ דוגמאות טובות (סיפורים, לא סטטיסטיקה!):
 • highlight "5:2 מול אייל", sentence "בחמישה משחקים אחרונים ביחד, ליאור שלט באייל עם 5 נצחונות מול 2. הלילה האם הסדרה תימשך או שאייל מכין נקמה?"
@@ -1629,7 +1632,7 @@ ${surpriseText}
             parts: [{ text: prompt }]
           }],
           generationConfig: {
-            temperature: 0.4,
+            temperature: 0.7,
             topK: 40,
             topP: 0.95,
             maxOutputTokens: 4096,
@@ -1870,15 +1873,37 @@ ${surpriseText}
         correctedSentence = correctedSentence.replace(/\.\s*\./g, '.');
         correctedSentence = correctedSentence.replace(/\s+\./g, '.');
         
-        // Strip large cumulative/total losses from sentence (not recent game results)
+        // Strip cumulative/total losses from sentence (game-last losses are OK)
         correctedSentence = correctedSentence
-          .replace(/סה"כ\s*(הפסד\s*(של\s*)?)?[-−]\s*\d+₪/g, '')
+          .replace(/סה"כ\s*(הפסד\s*(של\s*)?)?[-−]?\s*\d+₪/g, '')
           .replace(/(הפסד|מינוס)\s*(כולל|היסטורי|מצטבר)\s*(של\s*)?[-−]?\s*\d+₪/g, '')
           .replace(/מ[-−]\s*\d+₪\s*הפסד\s*(כולל|היסטורי)/g, '')
+          .replace(/לא\s*לרדת\s*(מתחת\s*ל?)?[-−]?\s*\d+₪\s*(הפסד\s*)?(כולל|מצטבר)?/g, '')
+          .replace(/[-−]?\d{3,}₪\s*(הפסד\s*)?(כולל|מצטבר|היסטורי)/g, '')
           .replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').trim();
         
-        // ========== 7. TEXT-NUMBER CONSISTENCY CHECK ==========
+        // ========== 6b. STRIP FORECAST NUMBER FROM SENTENCE ==========
+        // The AI often leaks the prediction number into the text despite instructions
         const predictedProfit = forecast.expectedProfit;
+        const absProfit = Math.abs(predictedProfit);
+        if (absProfit > 0) {
+          const profitStr = String(absProfit);
+          const leakPatterns = [
+            new RegExp(`(רווח|הפסד|יעד|מכוון)\\s*(של|ל|ל-)?\\s*[-+]?${profitStr}₪`, 'g'),
+            new RegExp(`[-+]?₪?${profitStr}₪?\\s*(רווח|הפסד)`, 'g'),
+            new RegExp(`(לרווח|להפסד|מכוון ל|שואף ל)[-+\\s]*${profitStr}₪`, 'g'),
+            new RegExp(`עם\\s*[-+]?${profitStr}₪`, 'g'),
+          ];
+          for (const pattern of leakPatterns) {
+            if (pattern.test(correctedSentence)) {
+              errorDetails.push(`number_leak: prediction ${predictedProfit}₪ found in sentence`);
+              correctedSentence = correctedSentence.replace(pattern, '').trim();
+            }
+          }
+          correctedSentence = correctedSentence.replace(/\s+/g, ' ').replace(/,\s*,/g, ',').replace(/,\s*\./g, '.').replace(/\.\s*\./g, '.').trim();
+        }
+        
+        // ========== 7. TEXT-NUMBER CONSISTENCY CHECK ==========
         const allTimeAvg = Math.round(player.avgProfit);
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
@@ -2239,6 +2264,8 @@ export const generateGameNightSummary = async (
 
   const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod } = payload;
 
+  if (tonight.length === 0) throw new Error('No players in tonight results');
+
   const winner = tonight[0];
   const loser = tonight[tonight.length - 1];
 
@@ -2312,7 +2339,7 @@ ${standingsLines}${contextBlock}
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
               temperature: 0.9,
-              maxOutputTokens: 400,
+              maxOutputTokens: 2048,
               topP: 0.95,
             }
           })
@@ -2326,12 +2353,20 @@ ${standingsLines}${contextBlock}
       }
 
       const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text && text.length > 20) {
-        console.log(`AI summary generated via ${config.model} (${text.length} chars)`);
+      const candidate = data?.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text?.trim();
+      const finishReason = candidate?.finishReason;
+
+      if (finishReason === 'MAX_TOKENS') {
+        console.warn(`AI summary: ${config.model} hit token limit — response truncated, retrying with next model`);
+        continue;
+      }
+
+      if (text && text.length > 50) {
+        console.log(`AI summary generated via ${config.model} (${text.length} chars, finishReason: ${finishReason})`);
         return text;
       }
-      console.warn(`AI summary: ${config.model} returned empty/short response`);
+      console.warn(`AI summary: ${config.model} returned empty/short response (${text?.length || 0} chars)`);
     } catch (err) {
       console.warn(`AI summary: ${config.model} error:`, err);
     }

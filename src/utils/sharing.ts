@@ -20,7 +20,7 @@ export const generateGameSummary = (
   skippedTransfers: SkippedTransfer[],
   chipGap?: number | null,
   chipGapPerPlayer?: number | null,
-  rebuyValue?: number,
+  _rebuyValue?: number,
   chipValues?: ChipValue[]
 ): string => {
   const gameDate = new Date(date).toLocaleDateString('en-US', {

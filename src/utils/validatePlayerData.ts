@@ -71,10 +71,6 @@ function validatePlayerData(playerName: string): DataValidation | null {
     }
   }
   
-  // Validate win/loss counts
-  const winsFromHistory = stats.lastGameResults.filter(g => g.profit > 0).length;
-  const lossesFromHistory = stats.lastGameResults.filter(g => g.profit < 0).length;
-  
   // Get last game
   const lastGameProfit = stats.lastGameResults[0]?.profit || 0;
   

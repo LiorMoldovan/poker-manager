@@ -5,6 +5,7 @@ import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, P
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload } from '../utils/geminiAI';
+import { speakHebrew } from '../utils/tts';
 
 const hebrewNum = (n: number, feminine: boolean): string => {
   const abs = Math.round(Math.abs(n));
@@ -494,8 +495,12 @@ const GameSummaryScreen = () => {
     const gameDateObj = new Date(game.date || game.createdAt);
     const gameInCurrentPeriod = gameDateObj >= halfStart && gameDateObj <= halfEnd;
 
-    if (game.aiSummary) {
-      setAiSummary(game.aiSummary);
+    // Treat very short cached summaries as truncated — regenerate them
+    const cachedSummary = game.aiSummary;
+    const isCachedValid = cachedSummary && cachedSummary.length > 80;
+
+    if (isCachedValid) {
+      setAiSummary(cachedSummary);
     } else if (getGeminiApiKey() && game.status === 'completed' && gameInCurrentPeriod) {
       setIsLoadingAiSummary(true);
 
@@ -607,19 +612,13 @@ const GameSummaryScreen = () => {
     setIsLoading(false);
 
     // TTS game summary announcement
-    if ('speechSynthesis' in window && sortedPlayers.length >= 2) {
+    if (sortedPlayers.length >= 2) {
       setTimeout(() => {
-        const voices = window.speechSynthesis.getVoices();
-        const hebrewVoice = voices.find(v => v.lang.startsWith('he') && v.name.toLowerCase().includes('female'))
-          || voices.find(v => v.lang.startsWith('he'))
-          || null;
-
         const winner = sortedPlayers[0];
         const loser = sortedPlayers[sortedPlayers.length - 1];
         const totalBuyins = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
         const totalRebuysOnly = totalBuyins - sortedPlayers.length;
 
-        // Format rebuy count with proper Hebrew for halves
         const formatRebuysHebrew = (n: number): string => {
           const hasHalf = Math.abs((n % 1) - 0.5) < 0.01;
           const whole = Math.floor(n);
@@ -634,21 +633,21 @@ const GameSummaryScreen = () => {
           `המנצח הגדול של הערב הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
           `${winner.playerName} לוקח הכל הערב! פלוס ${cleanNumber(winner.profit)} שקל`,
           `ונצחון גדול של ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל`,
-          `${winner.playerName} הולך הביתה עם פלוס ${cleanNumber(winner.profit)} שקל, כל הכבוד!`,
-          `${winner.playerName} שולט הערב, פלוס ${cleanNumber(winner.profit)} שקל`,
+          `${winner.playerName} הולך הביתה עם פלוס ${cleanNumber(winner.profit)} שקל. כל הכבוד!`,
+          `${winner.playerName} שולט הערב. פלוס ${cleanNumber(winner.profit)} שקל`,
           `הכסף הולך אל ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל בכיס`,
-          `${winner.playerName} סוגר את הערב עם חיוך, פלוס ${cleanNumber(winner.profit)} שקל`,
-          `ו ${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
+          `${winner.playerName} סוגר את הערב עם חיוך. פלוס ${cleanNumber(winner.profit)} שקל`,
+          `ו${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
         ];
         const loseMessages = [
-          `והתורם הרשמי של הערב, ${loser.playerName}, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
-          `${loser.playerName}, תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
-          `ו ${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
-          `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן, גיבור אמיתי`,
-          `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל, אבל מי סופר`,
-          `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל, הערב לא היה שלו`,
-          `ו ${loser.playerName} שילם את החשבון הערב, מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
-          `${loser.playerName}, ${cleanNumber(Math.abs(loser.profit))} שקל מינוס, אבל מה זה כסף בין חברים`,
+          `והתורם הרשמי של הערב. ${loser.playerName}. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
+          `${loser.playerName}. תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
+          `ו${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
+          `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן. גיבור אמיתי`,
+          `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל. אבל מי סופר`,
+          `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. הערב לא היה שלו`,
+          `ו${loser.playerName} שילם את החשבון הערב. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
+          `${loser.playerName}. ${cleanNumber(Math.abs(loser.profit))} שקל מינוס. אבל מה זה כסף בין חברים`,
         ];
         const potMessage = `סך הכל ${formatRebuysHebrew(totalRebuysOnly)} קניות חוזרות הערב.`;
 
@@ -657,13 +656,7 @@ const GameSummaryScreen = () => {
 
         const fullMessage = `סיכום המשחק. ${potMessage} ${winMsg} ${loseMsg}`;
 
-        const utterance = new SpeechSynthesisUtterance(fullMessage);
-        utterance.lang = 'he-IL';
-        if (hebrewVoice) utterance.voice = hebrewVoice;
-        utterance.rate = 0.9;
-        utterance.pitch = 1.0;
-        utterance.volume = 1;
-        window.speechSynthesis.speak(utterance);
+        speakHebrew([fullMessage], getGeminiApiKey());
       }, 1500);
     }
   };
@@ -785,8 +778,8 @@ const GameSummaryScreen = () => {
         files.push(new File([expenseBlob], 'poker-expenses.png', { type: 'image/png' }));
       }
       
-      // Capture the Fun Stats / Highlights section if it exists
-      if (funStatsRef.current && funStats.length > 0) {
+      // Capture the Game Night Summary / Highlights section if it exists
+      if (funStatsRef.current && (aiSummary || funStats.length > 0)) {
         const funStatsCanvas = await html2canvas(funStatsRef.current, {
           backgroundColor: '#1a1a2e',
           scale: 2,
@@ -1225,19 +1218,21 @@ const GameSummaryScreen = () => {
             {aiSummary ? (
               <>
                 <h2 className="card-title mb-2">🎭 סיכום הערב</h2>
-                <div style={{
+                <p style={{
                   direction: 'rtl',
                   fontSize: '0.85rem',
                   lineHeight: 1.8,
                   color: 'var(--text)',
-                  padding: '0.5rem',
+                  padding: '0.75rem',
+                  margin: 0,
                   background: 'rgba(168, 85, 247, 0.06)',
                   borderRadius: '8px',
                   borderRight: '3px solid var(--primary)',
-                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
                 }}>
                   {aiSummary}
-                </div>
+                </p>
               </>
             ) : isLoadingAiSummary ? (
               <>

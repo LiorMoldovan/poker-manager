@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { PlayerStats, Player, PlayerType, GamePlayer } from '../types';
+import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
 
@@ -29,7 +29,6 @@ const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
-  const [selectedIndividualPlayer, setSelectedIndividualPlayer] = useState<string | null>(savedPlayerInfo?.playerId || null);
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
@@ -2903,8 +2902,6 @@ const StatisticsScreen = () => {
                 const periodLabel = getTimeframeLabel();
                 const currentYear = new Date().getFullYear();
                 const currentMonth = new Date().getMonth();
-                const monthNames = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-                const currentHalf = currentMonth < 6 ? 1 : 2;
                 const isEndOfYear = currentMonth === 11; // December
                 const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
                 
@@ -3038,8 +3035,6 @@ const StatisticsScreen = () => {
                 // Use actual overall rankings, not filtered rankings
                 if (!isHistoricalPeriod) {
                   let leaderboardBattleCount = 0;
-                  // Create a set of filtered player IDs for quick lookup
-                  const filteredPlayerIds = new Set(rankedStats.map(p => p.playerId));
                   
                   // Check each adjacent pair in filtered list
                   for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
@@ -3340,9 +3335,6 @@ const StatisticsScreen = () => {
                 // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured or historical)
                 // Only show if players are actually close in overall ranking
                 if (!isHistoricalPeriod) {
-                  // Create a set of filtered player IDs for quick lookup
-                  const filteredPlayerIds = new Set(rankedStats.map(p => p.playerId));
-                  
                   for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
                     const p1 = rankedStats[i];
                     const p2 = rankedStats[i + 1];
@@ -3555,9 +3547,7 @@ const StatisticsScreen = () => {
                 const lossCount = player.lossCount;
                 const currentStreak = player.currentStreak;
                 const longestWinStreak = player.longestWinStreak || 0;
-                const longestLossStreak = player.longestLossStreak || 0;
                 const lastGames = player.lastGameResults || [];
-                const periodLabel = getTimeframeLabel();
                 
                 // ========== REBUY DATA: Only valid for 2026+ ==========
                 // Rebuy tracking was added in late 2025, so only use it for 2026+ data
@@ -3797,14 +3787,6 @@ const StatisticsScreen = () => {
                   ...(equivalentWins >= 2 ? [`📊 הנצחון הגדול (+${Math.round(bestWin)}₪) שווה ${equivalentWins} נצחונות ממוצעים.`] : []),
                   ...(longestWinStreak >= 2 ? [`💪 רצף הנצחונות הארוך שלו: ${longestWinStreak} ברצף.`] : []),
                   `📈 ${gamesPlayed} משחקים של ניסיון עם רווח כולל של ${formatCurrency(totalProfit)}.`,
-                ];
-                
-                // NEWCOMER sentences
-                const newcomerSentences = [
-                  `🌱 ${gamesPlayed} משחקים בלבד - עוד מוקדם לדעת לאן זה הולך.`,
-                  `👋 שחקן חדש יחסית. הנתונים עדיין לא מייצגים.`,
-                  `🎲 רק ${gamesPlayed} משחקים. הסטטיסטיקה תתייצב עם הזמן.`,
-                  `📊 מדגם קטן של ${gamesPlayed} משחקים. עוד הכל פתוח.`,
                 ];
                 
                 // ===== BUILD NARRATIVE BASED ON PLAYER PROFILE =====
@@ -4266,10 +4248,6 @@ const StatisticsScreen = () => {
                 <div 
                   key={idx}
                   onClick={() => {
-                    const savedPlayerInfo = {
-                      playerId: playerAllGames.playerId,
-                      playerName: playerAllGames.playerName
-                    };
                     setPlayerAllGames(null);
                     navigate(`/game/${game.gameId}`, { 
                       state: { 

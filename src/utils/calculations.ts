@@ -85,35 +85,87 @@ function findMaxZeroSumPartition(balances: BalanceEntry[]): BalanceEntry[][] {
 
 /**
  * Settle one zero-sum group using largest-first greedy matching.
- * Produces exactly k-1 transfers for k members (optimal within a group).
- * Big amounts are matched first so small remainders stay at the tail end.
+ * Simple fallback for large groups.
  */
-function settleGroup(group: BalanceEntry[]): Settlement[] {
+function greedySettle(balances: BalanceEntry[]): Settlement[] {
   const transfers: Settlement[] = [];
-  const balances = group.map(b => ({ ...b }));
+  const work = balances.map(b => ({ ...b }));
 
   for (;;) {
-    const creditors = balances
-      .filter(b => b.balance > 0.001)
-      .sort((a, b) => b.balance - a.balance);
-    const debtors = balances
-      .filter(b => b.balance < -0.001)
-      .sort((a, b) => a.balance - b.balance);
-
+    const creditors = work.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
+    const debtors = work.filter(b => b.balance < -0.001).sort((a, b) => a.balance - b.balance);
     if (creditors.length === 0 || debtors.length === 0) break;
 
-    const creditor = creditors[0];
-    const debtor = debtors[0];
-
-    const amount = Math.min(creditor.balance, Math.abs(debtor.balance));
+    const amount = Math.min(creditors[0].balance, Math.abs(debtors[0].balance));
     if (amount < 0.001) break;
 
-    transfers.push({ from: debtor.name, to: creditor.name, amount });
-    creditor.balance -= amount;
-    debtor.balance += amount;
+    transfers.push({ from: debtors[0].name, to: creditors[0].name, amount });
+    creditors[0].balance -= amount;
+    debtors[0].balance += amount;
+  }
+  return transfers;
+}
+
+/**
+ * Recursively try all creditor-debtor pairings and pick the arrangement
+ * that maximizes the smallest transaction (avoids tiny remainders).
+ * Fast for groups ≤ 7 members (typical poker game groups).
+ */
+function bestSettleRecursive(
+  balances: BalanceEntry[],
+  depth: number
+): Settlement[] {
+  const creditors = balances.filter(b => b.balance > 0.001);
+  const debtors = balances.filter(b => b.balance < -0.001);
+
+  if (creditors.length === 0 || debtors.length === 0) return [];
+  if (creditors.length === 1 && debtors.length === 1) {
+    const amt = Math.min(creditors[0].balance, Math.abs(debtors[0].balance));
+    return amt > 0.001 ? [{ from: debtors[0].name, to: creditors[0].name, amount: amt }] : [];
   }
 
-  return transfers;
+  // Depth guard for unexpectedly large groups
+  if (depth > 12) return greedySettle(balances);
+
+  let best: Settlement[] | null = null;
+  let bestMin = -1;
+
+  for (const cr of creditors) {
+    for (const db of debtors) {
+      const amount = Math.min(cr.balance, Math.abs(db.balance));
+      if (amount < 0.001) continue;
+
+      const next = balances.map(b => {
+        if (b.name === cr.name) return { name: b.name, balance: b.balance - amount };
+        if (b.name === db.name) return { name: b.name, balance: b.balance + amount };
+        return { name: b.name, balance: b.balance };
+      }).filter(b => Math.abs(b.balance) > 0.001);
+
+      const rest = bestSettleRecursive(next, depth + 1);
+      const transfers = [{ from: db.name, to: cr.name, amount }, ...rest];
+      const minAmt = Math.min(...transfers.map(t => t.amount));
+
+      if (minAmt > bestMin || (minAmt === bestMin && best && transfers.length < best.length)) {
+        bestMin = minAmt;
+        best = transfers;
+      }
+    }
+  }
+
+  return best || greedySettle(balances);
+}
+
+/**
+ * Settle one zero-sum group optimally:
+ * - For small groups (≤ 7): try all orderings to maximize smallest transaction
+ * - For larger groups: fall back to largest-first greedy
+ */
+function settleGroup(group: BalanceEntry[]): Settlement[] {
+  const active = group.filter(b => Math.abs(b.balance) > 0.001);
+  if (active.length <= 7) {
+    return bestSettleRecursive(active.map(b => ({ ...b })), 0);
+  }
+  return greedySettle(active.map(b => ({ ...b })));
 }
 
 /**

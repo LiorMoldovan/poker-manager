@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.5.0';
+export const APP_VERSION = '5.5.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.5.1',
+    date: '2026-03-13',
+    changes: [
+      '🔊 TTS engine refactored into dedicated module with Hebrew number pronunciation',
+      '🧮 Optimized settlement algorithm for fewer transfers',
+      '🎙️ AI summary caching fix — regenerates truncated summaries',
+      '📉 Graphs & Statistics screens cleanup and streamlining',
+      '🎮 LiveGame screen simplified with shared TTS utility',
+    ]
+  },
   {
     version: '5.5.0',
     date: '2026-03-13',
