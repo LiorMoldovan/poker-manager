@@ -1,54 +1,72 @@
 {
-  "id": "mmo582ui8jyc7hqbhyi",
-  "date": "2026-03-13T00:13:04.746Z",
+  "id": "mmoxgeo51hj8wj1qyli",
+  "date": "2026-03-13T13:23:22.565Z",
   "type": "manual",
   "players": [
     {
       "id": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
       "name": "ליאור",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.069Z",
       "type": "permanent"
     },
     {
       "id": "b1ae0113-3ffc-41f5-a732-778d79c46286",
       "name": "אייל",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
+      "type": "permanent"
+    },
+    {
+      "id": "p3",
+      "name": "ארז",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
       "name": "אורן",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
       "name": "ליכטר",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
       "name": "סגל",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "2cedc21c-7c0d-479c-ac04-483638d01881",
       "name": "תומר",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
       "name": "פיליפ",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
+      "type": "permanent"
+    },
+    {
+      "id": "p9",
+      "name": "אסף",
+      "createdAt": "2026-03-13T13:02:11.070Z",
+      "type": "permanent"
+    },
+    {
+      "id": "p10",
+      "name": "פבל",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
       "id": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
       "name": "מלמד",
-      "createdAt": "2025-12-18T17:00:27.639Z",
+      "createdAt": "2026-03-13T13:02:11.070Z",
       "type": "permanent"
     },
     {
@@ -19390,5 +19408,5 @@
     "chipsPerRebuy": 10000,
     "minTransfer": 5
   },
-  "uploadedAt": "2026-03-13T00:13:05.934Z"
+  "uploadedAt": "2026-03-13T13:23:24.736Z"
 }
