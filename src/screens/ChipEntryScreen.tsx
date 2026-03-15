@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, ChipValue } from '../types';
 import { 
@@ -14,6 +14,7 @@ import {
 import { syncToCloud } from '../database/githubSync';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
+import { getGeminiApiKey } from '../utils/geminiAI';
 
 // Numpad Modal Component with auto-advance
 interface NumpadModalProps {
@@ -241,23 +242,29 @@ const ChipEntryScreen = () => {
     }
   }, [gameId]);
 
+  // Save chip counts to storage
+  const saveChipCounts = useCallback(() => {
+    if (isLoading || Object.keys(chipCounts).length === 0) return;
+    players.forEach(player => {
+      const playerChips = chipCounts[player.id] || {};
+      if (Object.values(playerChips).some(v => v > 0)) {
+        updateGamePlayerChips(player.id, playerChips);
+      }
+    });
+  }, [chipCounts, players, isLoading]);
+
   // Auto-save chip counts to localStorage whenever they change (debounced)
+  // Also flush immediately on unmount to prevent data loss
   useEffect(() => {
     if (isLoading || Object.keys(chipCounts).length === 0) return;
     
-    // Debounce: save after 500ms of no changes
-    const saveTimeout = setTimeout(() => {
-      players.forEach(player => {
-        const playerChips = chipCounts[player.id] || {};
-        // Only save if there are any non-zero chip counts
-        if (Object.values(playerChips).some(v => v > 0)) {
-          updateGamePlayerChips(player.id, playerChips);
-        }
-      });
-    }, 500);
+    const saveTimeout = setTimeout(saveChipCounts, 500);
 
-    return () => clearTimeout(saveTimeout);
-  }, [chipCounts, players, isLoading]);
+    return () => {
+      clearTimeout(saveTimeout);
+      saveChipCounts();
+    };
+  }, [chipCounts, players, isLoading, saveChipCounts]);
 
   const loadData = () => {
     if (!gameId) {
@@ -434,8 +441,17 @@ const ChipEntryScreen = () => {
     return `hsl(${hue}, 80%, 45%)`;
   };
 
+  const allPlayersCounted = completedPlayers.size === players.length;
+  const [showUncountedWarning, setShowUncountedWarning] = useState(false);
+
   const handleCalculate = () => {
     if (!gameId) return;
+
+    if (!allPlayersCounted && !showUncountedWarning) {
+      setShowUncountedWarning(true);
+      return;
+    }
+    setShowUncountedWarning(false);
     
     // Calculate the gap between expected and actual chips (in money terms)
     const totalCountedMoney = players.reduce((sum, p) => sum + getPlayerMoneyValue(p.id), 0);
@@ -477,11 +493,12 @@ const ChipEntryScreen = () => {
           setUploadStatus('⚠️ Sync failed');
           console.error('Sync failed:', result.message);
         }
-        // Navigate after a short delay to show status
-        setTimeout(() => navigate(`/game-summary/${gameId}`), 1000);
+        setTimeout(() => {
+          navigate(`/game-summary/${gameId}`, { state: { from: 'chip-entry', autoAI: !!getGeminiApiKey() } });
+        }, 1000);
       });
     } else {
-      navigate(`/game-summary/${gameId}`);
+      navigate(`/game-summary/${gameId}`, { state: { from: 'chip-entry' } });
     }
   };
 
@@ -805,12 +822,26 @@ const ChipEntryScreen = () => {
           </span>
         </div>
         
+        {showUncountedWarning && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.15)',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            borderRadius: '8px',
+            padding: '0.6rem',
+            marginBottom: '0.5rem',
+            fontSize: '0.8rem',
+            color: '#f59e0b',
+            textAlign: 'center'
+          }}>
+            ⚠️ {players.length - completedPlayers.size} players not marked as counted. Tap again to confirm.
+          </div>
+        )}
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
           style={{ padding: '0.6rem' }}
         >
-          🧮 Calculate Results
+          {showUncountedWarning ? '⚠️ Confirm Calculate' : '🧮 Calculate Results'}
         </button>
       </div>
 

@@ -34,7 +34,7 @@ const HistoryScreen = () => {
         const totalPot = totalBuyins * settings.rebuyValue;
         return { ...game, players: sortedPlayers, totalPot, totalBuyins };
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => (new Date(b.date || b.createdAt).getTime() || 0) - (new Date(a.date || a.createdAt).getTime() || 0));
     
     setGames(gamesWithDetails);
   };
@@ -104,7 +104,7 @@ const HistoryScreen = () => {
               key={game.id} 
               className="card" 
               style={{ cursor: 'pointer' }}
-              onClick={() => navigate(`/game/${game.id}`)}
+              onClick={() => navigate(`/game-summary/${game.id}`)}
             >
                 <div className="card-header">
                 <div>
@@ -166,32 +166,11 @@ const HistoryScreen = () => {
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/game/${game.id}`);
+                    navigate(`/game-summary/${game.id}`);
                   }}
                 >
                   📊 פרטים
                 </button>
-                {role === 'admin' && (
-                  <button 
-                    className="btn btn-sm"
-                    style={{ 
-                      background: game.aiSummary ? 'rgba(168, 85, 247, 0.15)' : 'linear-gradient(135deg, #A855F7, #EC4899)',
-                      color: game.aiSummary ? '#A855F7' : 'white',
-                      border: game.aiSummary ? '1px solid rgba(168, 85, 247, 0.3)' : 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.3rem',
-                      fontSize: '0.75rem',
-                      padding: '0.3rem 0.5rem',
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/game-summary/${game.id}`);
-                    }}
-                  >
-                    🎭 סיכום
-                  </button>
-                )}
                 {canDeleteGames && (
                   <button 
                     className="btn btn-sm btn-danger"

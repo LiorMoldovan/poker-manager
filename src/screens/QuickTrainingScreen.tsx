@@ -9,10 +9,29 @@ import {
   SessionResult,
 } from '../utils/pokerTraining';
 
+const ColoredCards = ({ text }: { text: string }) => {
+  const parts = text.split(/(\S+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const hasRed = part.includes('♥') || part.includes('♦');
+        const hasSuit = hasRed || part.includes('♠') || part.includes('♣');
+        if (!hasSuit) return <span key={i}>{part}</span>;
+        return (
+          <span key={i} style={{ color: hasRed ? '#ef4444' : '#e2e8f0', fontWeight: 700 }}>
+            {part}
+          </span>
+        );
+      })}
+    </>
+  );
+};
+
 const QuickTrainingScreen = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const categoriesParam = searchParams.get('categories') || '';
+  const maxHands = parseInt(searchParams.get('maxHands') || '8', 10) || 8;
 
   const [scenarios, setScenarios] = useState<QuickScenario[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -27,7 +46,7 @@ const QuickTrainingScreen = () => {
     setError(null);
     try {
       const catIds = categoriesParam ? categoriesParam.split(',').filter(Boolean) : undefined;
-      const batch = await generateQuickBatch(8, catIds);
+      const batch = await generateQuickBatch(maxHands, catIds);
       setScenarios(batch);
       setCurrentIdx(0);
       setResults([]);
@@ -323,9 +342,9 @@ const QuickTrainingScreen = () => {
           padding: '0.25rem 0.6rem', borderRadius: '8px',
           background: 'rgba(99, 102, 241, 0.12)',
           fontSize: '0.9rem', fontWeight: '700',
-          marginBottom: '0.75rem', letterSpacing: '1px',
+          marginBottom: '0.75rem', letterSpacing: '2px',
         }}>
-          🃏 {scenario.yourCards}
+          🃏 <ColoredCards text={scenario.yourCards} />
         </div>
 
         {/* Situation text */}

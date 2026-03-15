@@ -47,6 +47,7 @@ const DEFAULT_SETTINGS: Settings = {
   rebuyValue: 30,
   chipsPerRebuy: 10000,
   minTransfer: 5,
+  gameNightDays: [4, 6],
 };
 
 // Default players (all permanent)
@@ -100,6 +101,22 @@ export const initializeStorage = (): void => {
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
     setItem(STORAGE_KEYS.GAMES, []);
+  } else {
+    // Fix: only the 2 most recent "מקלט ליכטר" games should keep that name;
+    // all others should revert to "ליכטר" (undoes over-eager earlier migration).
+    const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+    const shelterGames = games
+      .filter(g => g.location === 'מקלט ליכטר')
+      .sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
+    if (shelterGames.length > 2) {
+      const keepIds = new Set([shelterGames[0].id, shelterGames[1].id]);
+      games.forEach(g => {
+        if (g.location === 'מקלט ליכטר' && !keepIds.has(g.id)) {
+          g.location = 'ליכטר';
+        }
+      });
+      setItem(STORAGE_KEYS.GAMES, games);
+    }
   }
   if (!localStorage.getItem(STORAGE_KEYS.GAME_PLAYERS)) {
     setItem(STORAGE_KEYS.GAME_PLAYERS, []);
@@ -869,12 +886,13 @@ export const getPendingForecast = (): PendingForecast | null => {
 };
 
 // Save pending forecast
-export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[]): PendingForecast => {
+export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[], preGameTeaser?: string): PendingForecast => {
   const pendingForecast: PendingForecast = {
     id: generateId(),
     createdAt: new Date().toISOString(),
     playerIds,
     forecasts,
+    ...(preGameTeaser && { preGameTeaser }),
   };
   setItem(STORAGE_KEYS.PENDING_FORECAST, pendingForecast);
   return pendingForecast;
@@ -887,11 +905,13 @@ export const linkForecastToGame = (gameId: string): void => {
     pending.linkedGameId = gameId;
     setItem(STORAGE_KEYS.PENDING_FORECAST, pending);
     
-    // Also store forecasts in the game record
     const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
     const gameIndex = games.findIndex(g => g.id === gameId);
     if (gameIndex !== -1) {
       games[gameIndex].forecasts = pending.forecasts;
+      if (pending.preGameTeaser) {
+        games[gameIndex].preGameTeaser = pending.preGameTeaser;
+      }
       setItem(STORAGE_KEYS.GAMES, games);
     }
   }
@@ -1166,5 +1186,46 @@ export const formatStorageSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+// ========== Chronicle Profiles (AI-generated player stories) ==========
+
+const CHRONICLE_STORAGE_KEY = 'poker_chronicle_profiles';
+
+export interface ChronicleEntry {
+  profiles: Record<string, string>;
+  generatedAt: string;
+}
+
+export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null => {
+  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const all: Record<string, ChronicleEntry> = JSON.parse(raw);
+    return all[periodKey] || null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveChronicleProfiles = (periodKey: string, profiles: Record<string, string>): void => {
+  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const all: Record<string, ChronicleEntry> = raw ? JSON.parse(raw) : {};
+  all[periodKey] = { profiles, generatedAt: new Date().toISOString() };
+  localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
+};
+
+export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null => {
+  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const setAllChronicleProfiles = (data: Record<string, ChronicleEntry>): void => {
+  localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
 };
 

@@ -11,7 +11,7 @@ import LiveGameScreen from './screens/LiveGameScreen';
 import ChipEntryScreen from './screens/ChipEntryScreen';
 import GameSummaryScreen from './screens/GameSummaryScreen';
 import HistoryScreen from './screens/HistoryScreen';
-import GameDetailsScreen from './screens/GameDetailsScreen';
+
 import StatisticsScreen from './screens/StatisticsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import GraphsScreen from './screens/GraphsScreen';
@@ -23,11 +23,13 @@ import QuickTrainingScreen from './screens/QuickTrainingScreen';
 interface PermissionContextType {
   role: PermissionRole | null;
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
+  signOut: () => void;
 }
 
 const PermissionContext = createContext<PermissionContextType>({
   role: null,
   hasPermission: () => false,
+  signOut: () => {},
 });
 
 export const usePermissions = () => useContext(PermissionContext);
@@ -98,10 +100,16 @@ function App() {
     }
   };
 
+  const handleSignOut = () => {
+    setRole(null);
+    sessionStorage.removeItem('poker_role');
+  };
+
   // Permission context value
   const permissionValue: PermissionContextType = {
     role,
     hasPermission: (permission) => hasPermission(role, permission),
+    signOut: handleSignOut,
   };
 
   // Show loading while initializing
@@ -186,7 +194,8 @@ function App() {
             <Routes>
               <Route path="/statistics" element={<StatisticsScreen />} />
               <Route path="/history" element={<HistoryScreen />} />
-              <Route path="/game/:gameId" element={<GameDetailsScreen />} />
+              <Route path="/game/:gameId" element={<GameSummaryScreen />} />
+              <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
               {/* Redirect everything else to statistics */}
               <Route path="*" element={<Navigate to="/statistics" replace />} />
@@ -303,7 +312,7 @@ function App() {
             <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
             <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
             <Route path="/history" element={<HistoryScreen />} />
-            <Route path="/game/:gameId" element={<GameDetailsScreen />} />
+            <Route path="/game/:gameId" element={<GameSummaryScreen />} />
             <Route path="/statistics" element={<StatisticsScreen />} />
             <Route path="/settings" element={<SettingsScreen />} />
             {/* Graphs page - admin and member only */}

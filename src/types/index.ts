@@ -46,6 +46,19 @@ export interface PendingForecast {
   playerIds: string[];  // Selected player IDs at time of forecast
   forecasts: GameForecast[];
   linkedGameId?: string;  // Set when game starts
+  preGameTeaser?: string; // AI-generated pre-game teaser text (group-level)
+}
+
+export interface PeriodMarkers {
+  isFirstGameOfMonth: boolean;
+  isLastGameOfMonth: boolean;
+  isFirstGameOfHalf: boolean;
+  isLastGameOfHalf: boolean;
+  isFirstGameOfYear: boolean;
+  isLastGameOfYear: boolean;
+  monthName: string;       // Hebrew month name
+  halfLabel: string;       // e.g. "H1 2026"
+  year: number;
 }
 
 // Shared expense (food, pizza, etc.) during a game
@@ -78,6 +91,8 @@ export interface Game {
   };
   sharedExpenses?: SharedExpense[]; // Shared expenses (food, etc.) during the game
   aiSummary?: string; // Cached AI-generated game night narrative summary
+  preGameTeaser?: string; // AI-generated pre-game teaser text
+  periodMarkers?: PeriodMarkers; // Period context stored at game creation
 }
 
 export interface GamePlayer {
@@ -102,6 +117,7 @@ export interface Settings {
   rebuyValue: number;
   chipsPerRebuy: number;
   minTransfer: number;
+  gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
 }
 
 export interface Settlement {
@@ -153,5 +169,17 @@ export interface PlayerStats {
 export interface GameWithDetails extends Game {
   players: GamePlayer[];
   totalPot: number;
+}
+
+export type MilestoneCategory = 'battle' | 'streak' | 'milestone' | 'form' | 'drama' | 'record' | 'season' | 'h2h' | 'rebuy';
+export type MilestoneSentiment = 'positive' | 'negative' | 'battle' | 'surprise';
+
+export interface MilestoneItem {
+  emoji: string;
+  title: string;
+  description: string;
+  priority: number;
+  category: MilestoneCategory;
+  sentiment: MilestoneSentiment;
 }
 

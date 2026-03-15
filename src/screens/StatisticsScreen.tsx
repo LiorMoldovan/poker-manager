@@ -2,8 +2,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { PlayerStats, Player, PlayerType } from '../types';
-import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
+import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
+import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
+import { generatePlayerChronicle, ChroniclePlayerData } from '../utils/geminiAI';
+import { usePermissions } from '../App';
+import { syncToCloud } from '../database/githubSync';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
 type ViewMode = 'table' | 'records' | 'individual' | 'insights';
@@ -11,6 +15,7 @@ type ViewMode = 'table' | 'records' | 'individual' | 'insights';
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role } = usePermissions();
   const locationState = location.state as { 
     viewMode?: ViewMode;
     recordInfo?: { title: string; playerId: string; recordType: string };
@@ -67,6 +72,14 @@ const StatisticsScreen = () => {
   const podiumRef = useRef<HTMLDivElement>(null);
   const hallOfFameRef = useRef<HTMLDivElement>(null);
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
+  const chronicleRef = useRef<HTMLDivElement>(null);
+
+  // Chronicle AI state
+  const [chronicleStories, setChronicleStories] = useState<Record<string, string>>({});
+  const [chronicleLoading, setChronicleLoading] = useState(false);
+  const [chronicleError, setChronicleError] = useState<string | null>(null);
+  const [isSharingChronicle, setIsSharingChronicle] = useState(false);
+  const chronicleGenRef = useRef(false);
 
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
@@ -79,6 +92,15 @@ const StatisticsScreen = () => {
       return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
     }
     return '';
+  };
+
+  const getChronicleKey = () => {
+    if (timePeriod === 'all') return 'all';
+    if (timePeriod === 'year') return `${selectedYear}`;
+    if (timePeriod === 'h1') return `H1-${selectedYear}`;
+    if (timePeriod === 'h2') return `H2-${selectedYear}`;
+    if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    return 'all';
   };
 
   // Share table as screenshot to WhatsApp
@@ -329,13 +351,47 @@ const StatisticsScreen = () => {
     }
   };
 
+  const handleShareChronicle = async () => {
+    if (!chronicleRef.current) return;
+    setIsSharingChronicle(true);
+    try {
+      const canvas = await html2canvas(chronicleRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setIsSharingChronicle(false); return; }
+        const file = new File([blob], 'poker-chronicle.png', { type: 'image/png' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Poker Chronicle' });
+          } catch {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'poker-chronicle.png'; a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'poker-chronicle.png'; a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingChronicle(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing chronicle:', error);
+      setIsSharingChronicle(false);
+    }
+  };
+
   // Show all games for a player (for table row click)
   const showPlayerGames = (player: PlayerStats) => {
     const dateFilter = getDateFilter();
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -413,7 +469,7 @@ const StatisticsScreen = () => {
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -481,7 +537,7 @@ const StatisticsScreen = () => {
     // Only includes permanent players (matches Season Podium logic)
     const calculatePeriodTop3 = (start: Date, end: Date): Array<{ playerName: string; profit: number }> => {
       const periodGames = allGames.filter(g => {
-        const gameDate = new Date(g.date);
+        const gameDate = new Date(g.date || g.createdAt);
         return gameDate >= start && gameDate <= end;
       });
       
@@ -530,7 +586,7 @@ const StatisticsScreen = () => {
     // Only includes PERMANENT players for current season
     const calculatePeriodStats = (start: Date, end: Date) => {
       const periodGames = allGames.filter(g => {
-        const gameDate = new Date(g.date);
+        const gameDate = new Date(g.date || g.createdAt);
         return gameDate >= start && gameDate <= end;
       });
       
@@ -724,7 +780,7 @@ const StatisticsScreen = () => {
     const games = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -742,7 +798,7 @@ const StatisticsScreen = () => {
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -840,12 +896,34 @@ const StatisticsScreen = () => {
     }
   }, [selectedPlayers, availableStats]);
 
-  // Update selected players when active filter changes
+  // Update selected players when active filter or stats change — default to permanent players only
   useEffect(() => {
     if (availableStats.length > 0) {
-      setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
+      const permanentPlayerIds = new Set(
+        players.filter(p => p.type === 'permanent').map(p => p.id)
+      );
+      const permanentStatsIds = availableStats
+        .filter(s => permanentPlayerIds.has(s.playerId))
+        .map(s => s.playerId);
+      setSelectedPlayers(new Set(
+        permanentStatsIds.length > 0 ? permanentStatsIds : availableStats.map(p => p.playerId)
+      ));
     }
   }, [filterActiveOnly, stats.length, availableStats]);
+
+  // Load cached chronicle stories on period change; auto-generate for admin if new data
+  useEffect(() => {
+    if (viewMode !== 'insights') return;
+    const periodKey = getChronicleKey();
+    const cached = getChronicleProfiles(periodKey);
+    if (cached) {
+      setChronicleStories(cached.profiles);
+    } else {
+      setChronicleStories({});
+    }
+    setChronicleError(null);
+    chronicleGenRef.current = false;
+  }, [viewMode, timePeriod, selectedYear, selectedMonth]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -872,7 +950,7 @@ const StatisticsScreen = () => {
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -956,8 +1034,8 @@ const StatisticsScreen = () => {
     const rebuyKings = findTied(filteredStats, s => s.totalRebuys, true);
     const avgBuyinKings = findTied(filteredStats.filter(s => s.gamesPlayed >= 3), s => s.avgRebuysPerGame, true);
     
-    const sharpshooters = findTied(filteredStats, s => s.winPercentage, true);
-    const worstWinRates = findTied(filteredStats, s => s.winPercentage, false);
+    const sharpshooters = findTied(filteredStats.filter(s => s.gamesPlayed >= 3), s => s.winPercentage, true);
+    const worstWinRates = findTied(filteredStats.filter(s => s.gamesPlayed >= 3), s => s.winPercentage, false);
     
     const onFirePlayers = findTied(filteredStats.filter(s => s.currentStreak > 0), s => s.currentStreak, true);
     const iceColdPlayers = findTied(filteredStats.filter(s => s.currentStreak < 0), s => s.currentStreak, false);
@@ -1012,7 +1090,7 @@ const StatisticsScreen = () => {
     const allGames = getAllGames().filter(g => {
       if (g.status !== 'completed') return false;
       if (!dateFilter) return true;
-      const gameDate = new Date(g.date);
+      const gameDate = new Date(g.date || g.createdAt);
       if (dateFilter.start && gameDate < dateFilter.start) return false;
       if (dateFilter.end && gameDate > dateFilter.end) return false;
       return true;
@@ -1045,34 +1123,42 @@ const StatisticsScreen = () => {
     } else if (recordType === 'biggestLoss') {
       const minProfit = Math.min(...playerGames.map(g => g.profit));
       filteredGames = playerGames.filter(g => g.profit === minProfit);
-    } else if (recordType === 'currentWinStreak' || recordType === 'longestWinStreak') {
-      // Find consecutive wins from most recent
+    } else if (recordType === 'currentWinStreak') {
       const streakGames: typeof playerGames = [];
       for (const game of playerGames) {
         if (game.profit > 0) {
           streakGames.push(game);
         } else {
-          // Current streak stops at first loss or break-even (profit === 0)
-          if (recordType === 'currentWinStreak') {
-            break;
-          }
+          break;
         }
       }
-      filteredGames = recordType === 'currentWinStreak' ? streakGames : streakGames.slice(0, player.longestWinStreak);
-    } else if (recordType === 'currentLossStreak' || recordType === 'longestLossStreak') {
-      // Find consecutive losses from most recent
+      filteredGames = streakGames;
+    } else if (recordType === 'currentLossStreak') {
       const streakGames: typeof playerGames = [];
       for (const game of playerGames) {
         if (game.profit < 0) {
           streakGames.push(game);
         } else {
-          // Current streak stops at first win or break-even (profit === 0)
-          if (recordType === 'currentLossStreak') {
-            break;
-          }
+          break;
         }
       }
-      filteredGames = recordType === 'currentLossStreak' ? streakGames : streakGames.slice(0, player.longestLossStreak);
+      filteredGames = streakGames;
+    } else if (recordType === 'longestWinStreak' || recordType === 'longestLossStreak') {
+      const isWin = recordType === 'longestWinStreak';
+      const chronological = [...playerGames].reverse();
+      let bestStreak: typeof playerGames = [];
+      let currentRun: typeof playerGames = [];
+      for (const game of chronological) {
+        if (isWin ? game.profit > 0 : game.profit < 0) {
+          currentRun.push(game);
+          if (currentRun.length >= bestStreak.length) {
+            bestStreak = [...currentRun];
+          }
+        } else {
+          currentRun = [];
+        }
+      }
+      filteredGames = bestStreak.reverse();
     }
 
     setRecordDetails({
@@ -2109,8 +2195,8 @@ const StatisticsScreen = () => {
                     {top20Wins.map((record, index) => (
                       <tr 
                         key={`${record.gameId}-${record.playerName}`}
-                        onClick={() => navigate(`/game/${record.gameId}`, { 
-                          state: { from: 'statistics', viewMode: 'table' } 
+                        onClick={() => navigate(`/game-summary/${record.gameId}`, {
+                          state: { from: 'statistics', viewMode: 'table' }
                         })}
                         style={{ 
                           borderBottom: '1px solid rgba(255,255,255,0.03)',
@@ -2693,7 +2779,7 @@ const StatisticsScreen = () => {
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
-                            navigate(`/game/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
+                            navigate(`/game-summary/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
                             window.scrollTo(0, 0);
                           }}
                         >
@@ -2861,1207 +2947,444 @@ const StatisticsScreen = () => {
             </span>
           </div>
 
-          {/* Milestones Section */}
-          <div className="card" style={{ padding: '1rem' }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              🏆 Potential Milestones
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {(() => {
-                // Generate diverse milestones based on filtered data
-                const milestones: Array<{ emoji: string; title: string; description: string; priority: number }> = [];
-                
-                // DEDUPLICATION: Track player pairs already featured to avoid repetitive milestones
-                const featuredBattles = new Set<string>();
-                const markBattle = (p1: string, p2: string) => {
-                  const key = [p1, p2].sort().join('|');
-                  featuredBattles.add(key);
-                };
-                const isBattleFeatured = (p1: string, p2: string) => {
-                  const key = [p1, p2].sort().join('|');
-                  return featuredBattles.has(key);
-                };
-                
-                // Track players already featured in individual milestones
-                const featuredPlayers = new Set<string>();
-                
-                // Sort by profit for rankings (filtered players only)
-                const rankedStats = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
-                
-                // Get ALL players' stats (unfiltered) to calculate actual overall rankings
-                // This ensures we show correct rank numbers even when some players are filtered out
-                const allStatsForRanking = getPlayerStats(getDateFilter());
-                const allRankedStats = [...allStatsForRanking].sort((a, b) => b.totalProfit - a.totalProfit);
-                
-                // Create a map of playerId -> actual overall rank (1-based)
-                const overallRankMap = new Map<string, number>();
-                allRankedStats.forEach((stat, idx) => {
-                  overallRankMap.set(stat.playerId, idx + 1);
+          {/* Player Chronicle Section */}
+          {(() => {
+            // ===== DATA SETUP =====
+            const isRebuyDataValid = timePeriod !== 'all' && selectedYear >= 2026;
+            const allTimeStatsRaw = getPlayerStats();
+            const activePlayerIds = new Set(players.filter(p => selectedTypes.has(p.type)).map(p => p.id));
+            const allTimeStats = allTimeStatsRaw.filter(s => activePlayerIds.has(s.playerId));
+            const chronicleDateFilter = getDateFilter();
+            const periodGames = getAllGames().filter(pg => {
+              if (pg.status !== 'completed') return false;
+              if (!chronicleDateFilter) return true;
+              const gd = new Date(pg.date || pg.createdAt);
+              if (chronicleDateFilter.start && gd < chronicleDateFilter.start) return false;
+              if (chronicleDateFilter.end && gd > chronicleDateFilter.end) return false;
+              return true;
+            });
+            const totalPeriodGames = periodGames.length;
+            const latestGameDate = periodGames.length > 0
+              ? new Date(Math.max(...periodGames.map(pg => new Date(pg.date || pg.createdAt).getTime())))
+              : null;
+            const rankedByProfit = [...sortedStats].sort((a, b) => b.totalProfit - a.totalProfit);
+            const allTimeRanked = [...allTimeStats].sort((a, b) => b.totalProfit - a.totalProfit);
+            const numPlayers = rankedByProfit.length;
+
+            if (numPlayers === 0) return null;
+
+            // Group means for z-score
+            const gMean = {
+              profit: rankedByProfit.reduce((s, p) => s + p.avgProfit, 0) / numPlayers,
+              winPct: rankedByProfit.reduce((s, p) => s + p.winPercentage, 0) / numPlayers,
+              rebuys: isRebuyDataValid ? rankedByProfit.reduce((s, p) => s + (p.avgRebuysPerGame || 0), 0) / numPlayers : 0,
+              vol: rankedByProfit.reduce((s, p) => s + p.biggestWin + Math.abs(p.biggestLoss), 0) / numPlayers,
+            };
+            const gStd = {
+              profit: Math.sqrt(rankedByProfit.reduce((s, p) => s + (p.avgProfit - gMean.profit) ** 2, 0) / numPlayers) || 1,
+              winPct: Math.sqrt(rankedByProfit.reduce((s, p) => s + (p.winPercentage - gMean.winPct) ** 2, 0) / numPlayers) || 1,
+              rebuys: isRebuyDataValid ? Math.sqrt(rankedByProfit.reduce((s, p) => s + ((p.avgRebuysPerGame || 0) - gMean.rebuys) ** 2, 0) / numPlayers) || 1 : 1,
+              vol: Math.sqrt(rankedByProfit.reduce((s, p) => s + (p.biggestWin + Math.abs(p.biggestLoss) - gMean.vol) ** 2, 0) / numPlayers) || 1,
+            };
+            const zs = (v: number, m: number, sd: number) => (v - m) / sd;
+
+            // ===== ARCHETYPE ENGINE =====
+            type Arch = { id: string; title: string; icon: string; color: string };
+            const A: Record<string, Arch> = {
+              dominator: { id: 'dominator', title: 'השולט', icon: '👑', color: '#f59e0b' },
+              shark:     { id: 'shark', title: 'הכריש', icon: '🦈', color: '#3b82f6' },
+              sniper:    { id: 'sniper', title: 'הצלף', icon: '🎯', color: '#14b8a6' },
+              gambler:   { id: 'gambler', title: 'המהמר', icon: '🎰', color: '#ef4444' },
+              rock:      { id: 'rock', title: 'הסלע', icon: '🪨', color: '#64748b' },
+              phoenix:   { id: 'phoenix', title: 'הפניקס', icon: '🐦', color: '#a855f7' },
+              streaker:  { id: 'streaker', title: 'ברצף', icon: '⚡', color: '#f97316' },
+              coaster:   { id: 'coaster', title: 'רכבת הרים', icon: '🎢', color: '#ec4899' },
+              fighter:   { id: 'fighter', title: 'הלוחם', icon: '⚔️', color: '#d97706' },
+              newcomer:  { id: 'newcomer', title: 'החדש', icon: '🌱', color: '#22c55e' },
+            };
+
+            const getArch = (p: typeof rankedByProfit[0]): Arch => {
+              if (p.gamesPlayed <= 2) return A.newcomer;
+              const pw = (p.avgWin || 0) > 0 && (p.avgLoss || 0) > 0 ? (p.avgWin || 0) / (p.avgLoss || 0) : 1;
+              const vol = p.biggestWin + Math.abs(p.biggestLoss);
+              const rec = (p.lastGameResults || []).slice(0, Math.min(6, (p.lastGameResults || []).length));
+              const recAvg = rec.length > 0 ? rec.reduce((s, r) => s + r.profit, 0) / rec.length : 0;
+              const rec3 = (p.lastGameResults || []).slice(0, Math.min(3, (p.lastGameResults || []).length));
+              const rec3Avg = rec3.length > 0 ? rec3.reduce((s, r) => s + r.profit, 0) / rec3.length : 0;
+              const mom = Math.max(recAvg - p.avgProfit, rec3Avg - p.avgProfit);
+
+              const lg = p.lastGameResults || [];
+              const chrono = [...lg].reverse();
+              let cumT = 0;
+              const trajT = chrono.map((g2) => { cumT += g2.profit; return { y: cumT }; });
+              let valT = 0;
+              for (let i2 = 1; i2 < trajT.length; i2++) { if (trajT[i2].y < trajT[valT].y) valT = i2; }
+              const hasComeback = trajT.length >= 5 && valT > 0 && valT < trajT.length - 1 && (trajT[trajT.length - 1].y - trajT[valT].y) > 100;
+
+              if (Math.abs(p.currentStreak) >= 3) return A.streaker;
+
+              if (p.gamesPlayed <= 4) {
+                if (p.avgProfit > 0 && p.winPercentage >= 50) return A.dominator;
+                if (p.avgProfit > 0 && p.winPercentage < 50) return A.sniper;
+                if (p.avgProfit < 0 && (mom > 15 || hasComeback)) return A.phoenix;
+                if (p.avgProfit < 0) return A.fighter;
+                return A.rock;
+              }
+
+              const scores: { a: Arch; s: number }[] = [];
+              const zP = zs(p.avgProfit, gMean.profit, gStd.profit);
+              const zW = zs(p.winPercentage, gMean.winPct, gStd.winPct);
+              const zV = zs(vol, gMean.vol, gStd.vol);
+              const zR = isRebuyDataValid ? zs(p.avgRebuysPerGame || 0, gMean.rebuys, gStd.rebuys) : 0;
+
+              if (zP > 0.3) scores.push({ a: A.dominator, s: zP + zW * 0.5 });
+              if (pw > 1.3 && p.avgProfit > 0) scores.push({ a: A.shark, s: pw * 0.8 });
+              if (p.avgProfit > 0 && zW < -0.2) scores.push({ a: A.sniper, s: zP + Math.abs(zW) * 0.5 });
+              if (isRebuyDataValid && zR > 0.5) scores.push({ a: A.gambler, s: zR });
+              if (zV < -0.3) scores.push({ a: A.rock, s: Math.abs(zV) });
+              if (p.avgProfit <= 0 && (mom > 15 || hasComeback)) scores.push({ a: A.phoenix, s: Math.max(mom / 25, hasComeback ? 1.2 : 0) + 0.5 });
+              if (zV > 0.5) scores.push({ a: A.coaster, s: zV });
+              if (p.avgProfit < 0) scores.push({ a: A.fighter, s: Math.abs(zP) * 0.4 + p.gamesPlayed / 30 });
+
+              scores.sort((a, b) => b.s - a.s);
+              return scores.length > 0 ? scores[0].a : A.rock;
+            };
+
+            // ===== COMPUTE MILESTONES FOR AI CONTEXT =====
+            const computeMilestoneStrings = (): string[] => {
+              const allStatsForRanking = getPlayerStats(getDateFilter());
+              const allRankedForMilestones = [...allStatsForRanking].sort((a, b) => b.totalProfit - a.totalProfit);
+              const overallRankMap = new Map<string, number>();
+              allRankedForMilestones.forEach((stat, idx) => overallRankMap.set(stat.playerId, idx + 1));
+              const currentYear = new Date().getFullYear();
+              const currentMonth = new Date().getMonth();
+              const maxGamesPlayed = rankedByProfit.length > 0 ? Math.max(...rankedByProfit.map(p => p.gamesPlayed)) : 0;
+              const isLowData = totalPeriodGames <= 3 || maxGamesPlayed <= 2;
+              const isHistorical = (() => {
+                if (timePeriod === 'all') return false;
+                if (timePeriod === 'year') return selectedYear < currentYear;
+                if (timePeriod === 'h1') return selectedYear < currentYear || (selectedYear === currentYear && currentMonth >= 6);
+                if (timePeriod === 'h2') return selectedYear < currentYear;
+                if (timePeriod === 'month') return selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth + 1);
+                return false;
+              })();
+              const milestonePlayers = rankedByProfit.map(adaptPlayerStats);
+              const milestoneOpts: MilestoneOptions = {
+                mode: 'period', periodLabel: getTimeframeLabel(), isHistorical, isLowData, overallRankMap, uniqueGamesInPeriod: totalPeriodGames,
+              };
+              const items = generateMilestones(milestonePlayers, milestoneOpts);
+              return items.map(m => `${m.emoji} ${m.title}: ${m.description}`);
+            };
+
+            // ===== AUTO-GENERATE AI STORIES (admin only) =====
+            const periodKey = getChronicleKey();
+            const isAdmin = role === 'admin';
+            const cached = getChronicleProfiles(periodKey);
+            const hasNewData = latestGameDate && (!cached || latestGameDate.toISOString() > cached.generatedAt);
+
+            if (isAdmin && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
+              chronicleGenRef.current = true;
+              const latestGD = latestGameDate as Date;
+
+              const buildPayloadAndGenerate = async () => {
+                setChronicleLoading(true);
+                setChronicleError(null);
+                try {
+                  const payloadPlayers: ChroniclePlayerData[] = rankedByProfit.map((p, idx) => {
+                    const lg = p.lastGameResults || [];
+                    const rec = lg.slice(0, Math.min(6, lg.length));
+                    const recForm = rec.map(r => r.profit > 0 ? 'W' : r.profit < 0 ? 'L' : 'D').join('');
+                    const pLastDate = lg.length > 0 ? lg[0].date : null;
+                    const daysSince = pLastDate ? Math.floor((latestGD.getTime() - new Date(pLastDate).getTime()) / 86400000) : 999;
+                    const atP = allTimeRanked.find(a => a.playerId === p.playerId);
+                    const atRank = atP ? allTimeRanked.findIndex(a => a.playerId === p.playerId) + 1 : null;
+                    const arch = getArch(p);
+
+                    return {
+                      playerId: p.playerId,
+                      name: p.playerName,
+                      periodRank: idx + 1,
+                      totalProfit: p.totalProfit,
+                      gamesPlayed: p.gamesPlayed,
+                      winPercentage: p.winPercentage,
+                      avgProfit: p.avgProfit,
+                      currentStreak: p.currentStreak,
+                      biggestWin: p.biggestWin,
+                      biggestLoss: p.biggestLoss,
+                      avgRebuysPerGame: isRebuyDataValid ? (p.avgRebuysPerGame ?? null) : null,
+                      lastGameDate: pLastDate,
+                      daysSinceLastGame: daysSince,
+                      recentForm: recForm || 'N/A',
+                      archetype: arch.title,
+                      allTimeRank: atRank,
+                      allTimeGames: atP?.gamesPlayed ?? null,
+                      allTimeProfit: atP?.totalProfit ?? null,
+                    };
+                  });
+
+                  const profiles = await generatePlayerChronicle({
+                    players: payloadPlayers,
+                    periodLabel: getTimeframeLabel(),
+                    totalPeriodGames,
+                    isEarlyPeriod: totalPeriodGames <= 3,
+                    milestones: computeMilestoneStrings(),
+                  });
+
+                  saveChronicleProfiles(periodKey, profiles);
+                  setChronicleStories(profiles);
+
+                  syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
+                } catch (err) {
+                  console.error('Chronicle generation failed:', err);
+                  setChronicleError(err instanceof Error ? err.message : 'Generation failed');
+                  if (cached) setChronicleStories(cached.profiles);
+                } finally {
+                  setChronicleLoading(false);
+                }
+              };
+
+              buildPayloadAndGenerate();
+            }
+
+            const handleRegenerate = async () => {
+              chronicleGenRef.current = false;
+              setChronicleLoading(true);
+              setChronicleError(null);
+              try {
+                const payloadPlayers: ChroniclePlayerData[] = rankedByProfit.map((p, idx) => {
+                  const lg = p.lastGameResults || [];
+                  const rec = lg.slice(0, Math.min(6, lg.length));
+                  const recForm = rec.map(r => r.profit > 0 ? 'W' : r.profit < 0 ? 'L' : 'D').join('');
+                  const pLastDate = lg.length > 0 ? lg[0].date : null;
+                  const daysSince = pLastDate && latestGameDate ? Math.floor((latestGameDate.getTime() - new Date(pLastDate).getTime()) / 86400000) : 999;
+                  const atP = allTimeRanked.find(a => a.playerId === p.playerId);
+                  const atRank = atP ? allTimeRanked.findIndex(a => a.playerId === p.playerId) + 1 : null;
+                  const arch = getArch(p);
+
+                  return {
+                    playerId: p.playerId,
+                    name: p.playerName,
+                    periodRank: idx + 1,
+                    totalProfit: p.totalProfit,
+                    gamesPlayed: p.gamesPlayed,
+                    winPercentage: p.winPercentage,
+                    avgProfit: p.avgProfit,
+                    currentStreak: p.currentStreak,
+                    biggestWin: p.biggestWin,
+                    biggestLoss: p.biggestLoss,
+                    avgRebuysPerGame: isRebuyDataValid ? (p.avgRebuysPerGame ?? null) : null,
+                    lastGameDate: pLastDate,
+                    daysSinceLastGame: daysSince,
+                    recentForm: recForm || 'N/A',
+                    archetype: arch.title,
+                    allTimeRank: atRank,
+                    allTimeGames: atP?.gamesPlayed ?? null,
+                    allTimeProfit: atP?.totalProfit ?? null,
+                  };
                 });
-                
-                const periodLabel = getTimeframeLabel();
-                const currentYear = new Date().getFullYear();
-                const currentMonth = new Date().getMonth();
-                const isEndOfYear = currentMonth === 11; // December
-                const isEndOfHalf = currentMonth === 5 || currentMonth === 11; // June or December
-                
-                // Detect low data scenario - calculate total games in period
-                const totalGamesInPeriod = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
-                const maxGamesPlayed = rankedStats.length > 0 ? Math.max(...rankedStats.map(p => p.gamesPlayed)) : 0;
-                const isLowData = totalGamesInPeriod <= 3 || maxGamesPlayed <= 2; // Very few games in period
-                
-                // Determine if this is a historical (completed) period
-                const isHistoricalPeriod = (() => {
-                  if (timePeriod === 'all') return false; // All-time is always "current"
-                  if (timePeriod === 'year') return selectedYear < currentYear;
-                  if (timePeriod === 'h1') return selectedYear < currentYear || (selectedYear === currentYear && currentMonth >= 6); // H1 ends in June
-                  if (timePeriod === 'h2') return selectedYear < currentYear; // H2 of current year may still be ongoing
-                  if (timePeriod === 'month') return selectedYear < currentYear || (selectedYear === currentYear && selectedMonth < currentMonth + 1);
-                  return false;
-                })();
-                
-                // 1. CHAMPION TITLE - Dramatic year/half-year milestone
-                // For low data scenarios, always show leader even with 1 game
-                if (rankedStats.length > 0) {
-                  const leader = rankedStats[0];
-                  const secondPlace = rankedStats[1];
-                  const gap = secondPlace ? Math.round(leader.totalProfit - secondPlace.totalProfit) : 0;
-                  
-                  if (isHistoricalPeriod) {
-                    // HISTORICAL: Show what happened, not speculation
-                    const halfName = timePeriod === 'h1' ? 'H1' : timePeriod === 'h2' ? 'H2' : '';
-                    const periodName = timePeriod === 'year' ? `שנת ${selectedYear}` : 
-                                       halfName ? `${halfName} ${selectedYear}` : periodLabel;
-                    milestones.push({
-                      emoji: '🏆',
-                      title: `אלוף ${periodName}!`,
-                      description: secondPlace && gap <= 150 
-                        ? `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)}, בפער של ${gap}₪ בלבד מ-${secondPlace.playerName}! קרב צמוד עד הסוף.`
-                        : `${leader.playerName} סיים במקום הראשון עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed > 1 ? ` אחרי ${leader.gamesPlayed} משחקים` : ''}.`,
-                      priority: 98
-                    });
-                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if (timePeriod === 'year' && isEndOfYear && (leader.gamesPlayed >= 5 || isLowData)) {
-                    // Year-end special milestone (lower threshold for low data)
-                    milestones.push({
-                      emoji: '🏆',
-                      title: `אלוף שנת ${selectedYear}?`,
-                      description: isLowData
-                        ? `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
-                        : `${leader.playerName} מוביל את טבלת ${selectedYear} עם ${formatCurrency(leader.totalProfit)}! עם סיום השנה מתקרב, זה המשחק האחרון להשפיע על הדירוג השנתי. האם מישהו יצליח לעקוף אותו?`,
-                      priority: 98
-                    });
-                    // Mark the leader battle to avoid duplication
-                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if ((timePeriod === 'h1' || timePeriod === 'h2') && isEndOfHalf && (leader.gamesPlayed >= 3 || isLowData)) {
-                    // Half-year end special (lower threshold for low data)
-                    const halfName = timePeriod === 'h1' ? 'H1' : 'H2';
-                    milestones.push({
-                      emoji: '🏆',
-                      title: `אלוף ${halfName} ${selectedYear}?`,
-                      description: isLowData
-                        ? `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה מבטיחה!`
-                        : `${leader.playerName} מוביל את ${halfName} עם ${formatCurrency(leader.totalProfit)}! עם סיום החצי מתקרב, האם מישהו יצליח לעקוף אותו?`,
-                      priority: 96
-                    });
-                    // Mark the leader battle to avoid duplication
-                    if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                  } else if (gap > 0 && gap <= 150) {
-                    // Close race for 1st place - only show if both are actually #1 and #2 overall
-                    const leaderOverallRank = overallRankMap.get(leader.playerId) || 999;
-                    const secondOverallRank = secondPlace ? (overallRankMap.get(secondPlace.playerId) || 999) : 999;
-                    
-                    // Only show if they're actually #1 and #2 in overall ranking
-                    if (leaderOverallRank === 1 && secondOverallRank === 2) {
-                      milestones.push({
-                        emoji: '👑',
-                        title: `קרב על הכתר!`,
-                        description: `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}. ${secondPlace?.playerName} רודף עם הפרש של ${gap}₪. האם הוא יצליח לעקוף?`,
-                        priority: 95
-                      });
-                      // Mark this battle to avoid showing it again in leaderboard battles
-                      if (secondPlace) markBattle(leader.playerId, secondPlace.playerId);
-                    }
-                  } else if (leader.gamesPlayed >= 5 || (isLowData && leader.gamesPlayed >= 1)) {
-                    // Big lead - only show if it's interesting (close gap or low data)
-                    // Skip routine "leader is leading" messages to avoid repetition
-                    if (gap > 150 && !isLowData) {
-                      // Big lead - skip to avoid repetitive "leader is leading" messages
-                      // Only show if there's something interesting (low data, close race, etc.)
-                    } else {
-                      milestones.push({
-                        emoji: '🏆',
-                        title: `מוביל ${periodLabel}!`,
-                        description: isLowData
-                          ? `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${leader.gamesPlayed} משחקים`}. התחלה חזקה - האם הוא ישמור על ההובלה?`
-                          : `${leader.playerName} מוביל את ${periodLabel} עם ${formatCurrency(leader.totalProfit)}${leader.gamesPlayed > 1 ? ` אחרי ${leader.gamesPlayed} משחקים` : ''}. ${secondPlace && gap <= 150 ? `${secondPlace.playerName} רודף עם הפרש של ${gap}₪.` : 'האם הוא יצליח לשמור על ההובלה?'}`,
-                        priority: 80
-                      });
-                    }
-                  }
-                  // Mark leader as featured for individual milestones
-                  featuredPlayers.add(leader.playerId);
-                }
-                
-                // 2. LONGEST LOSING STREAK - drama!
-                const worstStreaker = rankedStats.filter(p => p.currentStreak <= -3).sort((a, b) => a.currentStreak - b.currentStreak)[0];
-                if (worstStreaker) {
-                  milestones.push({
-                    emoji: '❄️',
-                    title: `${worstStreaker.playerName} ברצף הפסדים!`,
-                    description: isHistoricalPeriod
-                      ? `${worstStreaker.playerName} סיים את התקופה ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים.`
-                      : `${worstStreaker.playerName} נמצא ברצף של ${Math.abs(worstStreaker.currentStreak)} הפסדים רצופים! הלילה הזדמנות לשבור את הרצף השלילי.`,
-                    priority: 88
-                  });
-                }
-                
-                // 3. HOT STREAK - fire!
-                const hotStreaker = rankedStats.filter(p => p.currentStreak >= 3).sort((a, b) => b.currentStreak - a.currentStreak)[0];
-                if (hotStreaker) {
-                  milestones.push({
-                    emoji: '🔥',
-                    title: `${hotStreaker.playerName} על גל!`,
-                    description: isHistoricalPeriod
-                      ? `${hotStreaker.playerName} סיים את התקופה ברצף מרשים של ${hotStreaker.currentStreak} נצחונות רצופים!`
-                      : `${hotStreaker.currentStreak} נצחונות רצופים! ${hotStreaker.playerName} נמצא בתקופה הכי חזקה שלו. האם הרצף ימשיך?`,
-                    priority: 90
-                  });
-                }
-                
-                // 4. LEADERBOARD BATTLES (show max 2 most interesting, skip already featured)
-                // Skip for historical periods - no point showing "could have passed" scenarios
-                // IMPORTANT: Only show battles between players who are BOTH in the filtered set
-                // Use actual overall rankings, not filtered rankings
-                if (!isHistoricalPeriod) {
-                  let leaderboardBattleCount = 0;
-                  
-                  // Check each adjacent pair in filtered list
-                  for (let i = 1; i < rankedStats.length && leaderboardBattleCount < 2; i++) {
-                    const chaser = rankedStats[i];
-                    const leader = rankedStats[i - 1];
-                    
-                    // Skip if this battle was already featured
-                    if (isBattleFeatured(chaser.playerId, leader.playerId)) continue;
-                    
-                    // Get actual overall ranks
-                    const chaserOverallRank = overallRankMap.get(chaser.playerId) || 999;
-                    const leaderOverallRank = overallRankMap.get(leader.playerId) || 999;
-                    
-                    // Only show milestone if they are actually adjacent in overall ranking
-                    // (no players between them in the overall ranking)
-                    // OR if they're very close (within 2 positions) and the gap is small
-                    const rankDifference = chaserOverallRank - leaderOverallRank;
-                    const gap = Math.round(leader.totalProfit - chaser.totalProfit);
-                    
-                    // Show if: gap is achievable AND they're actually close in overall ranking
-                    // (rankDifference should be 1 if truly adjacent, but allow 2-3 if gap is very small)
-                    if (gap > 0 && gap <= 200 && rankDifference <= Math.max(1, Math.ceil(gap / 100))) {
-                      const isTopBattle = leaderOverallRank <= 3;
-                      milestones.push({
-                        emoji: isTopBattle ? '📈' : '🎯',
-                        title: `מרדף על מקום ${leaderOverallRank}!`,
-                        description: `${chaser.playerName} (מקום ${chaserOverallRank} ב${periodLabel}) יכול לעקוף את ${leader.playerName} (מקום ${leaderOverallRank}) עם ${gap}₪ בלבד. האם הלילה הוא ישנה את הדירוג?`,
-                        priority: 85 - leaderOverallRank * 3
-                      });
-                      markBattle(chaser.playerId, leader.playerId);
-                      leaderboardBattleCount++;
-                    }
-                  }
-                }
-                
-                // 5. ROUND NUMBER MILESTONE - show ONE best candidate (skip for historical)
-                if (!isHistoricalPeriod) {
-                  const roundNumbers = [500, 1000, 1500, 2000, 2500, 3000];
-                  const roundCandidates: { player: typeof rankedStats[0]; milestone: number; distance: number }[] = [];
-                  rankedStats.forEach(p => {
-                    for (const m of roundNumbers) {
-                      const dist = Math.round(m - p.totalProfit);
-                      if (dist > 0 && dist <= 150) {
-                        roundCandidates.push({ player: p, milestone: m, distance: dist });
-                        break;
-                      }
-                    }
-                  });
-                  if (roundCandidates.length > 0) {
-                    const best = roundCandidates.sort((a, b) => a.distance - b.distance)[0];
-                    milestones.push({
-                      emoji: '🎯',
-                      title: `יעד עגול!`,
-                      description: `${best.player.playerName} צריך ${best.distance}₪ להגיע ל-₪${best.milestone.toLocaleString()} ב${periodLabel}. מספר עגול ויפה - האם הוא יגיע אליו?`,
-                      priority: 75
-                    });
-                  }
-                }
-                
-                // 6. EXACT TIE - very dramatic!
-                for (let i = 0; i < rankedStats.length; i++) {
-                  for (let j = i + 1; j < rankedStats.length; j++) {
-                    if (Math.round(rankedStats[i].totalProfit) === Math.round(rankedStats[j].totalProfit) && rankedStats[i].totalProfit !== 0) {
-                      milestones.push({
-                        emoji: '🤝',
-                        title: `תיקו מושלם!`,
-                        description: isHistoricalPeriod
-                          ? `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} סיימו בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}!`
-                          : `${rankedStats[i].playerName} ו-${rankedStats[j].playerName} נמצאים בתיקו מושלם - שניהם בדיוק ${formatCurrency(rankedStats[i].totalProfit)}! המשחק הבא יקבע מי יעלה.`,
-                        priority: 92
-                      });
-                    }
-                  }
-                }
-                
-                // 7. GAMES MILESTONE - ONE player closest (skip for historical - already happened)
-                if (!isHistoricalPeriod) {
-                  const gamesMilestones = [10, 25, 50, 75, 100, 150, 200];
-                  const gameMilestonePlayer = rankedStats.find(p => gamesMilestones.includes(p.gamesPlayed + 1));
-                  if (gameMilestonePlayer) {
-                    const nextMilestone = gameMilestonePlayer.gamesPlayed + 1;
-                    const avgProfit = gameMilestonePlayer.gamesPlayed > 0 ? Math.round(gameMilestonePlayer.totalProfit / gameMilestonePlayer.gamesPlayed) : 0;
-                    milestones.push({
-                      emoji: '🎮',
-                      title: `יובל משחקים ל-${gameMilestonePlayer.playerName}!`,
-                      description: `המשחק הבא יהיה המשחק ה-${nextMilestone} של ${gameMilestonePlayer.playerName}! עד כה עם ממוצע של ${avgProfit >= 0 ? '+' : ''}${avgProfit}₪ למשחק.`,
-                      priority: 65
-                    });
-                  }
-                }
-                
-                // 8. RECOVERY TO POSITIVE (skip for historical - outcome is already known)
-                if (!isHistoricalPeriod) {
-                  const recoveryCandidate = rankedStats
-                    .filter(p => p.totalProfit < 0 && p.totalProfit > -150 && p.gamesPlayed >= 3)
-                    .sort((a, b) => b.totalProfit - a.totalProfit)[0];
-                  if (recoveryCandidate) {
-                    const absProfit = Math.abs(Math.round(recoveryCandidate.totalProfit));
-                    milestones.push({
-                      emoji: '🔄',
-                      title: `חזרה לפלוס!`,
-                      description: `${recoveryCandidate.playerName} נמצא ב-${absProfit}₪ ב${periodLabel}. נצחון של ${absProfit}₪ או יותר יחזיר אותו לרווח חיובי! האם הוא יצליח?`,
-                      priority: 72
-                    });
-                  }
-                }
-                
-                // 9. PODIUM BATTLE - 2nd vs 3rd place (skip if already featured or historical)
-                // Only show if both players are actually 2nd and 3rd in overall ranking
-                if (!isHistoricalPeriod && rankedStats.length >= 3 && rankedStats[1].gamesPlayed >= 3 && rankedStats[2].gamesPlayed >= 3) {
-                  const second = rankedStats[1];
-                  const third = rankedStats[2];
-                  
-                  // Get actual overall ranks
-                  const secondOverallRank = overallRankMap.get(second.playerId) || 999;
-                  const thirdOverallRank = overallRankMap.get(third.playerId) || 999;
-                  
-                  // Only show if they're actually 2nd and 3rd in overall ranking
-                  // Skip if this battle was already featured
-                  if (!isBattleFeatured(second.playerId, third.playerId) && secondOverallRank === 2 && thirdOverallRank === 3) {
-                    const gap = Math.round(second.totalProfit - third.totalProfit);
-                    if (gap > 0 && gap <= 150) {
-                      milestones.push({
-                        emoji: '🥈',
-                        title: `מרדף על מקום 2!`,
-                        description: `${third.playerName} (מקום 3 ב${periodLabel}) יכול לעקוף את ${second.playerName} (מקום 2) עם ${gap}₪. קרב על הפודיום!`,
-                        priority: 78
-                      });
-                      markBattle(second.playerId, third.playerId);
-                    }
-                  }
-                }
-                
-                // 10. BIGGEST WIN RECORD - show current record holder (lower threshold for low data)
-                const bestWinRecord = rankedStats.length > 0 
-                  ? rankedStats.reduce((max, p) => p.biggestWin > max.biggestWin ? p : max, rankedStats[0])
-                  : null;
-                const winThreshold = isLowData ? 100 : 200; // Lower threshold when few games
-                if (bestWinRecord && bestWinRecord.biggestWin >= winThreshold) {
-                  milestones.push({
-                    emoji: '💰',
-                    title: `שיא הנצחון הגדול!`,
-                    description: isHistoricalPeriod
-                      ? `${bestWinRecord.playerName} סיים עם שיא הנצחון הגדול ב${periodLabel} - +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד!`
-                      : `${bestWinRecord.playerName} מחזיק בשיא הנצחון הגדול ב${periodLabel} עם +${Math.round(bestWinRecord.biggestWin)}₪ בלילה אחד. האם מישהו ישבור את השיא?`,
-                    priority: 60
-                  });
-                }
-                
-                // 11. CONSISTENCY KING - REMOVED (too repetitive, always same player)
-                // Skipped to focus on more interesting recent insights
-                
-                // 11a. RECENT FORM CHANGES - players showing significant improvement/decline
-                if (!isHistoricalPeriod) {
-                  rankedStats.forEach(p => {
-                    if (p.lastGameResults && p.lastGameResults.length >= 3) {
-                      const recent3 = p.lastGameResults.slice(0, 3);
-                      const recentAvg = recent3.reduce((sum, g) => sum + g.profit, 0) / 3;
-                      const overallAvg = p.avgProfit;
-                      
-                      // Significant improvement (recent much better than overall)
-                      if (recentAvg > overallAvg + 50 && recentAvg > 30) {
-                        const recentWins = recent3.filter(g => g.profit > 0).length;
-                        if (recentWins >= 2 && !featuredPlayers.has(p.playerId)) {
-                          milestones.push({
-                            emoji: '📈',
-                            title: `${p.playerName} בתאוצה!`,
-                            description: `${p.playerName} משפר את הביצועים - ${recentWins} נצחונות ב-3 המשחקים האחרונים עם ממוצע +${Math.round(recentAvg)}₪, הרבה יותר מהממוצע הכללי שלו.`,
-                            priority: 72
-                          });
-                          featuredPlayers.add(p.playerId);
-                        }
-                      }
-                      // Significant decline (recent much worse than overall)
-                      else if (recentAvg < overallAvg - 50 && recentAvg < -30) {
-                        const recentLosses = recent3.filter(g => g.profit < 0).length;
-                        if (recentLosses >= 2 && !featuredPlayers.has(p.playerId)) {
-                          milestones.push({
-                            emoji: '📉',
-                            title: `${p.playerName} במגמת ירידה`,
-                            description: `${p.playerName} חווה תקופה קשה - ${recentLosses} הפסדים ב-3 המשחקים האחרונים עם ממוצע ${Math.round(recentAvg)}₪. האם הוא יצליח לעצור את הירידה?`,
-                            priority: 68
-                          });
-                          featuredPlayers.add(p.playerId);
-                        }
-                      }
-                    }
-                  });
-                }
-                
-                // 12. COMEBACK KING - someone who went from negative to positive (lower threshold for low data)
-                // Note: biggestLoss is stored as negative number (e.g., -150)
-                const minGamesForComeback = isLowData ? 1 : 5;
-                const minLossForComeback = isLowData ? -50 : -100;
-                const comebackKing = rankedStats
-                  .filter(p => p.totalProfit > 0 && p.biggestLoss <= minLossForComeback && p.gamesPlayed >= minGamesForComeback)
-                  .sort((a, b) => a.biggestLoss - b.biggestLoss)[0]; // Most negative first
-                if (comebackKing) {
-                  milestones.push({
-                    emoji: '💪',
-                    title: `קאמבק קינג!`,
-                    description: isLowData && comebackKing.gamesPlayed === 1
-                      ? `${comebackKing.playerName} התחיל חזק עם ${formatCurrency(comebackKing.totalProfit)} במשחק הראשון ב${periodLabel}!`
-                      : `${comebackKing.playerName} הפסיד פעם ${Math.round(Math.abs(comebackKing.biggestLoss))}₪ בלילה אחד, אבל עכשיו ברווח של ${formatCurrency(comebackKing.totalProfit)}. מעורר השראה!`,
-                    priority: 58
-                  });
-                }
-                
-                // 13. WIN RATE MILESTONE - approaching 60% (skip for historical, skip for low data - not meaningful)
-                if (!isHistoricalPeriod && !isLowData) {
-                  const winRateCandidate = rankedStats
-                    .filter(p => p.gamesPlayed >= 8 && p.winPercentage >= 55 && p.winPercentage < 60)
-                    .sort((a, b) => b.winPercentage - a.winPercentage)[0];
-                  if (winRateCandidate) {
-                    const winsNeeded = Math.ceil(0.6 * (winRateCandidate.gamesPlayed + 1)) - winRateCandidate.winCount;
-                    if (winsNeeded === 1) {
-                      milestones.push({
-                        emoji: '🎯',
-                        title: `יעד 60% נצחונות!`,
-                        description: `${winRateCandidate.playerName} נמצא על ${Math.round(winRateCandidate.winPercentage)}% נצחונות. נצחון נוסף יעביר אותו מעל רף ה-60%!`,
-                        priority: 65
-                      });
-                    }
-                  }
-                }
-                
-                // 14. BIGGEST LOSER - who's struggling the most (lower threshold for low data)
-                const minGamesForLoser = isLowData ? 1 : 5;
-                const minLossForLoser = isLowData ? -50 : -200;
-                const biggestLoser = rankedStats
-                  .filter(p => p.totalProfit < 0 && p.gamesPlayed >= minGamesForLoser)
-                  .sort((a, b) => a.totalProfit - b.totalProfit)[0];
-                if (biggestLoser && biggestLoser.totalProfit < minLossForLoser) {
-                  milestones.push({
-                    emoji: '📉',
-                    title: isHistoricalPeriod ? `תקופה קשה` : `במאבק על שיפור`,
-                    description: isHistoricalPeriod
-                      ? `${biggestLoser.playerName} סיים ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת.`
-                      : isLowData && biggestLoser.gamesPlayed === 1
-                        ? `${biggestLoser.playerName} התחיל עם ${Math.abs(Math.round(biggestLoser.totalProfit))}₪ במשחק הראשון ב${periodLabel}. הלילה הזדמנות להתהפך!`
-                        : `${biggestLoser.playerName} ב-${Math.abs(Math.round(biggestLoser.totalProfit))}₪ ב${periodLabel}. תקופה מאתגרת - האם הוא יצליח להתהפך?`,
-                    priority: 50
-                  });
-                }
-                
-                // 15. VOLATILITY KING - biggest swings (lower threshold for low data)
-                const minGamesForVolatility = isLowData ? 1 : 5;
-                const minVolatility = isLowData ? 150 : 400;
-                const volatilityKing = rankedStats
-                  .filter(p => p.gamesPlayed >= minGamesForVolatility)
-                  .map(p => ({ ...p, volatility: p.biggestWin + Math.abs(p.biggestLoss) }))
-                  .sort((a, b) => b.volatility - a.volatility)[0];
-                if (volatilityKing && volatilityKing.volatility >= minVolatility) {
-                  milestones.push({
-                    emoji: '🎢',
-                    title: `מלך התנודות!`,
-                    description: isLowData && volatilityKing.gamesPlayed === 1
-                      ? `${volatilityKing.playerName} עם ${volatilityKing.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(volatilityKing.totalProfit))}₪ במשחק הראשון. התחלה דרמטית!`
-                      : `${volatilityKing.playerName} - מ-+${Math.round(volatilityKing.biggestWin)}₪ ועד ${Math.round(volatilityKing.biggestLoss)}₪. לילות דרמטיים מובטחים!`,
-                    priority: 52
-                  });
-                }
-                
-                // 16. TOTAL PLAYER PARTICIPATIONS - approaching milestone (skip for historical)
-                if (!isHistoricalPeriod) {
-                  // Note: This counts total player-game participations, not unique games
-                  const totalParticipations = rankedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
-                  const participationMilestones = [100, 200, 300, 500, 750, 1000];
-                  for (const pm of participationMilestones) {
-                    if (totalParticipations >= pm - 15 && totalParticipations < pm) {
-                      milestones.push({
-                        emoji: '🎊',
-                        title: `${pm} השתתפויות בקבוצה!`,
-                        description: `הקבוצה צברה ${totalParticipations} השתתפויות במשחקים ב${periodLabel}. עוד ${pm - totalParticipations} להשגת יעד ${pm}!`,
-                        priority: 45
-                      });
-                      break;
-                    }
-                  }
-                }
-                
-                // 17. LONGEST WIN STREAK RECORD HOLDER - Only show if it's recent/current
-                // Skip if it's an old record that's not relevant to current period
-                if (!isHistoricalPeriod) {
-                  // Only show if someone is currently ON a long streak (not just historical record)
-                  const currentLongStreaker = rankedStats.find(p => p.currentStreak >= 4);
-                  if (currentLongStreaker) {
-                    const longestStreakRecord = Math.max(...rankedStats.map(p => p.longestWinStreak || 0));
-                    milestones.push({
-                      emoji: '⚡',
-                      title: `רצף נצחונות חם!`,
-                      description: `${currentLongStreaker.playerName} נמצא כרגע ברצף של ${currentLongStreaker.currentStreak} נצחונות! ${currentLongStreaker.currentStreak >= longestStreakRecord ? 'שיא חדש!' : `נצחון נוסף ישבור את השיא של ${longestStreakRecord}!`}`,
-                      priority: 75
-                    });
-                  }
-                }
-                
-                // 18. CLOSE BATTLE (any two adjacent players very close - skip if already featured or historical)
-                // Only show if players are actually close in overall ranking
-                if (!isHistoricalPeriod) {
-                  for (let i = 0; i < Math.min(rankedStats.length - 1, 5); i++) {
-                    const p1 = rankedStats[i];
-                    const p2 = rankedStats[i + 1];
-                    
-                    // Skip if this battle was already featured
-                    if (isBattleFeatured(p1.playerId, p2.playerId)) continue;
-                    
-                    // Get actual overall ranks
-                    const p1OverallRank = overallRankMap.get(p1.playerId) || 999;
-                    const p2OverallRank = overallRankMap.get(p2.playerId) || 999;
-                    
-                    const gap = Math.abs(p1.totalProfit - p2.totalProfit);
-                    const rankDifference = Math.abs(p1OverallRank - p2OverallRank);
-                    
-                    // Only show if gap is very small AND they're actually close in overall ranking (within 2 positions)
-                    if (gap <= 30 && gap > 0 && rankDifference <= 2) {
-                      milestones.push({
-                        emoji: '⚔️',
-                        title: `קרב צמוד!`,
-                        description: `${p1.playerName} (מקום ${p1OverallRank}) ו-${p2.playerName} (מקום ${p2OverallRank}) בהפרש של ${Math.round(gap)}₪ בלבד ב${periodLabel}! המשחק הבא יקבע מי יהיה מעל.`,
-                        priority: 82
-                      });
-                      markBattle(p1.playerId, p2.playerId);
-                      break; // Only show one close battle
-                    }
-                  }
-                }
-                
-                // 18a. NEW PATTERNS - players breaking their usual pattern
-                if (!isHistoricalPeriod) {
-                  rankedStats.forEach(p => {
-                    if (p.lastGameResults && p.lastGameResults.length >= 4 && !featuredPlayers.has(p.playerId)) {
-                      const last4 = p.lastGameResults.slice(0, 4);
-                      const last4Wins = last4.filter(g => g.profit > 0).length;
-                      const last4Losses = last4.filter(g => g.profit < 0).length;
-                      
-                      // Usually wins but losing streak, or usually loses but winning streak
-                      if (p.winPercentage >= 60 && last4Losses >= 3) {
-                        milestones.push({
-                          emoji: '🔄',
-                          title: `${p.playerName} יוצא מהדפוס`,
-                          description: `${p.playerName} בדרך כלל מנצח (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Losses} הפסדים ב-4 המשחקים האחרונים. האם זה שינוי מגמה או רק תקלה זמנית?`,
-                          priority: 70
-                        });
-                        featuredPlayers.add(p.playerId);
-                      } else if (p.winPercentage <= 40 && last4Wins >= 3) {
-                        milestones.push({
-                          emoji: '🌟',
-                          title: `${p.playerName} משנה את המגמה!`,
-                          description: `${p.playerName} בדרך כלל מתקשה (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Wins} נצחונות ב-4 המשחקים האחרונים! האם זה הקאמבק שלו?`,
-                          priority: 73
-                        });
-                        featuredPlayers.add(p.playerId);
-                      }
-                    }
-                  });
-                }
-                
-                // 19. MOST GAMES PLAYED (lower threshold for low data)
-                const mostGamesPlayer = [...rankedStats].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0];
-                const minGamesForIron = isLowData ? 1 : 15;
-                if (mostGamesPlayer && mostGamesPlayer.gamesPlayed >= minGamesForIron && rankedStats.filter(p => p.gamesPlayed === mostGamesPlayer.gamesPlayed).length === 1) {
-                  // Only show if there's a clear leader (not everyone tied at 1 game)
-                  milestones.push({
-                    emoji: '🎮',
-                    title: `שחקן הברזל!`,
-                    description: isLowData && mostGamesPlayer.gamesPlayed === 1
-                      ? `${mostGamesPlayer.playerName} השתתף במשחק הראשון ב${periodLabel} עם ${mostGamesPlayer.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(mostGamesPlayer.totalProfit))}₪.`
-                      : `${mostGamesPlayer.playerName} שיחק ${mostGamesPlayer.gamesPlayed} משחקים ב${periodLabel} - הכי הרבה בקבוצה!`,
-                    priority: 40
-                  });
-                }
-                
-                // 20. BEST AVERAGE PROFIT (lower threshold for low data)
-                const minGamesForAvg = isLowData ? 1 : 5;
-                const minAvgForShow = isLowData ? 0 : 30;
-                const bestAvgPlayer = rankedStats
-                  .filter(p => p.gamesPlayed >= minGamesForAvg)
-                  .sort((a, b) => b.avgProfit - a.avgProfit)[0];
-                if (bestAvgPlayer && bestAvgPlayer.avgProfit >= minAvgForShow) {
-                  milestones.push({
-                    emoji: '📊',
-                    title: `הממוצע הגבוה ביותר!`,
-                    description: isLowData && bestAvgPlayer.gamesPlayed === 1
-                      ? `${bestAvgPlayer.playerName} עם ${bestAvgPlayer.totalProfit >= 0 ? 'נצחון' : 'הפסד'} של ${Math.abs(Math.round(bestAvgPlayer.totalProfit))}₪ במשחק הראשון ב${periodLabel}. התחלה ${bestAvgPlayer.totalProfit >= 0 ? 'חזקה' : 'מאתגרת'}!`
-                      : `${bestAvgPlayer.playerName} עם ממוצע +${Math.round(bestAvgPlayer.avgProfit)}₪ למשחק ב${periodLabel}. יעילות מרשימה!`,
-                    priority: 42
-                  });
-                }
-                
-                // 21. LOW DATA SPECIFIC MILESTONES - focus on what we have
-                if (isLowData && rankedStats.length > 0) {
-                  // Show all players who participated (when there's only 1-2 games, everyone matters)
-                  const participants = rankedStats.filter(p => p.gamesPlayed >= 1);
-                  
-                  // First game milestone
-                  if (totalGamesInPeriod === 1 && participants.length > 0) {
-                    const winner = participants.find(p => p.totalProfit > 0);
-                    const loser = participants.find(p => p.totalProfit < 0);
-                    if (winner) {
-                      milestones.push({
-                        emoji: '🎉',
-                        title: `המשחק הראשון ב${periodLabel}!`,
-                        description: `${winner.playerName} ניצח במשחק הראשון עם ${formatCurrency(winner.totalProfit)}. התחלה מעולה!`,
-                        priority: 70
-                      });
-                    }
-                    if (loser && participants.length > 1) {
-                      milestones.push({
-                        emoji: '💪',
-                        title: `הזדמנות להתהפך!`,
-                        description: `${loser.playerName} הפסיד ${Math.abs(Math.round(loser.totalProfit))}₪ במשחק הראשון. הלילה הזדמנות לחזור לפלוס!`,
-                        priority: 65
-                      });
-                    }
-                  }
-                  
-                  // Show close battles even with 1-2 games
-                  if (rankedStats.length >= 2) {
-                    const p1 = rankedStats[0];
-                    const p2 = rankedStats[1];
-                    const gap = Math.abs(p1.totalProfit - p2.totalProfit);
-                    if (gap <= 100 && gap > 0 && !isBattleFeatured(p1.playerId, p2.playerId)) {
-                      milestones.push({
-                        emoji: '⚔️',
-                        title: `קרב צמוד!`,
-                        description: `${p1.playerName} מוביל את ${p2.playerName} בהפרש של ${Math.round(gap)}₪ בלבד. המשחק הבא יקבע מי יהיה מעל!`,
-                        priority: 75
-                      });
-                      markBattle(p1.playerId, p2.playerId);
-                    }
-                  }
-                  
-                  // Show all participants when there are very few games
-                  if (totalGamesInPeriod <= 2 && participants.length <= 4) {
-                    participants.forEach((p, idx) => {
-                      if (idx < 3 && !featuredPlayers.has(p.playerId)) { // Limit to top 3
-                        milestones.push({
-                          emoji: p.totalProfit >= 0 ? '✅' : '📊',
-                          title: `${p.playerName} ב${periodLabel}`,
-                          description: `${p.playerName} עם ${formatCurrency(p.totalProfit)}${p.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${p.gamesPlayed} משחקים`}. ${p.totalProfit >= 0 ? 'התחלה טובה!' : 'הלילה הזדמנות להתהפך!'}`,
-                          priority: 35 - idx * 5
-                        });
-                        featuredPlayers.add(p.playerId);
-                      }
-                    });
-                  }
-                }
-                
-                // Sort by priority and show top 8
-                milestones.sort((a, b) => b.priority - a.priority);
-                const topMilestones = milestones.slice(0, 8);
-                
-                // Show milestones or empty state
-                if (topMilestones.length === 0) {
+
+                const profiles = await generatePlayerChronicle({
+                  players: payloadPlayers,
+                  periodLabel: getTimeframeLabel(),
+                  totalPeriodGames,
+                  isEarlyPeriod: totalPeriodGames <= 3,
+                  milestones: computeMilestoneStrings(),
+                });
+
+                saveChronicleProfiles(periodKey, profiles);
+                setChronicleStories(profiles);
+
+                syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
+              } catch (err) {
+                console.error('Chronicle regeneration failed:', err);
+                setChronicleError(err instanceof Error ? err.message : 'Generation failed');
+              } finally {
+                setChronicleLoading(false);
+              }
+            };
+
+            // ===== SPARKLINE HELPER =====
+            const buildSparkline = (player: typeof rankedByProfit[0]) => {
+              const lg = player.lastGameResults || [];
+              const chrono = [...lg].reverse();
+              let cum = 0;
+              const pts = chrono.map((g, i) => { cum += g.profit; return { x: i, y: cum }; });
+
+              const SW = 300, SH = 40, SP = 4;
+              const lineColor = player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)';
+
+              if (pts.length < 2) {
+                if (pts.length === 1) {
                   return (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
-                      אין מיילסטונים מיוחדים בתקופה הנבחרת
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: lineColor }} />
                     </div>
                   );
                 }
-                
-                return topMilestones.map((m, idx) => (
-                  <div 
-                    key={idx}
-                    style={{
-                      padding: '0.75rem',
-                      background: 'var(--surface)',
-                      borderRadius: '8px',
-                      borderRight: '4px solid var(--primary)',
-                      direction: 'rtl'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '1.1rem' }}>{m.emoji}</span>
-                      <span style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--primary)' }}>{m.title}</span>
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text)', paddingRight: '1.6rem' }}>
-                      {m.description}
-                    </div>
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
+                return null;
+              }
 
-          {/* Player Profiles Section */}
-          <div className="card" style={{ padding: '1rem' }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              👤 Player Profiles - {getTimeframeLabel()}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {(() => {
-                // Detect low data scenario for player profiles
-                const totalGamesInPeriod = sortedStats.reduce((sum, p) => sum + p.gamesPlayed, 0);
-                const maxGamesPlayed = sortedStats.length > 0 ? Math.max(...sortedStats.map(p => p.gamesPlayed)) : 0;
-                const isLowData = totalGamesInPeriod <= 3 || maxGamesPlayed <= 2;
-                
-                return sortedStats.map((player, idx) => {
-                // ========== COMPREHENSIVE PLAYER ANALYSIS ==========
-                const gamesPlayed = player.gamesPlayed;
-                const winRate = player.winPercentage;
-                const avgProfit = player.avgProfit;
-                const avgWin = player.avgWin || 0;
-                const avgLoss = player.avgLoss || 0;
-                const bestWin = player.biggestWin;
-                const worstLoss = player.biggestLoss;
-                const totalProfit = player.totalProfit;
-                const winCount = player.winCount;
-                const lossCount = player.lossCount;
-                const currentStreak = player.currentStreak;
-                const longestWinStreak = player.longestWinStreak || 0;
-                const lastGames = player.lastGameResults || [];
-                
-                // ========== REBUY DATA: Only valid for 2026+ ==========
-                // Rebuy tracking was added in late 2025, so only use it for 2026+ data
-                // Also disable for "All Time" view since it includes pre-2026 data
-                const isRebuyDataValid = timePeriod !== 'all' && selectedYear >= 2026;
-                const avgRebuys = isRebuyDataValid ? (player.avgRebuysPerGame || 0) : 0;
-                
-                // Calculate advanced metrics
-                const winLossRatio = avgWin > 0 && avgLoss > 0 ? avgWin / avgLoss : 1;
-                const volatilityScore = bestWin + Math.abs(worstLoss);
-                
-                // Recent form analysis (last 3-6 games)
-                const recentGames = lastGames.slice(0, Math.min(6, lastGames.length));
-                const recentWins = recentGames.filter(g => g.profit > 0).length;
-                const recentProfit = recentGames.reduce((sum, g) => sum + g.profit, 0);
-                const isRecentlyHot = recentGames.length >= 3 && recentWins >= Math.ceil(recentGames.length * 0.66);
-                const isRecentlyCold = recentGames.length >= 3 && recentWins <= Math.floor(recentGames.length * 0.33);
-                
-                // ========== PLAYER STYLE CLASSIFICATION ==========
-                // Based on: profitability, streak, volatility, trend
-                // Note: Rebuy-based styles only apply when rebuy data is valid (2026+)
-                let styleEmoji = '';
-                let styleName = '';
-                
-                // Calculate recent trend (comparing recent to overall)
-                const recentAvgProfit = recentGames.length > 0 ? recentProfit / recentGames.length : 0;
-                const isImproving = recentGames.length >= 3 && recentAvgProfit > avgProfit + 20;
-                const isDeclining = recentGames.length >= 3 && recentAvgProfit < avgProfit - 20;
-                
-                // Classification priority:
-                // 1. New player (too few games)
-                // 2. Current streak (hot/cold)
-                // 3. Profitability (profitable/losing)
-                // 4. Playing style (volatile/stable)
-                // 5. Trend (improving/declining)
-                
-                const minGamesForClassification = isLowData ? 1 : 3;
-                const minStreakForHotCold = isLowData ? 1 : 3;
-                const minGamesForStyle = isLowData ? 1 : 5; // Used for rebuy-based classification
-                
-                if (gamesPlayed < minGamesForClassification) {
-                  // Too few games to classify (only for non-low-data scenarios)
-                  if (!isLowData) {
-                    styleName = 'חדש';
-                    styleEmoji = '🌱';
-                  } else {
-                    // For low data, classify based on single game result
-                    if (totalProfit > 0) {
-                      styleName = 'רווחי';
-                      styleEmoji = '💰';
-                    } else if (totalProfit < 0) {
-                      styleName = 'מפסיד';
-                      styleEmoji = '📉';
-                    } else {
-                      styleName = 'ממוצע';
-                      styleEmoji = '➖';
-                    }
-                  }
-                } else if (currentStreak >= minStreakForHotCold) {
-                  // On a hot winning streak
-                  styleName = 'חם';
-                  styleEmoji = '🔥';
-                } else if (currentStreak <= -minStreakForHotCold) {
-                  // On a cold losing streak
-                  styleName = 'קר';
-                  styleEmoji = '❄️';
-                } else if (avgProfit > (isLowData ? 0 : 30) && winRate >= (isLowData ? 50 : 55)) {
-                  // Clearly profitable with good win rate
-                  styleName = 'רווחי';
-                  styleEmoji = '💰';
-                } else if (avgProfit > 0 && winRate >= (isLowData ? 0 : 50)) {
-                  // Moderately profitable
-                  styleName = 'רווחי';
-                  styleEmoji = '📈';
-                } else if (avgProfit < (isLowData ? 0 : -30) && winRate < (isLowData ? 100 : 45)) {
-                  // Clearly losing with low win rate
-                  styleName = 'מפסיד';
-                  styleEmoji = '📉';
-                } else if (avgProfit < 0 && winRate < (isLowData ? 100 : 50)) {
-                  // Losing overall
-                  styleName = 'מפסיד';
-                  styleEmoji = '📉';
-                } else if (volatilityScore >= (isLowData ? 150 : 400)) {
-                  // High volatility - big swings
-                  styleName = 'תנודתי';
-                  styleEmoji = '🎢';
-                } else if (volatilityScore <= (isLowData ? 100 : 180) && gamesPlayed >= (isLowData ? 1 : 5)) {
-                  // Low volatility - stable
-                  styleName = 'יציב';
-                  styleEmoji = '🛡️';
-                } else if (isImproving) {
-                  // Recent improvement trend
-                  styleName = 'משתפר';
-                  styleEmoji = '📈';
-                } else if (isDeclining) {
-                  // Recent decline trend
-                  styleName = 'יורד';
-                  styleEmoji = '📉';
-                } else if (isRebuyDataValid && avgRebuys >= 2.5 && gamesPlayed >= minGamesForStyle) {
-                  // High rebuys (2026+ only)
-                  styleName = 'מהמר';
-                  styleEmoji = '🎰';
-                } else if (avgProfit >= 0) {
-                  // Break-even or slightly positive
-                  styleName = 'ממוצע';
-                  styleEmoji = '➖';
-                } else {
-                  // Default for negative but not clearly losing
-                  styleName = 'מתקשה';
-                  styleEmoji = '⚠️';
-                }
-                
-                // ========== GENERATE UNIQUE NARRATIVE (Massive variety) ==========
-                const sentences: string[] = [];
-                const usedAngles = new Set<string>();
-                
-                // Helper to pick random from array and track usage
-                const pickRandom = <T,>(arr: T[], angle: string): T | null => {
-                  if (usedAngles.has(angle) || arr.length === 0) return null;
-                  usedAngles.add(angle);
-                  return arr[Math.floor(Math.random() * arr.length)];
-                };
-                
-                // ===== SENTENCE POOLS BY CATEGORY =====
-                
-                // PROFITABLE + HIGH WIN RATE (The Champions)
-                const championSentences = [
-                  `📈 ${winCount} נצחונות מתוך ${gamesPlayed} משחקים (${Math.round(winRate)}%) עם ממוצע +${Math.round(avgProfit)}₪. הנוסחה עובדת.`,
-                  `🏆 שחקן מוביל עם ${Math.round(winRate)}% נצחונות. כשהוא מנצח, הוא מרוויח בממוצע +${Math.round(avgWin)}₪.`,
-                  `💰 רווח כולל של ${formatCurrency(totalProfit)} ב-${gamesPlayed} משחקים. אחד הרווחיים בקבוצה.`,
-                  `🎯 יחס נצחון-הפסד מרשים: +${Math.round(avgWin)}₪ בממוצע כשמנצח, רק -${Math.round(avgLoss)}₪ כשמפסיד.`,
-                  `⭐ ${Math.round(winRate)}% נצחונות זה לא מזל - זו שיטה. ממוצע +${Math.round(avgProfit)}₪ מדבר בעד עצמו.`,
-                ];
-                
-                // PROFITABLE + LOW WIN RATE (The Big Winners)
-                const bigWinnerSentences = [
-                  `💎 רק ${Math.round(winRate)}% נצחונות, אבל כשהוא מנצח - בגדול! ממוצע נצחון +${Math.round(avgWin)}₪.`,
-                  `🎰 פחות נצחונות (${winCount}), יותר איכות. הנצחון הגדול: +${Math.round(bestWin)}₪.`,
-                  `🦅 צד את הרגעים הנכונים. ${Math.round(winRate)}% נצחונות אבל ברווח כולל של ${formatCurrency(totalProfit)}.`,
-                  `💡 יחס הנצחון/הפסד שלו ${winLossRatio.toFixed(1)} - כשמנצח, מנצח גדול.`,
-                  `🎯 לא צריך הרבה נצחונות כשממוצע הנצחון הוא +${Math.round(avgWin)}₪.`,
-                ];
-                
-                // LOSING + HIGH WIN RATE (The Unlucky)
-                const unluckySentences = [
-                  `🎲 ${Math.round(winRate)}% נצחונות אבל עדיין בהפסד. הנצחונות קטנים (+${Math.round(avgWin)}₪), ההפסדים גדולים (-${Math.round(avgLoss)}₪).`,
-                  `📊 מנצח ב-${winCount} מתוך ${gamesPlayed} משחקים, אבל ההפסדים בולעים את הרווחים.`,
-                  `⚠️ יחס נצחון/הפסד לא טוב: מרוויח +${Math.round(avgWin)}₪ בממוצע, מפסיד -${Math.round(avgLoss)}₪.`,
-                  `🔍 הבעיה לא באחוז הנצחונות (${Math.round(winRate)}%) - הבעיה בגודל ההפסדים.`,
-                  `💡 ${winCount} נצחונות לא מספיקים כש-${lossCount} הפסדים גדולים יותר.`,
-                ];
-                
-                // LOSING + LOW WIN RATE (The Strugglers)
-                // Note: worstLoss is already negative (e.g., -150)
-                const struggleSentences = [
-                  `📉 ${lossCount} הפסדים מתוך ${gamesPlayed} משחקים. תקופה מאתגרת שדורשת סבלנות.`,
-                  `⏸️ רק ${Math.round(winRate)}% נצחונות. כל שחקן עובר תקופות כאלה.`,
-                  `🔄 הממוצע (${Math.round(avgProfit)}₪) לא משקף את הפוטנציאל. זמן לאיפוס.`,
-                  `💪 ${gamesPlayed} משחקים של ניסיון. ההשקעה תשתלם בסוף.`,
-                  `🎯 ההפסד הגדול (${Math.round(worstLoss)}₪) משך את הממוצע למטה. בלעדיו התמונה שונה.`,
-                ];
-                
-                // HOT STREAK sentences
-                const hotStreakSentences = [
-                  `🔥 ${currentStreak} נצחונות ברצף! המומנטום עובד בעדו.`,
-                  `⚡ רצף חם של ${currentStreak} נצחונות. הביטחון בשיא.`,
-                  `🌟 ${currentStreak} נצחונות רצופים - התקופה הכי טובה שלו.`,
-                  `🚀 ברצף של ${currentStreak} נצחונות. קשה לעצור אותו עכשיו.`,
-                  `💫 ${currentStreak} ברצף! כולם רוצים לשבת לידו.`,
-                ];
-                
-                // COLD STREAK sentences
-                const coldStreakSentences = [
-                  `❄️ ${Math.abs(currentStreak)} הפסדים ברצף. נצחון אחד ישבור את הקרח.`,
-                  `⏳ רצף של ${Math.abs(currentStreak)} הפסדים. הסטטיסטיקה לטובתו - זה חייב להסתובב.`,
-                  `💪 ${Math.abs(currentStreak)} הפסדים? הקאמבק הבא יהיה מתוק יותר.`,
-                  `🔄 ברצף שלילי של ${Math.abs(currentStreak)}. זמן לשינוי מזל.`,
-                  `🎯 ${Math.abs(currentStreak)} הפסדים לא משנים את הפוטנציאל. הנצחון הבא קרוב.`,
-                ];
-                
-                // HIGH REBUYS (Risk-takers) - Only valid for 2026+ data
-                const highRebuySentences = isRebuyDataValid && avgRebuys >= 2.2 ? [
-                  `🎰 ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק. לא מפחד להיכנס עמוק.`,
-                  `💵 ${avgRebuys.toFixed(1)} רכישות בממוצע - סגנון אגרסיבי שדורש כיסים עמוקים.`,
-                  `⚔️ נכנס למשחק עם ${avgRebuys.toFixed(1)} רכישות בממוצע. לוחם עד הסוף.`,
-                  `🔥 לא מוותר בקלות - ממוצע ${avgRebuys.toFixed(1)} רכישות למשחק.`,
-                  `💪 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על התמדה ונחישות.`,
-                ] : [];
-                
-                // LOW REBUYS (Conservative) - Only valid for 2026+ data
-                const lowRebuySentences = isRebuyDataValid && avgRebuys > 0 && avgRebuys <= 1.4 ? [
-                  `🛡️ רק ${avgRebuys.toFixed(1)} רכישות בממוצע. יודע מתי לעצור.`,
-                  `💡 ${avgRebuys.toFixed(1)} רכישות למשחק - גישה שמרנית וחכמה.`,
-                  `🎯 שומר על משמעת עם ${avgRebuys.toFixed(1)} רכישות בממוצע.`,
-                  `⚖️ ממוצע ${avgRebuys.toFixed(1)} רכישות - לא נסחף, לא מתייאש.`,
-                  `🧠 ${avgRebuys.toFixed(1)} רכישות בממוצע מראה על שליטה עצמית.`,
-                ] : [];
-                
-                // VOLATILE (Big swings)
-                // Note: worstLoss is negative, avgLoss is positive
-                const volatileSentences = [
-                  `🎢 תנודות קיצוניות: מ-+${Math.round(bestWin)}₪ ועד ${Math.round(worstLoss)}₪. לילות דרמטיים.`,
-                  `⚡ הפער בין הטוב (+${Math.round(bestWin)}₪) לרע (${Math.round(worstLoss)}₪) הוא ${Math.round(volatilityScore)}₪!`,
-                  `🌊 גלים גבוהים: נצחון ממוצע +${Math.round(avgWin)}₪, הפסד ממוצע -${Math.round(avgLoss)}₪.`,
-                  `🎭 שני פנים: יכול לקחת +${Math.round(bestWin)}₪ או להפסיד ${Math.round(worstLoss)}₪.`,
-                  `💥 משחק עוצמתי - הממוצעים לא מספרים את כל הסיפור.`,
-                ];
-                
-                // CONSISTENT (Stable)
-                const consistentSentences = [
-                  `📊 תוצאות יציבות ללא קפיצות קיצוניות. אפשר לחזות אותו.`,
-                  `⚖️ ממוצע נצחון +${Math.round(avgWin)}₪, ממוצע הפסד -${Math.round(avgLoss)}₪. מאוזן.`,
-                  `🎯 עקביות מרשימה - הטוב והרע באותו גודל בערך.`,
-                  `🛡️ לא גבוה מדי, לא נמוך מדי. סגנון בטוח ויציב.`,
-                  `📈 הגרף שלו חלק יחסית - ללא הפתעות גדולות.`,
-                ];
-                
-                // RECENT FORM sentences
-                const recentHotSentences = [
-                  `📈 ${recentWins} מתוך ${recentGames.length} משחקים אחרונים ברווח. פורם עולה!`,
-                  `🔥 ${recentWins} נצחונות ב-${recentGames.length} משחקים אחרונים. תפוס אותו עכשיו!`,
-                  `⬆️ מגמה חיובית - ${recentWins}/${recentGames.length} משחקים אחרונים ברווח.`,
-                  `💪 ${recentWins} נצחונות לאחרונה מתוך ${recentGames.length}. בכושר מעולה.`,
-                ];
-                
-                const recentColdSentences = [
-                  `📉 רק ${recentWins} מתוך ${recentGames.length} משחקים אחרונים ברווח. תקופה קשה.`,
-                  `⬇️ ${recentGames.length - recentWins} הפסדים ב-${recentGames.length} משחקים אחרונים.`,
-                  `⏸️ רק ${recentWins}/${recentGames.length} נצחונות לאחרונה. ממתין לשינוי.`,
-                  `🔄 ${recentGames.length - recentWins} הפסדים אחרונים. הגלגל יסתובב.`,
-                ];
-                
-                // RECORDS & MILESTONES
-                const equivalentWins = avgWin > 0 ? Math.round(bestWin / avgWin) : 0;
-                const recordSentences = [
-                  `🏆 שיא הנצחון שלו: +${Math.round(bestWin)}₪ בלילה אחד!`,
-                  ...(equivalentWins >= 2 ? [`📊 הנצחון הגדול (+${Math.round(bestWin)}₪) שווה ${equivalentWins} נצחונות ממוצעים.`] : []),
-                  ...(longestWinStreak >= 2 ? [`💪 רצף הנצחונות הארוך שלו: ${longestWinStreak} ברצף.`] : []),
-                  `📈 ${gamesPlayed} משחקים של ניסיון עם רווח כולל של ${formatCurrency(totalProfit)}.`,
-                ];
-                
-                // ===== BUILD NARRATIVE BASED ON PLAYER PROFILE =====
-                
-                // Adjust thresholds for low-data scenarios
-                const minGamesForChampion = isLowData ? 1 : 5;
-                // minGamesForStyle already defined above
-                const minGamesForRecord = isLowData ? 1 : 5;
-                const minGamesForRecent = isLowData ? 1 : 3;
-                const minVolatilityForShow = isLowData ? 150 : 400;
-                const maxVolatilityForStable = isLowData ? 100 : 200;
-                
-                // Sentence 1: Main performance angle
-                // For very low data (1-2 games), use creative and engaging statements
-                if (isLowData && gamesPlayed <= 2) {
-                  if (gamesPlayed === 1) {
-                    // Single game - creative dramatic openers based on result
-                    const singleGameSentences = totalProfit > 0 ? [
-                      `🎉 כניסה רועמת! ${formatCurrency(totalProfit)} ברווח במופע הבכורה.`,
-                      `⚡ התחלה מבטיחה - ${formatCurrency(totalProfit)} ברווח ביציאה הראשונה!`,
-                      `🚀 פתיחה חזקה! ${formatCurrency(totalProfit)} מהמשחק הראשון.`,
-                      `💫 הדבר הטוב ביותר שיכול לקרות למתחיל - ${formatCurrency(totalProfit)} ברווח!`,
-                      `🎯 ישר לעניין - ${formatCurrency(totalProfit)} במכה אחת.`,
-                      `🏆 אלופי העולם התחילו בדיוק ככה - ${formatCurrency(totalProfit)} במשחק הראשון!`,
-                      `🌟 "שמים מחכים למי שמעז" - ${formatCurrency(totalProfit)} ברווח בהתחלה.`,
-                    ] : totalProfit < 0 ? [
-                      `💪 הפסד של ${formatCurrency(Math.abs(totalProfit))} במשחק הראשון? זה רק שיעור ראשון!`,
-                      `🔥 שילם ${formatCurrency(Math.abs(totalProfit))} שכר לימוד. עכשיו הוא יודע למה להיזהר.`,
-                      `📉 התחלה קשה (-${formatCurrency(Math.abs(totalProfit))}). אבל כולם יודעים - הנפילה לפני העלייה!`,
-                      `🎲 המזל לא היה בצד שלו - ${formatCurrency(Math.abs(totalProfit))} הפסד. אבל עוד לא אמרנו את המילה האחרונה.`,
-                      `⏳ ${formatCurrency(Math.abs(totalProfit))} הפסד בהתחלה? הסטטיסטיקה אומרת שהבא יותר טוב.`,
-                      `🌊 גל ראשון קשה (-${formatCurrency(Math.abs(totalProfit))}). אבל הים הזה עוד יהיה שלו.`,
-                      `💎 יהלומים נוצרים תחת לחץ - ${formatCurrency(Math.abs(totalProfit))} הפסד זה רק ההתחלה של הסיפור.`,
-                    ] : [
-                      `⚖️ יציאה מאוזנת! לא הפסיד, לא הרוויח - טקטיקה שמרנית.`,
-                      `🎭 משחק ראשון, תוצאה אפסית. שחקן זהיר או סתם מזל?`,
-                      `🔮 תוצאה אפס במשחק הראשון - הכל פתוח להמשך!`,
-                    ];
-                    sentences.push(singleGameSentences[Math.floor(Math.random() * singleGameSentences.length)]);
-                  } else if (gamesPlayed === 2) {
-                    // Two games - creative narratives based on pattern
-                    const game1 = lastGames[0]; // Most recent
-                    const game2 = lastGames[1]; // Earlier game
-                    if (game1 && game2) {
-                      const twoGameSentences = 
-                        // Win-Win pattern
-                        (game1.profit > 0 && game2.profit > 0) ? [
-                          `🔥 2 מתוך 2 נצחונות! הוא יודע משהו שאנחנו לא?`,
-                          `💰 מנצח את שני המשחקים הראשונים! כישרון טבעי או מזל מתחילים?`,
-                          `🚀 רצף מושלם - 2 נצחונות ברצף. ההתחלה הטובה ביותר האפשרית!`,
-                          `⚡ 100% נצחונות! ${formatCurrency(totalProfit)} ברווח ב-2 משחקים. מפחיד.`,
-                          `🏆 2/2 נצחונות - אם זה ימשיך ככה, יש לנו בעיה...`,
-                        ] :
-                        // Loss-Loss pattern
-                        (game1.profit < 0 && game2.profit < 0) ? [
-                          `❄️ 2 הפסדים ברצף. אבל היסטוריית הפוקר מלאה בקאמבקים אגדיים!`,
-                          `💪 ${formatCurrency(Math.abs(totalProfit))} הפסד ב-2 משחקים - עכשיו הוא מכיר את הטעויות שלו.`,
-                          `🎲 התחלה קשה, אבל הסטטיסטיקה חייבת להסתובב לטובתו!`,
-                          `🔄 2 הפסדים רצופים? הנצחון הבא יהיה מתוק במיוחד.`,
-                          `📉 תקופת לימודים - ${formatCurrency(Math.abs(totalProfit))} הפסד. אבל זה רק ההתחלה.`,
-                        ] :
-                        // Win then Loss (improving trend - most recent is win)
-                        (game1.profit > 0 && game2.profit < 0) ? [
-                          `📈 אחרי הפסד - נצחון! הוא למד מהר וחזר חזק.`,
-                          `🔥 קאמבק מרשים! מהפסד של ${formatCurrency(Math.abs(game2.profit))} לנצחון של ${formatCurrency(game1.profit)}.`,
-                          `💫 נפל וקם! הלילה האחרון היה נצחון - המגמה חיובית.`,
-                          `🎯 תיקן במהירות - מ-${formatCurrency(game2.profit)} ל+${formatCurrency(game1.profit)}. יודע להסתגל!`,
-                          `⬆️ מגמה עולה! הנצחון האחרון (+${formatCurrency(game1.profit)}) מוחק את ההפסד הקודם.`,
-                        ] :
-                        // Loss then Win (declining trend - most recent is loss)
-                        (game1.profit < 0 && game2.profit > 0) ? [
-                          `📉 התחיל בנצחון אבל הלילה האחרון היה הפסד. מחפש לחזור למסלול.`,
-                          `⏸️ אחרי נצחון ראשון (+${formatCurrency(game2.profit)}), הפסד של ${formatCurrency(game1.profit)}. 1:1 לעכשיו.`,
-                          `🎢 תנודות מוקדמות - נצחון ואז הפסד. הסיפור רק מתחיל.`,
-                          `🔄 מ+${formatCurrency(game2.profit)} ל${formatCurrency(game1.profit)}. המשחק הבא יכריע!`,
-                          `⚔️ תוצאות מעורבות - ${totalProfit >= 0 ? 'עדיין בפלוס!' : 'קצת במינוס.'} הכל פתוח.`,
-                        ] :
-                        // Mixed with zero
-                        [
-                          `📊 2 משחקים, תוצאה מעורבת. רווח כולל: ${formatCurrency(totalProfit)}.`,
-                          `🎭 1-1 לעכשיו. המשחק הבא יקבע את הכיוון!`,
-                        ];
-                      sentences.push(twoGameSentences[Math.floor(Math.random() * twoGameSentences.length)]);
-                    } else {
-                      sentences.push(`📊 2 משחקים, רווח כולל ${formatCurrency(totalProfit)}. הסיפור רק מתחיל!`);
-                    }
-                  }
-                } else if (gamesPlayed < minGamesForChampion) {
-                  // 3-4 games - still low data, use simple facts
-                  sentences.push(`📊 ${player.playerName} שיחק ${gamesPlayed} משחקים עם רווח כולל של ${formatCurrency(totalProfit)} (${winCount} נצחונות, ${lossCount} הפסדים).`);
-                } else if (avgProfit > (isLowData ? 0 : 20) && winRate >= (isLowData ? 50 : 55)) {
-                  const s = pickRandom(championSentences, 'champion');
-                  if (s) sentences.push(s);
-                } else if (avgProfit > 0 && winRate < (isLowData ? 100 : 50)) {
-                  const s = pickRandom(bigWinnerSentences, 'bigwinner');
-                  if (s) sentences.push(s);
-                } else if (avgProfit < 0 && winRate >= (isLowData ? 0 : 50)) {
-                  const s = pickRandom(unluckySentences, 'unlucky');
-                  if (s) sentences.push(s);
-                } else if (avgProfit < (isLowData ? 0 : -10) && winRate < (isLowData ? 100 : 45)) {
-                  const s = pickRandom(struggleSentences, 'struggle');
-                  if (s) sentences.push(s);
-                } else {
-                  // Fallback to a neutral performance sentence
-                  sentences.push(`📊 ${winCount} נצחונות ו-${lossCount} הפסדים ב-${gamesPlayed} משחקים. ממוצע ${avgProfit >= 0 ? '+' : ''}${Math.round(avgProfit)}₪.`);
-                }
-                
-                // Sentence 2: Streak/momentum or style angle
-                // For low data (1-2 games), add creative predictions and insights
-                if (isLowData && gamesPlayed <= 2) {
-                  // Creative second sentences for low data - predictions, comparisons, fun facts
-                  const lowDataSecondSentences = totalProfit > 50 ? [
-                    `🎰 אם ימשיך בקצב הזה, הוא יהפוך לאלוף בעוד כמה משחקים!`,
-                    `📊 ממוצע של ${formatCurrency(Math.round(avgProfit))} למשחק - יותר טוב מהרבה "ותיקים"!`,
-                    `🎯 התחלה כזו רואים רק אחת ל-100 שחקנים.`,
-                    `💡 טיפ: אל תתנו לו לשבת לידכם בשבוע הבא!`,
-                    `🌟 הכוכב הבא של הקבוצה? הזמן יגיד.`,
-                  ] : totalProfit > 0 ? [
-                    `🎲 ממוצע חיובי בהתחלה - סימן טוב להמשך!`,
-                    `📈 אם זה לא מזל מתחילים, זה כישרון אמיתי.`,
-                    `🔮 התחזית: עוד כמה משחקים ונדע אם זה אמיתי.`,
-                    `💫 בפלוס מההתחלה - יש לו את הקטע!`,
-                    `🎯 מומלץ להמשיך לעקוב אחריו.`,
-                  ] : totalProfit < -50 ? [
-                    `🔄 הסטטיסטיקה אומרת: הממוצע חייב לעלות!`,
-                    `💪 שחקנים גדולים התחילו בהרבה יותר גרוע.`,
-                    `🎲 "לא משנה כמה פעמים נופלים, משנה כמה פעמים קמים."`,
-                    `📊 המספרים יתאזנו - זה רק עניין של זמן.`,
-                    `🌊 כל שחקן עובר גלים - זה פשוט הגל הראשון.`,
-                  ] : totalProfit < 0 ? [
-                    `⏳ הפסד קטן - נגמר בלחיצת יד, ההמשך יותר טוב.`,
-                    `🎯 מינוס קל לגמרי - יכול להתהפך במשחק אחד.`,
-                    `💡 הניסיון הזה ישתלם במשחקים הבאים.`,
-                    `🔮 המספרים האלה לא אומרים כלום עדיין.`,
-                    `📊 מדגם קטן מדי להסקת מסקנות - הכל פתוח!`,
-                  ] : [
-                    `⚖️ אפס מושלם - יציב כמו סלע!`,
-                    `🎭 לא מפסיד, לא מרוויח - שחקן מחושב?`,
-                    `🔮 כרטיס ביקור מעניין - נראה מה יקרה הלאה.`,
-                  ];
-                  sentences.push(lowDataSecondSentences[Math.floor(Math.random() * lowDataSecondSentences.length)]);
-                } else {
-                  const minStreakForShow = isLowData ? 1 : 3;
-                  if (currentStreak >= minStreakForShow) {
-                    const s = pickRandom(hotStreakSentences, 'hotstreak');
-                    if (s) sentences.push(s);
-                  } else if (currentStreak <= -minStreakForShow) {
-                    const s = pickRandom(coldStreakSentences, 'coldstreak');
-                    if (s) sentences.push(s);
-                  } else if (highRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
-                    // Only show rebuy sentences if data is valid (2026+)
-                    const s = pickRandom(highRebuySentences, 'highrebuy');
-                    if (s) sentences.push(s);
-                  } else if (lowRebuySentences.length > 0 && gamesPlayed >= minGamesForStyle) {
-                    // Only show rebuy sentences if data is valid (2026+)
-                    const s = pickRandom(lowRebuySentences, 'lowrebuy');
-                    if (s) sentences.push(s);
-                  } else if (volatilityScore >= minVolatilityForShow && gamesPlayed >= minGamesForStyle) {
-                    const s = pickRandom(volatileSentences, 'volatile');
-                    if (s) sentences.push(s);
-                  } else if (volatilityScore <= maxVolatilityForStable && gamesPlayed >= minGamesForStyle) {
-                    const s = pickRandom(consistentSentences, 'consistent');
-                    if (s) sentences.push(s);
-                  } else if (isRecentlyHot && recentGames.length >= minGamesForRecent) {
-                    const s = pickRandom(recentHotSentences, 'recenthot');
-                    if (s) sentences.push(s);
-                  } else if (isRecentlyCold && recentGames.length >= minGamesForRecent) {
-                    const s = pickRandom(recentColdSentences, 'recentcold');
-                    if (s) sentences.push(s);
-                  }
-                }
-                
-                // Sentence 3: Additional insight (record, comparison, or tip)
-                // For low data (1-2 games), add fun comparisons and call-to-action
-                if (isLowData && gamesPlayed <= 2) {
-                  // Third sentence - fun facts, comparisons, looking forward
-                  const game1 = lastGames[0];
-                  const bestGameProfit = game1 ? Math.max(...lastGames.map(g => g.profit)) : totalProfit;
-                  const worstGameProfit = game1 ? Math.min(...lastGames.map(g => g.profit)) : totalProfit;
-                  
-                  const lowDataThirdSentences = bestGameProfit > 100 ? [
-                    `💰 הנצחון הגדול (+${formatCurrency(bestGameProfit)}) כבר בספרי השיאים!`,
-                    `🏆 +${formatCurrency(bestGameProfit)} בלילה אחד - התחלה שראויה לכבוד.`,
-                    `📊 אם זה ימשיך, הוא יטפס מהר בטבלה.`,
-                    `⚡ ${formatCurrency(bestGameProfit)} במכה - יש פוטנציאל גדול כאן!`,
-                  ] : worstGameProfit < -100 ? [
-                    `📉 ההפסד הגדול (${formatCurrency(worstGameProfit)}) כבר מאחוריו. רק למעלה מכאן!`,
-                    `💪 ידע להפסיד ${formatCurrency(Math.abs(worstGameProfit))} ולהישאר במשחק - זו תכונה חשובה.`,
-                    `🔥 ההפסד הזה יהפוך לסיפור קאמבק מעולה.`,
-                    `🎯 חייב לתקן את ה-${formatCurrency(worstGameProfit)} הזה - מוטיבציה מובנית!`,
-                  ] : gamesPlayed === 1 ? [
-                    `🎮 המשחק הראשון תמיד מיוחד - נזכור אותו!`,
-                    `📌 נקודת ההתחלה נקבעה. עכשיו מתחיל הסיפור האמיתי.`,
-                    `🚀 משחק אחד לא אומר כלום - אבל שניים כבר מגמה!`,
-                    `⏳ מחכים לראות אותו שוב בשבוע הבא!`,
-                  ] : [
-                    `🎲 2 משחקים בספרים. המשחק השלישי יגדיר את הדרך!`,
-                    `📊 עוד קצת ונוכל באמת לנתח את הסגנון שלו.`,
-                    `🔮 3 משחקים = מגמה. עוד אחד ונדע לאן זה הולך!`,
-                    `💡 ההמלצה: לשים לב אליו בשבועות הקרובים.`,
-                  ];
-                  sentences.push(lowDataThirdSentences[Math.floor(Math.random() * lowDataThirdSentences.length)]);
-                } else if (gamesPlayed >= minGamesForRecord) {
-                  const minBestWinForRecord = isLowData ? 100 : 200;
-                  if (sentences.length < 3) {
-                    // Try to add a third sentence for variety
-                    if (bestWin >= minBestWinForRecord && !usedAngles.has('record')) {
-                      const s = pickRandom(recordSentences, 'record');
-                      if (s) sentences.push(s);
-                    } else if (isRecentlyHot && !usedAngles.has('recenthot')) {
-                      const s = pickRandom(recentHotSentences, 'recenthot');
-                      if (s) sentences.push(s);
-                    } else if (isRecentlyCold && !usedAngles.has('recentcold')) {
-                      const s = pickRandom(recentColdSentences, 'recentcold');
-                      if (s) sentences.push(s);
-                    }
-                  }
-                }
-                
-                return (
-                  <div 
-                    key={player.playerId}
-                    style={{
-                      padding: '1rem',
-                      background: 'var(--surface)',
-                      borderRadius: '10px',
-                      borderRight: `4px solid ${player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'}`,
-                      direction: 'rtl'
-                    }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '1rem', fontWeight: '700' }}>#{idx + 1}</span>
-                        <span style={{ fontSize: '1rem', fontWeight: '600' }}>{player.playerName}</span>
+              const minY = Math.min(0, ...pts.map(pt => pt.y));
+              const maxY = Math.max(0, ...pts.map(pt => pt.y));
+              const yR = maxY - minY || 1;
+              const scX = (SW - SP * 2) / Math.max(pts.length - 1, 1);
+              const scY = (SH - SP * 2) / yR;
+              const scaled = pts.map((pt, i) => ({ x: SP + i * scX, y: SH - SP - (pt.y - minY) * scY }));
+
+              // Smooth curve (catmull-rom to cubic bezier)
+              let curvePath = `M${scaled[0].x.toFixed(1)},${scaled[0].y.toFixed(1)}`;
+              for (let i = 0; i < scaled.length - 1; i++) {
+                const p0 = scaled[Math.max(0, i - 1)];
+                const p1 = scaled[i];
+                const p2 = scaled[i + 1];
+                const p3 = scaled[Math.min(scaled.length - 1, i + 2)];
+                const tension = 0.3;
+                const cp1x = p1.x + (p2.x - p0.x) * tension;
+                const cp1y = p1.y + (p2.y - p0.y) * tension;
+                const cp2x = p2.x - (p3.x - p1.x) * tension;
+                const cp2y = p2.y - (p3.y - p1.y) * tension;
+                curvePath += ` C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+              }
+
+              const last = scaled[scaled.length - 1], first = scaled[0];
+              const fillPath = `${curvePath} L${last.x.toFixed(1)},${SH} L${first.x.toFixed(1)},${SH} Z`;
+              const zeroY = SH - SP - (0 - minY) * scY;
+              const showZero = minY < 0 && maxY > 0;
+              const gradId = `cg2-${player.playerId}`;
+
+              return (
+                <svg viewBox={`0 0 ${SW} ${SH}`} style={{ width: '100%', height: '40px', display: 'block', marginBottom: '0.5rem' }} preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={lineColor} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={lineColor} stopOpacity={0.03} />
+                    </linearGradient>
+                  </defs>
+                  <path d={fillPath} fill={`url(#${gradId})`} />
+                  {showZero && <line x1={SP} y1={zeroY} x2={SW - SP} y2={zeroY} stroke="rgba(255,255,255,0.25)" strokeWidth="1" strokeDasharray="4 3" />}
+                  <path d={curvePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  {scaled.map((pt, i) => (
+                    <circle key={i} cx={pt.x} cy={pt.y} r="2.5" fill={lineColor} />
+                  ))}
+                </svg>
+              );
+            };
+
+            const hasAiStories = Object.keys(chronicleStories).length > 0;
+
+            // ===== RENDER =====
+            return (
+              <div className="card" ref={chronicleRef} style={{ padding: '1rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        הכרוניקה — {getTimeframeLabel()}
+                      </h3>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                        {totalPeriodGames} משחקים | {numPlayers} שחקנים פעילים
                       </div>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        fontSize: '1rem',
-                        color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'
-                      }}>
-                        {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
-                      </span>
                     </div>
-                    
-                    {/* Stats Row */}
-                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                      <span>🎮 {gamesPlayed} משחקים</span>
-                      <span>🎯 {Math.round(winRate)}%</span>
-                      {/* Only show rebuys if data is valid (2026+) */}
-                      {isRebuyDataValid && avgRebuys > 0 && <span>💵 {avgRebuys.toFixed(1)} רכישות</span>}
-                      <span>{styleEmoji} {styleName}</span>
+                    {isAdmin && !chronicleLoading && totalPeriodGames > 0 && (
+                      <button
+                        onClick={handleRegenerate}
+                        style={{
+                          fontSize: '0.7rem', padding: '0.3rem 0.7rem', borderRadius: '8px',
+                          background: 'var(--surface-hover)', color: 'var(--text-muted)',
+                          border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {hasAiStories ? 'יצירה מחדש' : 'יצירת סיפורים'}
+                      </button>
+                    )}
+                  </div>
+                  {totalPeriodGames > 0 && totalPeriodGames <= 3 && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontStyle: 'italic' }}>
+                      התקופה רק התחילה — הסיפורים יתעדכנו עם כל משחק חדש
                     </div>
-                    
-                    {/* Narrative Sentences */}
-                    <div style={{ 
-                      fontSize: '0.85rem', 
-                      color: 'var(--text)', 
-                      lineHeight: '1.6',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.4rem'
-                    }}>
-                      {sentences.map((sentence, sIdx) => (
-                        <div key={sIdx}>
-                          {sentence}
-                        </div>
-                      ))}
+                  )}
+                  {chronicleError && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.3rem' }}>
+                      שגיאה: {chronicleError}
+                    </div>
+                  )}
+                </div>
+
+                {chronicleLoading && (
+                  <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: '0.85rem', animation: 'pulse 1.5s ease-in-out infinite' }}>
+                      מייצר סיפורים...
                     </div>
                   </div>
-                );
-              });
-              })()}
+                )}
+
+                {!chronicleLoading && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {!hasAiStories && !isAdmin && totalPeriodGames > 0 && (
+                      <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                        הסיפורים טרם נוצרו לתקופה זו
+                      </div>
+                    )}
+                    {rankedByProfit.map((player, idx) => {
+                      const aiStory = chronicleStories[player.playerId];
+                      const profitColor = player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)';
+
+                      return (
+                        <div key={player.playerId} style={{
+                          padding: '0.85rem', background: 'var(--surface)',
+                          borderRadius: '12px', direction: 'rtl',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '500', minWidth: '1.2rem' }}>#{idx + 1}</span>
+                              <span style={{ fontSize: '1rem', fontWeight: '600' }}>{player.playerName}</span>
+                            </div>
+                            <span style={{ fontWeight: '700', fontSize: '1rem', color: profitColor }}>
+                              {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.4rem', paddingRight: '1.7rem' }}>
+                            {player.gamesPlayed} משחקים | {Math.round(player.winPercentage)}% נצחונות | ממוצע {player.avgProfit >= 0 ? '+' : ''}{Math.round(player.avgProfit)}₪
+                          </div>
+
+                          {buildSparkline(player)}
+
+                          {aiStory && (
+                            <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text)', textAlign: 'right' }}>
+                              {aiStory}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          {Object.keys(chronicleStories).length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
+              <button
+                onClick={handleShareChronicle}
+                disabled={isSharingChronicle}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.3rem',
+                  fontSize: '0.75rem',
+                  padding: '0.4rem 0.8rem',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                {isSharingChronicle ? '📸...' : '📤 שתף'}
+              </button>
             </div>
-          </div>
+          )}
         </>
       )}
 
@@ -4131,7 +3454,7 @@ const StatisticsScreen = () => {
                       recordType: recordDetails.recordType
                     } : null;
                     setRecordDetails(null);
-                    navigate(`/game/${game.gameId}`, { 
+                    navigate(`/game-summary/${game.gameId}`, { 
                       state: { 
                         from: viewMode === 'individual' ? 'individual' : 'records', 
                         viewMode: viewMode,
@@ -4249,7 +3572,7 @@ const StatisticsScreen = () => {
                   key={idx}
                   onClick={() => {
                     setPlayerAllGames(null);
-                    navigate(`/game/${game.gameId}`, { 
+                    navigate(`/game-summary/${game.gameId}`, { 
                       state: { 
                         from: 'statistics', 
                         viewMode: viewMode,

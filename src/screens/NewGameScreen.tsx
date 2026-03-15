@@ -2,17 +2,46 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, generateMilestones, MilestoneItem, GlobalRankingContext } from '../utils/geminiAI';
+import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers } from '../utils/geminiAI';
+
+import { PeriodMarkers } from '../types';
 
 // Default location options
-const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'אייל'];
+const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+
+const PERIOD_OPTIONS: { value: string; label: string; getMarkerOverrides: () => Partial<PeriodMarkers> }[] = [
+  { value: 'regular', label: '🎮 משחק רגיל', getMarkerOverrides: () => ({ isFirstGameOfMonth: false, isLastGameOfMonth: false, isFirstGameOfHalf: false, isLastGameOfHalf: false, isFirstGameOfYear: false, isLastGameOfYear: false }) },
+  { value: 'firstMonth', label: '🗓️ ראשון בחודש', getMarkerOverrides: () => ({ isFirstGameOfMonth: true, isLastGameOfMonth: false }) },
+  { value: 'lastMonth', label: '🗓️ אחרון בחודש', getMarkerOverrides: () => ({ isLastGameOfMonth: true, isFirstGameOfMonth: false }) },
+  { value: 'firstHalf', label: '🚀 פתיחת מחצית', getMarkerOverrides: () => ({ isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfHalf: false }) },
+  { value: 'lastHalf', label: '🏁 סגירת מחצית', getMarkerOverrides: () => ({ isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfHalf: false }) },
+  { value: 'firstYear', label: '🎆 פתיחת שנה', getMarkerOverrides: () => ({ isFirstGameOfYear: true, isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfYear: false }) },
+  { value: 'lastYear', label: '🎇 סגירת שנה', getMarkerOverrides: () => ({ isLastGameOfYear: true, isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfYear: false }) },
+];
+
+const getAutoDetectedPeriodValue = (markers: PeriodMarkers): string => {
+  if (markers.isFirstGameOfYear) return 'firstYear';
+  if (markers.isLastGameOfYear) return 'lastYear';
+  if (markers.isFirstGameOfHalf) return 'firstHalf';
+  if (markers.isLastGameOfHalf) return 'lastHalf';
+  if (markers.isFirstGameOfMonth) return 'firstMonth';
+  if (markers.isLastGameOfMonth) return 'lastMonth';
+  return 'regular';
+};
+
+const applyPeriodOverride = (base: PeriodMarkers, override: string | null): PeriodMarkers => {
+  if (!override) return base;
+  const option = PERIOD_OPTIONS.find(o => o.value === override);
+  if (!option) return base;
+  return { ...base, ...option.getMarkerOverrides() };
+};
 
 const NewGameScreen = () => {
   const navigate = useNavigate();
-  const { role } = usePermissions();
+  const { role, signOut } = usePermissions();
   const isAdmin = role === 'admin';
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -43,17 +72,22 @@ const NewGameScreen = () => {
   const [activeGame, setActiveGame] = useState<Game | null>(null);
   const [activeGamePlayers, setActiveGamePlayers] = useState<string[]>([]);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
-  const [showMilestones, setShowMilestones] = useState(false);
-  const [milestonesData, setMilestonesData] = useState<MilestoneItem[]>([]);
-  const [isSharingMilestones, setIsSharingMilestones] = useState(false);
+  const [periodMarkers, setPeriodMarkers] = useState<PeriodMarkers | null>(null);
+  const [periodOverride, setPeriodOverride] = useState<string | null>(null); // null = auto-detect
+  const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
-  const milestonesRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadPlayers();
     checkForActiveGame();
-    // Cleanup timer on unmount
+    // Auto-detect period markers
+    try {
+      const settings = getSettings();
+      const allGames = getAllGames();
+      const markers = detectPeriodMarkers(new Date(), allGames, settings.gameNightDays || [4, 6]);
+      setPeriodMarkers(markers);
+    } catch (e) { console.warn('Period detection failed:', e); }
     return () => {
       if (retryTimerRef.current) clearInterval(retryTimerRef.current);
     };
@@ -165,6 +199,11 @@ const NewGameScreen = () => {
       setError('Select at least 2 players');
       return;
     }
+
+    if (getActiveGame()) {
+      setError('There is already an active game. Resume or abandon it first.');
+      return;
+    }
     
     // Validate location is selected
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
@@ -211,15 +250,17 @@ const NewGameScreen = () => {
     }
   };
   
-  // Start game with optional forecast
   const startGameWithForecast = (forecasts?: GameForecast[]) => {
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     const game = createGame(Array.from(selectedIds), location || undefined, forecasts);
     
-    // Link pending forecast to this game and clear it
     if (forecasts) {
       linkForecastToGame(game.id);
       clearPendingForecast();
+    }
+
+    if (periodMarkers) {
+      updateGame(game.id, { periodMarkers });
     }
     
     navigate(`/live-game/${game.id}`);
@@ -258,149 +299,6 @@ const NewGameScreen = () => {
   const handleSkipShare = () => {
     if (pendingGameId) {
       navigate(`/live-game/${pendingGameId}`);
-    }
-  };
-
-  // ============ MILESTONES FEATURE ============
-  const handleShowMilestones = () => {
-    if (selectedIds.size < 2) {
-      setError('Select at least 2 players');
-      return;
-    }
-    
-    // Prepare player data
-    const selectedPlayers = players.filter(p => selectedIds.has(p.id));
-    const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
-      const stats = getStatsForPlayer(player.id);
-      const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
-      
-      return {
-        name: player.name,
-        isFemale: player.name === 'מור',
-        gamesPlayed: stats?.gamesPlayed || 0,
-        totalProfit: stats?.totalProfit || 0,
-        avgProfit: stats?.avgProfit || 0,
-        winCount: stats?.winCount || 0,
-        lossCount: stats?.lossCount || 0,
-        winPercentage: stats?.winPercentage || 0,
-        currentStreak: stats?.currentStreak || 0,
-        bestWin: stats?.biggestWin || 0,
-        worstLoss: stats?.biggestLoss ? -Math.abs(stats.biggestLoss) : 0,
-        gameHistory: (stats?.lastGameResults || []).map(g => {
-          const d = new Date(g.date);
-          const day = d.getDate().toString().padStart(2, '0');
-          const month = (d.getMonth() + 1).toString().padStart(2, '0');
-          const year = d.getFullYear();
-          return {
-            profit: g.profit,
-            date: `${day}/${month}/${year}`, // MUST be DD/MM/YYYY format for parseGameDate!
-            gameId: g.gameId
-          };
-        }),
-        daysSinceLastGame: daysSince,
-        isActive: daysSince <= 60
-      };
-    });
-    
-    const milestones = generateMilestones(playerData);
-    setMilestonesData(milestones);
-    setShowMilestones(true);
-  };
-  
-  const shareMilestones = async () => {
-    if (milestonesData.length === 0) return;
-    
-    setIsSharingMilestones(true);
-    try {
-      const MILESTONES_PER_PAGE = 5;
-      const files: File[] = [];
-      const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
-      
-      // Split milestones into chunks of 5
-      const chunks: typeof milestonesData[] = [];
-      for (let i = 0; i < milestonesData.length; i += MILESTONES_PER_PAGE) {
-        chunks.push(milestonesData.slice(i, i + MILESTONES_PER_PAGE));
-      }
-      
-      // Create a screenshot for each chunk
-      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-        const chunk = chunks[chunkIndex];
-        const pageNum = chunks.length > 1 ? ` (${chunkIndex + 1}/${chunks.length})` : '';
-        
-        // Create temporary container for this chunk
-        const container = document.createElement('div');
-        container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif; direction: rtl;';
-        
-        // Build milestones HTML
-        const milestonesHTML = chunk.map(m => `
-          <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: rgba(243, 156, 18, 0.1); border-right: 4px solid #f39c12; text-align: right;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-direction: row-reverse; justify-content: flex-start;">
-              <span style="font-size: 1.2rem;">${m.emoji}</span>
-              <span style="font-weight: 600; font-size: 0.95rem; color: #f39c12;">${m.title}</span>
-            </div>
-            <div style="font-size: 0.85rem; color: #f1f5f9; line-height: 1.4; padding-left: 1.7rem;">${m.description}</div>
-          </div>
-        `).join('');
-        
-        container.innerHTML = `
-          <div style="text-align: center; margin-bottom: 1.25rem;">
-            <div style="font-size: 2rem; margin-bottom: 0.25rem;">🎯</div>
-            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
-              מיילסטונים להלילה${pageNum}
-            </h3>
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
-          </div>
-          <div style="margin-bottom: 1rem;">
-            ${milestonesHTML}
-          </div>
-          <div style="text-align: center; font-size: 0.7rem; color: #64748b; padding: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
-            נתונים מבוססים על כל ההיסטוריה 📊
-          </div>
-        `;
-        
-        document.body.appendChild(container);
-        
-        const canvas = await html2canvas(container, {
-          backgroundColor: '#1a1a2e',
-          scale: 2,
-          logging: false,
-          useCORS: true,
-        });
-        
-        document.body.removeChild(container);
-        
-        const blob = await new Promise<Blob>((resolve) => {
-          canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-        });
-        
-        const fileName = chunks.length > 1 
-          ? `milestones-${chunkIndex + 1}-${new Date().toISOString().split('T')[0]}.png`
-          : `milestones-${new Date().toISOString().split('T')[0]}.png`;
-        
-        files.push(new File([blob], fileName, { type: 'image/png' }));
-      }
-      
-      // Share all files
-      if (navigator.share && navigator.canShare?.({ files })) {
-        await navigator.share({
-          files,
-          title: '🎯 מיילסטונים להלילה',
-        });
-      } else {
-        // Fallback: download files
-        for (const file of files) {
-          const url = URL.createObjectURL(file);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = file.name;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-      }
-    } catch (err) {
-      console.error('Error sharing milestones:', err);
-    } finally {
-      setIsSharingMilestones(false);
     }
   };
 
@@ -985,23 +883,52 @@ const NewGameScreen = () => {
         const bProfit = b.expectedProfit ?? b.expected ?? 0;
         return bProfit - aProfit;
       });
+
+      const hasTeaser = isAI && aiForecasts?.[0]?.preGameTeaser;
+
+      // Page 1: Teaser as its own dedicated card (if exists)
+      if (hasTeaser) {
+        const teaserContainer = document.createElement('div');
+        teaserContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
+        teaserContainer.innerHTML = `
+          <div style="text-align: center; margin-bottom: 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.25rem;">🤖</div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">טיזר הלילה</h3>
+            <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
+          </div>
+          <div style="padding: 1rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10)); border: 1px solid rgba(139, 92, 246, 0.35); text-align: right; direction: rtl;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; flex-direction: row-reverse; justify-content: center;">
+              <span style="font-size: 1.2rem;">🎙️</span>
+              <span style="font-size: 0.85rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">טיזר הלילה</span>
+            </div>
+            <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.8; font-weight: 400;">${aiForecasts![0].preGameTeaser}</div>
+          </div>
+          <div style="text-align: center; margin-top: 1.25rem; font-size: 0.75rem; color: #64748b; opacity: 0.7;">Poker Manager 🎲</div>
+        `;
+        document.body.appendChild(teaserContainer);
+        const teaserCanvas = await html2canvas(teaserContainer, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true });
+        document.body.removeChild(teaserContainer);
+        const teaserBlob = await new Promise<Blob>((resolve) => { teaserCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0); });
+        files.push(new File([teaserBlob], `poker-teaser-${new Date().toISOString().split('T')[0]}.png`, { type: 'image/png' }));
+      }
       
-      // Split sorted forecasts into chunks
+      // Split sorted forecasts into chunks (players only, no teaser)
       const chunks: any[][] = [];
       for (let i = 0; i < sortedForecasts.length; i += PLAYERS_PER_PAGE) {
         chunks.push(sortedForecasts.slice(i, i + PLAYERS_PER_PAGE));
       }
       
-      // Create a screenshot for each chunk
+      // Create a screenshot for each player chunk
       for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
         const chunk = chunks[chunkIndex];
-        const pageNum = chunks.length > 1 ? ` (${chunkIndex + 1}/${chunks.length})` : '';
+        const totalPages = chunks.length + (hasTeaser ? 1 : 0);
+        const pageNumber = chunkIndex + (hasTeaser ? 2 : 1);
+        const pageNum = totalPages > 1 ? ` (${pageNumber}/${totalPages})` : '';
         
-        // Create temporary container for this chunk
         const container = document.createElement('div');
         container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
         
-        // Header
         container.innerHTML = `
           <div style="text-align: center; margin-bottom: 1.25rem;">
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">${isAI ? '🤖' : '🔮'}</div>
@@ -1011,11 +938,6 @@ const NewGameScreen = () => {
             ${isAI ? '<div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>' : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
-          ${chunkIndex === 0 && isAI && aiForecasts?.[0]?.groupIntro ? `
-          <div style="padding: 0.7rem 0.8rem; margin-bottom: 0.75rem; border-radius: 8px; background: linear-gradient(135deg, rgba(234, 179, 8, 0.10), rgba(249, 115, 22, 0.10)); border: 1px solid rgba(234, 179, 8, 0.30); text-align: center; direction: rtl;">
-            <div style="font-size: 0.7rem; margin-bottom: 0.2rem; opacity: 0.6;">📣</div>
-            <div style="font-size: 0.85rem; color: #fbbf24; line-height: 1.5; font-weight: 500;">${aiForecasts[0].groupIntro}</div>
-          </div>` : ''}
           <div style="margin-bottom: 1rem;">
             ${chunk.map((forecast: any, index: number) => {
               const isFirst = chunkIndex === 0 && index === 0;
@@ -1025,22 +947,12 @@ const NewGameScreen = () => {
               const highlight = forecast.highlight || '';
               const name = forecast.name || forecast.playerName || '';
               
-              let bgColor = 'rgba(100, 116, 139, 0.12)';
-              let borderColor = '#64748b';
-              let textColor = '#f1f5f9';
+              let bgColor = expected >= 0 ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)';
+              let borderColor = expected >= 0 ? '#22c55e' : '#ef4444';
               
               if (isSurprise) {
                 bgColor = 'rgba(168, 85, 247, 0.15)';
                 borderColor = '#a855f7';
-                textColor = '#a855f7';
-              } else if (expected > 10) {
-                bgColor = 'rgba(34, 197, 94, 0.12)';
-                borderColor = '#22c55e';
-                textColor = '#22c55e';
-              } else if (expected < -10) {
-                bgColor = 'rgba(239, 68, 68, 0.12)';
-                borderColor = '#ef4444';
-                textColor = '#ef4444';
               }
               
               return `
@@ -1049,12 +961,12 @@ const NewGameScreen = () => {
                     <span style="font-weight: 700; font-size: 1rem; color: #f1f5f9;">
                       ${isFirst && expected > 0 ? '👑 ' : ''}${name}${isSurprise ? ' ⚡' : ''}
                     </span>
-                    <span style="font-weight: 700; font-size: 1.05rem; color: ${textColor};">
+                    <span style="font-weight: 700; font-size: 1.05rem; color: #f1f5f9;">
                       ${expected >= 0 ? '+' : '-'}₪${Math.abs(Math.round(expected)).toLocaleString()}
                     </span>
                   </div>
                   ${highlight ? `<div style="font-size: 0.78rem; color: #f1f5f9; opacity: 0.8; margin-bottom: 0.4rem; direction: rtl; line-height: 1.4;">${highlight}</div>` : ''}
-                  <div style="font-size: 0.85rem; color: ${isSurprise ? '#a855f7' : '#94a3b8'}; line-height: 1.45; direction: rtl; font-style: italic;">
+                  <div style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; direction: rtl; font-style: italic;">
                     ${sentence}
                   </div>
                 </div>
@@ -1082,8 +994,8 @@ const NewGameScreen = () => {
           canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
         });
         
-        const fileName = chunks.length > 1 
-          ? `poker-forecast-${chunkIndex + 1}.png` 
+        const fileName = totalPages > 1 
+          ? `poker-forecast-${pageNumber}.png` 
           : 'poker-forecast.png';
         files.push(new File([blob], fileName, { type: 'image/png' }));
       }
@@ -1237,8 +1149,10 @@ const NewGameScreen = () => {
       setAiForecasts(null);
       
       try {
-        // Prepare player data for AI
         const selectedPlayers = players.filter(p => selectedIds.has(p.id));
+        const allGames = getAllGames();
+        const gameLocationMap = new Map(allGames.map(g => [g.id, g.location]));
+        
         const playerData: PlayerForecastData[] = selectedPlayers.map(player => {
           const stats = getStatsForPlayer(player.id);
           const daysSince = stats ? getDaysSinceLastGame(stats) : 999;
@@ -1255,7 +1169,6 @@ const NewGameScreen = () => {
             currentStreak: stats?.currentStreak || 0,
             bestWin: stats?.biggestWin || 0,
             worstLoss: stats?.biggestLoss ? -Math.abs(stats.biggestLoss) : 0,
-            // Convert dates to DD/MM/YYYY format for parseGameDate!
             gameHistory: (stats?.lastGameResults || []).map(g => {
               const d = new Date(g.date);
               const day = d.getDate().toString().padStart(2, '0');
@@ -1264,7 +1177,8 @@ const NewGameScreen = () => {
               return {
                 profit: g.profit,
                 date: `${day}/${month}/${year}`,
-                gameId: g.gameId
+                gameId: g.gameId,
+                location: gameLocationMap.get(g.gameId),
               };
             }),
             daysSinceLastGame: daysSince,
@@ -1272,14 +1186,19 @@ const NewGameScreen = () => {
           };
         });
         
-        // Calculate global rankings for accurate table positions
         const globalRankings = calculateGlobalRankings();
+
+        const settings = getSettings();
+        const resolvedMarkers = detectPeriodMarkers(new Date(), allGames, settings.gameNightDays || [4, 6]);
+        const finalMarkers = applyPeriodOverride(resolvedMarkers, periodOverride);
+        setPeriodMarkers(finalMarkers);
+
+        const loc = gameLocation === 'other' ? customLocation.trim() : gameLocation;
         
-        const forecasts = await generateAIForecasts(playerData, globalRankings);
+        const forecasts = await generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined);
         setAiForecasts(forecasts);
         setIsLoadingAI(false);
         
-        // Save to pending forecast storage
         const forecastsToSave: GameForecast[] = forecasts.map(f => ({
           playerName: f.name,
           expectedProfit: f.expectedProfit,
@@ -1287,7 +1206,7 @@ const NewGameScreen = () => {
           sentence: f.sentence,
           isSurprise: f.isSurprise
         }));
-        savePendingForecast(Array.from(selectedIds), forecastsToSave);
+        savePendingForecast(Array.from(selectedIds), forecastsToSave, forecasts[0]?.preGameTeaser);
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
@@ -1435,11 +1354,28 @@ const NewGameScreen = () => {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>New Game</h1>
-        {permanentPlayers.length > 0 && (
-          <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
-            {permanentPlayers.every(p => selectedIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {permanentPlayers.length > 0 && (
+            <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
+              {permanentPlayers.every(p => selectedIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+          <button
+            onClick={signOut}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              padding: '0.2rem 0.4rem',
+              opacity: 0.7,
+            }}
+            title="Sign Out"
+          >
+            🔓
           </button>
-        )}
+        </div>
       </div>
 
       {error && (
@@ -1626,33 +1562,108 @@ const NewGameScreen = () => {
               className="btn btn-secondary"
               onClick={handleShowForecast}
               disabled={selectedIds.size < 2}
-              style={{ padding: '0.6rem', flex: '1', fontSize: '0.85rem', minWidth: '0' }}
+              style={{ padding: '0.6rem', flex: '1', fontSize: '0.8rem', minWidth: '0' }}
             >
               🔮 Forecast
             </button>
-            <button 
-              className="btn"
-              onClick={handleShowMilestones}
-              disabled={selectedIds.size < 2}
-              style={{ 
-                padding: '0.6rem', 
-                flex: '1', 
-                fontSize: '0.85rem',
-                minWidth: '0',
-                background: 'linear-gradient(135deg, #f39c12, #e67e22)',
-                color: 'white',
-                border: 'none'
-              }}
-            >
-              🎯 Milestones
-            </button>
+            {periodMarkers && isAdmin && (() => {
+              const autoValue = getAutoDetectedPeriodValue(periodMarkers);
+              const activeValue = periodOverride || autoValue;
+              const activeOption = PERIOD_OPTIONS.find(o => o.value === activeValue) || PERIOD_OPTIONS[0];
+              const isOverridden = periodOverride !== null && periodOverride !== autoValue;
+              return (
+                <div style={{ position: 'relative', flex: '1', minWidth: '0' }}>
+                  <button
+                    onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      background: activeValue === 'regular'
+                        ? 'rgba(100, 116, 139, 0.15)'
+                        : 'rgba(139, 92, 246, 0.2)',
+                      color: activeValue === 'regular' ? '#94a3b8' : '#a78bfa',
+                      border: `1px solid ${activeValue === 'regular' ? 'rgba(100, 116, 139, 0.25)' : 'rgba(139, 92, 246, 0.35)'}`,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.3rem',
+                      whiteSpace: 'nowrap',
+                      direction: 'rtl',
+                    }}
+                  >
+                    <span>{activeOption.label}</span>
+                    {isOverridden && <span style={{ fontSize: '0.55rem', opacity: 0.6 }}>(ידני)</span>}
+                    <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>▼</span>
+                  </button>
+                  {showPeriodDropdown && (
+                    <>
+                      <div
+                        onClick={() => setShowPeriodDropdown(false)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: 0,
+                        right: 0,
+                        marginBottom: '4px',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        boxShadow: '0 -4px 16px rgba(0,0,0,0.3)',
+                        zIndex: 100,
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', direction: 'rtl' }}>
+                          זוהה אוטומטית: {PERIOD_OPTIONS.find(o => o.value === autoValue)?.label}
+                        </div>
+                        {PERIOD_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              const newOverride = opt.value === autoValue ? null : opt.value;
+                              setPeriodOverride(newOverride);
+                              setPeriodMarkers(applyPeriodOverride(periodMarkers, newOverride));
+                              setShowPeriodDropdown(false);
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem 0.6rem',
+                              background: activeValue === opt.value ? 'rgba(139, 92, 246, 0.15)' : 'transparent',
+                              border: 'none',
+                              borderBottom: '1px solid rgba(255,255,255,0.05)',
+                              color: activeValue === opt.value ? '#a78bfa' : 'var(--text)',
+                              fontSize: '0.78rem',
+                              cursor: 'pointer',
+                              textAlign: 'right',
+                              direction: 'rtl',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                            }}
+                          >
+                            <span>{opt.label}</span>
+                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>(אוטומטי)</span>}
+                            {activeValue === opt.value && <span style={{ fontSize: '0.7rem' }}>✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
         <button 
           className="btn btn-primary"
           onClick={handleStartGame}
           disabled={selectedIds.size < 2}
-          style={{ padding: '0.6rem', flex: isAdmin ? '2' : '1', fontSize: '0.9rem' }}
+          style={{ padding: '0.6rem', flex: isAdmin ? '2' : '1', fontSize: '0.8rem' }}
         >
           🎰 Start Game ({selectedIds.size})
         </button>
@@ -1837,20 +1848,23 @@ const NewGameScreen = () => {
                   </div>
                 </div>
 
-                {/* Group intro banner */}
-                {aiForecasts[0]?.groupIntro && (
+                {/* Pre-Game Teaser card */}
+                {aiForecasts[0]?.preGameTeaser && (
                   <div style={{
-                    padding: '0.85rem 1rem',
+                    padding: '1rem 1.1rem',
                     marginBottom: '1.25rem',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.10), rgba(249, 115, 22, 0.10))',
-                    border: '1px solid rgba(234, 179, 8, 0.30)',
-                    textAlign: 'center',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10))',
+                    border: '1px solid rgba(139, 92, 246, 0.35)',
+                    textAlign: 'right',
                     direction: 'rtl',
                   }}>
-                    <div style={{ fontSize: '0.8rem', marginBottom: '0.3rem', opacity: 0.6 }}>📣</div>
-                    <div style={{ fontSize: '0.95rem', color: '#fbbf24', lineHeight: 1.6, fontWeight: 500 }}>
-                      {aiForecasts[0].groupIntro}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '1.1rem' }}>🎙️</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', letterSpacing: '0.5px' }}>טיזר הלילה</span>
+                    </div>
+                    <div style={{ fontSize: '0.92rem', color: '#e2e8f0', lineHeight: 1.7, fontWeight: 400 }}>
+                      {aiForecasts[0].preGameTeaser}
                     </div>
                   </div>
                 )}
@@ -1861,10 +1875,9 @@ const NewGameScreen = () => {
                     const { name, expectedProfit, sentence, highlight, isSurprise } = forecast;
                     
                     const getStyle = () => {
-                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
-                      if (expectedProfit > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
-                      if (expectedProfit < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
-                      return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
+                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7' };
+                      if (expectedProfit >= 0) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' };
+                      return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' };
                     };
                     
                     const style = getStyle();
@@ -1890,6 +1903,7 @@ const NewGameScreen = () => {
                           <span style={{ 
                             fontWeight: '700', 
                             fontSize: '1rem',
+                            color: 'white',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.3rem'
@@ -1901,7 +1915,7 @@ const NewGameScreen = () => {
                           <span style={{ 
                             fontWeight: '700', 
                             fontSize: '1.05rem',
-                            color: style.text,
+                            color: 'white',
                             fontFamily: 'system-ui'
                           }}>
                             {expectedProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(expectedProfit))}
@@ -1926,7 +1940,7 @@ const NewGameScreen = () => {
                         {/* AI Creative sentence */}
                         <div style={{ 
                           fontSize: '0.85rem', 
-                          color: isSurprise ? '#a855f7' : 'var(--text-muted)',
+                          color: 'var(--text-muted)',
                           lineHeight: '1.45',
                           direction: 'rtl',
                           fontStyle: 'italic'
@@ -1971,10 +1985,9 @@ const NewGameScreen = () => {
                     const { player, expected, sentence, highlights, gamesPlayed, isSurprise } = forecast;
                     
                     const getStyle = () => {
-                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7', text: '#a855f7' };
-                      if (expected > 10) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e', text: '#22c55e' };
-                      if (expected < -10) return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444', text: '#ef4444' };
-                      return { bg: 'rgba(100, 116, 139, 0.12)', border: '#64748b', text: 'var(--text)' };
+                      if (isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7' };
+                      if (expected >= 0) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' };
+                      return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' };
                     };
                     
                     const style = getStyle();
@@ -2000,6 +2013,7 @@ const NewGameScreen = () => {
                           <span style={{ 
                             fontWeight: '700', 
                             fontSize: '1rem',
+                            color: 'white',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.3rem'
@@ -2010,7 +2024,7 @@ const NewGameScreen = () => {
                           <span style={{ 
                             fontWeight: '700', 
                             fontSize: '1.05rem',
-                            color: style.text,
+                            color: 'white',
                             fontFamily: 'system-ui'
                           }}>
                             {expected >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(expected))}
@@ -2035,7 +2049,7 @@ const NewGameScreen = () => {
                         {/* Creative forecast sentence */}
                         <div style={{ 
                           fontSize: '0.85rem', 
-                          color: isSurprise ? '#a855f7' : 'var(--text-muted)',
+                          color: 'var(--text-muted)',
                           lineHeight: '1.45',
                           direction: 'rtl',
                           fontStyle: 'italic'
@@ -2189,121 +2203,6 @@ const NewGameScreen = () => {
                 התחל ללא תחזית
               </button>
             </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Milestones Modal */}
-      {showMilestones && (
-        <div className="modal-overlay" onClick={() => setShowMilestones(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', overflow: 'auto', maxWidth: '420px' }}>
-            {milestonesData.length === 0 ? (
-              <div style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🤷</div>
-                <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>אין מיילסטונים מעניינים</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>נסה לבחור יותר שחקנים</p>
-              </div>
-            ) : (
-              <div ref={milestonesRef} style={{ padding: '1.25rem', background: '#1a1a2e', borderRadius: '12px' }}>
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🎯</div>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
-                    מיילסטונים להלילה
-                  </h3>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                    {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#f39c12', marginTop: '0.25rem' }}>
-                    {milestonesData.length} נקודות מעניינות ✨
-                  </div>
-                </div>
-
-                {/* Milestones List */}
-                <div style={{ marginBottom: '1rem', direction: 'rtl' }}>
-                  {milestonesData.map((milestone, index) => (
-                    <div 
-                      key={index}
-                      style={{
-                        padding: '0.75rem 0.85rem',
-                        marginBottom: '0.5rem',
-                        borderRadius: '10px',
-                        background: 'rgba(243, 156, 18, 0.1)',
-                        borderRight: '4px solid #f39c12',
-                        textAlign: 'right',
-                      }}
-                    >
-                      {/* Emoji and Title */}
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '0.5rem',
-                        marginBottom: '0.35rem',
-                        justifyContent: 'flex-start',
-                        flexDirection: 'row-reverse'
-                      }}>
-                        <span style={{ fontSize: '1.2rem' }}>{milestone.emoji}</span>
-                        <span style={{ 
-                          fontWeight: '600', 
-                          fontSize: '0.95rem',
-                          color: '#f39c12'
-                        }}>
-                          {milestone.title}
-                        </span>
-                      </div>
-                      
-                      {/* Description */}
-                      <div style={{ 
-                        fontSize: '0.85rem', 
-                        color: 'var(--text)',
-                        lineHeight: '1.4',
-                        paddingLeft: '1.7rem'
-                      }}>
-                        {milestone.description}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Legend */}
-                <div style={{ 
-                  textAlign: 'center', 
-                  fontSize: '0.7rem', 
-                  color: 'var(--text-muted)',
-                  padding: '0.5rem',
-                  borderTop: '1px solid rgba(255,255,255,0.1)'
-                }}>
-                  נתונים מבוססים על כל ההיסטוריה 📊
-                </div>
-              </div>
-            )}
-            
-            {/* Action buttons */}
-            {milestonesData.length > 0 && (
-              <div style={{ padding: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-                <button
-                  className="btn"
-                  onClick={() => setShowMilestones(false)}
-                  style={{ flex: 1, padding: '0.6rem', background: 'var(--surface)', color: 'var(--text)' }}
-                >
-                  סגור
-                </button>
-                <button
-                  className="btn"
-                  onClick={shareMilestones}
-                  disabled={isSharingMilestones}
-                  style={{ 
-                    flex: 2, 
-                    padding: '0.6rem',
-                    background: 'linear-gradient(135deg, #25D366, #128C7E)',
-                    color: 'white',
-                    border: 'none'
-                  }}
-                >
-                  {isSharingMilestones ? '⏳ מעבד...' : '📤 שתף לוואטסאפ'}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

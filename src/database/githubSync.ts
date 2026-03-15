@@ -11,6 +11,7 @@
 
 import { Player, Game, GamePlayer } from '../types';
 import { getEmbeddedToken } from './embeddedToken';
+import { ChronicleEntry } from './storage';
 
 // GitHub repository info
 const GITHUB_OWNER = 'LiorMoldovan';
@@ -31,6 +32,7 @@ export interface SyncData {
   gamePlayers: GamePlayer[];
   lastUpdated: string;
   updatedBy: string;
+  chronicleProfiles?: Record<string, ChronicleEntry>;
 }
 
 // Get stored GitHub token
@@ -310,6 +312,10 @@ export const getLocalSyncData = (): SyncData => {
   // Only include gamePlayers for completed games
   const completedGamePlayers = allGamePlayers.filter(gp => completedGameIds.has(gp.gameId));
   
+  // Include AI-generated chronicle profiles
+  const chronicleRaw = localStorage.getItem('poker_chronicle_profiles');
+  const chronicleProfiles: Record<string, ChronicleEntry> | undefined = chronicleRaw ? JSON.parse(chronicleRaw) : undefined;
+  
   console.log(`Sync data: ${completedGames.length} completed games (${allGames.length - completedGames.length} incomplete games excluded)`);
   
   return {
@@ -318,6 +324,7 @@ export const getLocalSyncData = (): SyncData => {
     gamePlayers: completedGamePlayers,
     lastUpdated: new Date().toISOString(),
     updatedBy: 'admin',
+    chronicleProfiles,
   };
 };
 
@@ -407,10 +414,30 @@ const replaceGamesWithRemote = (
     }
   }
   
+  // Preserve locally-generated AI fields that may not exist in remote data
+  const localGameMap = new Map(localGames.map(g => [g.id, g]));
+  const mergedGames = remoteData.games.map(remoteGame => {
+    const localGame = localGameMap.get(remoteGame.id);
+    if (localGame) {
+      if (!remoteGame.aiSummary && localGame.aiSummary) {
+        remoteGame.aiSummary = localGame.aiSummary;
+      }
+      if (!remoteGame.forecastComment && localGame.forecastComment) {
+        remoteGame.forecastComment = localGame.forecastComment;
+      }
+    }
+    return remoteGame;
+  });
+
   // Save all data
   localStorage.setItem('poker_players', JSON.stringify(localPlayers));
-  localStorage.setItem('poker_games', JSON.stringify(remoteData.games));
+  localStorage.setItem('poker_games', JSON.stringify(mergedGames));
   localStorage.setItem('poker_game_players', JSON.stringify(remoteData.gamePlayers));
+  
+  // Sync chronicle profiles from cloud (cloud is authoritative)
+  if (remoteData.chronicleProfiles) {
+    localStorage.setItem('poker_chronicle_profiles', JSON.stringify(remoteData.chronicleProfiles));
+  }
   
   return { gamesChanged, deletedGames, newPlayers, playersChanged };
 };

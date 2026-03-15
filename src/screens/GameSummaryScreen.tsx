@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats } from '../types';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
-import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload } from '../utils/geminiAI';
+import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers } from '../utils/geminiAI';
 import { speakHebrew } from '../utils/tts';
 import { usePermissions } from '../App';
 
@@ -34,6 +34,21 @@ const hebrewNum = (n: number, feminine: boolean): string => {
 const GameSummaryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as { 
+    from?: string; 
+    viewMode?: string;
+    recordInfo?: { title: string; playerId: string; recordType: string };
+    playerInfo?: { playerId: string; playerName: string };
+    timePeriod?: string;
+    selectedYear?: number;
+    selectedMonth?: number;
+    autoAI?: boolean;
+  } | null;
+  const cameFromRecords = locationState?.from === 'records';
+  const cameFromIndividual = locationState?.from === 'individual';
+  const cameFromTable = locationState?.from === 'statistics';
+  const cameFromStatistics = cameFromRecords || cameFromIndividual || cameFromTable;
   const { role } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -53,6 +68,8 @@ const GameSummaryScreen = () => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
+  const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
@@ -115,6 +132,7 @@ const GameSummaryScreen = () => {
     setGameDate(game.date);
     setChipGap(game.chipGap || null);
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
+    setPreGameTeaser(game.preGameTeaser || null);
     
     const sortedPlayers = gamePlayers.sort((a, b) => b.profit - a.profit);
     setPlayers(sortedPlayers);
@@ -176,10 +194,10 @@ const GameSummaryScreen = () => {
     const totalRebuysTonight = sortedPlayers.reduce((sum, p) => sum + p.rebuys, 0);
     const tonightsPot = totalRebuysTonight * settings2.rebuyValue;
 
-    // Determine current period (H1/H2)
-    const gameDate = new Date();
-    const periodMonth = gameDate.getMonth() + 1;
-    const periodYear = gameDate.getFullYear();
+    // Determine period (H1/H2) based on the actual game date
+    const actualGameDate = new Date(game.date);
+    const periodMonth = actualGameDate.getMonth() + 1;
+    const periodYear = actualGameDate.getFullYear();
     const periodStart = new Date(periodYear, periodMonth <= 6 ? 0 : 6, 1);
     const periodLabel = periodMonth <= 6 ? `H1 ${periodYear}` : `H2 ${periodYear}`;
 
@@ -473,12 +491,12 @@ const GameSummaryScreen = () => {
     bank.sort((a, b) => a.priority - b.priority);
     setFunStats(bank.slice(0, 10).map(({ emoji, label, detail }) => ({ emoji, label, detail })));
 
-    // Compute standings table for the current half-year period
-    const currentMonth = new Date().getMonth() + 1;
-    const currentYear = new Date().getFullYear();
-    const halfStart = new Date(currentYear, currentMonth <= 6 ? 0 : 6, 1);
-    const halfEnd = new Date(currentYear, currentMonth <= 6 ? 6 : 12, 0, 23, 59, 59);
-    const halfLabel = currentMonth <= 6 ? `H1 ${currentYear}` : `H2 ${currentYear}`;
+    // Compute standings table for the game's half-year period
+    const gameMonth = actualGameDate.getMonth() + 1;
+    const gameYear = actualGameDate.getFullYear();
+    const halfStart = new Date(gameYear, gameMonth <= 6 ? 0 : 6, 1);
+    const halfEnd = new Date(gameYear, gameMonth <= 6 ? 6 : 12, 0, 23, 59, 59);
+    const halfLabel = gameMonth <= 6 ? `H1 ${gameYear}` : `H2 ${gameYear}`;
 
     const halfStats = getPlayerStats({ start: halfStart, end: halfEnd });
     const allPlayers = getAllPlayers();
@@ -505,20 +523,15 @@ const GameSummaryScreen = () => {
     setStandingsLabel(halfLabel);
 
     // --- AI Game Night Summary ---
-    // Only auto-generate for games within the current half-year period (avoid stale data for old games)
-    const gameDateObj = new Date(game.date || game.createdAt);
-    const gameInCurrentPeriod = gameDateObj >= halfStart && gameDateObj <= halfEnd;
-
-    // Treat very short cached summaries as truncated — regenerate them
+    // Never auto-generate. Show cached version if it exists, otherwise show "Generate" button.
     const cachedSummary = game.aiSummary;
     const isCachedValid = cachedSummary && cachedSummary.length > 80;
 
-    const shouldGenerate = gameInCurrentPeriod || forceGenerateRef.current;
-    forceGenerateRef.current = false;
-
-    if (isCachedValid) {
+    const shouldAutoGenerate = locationState?.autoAI && !isCachedValid;
+    if (isCachedValid && !forceGenerateRef.current) {
       setAiSummary(cachedSummary);
-    } else if (getGeminiApiKey() && game.status === 'completed' && shouldGenerate) {
+    } else if ((forceGenerateRef.current || shouldAutoGenerate) && getGeminiApiKey() && game.status === 'completed') {
+      forceGenerateRef.current = false;
       setIsLoadingAiSummary(true);
 
       // Build payload from already-computed data
@@ -553,7 +566,7 @@ const GameSummaryScreen = () => {
 
       // Extract from the already-computed highlight bank
       for (const h of bank) {
-        if (h.label.includes('שיא') && h.priority <= 2) {
+        if (h.label.includes('שיא')) {
           aiRecords.push(`${h.emoji} ${h.detail}`);
         }
         if (h.label === 'רצף') {
@@ -568,9 +581,15 @@ const GameSummaryScreen = () => {
         if (h.label === 'חזרו לשולחן') {
           aiWelcomeBacks.push(h.detail);
         }
+        if (h.label.includes('קאמבק') || h.label.includes('מלך הקניות') || h.label.includes('תשואה') || h.label.includes('חוסר מזל')) {
+          aiMilestones.push(`${h.label}: ${h.detail}`);
+        }
+        if (h.label.includes('אחוז נצחון') || h.label.includes('מעל הממוצע')) {
+          aiMilestones.push(`${h.label}: ${h.detail}`);
+        }
       }
 
-      // Compute ranking shifts: who overtook whom because of tonight
+      // Compute ranking shifts: who overtook whom / who dropped because of tonight
       try {
         const beforeTonight = activeStats.map(s => {
           const tonightPlayer = sortedPlayers.find(p => p.playerId === s.playerId);
@@ -580,23 +599,33 @@ const GameSummaryScreen = () => {
 
         const afterTonight = [...activeStats];
 
-        for (const player of sortedPlayers) {
-          const newRank = afterTonight.findIndex(s => s.playerId === player.playerId) + 1;
-          const oldRank = beforeTonight.findIndex(s => s.playerId === player.playerId) + 1;
+        for (const stat of activeStats) {
+          const newRank = afterTonight.findIndex(s => s.playerId === stat.playerId) + 1;
+          const oldRank = beforeTonight.findIndex(s => s.playerId === stat.playerId) + 1;
           if (newRank > 0 && oldRank > 0 && newRank < oldRank) {
             const passedPlayers = beforeTonight
               .slice(newRank - 1, oldRank - 1)
-              .filter(s => s.playerId !== player.playerId)
+              .filter(s => s.playerId !== stat.playerId)
               .map(s => s.playerName);
             if (passedPlayers.length > 0) {
-              aiRankingShifts.push(`${player.playerName} עקף את ${passedPlayers.join(' ואת ')} ועלה למקום ${newRank}`);
+              aiRankingShifts.push(`${stat.playerName} עלה ממקום ${oldRank} למקום ${newRank} (עקף את ${passedPlayers.join(' ואת ')})`);
             }
+          } else if (newRank > 0 && oldRank > 0 && newRank > oldRank) {
+            aiRankingShifts.push(`${stat.playerName} ירד ממקום ${oldRank} למקום ${newRank}`);
           }
         }
       } catch {}
 
       // Count games in period (for "game #X")
       const periodGameCount = halfGames.length;
+
+      const resolvedPeriodMarkers: PeriodMarkers | undefined = game.periodMarkers || (() => {
+        try {
+          const allGamesForPeriod = getAllGames();
+          const s = getSettings();
+          return detectPeriodMarkers(new Date(game.date || game.createdAt), allGamesForPeriod, s.gameNightDays || [4, 6]);
+        } catch { return undefined; }
+      })();
 
       const summaryPayload: GameNightSummaryPayload = {
         tonight: aiTonightResults,
@@ -611,14 +640,23 @@ const GameSummaryScreen = () => {
         welcomeBacks: aiWelcomeBacks,
         rankingShifts: aiRankingShifts,
         gameNumberInPeriod: periodGameCount,
+        location: game.location,
+        periodMarkers: resolvedPeriodMarkers,
       };
 
       setAiSummaryError(null);
       generateGameNightSummary(summaryPayload)
-        .then(summary => {
-          setAiSummary(summary);
+        .then(async result => {
+          setAiSummary(result.text);
           setAiSummaryError(null);
-          saveGameAiSummary(game.id, summary);
+          saveGameAiSummary(game.id, result.text);
+          if (shouldAutoGenerate) {
+            try {
+              const { syncToCloud } = await import('../database/githubSync');
+              await syncToCloud();
+              console.log('Background: synced after auto AI summary');
+            } catch (e) { console.warn('Background sync failed:', e); }
+          }
         })
         .catch(err => {
           console.error('AI summary generation failed:', err);
@@ -634,6 +672,8 @@ const GameSummaryScreen = () => {
         .finally(() => {
           setIsLoadingAiSummary(false);
         });
+    } else {
+      forceGenerateRef.current = false;
     }
 
     setIsLoading(false);
@@ -869,8 +909,31 @@ const GameSummaryScreen = () => {
     }
   };
 
+  const navigateBack = () => {
+    if (cameFromStatistics) {
+      navigate('/statistics', { 
+        state: { 
+          viewMode: locationState?.viewMode, 
+          recordInfo: locationState?.recordInfo,
+          playerInfo: locationState?.playerInfo,
+          timePeriod: locationState?.timePeriod,
+          selectedYear: locationState?.selectedYear,
+        } 
+      });
+    } else {
+      navigate('/history');
+    }
+  };
+
   return (
     <div className="fade-in">
+      <button 
+        className="btn btn-sm btn-secondary mb-2"
+        onClick={navigateBack}
+      >
+        ← {cameFromRecords ? 'Back to Records' : cameFromStatistics ? 'Back to Statistics' : 'Back to History'}
+      </button>
+
       {/* Results Section - for screenshot */}
       <div ref={summaryRef} style={{ padding: '1rem', background: '#1a1a2e' }}>
         <div className="page-header">
@@ -1176,6 +1239,76 @@ const GameSummaryScreen = () => {
         </div>
       )}
 
+      {/* Historical Forecast Section (collapsible, not included in screenshots) */}
+      {forecasts.length > 0 && (preGameTeaser || forecasts.some(f => f.highlight || f.sentence)) && (
+        <div style={{ marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button
+              onClick={() => setShowHistoricalForecast(!showHistoricalForecast)}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.5rem',
+                color: 'var(--text)',
+              }}
+            >
+              <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>🔮 תחזית טרום-משחק</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: showHistoricalForecast ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
+
+            {showHistoricalForecast && (
+              <div style={{ paddingTop: '0.5rem', direction: 'rtl' }}>
+                {preGameTeaser && (
+                  <div style={{
+                    padding: '0.85rem 1rem',
+                    marginBottom: '0.75rem',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10))',
+                    border: '1px solid rgba(139, 92, 246, 0.35)',
+                    textAlign: 'right',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
+                      <span style={{ fontSize: '1rem' }}>🎙️</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa' }}>טיזר הלילה</span>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: 1.6 }}>{preGameTeaser}</div>
+                  </div>
+                )}
+
+                {forecasts.filter(f => f.highlight || f.sentence).map((forecast, index) => (
+                  <div key={index} style={{
+                    padding: '0.6rem 0.75rem',
+                    marginBottom: '0.4rem',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    textAlign: 'right',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        {forecast.expectedProfit >= 0 ? '+' : ''}{forecast.expectedProfit}₪
+                      </span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{forecast.playerName}</span>
+                    </div>
+                    {forecast.highlight && (
+                      <div style={{ fontSize: '0.7rem', color: '#a78bfa', fontWeight: 600, marginBottom: '0.2rem' }}>{forecast.highlight}</div>
+                    )}
+                    {forecast.sentence && (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>{forecast.sentence}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Shared Expenses Info - separate screenshot (for reference only, settlements are combined) */}
       {sharedExpenses.length > 0 && (
         <div ref={expenseSettlementsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
@@ -1196,7 +1329,7 @@ const GameSummaryScreen = () => {
                     <span>₪{cleanNumber(expense.amount)}</span>
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.8rem' }}>
-                    {expense.paidByName} paid • {expense.participantNames.length} participants • ₪{cleanNumber(expense.amount / expense.participants.length)} each
+                    {expense.paidByName} paid • {expense.participantNames.length} participants • ₪{cleanNumber(expense.participants.length > 0 ? expense.amount / expense.participants.length : 0)} each
                   </div>
                 </div>
               ))}
@@ -1498,8 +1631,8 @@ const GameSummaryScreen = () => {
 
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
-        <button className="btn btn-secondary btn-lg" onClick={() => navigate('/')}>
-          🏠 Home
+        <button className="btn btn-secondary btn-lg" onClick={navigateBack}>
+          {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : '📜 History'}
         </button>
         <button 
           className="btn btn-primary btn-lg" 

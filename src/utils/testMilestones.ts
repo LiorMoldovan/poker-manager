@@ -5,7 +5,11 @@
  * Run in browser console: window.runAllTests()
  */
 
-import { generateMilestones, PlayerForecastData } from './geminiAI';
+import { PlayerForecastData } from './geminiAI';
+import { generateMilestones as _genMilestones, adaptForecastData } from './milestones';
+
+const generateMilestones = (players: PlayerForecastData[]) =>
+  _genMilestones(players.map(adaptForecastData), { mode: 'tonight' });
 
 interface TestResult {
   category: string;

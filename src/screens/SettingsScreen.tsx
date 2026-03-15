@@ -129,7 +129,7 @@ const SettingsScreen = () => {
     if (savedGeminiKey) setGeminiKey(savedGeminiKey);
   };
 
-  const handleSettingsChange = (key: keyof Settings, value: number) => {
+  const handleSettingsChange = (key: keyof Settings, value: number | number[]) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     saveSettings(newSettings);
@@ -475,6 +475,55 @@ const SettingsScreen = () => {
             />
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Transfers below this amount will be skipped
+            </p>
+          </div>
+
+          <div className="input-group">
+            <label className="label">Game Night Days</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+              {[
+                { day: 0, label: 'Sun' },
+                { day: 1, label: 'Mon' },
+                { day: 2, label: 'Tue' },
+                { day: 3, label: 'Wed' },
+                { day: 4, label: 'Thu' },
+                { day: 5, label: 'Fri' },
+                { day: 6, label: 'Sat' },
+              ].map(({ day, label }) => {
+                const days = settings.gameNightDays || [4, 6];
+                const isSelected = days.includes(day);
+                return (
+                  <button
+                    key={day}
+                    disabled={!canEditSettings}
+                    onClick={() => {
+                      const current = settings.gameNightDays || [4, 6];
+                      const updated = isSelected
+                        ? current.filter(d => d !== day)
+                        : [...current, day].sort();
+                      if (updated.length > 0) {
+                        handleSettingsChange('gameNightDays', updated);
+                      }
+                    }}
+                    style={{
+                      padding: '0.35rem 0.6rem',
+                      borderRadius: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: isSelected ? '600' : '400',
+                      background: isSelected ? 'var(--primary)' : 'var(--surface)',
+                      color: isSelected ? 'white' : 'var(--text-muted)',
+                      border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                      cursor: canEditSettings ? 'pointer' : 'default',
+                      opacity: canEditSettings ? 1 : 0.6,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              Used to auto-detect first/last game of a period
             </p>
           </div>
         </div>

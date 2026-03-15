@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.5.3';
+export const APP_VERSION = '5.6.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.6.0',
+    date: '2026-03-15',
+    changes: [
+      '📖 Player chronicles — AI-generated per-player stories on statistics screen',
+      '🏷️ Period markers — auto-detect and manually tag first/last game of month, half, year',
+      '🎭 Pre-game teaser — AI narrative before the game starts',
+      '🏆 Milestones engine refactored into dedicated module with new categories',
+      '🤖 Gemini model cascade updated — Gemini 3 Flash + 3.1 Flash Lite',
+      '📊 Statistics screen overhaul with chronicle sharing and period filtering',
+      '🎮 New game screen: location and period type selectors',
+      '📜 Game summary deep-linking from statistics and history',
+    ]
+  },
   {
     version: '5.5.3',
     date: '2026-03-13',

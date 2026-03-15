@@ -246,8 +246,9 @@ export const calculateExpenseBalances = (expenses: SharedExpense[]): ExpenseBala
   const balanceMap = new Map<string, { name: string; balance: number }>();
   
   for (const expense of expenses) {
+    if (expense.participants.length === 0) continue;
     const perPerson = expense.amount / expense.participants.length;
-    
+
     // Person who paid receives money from everyone
     const payerData = balanceMap.get(expense.paidBy) || { name: expense.paidByName, balance: 0 };
     payerData.balance += expense.amount; // They paid the full amount
@@ -331,6 +332,7 @@ export const calculateCombinedSettlement = (
 
   // Add expense balances (pizza, food, etc.)
   for (const expense of expenses) {
+    if (expense.participants.length === 0) continue;
     const perPerson = expense.amount / expense.participants.length;
 
     const payerData = balanceMap.get(expense.paidBy) || { name: expense.paidByName, balance: 0 };

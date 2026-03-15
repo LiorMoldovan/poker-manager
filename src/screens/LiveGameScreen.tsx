@@ -1412,13 +1412,41 @@ const LiveGameScreen = () => {
       extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
     } else if (rebuyThresholdMet && ctx.isTiedForLead) {
       extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames, totalBuyins);
+    } else if (isHalfBuyin) {
+      const halfMessages = [
+        'רק חצי? חסכן או פשוט זהיר?',
+        'חצי קנייה, חצי סיכון, כל הכבוד על האיפוק',
+        'חצי בפנים, נראה אם זה מספיק',
+        'חצי קנייה, גישה חכמה, לא משקיעים הכל בבת אחת',
+        'רגל אחת בפנים, רגל אחת בחוץ, גישה מעניינת',
+        'חצי קנייה, חצי תקווה, אבל תקווה שלמה',
+        'נו, לפחות הארנק לא הרגיש את זה כל כך',
+        'חצי חצי, בינתיים חוסכים, נראה כמה זמן זה יחזיק',
+        'מזמינים חצי מנה גם במסעדה? סגנון עקבי',
+        'חצי קנייה, כי למה לסכן הכל כשאפשר לסכן חצי',
+        'אצבע על הדופק וחצי יד בכיס, תכלס גישה נכונה',
+        'חצי קנייה, חצי כאב, הארנק מודה',
+        'קונים בזהירות הערב, מעניין כמה זה יחזיק',
+        'חצי עכשיו, חצי אחר כך, או שאולי זה מספיק',
+        'טיפה בים, אבל לפעמים טיפה משנה הכל',
+        'רק חצי, כי מה הטעם לבזבז הכל בבת אחת',
+        'מינימליסט גם בפוקר, רק מה שצריך',
+        'חצי קנייה, חצי חיוך, נראה איך זה ייגמר',
+        'נכנסים בעדינות, לא צריך לשבור דלתות',
+        'חצי? זה כמו להזמין מים בבר, אבל בסדר',
+        'לפחות החצי הזה קטן על הארנק',
+        'בואו נקרא לזה טעימה, לא קנייה',
+        'חצי עכשיו ונראה מה הקלפים אומרים',
+        'קנייה דיאטטית, פחות קלוריות לארנק',
+      ];
+      extraMessage = halfMessages[Math.floor(Math.random() * halfMessages.length)];
     } else {
       const personal = getPersonalMessage(playerName, playerId, ceilBuyins, isQuickRebuy, ctx.allPlayers);
       extraMessage = personal || getBuyinMessage(ceilBuyins, isQuickRebuy);
     }
 
-    // Force a trait message at least once per player per game
-    if (playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
+    // Force a trait message at least once per player per game (skip on half buyins to avoid count mismatch)
+    if (!isHalfBuyin && playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
       const rebuysCount = ceilBuyins - 1;
       const shouldForce = rebuysCount >= 2 || (rebuysCount === 1 && Math.random() < 0.5);
       if (shouldForce) {
@@ -1647,7 +1675,7 @@ const LiveGameScreen = () => {
         ) : (
           <>
             {sharedExpenses.map(expense => {
-              const perPerson = expense.amount / expense.participants.length;
+              const perPerson = expense.participants.length > 0 ? expense.amount / expense.participants.length : 0;
               return (
                 <div key={expense.id} style={{ 
                   padding: '0.4rem', 

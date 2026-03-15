@@ -321,15 +321,16 @@ export const getAccuracyTrend = (): number[] => {
 // ════════════════════════════════════════════════════════════
 
 const FULL_MODE_MODELS = [
+  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
   { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-2.0-flash' },
   { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
 ];
 
 const QUICK_MODE_MODELS = [
-  { version: 'v1beta', model: 'gemini-2.0-flash-lite' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
   { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
-  { version: 'v1beta', model: 'gemini-2.0-flash' },
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
 ];
 
 const getStyleSummary = (playerProfiles: PlayerProfile[]): string => {
@@ -545,6 +546,8 @@ export const generateTrainingHand = async (
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
     const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
 
+    const MAX_VALIDATION_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_VALIDATION_RETRIES; attempt++) {
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -552,7 +555,7 @@ export const generateTrainingHand = async (
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.75,
+            temperature: 0.75 + attempt * 0.05,
             topP: 0.9,
             maxOutputTokens: 3000,
             responseMimeType: 'application/json',
@@ -566,13 +569,13 @@ export const generateTrainingHand = async (
         console.warn(`Training [${config.model}]: ${msg}`);
         if (response.status === 429 || response.status === 404 || response.status === 503) {
           lastError = msg;
-          continue;
+          break;
         }
         if (response.status === 400 && msg.includes('API key')) {
           throw new Error('INVALID_API_KEY');
         }
         lastError = msg;
-        continue;
+        break;
       }
 
       const data = await response.json();
@@ -686,9 +689,10 @@ export const generateTrainingHand = async (
       }
 
       if (!valid) {
-        console.warn(`Training [${config.model}]: validation failed - ${rejectReason}`);
+        console.warn(`Training [${config.model}] attempt ${attempt + 1}: validation failed - ${rejectReason}`);
         lastError = rejectReason;
-        continue;
+        if (attempt < MAX_VALIDATION_RETRIES) continue;
+        break;
       }
 
       hand.categoryId = selectedCategory.id;
@@ -702,8 +706,9 @@ export const generateTrainingHand = async (
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`Training [${config.model}]:`, msg);
       lastError = msg;
-      continue;
+      break;
     }
+    } // end retry loop
   }
 
   throw new Error(`ALL_MODELS_FAILED:${lastError}`);
