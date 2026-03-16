@@ -826,19 +826,12 @@ export const generateAIForecasts = async (
     return { name: p.name, score, volatility };
   });
 
-  // Per-player noise: volatile players get more position uncertainty
+  // Compute score spread for surprise modifiers and temperature calibration
   const rawScores = strengthScores.map(s => s.score);
   const scoreMean = rawScores.reduce((a, b) => a + b, 0) / rawScores.length;
   const scoreStdDev = rawScores.length >= 2
     ? Math.sqrt(rawScores.reduce((s, v) => s + (v - scoreMean) ** 2, 0) / rawScores.length)
     : 50;
-  const avgVolatility = strengthScores.reduce((s, p) => s + p.volatility, 0) / strengthScores.length;
-  const baseNoise = Math.max(scoreStdDev * 0.7, 25);
-  strengthScores.forEach(s => {
-    const volFactor = avgVolatility > 0 ? Math.min(s.volatility / avgVolatility, 2.0) : 1.0;
-    const playerNoise = baseNoise * (0.6 + 0.4 * volFactor);
-    s.score += (Math.random() - 0.5) * 2 * playerNoise;
-  });
 
   // STEP 3b: Surprise detection (same conditions as before)
   type SurpriseType = 'underdog_rise' | 'top_dog_fall' | 'wild_card' | 'breakout' | 'streak_breaker' | 'dark_horse';
@@ -895,27 +888,47 @@ export const generateAIForecasts = async (
     usedSurpriseNames.add(candidate.name);
   }
 
-  // STEP 3c: Apply surprises as rank modifiers (shift position, don't override numbers)
+  // STEP 3c: Apply surprises as score modifiers
+  const surpriseBoost = Math.max(scoreStdDev * 0.5, 15);
   for (const surprise of selectedSurprises) {
     const ss = strengthScores.find(s => s.name === surprise.name);
     if (!ss) continue;
     if (surprise.type === 'underdog_rise' || surprise.type === 'breakout' || surprise.type === 'dark_horse') {
-      ss.score += baseNoise * 0.8;
+      ss.score += surpriseBoost;
     } else if (surprise.type === 'top_dog_fall') {
-      ss.score -= baseNoise * 0.8;
+      ss.score -= surpriseBoost;
     } else if (surprise.type === 'streak_breaker') {
       const player = players.find(p => p.name === surprise.name)!;
-      ss.score += (player.currentStreak > 0 ? -1 : 1) * baseNoise * 0.6;
+      ss.score += (player.currentStreak > 0 ? -1 : 1) * surpriseBoost * 0.8;
     } else if (surprise.type === 'wild_card') {
-      ss.score += (Math.random() - 0.5) * 2 * baseNoise;
+      ss.score += (Math.random() - 0.5) * 2 * surpriseBoost;
     }
   }
 
-  // Sort by adjusted score (highest = strongest = gets best template slot)
-  strengthScores.sort((a, b) => b.score - a.score);
+  // STEP 4: Probability-weighted random position assignment
+  // Instead of deterministic sort (which always puts the best player first),
+  // each player's score determines their PROBABILITY of getting each slot.
+  // Stronger players are more likely to get better slots, but anyone can end up anywhere.
+  // Temperature controls how much scores matter vs pure randomness.
+  const temperature = Math.max(scoreStdDev * 2, 40);
+  const maxScore = Math.max(...strengthScores.map(s => s.score));
+  const remaining = [...strengthScores];
+  const orderedPlayers: { name: string; score: number }[] = [];
 
-  // STEP 4: Assign template positions to ranked players
-  const playerSuggestions = strengthScores.map((s, i) => ({
+  for (let pos = 0; pos < n; pos++) {
+    const weights = remaining.map(s => Math.exp((s.score - maxScore) / temperature));
+    const totalWeight = weights.reduce((s, w) => s + w, 0);
+    let rand = Math.random() * totalWeight;
+    let selectedIdx = 0;
+    for (let i = 0; i < weights.length; i++) {
+      rand -= weights[i];
+      if (rand <= 0) { selectedIdx = i; break; }
+    }
+    orderedPlayers.push(remaining[selectedIdx]);
+    remaining.splice(selectedIdx, 1);
+  }
+
+  const playerSuggestions = orderedPlayers.map((s, i) => ({
     name: s.name,
     suggested: Math.round(template[i])
   }));
@@ -938,7 +951,8 @@ export const generateAIForecasts = async (
   console.log('🎲 Surprises:', selectedSurprises.map(s => `${s.name}(${s.type})`).join(', '));
   console.log(`📊 Predictions (${winners}W/${losers}L):`, playerSuggestions.map(s => `${s.name}: ${s.suggested >= 0 ? '+' : ''}${s.suggested}`).join(', '));
   console.log(`🎰 Template shape: [${template.map(t => t >= 0 ? '+' + t : '' + t).join(', ')}]`);
-  console.log(`📏 Strength ranking: ${strengthScores.map(s => `${s.name}(${Math.round(s.score)})`).join(' > ')}`);
+  console.log(`📏 Strength scores: ${[...strengthScores].sort((a, b) => b.score - a.score).map(s => `${s.name}(${Math.round(s.score)})`).join(' > ')}`);
+  console.log(`🎯 Assigned order: ${orderedPlayers.map(s => s.name).join(' > ')}`);
 
   const surpriseNames = new Set(selectedSurprises.map(s => s.name));
   const surpriseText = selectedSurprises.length > 0 
