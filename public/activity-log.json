@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "deviceId": "14af79ab-8a3a-42e8-a7c2-4aefec0789b7",
+    "role": "member",
+    "timestamp": "2026-03-16T17:54:55.626Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "384x832",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-03-16T17:54:55.629Z"
+  }
+]
