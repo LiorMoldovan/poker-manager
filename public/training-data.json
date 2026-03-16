@@ -1,26 +1,26 @@
 {
-  "totalDecisions": 38,
-  "bestDecisions": 17,
+  "totalDecisions": 78,
+  "bestDecisions": 39,
   "goodDecisions": 4,
   "byCategory": {
     "flush_draw": {
-      "total": 5,
-      "best": 3,
+      "total": 11,
+      "best": 9,
       "good": 1
     },
     "missed_draw": {
-      "total": 15,
-      "best": 6,
+      "total": 25,
+      "best": 9,
       "good": 1
     },
     "set_mining": {
-      "total": 4,
-      "best": 2,
+      "total": 6,
+      "best": 3,
       "good": 1
     },
     "blind_defense": {
-      "total": 1,
-      "best": 1,
+      "total": 4,
+      "best": 4,
       "good": 0
     },
     "wet_board_top_pair": {
@@ -29,7 +29,7 @@
       "good": 0
     },
     "medium_pairs": {
-      "total": 1,
+      "total": 3,
       "best": 0,
       "good": 0
     },
@@ -59,20 +59,75 @@
       "good": 0
     },
     "second_pair": {
-      "total": 1,
-      "best": 1,
+      "total": 3,
+      "best": 2,
       "good": 0
     },
     "position_play": {
       "total": 3,
       "best": 1,
       "good": 1
+    },
+    "seeking_set": {
+      "total": 1,
+      "best": 0,
+      "good": 0
+    },
+    "top_pair_dangerous_board": {
+      "total": 2,
+      "best": 0,
+      "good": 0
+    },
+    "straight_draw": {
+      "total": 1,
+      "best": 0,
+      "good": 0
+    },
+    "looks_good_but_risky": {
+      "total": 1,
+      "best": 1,
+      "good": 0
+    },
+    "strong_hand_dangerous_board": {
+      "total": 2,
+      "best": 2,
+      "good": 0
+    },
+    "value_betting": {
+      "total": 2,
+      "best": 1,
+      "good": 0
+    },
+    "continuation_bet": {
+      "total": 2,
+      "best": 2,
+      "good": 0
+    },
+    "squeeze_isolate": {
+      "total": 1,
+      "best": 1,
+      "good": 0
+    },
+    "strong_hand_risky_board": {
+      "total": 1,
+      "best": 0,
+      "good": 0
+    },
+    "looks_good_risky": {
+      "total": 1,
+      "best": 0,
+      "good": 0
+    },
+    "catching_bluff": {
+      "total": 1,
+      "best": 1,
+      "good": 0
     }
   },
   "byDifficulty": {
     "hard": {
-      "total": 38,
-      "best": 17,
+      "total": 78,
+      "best": 39,
       "good": 4
     }
   },
@@ -153,7 +208,93 @@
       ],
       "difficulty": "hard",
       "accuracy": 55.55555555555556
+    },
+    {
+      "date": "2026-03-14T21:43:33.240Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 4,
+      "goodDecisions": 0,
+      "categories": [
+        "seeking_set",
+        "flush_draw",
+        "top_pair_dangerous_board",
+        "straight_draw",
+        "looks_good_but_risky",
+        "medium_pairs",
+        "strong_hand_dangerous_board"
+      ],
+      "difficulty": "hard",
+      "accuracy": 50
+    },
+    {
+      "date": "2026-03-14T21:46:55.164Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 5,
+      "goodDecisions": 0,
+      "categories": [
+        "missed_draw",
+        "flush_draw",
+        "value_betting",
+        "blind_defense",
+        "continuation_bet",
+        "strong_hand_dangerous_board",
+        "top_pair_dangerous_board",
+        "second_pair"
+      ],
+      "difficulty": "hard",
+      "accuracy": 62.5
+    },
+    {
+      "date": "2026-03-14T21:50:03.624Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 5,
+      "goodDecisions": 0,
+      "categories": [
+        "squeeze_isolate",
+        "strong_hand_risky_board",
+        "blind_defense",
+        "flush_draw",
+        "second_pair",
+        "looks_good_risky",
+        "set_mining"
+      ],
+      "difficulty": "hard",
+      "accuracy": 62.5
+    },
+    {
+      "date": "2026-03-14T21:53:01.948Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 3,
+      "goodDecisions": 0,
+      "categories": [
+        "missed_draw"
+      ],
+      "difficulty": "hard",
+      "accuracy": 37.5
+    },
+    {
+      "date": "2026-03-15T22:10:06.130Z",
+      "handsPlayed": 8,
+      "totalDecisions": 8,
+      "bestDecisions": 5,
+      "goodDecisions": 0,
+      "categories": [
+        "set_mining",
+        "flush_draw",
+        "medium_pairs",
+        "missed_draw",
+        "continuation_bet",
+        "catching_bluff",
+        "blind_defense",
+        "value_betting"
+      ],
+      "difficulty": "hard",
+      "accuracy": 62.5
     }
   ],
-  "lastSynced": "2026-03-13T11:53:27.023Z"
+  "lastSynced": "2026-03-16T18:59:04.281Z"
 }
