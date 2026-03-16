@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.7.2';
+export const APP_VERSION = '5.7.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.7.3',
+    date: '2026-03-16',
+    changes: [
+      '🔍 Device fingerprinting — GPU, canvas hash, and hardware info for activity tracking',
+      '📱 Activity log redesigned with device-grouped view and profiles',
+    ]
+  },
   {
     version: '5.7.2',
     date: '2026-03-16',

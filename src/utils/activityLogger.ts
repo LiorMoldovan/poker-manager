@@ -1,4 +1,4 @@
-import { ActivityLogEntry, PermissionRole } from '../types';
+import { ActivityLogEntry, DeviceFingerprint, PermissionRole } from '../types';
 import { getEmbeddedToken } from '../database/embeddedToken';
 import { GITHUB_OWNER, GITHUB_REPO, GITHUB_ACTIVITY_PATH, GITHUB_BRANCH } from '../database/githubSync';
 
@@ -197,6 +197,52 @@ const writeWithRetry = async (
   }
 };
 
+const getGPURenderer = (): string => {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) return 'Unknown';
+    const ext = (gl as WebGLRenderingContext).getExtension('WEBGL_debug_renderer_info');
+    if (!ext) return 'Unknown';
+    return (gl as WebGLRenderingContext).getParameter(ext.UNMASKED_RENDERER_WEBGL) || 'Unknown';
+  } catch { return 'Unknown'; }
+};
+
+const getCanvasHash = (): string => {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 200;
+    canvas.height = 50;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(50, 0, 100, 50);
+    ctx.fillStyle = '#069';
+    ctx.fillText('fingerprint', 2, 15);
+    ctx.fillStyle = 'rgba(102,204,0,0.7)';
+    ctx.fillText('fingerprint', 4, 17);
+    const data = canvas.toDataURL();
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+      hash = ((hash << 5) - hash) + data.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+  } catch { return ''; }
+};
+
+export const getDeviceFingerprint = (): DeviceFingerprint => ({
+  gpu: getGPURenderer(),
+  cores: navigator.hardwareConcurrency || 0,
+  memory: (navigator as unknown as { deviceMemory?: number }).deviceMemory || 0,
+  touchPoints: navigator.maxTouchPoints || 0,
+  language: navigator.language || '',
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+  canvasHash: getCanvasHash(),
+});
+
 export const logActivity = async (role: PermissionRole): Promise<void> => {
   if (role === 'admin') return;
 
@@ -212,6 +258,7 @@ export const logActivity = async (role: PermissionRole): Promise<void> => {
     screensVisited: [],
     sessionDuration: 0,
     lastActive: new Date().toISOString(),
+    fingerprint: getDeviceFingerprint(),
   };
 
   currentSessionTimestamp = entry.timestamp;

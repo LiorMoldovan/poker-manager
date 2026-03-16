@@ -1311,7 +1311,7 @@ const SettingsScreen = () => {
           {activityLog.length === 0 && !activityLoading && !activityError && (
             <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
-              {activityLog.length === 0 ? 'No activity recorded yet. Press Refresh to load.' : 'No entries'}
+              No activity recorded yet. Press Refresh to load.
             </div>
           )}
 
@@ -1322,51 +1322,64 @@ const SettingsScreen = () => {
           )}
 
           {!activityLoading && activityLog.length > 0 && (() => {
-            // Group entries by day
-            const groups: Record<string, ActivityLogEntry[]> = {};
+            // Build device profiles from all entries
+            const deviceMap = new Map<string, { entries: ActivityLogEntry[]; latest: ActivityLogEntry }>();
             for (const entry of activityLog) {
-              const date = new Date(entry.timestamp);
-              const dayKey = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-              if (!groups[dayKey]) groups[dayKey] = [];
-              groups[dayKey].push(entry);
+              const existing = deviceMap.get(entry.deviceId);
+              if (!existing) {
+                deviceMap.set(entry.deviceId, { entries: [entry], latest: entry });
+              } else {
+                existing.entries.push(entry);
+                if (new Date(entry.timestamp) > new Date(existing.latest.timestamp)) {
+                  existing.latest = entry;
+                }
+              }
             }
+            const devices = Array.from(deviceMap.entries()).sort((a, b) =>
+              new Date(b[1].latest.timestamp).getTime() - new Date(a[1].latest.timestamp).getTime()
+            );
 
-            return Object.entries(groups).map(([day, entries]) => (
-              <div key={day} style={{ marginTop: '0.75rem' }}>
-                <div style={{
-                  fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: '0.5px',
-                  paddingBottom: '0.3rem', borderBottom: '1px solid var(--border)',
-                  marginBottom: '0.4rem',
-                }}>
-                  {day}
+            const shortenGPU = (gpu: string): string => {
+              if (!gpu || gpu === 'Unknown') return '—';
+              return gpu
+                .replace(/ANGLE \(/, '').replace(/\)$/, '')
+                .replace(/Direct3D\d+\s*vs_\S+\s*ps_\S+\s*/, '')
+                .replace(/,\s*D3D\d+.*/, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 40);
+            };
+
+            return (
+              <div>
+                {/* Device Cards */}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', marginBottom: '0.5rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {devices.length} Known Device{devices.length !== 1 ? 's' : ''}
                 </div>
-                {entries.map((entry, i) => {
-                  const roleInfo = getRoleInfo(entry.role);
-                  const label = deviceLabels[entry.deviceId];
-                  const isEditing = editingDeviceId === entry.deviceId;
+
+                {devices.map(([deviceId, { entries, latest }]) => {
+                  const label = deviceLabels[deviceId];
+                  const isEditing = editingDeviceId === deviceId;
+                  const roleInfo = getRoleInfo(latest.role);
+                  const fp = latest.fingerprint;
+                  const totalSessions = entries.length;
+                  const totalMinutes = entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+                  const lastSeen = formatRelativeTime(latest.lastActive || latest.timestamp);
 
                   return (
                     <div
-                      key={`${entry.timestamp}-${i}`}
+                      key={deviceId}
                       style={{
-                        padding: '0.6rem 0.5rem',
-                        borderRadius: '8px',
+                        padding: '0.65rem',
+                        borderRadius: '10px',
                         background: 'var(--surface)',
-                        marginBottom: '0.35rem',
-                        fontSize: '0.8rem',
+                        marginBottom: '0.5rem',
+                        border: label ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border)',
                       }}
                     >
-                      {/* Top row: role + device/label + time */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      {/* Header: Label/Name + role badge */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
-                          <span style={{
-                            fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
-                            background: `${roleInfo.color}20`, color: roleInfo.color, fontWeight: '600',
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {roleInfo.emoji} {roleInfo.name}
-                          </span>
                           {isEditing ? (
                             <div style={{ display: 'flex', gap: '0.25rem', flex: 1 }}>
                               <input
@@ -1374,80 +1387,181 @@ const SettingsScreen = () => {
                                 value={editLabelValue}
                                 onChange={e => setEditLabelValue(e.target.value)}
                                 onKeyDown={e => {
-                                  if (e.key === 'Enter') saveDeviceLabel(entry.deviceId, editLabelValue);
+                                  if (e.key === 'Enter') saveDeviceLabel(deviceId, editLabelValue);
                                   if (e.key === 'Escape') setEditingDeviceId(null);
                                 }}
                                 placeholder="Player name..."
                                 autoFocus
                                 style={{
-                                  flex: 1, padding: '0.2rem 0.4rem', fontSize: '0.75rem',
-                                  borderRadius: '4px', border: '1px solid var(--primary)',
+                                  flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.8rem',
+                                  borderRadius: '6px', border: '1px solid var(--primary)',
                                   background: 'var(--background)', color: 'var(--text)',
-                                  outline: 'none', minWidth: '60px',
+                                  outline: 'none', minWidth: '80px',
                                 }}
                               />
                               <button
-                                onClick={() => saveDeviceLabel(entry.deviceId, editLabelValue)}
+                                onClick={() => saveDeviceLabel(deviceId, editLabelValue)}
                                 style={{
-                                  fontSize: '0.7rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
+                                  fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
                                   background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer',
                                 }}
                               >
-                                ✓
+                                Save
                               </button>
                               <button
                                 onClick={() => setEditingDeviceId(null)}
                                 style={{
-                                  fontSize: '0.7rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
+                                  fontSize: '0.75rem', padding: '0.2rem 0.4rem', borderRadius: '6px',
                                   background: 'var(--surface-hover)', color: 'var(--text-muted)', border: 'none', cursor: 'pointer',
                                 }}
                               >
-                                ✕
+                                Cancel
                               </button>
                             </div>
                           ) : (
                             <button
-                              onClick={() => { setEditingDeviceId(entry.deviceId); setEditLabelValue(label || ''); }}
+                              onClick={() => { setEditingDeviceId(deviceId); setEditLabelValue(label || ''); }}
                               style={{
-                                fontWeight: label ? '600' : '400',
-                                color: label ? 'var(--text)' : 'var(--text-muted)',
+                                fontSize: label ? '0.95rem' : '0.82rem',
+                                fontWeight: label ? '700' : '500',
+                                color: label ? 'var(--text)' : '#818cf8',
                                 cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap', fontSize: '0.78rem',
+                                whiteSpace: 'nowrap',
                                 background: 'none', border: 'none', padding: 0,
                                 textAlign: 'left', minWidth: 0,
                               }}
-                              title={`${entry.device} (${entry.screenSize}) — Click to label`}
+                              title="Click to assign player name"
                             >
-                              {label || entry.device}
+                              {label || '+ Assign Name'}
                             </button>
                           )}
                         </div>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
-                          {formatRelativeTime(entry.timestamp)}
+                        <span style={{
+                          fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
+                          background: `${roleInfo.color}20`, color: roleInfo.color, fontWeight: '600',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {roleInfo.emoji} {roleInfo.name}
                         </span>
                       </div>
 
-                      {/* Bottom row: duration + screens */}
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        {entry.sessionDuration > 0 && (
-                          <span style={{
-                            fontSize: '0.65rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
-                            background: 'rgba(99, 102, 241, 0.12)', color: '#818cf8', fontWeight: '500',
-                          }}>
-                            ⏱ {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)} min
-                          </span>
-                        )}
-                        {entry.screensVisited.length > 0 && (
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
-                            {entry.screensVisited.join(' → ')}
-                          </span>
+                      {/* Device identity line */}
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', lineHeight: '1.45' }}>
+                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{latest.device}</span>
+                        <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
+                        {latest.screenSize}
+                        {fp && fp.gpu !== 'Unknown' && (
+                          <>
+                            <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
+                            <span title={fp.gpu}>{shortenGPU(fp.gpu)}</span>
+                          </>
                         )}
                       </div>
+
+                      {/* Fingerprint details */}
+                      {fp && (
+                        <div style={{
+                          display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
+                          marginBottom: '0.35rem',
+                        }}>
+                          {fp.cores > 0 && (
+                            <span style={{
+                              fontSize: '0.62rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                              background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa',
+                            }}>
+                              {fp.cores} cores
+                            </span>
+                          )}
+                          {fp.memory > 0 && (
+                            <span style={{
+                              fontSize: '0.62rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                              background: 'rgba(16, 185, 129, 0.1)', color: '#34d399',
+                            }}>
+                              {fp.memory}GB RAM
+                            </span>
+                          )}
+                          {fp.touchPoints > 0 && (
+                            <span style={{
+                              fontSize: '0.62rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                              background: 'rgba(245, 158, 11, 0.1)', color: '#fbbf24',
+                            }}>
+                              {fp.touchPoints} touch
+                            </span>
+                          )}
+                          {fp.language && (
+                            <span style={{
+                              fontSize: '0.62rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                              background: 'rgba(139, 92, 246, 0.1)', color: '#a78bfa',
+                            }}>
+                              {fp.language}
+                            </span>
+                          )}
+                          {fp.canvasHash && (
+                            <span style={{
+                              fontSize: '0.62rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                              background: 'rgba(236, 72, 153, 0.1)', color: '#f472b6',
+                            }}
+                            title={`Unique canvas fingerprint: ${fp.canvasHash}`}
+                            >
+                              #{fp.canvasHash.slice(0, 6)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Stats row */}
+                      <div style={{
+                        display: 'flex', gap: '0.6rem', alignItems: 'center',
+                        fontSize: '0.68rem', color: 'var(--text-muted)',
+                        padding: '0.3rem 0', borderTop: '1px solid var(--border)',
+                      }}>
+                        <span>{totalSessions} session{totalSessions !== 1 ? 's' : ''}</span>
+                        <span style={{ opacity: 0.4 }}>|</span>
+                        <span>{totalMinutes < 1 ? '<1' : Math.round(totalMinutes)} min total</span>
+                        <span style={{ opacity: 0.4 }}>|</span>
+                        <span>Last: {lastSeen}</span>
+                      </div>
+
+                      {/* Recent sessions (last 3) */}
+                      {entries.slice(0, 3).map((entry, i) => (
+                        <div
+                          key={`${entry.timestamp}-${i}`}
+                          style={{
+                            marginTop: '0.3rem',
+                            padding: '0.3rem 0.4rem',
+                            borderRadius: '6px',
+                            background: 'var(--background)',
+                            fontSize: '0.68rem',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          }}
+                        >
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                            {entry.sessionDuration > 0 && (
+                              <span style={{ color: '#818cf8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)}m
+                              </span>
+                            )}
+                            {entry.screensVisited.length > 0 && (
+                              <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {entry.screensVisited.join(' > ')}
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem', opacity: 0.7 }}>
+                            {formatRelativeTime(entry.timestamp)}
+                          </span>
+                        </div>
+                      ))}
+                      {entries.length > 3 && (
+                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.25rem', opacity: 0.6 }}>
+                          +{entries.length - 3} older session{entries.length - 3 !== 1 ? 's' : ''}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            ));
+            );
           })()}
 
           <div style={{ marginTop: '0.75rem', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>

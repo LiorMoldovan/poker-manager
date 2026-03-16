@@ -183,6 +183,16 @@ export interface MilestoneItem {
   sentiment: MilestoneSentiment;
 }
 
+export interface DeviceFingerprint {
+  gpu: string;
+  cores: number;
+  memory: number;
+  touchPoints: number;
+  language: string;
+  timezone: string;
+  canvasHash: string;
+}
+
 export interface ActivityLogEntry {
   deviceId: string;
   role: PermissionRole;
@@ -192,5 +202,6 @@ export interface ActivityLogEntry {
   screensVisited: string[];
   sessionDuration: number;
   lastActive: string;
+  fingerprint?: DeviceFingerprint;
 }
 
