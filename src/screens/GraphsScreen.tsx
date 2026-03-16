@@ -9,8 +9,11 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { Player, Game, GamePlayer } from '../types';
-import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraphInsights, saveGraphInsights } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
+import { usePermissions } from '../App';
+import { getGeminiApiKey, generateGraphInsights } from '../utils/geminiAI';
+import { syncToCloud } from '../database/githubSync';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
@@ -76,6 +79,14 @@ const GraphsScreen = () => {
   const [showLimitedData, setShowLimitedData] = useState(false);
   const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
+  // AI Graph Insights state
+  const { role } = usePermissions();
+  const [insightsText, setInsightsText] = useState<string>('');
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+  const [insightsGeneratedAt, setInsightsGeneratedAt] = useState<string>('');
+  const insightsGenRef = useRef(false);
+
   // Color mapping - stable by player order in permanent list
   const playerColorMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -118,6 +129,60 @@ const GraphsScreen = () => {
     }
   };
 
+  // ─── AI Graph Insights helpers ───
+
+  const getInsightsKey = useCallback(() => {
+    if (timePeriod === 'all') return 'all';
+    if (timePeriod === 'year') return `${selectedYear}`;
+    if (timePeriod === 'h1') return `H1-${selectedYear}`;
+    if (timePeriod === 'h2') return `H2-${selectedYear}`;
+    if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    return 'all';
+  }, [timePeriod, selectedYear, selectedMonth]);
+
+  const getInsightsPeriodLabel = useCallback(() => {
+    if (timePeriod === 'all') return 'כל הזמנים';
+    if (timePeriod === 'year') return `${selectedYear}`;
+    if (timePeriod === 'h1') return `H1 ${selectedYear}`;
+    if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'month') {
+      const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+      return `${months[selectedMonth - 1]} ${selectedYear}`;
+    }
+    return '';
+  }, [timePeriod, selectedYear, selectedMonth]);
+
+  const getDateFilter = useCallback((): { start?: Date; end?: Date } | undefined => {
+    const year = selectedYear;
+    switch (timePeriod) {
+      case 'h1': return { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) };
+      case 'h2': return { start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+      case 'year': return { start: new Date(year, 0, 1), end: new Date(year, 11, 31, 23, 59, 59) };
+      case 'month': {
+        const monthIdx = selectedMonth - 1;
+        const lastDay = new Date(year, monthIdx + 1, 0).getDate();
+        return { start: new Date(year, monthIdx, 1), end: new Date(year, monthIdx, lastDay, 23, 59, 59) };
+      }
+      case 'all':
+      default: return undefined;
+    }
+  }, [timePeriod, selectedYear, selectedMonth]);
+
+  // Load cached insights when period changes
+  useEffect(() => {
+    const key = getInsightsKey();
+    const cached = getGraphInsights(key);
+    if (cached) {
+      setInsightsText(cached.text);
+      setInsightsGeneratedAt(cached.generatedAt);
+    } else {
+      setInsightsText('');
+      setInsightsGeneratedAt('');
+    }
+    setInsightsError(null);
+    insightsGenRef.current = false;
+  }, [getInsightsKey]);
+
   // Get available years
   const getAvailableYears = (): number[] => {
     const years: number[] = [];
@@ -151,6 +216,104 @@ const GraphsScreen = () => {
       }
     });
   }, [allGames, timePeriod, selectedYear, selectedMonth]);
+
+  // Auto-generate insights for admin only when cache is empty for this period
+  useEffect(() => {
+    if (role !== 'admin') return;
+    if (insightsGenRef.current || insightsLoading) return;
+    if (!getGeminiApiKey()) return;
+    if (filteredGames.length === 0) return;
+
+    const key = getInsightsKey();
+    const cached = getGraphInsights(key);
+    if (cached) return;
+
+    insightsGenRef.current = true;
+    (async () => {
+      setInsightsLoading(true);
+      setInsightsError(null);
+      try {
+        const dateFilter = getDateFilter();
+        const stats = getPlayerStats(dateFilter)
+          .filter(s => {
+            const p = players.find(pl => pl.id === s.playerId);
+            return p && p.type === 'permanent' && s.gamesPlayed > 0;
+          })
+          .sort((a, b) => b.totalProfit - a.totalProfit);
+
+        if (stats.length === 0) {
+          setInsightsLoading(false);
+          return;
+        }
+
+        const periodLabel = getInsightsPeriodLabel();
+        const totalGames = filteredGames.length;
+        const now = new Date();
+        const currentHalf = now.getMonth() < 6 ? 1 : 2;
+        const isEarlyPeriod = timePeriod === 'h1' || timePeriod === 'h2'
+          ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
+          : totalGames <= 3;
+
+        const text = await generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod);
+        saveGraphInsights(key, text);
+        setInsightsText(text);
+        setInsightsGeneratedAt(new Date().toISOString());
+        syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
+      } catch (err) {
+        console.error('Graph insights auto-generation failed:', err);
+        setInsightsError(err instanceof Error ? err.message : 'שגיאה ביצירת תובנות');
+      } finally {
+        setInsightsLoading(false);
+      }
+    })();
+  }, [role, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear]);
+
+  const handleGenerateInsights = useCallback(async () => {
+    if (insightsLoading) return;
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      setInsightsError('לא הוגדר מפתח API של Gemini');
+      return;
+    }
+
+    setInsightsLoading(true);
+    setInsightsError(null);
+    try {
+      const dateFilter = getDateFilter();
+      const stats = getPlayerStats(dateFilter)
+        .filter(s => {
+          const p = players.find(pl => pl.id === s.playerId);
+          return p && p.type === 'permanent' && s.gamesPlayed > 0;
+        })
+        .sort((a, b) => b.totalProfit - a.totalProfit);
+
+      if (stats.length === 0) {
+        setInsightsError('אין מספיק נתונים לתקופה זו');
+        setInsightsLoading(false);
+        return;
+      }
+
+      const periodLabel = getInsightsPeriodLabel();
+      const totalGames = filteredGames.length;
+      const now = new Date();
+      const currentHalf = now.getMonth() < 6 ? 1 : 2;
+      const isEarlyPeriod = timePeriod === 'h1' || timePeriod === 'h2'
+        ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
+        : totalGames <= 3;
+
+      const text = await generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod);
+      const key = getInsightsKey();
+      saveGraphInsights(key, text);
+      setInsightsText(text);
+      setInsightsGeneratedAt(new Date().toISOString());
+      syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
+    } catch (err) {
+      console.error('Graph insights generation failed:', err);
+      setInsightsError(err instanceof Error ? err.message : 'שגיאה ביצירת תובנות');
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [insightsLoading, players, filteredGames, getDateFilter, getInsightsPeriodLabel, getInsightsKey, timePeriod, selectedYear]);
 
   const getPlayerName = useCallback((playerId: string): string => {
     const player = players.find(p => p.id === playerId);
@@ -407,68 +570,6 @@ const GraphsScreen = () => {
     });
   }, [selectedPlayers, getPlayerName]);
 
-  // Win streak data - for each player, show their current and best streaks
-  const streakData = useMemo(() => {
-    const playerStreaks: Array<{
-      playerId: string;
-      playerName: string;
-      color: string;
-      currentStreak: number;
-      bestWinStreak: number;
-      bestLossStreak: number;
-      last5: ('W' | 'L' | 'T')[];
-    }> = [];
-
-    sortedPlayerIds.forEach(playerId => {
-      const playerGames = filteredGames
-        .map(game => gamePlayers.find(gp => gp.gameId === game.id && gp.playerId === playerId))
-        .filter(Boolean) as GamePlayer[];
-
-      let currentStreak = 0;
-      let bestWinStreak = 0;
-      let bestLossStreak = 0;
-      let tempWinStreak = 0;
-      let tempLossStreak = 0;
-      const results: ('W' | 'L' | 'T')[] = [];
-
-      playerGames.forEach((gp, idx) => {
-        const result = gp.profit > 0 ? 'W' : gp.profit < 0 ? 'L' : 'T';
-        results.push(result);
-
-        if (result === 'W') {
-          tempWinStreak++;
-          tempLossStreak = 0;
-          bestWinStreak = Math.max(bestWinStreak, tempWinStreak);
-        } else if (result === 'L') {
-          tempLossStreak++;
-          tempWinStreak = 0;
-          bestLossStreak = Math.max(bestLossStreak, tempLossStreak);
-        } else {
-          tempWinStreak = 0;
-          tempLossStreak = 0;
-        }
-
-        // Track current streak at the end
-        if (idx === playerGames.length - 1) {
-          if (tempWinStreak > 0) currentStreak = tempWinStreak;
-          else if (tempLossStreak > 0) currentStreak = -tempLossStreak;
-        }
-      });
-
-      playerStreaks.push({
-        playerId,
-        playerName: getPlayerName(playerId),
-        color: getPlayerColor(playerId),
-        currentStreak,
-        bestWinStreak,
-        bestLossStreak,
-        last5: results.slice(-5),
-      });
-    });
-
-    return playerStreaks;
-  }, [filteredGames, gamePlayers, sortedPlayerIds, getPlayerName, getPlayerColor]);
-
   // Impact data - for a selected player, how their avg changes with/without each other player
   const impactData = useMemo(() => {
     if (!impactPlayerId) return [];
@@ -585,8 +686,8 @@ const GraphsScreen = () => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">Graphs</h1>
-        <p className="page-subtitle">Visualize player performance trends</p>
+        <h1 className="page-title">Analysis</h1>
+        <p className="page-subtitle">Trends, comparisons and player chemistry</p>
       </div>
 
       {/* View Mode Toggle */}
@@ -604,7 +705,7 @@ const GraphsScreen = () => {
             }}
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
-            📈 Profit
+            📈 Trends
           </button>
           <button 
             className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1021,104 +1122,92 @@ const GraphsScreen = () => {
         </div>
       )}
 
-      {/* 🔥 STREAKS & FORM */}
-      {viewMode === 'cumulative' && streakData.length > 0 && (
+      {/* 🤖 AI GRAPH INSIGHTS */}
+      {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin') && (
         <div className="card">
-          <h2 className="card-title mb-2">🔥 Streaks & Recent Form</h2>
-          <div style={{ 
-            fontSize: '0.7rem', 
-            color: 'var(--text-muted)',
-            textAlign: 'center',
-            marginBottom: '0.75rem' 
-          }}>
-            Current momentum and best streaks
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>🤖 תובנות AI</h2>
+            {role === 'admin' && !insightsLoading && filteredGames.length > 0 && (
+              <button
+                onClick={handleGenerateInsights}
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '0.3rem 0.7rem',
+                  borderRadius: '8px',
+                  background: 'var(--surface-hover)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {insightsText ? 'יצירה מחדש' : 'יצירת תובנות'}
+              </button>
+            )}
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {streakData.map(player => (
-              <div key={player.playerId} style={{ 
+
+          {insightsLoading && (
+            <div style={{
+              textAlign: 'center',
+              padding: '1.5rem',
+              color: 'var(--text-muted)',
+              fontSize: '0.8rem',
+            }}>
+              ⏳ יוצר תובנות AI לתקופה...
+            </div>
+          )}
+
+          {insightsError && (
+            <div style={{
+              padding: '0.6rem',
+              borderRadius: '6px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#EF4444',
+              fontSize: '0.75rem',
+              textAlign: 'center',
+            }}>
+              {insightsError}
+            </div>
+          )}
+
+          {insightsText && !insightsLoading && (
+            <>
+              <div style={{
+                direction: 'rtl',
+                textAlign: 'right',
+                fontSize: '0.85rem',
+                lineHeight: '1.7',
+                color: 'var(--text-primary)',
                 padding: '0.5rem',
                 background: 'var(--surface)',
                 borderRadius: '8px',
-                borderLeft: `3px solid ${player.color}`,
+                borderRight: '3px solid #8B5CF6',
               }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '0.4rem',
-                }}>
-                  <span style={{ fontWeight: '600', color: player.color, fontSize: '0.85rem' }}>
-                    {player.playerName}
-                  </span>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center',
-                    gap: '0.25rem',
-                  }}>
-                    {player.currentStreak !== 0 && (
-                      <span style={{ 
-                        padding: '0.15rem 0.4rem',
-                        borderRadius: '10px',
-                        fontSize: '0.7rem',
-                        fontWeight: '700',
-                        background: player.currentStreak > 0 
-                          ? 'rgba(16, 185, 129, 0.2)' 
-                          : 'rgba(239, 68, 68, 0.2)',
-                        color: player.currentStreak > 0 ? '#10B981' : '#EF4444',
-                      }}>
-                        {player.currentStreak > 0 ? '🔥' : '❄️'} {Math.abs(player.currentStreak)} game streak
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  {/* Last 5 games */}
-                  <div style={{ display: 'flex', gap: '0.2rem' }}>
-                    {player.last5.map((result, idx) => (
-                      <div key={idx} style={{ 
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.65rem',
-                        fontWeight: '700',
-                        background: result === 'W' ? '#10B981' : result === 'L' ? '#EF4444' : 'var(--border)',
-                        color: result === 'T' ? 'var(--text-muted)' : 'white',
-                      }}>
-                        {result}
-                      </div>
-                    ))}
-                    {player.last5.length === 0 && (
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>No games</span>
-                    )}
-                  </div>
-                  
-                  {/* Best streaks */}
-                  <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.65rem' }}>
-                    <span style={{ color: '#10B981' }}>
-                      Best: {player.bestWinStreak}W
-                    </span>
-                    <span style={{ color: '#EF4444' }}>
-                      Worst: {player.bestLossStreak}L
-                    </span>
-                  </div>
-                </div>
+                {insightsText}
               </div>
-            ))}
-          </div>
-          
-          <div style={{ 
-            fontSize: '0.6rem', 
-            color: 'var(--text-muted)',
-            textAlign: 'center',
-            marginTop: '0.5rem',
-          }}>
-            W = Win (profit &gt; 0) • L = Loss (profit &lt; 0) • T = Tie (break even)
-          </div>
+              {insightsGeneratedAt && (
+                <div style={{
+                  fontSize: '0.6rem',
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                  marginTop: '0.4rem',
+                }}>
+                  נוצר: {new Date(insightsGeneratedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
+            </>
+          )}
+
+          {!insightsText && !insightsLoading && !insightsError && role !== 'admin' && (
+            <div style={{
+              textAlign: 'center',
+              padding: '1rem',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+            }}>
+              אין תובנות AI לתקופה זו עדיין
+            </div>
+          )}
         </div>
       )}
 
@@ -1847,7 +1936,7 @@ const GraphsScreen = () => {
           {/* With/Without Table */}
           {impactData.length > 0 && (() => {
             const totalPeriodGames = filteredGames.length;
-            const minGamesThreshold = Math.max(3, Math.ceil(totalPeriodGames * 0.15));
+            const minGamesThreshold = Math.max(3, Math.min(10, Math.ceil(totalPeriodGames * 0.10)));
             const isLowConf = (r: typeof impactData[0]) => {
               const min = Math.min(r.withGames, r.withoutGames);
               return min < minGamesThreshold;
@@ -1864,11 +1953,30 @@ const GraphsScreen = () => {
               .filter(r => isLowConf(r))
               .sort((a, b) => confidenceScore(b) - confidenceScore(a));
 
+            const getImpactIcon = (row: typeof impactData[0], isLimited: boolean): string | null => {
+              if (isLimited) return null;
+              const minSide = Math.min(row.withGames, row.withoutGames);
+              const maxSide = Math.max(row.withGames, row.withoutGames);
+              const sampleBalance = minSide / maxSide;
+              if (sampleBalance < 0.08) return null;
+
+              const signFlip = (row.avgWith > 0 && row.avgWithout < 0) || (row.avgWith < 0 && row.avgWithout > 0);
+              const winRateDelta = row.winRateWith - row.winRateWithout;
+
+              if (signFlip && Math.abs(row.impact) >= 15) {
+                return row.impact > 0 ? '🍀' : '💀';
+              }
+              if (Math.abs(row.impact) >= 30 && Math.abs(winRateDelta) >= 10) {
+                return row.impact > 0 ? '🍀' : '💀';
+              }
+              return null;
+            };
+
             const renderRow = (row: typeof impactData[0], isLimited: boolean) => {
               const roundedImpact = Math.round(row.impact);
               const isZero = roundedImpact === 0;
               const impactColor = isZero ? 'var(--text-muted)' : row.impact > 0 ? '#10B981' : '#EF4444';
-              const impactIcon = row.impact >= 20 ? '🍀' : row.impact <= -20 ? '💀' : null;
+              const impactIcon = getImpactIcon(row, isLimited);
               const avgWithRounded = Math.round(row.avgWith);
               const avgWithoutRounded = Math.round(row.avgWithout);
               const avgWithColor = avgWithRounded === 0 ? 'var(--text-muted)' : avgWithRounded > 0 ? '#10B981' : '#EF4444';
@@ -2077,15 +2185,29 @@ const GraphsScreen = () => {
           {/* Chemistry Summary - derived from reliable impact data only */}
           {impactData.length > 0 && (() => {
             const totalPeriodGames = filteredGames.length;
-            const minGamesThreshold = Math.max(3, Math.ceil(totalPeriodGames * 0.15));
+            const minGamesThreshold = Math.max(3, Math.min(10, Math.ceil(totalPeriodGames * 0.10)));
             const reliableOnly = impactData.filter(r => {
               const min = Math.min(r.withGames, r.withoutGames);
               return min >= minGamesThreshold;
             });
-            const luckyCharms = reliableOnly.filter(r => r.impact > 0).slice(0, 3);
-            const kryptonite = reliableOnly.filter(r => r.impact < 0).slice(-3).reverse();
+
+            const isStrongChemistry = (r: typeof impactData[0]) => {
+              const minSide = Math.min(r.withGames, r.withoutGames);
+              const maxSide = Math.max(r.withGames, r.withoutGames);
+              const sampleBalance = minSide / maxSide;
+              if (sampleBalance < 0.08) return false;
+              const signFlip = (r.avgWith > 0 && r.avgWithout < 0) || (r.avgWith < 0 && r.avgWithout > 0);
+              const winRateDelta = Math.abs(r.winRateWith - r.winRateWithout);
+              return (signFlip && Math.abs(r.impact) >= 15) || (Math.abs(r.impact) >= 30 && winRateDelta >= 10);
+            };
+
+            const luckyCharms = reliableOnly
+              .filter(r => r.impact > 0 && isStrongChemistry(r))
+              .slice(0, 3);
+            const kryptonite = reliableOnly
+              .filter(r => r.impact < 0 && isStrongChemistry(r))
+              .slice(-3).reverse();
             const selectedName = getPlayerName(impactPlayerId);
-            if (luckyCharms.length === 0 && kryptonite.length === 0) return null;
             return (
               <div className="card">
                 <h2 className="card-title mb-2">🧪 {selectedName}'s Chemistry</h2>
@@ -2098,16 +2220,16 @@ const GraphsScreen = () => {
                   Based on balanced samples only ({minGamesThreshold}+ games on each side)
                 </div>
 
-                {luckyCharms.length > 0 && (
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <div style={{ 
-                      fontSize: '0.7rem', 
-                      fontWeight: '700', 
-                      color: '#10B981', 
-                      marginBottom: '0.4rem',
-                    }}>
-                      🍀 Lucky Charms
-                    </div>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '700', 
+                    color: '#10B981', 
+                    marginBottom: '0.4rem',
+                  }}>
+                    🍀 Lucky Charms
+                  </div>
+                  {luckyCharms.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {luckyCharms.map((row, idx) => (
                         <div key={idx} style={{
@@ -2131,19 +2253,31 @@ const GraphsScreen = () => {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {kryptonite.length > 0 && (
-                  <div>
-                    <div style={{ 
-                      fontSize: '0.7rem', 
-                      fontWeight: '700', 
-                      color: '#EF4444', 
-                      marginBottom: '0.4rem',
+                  ) : (
+                    <div style={{
+                      padding: '0.5rem',
+                      background: 'rgba(16, 185, 129, 0.05)',
+                      borderRadius: '6px',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-muted)',
+                      textAlign: 'center',
+                      fontStyle: 'italic',
                     }}>
-                      💀 Kryptonite
+                      No standout lucky charm — {selectedName} performs consistently regardless of company
                     </div>
+                  )}
+                </div>
+
+                <div>
+                  <div style={{ 
+                    fontSize: '0.7rem', 
+                    fontWeight: '700', 
+                    color: '#EF4444', 
+                    marginBottom: '0.4rem',
+                  }}>
+                    💀 Kryptonite
+                  </div>
+                  {kryptonite.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {kryptonite.map((row, idx) => (
                         <div key={idx} style={{
@@ -2167,8 +2301,20 @@ const GraphsScreen = () => {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div style={{
+                      padding: '0.5rem',
+                      background: 'rgba(239, 68, 68, 0.05)',
+                      borderRadius: '6px',
+                      fontSize: '0.7rem',
+                      color: 'var(--text-muted)',
+                      textAlign: 'center',
+                      fontStyle: 'italic',
+                    }}>
+                      No clear kryptonite — {selectedName} holds strong against everyone
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ 
                   fontSize: '0.55rem', 

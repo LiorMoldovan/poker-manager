@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.6.0';
+export const APP_VERSION = '5.7.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.7.0',
+    date: '2026-03-16',
+    changes: [
+      '📊 AI graph insights — trend analysis and narratives on the graphs screen',
+      '🤝 Combo history — track results for specific player group combinations',
+      '📱 Activity logger — session tracking with device info and screen visits',
+      '🎯 Unified surprise system — code-controlled, tighter thresholds, max 2 per forecast',
+      '📄 Forecast pages split to 4 players each for better readability',
+      '💬 H2H storylines rewritten with accurate profit-gap language',
+      '📋 Game summary collapsible sections and deep-link navigation',
+      '🔊 TTS only on game end, not when browsing history',
+    ]
+  },
   {
     version: '5.6.0',
     date: '2026-03-15',

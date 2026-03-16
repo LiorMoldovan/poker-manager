@@ -1229,3 +1229,44 @@ export const setAllChronicleProfiles = (data: Record<string, ChronicleEntry>): v
   localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
 };
 
+// ========== Graph Insights (AI-generated group narrative for Graphs page) ==========
+
+const GRAPH_INSIGHTS_KEY = 'poker_graph_insights';
+
+export interface GraphInsightsEntry {
+  text: string;
+  generatedAt: string;
+}
+
+export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null => {
+  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  if (!raw) return null;
+  try {
+    const all: Record<string, GraphInsightsEntry> = JSON.parse(raw);
+    return all[periodKey] || null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveGraphInsights = (periodKey: string, text: string): void => {
+  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const all: Record<string, GraphInsightsEntry> = raw ? JSON.parse(raw) : {};
+  all[periodKey] = { text, generatedAt: new Date().toISOString() };
+  localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
+};
+
+export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null => {
+  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): void => {
+  localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
+};
+

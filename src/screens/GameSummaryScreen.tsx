@@ -3,8 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
-import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
+import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers } from '../utils/geminiAI';
+import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import { speakHebrew } from '../utils/tts';
 import { usePermissions } from '../App';
 
@@ -46,9 +47,9 @@ const GameSummaryScreen = () => {
     autoAI?: boolean;
   } | null;
   const cameFromRecords = locationState?.from === 'records';
-  const cameFromIndividual = locationState?.from === 'individual';
+  const cameFromPlayers = locationState?.from === 'players';
   const cameFromTable = locationState?.from === 'statistics';
-  const cameFromStatistics = cameFromRecords || cameFromIndividual || cameFromTable;
+  const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const { role } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -70,15 +71,19 @@ const GameSummaryScreen = () => {
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
   const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: true, forecast: true, expenses: true, aiSummary: true, combo: true, standings: true });
+  const toggleSection = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
   const forecastCompareRef = useRef<HTMLDivElement>(null);
   const expenseSettlementsRef = useRef<HTMLDivElement>(null);
   const funStatsRef = useRef<HTMLDivElement>(null);
+  const comboHistoryRef = useRef<HTMLDivElement>(null);
   const standingsRef = useRef<HTMLDivElement>(null);
   const [standingsData, setStandingsData] = useState<PlayerStats[]>([]);
   const [standingsLabel, setStandingsLabel] = useState('');
+  const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
 
   const handleRegenerateAiSummary = () => {
     if (!gameId) return;
@@ -187,6 +192,11 @@ const GameSummaryScreen = () => {
       }
     }
     
+    // Compute combo history for this game's player set
+    const comboPlayerIds = gamePlayers.map(gp => gp.playerId);
+    const combo = getComboHistory(comboPlayerIds, gameId);
+    setComboHistory(combo);
+
     // Calculate highlights — prioritized, period-focused, always exactly 10
     type Highlight = { emoji: string; label: string; detail: string; priority: number };
     const bank: Highlight[] = [];
@@ -199,7 +209,7 @@ const GameSummaryScreen = () => {
     const periodMonth = actualGameDate.getMonth() + 1;
     const periodYear = actualGameDate.getFullYear();
     const periodStart = new Date(periodYear, periodMonth <= 6 ? 0 : 6, 1);
-    const periodLabel = periodMonth <= 6 ? `H1 ${periodYear}` : `H2 ${periodYear}`;
+    const periodLabel = formatHebrewHalf(periodMonth <= 6 ? 1 : 2, periodYear);
 
     // --- Tonight's game highlights ---
     const pLabel = periodLabel;
@@ -496,7 +506,7 @@ const GameSummaryScreen = () => {
     const gameYear = actualGameDate.getFullYear();
     const halfStart = new Date(gameYear, gameMonth <= 6 ? 0 : 6, 1);
     const halfEnd = new Date(gameYear, gameMonth <= 6 ? 6 : 12, 0, 23, 59, 59);
-    const halfLabel = gameMonth <= 6 ? `H1 ${gameYear}` : `H2 ${gameYear}`;
+    const halfLabel = formatHebrewHalf(gameMonth <= 6 ? 1 : 2, gameYear);
 
     const halfStats = getPlayerStats({ start: halfStart, end: halfEnd });
     const allPlayers = getAllPlayers();
@@ -642,6 +652,7 @@ const GameSummaryScreen = () => {
         gameNumberInPeriod: periodGameCount,
         location: game.location,
         periodMarkers: resolvedPeriodMarkers,
+        comboHistoryText: !combo.isFirstTime ? buildComboHistoryText(combo) : undefined,
       };
 
       setAiSummaryError(null);
@@ -678,8 +689,8 @@ const GameSummaryScreen = () => {
 
     setIsLoading(false);
 
-    // TTS game summary announcement
-    if (sortedPlayers.length >= 2) {
+    // TTS game summary announcement — only when arriving from game end, not when browsing history
+    if (sortedPlayers.length >= 2 && locationState?.from === 'chip-entry') {
       setTimeout(() => {
         const winner = sortedPlayers[0];
         const loser = sortedPlayers[sortedPlayers.length - 1];
@@ -860,6 +871,21 @@ const GameSummaryScreen = () => {
         files.push(new File([funStatsBlob], 'poker-highlights.png', { type: 'image/png' }));
       }
 
+      // Capture the Combo History section if it exists and has data
+      if (comboHistoryRef.current && comboHistory && !comboHistory.isFirstTime) {
+        const comboCanvas = await html2canvas(comboHistoryRef.current, {
+          backgroundColor: '#1a1a2e',
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+
+        const comboBlob = await new Promise<Blob>((resolve) => {
+          comboCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+        });
+        files.push(new File([comboBlob], 'poker-combo-history.png', { type: 'image/png' }));
+      }
+
       // Capture the Updated Standings table if it exists
       if (standingsRef.current && standingsData.length > 0) {
         const standingsCanvas = await html2canvas(standingsRef.current, {
@@ -935,7 +961,7 @@ const GameSummaryScreen = () => {
       </button>
 
       {/* Results Section - for screenshot */}
-      <div ref={summaryRef} style={{ padding: '1rem', background: '#1a1a2e' }}>
+      <div ref={summaryRef} style={{ padding: '0.75rem', background: '#1a1a2e' }}>
         <div className="page-header">
           <h1 className="page-title">🃏 Poker Night</h1>
           <p className="page-subtitle">
@@ -1012,59 +1038,54 @@ const GameSummaryScreen = () => {
             </div>
           )}
         </div>
-        
-        <div style={{ 
-          textAlign: 'center', 
-          marginTop: '1rem', 
-          fontSize: '0.75rem', 
-          color: 'var(--text-muted)',
-          opacity: 0.7
-        }}>
-          Poker Manager 🎲
-        </div>
       </div>
 
       {/* Settlements Section - for separate screenshot */}
       {settlements.length > 0 && (
-        <div ref={settlementsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
-          <div className="card">
-            <h2 className="card-title mb-2">💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
-            {settlements.map((s, index) => (
-              <div key={index} className="settlement-row">
-                <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                <span className="settlement-arrow">➜</span>
-                <span>{renderPlayerWithFoodIcon(s.to)}</span>
-                <span className="settlement-amount">{formatCurrency(s.amount)}</span>
-              </div>
-            ))}
-            {sharedExpenses.length > 0 && (
-              <div style={{ 
-                marginTop: '0.75rem', 
-                paddingTop: '0.5rem', 
-                borderTop: '1px solid rgba(255,255,255,0.1)',
-              }}>
-                {sharedExpenses.map((expense, idx) => (
-                  <div key={idx} style={{ 
-                    fontSize: '0.75rem', 
-                    color: 'var(--text-muted)',
-                    direction: 'rtl',
-                    marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
-                  }}>
-                    <div>
-                      <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - ₪{cleanNumber(expense.amount)}
+        <div ref={settlementsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button onClick={() => toggleSection('settlements')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.settlements ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
+            {!collapsedSections.settlements && (<>
+              {settlements.map((s, index) => (
+                <div key={index} className="settlement-row">
+                  <span>{renderPlayerWithFoodIcon(s.from)}</span>
+                  <span className="settlement-arrow">➜</span>
+                  <span>{renderPlayerWithFoodIcon(s.to)}</span>
+                  <span className="settlement-amount">{formatCurrency(s.amount)}</span>
+                </div>
+              ))}
+              {sharedExpenses.length > 0 && (
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  paddingTop: '0.5rem', 
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
+                }}>
+                  {sharedExpenses.map((expense, idx) => (
+                    <div key={idx} style={{ 
+                      fontSize: '0.75rem', 
+                      color: 'var(--text-muted)',
+                      direction: 'rtl',
+                      marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
+                    }}>
+                      <div>
+                        <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - ₪{cleanNumber(expense.amount)}
+                      </div>
+                      <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
+                        שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
+                        {' • '}
+                        אכלו: {expense.participantNames.join(', ')}
+                      </div>
                     </div>
-                    <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
-                      שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
-                      {' • '}
-                      אכלו: {expense.participantNames.join(', ')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </>)}
           </div>
 
-          {skippedTransfers.length > 0 && (
+          {!collapsedSections.settlements && skippedTransfers.length > 0 && (
             <div className="card">
               <h2 className="card-title mb-2">💡 Small Amounts</h2>
               <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
@@ -1080,16 +1101,6 @@ const GameSummaryScreen = () => {
               ))}
             </div>
           )}
-          
-          <div style={{ 
-            textAlign: 'center', 
-            marginTop: '1rem', 
-            fontSize: '0.75rem', 
-            color: 'var(--text-muted)',
-            opacity: 0.7
-          }}>
-            Poker Manager 🎲
-          </div>
         </div>
       )}
 
@@ -1097,8 +1108,12 @@ const GameSummaryScreen = () => {
       {forecasts.length > 0 && (
         <div ref={forecastCompareRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
-            <h2 className="card-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>🎯 Forecast vs Reality</h2>
+            <button onClick={() => toggleSection('forecast')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.forecast ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>🎯 Forecast vs Reality</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.forecast ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
             
+            {!collapsedSections.forecast && (<>
             {/* Legend - compact */}
             <div style={{ 
               marginBottom: '0.5rem',
@@ -1221,27 +1236,18 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
               minHeight: '2rem'
             }}>
-              {isLoadingComment && <span style={{ color: '#a855f7' }}>🤖 מסכם...</span>}
+              {isLoadingComment && <span style={{ color: '#a855f7' }}>🤖 Summarizing...</span>}
               {forecastComment && !isLoadingComment && <span>🤖 {forecastComment}</span>}
-              {!forecastComment && !isLoadingComment && <span style={{ color: 'var(--text-muted)' }}>🤖 אין סיכום זמין</span>}
+              {!forecastComment && !isLoadingComment && <span style={{ color: 'var(--text-muted)' }}>🤖 No summary available</span>}
             </div>
-          </div>
-          
-          <div style={{ 
-            textAlign: 'center', 
-            marginTop: '1rem', 
-            fontSize: '0.75rem', 
-            color: 'var(--text-muted)',
-            opacity: 0.7
-          }}>
-            Poker Manager 🎲
+            </>)}
           </div>
         </div>
       )}
 
       {/* Historical Forecast Section (collapsible, not included in screenshots) */}
       {forecasts.length > 0 && (preGameTeaser || forecasts.some(f => f.highlight || f.sentence)) && (
-        <div style={{ marginTop: '-1rem' }}>
+        <div style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button
               onClick={() => setShowHistoricalForecast(!showHistoricalForecast)}
@@ -1253,11 +1259,11 @@ const GameSummaryScreen = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '0.5rem',
+                padding: 0,
                 color: 'var(--text)',
               }}
             >
-              <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>🔮 תחזית טרום-משחק</span>
+              <h2 className="card-title" style={{ margin: 0 }}>🔮 Pre-Game Forecast</h2>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: showHistoricalForecast ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
 
@@ -1311,10 +1317,14 @@ const GameSummaryScreen = () => {
 
       {/* Shared Expenses Info - separate screenshot (for reference only, settlements are combined) */}
       {sharedExpenses.length > 0 && (
-        <div ref={expenseSettlementsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
-          <div className="card">
-            <h2 className="card-title mb-2">🍕 Shared Expenses</h2>
+        <div ref={expenseSettlementsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button onClick={() => toggleSection('expenses')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.expenses ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>🍕 Shared Expenses</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.expenses ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
             
+            {!collapsedSections.expenses && (<>
             {/* Expense Summary */}
             <div>
               {sharedExpenses.map(expense => (
@@ -1357,158 +1367,268 @@ const GameSummaryScreen = () => {
             }}>
               ✓ Included in settlements above (combined with poker)
             </div>
-          </div>
-          
-          <div style={{ 
-            textAlign: 'center', 
-            marginTop: '1rem', 
-            fontSize: '0.75rem', 
-            color: 'var(--text-muted)',
-            opacity: 0.7
-          }}>
-            Poker Manager 🎲
+            </>)}
           </div>
         </div>
       )}
 
       {/* Game Night Summary Section - for screenshot */}
       {(aiSummary || isLoadingAiSummary || funStats.length > 0) && (
-        <div ref={funStatsRef} style={{ padding: '1rem', background: '#1a1a2e', marginTop: '-1rem' }}>
-          <div className="card">
-            {aiSummary ? (
+        <div ref={funStatsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? '🎭 Game Night Summary' : '🎭 Game Highlights'}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (
+                  <span
+                    className="btn btn-sm"
+                    style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#A855F7', border: '1px solid rgba(168, 85, 247, 0.3)', fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                    onClick={(e) => { e.stopPropagation(); handleRegenerateAiSummary(); }}
+                  >
+                    🔄 Regenerate
+                  </span>
+                )}
+                {!collapsedSections.aiSummary && role === 'admin' && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
+                  <span
+                    className="btn btn-sm"
+                    style={{ background: 'linear-gradient(135deg, #A855F7, #EC4899)', color: 'white', fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
+                    onClick={(e) => { e.stopPropagation(); handleRegenerateAiSummary(); }}
+                  >
+                    ✨ Generate AI Summary
+                  </span>
+                )}
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              </div>
+            </button>
+            {!collapsedSections.aiSummary && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 className="card-title" style={{ margin: 0 }}>🎭 סיכום הערב</h2>
-                  {role === 'admin' && (
-                    <button
-                      className="btn btn-sm"
-                      style={{
-                        background: 'rgba(168, 85, 247, 0.15)',
-                        color: '#A855F7',
-                        border: '1px solid rgba(168, 85, 247, 0.3)',
-                        fontSize: '0.7rem',
-                        padding: '0.2rem 0.5rem',
-                      }}
-                      onClick={handleRegenerateAiSummary}
-                      disabled={isLoadingAiSummary}
-                    >
-                      🔄 צור מחדש
-                    </button>
-                  )}
-                </div>
-                <div style={{
-                  direction: 'rtl',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.8,
-                  color: 'var(--text)',
-                  padding: '0.75rem',
-                  background: 'rgba(168, 85, 247, 0.06)',
-                  borderRadius: '8px',
-                  borderRight: '3px solid var(--primary)',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                }}>
-                  {aiSummary.split('\n').filter(line => line.trim()).map((paragraph, i) => (
-                    <p key={i} style={{
-                      margin: i === 0 ? 0 : '0.75rem 0 0 0',
-                      textAlign: 'right',
-                    }}>
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              </>
-            ) : isLoadingAiSummary ? (
-              <>
-                <h2 className="card-title mb-2">🎭 סיכום הערב</h2>
-                <div style={{
-                  direction: 'rtl',
-                  textAlign: 'center',
-                  padding: '1.5rem',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.85rem',
-                }}>
-                  <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>✍️</div>
-                  הסיכום נכתב...
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h2 className="card-title" style={{ margin: 0 }}>🎭 הרגעים של הערב</h2>
-                  {role === 'admin' && getGeminiApiKey() && (
-                    <button
-                      className="btn btn-sm"
-                      style={{
-                        background: 'linear-gradient(135deg, #A855F7, #EC4899)',
-                        color: 'white',
-                        fontSize: '0.7rem',
-                        padding: '0.2rem 0.5rem',
-                      }}
-                      onClick={handleRegenerateAiSummary}
-                      disabled={isLoadingAiSummary}
-                    >
-                      ✨ צור סיכום AI
-                    </button>
-                  )}
-                </div>
-                {aiSummaryError && (
+                {aiSummary ? (
                   <div style={{
                     direction: 'rtl',
-                    padding: '0.6rem 0.75rem',
-                    marginBottom: '0.5rem',
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    fontSize: '0.85rem',
+                    lineHeight: 1.8,
+                    color: 'var(--text)',
+                    padding: '0.75rem',
+                    background: 'rgba(168, 85, 247, 0.06)',
                     borderRadius: '8px',
-                    fontSize: '0.8rem',
-                    color: '#f87171',
-                    textAlign: 'center',
+                    borderRight: '3px solid var(--primary)',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
                   }}>
-                    ⚠️ {aiSummaryError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {funStats.map((stat, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.5rem',
-                        padding: '0.4rem 0.5rem',
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '6px',
-                        direction: 'rtl',
-                      }}
-                    >
-                      <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
-                      <span style={{
-                        fontSize: '0.75rem',
-                        lineHeight: 1.5,
-                        color: 'var(--text)',
-                        flex: 1,
-                        minWidth: 0,
-                        wordBreak: 'break-word',
+                    {aiSummary.split('\n').filter(line => line.trim()).map((paragraph, i) => (
+                      <p key={i} style={{
+                        margin: i === 0 ? 0 : '0.75rem 0 0 0',
+                        textAlign: 'right',
                       }}>
-                        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
-                        {' — '}
-                        {stat.detail}
-                      </span>
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
+                ) : isLoadingAiSummary ? (
+                  <div style={{
+                    direction: 'rtl',
+                    textAlign: 'center',
+                    padding: '1.5rem',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.85rem',
+                  }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>✍️</div>
+                    Generating summary...
+                  </div>
+                ) : (
+                  <>
+                    {aiSummaryError && (
+                      <div style={{
+                        direction: 'rtl',
+                        padding: '0.6rem 0.75rem',
+                        marginBottom: '0.5rem',
+                        background: 'rgba(239, 68, 68, 0.12)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        color: '#f87171',
+                        textAlign: 'center',
+                      }}>
+                        ⚠️ {aiSummaryError}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {funStats.map((stat, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '0.5rem',
+                            padding: '0.4rem 0.5rem',
+                            background: 'rgba(255,255,255,0.03)',
+                            borderRadius: '6px',
+                            direction: 'rtl',
+                          }}
+                        >
+                          <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            lineHeight: 1.5,
+                            color: 'var(--text)',
+                            flex: 1,
+                            minWidth: 0,
+                            wordBreak: 'break-word',
+                          }}>
+                            <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{stat.label}</span>
+                            {' — '}
+                            {stat.detail}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </>
             )}
           </div>
+        </div>
+      )}
 
-          <div style={{
-            textAlign: 'center',
-            marginTop: '1rem',
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            opacity: 0.7
-          }}>
-            Poker Manager 🎲
+      {/* Combo History Section */}
+      {comboHistory && (
+        <div ref={comboHistoryRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button onClick={() => toggleSection('combo')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.combo ? 0 : '0.75rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>
+                {comboHistory.isFirstTime ? '🆕 New Combo' : '🔄 Returning Combo'}
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.combo ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
+
+            {!collapsedSections.combo && (comboHistory.isFirstTime ? (
+              <div style={{
+                direction: 'rtl',
+                textAlign: 'right',
+                fontSize: '0.85rem',
+                color: '#e2e8f0',
+                padding: '0.75rem',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(16, 185, 129, 0.06))',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+              }}>
+                זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה שיחקו יחד!
+              </div>
+            ) : (
+              <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                <div style={{
+                  fontSize: '0.85rem',
+                  color: '#fbbf24',
+                  marginBottom: '0.75rem',
+                  fontWeight: 600,
+                }}>
+                  אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo + 1} פעמים (כולל הערב)
+                </div>
+
+                {/* Previous games list */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.4rem',
+                  marginBottom: '0.75rem',
+                }}>
+                  {comboHistory.previousGames.map((game, i) => {
+                    const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return game.date; } })();
+                    return (
+                      <div key={i} style={{
+                        fontSize: '0.78rem',
+                        color: '#94a3b8',
+                        padding: '0.4rem 0.6rem',
+                        borderRadius: '8px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                      }}>
+                        <span style={{ color: '#64748b' }}>📅 {dateStr}</span>
+                        {' · '}
+                        <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
+                        {' · '}
+                        <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Player leaderboard for this combo */}
+                <div style={{
+                  fontSize: '0.75rem',
+                  marginBottom: '0.5rem',
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                }}>
+                  📊 דירוג שחקנים בהרכב הזה (כל המשחקים):
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {comboHistory.playerStats.map((ps, i) => {
+                    const isInProfit = ps.totalProfit > 0;
+                    const currentGamePlayer = players.find(p => p.playerName === ps.playerName);
+                    const tonightProfit = currentGamePlayer?.profit || 0;
+                    return (
+                      <div key={i} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.78rem',
+                        padding: '0.3rem 0.5rem',
+                        borderRadius: '6px',
+                        background: ps.alwaysWon ? 'rgba(34, 197, 94, 0.08)' : ps.alwaysLost ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                        borderRight: ps.alwaysWon ? '3px solid rgba(34, 197, 94, 0.5)' : ps.alwaysLost ? '3px solid rgba(239, 68, 68, 0.5)' : '3px solid transparent',
+                      }}>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                          {ps.wins}/{comboHistory.totalGamesWithCombo} ({Math.round(ps.winRate)}%)
+                          {ps.alwaysWon && ' ⭐'}
+                          {ps.alwaysLost && ' ⚠️'}
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{
+                            fontWeight: 600,
+                            color: isInProfit ? 'var(--success)' : 'var(--danger)',
+                            fontSize: '0.75rem',
+                          }}>
+                            {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
+                          </span>
+                          <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
+                            {i === 0 && '👑 '}{ps.playerName}
+                          </span>
+                          {tonightProfit !== 0 && (
+                            <span style={{
+                              fontSize: '0.65rem',
+                              color: tonightProfit > 0 ? '#4ade80' : '#f87171',
+                              opacity: 0.8,
+                            }}>
+                              (הערב: {tonightProfit >= 0 ? '+' : ''}{Math.round(tonightProfit)}₪)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Fun facts */}
+                <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
+                    <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
+                      🎲 מנצח שונה בכל משחק!
+                    </div>
+                  )}
+                  {comboHistory.repeatWinners.length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+                      👑 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}
+                    </div>
+                  )}
+                  {comboHistory.repeatLosers.length > 0 && (
+                    <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                      💀 סיימו אחרונים יותר מפעם: {comboHistory.repeatLosers.map(l => `${l.name} (${l.count}x)`).join(', ')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1517,9 +1637,11 @@ const GameSummaryScreen = () => {
       {standingsData.length > 0 && (
         <div ref={standingsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
-            <h2 className="card-title" style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>
-              🏆 טבלה מעודכנת — {standingsLabel}
-            </h2>
+            <button onClick={() => toggleSection('standings')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.standings ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>🏆 Updated Standings — {standingsLabel}</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
+            {!collapsedSections.standings && (<>
             <div style={{
               textAlign: 'center',
               fontSize: '0.65rem',
@@ -1532,7 +1654,7 @@ const GameSummaryScreen = () => {
               alignItems: 'center',
               gap: '0.75rem',
             }}>
-              <span>📊 שחקנים פעילים • כולל המשחק האחרון</span>
+              <span>📊 Active players • Including latest game</span>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1546,7 +1668,7 @@ const GameSummaryScreen = () => {
                   background: 'rgba(168, 85, 247, 0.25)',
                   border: '1px solid rgba(168, 85, 247, 0.5)',
                 }} />
-                שיחק הערב
+                Played tonight
               </span>
             </div>
             <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
@@ -1616,6 +1738,7 @@ const GameSummaryScreen = () => {
                 })}
               </tbody>
             </table>
+            </>)}
             <div style={{
               textAlign: 'center',
               marginTop: '0.5rem',
@@ -1639,7 +1762,7 @@ const GameSummaryScreen = () => {
           onClick={handleShare}
           disabled={isSharing || isLoadingAiSummary}
         >
-          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ ממתין לסיכום...' : '📤 Share'}
+          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ Waiting for summary...' : '📤 Share'}
         </button>
       </div>
     </div>

@@ -1,9 +1,10 @@
-import { useEffect, useState, createContext, useContext } from 'react';
+import { useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { initializeStorage, getStorageUsage, formatStorageSize, StorageUsage } from './database/storage';
 import { syncFromCloud, restoreTrainingFromGitHub } from './database/githubSync';
 import { PermissionRole } from './types';
 import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
+import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
 import NewGameScreen from './screens/NewGameScreen';
@@ -42,6 +43,19 @@ function App() {
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [storageWarningDismissed, setStorageWarningDismissed] = useState(false);
 
+  // Activity tracking
+  const screensVisitedRef = useRef<Set<string>>(new Set());
+  const sessionStartRef = useRef<number | null>(null);
+  const activityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isTrackingRef = useRef(false);
+
+  const pushSessionUpdate = useCallback((keepalive = false) => {
+    if (!isTrackingRef.current || !sessionStartRef.current) return;
+    const screens = Array.from(screensVisitedRef.current);
+    const duration = (Date.now() - sessionStartRef.current) / 60000;
+    updateSessionActivity(screens, duration, keepalive).catch(() => {});
+  }, []);
+
   useEffect(() => {
     initializeStorage();
     setIsInitialized(true);
@@ -51,6 +65,14 @@ function App() {
       setRole(savedRole);
     }
   }, []);
+
+  // Track screen visits for activity logging
+  useEffect(() => {
+    if (isTrackingRef.current) {
+      const screenName = getScreenName(location.pathname);
+      screensVisitedRef.current.add(screenName);
+    }
+  }, [location.pathname]);
 
   // Check storage usage on init and after navigation
   useEffect(() => {
@@ -97,10 +119,49 @@ function App() {
     if (userRole) {
       setRole(userRole);
       sessionStorage.setItem('poker_role', userRole);
+
+      // Start activity tracking for non-admin users
+      if (userRole !== 'admin') {
+        sessionStartRef.current = Date.now();
+        screensVisitedRef.current = new Set();
+        isTrackingRef.current = true;
+
+        logActivity(userRole).catch(() => {});
+
+        // Periodic session updates every 5 minutes
+        activityIntervalRef.current = setInterval(() => {
+          pushSessionUpdate();
+        }, 5 * 60 * 1000);
+
+        // Best-effort update when tab is hidden (user switches apps / closes tab)
+        // keepalive=true ensures the fetch completes even if the page is being destroyed
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'hidden') {
+            pushSessionUpdate(true);
+          }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        // Store cleanup reference
+        (window as any).__activityVisHandler = handleVisibilityChange;
+      }
     }
   };
 
   const handleSignOut = () => {
+    // Push final activity update before clearing session
+    if (isTrackingRef.current) {
+      pushSessionUpdate();
+      isTrackingRef.current = false;
+      resetSession();
+      if (activityIntervalRef.current) {
+        clearInterval(activityIntervalRef.current);
+        activityIntervalRef.current = null;
+      }
+      if ((window as any).__activityVisHandler) {
+        document.removeEventListener('visibilitychange', (window as any).__activityVisHandler);
+        delete (window as any).__activityVisHandler;
+      }
+    }
     setRole(null);
     sessionStorage.removeItem('poker_role');
   };

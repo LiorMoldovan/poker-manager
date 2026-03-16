@@ -1,4 +1,5 @@
 import { PlayerStats, MilestoneItem, MilestoneSentiment } from '../types';
+import { formatHebrewHalf } from './calculations';
 
 // ═══════════════════════════════════════════════════════════════════
 // COMMON PLAYER SHAPE — adapts both PlayerStats and PlayerForecastData
@@ -921,15 +922,15 @@ function generateSeason(
   }
 
   // Half year recovery
-  const halfName = ctx.currentHalf === 1 ? 'H1' : 'H2';
+  const halfName = formatHebrewHalf(ctx.currentHalf, ctx.currentYear);
   const halfRecovery = pStats
     .filter(p => p.halfProfit < 0 && p.halfProfit > -120 && p.halfGames >= 2)
     .sort((a, b) => b.halfProfit - a.halfProfit)[0];
   if (halfRecovery) {
     items.push({
       emoji: '🔄', category: 'season', sentiment: 'positive',
-      title: `חזרה לפלוס ${halfName}`,
-      description: `${halfRecovery.player.name} על ${fmt(halfRecovery.halfProfit)} ב-${halfName}. פער של ${Math.abs(Math.round(halfRecovery.halfProfit))}₪ לחצי שנה חיובי!`,
+      title: `חזרה לפלוס ב${halfName}`,
+      description: `${halfRecovery.player.name} על ${fmt(halfRecovery.halfProfit)} ב${halfName}. פער של ${Math.abs(Math.round(halfRecovery.halfProfit))}₪ לחצי שנה חיובי!`,
       priority: 66,
     });
   }

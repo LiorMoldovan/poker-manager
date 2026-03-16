@@ -3,14 +3,16 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
-import { formatCurrency, getProfitColor, cleanNumber } from '../utils/calculations';
+import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
 import { generatePlayerChronicle, ChroniclePlayerData } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import { syncToCloud } from '../database/githubSync';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
-type ViewMode = 'table' | 'records' | 'individual' | 'insights';
+type ViewMode = 'table' | 'records' | 'players';
+type PlayerSubTab = 'stats' | 'stories';
+type RecordsSubTab = 'global' | 'playerRecords';
 
 const StatisticsScreen = () => {
   const navigate = useNavigate();
@@ -34,6 +36,8 @@ const StatisticsScreen = () => {
   const [stats, setStats] = useState<PlayerStats[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const [playerSubTab, setPlayerSubTab] = useState<PlayerSubTab>('stats');
+  const [recordsSubTab, setRecordsSubTab] = useState<RecordsSubTab>('global');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
   const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
@@ -67,8 +71,10 @@ const StatisticsScreen = () => {
   const [isSharingPodium, setIsSharingPodium] = useState(false);
   const [isSharingHallOfFame, setIsSharingHallOfFame] = useState(false);
   const [isSharingRebuyStats, setIsSharingRebuyStats] = useState(false);
+  const [isSharingTop10, setIsSharingTop10] = useState(false);
   const tableRef = useRef<HTMLDivElement>(null);
   const top20Ref = useRef<HTMLDivElement>(null);
+  const top10Ref = useRef<HTMLDivElement>(null);
   const podiumRef = useRef<HTMLDivElement>(null);
   const hallOfFameRef = useRef<HTMLDivElement>(null);
   const rebuyStatsRef = useRef<HTMLDivElement>(null);
@@ -81,6 +87,8 @@ const StatisticsScreen = () => {
   const [isSharingChronicle, setIsSharingChronicle] = useState(false);
   const chronicleGenRef = useRef(false);
 
+  const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
   // Get formatted timeframe string for display
   const getTimeframeLabel = () => {
     if (timePeriod === 'all') return 'All Time';
@@ -91,6 +99,15 @@ const StatisticsScreen = () => {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
     }
+    return '';
+  };
+
+  const getHebrewTimeframeLabel = () => {
+    if (timePeriod === 'all') return 'כל הזמנים';
+    if (timePeriod === 'year') return `שנת ${selectedYear}`;
+    if (timePeriod === 'h1') return formatHebrewHalf(1, selectedYear);
+    if (timePeriod === 'h2') return formatHebrewHalf(2, selectedYear);
+    if (timePeriod === 'month') return `${HEBREW_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
     return '';
   };
 
@@ -201,6 +218,40 @@ const StatisticsScreen = () => {
     } catch (error) {
       console.error('Error sharing top 20:', error);
       setIsSharingTop20(false);
+    }
+  };
+
+  const handleShareTop10 = async () => {
+    if (!top10Ref.current) return;
+    setIsSharingTop10(true);
+    try {
+      const canvas = await html2canvas(top10Ref.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setIsSharingTop10(false); return; }
+        const file = new File([blob], 'poker-top10-wins.png', { type: 'image/png' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Top 10 Single Night Wins' });
+          } catch {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'poker-top10-wins.png'; a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'poker-top10-wins.png'; a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharingTop10(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error('Error sharing top 10:', error);
+      setIsSharingTop10(false);
     }
   };
 
@@ -355,30 +406,73 @@ const StatisticsScreen = () => {
     if (!chronicleRef.current) return;
     setIsSharingChronicle(true);
     try {
-      const canvas = await html2canvas(chronicleRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setIsSharingChronicle(false); return; }
-        const file = new File([blob], 'poker-chronicle.png', { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Poker Chronicle' });
-          } catch {
-            const url = URL.createObjectURL(blob);
+      const playerCards = chronicleRef.current.querySelectorAll<HTMLElement>('[data-chronicle-player]');
+      if (playerCards.length === 0) { setIsSharingChronicle(false); return; }
+
+      const PLAYERS_PER_PAGE = 3;
+      const chunks: HTMLElement[][] = [];
+      const allCards = Array.from(playerCards);
+      for (let i = 0; i < allCards.length; i += PLAYERS_PER_PAGE) {
+        chunks.push(allCards.slice(i, i + PLAYERS_PER_PAGE));
+      }
+
+      const titleLabel = getTimeframeLabel();
+      const files: File[] = [];
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci];
+        const pageNum = chunks.length > 1 ? ` (${ci + 1}/${chunks.length})` : '';
+
+        const container = document.createElement('div');
+        container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
+        container.innerHTML = `
+          <div style="text-align: center; margin-bottom: 1.25rem;">
+            <div style="font-size: 2rem; margin-bottom: 0.25rem;">📜</div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
+              הכרוניקה — ${titleLabel}${pageNum}
+            </h3>
+            <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
+          </div>
+          <div id="players-slot"></div>
+          <div style="text-align: center; margin-top: 1rem; font-size: 0.65rem; color: #94a3b8; opacity: 0.5;">Poker Manager 🎲</div>
+        `;
+
+        const slot = container.querySelector('#players-slot')!;
+        for (const card of chunk) {
+          const clone = card.cloneNode(true) as HTMLElement;
+          clone.style.marginBottom = '0.75rem';
+          slot.appendChild(clone);
+        }
+
+        document.body.appendChild(container);
+        const canvas = await html2canvas(container, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true });
+        document.body.removeChild(container);
+
+        const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0); });
+        const fileName = chunks.length > 1 ? `poker-chronicle-${ci + 1}.png` : 'poker-chronicle.png';
+        files.push(new File([blob], fileName, { type: 'image/png' }));
+      }
+
+      if (navigator.share && navigator.canShare({ files })) {
+        try {
+          await navigator.share({ files, title: 'Poker Chronicle' });
+        } catch {
+          for (const file of files) {
+            const url = URL.createObjectURL(file);
             const a = document.createElement('a');
-            a.href = url; a.download = 'poker-chronicle.png'; a.click();
+            a.href = url; a.download = file.name; a.click();
             URL.revokeObjectURL(url);
           }
-        } else {
-          const url = URL.createObjectURL(blob);
+        }
+      } else {
+        for (const file of files) {
+          const url = URL.createObjectURL(file);
           const a = document.createElement('a');
-          a.href = url; a.download = 'poker-chronicle.png'; a.click();
+          a.href = url; a.download = file.name; a.click();
           URL.revokeObjectURL(url);
         }
-        setIsSharingChronicle(false);
-      }, 'image/png');
+      }
+      setIsSharingChronicle(false);
     } catch (error) {
       console.error('Error sharing chronicle:', error);
       setIsSharingChronicle(false);
@@ -519,6 +613,50 @@ const StatisticsScreen = () => {
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
   }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]);
+
+  // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
+  const top20WinsAllTime = useMemo(() => {
+    const allGames = getAllGames().filter(g => g.status === 'completed');
+    const allGamePlayers = getAllGamePlayers();
+    
+    const validPlayerIds = new Set(
+      players.filter(p => selectedTypes.has(p.type)).map(p => p.id)
+    );
+    
+    const allResults: Array<{
+      playerName: string;
+      profit: number;
+      date: string;
+      gameId: string;
+      playersCount: number;
+    }> = [];
+    
+    for (const game of allGames) {
+      const gamePlayers = allGamePlayers.filter(gp => gp.gameId === game.id);
+      const playersCount = gamePlayers.length;
+      
+      for (const gp of gamePlayers) {
+        if (!validPlayerIds.has(gp.playerId)) continue;
+        
+        if (gp.profit > 0) {
+          const currentPlayer = players.find(p => p.id === gp.playerId);
+          const playerName = currentPlayer?.name || gp.playerName;
+          
+          allResults.push({
+            playerName,
+            profit: gp.profit,
+            date: game.date,
+            gameId: game.id,
+            playersCount
+          });
+        }
+      }
+    }
+    
+    return allResults
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 20);
+  }, [players, selectedTypes]);
 
   // Calculate podium data for H1, H2, and Yearly - INDEPENDENT of current filters
   const podiumData = useMemo(() => {
@@ -734,7 +872,7 @@ const StatisticsScreen = () => {
 
   // Scroll to selected player when coming back from individual game view
   useEffect(() => {
-    if (savedPlayerInfo && viewMode === 'individual' && stats.length > 0) {
+    if (savedPlayerInfo && viewMode === 'players' && stats.length > 0) {
       // Small delay to ensure the cards are rendered
       setTimeout(() => {
         const playerCard = document.getElementById(`player-card-${savedPlayerInfo.playerId}`);
@@ -913,7 +1051,7 @@ const StatisticsScreen = () => {
 
   // Load cached chronicle stories on period change; auto-generate for admin if new data
   useEffect(() => {
-    if (viewMode !== 'insights') return;
+    if (viewMode !== 'players' || playerSubTab !== 'stories') return;
     const periodKey = getChronicleKey();
     const cached = getChronicleProfiles(periodKey);
     if (cached) {
@@ -923,7 +1061,7 @@ const StatisticsScreen = () => {
     }
     setChronicleError(null);
     chronicleGenRef.current = false;
-  }, [viewMode, timePeriod, selectedYear, selectedMonth]);
+  }, [viewMode, playerSubTab, timePeriod, selectedYear, selectedMonth]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -1002,6 +1140,28 @@ const StatisticsScreen = () => {
       .filter(p => p.gamesPlayed > 0 && filteredStats.some(s => s.playerName === p.playerName))
       .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
   }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth]);
+
+  const rebuyDataCoverage = useMemo(() => {
+    const dateFilter = getDateFilter();
+    const allGames = getAllGames().filter(g => {
+      if (g.status !== 'completed') return false;
+      if (!dateFilter) return true;
+      const gameDate = new Date(g.date || g.createdAt);
+      if (dateFilter.start && gameDate < dateFilter.start) return false;
+      if (dateFilter.end && gameDate > dateFilter.end) return false;
+      return true;
+    });
+    const allGamePlayers = getAllGamePlayers();
+    const totalGames = allGames.length;
+    let gamesWithoutRebuys = 0;
+    for (const game of allGames) {
+      const players = allGamePlayers.filter(gp => gp.gameId === game.id);
+      if (players.length > 0 && players.every(p => p.rebuys <= 1)) {
+        gamesWithoutRebuys++;
+      }
+    }
+    return { totalGames, gamesWithoutRebuys };
+  }, [timePeriod, selectedYear, selectedMonth]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -1271,23 +1431,17 @@ const StatisticsScreen = () => {
             🏆 Records
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'individual' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('individual')}
+            className={`btn btn-sm ${viewMode === 'players' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('players')}
             style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
           >
             👤 Players
           </button>
-          <button 
-            className={`btn btn-sm ${viewMode === 'insights' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('insights')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
-          >
-            🎯 Insights
-          </button>
         </div>
       </div>
 
-      {/* Filters Card - Always visible */}
+      {/* Filters Card - hidden when Global Records sub-tab is active */}
+      {!(viewMode === 'records' && recordsSubTab === 'global') && (
       <div className="card" style={{ padding: '0.75rem' }}>
         {/* Active Players Filter - Toggle Switch */}
         <div style={{ 
@@ -1589,9 +1743,10 @@ const StatisticsScreen = () => {
               </>
             )}
           </div>
+      )}
 
-      {/* Empty state when no stats for selected period */}
-      {stats.length === 0 ? (
+      {/* Empty state when no stats for selected period (skip for Global Records) */}
+      {stats.length === 0 && !(viewMode === 'records' && recordsSubTab === 'global') ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-icon">📈</div>
@@ -1602,9 +1757,363 @@ const StatisticsScreen = () => {
       ) : (
         <>
           {/* RECORDS VIEW */}
-          {viewMode === 'records' && records && (
+          {viewMode === 'records' && (
             <>
-              {/* All-Time Notice */}
+              {/* Records Sub-Tab Toggle */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '0.25rem',
+                padding: '0.4rem',
+                background: 'var(--surface)',
+                borderRadius: '8px',
+                marginBottom: '0.5rem'
+              }}>
+                <button
+                  onClick={() => setRecordsSubTab('global')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: recordsSubTab === 'global' ? 'var(--primary)' : 'transparent',
+                    color: recordsSubTab === 'global' ? 'white' : 'var(--text-muted)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🏆 Global Records
+                </button>
+                <button
+                  onClick={() => setRecordsSubTab('playerRecords')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: recordsSubTab === 'playerRecords' ? 'var(--primary)' : 'transparent',
+                    color: recordsSubTab === 'playerRecords' ? 'white' : 'var(--text-muted)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  📊 Player Records
+                </button>
+              </div>
+
+              {/* GLOBAL RECORDS sub-tab */}
+              {recordsSubTab === 'global' && (
+                <>
+              {/* Season Podium - Independent of Filters */}
+              <div ref={podiumRef} className="card" style={{ padding: '0.75rem' }}>
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: '0.5rem', 
+                  marginBottom: '0.75rem',
+                  background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
+                  borderRadius: '6px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  color: '#fbbf24'
+                }}>
+                  🏆 Season Podium {podiumData.year}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ 
+                  flex: '1 1 30%', 
+                  minWidth: '140px',
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  borderRadius: '8px',
+                  padding: '0.5rem',
+                  border: '1px solid rgba(59, 130, 246, 0.2)'
+                }}>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '0.7rem', 
+                    fontWeight: '600', 
+                    color: '#3b82f6',
+                    marginBottom: '0.4rem',
+                    padding: '0.25rem',
+                    background: 'rgba(59, 130, 246, 0.15)',
+                    borderRadius: '4px'
+                  }}>
+                    H1 (Jan-Jun)
+                  </div>
+                  {podiumData.h1.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {podiumData.h1.map((player, idx) => (
+                        <div key={player.playerId} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.3rem 0.4rem',
+                          background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                     idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                     'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                          borderRadius: '4px',
+                          fontSize: '0.65rem'
+                        }}>
+                          <span style={{ fontSize: '0.9rem' }}>
+                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
+                          </span>
+                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {player.playerName}
+                          </span>
+                          <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                            {formatCurrency(player.profit)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                  )}
+                </div>
+                <div style={{ 
+                  flex: '1 1 30%', 
+                  minWidth: '140px',
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  borderRadius: '8px',
+                  padding: '0.5rem',
+                  border: '1px solid rgba(139, 92, 246, 0.2)'
+                }}>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '0.7rem', 
+                    fontWeight: '600', 
+                    color: '#8b5cf6',
+                    marginBottom: '0.4rem',
+                    padding: '0.25rem',
+                    background: 'rgba(139, 92, 246, 0.15)',
+                    borderRadius: '4px'
+                  }}>
+                    H2 (Jul-Dec)
+                  </div>
+                  {podiumData.h2.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {podiumData.h2.map((player, idx) => (
+                        <div key={player.playerId} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.3rem 0.4rem',
+                          background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                     idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                     'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                          borderRadius: '4px',
+                          fontSize: '0.65rem'
+                        }}>
+                          <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.playerName}</span>
+                          <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                  )}
+                </div>
+                <div style={{ 
+                  flex: '1 1 30%', 
+                  minWidth: '140px',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  borderRadius: '8px',
+                  padding: '0.5rem',
+                  border: '1px solid rgba(16, 185, 129, 0.2)'
+                }}>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '0.7rem', 
+                    fontWeight: '600', 
+                    color: 'var(--primary)',
+                    marginBottom: '0.4rem',
+                    padding: '0.25rem',
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    borderRadius: '4px'
+                  }}>
+                    Full Year
+                  </div>
+                  {podiumData.yearly.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {podiumData.yearly.map((player, idx) => (
+                        <div key={player.playerId} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.3rem 0.4rem',
+                          background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
+                                     idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
+                                     'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
+                          borderRadius: '4px',
+                          fontSize: '0.65rem'
+                        }}>
+                          <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.playerName}</span>
+                          <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                  )}
+                </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                <button
+                  onClick={handleSharePodium}
+                  disabled={isSharingPodium}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  {isSharingPodium ? '📸...' : '📤 שתף פודיום'}
+                </button>
+              </div>
+
+              {/* Hall of Fame - All Years Champions */}
+              {podiumData.history.length > 0 && (
+                <div ref={hallOfFameRef} className="card" style={{ padding: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '0.5rem', 
+                    marginBottom: '0.75rem',
+                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1))',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    color: '#a855f7'
+                  }}>
+                    🏅 Hall of Fame
+                  </div>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: '45px 1fr 1fr 1fr',
+                    gap: '0.25rem',
+                    marginBottom: '0.35rem',
+                    padding: '0.25rem 0.4rem',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderRadius: '4px',
+                    fontSize: '0.55rem',
+                    fontWeight: '600',
+                    color: 'var(--text-muted)',
+                    textAlign: 'center'
+                  }}>
+                    <div>Year</div>
+                    <div style={{ color: '#3b82f6' }}>H1</div>
+                    <div style={{ color: '#8b5cf6' }}>H2</div>
+                    <div style={{ color: 'var(--primary)' }}>Year</div>
+                  </div>
+                  {podiumData.history.map((yearData) => (
+                    <div 
+                      key={yearData.year}
+                      style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: '45px 1fr 1fr 1fr',
+                        gap: '0.25rem',
+                        padding: '0.4rem',
+                        marginBottom: '0.35rem',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        fontSize: '0.55rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.7rem', color: 'var(--text)' }}>{yearData.year}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h1Top3.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent', borderRadius: '4px' }}>
+                        {yearData.h1Top3.length > 0 ? yearData.h1Top3.map((player, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                          </div>
+                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.h2Top3.length > 0 ? 'rgba(139, 92, 246, 0.08)' : 'transparent', borderRadius: '4px' }}>
+                        {yearData.h2Top3.length > 0 ? yearData.h2Top3.map((player, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                          </div>
+                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', padding: '0.2rem', background: yearData.yearlyTop3.length > 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))' : 'transparent', borderRadius: '4px', border: yearData.yearlyTop3.length > 0 ? '1px solid rgba(251, 191, 36, 0.15)' : 'none' }}>
+                        {yearData.yearlyTop3.length > 0 ? yearData.yearlyTop3.map((player, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
+                            <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}</span>
+                            <span style={{ fontWeight: idx === 0 ? '700' : '400', color: idx === 0 ? '#fbbf24' : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
+                          </div>
+                        )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {podiumData.history.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareHallOfFame}
+                    disabled={isSharingHallOfFame}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingHallOfFame ? '📸...' : '📤 שתף היכל התהילה'}
+                  </button>
+                </div>
+              )}
+
+              {/* Top 20 Single Night Wins - ALL TIME */}
+              {top20WinsAllTime.length > 0 && (
+                <div ref={top20Ref} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                    🏆 Top 20 Single Night Wins
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>All Time</div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>Player</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>Profit</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {top20WinsAllTime.map((entry, idx) => (
+                        <tr 
+                          key={idx}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }}
+                          onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
+                        >
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500' }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {top20WinsAllTime.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <button
+                    onClick={handleShareTop20}
+                    disabled={isSharingTop20}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+                  >
+                    {isSharingTop20 ? '📸...' : '📤 שתף Top 20'}
+                  </button>
+                </div>
+              )}
+                </>
+              )}
+
+              {/* PLAYER RECORDS sub-tab */}
+              {recordsSubTab === 'playerRecords' && records && (
+                <>
               <div style={{ 
                 textAlign: 'center', 
                 padding: '0.5rem', 
@@ -1615,9 +2124,9 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                🏆 Records ({getTimeframeLabel()})
+                📊 Player Records ({getTimeframeLabel()})
               </div>
-              
+
               {/* Current Streaks */}
               <div className="card">
                 <h2 className="card-title mb-2">🔥 Current Streaks</h2>
@@ -1884,6 +2393,8 @@ const StatisticsScreen = () => {
                   )}
                 </div>
               </div>
+                </>
+              )}
             </>
           )}
 
@@ -1983,6 +2494,8 @@ const StatisticsScreen = () => {
                       >
                         <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px' }}>
                           {currentRank}
+                          {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
+                            sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                           {movement !== 0 && (
                             <span style={{ 
                               fontSize: '0.6rem', 
@@ -1995,8 +2508,6 @@ const StatisticsScreen = () => {
                       </td>
                         <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
                           {player.playerName}
-                          {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
-                            sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                       </td>
                         {tableMode === 'profit' ? (
                           <>
@@ -2058,28 +2569,28 @@ const StatisticsScreen = () => {
               {/* Rebuy Stats Table */}
               {rebuyStats.length > 0 && (
                 <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                  <div style={{ 
-                    textAlign: 'center', 
-                    fontSize: '0.85rem', 
-                    fontWeight: '600',
-                    color: 'var(--text)',
-                    marginBottom: '0.5rem',
-                    padding: '0.25rem',
-                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%)',
-                    borderRadius: '6px'
-                  }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
                     🎰 Rebuy Stats
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400', marginTop: '0.15rem' }}>
-                      {timePeriod === 'all' ? 'All Time' : 
-                       timePeriod === 'year' ? `${selectedYear}` :
-                       timePeriod === 'h1' ? `H1 ${selectedYear}` :
-                       timePeriod === 'h2' ? `H2 ${selectedYear}` :
-                       `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][selectedMonth - 1]} ${selectedYear}`}
-                    </div>
                   </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
+                  {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
+                    <div style={{
+                      fontSize: '0.65rem',
+                      color: '#f59e0b',
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                      borderRadius: '4px',
+                      padding: '0.3rem 0.5rem',
+                      marginBottom: '0.4rem',
+                      textAlign: 'center'
+                    }}>
+                      ⚠️ {rebuyDataCoverage.gamesWithoutRebuys} of {rebuyDataCoverage.totalGames} games have no rebuy data — averages may be lower than actual
+                    </div>
+                  )}
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
                         <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>Player</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Average buyins per game">Avg</th>
                         <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Total buyins">Total</th>
@@ -2095,6 +2606,9 @@ const StatisticsScreen = () => {
                             key={index}
                             style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
                           >
+                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
+                              {index + 1}
+                            </td>
                             <td style={{ 
                               padding: '0.3rem 0.2rem', 
                               whiteSpace: 'nowrap',
@@ -2160,576 +2674,118 @@ const StatisticsScreen = () => {
                 </div>
               )}
 
-              {/* Top 20 Single Night Wins */}
-              <div ref={top20Ref} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
-                <div style={{ 
-                  textAlign: 'center', 
-                  fontSize: '0.85rem', 
-                  fontWeight: '600',
-                  color: 'var(--text)',
-                  marginBottom: '0.5rem',
-                  padding: '0.25rem',
-                  background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%)',
-                  borderRadius: '6px'
-                }}>
-                  🏆 Top 20 Single Night Wins
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '400', marginTop: '0.15rem' }}>
-                    {timePeriod === 'all' ? 'All Time' : 
-                     timePeriod === 'year' ? `${selectedYear}` :
-                     timePeriod === 'h1' ? `H1 ${selectedYear}` :
-                     timePeriod === 'h2' ? `H2 ${selectedYear}` :
-                     `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][selectedMonth - 1]} ${selectedYear}`}
+              {/* Top 10 Single Night Wins - Filtered by period */}
+              {top20Wins.length > 0 && (
+                <div ref={top10Ref} className="card" style={{ padding: '0.5rem', marginTop: '0.5rem' }}>
+                  <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
+                    🏆 Top 10 Single Night Wins
                   </div>
-                </div>
-                <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ textAlign: 'center', padding: '0.25rem', width: '25px' }}>#</th>
-                      <th style={{ textAlign: 'left', padding: '0.25rem' }}>Player</th>
-                      <th style={{ textAlign: 'right', padding: '0.25rem' }}>Amount</th>
-                      <th style={{ textAlign: 'center', padding: '0.25rem' }}>👥</th>
-                      <th style={{ textAlign: 'right', padding: '0.25rem' }}>Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {top20Wins.map((record, index) => (
-                      <tr 
-                        key={`${record.gameId}-${record.playerName}`}
-                        onClick={() => navigate(`/game-summary/${record.gameId}`, {
-                          state: { from: 'statistics', viewMode: 'table' }
-                        })}
-                        style={{ 
-                          borderBottom: '1px solid rgba(255,255,255,0.03)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <td style={{ 
-                          textAlign: 'center', 
-                          padding: '0.3rem 0.25rem',
-                          color: index < 3 ? 'var(--warning)' : 'var(--text-muted)',
-                          fontWeight: index < 3 ? '700' : '400'
-                        }}>
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                        </td>
-                        <td style={{ padding: '0.3rem 0.25rem', whiteSpace: 'nowrap' }}>
-                          {record.playerName}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'right', 
-                          padding: '0.3rem 0.25rem',
-                          color: 'var(--success)',
-                          fontWeight: '600'
-                        }}>
-                          +{cleanNumber(record.profit)}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'center', 
-                          padding: '0.3rem 0.25rem',
-                          color: 'var(--text-muted)'
-                        }}>
-                          {record.playersCount}
-                        </td>
-                        <td style={{ 
-                          textAlign: 'right', 
-                          padding: '0.3rem 0.25rem',
-                          color: 'var(--text-muted)',
-                          fontSize: '0.65rem'
-                        }}>
-                          {new Date(record.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
-                <button
-                  onClick={handleShareTop20}
-                  disabled={isSharingTop20}
-                  style={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.3rem',
-                    fontSize: '0.75rem',
-                    padding: '0.4rem 0.8rem',
-                    background: 'var(--surface)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {isSharingTop20 ? '📸...' : '📤 שתף'}
-                </button>
-              </div>
-
-              {/* Season Podium - Independent of Filters */}
-              <div ref={podiumRef} className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '0.5rem', 
-                  marginBottom: '0.75rem',
-                  background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
-                  borderRadius: '6px',
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  color: '#fbbf24'
-                }}>
-                  🏆 Season Podium {podiumData.year}
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  {/* H1 Podium */}
-                  <div style={{ 
-                    flex: '1 1 30%', 
-                    minWidth: '140px',
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    border: '1px solid rgba(59, 130, 246, 0.2)'
-                  }}>
-                    <div style={{ 
-                      textAlign: 'center', 
-                      fontSize: '0.7rem', 
-                      fontWeight: '600', 
-                      color: '#3b82f6',
-                      marginBottom: '0.4rem',
-                      padding: '0.25rem',
-                      background: 'rgba(59, 130, 246, 0.15)',
-                      borderRadius: '4px'
-                    }}>
-                      H1 (Jan-Jun)
-                    </div>
-                    {podiumData.h1.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {podiumData.h1.map((player, idx) => (
-                          <div key={player.playerId} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            padding: '0.3rem 0.4rem',
-                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
-                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
-                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
-                            borderRadius: '4px',
-                            fontSize: '0.65rem'
-                          }}>
-                            <span style={{ fontSize: '0.9rem' }}>
-                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                            </span>
-                            <span style={{ 
-                              flex: 1, 
-                              fontWeight: '500',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {player.playerName}
-                            </span>
-                            <span style={{ 
-                              fontWeight: '600',
-                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                            }}>
-                              {formatCurrency(player.profit)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
-                        No data
-                      </div>
-                    )}
-                  </div>
-
-                  {/* H2 Podium */}
-                  <div style={{ 
-                    flex: '1 1 30%', 
-                    minWidth: '140px',
-                    background: 'rgba(139, 92, 246, 0.08)',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    border: '1px solid rgba(139, 92, 246, 0.2)'
-                  }}>
-                    <div style={{ 
-                      textAlign: 'center', 
-                      fontSize: '0.7rem', 
-                      fontWeight: '600', 
-                      color: '#8b5cf6',
-                      marginBottom: '0.4rem',
-                      padding: '0.25rem',
-                      background: 'rgba(139, 92, 246, 0.15)',
-                      borderRadius: '4px'
-                    }}>
-                      H2 (Jul-Dec)
-                    </div>
-                    {podiumData.h2.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {podiumData.h2.map((player, idx) => (
-                          <div key={player.playerId} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            padding: '0.3rem 0.4rem',
-                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
-                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
-                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
-                            borderRadius: '4px',
-                            fontSize: '0.65rem'
-                          }}>
-                            <span style={{ fontSize: '0.9rem' }}>
-                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                            </span>
-                            <span style={{ 
-                              flex: 1, 
-                              fontWeight: '500',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {player.playerName}
-                            </span>
-                            <span style={{ 
-                              fontWeight: '600',
-                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                            }}>
-                              {formatCurrency(player.profit)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
-                        No data
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Yearly Podium */}
-                  <div style={{ 
-                    flex: '1 1 30%', 
-                    minWidth: '140px',
-                    background: 'rgba(16, 185, 129, 0.08)',
-                    borderRadius: '8px',
-                    padding: '0.5rem',
-                    border: '1px solid rgba(16, 185, 129, 0.2)'
-                  }}>
-                    <div style={{ 
-                      textAlign: 'center', 
-                      fontSize: '0.7rem', 
-                      fontWeight: '600', 
-                      color: 'var(--primary)',
-                      marginBottom: '0.4rem',
-                      padding: '0.25rem',
-                      background: 'rgba(16, 185, 129, 0.15)',
-                      borderRadius: '4px'
-                    }}>
-                      Full Year
-                    </div>
-                    {podiumData.yearly.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        {podiumData.yearly.map((player, idx) => (
-                          <div key={player.playerId} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.35rem',
-                            padding: '0.3rem 0.4rem',
-                            background: idx === 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))' :
-                                       idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
-                                       'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
-                            borderRadius: '4px',
-                            fontSize: '0.65rem'
-                          }}>
-                            <span style={{ fontSize: '0.9rem' }}>
-                              {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                            </span>
-                            <span style={{ 
-                              flex: 1, 
-                              fontWeight: '500',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {player.playerName}
-                            </span>
-                            <span style={{ 
-                              fontWeight: '600',
-                              color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                            }}>
-                              {formatCurrency(player.profit)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
-                        No data
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Podium Share Button */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
-                <button
-                  onClick={handleSharePodium}
-                  disabled={isSharingPodium}
-                  style={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.3rem',
-                    fontSize: '0.75rem',
-                    padding: '0.4rem 0.8rem',
-                    background: 'var(--surface)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {isSharingPodium ? '📸...' : '📤 שתף פודיום'}
-                </button>
-              </div>
-
-              {/* Hall of Fame - All Years Champions */}
-              {podiumData.history.length > 0 && (
-                <div ref={hallOfFameRef} className="card" style={{ padding: '0.75rem', marginTop: '1rem' }}>
-                  <div style={{ 
-                    textAlign: 'center', 
-                    padding: '0.5rem', 
-                    marginBottom: '0.75rem',
-                    background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.1))',
-                    borderRadius: '6px',
-                    fontSize: '0.85rem',
-                    fontWeight: '600',
-                    color: '#a855f7'
-                  }}>
-                    🏅 Hall of Fame
-                  </div>
-
-                  {/* Table Header */}
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '45px 1fr 1fr 1fr',
-                    gap: '0.25rem',
-                    marginBottom: '0.35rem',
-                    padding: '0.25rem 0.4rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: '4px',
-                    fontSize: '0.55rem',
-                    fontWeight: '600',
-                    color: 'var(--text-muted)',
-                    textAlign: 'center'
-                  }}>
-                    <div>Year</div>
-                    <div style={{ color: '#3b82f6' }}>H1</div>
-                    <div style={{ color: '#8b5cf6' }}>H2</div>
-                    <div style={{ color: 'var(--primary)' }}>Year</div>
-                  </div>
-
-                  {/* Year Rows */}
-                  {podiumData.history.map((yearData) => (
-                    <div 
-                      key={yearData.year}
-                      style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: '45px 1fr 1fr 1fr',
-                        gap: '0.25rem',
-                        padding: '0.4rem',
-                        marginBottom: '0.35rem',
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
-                        fontSize: '0.55rem'
-                      }}
-                    >
-                      {/* Year */}
-                      <div style={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '700',
-                        fontSize: '0.7rem',
-                        color: 'var(--text)'
-                      }}>
-                        {yearData.year}
-                      </div>
-
-                      {/* H1 Top 3 */}
-                      <div style={{ 
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.15rem',
-                        padding: '0.2rem',
-                        background: yearData.h1Top3.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
-                        borderRadius: '4px'
-                      }}>
-                        {yearData.h1Top3.length > 0 ? (
-                          yearData.h1Top3.map((player, idx) => (
-                            <div key={idx} style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.2rem',
-                              justifyContent: 'center'
-                            }}>
-                              <span style={{ fontSize: '0.6rem' }}>
-                                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                              </span>
-                              <span style={{ 
-                                fontWeight: idx === 0 ? '600' : '400', 
-                                color: 'var(--text)',
-                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
-                              }}>
-                                {player.playerName}
-                              </span>
-                              <span style={{ 
-                                fontSize: '0.48rem',
-                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                              }}>
-                                {formatCurrency(player.profit)}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
-                        )}
-                      </div>
-
-                      {/* H2 Top 3 */}
-                      <div style={{ 
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.15rem',
-                        padding: '0.2rem',
-                        background: yearData.h2Top3.length > 0 ? 'rgba(139, 92, 246, 0.08)' : 'transparent',
-                        borderRadius: '4px'
-                      }}>
-                        {yearData.h2Top3.length > 0 ? (
-                          yearData.h2Top3.map((player, idx) => (
-                            <div key={idx} style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.2rem',
-                              justifyContent: 'center'
-                            }}>
-                              <span style={{ fontSize: '0.6rem' }}>
-                                {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
-                              </span>
-                              <span style={{ 
-                                fontWeight: idx === 0 ? '600' : '400', 
-                                color: 'var(--text)',
-                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
-                              }}>
-                                {player.playerName}
-                              </span>
-                              <span style={{ 
-                                fontSize: '0.48rem',
-                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                              }}>
-                                {formatCurrency(player.profit)}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
-                        )}
-                      </div>
-
-                      {/* Yearly Top 3 */}
-                      <div style={{ 
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.15rem',
-                        padding: '0.2rem',
-                        background: yearData.yearlyTop3.length > 0 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))' : 'transparent',
-                        borderRadius: '4px',
-                        border: yearData.yearlyTop3.length > 0 ? '1px solid rgba(251, 191, 36, 0.15)' : 'none'
-                      }}>
-                        {yearData.yearlyTop3.length > 0 ? (
-                          yearData.yearlyTop3.map((player, idx) => (
-                            <div key={idx} style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '0.2rem',
-                              justifyContent: 'center'
-                            }}>
-                              <span style={{ fontSize: '0.6rem' }}>
-                                {idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}
-                              </span>
-                              <span style={{ 
-                                fontWeight: idx === 0 ? '700' : '400', 
-                                color: idx === 0 ? '#fbbf24' : 'var(--text)',
-                                fontSize: idx === 0 ? '0.58rem' : '0.52rem'
-                              }}>
-                                {player.playerName}
-                              </span>
-                              <span style={{ 
-                                fontSize: '0.48rem',
-                                color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                              }}>
-                                {formatCurrency(player.profit)}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
+                  <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
+                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>Player</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>Profit</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {top20Wins.slice(0, 10).map((entry, idx) => (
+                        <tr 
+                          key={idx}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }}
+                          onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'table', timePeriod, selectedYear, selectedMonth } })}
+                        >
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500' }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
-
-              {/* Hall of Fame Share Button */}
-              {podiumData.history.length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '2rem' }}>
+              {top20Wins.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                   <button
-                    onClick={handleShareHallOfFame}
-                    disabled={isSharingHallOfFame}
-                    style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '0.3rem',
-                      fontSize: '0.75rem',
-                      padding: '0.4rem 0.8rem',
-                      background: 'var(--surface)',
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
+                    onClick={handleShareTop10}
+                    disabled={isSharingTop10}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingHallOfFame ? '📸...' : '📤 שתף היכל התהילה'}
+                    {isSharingTop10 ? '📸...' : '📤 שתף Top 10'}
                   </button>
                 </div>
               )}
             </>
           )}
 
-          {/* INDIVIDUAL VIEW */}
-          {viewMode === 'individual' && (
+          {/* PLAYERS VIEW */}
+          {viewMode === 'players' && (
             <>
-              {/* Timeframe Header */}
+              {/* Players Sub-Tab Toggle */}
               <div style={{ 
-                textAlign: 'center', 
-                padding: '0.5rem', 
-                marginBottom: '0.5rem',
-                background: 'rgba(16, 185, 129, 0.1)',
+                display: 'flex', 
+                gap: '0.25rem',
+                padding: '0.4rem',
+                background: 'var(--surface)',
                 borderRadius: '8px',
-                fontSize: '0.75rem',
-                color: 'var(--primary)',
-                fontWeight: '500'
+                marginBottom: '0.5rem'
               }}>
-                👤 Player Stats ({getTimeframeLabel()})
+                <button
+                  onClick={() => setPlayerSubTab('stats')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: playerSubTab === 'stats' ? 'var(--primary)' : 'transparent',
+                    color: playerSubTab === 'stats' ? 'white' : 'var(--text-muted)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  📊 Stats
+                </button>
+                <button
+                  onClick={() => setPlayerSubTab('stories')}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: playerSubTab === 'stories' ? 'var(--primary)' : 'transparent',
+                    color: playerSubTab === 'stories' ? 'white' : 'var(--text-muted)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🤖 AI Stories
+                </button>
               </div>
-            </>
-          )}
 
-          {viewMode === 'individual' && sortedStats.map((player, index) => (
+              {playerSubTab === 'stats' && (
+                <>
+                  {/* Timeframe Header - Stats sub-tab only */}
+                  <div style={{ 
+                    textAlign: 'center', 
+                    padding: '0.5rem', 
+                    marginBottom: '0.5rem',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    borderRadius: '8px',
+                    fontSize: '0.75rem',
+                    color: 'var(--primary)',
+                    fontWeight: '500'
+                  }}>
+                    👤 Player Stats ({getTimeframeLabel()})
+                  </div>
+
+                  {sortedStats.map((player, index) => (
             <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease' }}>
               <div className="card-header">
                 <h3 className="card-title">
@@ -2779,7 +2835,7 @@ const StatisticsScreen = () => {
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
-                            navigate(`/game-summary/${game.gameId}`, { state: { from: 'individual', viewMode: 'individual', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
+                            navigate(`/game-summary/${game.gameId}`, { state: { from: 'players', viewMode: 'players', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
                             window.scrollTo(0, 0);
                           }}
                         >
@@ -2933,19 +2989,18 @@ const StatisticsScreen = () => {
                   </div>
                 </div>
           ))}
+                </>
+              )}
 
-          </>
-      )}
-
-      {/* Insights View */}
-      {viewMode === 'insights' && (
-        <>
-          {/* Timeframe Header */}
-          <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-              🎯 Insights & Milestones - {getTimeframeLabel()}
-            </span>
-          </div>
+              {/* AI Stories sub-tab content */}
+              {playerSubTab === 'stories' && (
+                <>
+                  {/* Timeframe Header */}
+                  <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
+                      🤖 AI Stories — {getTimeframeLabel()}
+                    </span>
+                  </div>
 
           {/* Player Chronicle Section */}
           {(() => {
@@ -3070,7 +3125,7 @@ const StatisticsScreen = () => {
               })();
               const milestonePlayers = rankedByProfit.map(adaptPlayerStats);
               const milestoneOpts: MilestoneOptions = {
-                mode: 'period', periodLabel: getTimeframeLabel(), isHistorical, isLowData, overallRankMap, uniqueGamesInPeriod: totalPeriodGames,
+                mode: 'period', periodLabel: getHebrewTimeframeLabel(), isHistorical, isLowData, overallRankMap, uniqueGamesInPeriod: totalPeriodGames,
               };
               const items = generateMilestones(milestonePlayers, milestoneOpts);
               return items.map(m => `${m.emoji} ${m.title}: ${m.description}`);
@@ -3124,7 +3179,7 @@ const StatisticsScreen = () => {
 
                   const profiles = await generatePlayerChronicle({
                     players: payloadPlayers,
-                    periodLabel: getTimeframeLabel(),
+                    periodLabel: getHebrewTimeframeLabel(),
                     totalPeriodGames,
                     isEarlyPeriod: totalPeriodGames <= 3,
                     milestones: computeMilestoneStrings(),
@@ -3185,7 +3240,7 @@ const StatisticsScreen = () => {
 
                 const profiles = await generatePlayerChronicle({
                   players: payloadPlayers,
-                  periodLabel: getTimeframeLabel(),
+                  periodLabel: getHebrewTimeframeLabel(),
                   totalPeriodGames,
                   isEarlyPeriod: totalPeriodGames <= 3,
                   milestones: computeMilestoneStrings(),
@@ -3330,7 +3385,7 @@ const StatisticsScreen = () => {
                       const profitColor = player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)';
 
                       return (
-                        <div key={player.playerId} style={{
+                        <div key={player.playerId} data-chronicle-player style={{
                           padding: '0.85rem', background: 'var(--surface)',
                           borderRadius: '12px', direction: 'rtl',
                         }}>
@@ -3385,7 +3440,9 @@ const StatisticsScreen = () => {
               </button>
             </div>
           )}
-        </>
+                </>
+              )}
+            </>
       )}
 
       {/* Record Details Modal */}
@@ -3456,10 +3513,10 @@ const StatisticsScreen = () => {
                     setRecordDetails(null);
                     navigate(`/game-summary/${game.gameId}`, { 
                       state: { 
-                        from: viewMode === 'individual' ? 'individual' : 'records', 
+                        from: viewMode === 'players' ? 'players' : 'records', 
                         viewMode: viewMode,
                         recordInfo: savedRecordInfo,
-                        playerInfo: viewMode === 'individual' ? { playerId: recordDetails.playerId, playerName: recordDetails.playerName } : undefined,
+                        playerInfo: viewMode === 'players' ? { playerId: recordDetails.playerId, playerName: recordDetails.playerName } : undefined,
                         timePeriod,
                         selectedYear
                       } 
@@ -3628,6 +3685,8 @@ const StatisticsScreen = () => {
             )}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

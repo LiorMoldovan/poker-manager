@@ -228,6 +228,10 @@ export const formatCurrency = (amount: number): string => {
   return `${sign}₪${cleanNumber(Math.abs(amount))}`;
 };
 
+export const formatHebrewHalf = (half: number, year: number): string => {
+  return `חציון ${half === 1 ? 'ראשון' : 'שני'} ${year}`;
+};
+
 export const getProfitColor = (profit: number): string => {
   if (profit > 0) return 'profit';
   if (profit < 0) return 'loss';

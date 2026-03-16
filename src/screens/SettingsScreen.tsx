@@ -28,13 +28,15 @@ import {
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey } from '../utils/geminiAI';
+import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
+import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
-  const { role, hasPermission } = usePermissions();
+  const { role, hasPermission, signOut } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -71,6 +73,16 @@ const SettingsScreen = () => {
   const [geminiMessage, setGeminiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
 
+  // Activity log state
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+  const [deviceLabels, setDeviceLabels] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
+  });
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editLabelValue, setEditLabelValue] = useState('');
+
   // Permission checks
   const canEditSettings = hasPermission('settings:edit');
   const canEditChips = hasPermission('chips:edit');
@@ -88,16 +100,23 @@ const SettingsScreen = () => {
   };
 
   // Determine default tab based on permissions: players for admin/member, backup for viewer
-  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' => {
+  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' => {
     if (canAddPlayers) return 'players';  // Admin or Member
     return 'backup';  // Viewer
   };
   
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about'>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'>(getDefaultTab());
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-load activity log when tab is selected
+  useEffect(() => {
+    if (activeTab === 'activity' && role === 'admin' && activityLog.length === 0 && !activityLoading) {
+      loadActivityLog();
+    }
+  }, [activeTab]);
 
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
   const sortPlayersByType = (playerList: Player[]): Player[] => {
@@ -314,18 +333,82 @@ const SettingsScreen = () => {
     });
   };
 
+  const loadActivityLog = async () => {
+    setActivityLoading(true);
+    setActivityError(null);
+    try {
+      const entries = await fetchActivityLog();
+      setActivityLog(entries.reverse());
+    } catch (err) {
+      setActivityError(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  const handleClearActivityLog = async () => {
+    if (!window.confirm('Clear all activity log entries?')) return;
+    setActivityLoading(true);
+    try {
+      await clearActivityLog();
+      setActivityLog([]);
+    } catch (err) {
+      setActivityError(err instanceof Error ? err.message : 'Failed to clear');
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
+  const saveDeviceLabel = (deviceId: string, label: string) => {
+    const trimmed = label.trim();
+    const updated = { ...deviceLabels };
+    if (trimmed) {
+      updated[deviceId] = trimmed;
+    } else {
+      delete updated[deviceId];
+    }
+    setDeviceLabels(updated);
+    localStorage.setItem('poker_device_labels', JSON.stringify(updated));
+    setEditingDeviceId(null);
+    setEditLabelValue('');
+  };
+
+  const formatRelativeTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const entryDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today.getTime() - entryDay.getTime()) / 86400000);
+    const time = date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 0) return `Today ${time}`;
+    if (diffDays === 1) return `Yesterday ${time}`;
+    if (diffDays < 7) return `${diffDays} days ago ${time}`;
+    return `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} ${time}`;
+  };
+
+  const getRoleInfo = (r: string) => {
+    switch (r) {
+      case 'member': return { emoji: '⭐', name: 'Member', color: '#10B981' };
+      case 'memberSync': return { emoji: '🔄', name: 'Member+Sync', color: '#3B82F6' };
+      case 'viewer': return { emoji: '👁️', name: 'Viewer', color: '#94a3b8' };
+      default: return { emoji: '👤', name: r, color: '#94a3b8' };
+    }
+  };
+
   // Filter tabs based on permissions
   const allTabs = [
-    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const },
-    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const },
-    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const },
-    { id: 'backup', label: '📦 Backup & Restore', icon: '📦', requiresPermission: null },
-    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null },
+    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const, adminOnly: false },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, adminOnly: false },
+    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, adminOnly: false },
+    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, adminOnly: false },
+    { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, adminOnly: true },
+    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, adminOnly: false },
   ];
   
-  const tabs = allTabs.filter(tab => 
-    tab.requiresPermission === null || hasPermission(tab.requiresPermission)
-  ) as { id: 'players' | 'chips' | 'game' | 'backup' | 'about'; label: string; icon: string }[];
+  const tabs = allTabs.filter(tab => {
+    if (tab.adminOnly && role !== 'admin') return false;
+    return tab.requiresPermission === null || hasPermission(tab.requiresPermission);
+  }) as { id: 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'; label: string; icon: string }[];
 
   return (
     <div className="fade-in">
@@ -342,6 +425,16 @@ const SettingsScreen = () => {
             {getRoleEmoji(role)} {getRoleDisplayName(role)}
           </span>
         )}
+        <button
+          onClick={signOut}
+          style={{
+            background: 'none', border: 'none', color: 'var(--text-muted)',
+            fontSize: '0.85rem', cursor: 'pointer', padding: '0.25rem',
+          }}
+          title="Sign Out"
+        >
+          🔓
+        </button>
       </div>
 
       {/* Poker Training - Admin Only */}
@@ -1172,6 +1265,193 @@ const SettingsScreen = () => {
                 </ul>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Activity Tab - Admin Only */}
+      {activeTab === 'activity' && role === 'admin' && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">📊 Activity Log</h2>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                onClick={loadActivityLog}
+                disabled={activityLoading}
+                style={{
+                  fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
+                  background: 'var(--surface-hover)', color: 'var(--text-muted)',
+                  border: '1px solid var(--border)', cursor: 'pointer',
+                }}
+              >
+                {activityLoading ? '...' : '🔄 Refresh'}
+              </button>
+              {activityLog.length > 0 && (
+                <button
+                  onClick={handleClearActivityLog}
+                  disabled={activityLoading}
+                  style={{
+                    fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
+                    background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
+                    border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'pointer',
+                  }}
+                >
+                  🗑️ Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {activityError && (
+            <div style={{ padding: '0.5rem', color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+              {activityError}
+            </div>
+          )}
+
+          {activityLog.length === 0 && !activityLoading && !activityError && (
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📊</div>
+              {activityLog.length === 0 ? 'No activity recorded yet. Press Refresh to load.' : 'No entries'}
+            </div>
+          )}
+
+          {activityLoading && (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Loading activity log...
+            </div>
+          )}
+
+          {!activityLoading && activityLog.length > 0 && (() => {
+            // Group entries by day
+            const groups: Record<string, ActivityLogEntry[]> = {};
+            for (const entry of activityLog) {
+              const date = new Date(entry.timestamp);
+              const dayKey = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              if (!groups[dayKey]) groups[dayKey] = [];
+              groups[dayKey].push(entry);
+            }
+
+            return Object.entries(groups).map(([day, entries]) => (
+              <div key={day} style={{ marginTop: '0.75rem' }}>
+                <div style={{
+                  fontSize: '0.7rem', fontWeight: '600', color: 'var(--text-muted)',
+                  textTransform: 'uppercase', letterSpacing: '0.5px',
+                  paddingBottom: '0.3rem', borderBottom: '1px solid var(--border)',
+                  marginBottom: '0.4rem',
+                }}>
+                  {day}
+                </div>
+                {entries.map((entry, i) => {
+                  const roleInfo = getRoleInfo(entry.role);
+                  const label = deviceLabels[entry.deviceId];
+                  const isEditing = editingDeviceId === entry.deviceId;
+
+                  return (
+                    <div
+                      key={`${entry.timestamp}-${i}`}
+                      style={{
+                        padding: '0.6rem 0.5rem',
+                        borderRadius: '8px',
+                        background: 'var(--surface)',
+                        marginBottom: '0.35rem',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      {/* Top row: role + device/label + time */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                          <span style={{
+                            fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
+                            background: `${roleInfo.color}20`, color: roleInfo.color, fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {roleInfo.emoji} {roleInfo.name}
+                          </span>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', gap: '0.25rem', flex: 1 }}>
+                              <input
+                                type="text"
+                                value={editLabelValue}
+                                onChange={e => setEditLabelValue(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') saveDeviceLabel(entry.deviceId, editLabelValue);
+                                  if (e.key === 'Escape') setEditingDeviceId(null);
+                                }}
+                                placeholder="Player name..."
+                                autoFocus
+                                style={{
+                                  flex: 1, padding: '0.2rem 0.4rem', fontSize: '0.75rem',
+                                  borderRadius: '4px', border: '1px solid var(--primary)',
+                                  background: 'var(--background)', color: 'var(--text)',
+                                  outline: 'none', minWidth: '60px',
+                                }}
+                              />
+                              <button
+                                onClick={() => saveDeviceLabel(entry.deviceId, editLabelValue)}
+                                style={{
+                                  fontSize: '0.7rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
+                                  background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer',
+                                }}
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={() => setEditingDeviceId(null)}
+                                style={{
+                                  fontSize: '0.7rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
+                                  background: 'var(--surface-hover)', color: 'var(--text-muted)', border: 'none', cursor: 'pointer',
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingDeviceId(entry.deviceId); setEditLabelValue(label || ''); }}
+                              style={{
+                                fontWeight: label ? '600' : '400',
+                                color: label ? 'var(--text)' : 'var(--text-muted)',
+                                cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap', fontSize: '0.78rem',
+                                background: 'none', border: 'none', padding: 0,
+                                textAlign: 'left', minWidth: 0,
+                              }}
+                              title={`${entry.device} (${entry.screenSize}) — Click to label`}
+                            >
+                              {label || entry.device}
+                            </button>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
+                          {formatRelativeTime(entry.timestamp)}
+                        </span>
+                      </div>
+
+                      {/* Bottom row: duration + screens */}
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {entry.sessionDuration > 0 && (
+                          <span style={{
+                            fontSize: '0.65rem', padding: '0.1rem 0.35rem', borderRadius: '4px',
+                            background: 'rgba(99, 102, 241, 0.12)', color: '#818cf8', fontWeight: '500',
+                          }}>
+                            ⏱ {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)} min
+                          </span>
+                        )}
+                        {entry.screensVisited.length > 0 && (
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                            {entry.screensVisited.join(' → ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
+
+          <div style={{ marginTop: '0.75rem', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+            {activityLog.length > 0 && `${activityLog.length} entries (max 200)`}
           </div>
         </div>
       )}

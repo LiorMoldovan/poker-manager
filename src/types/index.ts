@@ -183,3 +183,14 @@ export interface MilestoneItem {
   sentiment: MilestoneSentiment;
 }
 
+export interface ActivityLogEntry {
+  deviceId: string;
+  role: PermissionRole;
+  timestamp: string;
+  device: string;
+  screenSize: string;
+  screensVisited: string[];
+  sessionDuration: number;
+  lastActive: string;
+}
+

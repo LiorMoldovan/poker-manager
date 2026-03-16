@@ -11,15 +11,16 @@
 
 import { Player, Game, GamePlayer } from '../types';
 import { getEmbeddedToken } from './embeddedToken';
-import { ChronicleEntry } from './storage';
+import { ChronicleEntry, GraphInsightsEntry } from './storage';
 
 // GitHub repository info
-const GITHUB_OWNER = 'LiorMoldovan';
-const GITHUB_REPO = 'poker-manager';
+export const GITHUB_OWNER = 'LiorMoldovan';
+export const GITHUB_REPO = 'poker-manager';
 const GITHUB_FILE_PATH = 'public/sync-data.json';
 const GITHUB_BACKUP_PATH = 'public/full-backup.json';  // Full backup file
 const GITHUB_TRAINING_PATH = 'public/training-data.json';  // Training progress (admin only)
-const GITHUB_BRANCH = 'main';
+export const GITHUB_ACTIVITY_PATH = 'public/activity-log.json';  // User activity log
+export const GITHUB_BRANCH = 'main';
 
 // Storage keys
 const GITHUB_TOKEN_KEY = 'poker_github_token';
@@ -33,6 +34,7 @@ export interface SyncData {
   lastUpdated: string;
   updatedBy: string;
   chronicleProfiles?: Record<string, ChronicleEntry>;
+  graphInsights?: Record<string, GraphInsightsEntry>;
 }
 
 // Get stored GitHub token
@@ -316,6 +318,10 @@ export const getLocalSyncData = (): SyncData => {
   const chronicleRaw = localStorage.getItem('poker_chronicle_profiles');
   const chronicleProfiles: Record<string, ChronicleEntry> | undefined = chronicleRaw ? JSON.parse(chronicleRaw) : undefined;
   
+  // Include AI-generated graph insights
+  const graphInsightsRaw = localStorage.getItem('poker_graph_insights');
+  const graphInsights: Record<string, GraphInsightsEntry> | undefined = graphInsightsRaw ? JSON.parse(graphInsightsRaw) : undefined;
+  
   console.log(`Sync data: ${completedGames.length} completed games (${allGames.length - completedGames.length} incomplete games excluded)`);
   
   return {
@@ -325,6 +331,7 @@ export const getLocalSyncData = (): SyncData => {
     lastUpdated: new Date().toISOString(),
     updatedBy: 'admin',
     chronicleProfiles,
+    graphInsights,
   };
 };
 
@@ -437,6 +444,11 @@ const replaceGamesWithRemote = (
   // Sync chronicle profiles from cloud (cloud is authoritative)
   if (remoteData.chronicleProfiles) {
     localStorage.setItem('poker_chronicle_profiles', JSON.stringify(remoteData.chronicleProfiles));
+  }
+  
+  // Sync graph insights from cloud (cloud is authoritative)
+  if (remoteData.graphInsights) {
+    localStorage.setItem('poker_graph_insights', JSON.stringify(remoteData.graphInsights));
   }
   
   return { gamesChanged, deletedGames, newPlayers, playersChanged };

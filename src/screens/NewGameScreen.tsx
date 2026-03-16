@@ -6,6 +6,7 @@ import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, 
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers } from '../utils/geminiAI';
+import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 
 import { PeriodMarkers } from '../types';
 
@@ -60,6 +61,7 @@ const NewGameScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [cachedForecasts, setCachedForecasts] = useState<ReturnType<typeof generateForecasts> | null>(null);
   const [aiForecasts, setAiForecasts] = useState<ForecastResult[] | null>(null);
+  const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
@@ -872,7 +874,7 @@ const NewGameScreen = () => {
     setIsSharing(true);
     
     try {
-      const PLAYERS_PER_PAGE = 5;
+      const PLAYERS_PER_PAGE = 4;
       const files: File[] = [];
       const isAI = !!aiForecasts;
       const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -886,8 +888,42 @@ const NewGameScreen = () => {
 
       const hasTeaser = isAI && aiForecasts?.[0]?.preGameTeaser;
 
+      // Build combo history HTML for screenshot
+      const buildComboScreenshotHtml = (): string => {
+        if (!comboHistory) return '';
+        if (comboHistory.isFirstTime) {
+          return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); text-align: right; direction: rtl; font-size: 0.85rem; color: #e2e8f0;">
+            <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboHistory.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
+          </div>`;
+        }
+        const gamesHtml = comboHistory.previousGames.slice(-3).map(game => {
+          const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+          return `<div style="padding: 0.2rem 0.4rem; border-radius: 6px; background: rgba(255,255,255,0.03); font-size: 0.78rem; color: #94a3b8;">📅 ${dateStr}: 👑 ${game.winnerName} (+${Math.round(game.winnerProfit)}₪) | 💀 ${game.loserName} (${Math.round(game.loserProfit)}₪)</div>`;
+        }).join('');
+        const top = comboHistory.playerStats[0];
+        const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
+        const alwaysWon = comboHistory.playerStats.filter(p => p.alwaysWon);
+        const alwaysLost = comboHistory.playerStats.filter(p => p.alwaysLost);
+        let patternsHtml = '';
+        if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${Math.round(p.winRate)}%)`).join(', ')}</div>`;
+        if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
+        if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הלילה?</div>`;
+        if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
+          <div style="font-size: 0.88rem; color: #e2e8f0; margin-bottom: 0.6rem;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong> פעם ${comboHistory.totalGamesWithCombo + 1} שאותם ${comboHistory.playerCount} שחקנים נפגשים</div>
+          <div style="display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.6rem;">${gamesHtml}</div>
+          <div style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.5rem;">
+            <div>👑 <span style="color: #fbbf24;">מוביל ההרכב:</span> ${top.playerName} (${top.totalProfit >= 0 ? '+' : ''}${Math.round(top.totalProfit)}₪ סה״כ, ממוצע ${top.avgProfit >= 0 ? '+' : ''}${Math.round(top.avgProfit)}₪)</div>
+            <div>📉 תחתית ההרכב: ${bottom.playerName} (${bottom.totalProfit >= 0 ? '+' : ''}${Math.round(bottom.totalProfit)}₪ סה״כ)</div>
+          </div>
+          ${patternsHtml}
+          <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.4rem;">💰 סה״כ עבר בהרכב: ₪${Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-${comboHistory.totalGamesWithCombo} משחקים</div>
+        </div>`;
+      };
+
       // Page 1: Teaser as its own dedicated card (if exists)
       if (hasTeaser) {
+        const comboHtml = buildComboScreenshotHtml();
         const teaserContainer = document.createElement('div');
         teaserContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 375px; padding: 1.25rem; background: #1a1a2e; border-radius: 12px; font-family: system-ui, -apple-system, sans-serif;';
         teaserContainer.innerHTML = `
@@ -904,6 +940,7 @@ const NewGameScreen = () => {
             </div>
             <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.8; font-weight: 400;">${aiForecasts![0].preGameTeaser}</div>
           </div>
+          ${comboHtml}
           <div style="text-align: center; margin-top: 1.25rem; font-size: 0.75rem; color: #64748b; opacity: 0.7;">Poker Manager 🎲</div>
         `;
         document.body.appendChild(teaserContainer);
@@ -1194,8 +1231,12 @@ const NewGameScreen = () => {
         setPeriodMarkers(finalMarkers);
 
         const loc = gameLocation === 'other' ? customLocation.trim() : gameLocation;
-        
-        const forecasts = await generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined);
+
+        const combo = getComboHistory(Array.from(selectedIds));
+        const comboText = buildComboHistoryText(combo);
+        setComboHistory(combo);
+
+        const forecasts = await generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined, comboText);
         setAiForecasts(forecasts);
         setIsLoadingAI(false);
         
@@ -1501,20 +1542,21 @@ const NewGameScreen = () => {
 
       {/* Location Selector */}
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>📍 מיקום:</span>
           {LOCATION_OPTIONS.map(loc => (
             <button
               key={loc}
               onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}
               style={{
-                padding: '0.25rem 0.4rem',
+                padding: '0.3rem 0.55rem',
                 borderRadius: '6px',
-                fontSize: '0.7rem',
+                fontSize: '0.72rem',
                 border: gameLocation === loc ? '2px solid var(--primary)' : '1px solid var(--border)',
                 background: gameLocation === loc ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
                 color: gameLocation === loc ? 'var(--primary)' : 'var(--text-muted)',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               {loc}
@@ -1523,13 +1565,14 @@ const NewGameScreen = () => {
           <button
             onClick={() => setGameLocation(gameLocation === 'other' ? '' : 'other')}
             style={{
-              padding: '0.25rem 0.4rem',
+              padding: '0.3rem 0.55rem',
               borderRadius: '6px',
-              fontSize: '0.7rem',
+              fontSize: '0.72rem',
               border: gameLocation === 'other' ? '2px solid var(--primary)' : '1px solid var(--border)',
               background: gameLocation === 'other' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
               color: gameLocation === 'other' ? 'var(--primary)' : 'var(--text-muted)',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
           >
             אחר
@@ -1555,14 +1598,14 @@ const NewGameScreen = () => {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
         {isAdmin && (
           <>
             <button 
               className="btn btn-secondary"
               onClick={handleShowForecast}
               disabled={selectedIds.size < 2}
-              style={{ padding: '0.6rem', flex: '1', fontSize: '0.8rem', minWidth: '0' }}
+              style={{ padding: '0.5rem 0.4rem', fontSize: '0.7rem', minWidth: '0', flex: '0 0 auto' }}
             >
               🔮 Forecast
             </button>
@@ -1572,14 +1615,15 @@ const NewGameScreen = () => {
               const activeOption = PERIOD_OPTIONS.find(o => o.value === activeValue) || PERIOD_OPTIONS[0];
               const isOverridden = periodOverride !== null && periodOverride !== autoValue;
               return (
-                <div style={{ position: 'relative', flex: '1', minWidth: '0' }}>
+                <div style={{ position: 'relative', flex: '1 1 0', minWidth: '0' }}>
                   <button
                     onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
                     style={{
                       width: '100%',
-                      padding: '0.6rem',
+                      height: '100%',
+                      padding: '0.5rem 0.35rem',
                       borderRadius: '8px',
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       fontWeight: 600,
                       background: activeValue === 'regular'
                         ? 'rgba(100, 116, 139, 0.15)'
@@ -1590,14 +1634,14 @@ const NewGameScreen = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '0.3rem',
+                      gap: '0.2rem',
                       whiteSpace: 'nowrap',
                       direction: 'rtl',
                     }}
                   >
-                    <span>{activeOption.label}</span>
-                    {isOverridden && <span style={{ fontSize: '0.55rem', opacity: 0.6 }}>(ידני)</span>}
-                    <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>▼</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeOption.label}</span>
+                    {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>(ידני)</span>}
+                    <span style={{ fontSize: '0.55rem', opacity: 0.5, flexShrink: 0 }}>▼</span>
                   </button>
                   {showPeriodDropdown && (
                     <>
@@ -1610,6 +1654,7 @@ const NewGameScreen = () => {
                         bottom: '100%',
                         left: 0,
                         right: 0,
+                        minWidth: '200px',
                         marginBottom: '4px',
                         background: 'var(--surface)',
                         border: '1px solid var(--border)',
@@ -1618,7 +1663,7 @@ const NewGameScreen = () => {
                         zIndex: 100,
                         overflow: 'hidden',
                       }}>
-                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', direction: 'rtl' }}>
+                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', direction: 'rtl', textAlign: 'right' }}>
                           זוהה אוטומטית: {PERIOD_OPTIONS.find(o => o.value === autoValue)?.label}
                         </div>
                         {PERIOD_OPTIONS.map(opt => (
@@ -1643,12 +1688,13 @@ const NewGameScreen = () => {
                               direction: 'rtl',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'space-between',
+                              justifyContent: 'flex-start',
+                              gap: '0.4rem',
                             }}
                           >
-                            <span>{opt.label}</span>
-                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>(אוטומטי)</span>}
-                            {activeValue === opt.value && <span style={{ fontSize: '0.7rem' }}>✓</span>}
+                            <span style={{ flex: 1, textAlign: 'right' }}>{opt.label}</span>
+                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', flexShrink: 0 }}>(אוטומטי)</span>}
+                            {activeValue === opt.value && <span style={{ fontSize: '0.7rem', flexShrink: 0 }}>✓</span>}
                           </button>
                         ))}
                       </div>
@@ -1663,7 +1709,7 @@ const NewGameScreen = () => {
           className="btn btn-primary"
           onClick={handleStartGame}
           disabled={selectedIds.size < 2}
-          style={{ padding: '0.6rem', flex: isAdmin ? '2' : '1', fontSize: '0.8rem' }}
+          style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
         >
           🎰 Start Game ({selectedIds.size})
         </button>
@@ -1866,6 +1912,88 @@ const NewGameScreen = () => {
                     <div style={{ fontSize: '0.92rem', color: '#e2e8f0', lineHeight: 1.7, fontWeight: 400 }}>
                       {aiForecasts[0].preGameTeaser}
                     </div>
+                  </div>
+                )}
+
+                {/* Combo History indicator */}
+                {comboHistory && (
+                  <div style={{
+                    padding: '0.85rem 1rem',
+                    marginBottom: '1.25rem',
+                    borderRadius: '12px',
+                    background: comboHistory.isFirstTime
+                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))'
+                      : 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08))',
+                    border: `1px solid ${comboHistory.isFirstTime ? 'rgba(34, 197, 94, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
+                    textAlign: 'right',
+                    direction: 'rtl',
+                  }}>
+                    {comboHistory.isFirstTime ? (
+                      <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
+                        <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
+                        <strong style={{ color: '#4ade80' }}>הרכב חדש!</strong> זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: '0.88rem', color: '#e2e8f0', marginBottom: '0.6rem' }}>
+                          <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
+                          <strong style={{ color: '#fbbf24' }}>הרכב חוזר!</strong> פעם {comboHistory.totalGamesWithCombo + 1} שאותם {comboHistory.playerCount} שחקנים נפגשים
+                        </div>
+
+                        {/* Previous games */}
+                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.6rem' }}>
+                          {comboHistory.previousGames.slice(-3).map((game, i) => {
+                            const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                            return (
+                              <div key={i} style={{ padding: '0.2rem 0.4rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)' }}>
+                                📅 {dateStr}: 👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪) | 💀 {game.loserName} ({Math.round(game.loserProfit)}₪)
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Combo leader + bottom */}
+                        {comboHistory.playerStats.length >= 2 && (
+                          <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <div>
+                              👑 <span style={{ color: '#fbbf24' }}>מוביל ההרכב:</span> {comboHistory.playerStats[0].playerName} ({comboHistory.playerStats[0].totalProfit >= 0 ? '+' : ''}{Math.round(comboHistory.playerStats[0].totalProfit)}₪ סה״כ, ממוצע {comboHistory.playerStats[0].avgProfit >= 0 ? '+' : ''}{Math.round(comboHistory.playerStats[0].avgProfit)}₪)
+                            </div>
+                            <div>
+                              📉 <span style={{ color: '#94a3b8' }}>תחתית ההרכב:</span> {comboHistory.playerStats[comboHistory.playerStats.length - 1].playerName} ({comboHistory.playerStats[comboHistory.playerStats.length - 1].totalProfit >= 0 ? '+' : ''}{Math.round(comboHistory.playerStats[comboHistory.playerStats.length - 1].totalProfit)}₪ סה״כ)
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Patterns */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
+                            <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
+                              ⭐ תמיד ברווח בהרכב: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${Math.round(p.winRate)}%)`).join(', ')}
+                            </div>
+                          )}
+                          {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
+                            <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                              ⚠️ תמיד בהפסד בהרכב: {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
+                            </div>
+                          )}
+                          {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2 && (
+                            <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
+                              🎲 מנצח שונה בכל משחק — מי הלילה?
+                            </div>
+                          )}
+                          {comboHistory.repeatWinners.length > 0 && (
+                            <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+                              🏆 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Total money moved */}
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.4rem' }}>
+                          💰 סה״כ עבר בהרכב: ₪{Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-{comboHistory.totalGamesWithCombo} משחקים (ממוצע ₪{Math.round(comboHistory.avgMoneyPerGame).toLocaleString()} למשחק)
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

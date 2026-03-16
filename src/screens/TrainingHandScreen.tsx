@@ -144,28 +144,21 @@ const TablePositionMap = ({ heroPosition, heroName, heroStack, opponents }: {
         סדר משחק ←
       </div>
       <div style={{
-        display: 'flex', gap: '0.35rem', overflowX: 'auto',
-        paddingBottom: '0.2rem',
+        display: 'flex', gap: '0.25rem',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
       }}>
         {allSeats.map((seat, i) => (
           <div key={i} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            minWidth: '54px', flex: '0 0 auto',
+            flex: '1 1 0',
+            minWidth: 0,
           }}>
-            {/* Arrow between seats */}
-            {i > 0 && (
-              <div style={{
-                position: 'absolute', left: '-0.3rem', top: '50%',
-                color: 'rgba(34, 197, 94, 0.3)', fontSize: '0.6rem',
-                transform: 'translateY(-50%)',
-              }}>
-              </div>
-            )}
             <div style={{
-              width: '42px', height: '42px',
+              width: '36px', height: '36px',
               borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.95rem',
+              fontSize: '0.85rem',
               background: seat.isHero
                 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3))'
                 : 'rgba(255,255,255,0.06)',
@@ -177,21 +170,22 @@ const TablePositionMap = ({ heroPosition, heroName, heroStack, opponents }: {
               {seat.isHero ? '👤' : '🎭'}
             </div>
             <div style={{
-              fontSize: '0.65rem', fontWeight: '700', marginTop: '0.2rem',
+              fontSize: '0.6rem', fontWeight: '700', marginTop: '0.2rem',
               color: seat.isHero ? '#a78bfa' : 'var(--text)',
-              maxWidth: '54px', overflow: 'hidden', textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap', textAlign: 'center',
+              textAlign: 'center',
+              wordBreak: 'break-word',
+              lineHeight: 1.2,
             }}>
               {seat.isHero ? 'אתה' : seat.name}
             </div>
             <div style={{
-              fontSize: '0.55rem', color: 'var(--text-muted)',
+              fontSize: '0.5rem', color: 'var(--text-muted)',
               textAlign: 'center', lineHeight: 1.2,
             }}>
               {positionLabels[seat.position] || seat.position}
             </div>
             <div style={{
-              fontSize: '0.55rem', color: 'rgba(245, 158, 11, 0.8)',
+              fontSize: '0.5rem', color: 'rgba(245, 158, 11, 0.8)',
               fontWeight: '600',
             }}>
               {seat.stack.toLocaleString()}

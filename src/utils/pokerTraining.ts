@@ -177,32 +177,32 @@ export const inferPlayerStyle = (stats: PlayerStats): PlayerProfile => {
   const isVolatile = Math.abs(biggestWin) + Math.abs(biggestLoss) > 400;
 
   if (isHighRebuyer && isWinner) {
-    style = 'loose-aggressive (LAG)';
-    description = `אגרסיבי שקונה הרבה אבל מרוויח. משחק הרבה ידיים ומהמר גדול. ממוצע ${avgRebuysPerGame.toFixed(1)} ריבאיים.`;
+    style = 'אגרסיבי';
+    description = `קונה הרבה אבל מרוויח. משחק הרבה ידיים ומהמר גדול. ממוצע ${avgRebuysPerGame.toFixed(1)} ריבאיים.`;
   } else if (isHighRebuyer && isLoser) {
-    style = 'loose-aggressive (מפסיד)';
-    description = `משחק הרבה ידיים ומהמר, אבל מפסיד לאורך זמן. נוטה ל-tilt אחרי ריבאי. ממוצע ${avgRebuysPerGame.toFixed(1)} ריבאיים.`;
+    style = 'פזיז';
+    description = `משחק הרבה ידיים ומהמר, אבל מפסיד לאורך זמן. ממוצע ${avgRebuysPerGame.toFixed(1)} ריבאיים.`;
   } else if (!isHighRebuyer && isWinner && isHighWinRate) {
-    style = 'tight-aggressive (TAG)';
-    description = `סולידי - מחכה לידיים טובות ומנצל. ${winPercentage.toFixed(0)}% נצחונות.`;
+    style = 'שמרני וחזק';
+    description = `מחכה לידיים טובות ומנצל. ${winPercentage.toFixed(0)}% נצחונות.`;
   } else if (!isHighRebuyer && isWinner && !isHighWinRate) {
-    style = 'selective aggressive';
+    style = 'סבלני';
     description = `מרוויח עם אחוז נצחונות בינוני - כשמנצח, מנצח גדול. ממוצע: +₪${avgProfit.toFixed(0)}.`;
   } else if (!isHighRebuyer && isLoser) {
-    style = 'tight-passive';
-    description = `שמרני, לא קונה הרבה אבל מתקשה להרוויח. ממוצע: ₪${avgProfit.toFixed(0)}.`;
+    style = 'שמרני';
+    description = `לא קונה הרבה אבל מתקשה להרוויח. ממוצע: ₪${avgProfit.toFixed(0)}.`;
   } else if (isVolatile) {
-    style = 'wild/unpredictable';
-    description = `תנודתי - נצחון עד +₪${Math.round(biggestWin)} או הפסד עד ₪${Math.round(Math.abs(biggestLoss))}. קשה לקרוא.`;
+    style = 'תנודתי';
+    description = `נצחון עד +₪${Math.round(biggestWin)} או הפסד עד ₪${Math.round(Math.abs(biggestLoss))}. קשה לקרוא.`;
   } else {
-    style = 'balanced';
-    description = `מאוזן עם ${gamesPlayed} משחקים. ממוצע: ${avgProfit >= 0 ? '+' : ''}₪${avgProfit.toFixed(0)}.`;
+    style = 'מאוזן';
+    description = `${gamesPlayed} משחקים. ממוצע: ${avgProfit >= 0 ? '+' : ''}₪${avgProfit.toFixed(0)}.`;
   }
 
   if (Math.abs(currentStreak) >= 3) {
     const streakText = currentStreak > 0
       ? `ברצף ${currentStreak} נצחונות - ביטחון גבוה`
-      : `ברצף ${Math.abs(currentStreak)} הפסדים - עלול להיות ב-tilt`;
+      : `ברצף ${Math.abs(currentStreak)} הפסדים - משחק רגשי`;
     description += ` ${streakText}.`;
   }
 
@@ -340,8 +340,7 @@ const getStyleSummary = (playerProfiles: PlayerProfile[]): string => {
   }
   const styleCounts: Record<string, number> = {};
   opponents.forEach(p => {
-    const baseStyle = p.style.split('(')[0].trim();
-    styleCounts[baseStyle] = (styleCounts[baseStyle] || 0) + 1;
+    styleCounts[p.style] = (styleCounts[p.style] || 0) + 1;
   });
   const styleLines = Object.entries(styleCounts)
     .sort((a, b) => b[1] - a[1])
@@ -367,7 +366,7 @@ const buildPrompt = (
   return `אתה בונה תרגיל פוקר למשחק ביתי. עברית פשוטה בלבד.
 
 מילים מותרות: קופה, בליינד, העלאה, קריאה, ויתור, צ'ק, בלוף, שלישייה, זוג, סדרה, צבע, אול-אין, פלופ, טרן, ריבר.
-**אסור** מונחים באנגלית: equity, EV, SPR, implied odds, range, c-bet, semi-bluff, value bet, OESD, gutshot, TPTK, LAG.
+**אסור** מונחים באנגלית: equity, EV, SPR, implied odds, range, c-bet, semi-bluff, value bet, OESD, gutshot, TPTK, LAG, TAG, loose, tight, wild, balanced, tilt.
 
 ${TABLE_DYNAMICS}
 ${styleSummary}
@@ -430,7 +429,7 @@ context: "ירדו K♥ 9♠ 4♦. כולם עושים צ'ק."
 
 - ב-opponents רשום **רק** שחקנים שמשתתפים ביד (שלא ויתרו).
 - אם 5 שחקנים ויתרו ורק 2 נשארו מול ${HERO_NAME}, opponents כולל רק את ה-2.
-- תאר כל יריב לפי סגנון: "שחקן אגרסיבי", "שחקן שמרני", "שחקן תנודתי". **בלי שמות אמיתיים**.
+- תאר כל יריב לפי סגנון פשוט: "שחקן אגרסיבי", "שחקן שמרני", "שחקן סבלני", "שחקן פזיז", "שחקן תנודתי", "שחקן מאוזן". **בלי שמות אמיתיים, בלי מונחים באנגלית**.
 - פעולות יריבים ב-context חייבות להתאים לסגנונם: שחקן אגרסיבי מעלה, שחקן שמרני קורא או מוותר.
 
 ## חוק מס' 6: המשכיות בין רחובות
@@ -461,8 +460,8 @@ context: "ירדו K♥ 9♠ 4♦. כולם עושים צ'ק."
     "yourStack": 12000,
     "potBefore": 150,
     "opponents": [
-      { "name": "שחקן אגרסיבי", "position": "CO", "style": "אגרסיבי, מהמר הרבה", "stack": 15000 },
-      { "name": "שחקן שמרני", "position": "BB", "style": "שמרני, קורא עם ידיים טובות", "stack": 10000 }
+      { "name": "שחקן אגרסיבי", "position": "CO", "style": "אגרסיבי", "stack": 15000 },
+      { "name": "שחקן שמרני", "position": "BB", "style": "שמרני", "stack": 10000 }
     ]
   },
   "streets": [

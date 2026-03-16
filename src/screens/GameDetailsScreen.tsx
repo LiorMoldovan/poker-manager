@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
+import { getComboHistory, ComboHistory } from '../utils/comboHistory';
 
 const GameDetailsScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -18,9 +19,9 @@ const GameDetailsScreen = () => {
     selectedYear?: number;
   } | null;
   const cameFromRecords = locationState?.from === 'records';
-  const cameFromIndividual = locationState?.from === 'individual';
+  const cameFromPlayers = locationState?.from === 'players';
   const cameFromTable = locationState?.from === 'statistics';
-  const cameFromStatistics = cameFromRecords || cameFromIndividual || cameFromTable;
+  const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const savedViewMode = locationState?.viewMode;
   const savedRecordInfo = locationState?.recordInfo;
   const savedPlayerInfo = locationState?.playerInfo;
@@ -36,6 +37,7 @@ const GameDetailsScreen = () => {
   const [gameNotFound, setGameNotFound] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
+  const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   // Calculate total chips for a player (same as GameSummaryScreen)
@@ -96,8 +98,14 @@ const GameDetailsScreen = () => {
     setChipGap(game.chipGap || null);
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
     
-    setPlayers(gamePlayers.sort((a, b) => b.profit - a.profit));
-    
+    const sortedPlayers = gamePlayers.sort((a, b) => b.profit - a.profit);
+    setPlayers(sortedPlayers);
+
+    // Compute combo history
+    const comboPlayerIds = gamePlayers.map(gp => gp.playerId);
+    const combo = getComboHistory(comboPlayerIds, gameId);
+    setComboHistory(combo);
+
     // Load shared expenses first
     const gameExpenses = game.sharedExpenses || [];
     if (gameExpenses.length > 0) {
@@ -435,6 +443,129 @@ const GameDetailsScreen = () => {
           </div>
         )}
         
+        {/* Combo History Section */}
+        {comboHistory && !comboHistory.isFirstTime && (
+          <div className="card">
+            <h2 className="card-title" style={{ marginBottom: '0.75rem' }}>
+              🔄 הרכב חוזר
+            </h2>
+            <div style={{ direction: 'rtl', textAlign: 'right' }}>
+              <div style={{
+                fontSize: '0.85rem',
+                color: '#fbbf24',
+                marginBottom: '0.75rem',
+                fontWeight: 600,
+              }}>
+                אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo + 1} פעמים (כולל הערב)
+              </div>
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.4rem',
+                marginBottom: '0.75rem',
+              }}>
+                {comboHistory.previousGames.map((game, i) => {
+                  const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return game.date; } })();
+                  return (
+                    <div key={i} style={{
+                      fontSize: '0.78rem',
+                      color: '#94a3b8',
+                      padding: '0.4rem 0.6rem',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                    }}>
+                      <span style={{ color: '#64748b' }}>📅 {dateStr}</span>
+                      {' · '}
+                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
+                      {' · '}
+                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{
+                fontSize: '0.75rem',
+                marginBottom: '0.5rem',
+                color: '#94a3b8',
+                fontWeight: 600,
+              }}>
+                📊 דירוג שחקנים בהרכב הזה:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {comboHistory.playerStats.map((ps, i) => {
+                  const isInProfit = ps.totalProfit > 0;
+                  const currentGamePlayer = players.find(p => p.playerName === ps.playerName);
+                  const tonightProfit = currentGamePlayer?.profit || 0;
+                  return (
+                    <div key={i} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '0.78rem',
+                      padding: '0.3rem 0.5rem',
+                      borderRadius: '6px',
+                      background: ps.alwaysWon ? 'rgba(34, 197, 94, 0.08)' : ps.alwaysLost ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                      borderRight: ps.alwaysWon ? '3px solid rgba(34, 197, 94, 0.5)' : ps.alwaysLost ? '3px solid rgba(239, 68, 68, 0.5)' : '3px solid transparent',
+                    }}>
+                      <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                        {ps.wins}/{comboHistory.totalGamesWithCombo} ({Math.round(ps.winRate)}%)
+                        {ps.alwaysWon && ' ⭐'}
+                        {ps.alwaysLost && ' ⚠️'}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          fontWeight: 600,
+                          color: isInProfit ? 'var(--success)' : 'var(--danger)',
+                          fontSize: '0.75rem',
+                        }}>
+                          {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
+                        </span>
+                        <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
+                          {i === 0 && '👑 '}{ps.playerName}
+                        </span>
+                        {tonightProfit !== 0 && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            color: tonightProfit > 0 ? '#4ade80' : '#f87171',
+                            opacity: 0.8,
+                          }}>
+                            (הערב: {tonightProfit >= 0 ? '+' : ''}{Math.round(tonightProfit)}₪)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2 && (
+                  <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
+                    🎲 מנצח שונה בכל משחק!
+                  </div>
+                )}
+                {comboHistory.repeatWinners.length > 0 && (
+                  <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+                    👑 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}
+                  </div>
+                )}
+                {comboHistory.repeatLosers.length > 0 && (
+                  <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                    💀 סיימו אחרונים יותר מפעם: {comboHistory.repeatLosers.map(l => `${l.name} (${l.count}x)`).join(', ')}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.4rem' }}>
+                💰 סה״כ עבר בהרכב: ₪{Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-{comboHistory.totalGamesWithCombo} משחקים
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ 
           textAlign: 'center', 
           marginTop: '1rem', 
