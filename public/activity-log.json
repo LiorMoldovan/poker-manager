@@ -8,5 +8,15 @@
     "screensVisited": [],
     "sessionDuration": 0,
     "lastActive": "2026-03-16T09:52:54.025Z"
+  },
+  {
+    "deviceId": "17ef62c7-8066-4f5f-8694-ca519c82bb21",
+    "role": "viewer",
+    "timestamp": "2026-03-16T10:01:16.312Z",
+    "device": "Windows PC / Windows 10/11 / Chrome",
+    "screenSize": "1920x1080",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-03-16T10:01:16.313Z"
   }
 ]
