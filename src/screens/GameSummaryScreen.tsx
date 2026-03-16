@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
-import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers } from '../utils/geminiAI';
+import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import { speakHebrew } from '../utils/tts';
 import { usePermissions } from '../App';
@@ -637,6 +637,27 @@ const GameSummaryScreen = () => {
         } catch { return undefined; }
       })();
 
+      // Build location insights for the summary (only if genuinely interesting)
+      const summaryLocInsights = (() => {
+        if (!game.location) return undefined;
+        const allGp = getAllGamePlayers();
+        const allGm = getAllGames().filter(g => g.status === 'completed');
+        const tonightNames = sortedPlayers.map(p => p.playerName);
+        const playerHistories = tonightNames.map(name => {
+          const playerGames = allGp.filter(gp => gp.playerName === name);
+          return {
+            name,
+            avgProfit: (() => { const pg = playerGames; if (pg.length === 0) return 0; return pg.reduce((s, g) => s + g.profit, 0) / pg.length; })(),
+            gameHistory: playerGames.map(gp => {
+              const gm = allGm.find(g => g.id === gp.gameId);
+              return { profit: gp.profit, date: gm?.date || gm?.createdAt || '', location: gm?.location };
+            }),
+          };
+        });
+        const allGamesWithLoc = allGm.map(g => ({ location: g.location, date: g.date || g.createdAt }));
+        return buildLocationInsights(playerHistories, game.location, allGamesWithLoc) || undefined;
+      })();
+
       const summaryPayload: GameNightSummaryPayload = {
         tonight: aiTonightResults,
         totalRebuys: totalRebuysTonight,
@@ -651,6 +672,7 @@ const GameSummaryScreen = () => {
         rankingShifts: aiRankingShifts,
         gameNumberInPeriod: periodGameCount,
         location: game.location,
+        locationInsights: summaryLocInsights,
         periodMarkers: resolvedPeriodMarkers,
         comboHistoryText: !combo.isFirstTime ? buildComboHistoryText(combo) : undefined,
       };

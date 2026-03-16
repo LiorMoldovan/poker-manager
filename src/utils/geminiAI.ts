@@ -149,6 +149,53 @@ export interface GlobalRankingContext {
 
 
 /**
+ * Analyze location data and return insights only when genuinely interesting.
+ * Returns an empty string if location is absent, insufficient data, or nothing notable.
+ */
+export const buildLocationInsights = (
+  players: { name: string; gameHistory: { profit: number; date: string; location?: string }[]; avgProfit: number }[],
+  location?: string,
+  allGamesWithLocations?: { location?: string; date: string }[]
+): string => {
+  if (!location) return '';
+
+  const insights: string[] = [];
+
+  // Per-player: compare performance at this location vs overall (need >= 3 games)
+  for (const p of players) {
+    const gamesHere = p.gameHistory.filter(g => g.location === location);
+    if (gamesHere.length < 3) continue;
+    const avgHere = Math.round(gamesHere.reduce((s, g) => s + g.profit, 0) / gamesHere.length);
+    const overallAvg = Math.round(p.avgProfit);
+    const diff = avgHere - overallAvg;
+    if (Math.abs(diff) >= 20) {
+      const tag = diff > 0 ? 'קמע' : 'מקולל';
+      insights.push(`${p.name} ${tag} אצל ${location}: ממוצע ${avgHere >= 0 ? '+' : ''}${avgHere}₪ ב-${gamesHere.length} משחקים (לעומת ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪ כלל)`);
+    }
+  }
+
+  // Group-level: haven't played here in a while?
+  if (allGamesWithLocations) {
+    const gamesAtLoc = allGamesWithLocations
+      .filter(g => g.location === location)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (gamesAtLoc.length > 0) {
+      const lastDate = new Date(gamesAtLoc[0].date);
+      const daysSince = Math.round((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince > 30) {
+        insights.push(`חזרה אצל ${location} אחרי ${daysSince} יום! פעם אחרונה: ${lastDate.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })}`);
+      }
+    } else {
+      insights.push(`פעם ראשונה שהקבוצה משחקת אצל ${location}!`);
+    }
+
+  }
+
+  if (insights.length === 0) return '';
+  return `🏠 תובנות מיקום (אצל ${location}):\n${insights.join('\n')}`;
+};
+
+/**
  * Generate AI-powered forecasts for selected players only
  */
 export const generateAIForecasts = async (
@@ -497,21 +544,17 @@ export const generateAIForecasts = async (
     }
   }
 
-  // === STORYLINE TYPE 11: Host effect ===
-  if (location) {
-    for (const p of players) {
-      const gamesAtLocation = p.gameHistory.filter(g => g.location === location);
-      if (gamesAtLocation.length >= 3) {
-        const avgAtLoc = Math.round(gamesAtLocation.reduce((s, g) => s + g.profit, 0) / gamesAtLocation.length);
-        const overallAvg = Math.round(p.avgProfit);
-        const diff = avgAtLoc - overallAvg;
-        if (Math.abs(diff) >= 20) {
-          const sentiment = diff > 0 ? 'קמע' : 'מקולל';
-          storylines.push(`🏠 אפקט מיקום: ${p.name} ${sentiment} אצל ${location} — ממוצע ${avgAtLoc >= 0 ? '+' : ''}${avgAtLoc}₪ ב-${gamesAtLocation.length} משחקים (לעומת ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪ כלל)`);
-        }
+  // === STORYLINE TYPE 11: Location insights (only when genuinely interesting) ===
+  // Aggregate all game history for group-level location analysis
+  const allGameHistories = new Map<string, { location?: string; date: string }>();
+  for (const p of players) {
+    for (const g of p.gameHistory) {
+      if (!allGameHistories.has(g.gameId)) {
+        allGameHistories.set(g.gameId, { location: g.location, date: g.date });
       }
     }
   }
+  const locationInsightsText = buildLocationInsights(players, location, Array.from(allGameHistories.values()));
 
   // === STORYLINE TYPE 12: Milestone chase ===
   for (const p of players) {
@@ -617,31 +660,10 @@ export const generateAIForecasts = async (
   const currentPeriodLabel = formatHebrewHalf(currentHalf, currentYear);
   const prevPeriod = getPreviousPeriod();
 
-  // ========== PREDICTION ALGORITHM ==========
-  // Core principle: sample ACTUAL game results for realistic magnitudes.
-  // Real poker nights produce results like ±100, ±200, ±300. The predictions should reflect that.
-
-  // Collect every real result from all players to understand what real games look like
-  const allRecentResults = players.flatMap(p =>
-    p.gameHistory.slice(0, Math.min(15, p.gameHistory.length)).map(g => g.profit)
-  );
-
-  // Pool of all absolute magnitudes — this is "how big are real game results?"
-  const allMagnitudes = allRecentResults.map(r => Math.abs(r)).sort((a, b) => a - b);
-  const groupMinResult = allRecentResults.length > 0 ? Math.min(...allRecentResults) : -300;
-  const groupMaxResult = allRecentResults.length > 0 ? Math.max(...allRecentResults) : 400;
-
-  // Helper: pick a random actual result from a player's history
-  const sampleResult = (results: number[]): number => {
-    if (results.length === 0) return 0;
-    return results[Math.floor(Math.random() * results.length)];
-  };
-
-  // Helper: pick a random magnitude from the group pool
-  const sampleGroupMagnitude = (): number => {
-    if (allMagnitudes.length === 0) return 100;
-    return allMagnitudes[Math.floor(Math.random() * allMagnitudes.length)];
-  };
+  // ========== GAME SHAPE SAMPLING PREDICTION ALGORITHM ==========
+  // Instead of predicting each player independently (which produces lopsided 1-winner distributions),
+  // we sample a real game's profit distribution as a template and assign players to slots
+  // based on their strength ranking. This guarantees realistic spread by construction.
 
   const halfGamesMap = new Map(players.map(p => {
     const hg = getHalfGames(p, currentYear, currentHalf);
@@ -649,52 +671,176 @@ export const generateAIForecasts = async (
     return [p.name, { games: hg, avg }];
   }));
 
-  const playerSuggestions = players.map(p => {
-    // New player with no history — sample from the group pool
-    if (p.gamesPlayed === 0) {
-      const mag = sampleGroupMagnitude();
-      const sign = Math.random() < 0.5 ? 1 : -1;
-      return { name: p.name, suggested: Math.round(sign * mag * (0.4 + Math.random() * 0.4)) };
+  const n = players.length;
+
+  // STEP 1: Collect game templates from localStorage (full game shapes, not just tonight's players)
+  let templates: number[][] = [];
+  try {
+    const storedGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
+    const storedGPs: { gameId: string; profit: number }[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+    const completedIds = new Set(storedGames.filter(g => g.status === 'completed').map(g => g.id));
+    const gameProfits = new Map<string, number[]>();
+    for (const gp of storedGPs) {
+      if (!completedIds.has(gp.gameId)) continue;
+      if (!gameProfits.has(gp.gameId)) gameProfits.set(gp.gameId, []);
+      gameProfits.get(gp.gameId)!.push(gp.profit);
+    }
+    for (const [, profits] of gameProfits) {
+      if (profits.length >= n - 1 && profits.length <= n + 1 && profits.length >= 5) {
+        const sum = profits.reduce((s, v) => s + v, 0);
+        const normalized = profits.map(v => v - sum / profits.length);
+        normalized.sort((a, b) => b - a);
+        templates.push(normalized);
+      }
+    }
+  } catch {
+    console.warn('⚠️ Could not load game templates from storage');
+  }
+
+  // Fallback: reconstruct templates from tonight's players' game histories
+  if (templates.length < 3) {
+    const gameMap = new Map<string, number[]>();
+    for (const p of players) {
+      for (const g of p.gameHistory) {
+        if (!gameMap.has(g.gameId)) gameMap.set(g.gameId, []);
+        gameMap.get(g.gameId)!.push(g.profit);
+      }
+    }
+    for (const [, profits] of gameMap) {
+      if (profits.length >= Math.max(5, n - 2)) {
+        const sum = profits.reduce((s, v) => s + v, 0);
+        const normalized = profits.map(v => v - sum / profits.length);
+        normalized.sort((a, b) => b - a);
+        templates.push(normalized);
+      }
+    }
+  }
+
+  console.log(`🎰 Template pool: ${templates.length} game shapes available for ${n} players`);
+
+  // STEP 2: Pick a template or generate synthetic fallback
+  let template: number[];
+  if (templates.length >= 3) {
+    template = [...templates[Math.floor(Math.random() * templates.length)]];
+  } else {
+    // Synthetic fallback based on observed real data patterns:
+    // 3 winners for 7p, 3-4 for 8p; top winner ≈ 2x second; magnitudes in 40-200 range
+    const winnersCount = n <= 7 ? 3 : (Math.random() < 0.5 ? 3 : 4);
+    const losersCount = n - winnersCount;
+    const synth: number[] = [];
+    const topWin = 80 + Math.random() * 120;
+    for (let i = 0; i < winnersCount; i++) {
+      const factor = i === 0 ? 1 : 1 / (1.5 + i * 0.4);
+      synth.push(Math.round(topWin * factor));
+    }
+    const totalPos = synth.reduce((s, v) => s + v, 0);
+    let remaining = totalPos;
+    for (let i = 0; i < losersCount; i++) {
+      if (i === losersCount - 1) {
+        synth.push(-remaining);
+      } else {
+        const share = Math.round(remaining * (0.15 + Math.random() * 0.25));
+        synth.push(-share);
+        remaining -= share;
+      }
+    }
+    synth.sort((a, b) => b - a);
+    template = synth;
+    console.log('🎲 Using synthetic template (not enough historical games)');
+  }
+
+  // Interpolate template to match tonight's player count
+  if (template.length < n) {
+    while (template.length < n) {
+      const mid = Math.floor(template.length / 2);
+      template.splice(mid, 0, 0);
+    }
+  } else if (template.length > n) {
+    while (template.length > n) {
+      let minIdx = 0;
+      let minAbs = Infinity;
+      for (let i = 0; i < template.length; i++) {
+        if (Math.abs(template[i]) < minAbs) { minAbs = Math.abs(template[i]); minIdx = i; }
+      }
+      const removed = template.splice(minIdx, 1)[0];
+      const totalAbs = template.reduce((s, v) => s + Math.abs(v), 0);
+      if (totalAbs > 0 && removed !== 0) {
+        template = template.map(v => Math.round(v - removed * (Math.abs(v) / totalAbs)));
+      }
+    }
+  }
+  // Ensure zero-sum after interpolation
+  const templateSum = template.reduce((s, v) => s + v, 0);
+  if (templateSum !== 0) {
+    const adj = templateSum / template.length;
+    template = template.map(v => Math.round(v - adj));
+    const residual = template.reduce((s, v) => s + v, 0);
+    if (residual !== 0) {
+      const smIdx = template.reduce((mi, v, i) => Math.abs(v) < Math.abs(template[mi]) ? i : mi, 0);
+      template[smIdx] -= residual;
+    }
+  }
+  template.sort((a, b) => b - a);
+
+  // STEP 3: Rank players by holistic strength score using ALL available data
+  const strengthScores = players.map(p => {
+    if (p.gamesPlayed === 0) return { name: p.name, score: 0, volatility: 100 };
+
+    const halfData = halfGamesMap.get(p.name);
+    const periodAvg = halfData && halfData.games.length > 0 ? halfData.avg : p.avgProfit;
+
+    // Recent momentum: weighted average of last 5 games (most recent game = 5x weight of 5th)
+    const last5 = p.gameHistory.slice(0, Math.min(5, p.gameHistory.length));
+    const weights = last5.map((_, i) => last5.length - i);
+    const totalWeight = weights.reduce((s, w) => s + w, 0);
+    const recentMomentum = last5.reduce((s, g, i) => s + g.profit * weights[i], 0) / totalWeight;
+
+    // All-time average — the historical baseline that grounds the prediction
+    const allTimeAvg = p.avgProfit;
+
+    // Win rate advantage centered at 50%, scaled so ±25% difference is meaningful
+    const winRateScore = (p.winPercentage - 50) * 1.5;
+
+    // Streak value weighted by actual profit magnitude (not just count)
+    let streakValue = 0;
+    if (p.currentStreak !== 0) {
+      const streakLen = Math.min(Math.abs(p.currentStreak), 5);
+      const streakGames = p.gameHistory.slice(0, streakLen);
+      const streakAvgProfit = streakGames.reduce((s, g) => s + g.profit, 0) / streakGames.length;
+      streakValue = streakLen * streakAvgProfit * 0.05;
     }
 
-    const recentResults = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length)).map(g => g.profit);
+    // Freshness: penalty for long absences (rust factor)
+    const freshness = p.daysSinceLastGame > 30 ? -15 : p.daysSinceLastGame > 14 ? -5 : 0;
 
-    // STEP 1: Pick a random actual result from this player's recent games as the base
-    const sampledResult = sampleResult(recentResults);
+    // Volatility (stddev of recent results) — used for per-player noise, not scoring
+    const recent10 = p.gameHistory.slice(0, Math.min(10, p.gameHistory.length)).map(g => g.profit);
+    const recentMean = recent10.reduce((s, v) => s + v, 0) / recent10.length;
+    const volatility = recent10.length >= 3
+      ? Math.sqrt(recent10.reduce((s, v) => s + (v - recentMean) ** 2, 0) / recent10.length)
+      : 80;
 
-    // STEP 2: Determine direction bias from recent trend (but with surprise chance)
-    const last3 = recentResults.slice(0, Math.min(3, recentResults.length));
-    const last3Avg = last3.reduce((sum, r) => sum + r, 0) / last3.length;
-    let directionBias = last3Avg >= 0 ? 1 : -1;
-    // 25% chance to flip direction for variety
-    if (Math.random() < 0.25) directionBias *= -1;
+    const score = periodAvg * 0.30 + recentMomentum * 0.25 + allTimeAvg * 0.15
+                + winRateScore * 0.15 + streakValue * 0.10 + freshness * 0.05;
 
-    // STEP 3: Build the prediction from the sampled result
-    // Use the sampled result's magnitude but apply direction bias
-    const magnitude = Math.abs(sampledResult);
-    // Scale slightly (0.6x-1.2x) to avoid exact history replay
-    const scaledMag = magnitude * (0.6 + Math.random() * 0.6);
-    let suggested = directionBias * scaledMag;
-
-    // STEP 4: Add noise proportional to player's actual volatility
-    const playerStdDev = recentResults.length >= 3
-      ? Math.sqrt(recentResults.reduce((s, r) => s + r * r, 0) / recentResults.length)
-      : 50;
-    suggested += (Math.random() - 0.5) * playerStdDev * 0.3;
-
-    // STEP 5: Ensure minimum magnitude — real games rarely end at ±5₪
-    const minMag = allMagnitudes.length > 0 ? allMagnitudes[Math.floor(allMagnitudes.length * 0.2)] : 20;
-    if (Math.abs(suggested) < minMag) {
-      suggested = (suggested >= 0 ? 1 : -1) * (minMag + Math.random() * minMag);
-    }
-
-    // New players with few games: slightly dampen
-    if (p.gamesPlayed <= 3) suggested *= 0.8;
-
-    return { name: p.name, suggested: Math.round(suggested) };
+    return { name: p.name, score, volatility };
   });
 
-  // ========== SURPRISE SYSTEM ==========
+  // Per-player noise: volatile players get more position uncertainty
+  const rawScores = strengthScores.map(s => s.score);
+  const scoreMean = rawScores.reduce((a, b) => a + b, 0) / rawScores.length;
+  const scoreStdDev = rawScores.length >= 2
+    ? Math.sqrt(rawScores.reduce((s, v) => s + (v - scoreMean) ** 2, 0) / rawScores.length)
+    : 50;
+  const avgVolatility = strengthScores.reduce((s, p) => s + p.volatility, 0) / strengthScores.length;
+  const baseNoise = Math.max(scoreStdDev * 0.7, 25);
+  strengthScores.forEach(s => {
+    const volFactor = avgVolatility > 0 ? Math.min(s.volatility / avgVolatility, 2.0) : 1.0;
+    const playerNoise = baseNoise * (0.6 + 0.4 * volFactor);
+    s.score += (Math.random() - 0.5) * 2 * playerNoise;
+  });
+
+  // STEP 3b: Surprise detection (same conditions as before)
   type SurpriseType = 'underdog_rise' | 'top_dog_fall' | 'wild_card' | 'breakout' | 'streak_breaker' | 'dark_horse';
   const surpriseCandidates: { name: string; type: SurpriseType; description: string }[] = [];
 
@@ -734,7 +880,7 @@ export const generateAIForecasts = async (
     }
   }
 
-  // Pick up to 3 surprises from different types
+  // Pick up to 2 surprises from different types
   const selectedSurprises: typeof surpriseCandidates = [];
   const usedSurpriseTypes = new Set<SurpriseType>();
   const usedSurpriseNames = new Set<string>();
@@ -749,66 +895,50 @@ export const generateAIForecasts = async (
     usedSurpriseNames.add(candidate.name);
   }
 
-  // Apply surprise: sample an actual result to set the magnitude, then flip direction
+  // STEP 3c: Apply surprises as rank modifiers (shift position, don't override numbers)
   for (const surprise of selectedSurprises) {
-    const sp = playerSuggestions.find(p => p.name === surprise.name);
-    if (!sp) continue;
-    const playerData = players.find(p => p.name === surprise.name)!;
-    const recent = playerData.gameHistory.slice(0, 10).map(g => g.profit);
-    // Pick a random actual result for realistic magnitude
-    const sampled = recent.length > 0 ? recent[Math.floor(Math.random() * recent.length)] : 80;
-    const mag = Math.abs(sampled) * (0.7 + Math.random() * 0.6);
-
-    if (surprise.type === 'top_dog_fall') {
-      sp.suggested = Math.round(-mag);
+    const ss = strengthScores.find(s => s.name === surprise.name);
+    if (!ss) continue;
+    if (surprise.type === 'underdog_rise' || surprise.type === 'breakout' || surprise.type === 'dark_horse') {
+      ss.score += baseNoise * 0.8;
+    } else if (surprise.type === 'top_dog_fall') {
+      ss.score -= baseNoise * 0.8;
     } else if (surprise.type === 'streak_breaker') {
-      sp.suggested = Math.round(playerData.currentStreak > 0 ? -mag : mag);
-    } else if (surprise.type === 'underdog_rise' || surprise.type === 'breakout' || surprise.type === 'dark_horse') {
-      sp.suggested = Math.round(mag);
-    } else {
-      sp.suggested = Math.round((Math.random() < 0.5 ? 1 : -1) * mag);
+      const player = players.find(p => p.name === surprise.name)!;
+      ss.score += (player.currentStreak > 0 ? -1 : 1) * baseNoise * 0.6;
+    } else if (surprise.type === 'wild_card') {
+      ss.score += (Math.random() - 0.5) * 2 * baseNoise;
     }
   }
 
-  // ========== ZERO-SUM BALANCING ==========
-  // Poker is zero-sum: total predictions must equal zero.
-  // Spread the adjustment proportionally to magnitude so big predictions stay big.
-  const totalSuggested = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
-  if (totalSuggested !== 0 && playerSuggestions.length > 0) {
-    const totalAbsMag = playerSuggestions.reduce((sum, p) => sum + Math.abs(p.suggested), 0);
-    if (totalAbsMag > 0) {
-      // Proportional adjustment: bigger predictions absorb more of the correction
-      playerSuggestions.forEach(p => {
-        const share = Math.abs(p.suggested) / totalAbsMag;
-        p.suggested = Math.round(p.suggested - totalSuggested * share);
-      });
-    } else {
-      const equal = Math.round(totalSuggested / playerSuggestions.length);
-      playerSuggestions.forEach(p => { p.suggested -= equal; });
-    }
-    // Fix any remaining rounding residual on the smallest prediction
-    const residual = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
-    if (residual !== 0) {
-      const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
-      sortedByAbs[0].suggested -= residual;
-    }
-  }
+  // Sort by adjusted score (highest = strongest = gets best template slot)
+  strengthScores.sort((a, b) => b.score - a.score);
 
-  // Hard clamp to actual group min/max (the real extremes, not P10-P90)
+  // STEP 4: Assign template positions to ranked players
+  const playerSuggestions = strengthScores.map((s, i) => ({
+    name: s.name,
+    suggested: Math.round(template[i])
+  }));
+
+  // STEP 5: Fine-tune for variety (slight scaling to avoid exact template replay)
   playerSuggestions.forEach(p => {
-    p.suggested = Math.max(groupMinResult, Math.min(groupMaxResult, p.suggested));
+    p.suggested = Math.round(p.suggested * (0.85 + Math.random() * 0.3));
   });
 
-  // Fix zero-sum residual that clamping may have introduced
-  const postClampTotal = playerSuggestions.reduce((sum, p) => sum + p.suggested, 0);
-  if (postClampTotal !== 0 && playerSuggestions.length > 0) {
-    const sortedByAbs = [...playerSuggestions].sort((a, b) => Math.abs(a.suggested) - Math.abs(b.suggested));
-    sortedByAbs[0].suggested -= postClampTotal;
+  // Fix zero-sum residual from scaling
+  const finalSum = playerSuggestions.reduce((s, p) => s + p.suggested, 0);
+  if (finalSum !== 0) {
+    const smIdx = playerSuggestions.reduce((mi, p, i) =>
+      Math.abs(p.suggested) < Math.abs(playerSuggestions[mi].suggested) ? i : mi, 0);
+    playerSuggestions[smIdx].suggested -= finalSum;
   }
 
+  const winners = playerSuggestions.filter(p => p.suggested > 0).length;
+  const losers = playerSuggestions.filter(p => p.suggested < 0).length;
   console.log('🎲 Surprises:', selectedSurprises.map(s => `${s.name}(${s.type})`).join(', '));
-  console.log('📊 Predictions:', playerSuggestions.map(s => `${s.name}: ${s.suggested >= 0 ? '+' : ''}${s.suggested}`).join(', '));
-  console.log(`📏 Group range: ${groupMinResult}₪ to +${groupMaxResult}₪ (from ${allRecentResults.length} actual results)`);
+  console.log(`📊 Predictions (${winners}W/${losers}L):`, playerSuggestions.map(s => `${s.name}: ${s.suggested >= 0 ? '+' : ''}${s.suggested}`).join(', '));
+  console.log(`🎰 Template shape: [${template.map(t => t >= 0 ? '+' + t : '' + t).join(', ')}]`);
+  console.log(`📏 Strength ranking: ${strengthScores.map(s => `${s.name}(${Math.round(s.score)})`).join(' > ')}`);
 
   const surpriseNames = new Set(selectedSurprises.map(s => s.name));
   const surpriseText = selectedSurprises.length > 0 
@@ -1018,13 +1148,14 @@ export const generateAIForecasts = async (
 
   const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
 
-🎯 הערב הזה: ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${location ? ` | מיקום: אצל ${location}` : ''}${periodContextText ? `\n${periodContextText}` : ''}
+🎯 הערב הזה: ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${periodContextText ? `\n${periodContextText}` : ''}
 
 📊 כרטיסי שחקנים (${players.length} שחקנים):
 ${playerDataText}
 ${allTimeRecordsText ? `\n🏅 שיאי הקבוצה (שחקני הלילה בלבד):\n${allTimeRecordsText}` : ''}
 ${storylinesText ? `\n📖 סיפורי הערב - יריבויות, נקמות, קשרים מעניינים:\n${storylinesText}` : ''}
 ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${milestonesText}` : ''}
+${locationInsightsText ? `\n${locationInsightsText}` : ''}
 ${comboHistoryText ? `\n${comboHistoryText}` : ''}
 ${surpriseText}
 
@@ -1038,7 +1169,7 @@ ${surpriseText}
 
 תוכן:
 • לקט את העובדות הכי מעניינות, מצחיקות ומפתיעות מכל הנתונים: רצפים, יריבויות, שיאים, חזרות, אבני דרך, קרבות דירוג
-• חובה לנסות להזכיר את כל ${players.length} השחקנים בשמם! כולם רוצים לראות את עצמם${location ? `\n• אם יש דפוסים מעניינים לגבי מיקום המשחק (אצל ${location}) — שלב אותם` : ''}
+• חובה לנסות להזכיר את כל ${players.length} השחקנים בשמם! כולם רוצים לראות את עצמם${locationInsightsText ? `\n• יש תובנות מיקום (🏠) למעלה — שלב אותן רק אם הן מעניינות, מצחיקות או ציניות. אל תזכיר מיקום סתם כי הוא קיים` : ''}
 • העדף סיפורים ויריבויות על פני סטטיסטיקות יבשות
 • אם יש מידע על הרכב חוזר (🔄) — זה חומר מצוין לטיזר! ציין שזה הרכב שכבר שיחק יחד, מי שלט בפעמים הקודמות, מי תמיד ברווח/הפסד בהרכב הזה. אם זה הרכב חדש (🆕) — ציין שזו פעם ראשונה
 • לא לחזור על עובדות שיופיעו ב-sentence של שחקנים ספציפיים — פזר חומר שונה
@@ -1794,6 +1925,7 @@ export interface GameNightSummaryPayload {
   rankingShifts: string[];
   gameNumberInPeriod: number;
   location?: string;
+  locationInsights?: string;
   periodMarkers?: PeriodMarkers;
   comboHistoryText?: string;
 }
@@ -1817,7 +1949,7 @@ export const generateGameNightSummary = async (
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod, location: summaryLocation, periodMarkers: summaryPeriodMarkers, comboHistoryText } = payload;
+  const { tonight, totalRebuys, totalPot, periodLabel, periodStandings, recordsBroken, notableStreaks, upsets, milestones, welcomeBacks, rankingShifts, gameNumberInPeriod, locationInsights: summaryLocationInsights, periodMarkers: summaryPeriodMarkers, comboHistoryText } = payload;
 
   if (tonight.length === 0) throw new Error('No players in tonight results');
 
@@ -1851,6 +1983,9 @@ export const generateGameNightSummary = async (
   }
   if (comboHistoryText) {
     contextSections.push(comboHistoryText);
+  }
+  if (summaryLocationInsights) {
+    contextSections.push(summaryLocationInsights);
   }
 
   const contextBlock = contextSections.length > 0
@@ -1892,7 +2027,7 @@ ${style.desc}
 
 📋 "${periodLabel}" = שם התקופה (מחצית של שנה). אם מזכירים → "בתקופת ${periodLabel}" או "במחצית".
 
-📊 נתוני הערב (משחק #${gameNumberInPeriod} ב${periodLabel})${summaryLocation ? ` | מיקום: אצל ${summaryLocation}` : ''}:
+📊 נתוני הערב (משחק #${gameNumberInPeriod} ב${periodLabel}):
 קופה: ${totalPot}₪ (${totalRebuys} קניות סה״כ)
 
 תוצאות:
@@ -1907,7 +2042,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}
 - 2-3 פסקאות קצרות (שורה ריקה ביניהן), כל פסקה 2-4 משפטים
 - סה״כ 60-120 מילים — דרמטי? קרוב ל-120. שקט? קרוב ל-60${periodEndingLines.length > 0 ? ` (+ פסקאות תקופתיות נוספות)` : ''}
 - שלב עובדות (רצפים, שיאים, דירוגים) בצורה טבעית בתוך הסיפור, לא כרשימה
-- אם יש מידע על הרכב חוזר (🔄) — שלב אותו! ציין שזה הרכב שכבר שיחק יחד, האם הדפוסים המשיכו או נשברו, מי שלט בפעמים הקודמות ומה קרה הפעם${summaryLocation ? `\n- אם רלוונטי, ציין את מיקום המשחק (אצל ${summaryLocation}) בצורה טבעית` : ''}
+- אם יש מידע על הרכב חוזר (🔄) — שלב אותו! ציין שזה הרכב שכבר שיחק יחד, האם הדפוסים המשיכו או נשברו, מי שלט בפעמים הקודמות ומה קרה הפעם
 - סיים עם פאנץ׳ליין, עקיצה, או הצצה לשבוע הבא
 
 ⚠️ דיוק עובדתי (חובה מוחלטת):

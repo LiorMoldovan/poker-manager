@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.7.0';
+export const APP_VERSION = '5.7.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.7.1',
+    date: '2026-03-16',
+    changes: [
+      '🏠 Location insights — per-player performance analysis by game location',
+      '🤝 Combo history UI polish — improved layout with date headers and color-coded results',
+      '📍 Location data integrated into game summary AI narratives',
+    ]
+  },
   {
     version: '5.7.0',
     date: '2026-03-16',
