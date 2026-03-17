@@ -11,6 +11,7 @@ import {
   saveSession,
   CategoryInfo,
   HERO_NAME,
+  getLastTrainingModel,
 } from '../utils/pokerTraining';
 
 // ════════════════════════════════════════════════════════════
@@ -228,6 +229,7 @@ const TrainingHandScreen = () => {
   const [hand, setHand] = useState<TrainingHand | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [trainingModelName, setTrainingModelName] = useState<string>('');
   const [currentStreetIdx, setCurrentStreetIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -251,7 +253,7 @@ const TrainingHandScreen = () => {
       ? categoryPool[Math.floor(Math.random() * categoryPool.length)]
       : undefined;
     generateTrainingHand(cat, difficulty)
-      .then(h => setPrefetchedHand(h))
+      .then(h => { setPrefetchedHand(h); setTrainingModelName(getLastTrainingModel()); })
       .catch(() => {})
       .finally(() => setIsPrefetching(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,6 +281,7 @@ const TrainingHandScreen = () => {
       const handCategory = pickCategory();
       const newHand = await generateTrainingHand(handCategory, difficulty);
       setHand(newHand);
+      setTrainingModelName(getLastTrainingModel());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       if (msg === 'NO_API_KEY') {
@@ -748,6 +751,11 @@ const TrainingHandScreen = () => {
         }}>
           <span style={{ fontSize: '1.2rem' }}>{catInfo.icon}</span>
           <span style={{ fontWeight: '700', fontSize: '0.9rem' }}>{catInfo.name}</span>
+          {trainingModelName && (
+            <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', opacity: 0.6, marginLeft: 'auto' }}>
+              model: {trainingModelName}
+            </span>
+          )}
         </div>
       )}
 

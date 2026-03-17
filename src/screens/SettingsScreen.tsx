@@ -1378,47 +1378,9 @@ const SettingsScreen = () => {
                       }}
                     >
                       {/* Header: Label/Name + role badge */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isEditing ? '0.25rem' : '0.4rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
-                          {isEditing ? (
-                            <div style={{ display: 'flex', gap: '0.25rem', flex: 1 }}>
-                              <input
-                                type="text"
-                                value={editLabelValue}
-                                onChange={e => setEditLabelValue(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') saveDeviceLabel(deviceId, editLabelValue);
-                                  if (e.key === 'Escape') setEditingDeviceId(null);
-                                }}
-                                placeholder="Player name..."
-                                autoFocus
-                                style={{
-                                  flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.8rem',
-                                  borderRadius: '6px', border: '1px solid var(--primary)',
-                                  background: 'var(--background)', color: 'var(--text)',
-                                  outline: 'none', minWidth: '80px',
-                                }}
-                              />
-                              <button
-                                onClick={() => saveDeviceLabel(deviceId, editLabelValue)}
-                                style={{
-                                  fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
-                                  background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer',
-                                }}
-                              >
-                                Save
-                              </button>
-                              <button
-                                onClick={() => setEditingDeviceId(null)}
-                                style={{
-                                  fontSize: '0.75rem', padding: '0.2rem 0.4rem', borderRadius: '6px',
-                                  background: 'var(--surface-hover)', color: 'var(--text-muted)', border: 'none', cursor: 'pointer',
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
+                          {!isEditing && (
                             <button
                               onClick={() => { setEditingDeviceId(deviceId); setEditLabelValue(label || ''); }}
                               style={{
@@ -1444,22 +1406,65 @@ const SettingsScreen = () => {
                           {roleInfo.emoji} {roleInfo.name}
                         </span>
                       </div>
+                      {isEditing && (
+                        <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
+                          <input
+                            type="text"
+                            value={editLabelValue}
+                            onChange={e => setEditLabelValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveDeviceLabel(deviceId, editLabelValue);
+                              if (e.key === 'Escape') setEditingDeviceId(null);
+                            }}
+                            placeholder="Player name..."
+                            autoFocus
+                            style={{
+                              flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.8rem',
+                              borderRadius: '6px', border: '1px solid var(--primary)',
+                              background: 'var(--background)', color: 'var(--text)',
+                              outline: 'none', minWidth: '80px',
+                            }}
+                          />
+                          <button
+                            onClick={() => saveDeviceLabel(deviceId, editLabelValue)}
+                            style={{
+                              fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
+                              background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer',
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingDeviceId(null)}
+                            style={{
+                              fontSize: '0.75rem', padding: '0.2rem 0.4rem', borderRadius: '6px',
+                              background: 'var(--surface-hover)', color: 'var(--text-muted)', border: 'none', cursor: 'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
 
                       {/* Device identity line */}
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', lineHeight: '1.45' }}>
                         <span style={{ color: 'var(--text)', fontWeight: 500 }}>{latest.device}</span>
-                        <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
-                        {latest.screenSize}
-                        {fp && fp.gpu !== 'Unknown' && (
+                        {!label && (
                           <>
                             <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
-                            <span title={fp.gpu}>{shortenGPU(fp.gpu)}</span>
+                            {latest.screenSize}
+                            {fp && fp.gpu !== 'Unknown' && (
+                              <>
+                                <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
+                                <span title={fp.gpu}>{shortenGPU(fp.gpu)}</span>
+                              </>
+                            )}
                           </>
                         )}
                       </div>
 
-                      {/* Fingerprint details */}
-                      {fp && (
+                      {/* Fingerprint details - only for unidentified devices */}
+                      {!label && fp && (
                         <div style={{
                           display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
                           marginBottom: '0.35rem',

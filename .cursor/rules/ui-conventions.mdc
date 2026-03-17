@@ -1,0 +1,71 @@
+---
+description: UI conventions — inline styles, CSS variables, RTL, collapsible sections, screenshot sharing
+globs: "{src/screens/**,src/components/**}"
+alwaysApply: false
+---
+
+# UI Conventions
+
+## Styling
+
+This project uses **inline React styles** exclusively — no CSS modules, no styled-components, no Tailwind.
+
+### CSS Variables (from `src/styles/index.css`)
+```
+var(--surface)         // Card backgrounds
+var(--surface-hover)   // Hover states
+var(--background)      // Page background
+var(--text)            // Primary text (white)
+var(--text-muted)      // Secondary text
+var(--primary)         // Accent/action color
+var(--border)          // Borders
+var(--danger)          // Error/delete red
+```
+
+### Common Values
+```typescript
+padding: '0.75rem'      // Standard card padding
+borderRadius: '8px'     // Cards
+borderRadius: '6px'     // Buttons, badges
+fontSize: '0.8rem'      // Body text
+fontSize: '0.75rem'     // Small buttons
+fontSize: '0.65rem'     // Badges, tags
+```
+
+### PC Compatibility
+Native `<select>` and `<option>` elements don't inherit CSS variables on some PC browsers. Use explicit hex:
+```typescript
+style={{ background: '#1a1a2e', color: '#ffffff' }}
+```
+
+## Screen Patterns
+
+### Collapsible Sections (GameSummaryScreen)
+- Default to **collapsed** (`true`)
+- Toggle header must have `color: 'var(--text)'` (white text)
+- Container: `padding: '0.75rem'`, `background: '#1a1a2e'`
+
+### Screenshot Sharing
+Uses `html2canvas` to capture UI as images for WhatsApp sharing via `navigator.share()`.
+- Build HTML in hidden divs, not from live DOM
+- Split long content into multiple pages (3 players/card for Chronicle, 5 players/card for Forecast)
+- Pre-game teaser = dedicated first screenshot
+- Include page numbers: "1/3", "2/3", "3/3"
+
+### Bottom Action Bars
+Standardized sizing: `padding: '0.6rem'`, `fontSize: '0.8rem'`
+
+### Navigation
+Bottom tab bar: New Game | History | Statistics | Graphs (admin/member) | Settings. Hidden during live game, chip entry, game summary, training play.
+
+## RTL Rules
+
+- Use `direction: 'rtl'` on containers with Hebrew text
+- Use `gap` instead of `marginRight` in flex containers
+- For `html2canvas` rendered HTML, use `dir="rtl"` attribute
+
+## Content Rules
+
+- All section headers in English for UI chrome, Hebrew for content
+- Only ONE "Poker Manager" signature at bottom of a screen, not after every card
+- Headers: `<h2 className="card-title">` with `margin: 0`, consistent font size per screen

@@ -1,0 +1,95 @@
+---
+description: Core project overview — architecture, tech stack, game lifecycle, auth, and key patterns
+alwaysApply: true
+---
+
+# Project Context
+
+## About This Project
+
+**Poker Manager** — A Hebrew-language web app for managing friendly poker nights among ~8-10 regular players. Tracks games, calculates settlements, generates AI narratives, forecasts, and statistics.
+
+- **Stack**: React 19 + TypeScript 5 (strict) + Vite 6
+- **Styling**: Inline React styles + CSS variables (dark theme in `src/styles/index.css`)
+- **Data**: LocalStorage (no backend/database)
+- **Cloud**: GitHub Pages repo as storage via GitHub API
+- **Deployment**: Vercel (auto-deploys from `main` branch)
+- **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
+- **Language**: Hebrew (RTL) — all user-facing text in Hebrew
+- **Target**: Mobile-first, must also work on desktop
+- **Font**: Outfit (Google Fonts, loaded in `index.html`)
+
+## Architecture
+
+```
+src/
+├── App.tsx                    # Root: routing, auth (PinLock), permission context, activity tracking
+├── main.tsx                   # Entry point (renders App into #root)
+├── version.ts                 # APP_VERSION constant + CHANGELOG array
+├── permissions.ts             # Role system: admin | member | memberSync | viewer (PIN-based)
+├── types/index.ts             # ALL TypeScript interfaces and types
+├── styles/index.css           # CSS variables, dark theme, global styles
+├── components/
+│   ├── Navigation.tsx         # Bottom tab bar (New Game, History, Stats, Graphs, Settings)
+│   ├── PinLock.tsx            # PIN entry screen with 4-digit keypad
+│   └── AddExpenseModal.tsx    # Modal for shared expenses (pizza etc.) during live games
+├── screens/
+│   ├── NewGameScreen.tsx      # Game setup: player selection, AI forecast, pre-game teaser, period indicators
+│   ├── LiveGameScreen.tsx     # Active game: rebuys, timer, voice announcements, shared expenses
+│   ├── ChipEntryScreen.tsx    # End-of-game chip counting, profit calculation, triggers background AI
+│   ├── GameSummaryScreen.tsx  # Post-game: results, settlements, AI summary, forecast comparison, collapsible sections
+│   ├── HistoryScreen.tsx      # Completed games list with search/filter
+│   ├── GameDetailsScreen.tsx  # Individual game details (legacy — not routed, GameSummaryScreen used instead)
+│   ├── StatisticsScreen.tsx   # Player stats table, records, AI-generated Chronicle per player
+│   ├── GraphsScreen.tsx       # Charts (Recharts): cumulative profit, head-to-head, impact analysis + AI insights
+│   ├── SettingsScreen.tsx     # Tabs: Players, Game, Chips, Backup, Activity (admin), About
+│   ├── TrainingScreen.tsx     # Poker training hub with category selection
+│   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
+│   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
+├── database/
+│   ├── storage.ts             # All LocalStorage CRUD: players, games, gamePlayers, settings, forecasts, backups, chronicles
+│   ├── githubSync.ts          # GitHub API: sync data, backups, training data, activity log
+│   └── embeddedToken.ts       # Obfuscated GitHub token for non-admin users (read sync + activity writes)
+└── utils/
+    ├── geminiAI.ts            # ALL Gemini AI: forecasts, summaries, chronicles, graph insights, comparison
+    ├── calculations.ts        # Currency formatting, Hebrew dates, formatHebrewHalf, utility math
+    ├── milestones.ts          # Player milestone detection (streaks, records, comebacks, etc.)
+    ├── comboHistory.ts        # Recurring player combo analysis (who played together before)
+    ├── activityLogger.ts      # Silent user activity tracking + device fingerprinting
+    ├── sharing.ts             # Text-based game summary generation + WhatsApp sharing
+    ├── pokerTraining.ts       # Training scenario generation, progress tracking, categories
+    ├── tts.ts                 # Hebrew text-to-speech (browser speechSynthesis + Google Cloud TTS)
+    └── validatePlayerData.ts  # Console-based data validation (window.validateAllPlayers)
+```
+
+## Game Lifecycle
+
+```
+NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
+   (setup)        (play)          (count chips)      (results + AI)
+```
+
+1. **NewGameScreen**: Select players, choose location, generate AI forecast + teaser, set period markers
+2. **LiveGameScreen**: Track rebuys, manage shared expenses, voice announcements
+3. **ChipEntryScreen**: Count chips per player, calculate profits (must sum to zero), finalize game
+4. **GameSummaryScreen**: View results, settlements, generate/view AI summary, forecast vs reality comparison
+
+## Auth & Permissions
+
+PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
+
+| Role | PIN | Can Do |
+|------|-----|--------|
+| `admin` | 2351 | Everything: games, players, settings, AI, sync, training |
+| `member` | 2580 | View + manage games + add players |
+| `memberSync` | 0852 | Same as member + cloud sync via embedded token |
+| `viewer` | 9876 | View only + backup |
+
+## Key Patterns
+
+- **Hebrew RTL**: `direction: 'rtl'` on containers, all user-facing strings in Hebrew
+- **Inline styles**: No CSS modules — follow existing inline style convention
+- **Dark theme**: Use CSS variables (`var(--surface)`, `var(--text)`, etc.)
+- **Native elements**: Use explicit hex colors for `<select>`/`<option>` on PC compatibility
+- **Audio**: Shared `AudioContext` (max ~6 per page), `speechSynthesis` for Hebrew TTS
+- **Zero-sum**: Game profits across all players must always sum to exactly zero

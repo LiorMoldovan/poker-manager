@@ -1,0 +1,43 @@
+---
+description: App version management rules — version lives in src/version.ts, bump on every push
+globs: src/version.ts
+alwaysApply: false
+---
+
+# Version Management
+
+## Version Location
+
+The app version is in `src/version.ts`, NOT `package.json`. Never modify `package.json` version.
+
+## When to Bump
+
+Version is bumped ONLY as part of the merge/push process (see git-workflow rule). Every push to `main` must include a version bump.
+
+## How to Bump
+
+1. Read current version from `src/version.ts`
+2. Increment appropriately:
+   - **Patch** (5.7.3 → 5.7.4): Bug fixes, small tweaks
+   - **Minor** (5.7.3 → 5.8.0): New features, significant UI changes
+   - **Major** (5.7.3 → 6.0.0): Breaking changes (rare)
+3. Update `APP_VERSION` constant
+4. Add new entry at the TOP of the `CHANGELOG` array:
+   ```typescript
+   {
+     version: '5.8.0',
+     date: '2026-03-17',
+     changes: [
+       '✅ Main feature description',
+       '🔧 Additional change',
+     ]
+   },
+   ```
+5. Commit message must match: `vX.Y.Z - Brief description`
+
+## Changelog Format
+
+- Each change line starts with an emoji indicating type
+- Common prefixes: ✅ feature, 🔧 fix, 📱 UI, 🤖 AI, 📊 data, 🔍 tracking
+- Keep descriptions concise (one line each)
+- List most important change first

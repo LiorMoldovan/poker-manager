@@ -2,6 +2,9 @@ import { getGeminiApiKey } from './geminiAI';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { PlayerStats } from '../types';
 
+let lastUsedTrainingModel = '';
+export const getLastTrainingModel = () => lastUsedTrainingModel;
+
 // ════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════
@@ -696,6 +699,7 @@ export const generateTrainingHand = async (
 
       hand.categoryId = selectedCategory.id;
       hand.difficulty = difficulty;
+      lastUsedTrainingModel = config.model;
 
       return hand;
     } catch (error) {
@@ -876,6 +880,7 @@ export const generateQuickBatch = async (
       });
 
       console.log(`QuickTraining [${config.model}]: generated ${valid.length} scenarios`);
+      lastUsedTrainingModel = config.model;
       return valid;
     } catch (error) {
       if (error instanceof Error && error.message === 'INVALID_API_KEY') {

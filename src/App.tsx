@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { initializeStorage, getStorageUsage, formatStorageSize, StorageUsage } from './database/storage';
+import { initializeStorage, getStorageUsage, formatStorageSize, StorageUsage, cleanupOrphanedTTSPools } from './database/storage';
 import { syncFromCloud, restoreTrainingFromGitHub } from './database/githubSync';
 import { PermissionRole } from './types';
 import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
@@ -58,6 +58,7 @@ function App() {
 
   useEffect(() => {
     initializeStorage();
+    cleanupOrphanedTTSPools();
     setIsInitialized(true);
     // Check if already authenticated
     const savedRole = sessionStorage.getItem('poker_role') as PermissionRole;

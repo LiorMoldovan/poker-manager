@@ -1,0 +1,45 @@
+---
+description: Activity tracking system — device fingerprinting, session tracking, admin UI
+globs: src/utils/activityLogger.ts
+alwaysApply: false
+---
+
+# Activity Tracking System
+
+## Overview
+
+Silent, transparent tracking of non-admin user activity. Admin sessions are excluded. Data stored in `public/activity-log.json` on GitHub via embedded token.
+
+## Files
+
+- **Logger**: `src/utils/activityLogger.ts` — session init, updates, fingerprinting, GitHub read/write
+- **Hooks**: `src/App.tsx` — starts tracking on `handleUnlock`, updates on navigation + `visibilitychange`
+- **UI**: `src/screens/SettingsScreen.tsx` — admin-only "Activity" tab with device cards
+- **Type**: `ActivityLogEntry` + `DeviceFingerprint` in `src/types/index.ts`
+
+## Device Identification
+
+Each browser gets a persistent UUID (`poker_device_id` in localStorage). Combined with fingerprint:
+
+| Signal | Source | Identifies |
+|--------|--------|-----------|
+| GPU renderer | WebGL `UNMASKED_RENDERER_WEBGL` | Exact phone model |
+| CPU cores | `navigator.hardwareConcurrency` | Hardware class |
+| RAM | `navigator.deviceMemory` | Device tier |
+| Touch points | `navigator.maxTouchPoints` | Phone vs tablet vs desktop |
+| Language | `navigator.language` | System locale |
+| Canvas hash | Canvas rendering fingerprint | Unique per device/GPU |
+
+Admin labels devices with player names in Activity tab (`poker_device_labels` in localStorage).
+
+## Session Lifecycle
+
+1. **Start**: `logActivity(role)` on PIN unlock (non-admin only)
+2. **Updates**: `updateSessionActivity(screens, duration)` every 5 minutes + on navigation; skips if unchanged
+3. **Tab close**: `visibilitychange` fires with `keepalive: true`
+4. **Sign out**: Final update + `resetSession()`
+
+## Limits
+
+- Max 200 entries (oldest trimmed)
+- `writeWithRetry()` handles GitHub 409 conflicts with one retry

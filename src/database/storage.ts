@@ -1270,3 +1270,75 @@ export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): v
   localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
 };
 
+// --- Rebuy Records (2026+) ---
+
+export interface RebuyRecords {
+  playerMax: Map<string, number>;
+  groupMax: number;
+}
+
+export const getRebuyRecords = (): RebuyRecords => {
+  const completedGames = getAllGames().filter(g => {
+    if (g.status !== 'completed') return false;
+    const year = new Date(g.date || g.createdAt).getFullYear();
+    return year >= 2026;
+  });
+  const completedIds = new Set(completedGames.map(g => g.id));
+  const allGP = getAllGamePlayers().filter(gp => completedIds.has(gp.gameId));
+
+  const playerMax = new Map<string, number>();
+  let groupMax = 0;
+
+  for (const gp of allGP) {
+    const current = playerMax.get(gp.playerId) || 0;
+    if (gp.rebuys > current) playerMax.set(gp.playerId, gp.rebuys);
+    if (gp.rebuys > groupMax) groupMax = gp.rebuys;
+  }
+
+  return { playerMax, groupMax };
+};
+
+// --- TTS Pool Storage ---
+
+const TTS_POOL_PREFIX = 'poker_tts_pool_';
+const TTS_CEREMONY_PREFIX = 'poker_ceremony_';
+
+export const saveTTSPool = (gameId: string, pool: unknown): void => {
+  localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}`, JSON.stringify(pool));
+};
+
+export const loadTTSPool = <T>(gameId: string): T | null => {
+  const raw = localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+export const deleteTTSPool = (gameId: string): void => {
+  localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}`);
+  localStorage.removeItem(`${TTS_CEREMONY_PREFIX}${gameId}`);
+};
+
+export const cleanupOrphanedTTSPools = (): void => {
+  const liveGameIds = new Set(
+    getAllGames().filter(g => g.status === 'live').map(g => g.id)
+  );
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    if (key.startsWith(TTS_POOL_PREFIX)) {
+      const gid = key.slice(TTS_POOL_PREFIX.length);
+      if (!liveGameIds.has(gid)) keysToRemove.push(key);
+    }
+    if (key.startsWith(TTS_CEREMONY_PREFIX)) {
+      const gid = key.slice(TTS_CEREMONY_PREFIX.length);
+      if (!liveGameIds.has(gid)) keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(k => localStorage.removeItem(k));
+};
+

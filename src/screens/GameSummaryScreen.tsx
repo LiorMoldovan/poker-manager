@@ -67,6 +67,7 @@ const GameSummaryScreen = () => {
   const [sharedExpenses, setSharedExpenses] = useState<SharedExpense[]>([]);
   const [funStats, setFunStats] = useState<{ emoji: string; label: string; detail: string }[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryModel, setAiSummaryModel] = useState<string>('');
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
@@ -681,6 +682,7 @@ const GameSummaryScreen = () => {
       generateGameNightSummary(summaryPayload)
         .then(async result => {
           setAiSummary(result.text);
+          setAiSummaryModel(result.meta.model);
           setAiSummaryError(null);
           saveGameAiSummary(game.id, result.text);
           if (shouldAutoGenerate) {
@@ -1302,7 +1304,7 @@ const GameSummaryScreen = () => {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
                       <span style={{ fontSize: '1rem' }}>🎙️</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa' }}>טיזר הלילה</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa' }}>טיזר המשחק</span>
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: 1.6 }}>{preGameTeaser}</div>
                   </div>
@@ -1445,6 +1447,11 @@ const GameSummaryScreen = () => {
                         {paragraph}
                       </p>
                     ))}
+                    {aiSummaryModel && (
+                      <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.5rem', opacity: 0.6 }}>
+                        model: {aiSummaryModel}
+                      </div>
+                    )}
                   </div>
                 ) : isLoadingAiSummary ? (
                   <div style={{

@@ -274,7 +274,7 @@ function generateBattles(
         emoji: aboveRank <= 2 ? '👑' : '⚔️', category: 'battle', sentiment: 'battle',
         title: aboveRank <= 2 ? 'קרב על הכתר!' : `קרב על מקום ${aboveRank}`,
         description: opts.mode === 'tonight'
-          ? `${below.name} (מקום ${belowRank}) רק ${gap}₪ מאחורי ${above.name} (מקום ${aboveRank}). נצחון גדול הלילה = עקיפה!`
+          ? `${below.name} (מקום ${belowRank}) רק ${gap}₪ מאחורי ${above.name} (מקום ${aboveRank}). נצחון גדול הפעם = עקיפה!`
           : `${below.name} (מקום ${belowRank}) יכול לעקוף את ${above.name} (מקום ${aboveRank}) עם ${gap}₪ בלבד.`,
         priority: 95 - i * 3,
       });
@@ -342,7 +342,7 @@ function generateBattles(
       items.push({
         emoji: '🔥', category: 'battle', sentiment: 'surprise',
         title: 'מפגש נקמה',
-        description: `${bigLoser.player.name} (${fmt(bigLoser.lastGameProfit)} במשחק האחרון) נגד ${bigWinner.player.name} (${fmt(bigWinner.lastGameProfit)}). הלילה זה אישי.`,
+        description: `${bigLoser.player.name} (${fmt(bigLoser.lastGameProfit)} במשחק האחרון) נגד ${bigWinner.player.name} (${fmt(bigWinner.lastGameProfit)}). הפעם זה אישי.`,
         priority: 85,
       });
     }
@@ -370,7 +370,7 @@ function generateStreaks(
       title: `${h.currentStreak} נצחונות רצופים`,
       description: isHistorical
         ? `${h.name} סיים ברצף מרשים של ${h.currentStreak} נצחונות רצופים!`
-        : `${h.name} לא מפסיד! רצף של ${h.currentStreak} נצחונות. נצחון הלילה = ${h.currentStreak + 1} רצופים.`,
+        : `${h.name} לא מפסיד! רצף של ${h.currentStreak} נצחונות. נצחון הפעם = ${h.currentStreak + 1} רצופים.`,
       priority: 90 + Math.round(unusualness),
     });
   }
@@ -382,7 +382,7 @@ function generateStreaks(
       title: `${Math.abs(c.currentStreak)} הפסדים רצופים`,
       description: isHistorical
         ? `${c.name} סיים ברצף של ${Math.abs(c.currentStreak)} הפסדים רצופים.`
-        : `${c.name} ברצף שלילי. הלילה = הזדמנות לשבור את הקללה ולחזור לנצחונות!`,
+        : `${c.name} ברצף שלילי. הפעם = הזדמנות לשבור את הקללה ולחזור לנצחונות!`,
       priority: 85 + Math.abs(c.currentStreak),
     });
   }
@@ -485,7 +485,7 @@ function generateNumericGoals(
           emoji: '🎮', category: 'milestone', sentiment: 'positive',
           title: dist === 1 ? `משחק מספר ${gm}` : `${dist} משחקים ל-${gm}!`,
           description: dist === 1
-            ? `הלילה ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
+            ? `הפעם ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
             : `${p.name} עוד ${dist} משחקים למשחק ה-${gm}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`,
           priority: 65 + gm / 5 + (3 - dist) * 5,
         });
@@ -503,7 +503,7 @@ function generateNumericGoals(
         items.push({
           emoji: '🎯', category: 'milestone', sentiment: 'positive',
           title: `יעד ${targetRate}% נצחונות`,
-          description: `${p.name} על ${Math.round(p.winPercentage)}%. נצחון הלילה = חציית ${targetRate}%!`,
+          description: `${p.name} על ${Math.round(p.winPercentage)}%. נצחון הפעם = חציית ${targetRate}%!`,
           priority: 65,
         });
         break;
@@ -609,7 +609,7 @@ function generateForm(
         items.push({
           emoji: '📉', category: 'form', sentiment: 'negative',
           title: `שנה קשה ל${ps.player.name}`,
-          description: `ממוצע ב-${ctx.currentYear}: ${fmt(Math.round(yearAvg))} למשחק לעומת ${fmt(Math.round(ps.player.avgProfit))} היסטורי. מהפך הלילה?`,
+          description: `ממוצע ב-${ctx.currentYear}: ${fmt(Math.round(yearAvg))} למשחק לעומת ${fmt(Math.round(ps.player.avgProfit))} היסטורי. מהפך הפעם?`,
           priority: 64,
         });
       }
@@ -685,7 +685,7 @@ function generateDrama(
     items.push({
       emoji: '🎢', category: 'drama', sentiment: 'surprise',
       title: 'הרים רוסיים',
-      description: `${v.player.name} בתנודות (סטייה ${Math.round(v.stdDev)}₪): מ${fmt(Math.min(...last4))} עד ${fmt(Math.max(...last4))} ב-4 אחרונים. לאן הלילה?`,
+      description: `${v.player.name} בתנודות (סטייה ${Math.round(v.stdDev)}₪): מ${fmt(Math.min(...last4))} עד ${fmt(Math.max(...last4))} ב-4 אחרונים. לאן הפעם?`,
       priority: 70,
     });
   }
@@ -744,7 +744,7 @@ function generateH2H(
       title: `${winner} שולט`,
       description: opts.isHistorical
         ? `${winner} ניצח את ${loser} ב-${wins} מתוך ${d.sharedGames} משחקים משותפים.`
-        : `${winner} ניצח את ${loser} ב-${wins} מתוך ${d.sharedGames} משחקים משותפים. ישנה את המגמה הלילה?`,
+        : `${winner} ניצח את ${loser} ב-${wins} מתוך ${d.sharedGames} משחקים משותפים. ישנה את המגמה הפעם?`,
       priority: 78,
     });
   }
@@ -760,7 +760,7 @@ function generateH2H(
       items.push({
         emoji: '⚔️', category: 'h2h', sentiment: 'battle',
         title: 'יריבות צמודה',
-        description: `${r.a} ו${r.b} כמעט שווים - ${r.aWins}:${r.bWins} ב-${r.sharedGames} משחקים משותפים. הלילה שובר שוויון!`,
+        description: `${r.a} ו${r.b} כמעט שווים - ${r.aWins}:${r.bWins} ב-${r.sharedGames} משחקים משותפים. הפעם שובר שוויון!`,
         priority: 76,
       });
     }
@@ -1034,7 +1034,7 @@ function generateLowData(
       items.push({
         emoji: '💪', category: 'drama', sentiment: 'negative',
         title: 'הזדמנות להתהפך!',
-        description: `${loser.name} הפסיד ${Math.abs(Math.round(loser.totalProfit))}₪ במשחק הראשון. הלילה הזדמנות לחזור לפלוס!`,
+        description: `${loser.name} הפסיד ${Math.abs(Math.round(loser.totalProfit))}₪ במשחק הראשון. הפעם הזדמנות לחזור לפלוס!`,
         priority: 65,
       });
     }
@@ -1045,7 +1045,7 @@ function generateLowData(
       items.push({
         emoji: p.totalProfit >= 0 ? '✅' : '📊', category: 'form', sentiment: p.totalProfit >= 0 ? 'positive' : 'negative',
         title: `${p.name} ב${periodLabel}`,
-        description: `${p.name} עם ${fmt(p.totalProfit)}${p.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${p.gamesPlayed} משחקים`}. ${p.totalProfit >= 0 ? 'התחלה טובה!' : 'הלילה הזדמנות להתהפך!'}`,
+        description: `${p.name} עם ${fmt(p.totalProfit)}${p.gamesPlayed === 1 ? ' במשחק הראשון' : ` אחרי ${p.gamesPlayed} משחקים`}. ${p.totalProfit >= 0 ? 'התחלה טובה!' : 'הפעם הזדמנות להתהפך!'}`,
         priority: 35 - idx * 5,
       });
     });

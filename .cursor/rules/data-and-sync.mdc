@@ -1,0 +1,57 @@
+---
+description: Data layer — LocalStorage keys, GitHub cloud sync, token system, data integrity rules
+globs: "{src/database/**,src/types/index.ts}"
+alwaysApply: false
+---
+
+# Data Layer & Cloud Sync
+
+## LocalStorage Keys
+
+| Key | Content | Type |
+|-----|---------|------|
+| `poker_players` | Player records | `Player[]` |
+| `poker_games` | Game records (with forecasts, AI summary, expenses, period markers) | `Game[]` |
+| `poker_game_players` | Per-player per-game results | `GamePlayer[]` |
+| `poker_settings` | Rebuy value, chips/rebuy, min transfer, game night days | `Settings` |
+| `poker_chip_values` | Chip color/value definitions | `ChipValue[]` |
+| `poker_pending_forecast` | Active pre-game forecast (before game starts) | `PendingForecast` |
+| `poker_chronicle_profiles` | AI-generated player chronicles (keyed by period) | `Record<string, ChronicleEntry>` |
+| `poker_graph_insights` | AI-generated graph insights (keyed by period) | `Record<string, GraphInsightsEntry>` |
+| `poker_backups` | Local backup history | `BackupData[]` |
+| `poker_training_progress` | Poker training session results | Training data |
+| `gemini_api_key` | Gemini API key (admin only) | `string` |
+| `poker_device_id` | Persistent device UUID for activity tracking | `string` |
+| `poker_device_labels` | Admin-assigned device→player name labels | `Record<string, string>` |
+| `poker_role` | Current role (**sessionStorage**, not localStorage) | `PermissionRole` |
+| `github_token` | Admin's personal GitHub token | `string` |
+| `poker_last_synced_version` | Last synced timestamp for conflict detection | `string` |
+
+## Cloud Sync Architecture
+
+### GitHub as Backend
+- **Repo**: `LiorMoldovan/poker-manager` (GitHub Pages)
+- **Branch**: `main`
+- **Files**:
+  - `public/full-backup.json` — main sync file (players, games, gamePlayers, settings, chipValues)
+  - `public/backup.json` — manual backup
+  - `public/training-data.json` — poker training data
+  - `public/activity-log.json` — user activity log
+
+### Token System
+- **Admin**: Personal GitHub token in localStorage (`github_token`)
+- **Non-admin**: Obfuscated embedded token from `embeddedToken.ts` (read-only sync + activity writes)
+- `getEffectiveToken(useMemberSyncToken)` decides which token to use
+
+### Sync Flow
+- `syncToCloud()` — pushes local data to GitHub (admin or memberSync)
+- `syncFromCloud()` — pulls remote data; uses `replaceGamesWithRemote` when remote is newer (compares `lastUpdated` timestamps)
+- Non-admin users pull on app open
+
+## Data Integrity Rules
+
+1. **Zero-sum**: Game profits across all players must sum to exactly zero
+2. **Timestamp-based sync**: Always use fresh `lastUpdated` when pushing to force remote devices to sync
+3. **Forecast linkage**: `linkForecastToGame()` copies pending forecast (including `preGameTeaser`) into game record
+4. **Backup on game end**: `createGameEndBackup()` auto-creates backup after each completed game
+5. **Storage limits**: ~5-10MB per origin; `canWriteToStorage()` checks before large writes

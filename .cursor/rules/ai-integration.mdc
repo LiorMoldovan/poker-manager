@@ -1,0 +1,53 @@
+---
+description: Gemini AI integration — forecasts, summaries, chronicles, prompt rules, prediction algorithm
+globs: src/utils/geminiAI.ts
+alwaysApply: false
+---
+
+# AI Integration (Gemini)
+
+## Overview
+
+All AI lives in `src/utils/geminiAI.ts`. Uses Google Gemini API (`gemini-2.0-flash`). API key stored per-device in localStorage (`gemini_api_key`), managed by admin only. Non-admin users see cached AI content synced from cloud.
+
+## AI Features
+
+| Feature | Function | Trigger | Storage |
+|---------|----------|---------|---------|
+| Pre-Game Forecast | `generateAIForecasts()` | Admin clicks Forecast on NewGameScreen | `poker_pending_forecast` → copied to `Game.forecasts` |
+| Pre-Game Teaser | Part of `generateAIForecasts()` | Generated with forecast | `PendingForecast.preGameTeaser` → `Game.preGameTeaser` |
+| Forecast Comparison | `generateForecastComparison()` | Auto after game ends | `Game.forecastComment` |
+| Game Night Summary | `generateGameNightSummary()` | Auto after game ends | `Game.aiSummary` |
+| Player Chronicle | `generatePlayerChronicle()` | Admin visits Statistics tab | `poker_chronicle_profiles` (keyed by period) |
+| Graph Insights | `generateGraphInsights()` | Admin visits Graphs tab | `poker_graph_insights` (keyed by period) |
+
+## Forecast Prediction Algorithm
+
+Uses **Game Shape Sampling** — NOT simple score-based sorting:
+
+1. **Template**: Pick a real historical game profit distribution as shape template
+2. **Holistic scoring**: 6 dimensions (period avg 30%, momentum 25%, all-time avg 15%, win rate 15%, streak value 10%, freshness 5%)
+3. **Surprise modifiers**: Detected surprises shift player scores (underdog rise, top dog fall, streak breaker, dark horse, wild card, breakout)
+4. **Probability-weighted assignment**: Softmax random selection — stronger players more likely to get better slots but never guaranteed
+5. **Fine-tuning**: ±15% random scaling + zero-sum correction
+
+**IMPORTANT**: Do NOT make this deterministic. Do NOT add hardcoded spread constraints. The algorithm uses probability for realistic variance.
+
+## Prompt Engineering Rules
+
+1. **Hebrew output**: Every prompt explicitly requires Hebrew
+2. **Holistic prompts**: One flowing instruction set — NEVER patch prompts with extra constraints
+3. **Factual accuracy**: Provide exact numbers; instruct AI to never invent stats
+4. **Period labels**: Use `formatHebrewHalf()` for "חציון ראשון/שני YYYY" — never "H1/H2" in Hebrew text
+5. **Location insights**: Use `buildLocationInsights()` — include only when genuinely interesting
+6. **Mention all players**: Teasers and summaries should reference all participants by name
+7. **Combo history**: Use `getComboHistory()` + `buildComboHistoryText()` for recurring lineup context
+8. **Period awareness**: `detectPeriodMarkers()` auto-detects first/last game of month/half/year
+
+## Background AI Generation
+
+After game completion in ChipEntryScreen:
+1. Navigate to GameSummaryScreen with `state: { autoAI: true }`
+2. GameSummaryScreen auto-triggers AI summary + forecast comparison
+3. After generation, `syncToCloud()` pushes results to GitHub
+4. All users then see fresh AI content on next sync

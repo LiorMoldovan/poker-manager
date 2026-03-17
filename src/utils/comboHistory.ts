@@ -216,14 +216,16 @@ export function buildComboHistoryText(combo: ComboHistory): string {
     lines.push(`  • ${dateStr}: מנצח ${game.winnerName} (+${Math.round(game.winnerProfit)}₪), מפסיד ${game.loserName} (${Math.round(game.loserProfit)}₪)`);
   }
 
-  const alwaysWon = combo.playerStats.filter(p => p.alwaysWon);
-  const alwaysLost = combo.playerStats.filter(p => p.alwaysLost);
+  if (combo.totalGamesWithCombo >= 2) {
+    const alwaysWon = combo.playerStats.filter(p => p.alwaysWon);
+    const alwaysLost = combo.playerStats.filter(p => p.alwaysLost);
 
-  if (alwaysWon.length > 0) {
-    lines.push(`  ⭐ תמיד ברווח בהרכב הזה: ${alwaysWon.map(p => `${p.playerName} (${Math.round(p.winRate)}%)`).join(', ')}`);
-  }
-  if (alwaysLost.length > 0) {
-    lines.push(`  ⚠️ תמיד בהפסד בהרכב הזה: ${alwaysLost.map(p => p.playerName).join(', ')}`);
+    if (alwaysWon.length > 0) {
+      lines.push(`  ⭐ תמיד ברווח בהרכב הזה: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${combo.totalGamesWithCombo})`).join(', ')}`);
+    }
+    if (alwaysLost.length > 0) {
+      lines.push(`  ⚠️ תמיד בהפסד בהרכב הזה: ${alwaysLost.map(p => p.playerName).join(', ')}`);
+    }
   }
 
   const topPlayer = combo.playerStats[0];

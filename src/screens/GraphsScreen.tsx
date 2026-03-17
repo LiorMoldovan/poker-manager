@@ -12,7 +12,7 @@ import { Player, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraphInsights, saveGraphInsights } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { getGeminiApiKey, generateGraphInsights } from '../utils/geminiAI';
+import { getGeminiApiKey, generateGraphInsights, getLastUsedModel } from '../utils/geminiAI';
 import { syncToCloud } from '../database/githubSync';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
@@ -85,6 +85,7 @@ const GraphsScreen = () => {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [insightsGeneratedAt, setInsightsGeneratedAt] = useState<string>('');
+  const [insightsModelName, setInsightsModelName] = useState<string>('');
   const insightsGenRef = useRef(false);
 
   // Color mapping - stable by player order in permanent list
@@ -258,6 +259,7 @@ const GraphsScreen = () => {
         saveGraphInsights(key, text);
         setInsightsText(text);
         setInsightsGeneratedAt(new Date().toISOString());
+        setInsightsModelName(getLastUsedModel());
         syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
       } catch (err) {
         console.error('Graph insights auto-generation failed:', err);
@@ -306,6 +308,7 @@ const GraphsScreen = () => {
       saveGraphInsights(key, text);
       setInsightsText(text);
       setInsightsGeneratedAt(new Date().toISOString());
+      setInsightsModelName(getLastUsedModel());
       syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
     } catch (err) {
       console.error('Graph insights generation failed:', err);
@@ -1193,6 +1196,7 @@ const GraphsScreen = () => {
                   marginTop: '0.4rem',
                 }}>
                   נוצר: {new Date(insightsGeneratedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {insightsModelName && ` · model: ${insightsModelName}`}
                 </div>
               )}
             </>

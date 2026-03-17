@@ -5,7 +5,7 @@ import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
-import { generatePlayerChronicle, ChroniclePlayerData } from '../utils/geminiAI';
+import { generatePlayerChronicle, ChroniclePlayerData, getLastUsedModel } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import { syncToCloud } from '../database/githubSync';
 
@@ -85,6 +85,7 @@ const StatisticsScreen = () => {
   const [chronicleLoading, setChronicleLoading] = useState(false);
   const [chronicleError, setChronicleError] = useState<string | null>(null);
   const [isSharingChronicle, setIsSharingChronicle] = useState(false);
+  const [chronicleModelName, setChronicleModelName] = useState<string>('');
   const chronicleGenRef = useRef(false);
 
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -432,6 +433,7 @@ const StatisticsScreen = () => {
               הכרוניקה — ${titleLabel}${pageNum}
             </h3>
             <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
+            ${chronicleModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${chronicleModelName}</div>` : ''}
           </div>
           <div id="players-slot"></div>
           <div style="text-align: center; margin-top: 1rem; font-size: 0.65rem; color: #94a3b8; opacity: 0.5;">Poker Manager 🎲</div>
@@ -1783,7 +1785,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  🏆 Global Records
+                  🏆 Hall of Fame
                 </button>
                 <button
                   onClick={() => setRecordsSubTab('playerRecords')}
@@ -1800,7 +1802,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  📊 Player Records
+                  👑 Personal Records
                 </button>
               </div>
 
@@ -2124,7 +2126,7 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                📊 Player Records ({getTimeframeLabel()})
+                👑 Personal Records ({getTimeframeLabel()})
               </div>
 
               {/* Current Streaks */}
@@ -3187,6 +3189,7 @@ const StatisticsScreen = () => {
 
                   saveChronicleProfiles(periodKey, profiles);
                   setChronicleStories(profiles);
+                  setChronicleModelName(getLastUsedModel());
 
                   syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
                 } catch (err) {
@@ -3248,6 +3251,7 @@ const StatisticsScreen = () => {
 
                 saveChronicleProfiles(periodKey, profiles);
                 setChronicleStories(profiles);
+                setChronicleModelName(getLastUsedModel());
 
                 syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
               } catch (err) {
@@ -3339,6 +3343,11 @@ const StatisticsScreen = () => {
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                         {totalPeriodGames} משחקים | {numPlayers} שחקנים פעילים
                       </div>
+                      {chronicleModelName && hasAiStories && (
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.15rem', opacity: 0.6 }}>
+                          model: {chronicleModelName}
+                        </div>
+                      )}
                     </div>
                     {isAdmin && !chronicleLoading && totalPeriodGames > 0 && (
                       <button

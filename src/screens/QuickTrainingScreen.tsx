@@ -7,6 +7,7 @@ import {
   recordDecision,
   saveSession,
   SessionResult,
+  getLastTrainingModel,
 } from '../utils/pokerTraining';
 
 const ColoredCards = ({ text }: { text: string }) => {
@@ -40,6 +41,7 @@ const QuickTrainingScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<{ correct: boolean; categoryId: string }[]>([]);
   const [showSummary, setShowSummary] = useState(false);
+  const [quickModelName, setQuickModelName] = useState<string>('');
 
   const loadBatch = useCallback(async () => {
     setLoading(true);
@@ -48,6 +50,7 @@ const QuickTrainingScreen = () => {
       const catIds = categoriesParam ? categoriesParam.split(',').filter(Boolean) : undefined;
       const batch = await generateQuickBatch(maxHands, catIds);
       setScenarios(batch);
+      setQuickModelName(getLastTrainingModel());
       setCurrentIdx(0);
       setResults([]);
       setSelectedOption(null);
@@ -288,11 +291,18 @@ const QuickTrainingScreen = () => {
         >
           ← {results.length > 0 ? 'סיים' : 'חזרה'}
         </button>
-        <div style={{
-          fontSize: '0.8rem', fontWeight: '700',
-          color: 'var(--primary)',
-        }}>
-          ⚡ {currentIdx + 1}/{scenarios.length}
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontSize: '0.8rem', fontWeight: '700',
+            color: 'var(--primary)',
+          }}>
+            ⚡ {currentIdx + 1}/{scenarios.length}
+          </div>
+          {quickModelName && (
+            <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+              model: {quickModelName}
+            </div>
+          )}
         </div>
       </div>
 

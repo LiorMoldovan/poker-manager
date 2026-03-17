@@ -205,3 +205,51 @@ export interface ActivityLogEntry {
   fingerprint?: DeviceFingerprint;
 }
 
+// --- Live Game AI TTS Pool ---
+
+export type TTSPlaceholder = '{PLAYER}' | '{COUNT}' | '{POT}' | '{RECORD}' | '{RIVAL}' | '{RANK}';
+
+export interface TTSMessage {
+  text: string;
+  placeholders?: TTSPlaceholder[];
+}
+
+export type TTSAnticipatedCategory =
+  | 'above_avg'
+  | 'record_tied'
+  | 'record_broken'
+  | 'is_leader'
+  | 'rival_matched'
+  | 'tied_for_lead';
+
+export interface TTSPlayerMessages {
+  generic: TTSMessage[];
+  anticipated?: Partial<Record<TTSAnticipatedCategory, TTSMessage[]>>;
+}
+
+export interface TTSRivalry {
+  player1: string;
+  player2: string;
+  description: string;
+}
+
+export interface LiveGameTTSPool {
+  gameId: string;
+  generatedAt: string;
+  players: Record<string, TTSPlayerMessages>;
+  shared: {
+    first_blood: TTSMessage[];
+    opening_ceremony: TTSMessage[];
+    bad_beat: Record<string, TTSMessage[]>;
+    bad_beat_generic: TTSMessage[];
+    big_hand: Record<string, TTSMessage[]>;
+    big_hand_generic: TTSMessage[];
+    break_time: TTSMessage[];
+    auto_announce: TTSMessage[];
+    awards_generosity: TTSMessage[];
+    awards_survival: TTSMessage[];
+  };
+  rivalries: TTSRivalry[];
+  usedIndices: Record<string, number[]>;
+}
+

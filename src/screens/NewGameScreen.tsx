@@ -2,10 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers } from '../utils/geminiAI';
+import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 
 import { PeriodMarkers } from '../types';
@@ -63,6 +63,7 @@ const NewGameScreen = () => {
   const [aiForecasts, setAiForecasts] = useState<ForecastResult[] | null>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiModelName, setAiModelName] = useState<string>('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [retryCountdown, setRetryCountdown] = useState<number | null>(null);
   const [showMismatchDialog, setShowMismatchDialog] = useState(false);
@@ -252,7 +253,9 @@ const NewGameScreen = () => {
     }
   };
   
-  const startGameWithForecast = (forecasts?: GameForecast[]) => {
+  const [generatingTTS, setGeneratingTTS] = useState(false);
+
+  const startGameWithForecast = async (forecasts?: GameForecast[]) => {
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     const game = createGame(Array.from(selectedIds), location || undefined, forecasts);
     
@@ -263,6 +266,25 @@ const NewGameScreen = () => {
 
     if (periodMarkers) {
       updateGame(game.id, { periodMarkers });
+    }
+
+    const apiKey = getGeminiApiKey();
+    if (apiKey) {
+      setGeneratingTTS(true);
+      try {
+        const allStats = getPlayerStats();
+        const playerIdArr = Array.from(selectedIds);
+        const playerNameArr = playerIdArr.map(id => players.find(p => p.id === id)?.name || '');
+        const pool = await generateLiveGameTTSPool(game.id, playerIdArr, playerNameArr, allStats, location || undefined);
+        if (pool) {
+          saveTTSPool(game.id, pool);
+          console.log('🎙️ TTS pool saved for game', game.id);
+        }
+      } catch (err) {
+        console.warn('TTS pool generation failed (non-blocking):', err);
+      } finally {
+        setGeneratingTTS(false);
+      }
     }
     
     navigate(`/live-game/${game.id}`);
@@ -390,7 +412,7 @@ const NewGameScreen = () => {
       } else if (streak <= -3) {
         insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים רצופים - צריך שינוי מזל דחוף` });
       } else if (streak === -2) {
-        insights.push({ priority: 60, text: `שני הפסדים אחרונים - הלילה ההזדמנות לשבור את הרצף` });
+        insights.push({ priority: 60, text: `שני הפסדים אחרונים - הפעם ההזדמנות לשבור את הרצף` });
       }
       
       // IMPROVEMENT vs HISTORY (only if active)
@@ -628,10 +650,10 @@ const NewGameScreen = () => {
     // Cold streak sentences
     if (trend === 'cold') {
       const sentences = [
-        `${name} ${g('עובר', 'עוברת')} תקופה קשה עם הרצף השלילי, אבל כל רצף נשבר מתישהו - השאלה אם הלילה`,
-        `הקלפים לא מחייכים ל${name} לאחרונה, אבל כולם יודעים שהמזל מתהפך. אולי הלילה?`,
+        `${name} ${g('עובר', 'עוברת')} תקופה קשה עם הרצף השלילי, אבל כל רצף נשבר מתישהו - השאלה אם הפעם`,
+        `הקלפים לא מחייכים ל${name} לאחרונה, אבל כולם יודעים שהמזל מתהפך. אולי הפעם?`,
         `${name} בתקופת יובש - מספיק הפסדים כדי שכולם יתחילו לשאול מה ${g('קורה לו', 'קורה לה')}`,
-        `כולם אוהבים סיפור קאמבק, ו${name} בדיוק במצב ${g('שבו הוא צריך', 'שבו היא צריכה')} אחד. הלילה ההזדמנות ${g('שלו', 'שלה')}`,
+        `כולם אוהבים סיפור קאמבק, ו${name} בדיוק במצב ${g('שבו הוא צריך', 'שבו היא צריכה')} אחד. הפעם ההזדמנות ${g('שלו', 'שלה')}`,
         `${name} ${g('יודע', 'יודעת')} שהרצף השלילי חייב להישבר - השאלה היא האם יש ${g('לו', 'לה')} את הכוח הנפשי לזה`,
         `תקופה קשה ל${name}, אבל ${g('שחקנים אמיתיים יודעים', 'שחקניות אמיתיות יודעות')} איך לצאת מבורות. נראה מה יקרה`,
         `${name} ${g('מחפש', 'מחפשת')} את הנצחון שישבור את הרצף - כשזה יקרה, זה יהיה מתוק במיוחד`,
@@ -647,7 +669,7 @@ const NewGameScreen = () => {
         `המומנטום לצד ${name} - מי שעוקב אחרי הנתונים רואה ${g('שהוא', 'שהיא')} בכיוון הנכון`,
         `${name} ${g('מראה', 'מראה')} סימני שיפור מרשימים - יכול להיות ${g('שהוא עומד', 'שהיא עומדת')} לפרוץ`,
         `הרוח משתנה לטובת ${name} - הביצועים האחרונים מבטיחים משהו טוב`,
-        `${name} בתהליך של שיפור עקבי - השאלה היא האם הלילה ${g('הוא ימשיך', 'היא תמשיך')} את המגמה`,
+        `${name} בתהליך של שיפור עקבי - השאלה היא האם הפעם ${g('הוא ימשיך', 'היא תמשיך')} את המגמה`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
     }
@@ -659,7 +681,7 @@ const NewGameScreen = () => {
         `משהו לא עובד ל${name} בתקופה האחרונה - הנתונים מראים ירידה ברורה`,
         `${name} ${g('מאבד', 'מאבדת')} קצת את הקצב - ימים יותר טובים ${g('היו לו', 'היו לה')} בעבר`,
         `${name} ${g('צריך', 'צריכה')} לעצור את מגמת הירידה - הביצועים האחרונים לא משקפים את הפוטנציאל ${g('שלו', 'שלה')}`,
-        `${name} בירידה קלה אבל מורגשת - נראה אם ${g('הוא יצליח', 'היא תצליח')} להתאושש הלילה`,
+        `${name} בירידה קלה אבל מורגשת - נראה אם ${g('הוא יצליח', 'היא תצליח')} להתאושש הפעם`,
         `לא הזמן הכי טוב של ${name} - הנתונים האחרונים מדאיגים קצת`,
       ];
       return sentences[Math.floor(Math.random() * sentences.length)];
@@ -669,20 +691,20 @@ const NewGameScreen = () => {
     if (isSurprise) {
       if (expectedOutcome.includes('win')) {
         const sentences = [
-          `⚡ תחושת בטן חזקה: ${name} ${g('הולך', 'הולכת')} להפתיע הלילה. הנתונים אומרים דבר אחד, אבל משהו באוויר אומר אחרת`,
+          `⚡ תחושת בטן חזקה: ${name} ${g('הולך', 'הולכת')} להפתיע הפעם. הנתונים אומרים דבר אחד, אבל משהו באוויר אומר אחרת`,
           `⚡ ${name} ${g('מגיע', 'מגיעה')} עם משהו להוכיח - לפעמים הדחף להוכיח שווה יותר מכל סטטיסטיקה`,
           `⚡ נגד כל הסיכויים: ${name} ${g('עשוי', 'עשויה')} לעשות קאמבק מפתיע. יש ${g('לו', 'לה')} את האנרגיה לזה`,
-          `⚡ ${name} לא ${g('הולך', 'הולכת')} לפי התסריט הלילה - יש משהו ${g('שונה בו', 'שונה בה')}, תחושה של פריצה`,
-          `⚡ הפתעה באוויר: ${name} ${g('יכול', 'יכולה')} לשנות את הכל הלילה ולהפוך את הקערה על פיה`,
+          `⚡ ${name} לא ${g('הולך', 'הולכת')} לפי התסריט הפעם - יש משהו ${g('שונה בו', 'שונה בה')}, תחושה של פריצה`,
+          `⚡ הפתעה באוויר: ${name} ${g('יכול', 'יכולה')} לשנות את הכל הפעם ולהפוך את הקערה על פיה`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       } else {
         const sentences = [
           `⚡ אזהרה: גם ${g('מלכים נופלים', 'מלכות נופלות')}. ${name} ${g('בא', 'באה')} עם ביטחון, אבל משהו יכול להשתבש`,
-          `⚡ ${name} ${g('צריך', 'צריכה')} להיזהר הלילה - ביטחון יתר יכול להיות מסוכן, וההיסטוריה לא תמיד מגינה`,
+          `⚡ ${name} ${g('צריך', 'צריכה')} להיזהר הפעם - ביטחון יתר יכול להיות מסוכן, וההיסטוריה לא תמיד מגינה`,
           `⚡ משהו לא מרגיש נכון לגבי ${name} הערב - למרות הנתונים הטובים, יש תחושה של נפילה`,
           `⚡ ${name} ${g('עלול', 'עלולה')} להיתקל בהפתעה לא נעימה - לפעמים דברים לא הולכים לפי התוכנית`,
-          `⚡ נבואה מפתיעה: ${name} ${g('יכול', 'יכולה')} לאכול אותה הלילה למרות ההיסטוריה ${g('המרשימה שלו', 'המרשימה שלה')}`,
+          `⚡ נבואה מפתיעה: ${name} ${g('יכול', 'יכולה')} לאכול אותה הפעם למרות ההיסטוריה ${g('המרשימה שלו', 'המרשימה שלה')}`,
         ];
         return sentences[Math.floor(Math.random() * sentences.length)];
       }
@@ -692,7 +714,7 @@ const NewGameScreen = () => {
     switch (expectedOutcome) {
       case 'big_win':
         const bigWinSentences = [
-          `${name} ${g('הוא המועמד המוביל', 'היא המועמדת המובילה')} לקחת הכי הרבה כסף הלילה - הנתונים והפורמה ${g('שלו', 'שלה')} פשוט מדברים בעד עצמם`,
+          `${name} ${g('הוא המועמד המוביל', 'היא המועמדת המובילה')} לקחת הכי הרבה כסף הפעם - הנתונים והפורמה ${g('שלו', 'שלה')} פשוט מדברים בעד עצמם`,
           `כולם צריכים להיזהר מ${name} הערב - ${g('הוא בא', 'היא באה')} לגבות מיסים ולא נראה שמישהו ${g('יכול לעצור אותו', 'יכול לעצור אותה')}`,
           `${name} במצב שבו הכל עובד ${g('לטובתו', 'לטובתה')} - אם הייתי צריך להמר על ${g('מישהו, הוא היה', 'מישהי, היא הייתה')} הבחירה הראשונה שלי`,
           `${name} ${g('הוא', 'היא')} הסיבה שכמה אנשים סביב השולחן קצת מודאגים - וזה מוצדק לגמרי`,
@@ -703,7 +725,7 @@ const NewGameScreen = () => {
         
       case 'win':
         const winSentences = [
-          `${name} בפורמה טובה ויש ${g('לו', 'לה')} סיכוי ממשי לצאת עם רווח יפה הלילה`,
+          `${name} בפורמה טובה ויש ${g('לו', 'לה')} סיכוי ממשי לצאת עם רווח יפה הפעם`,
           `הנתונים תומכים ב${name} - ${g('הוא יודע', 'היא יודעת')} לשחק והתוצאות מוכיחות את זה`,
           `${name} ${g('מגיע', 'מגיעה')} עם יתרון סטטיסטי ברור - לא ${g('מועמד', 'מועמדת')} לכתר, אבל בהחלט ${g('שחקן רציני', 'שחקנית רצינית')}`,
           `${name} לא ${g('בא', 'באה')} להשתתף, ${g('הוא בא', 'היא באה')} לנצח - והסיכויים בהחלט ${g('לצידו', 'לצידה')}`,
@@ -729,26 +751,26 @@ const NewGameScreen = () => {
           `50-50 עבור ${name} - יכול להיות ערב מדהים או ערב לשכוח. תלוי באיזה ${name} ${g('יגיע', 'תגיע')}`,
           `${name} על קו האפס - השאלה הגדולה היא לאיזה צד ${g('הוא ייפול', 'היא תיפול')}, ואף אחד לא יודע`,
           `${name} בלתי ${g('צפוי', 'צפויה')} לחלוטין - זה מה ${g('שמעניין בו', 'שמעניין בה')}, אף פעם לא יודעים מה יקרה`,
-          `מי יודע מה ${g('יעשה', 'תעשה')} ${name} הלילה? הנתונים לא עוזרים, והכל תלוי במזל ובמצב רוח`,
+          `מי יודע מה ${g('יעשה', 'תעשה')} ${name} הפעם? הנתונים לא עוזרים, והכל תלוי במזל ובמצב רוח`,
           `${name} ${g('יכול', 'יכולה')} להפתיע לכל כיוון - גם ניצחון גדול וגם הפסד כואב אפשריים לגמרי`,
         ];
         return neutralSentences[Math.floor(Math.random() * neutralSentences.length)];
         
       case 'slight_loss':
         const slightLossSentences = [
-          `${name} ${g('צריך', 'צריכה')} קצת מזל הלילה - הנתונים לא לגמרי ${g('לצידו', 'לצידה')}, אבל זה לא אומר ${g('שהוא', 'שהיא')} לא ${g('יכול', 'יכולה')} להפוך את הקערה`,
+          `${name} ${g('צריך', 'צריכה')} קצת מזל הפעם - הנתונים לא לגמרי ${g('לצידו', 'לצידה')}, אבל זה לא אומר ${g('שהוא', 'שהיא')} לא ${g('יכול', 'יכולה')} להפוך את הקערה`,
           `הרוח לא לגמרי לטובת ${name} הערב - ${g('הוא יצטרך', 'היא תצטרך')} להילחם על כל שקל אם ${g('הוא רוצה', 'היא רוצה')} לצאת ברווח`,
           `${name} ${g('מתחיל', 'מתחילה')} עם חיסרון קל - לא דרמטי, אבל מספיק כדי להקשות על הערב`,
           `הסיכויים קצת נגד ${name} - ${g('הוא יצטרך', 'היא תצטרך')} משחק טוב במיוחד כדי להפוך את המגמה`,
           `${name} ${g('בא', 'באה')} לערב מאתגר - הנתונים מציעים שזה לא יהיה קל, אבל הכל אפשרי`,
-          `${name} ${g('יצטרך', 'תצטרך')} לעבוד קשה הלילה - היתרון לא ${g('לצידו', 'לצידה')}, אבל ${g('שחקנים טובים יודעים', 'שחקניות טובות יודעות')} איך להתגבר`,
+          `${name} ${g('יצטרך', 'תצטרך')} לעבוד קשה הפעם - היתרון לא ${g('לצידו', 'לצידה')}, אבל ${g('שחקנים טובים יודעים', 'שחקניות טובות יודעות')} איך להתגבר`,
         ];
         return slightLossSentences[Math.floor(Math.random() * slightLossSentences.length)];
         
       case 'loss':
         const lossSentences = [
           `${name} לא בעמדה הכי טובה הערב - הנתונים מראים ${g('שהוא יצטרך', 'שהיא תצטרך')} הרבה מזל כדי לשנות את המגמה`,
-          `קשה להיות ${g('אופטימי', 'אופטימית')} לגבי ${name} הלילה - הסטטיסטיקות לא ${g('לצידו', 'לצידה')} ונראה ${g('שיהיה לו', 'שיהיה לה')} קשה`,
+          `קשה להיות ${g('אופטימי', 'אופטימית')} לגבי ${name} הפעם - הסטטיסטיקות לא ${g('לצידו', 'לצידה')} ונראה ${g('שיהיה לו', 'שיהיה לה')} קשה`,
           `${name} ${g('בא', 'באה')} עם רוח נגדית חזקה - אולי ${g('כדאי לו', 'כדאי לה')} לשחק ${g('שמרני', 'שמרנית')} ולא לקחת סיכונים`,
           `הנתונים לא מבשרים טובות ל${name} - נראה שזה הולך להיות ערב מאתגר במיוחד`,
           `${name} ${g('יצטרך', 'תצטרך')} נס קטן כדי לסיים ברווח - הסיכויים ממש לא ${g('לצידו', 'לצידה')} הערב`,
@@ -759,7 +781,7 @@ const NewGameScreen = () => {
       case 'big_loss':
         const bigLossSentences = [
           `${name} ${g('הוא הספונסר הלא רשמי', 'היא הספונסרית הלא רשמית')} של הקבוצה - ${g('בזכותו', 'בזכותה')} כולנו מרוויחים יותר, ועל זה אנחנו מודים`,
-          `תודה מראש ל${name} על התרומה - הנתונים מראים ${g('שהוא כנראה יחלק', 'שהיא כנראה תחלק')} כסף לכולם הלילה`,
+          `תודה מראש ל${name} על התרומה - הנתונים מראים ${g('שהוא כנראה יחלק', 'שהיא כנראה תחלק')} כסף לכולם הפעם`,
           `${name} ${g('בא', 'באה')} לבלות עם חברים, לא לנצח - וזה בסדר גמור, כי מישהו צריך לממן את המשחק`,
           `${name} ${g('מוכיח', 'מוכיחה')} שפוקר זה לא רק על כסף - ${g('הוא בא', 'היא באה')} ליהנות, גם אם הארנק ${g('שלו', 'שלה')} סובל`,
           `כולם אוהבים כש${name} ${g('מגיע', 'מגיעה')} - בעיקר הארנקים שלהם. הנתונים מדברים בעד עצמם`,
@@ -777,8 +799,8 @@ const NewGameScreen = () => {
     const g = (m: string, f: string) => female ? f : m;
     
     const sentences = [
-      `${name} ${g('נכנס', 'נכנסת')} למשחק בלי היסטוריה - דף חלק לגמרי. הלילה נתחיל לכתוב את הסיפור ${g('שלו', 'שלה')}`,
-      `אין לנו שום מידע על ${name} - ${g('הוא יכול להיות גאון פוקר או הפסד מובטח', 'היא יכולה להיות גאונת פוקר או הפסד מובטח')}. הלילה נגלה`,
+      `${name} ${g('נכנס', 'נכנסת')} למשחק בלי היסטוריה - דף חלק לגמרי. הפעם נתחיל לכתוב את הסיפור ${g('שלו', 'שלה')}`,
+      `אין לנו שום מידע על ${name} - ${g('הוא יכול להיות גאון פוקר או הפסד מובטח', 'היא יכולה להיות גאונת פוקר או הפסד מובטח')}. הפעם נגלה`,
       `${name} ${g('הוא', 'היא')} סוס אפל מוחלט - בלי נתונים, בלי היסטוריה, בלי שום רמז למה שיקרה`,
       `מי ${g('זה', 'זאת')} בכלל ${name}? אין לנו מושג, ובדיוק זה מה שמעניין. הכל פתוח`,
       `${name} ${g('מתחיל', 'מתחילה')} מאפס - בלי יתרון ובלי חיסרון. הערב הזה יקבע את הרושם הראשוני`,
@@ -902,10 +924,12 @@ const NewGameScreen = () => {
         const alwaysLost = comboHistory.playerStats.filter(p => p.alwaysLost);
 
         let patternsHtml = '';
-        if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${Math.round(p.winRate)}%)`).join(', ')}</div>`;
-        if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
-        if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הלילה?</div>`;
-        if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        if (comboHistory.totalGamesWithCombo >= 2) {
+          if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+          if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
+          if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הפעם?</div>`;
+          if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        }
 
         const gamesHtml = comboHistory.previousGames.slice(-3).map(game => {
           const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
@@ -927,7 +951,6 @@ const NewGameScreen = () => {
           ${patternsHtml ? `<div style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem;">${patternsHtml}</div>` : ''}
           <div style="font-size: 0.75rem; color: #64748b; font-weight: 600; margin-bottom: 0.3rem;">📅 משחקים קודמים:</div>
           <div style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.6rem;">${gamesHtml}</div>
-          <div style="font-size: 0.72rem; color: #64748b; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.4rem;">💰 סה״כ עבר בהרכב: ₪${Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-${comboHistory.totalGamesWithCombo} משחקים</div>
         </div>`;
       };
 
@@ -939,14 +962,15 @@ const NewGameScreen = () => {
         teaserContainer.innerHTML = `
           <div style="text-align: center; margin-bottom: 1.25rem;">
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">🤖</div>
-            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">טיזר הלילה</h3>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">טיזר המשחק</h3>
             <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
+            ${aiModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${aiModelName}</div>` : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
           <div style="padding: 1rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10)); border: 1px solid rgba(139, 92, 246, 0.35); text-align: right; direction: rtl;">
             <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; flex-direction: row-reverse; justify-content: center;">
               <span style="font-size: 1.2rem;">🎙️</span>
-              <span style="font-size: 0.85rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">טיזר הלילה</span>
+              <span style="font-size: 0.85rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">טיזר המשחק</span>
             </div>
             <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.8; font-weight: 400;">${aiForecasts![0].preGameTeaser}</div>
           </div>
@@ -980,9 +1004,10 @@ const NewGameScreen = () => {
           <div style="text-align: center; margin-bottom: 1.25rem;">
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">${isAI ? '🤖' : '🔮'}</div>
             <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
-              ${isAI ? 'תחזית AI' : 'תחזית הלילה'}${pageNum}
+              ${isAI ? 'תחזית AI' : 'תחזית המשחק'}${pageNum}
             </h3>
             ${isAI ? '<div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>' : ''}
+            ${isAI && aiModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${aiModelName}</div>` : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
           <div style="margin-bottom: 1rem;">
@@ -1248,6 +1273,7 @@ const NewGameScreen = () => {
 
         const forecasts = await generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined, comboText);
         setAiForecasts(forecasts);
+        setAiModelName(getLastUsedModel());
         setIsLoadingAI(false);
         
         const forecastsToSave: GameForecast[] = forecasts.map(f => ({
@@ -1718,10 +1744,10 @@ const NewGameScreen = () => {
         <button 
           className="btn btn-primary"
           onClick={handleStartGame}
-          disabled={selectedIds.size < 2}
+          disabled={selectedIds.size < 2 || generatingTTS}
           style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
         >
-          🎰 Start Game ({selectedIds.size})
+          {generatingTTS ? '🎙️ מכין את הערב...' : `🎰 Start Game (${selectedIds.size})`}
         </button>
       </div>
 
@@ -1899,6 +1925,11 @@ const NewGameScreen = () => {
                   <div style={{ fontSize: '0.75rem', color: '#A855F7', marginTop: '0.25rem' }}>
                     Powered by Gemini ✨
                   </div>
+                  {aiModelName && (
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.15rem', opacity: 0.7 }}>
+                      model: {aiModelName}
+                    </div>
+                  )}
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                     {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </div>
@@ -1917,7 +1948,7 @@ const NewGameScreen = () => {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
                       <span style={{ fontSize: '1.1rem' }}>🎙️</span>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', letterSpacing: '0.5px' }}>טיזר הלילה</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', letterSpacing: '0.5px' }}>טיזר המשחק</span>
                     </div>
                     <div style={{ fontSize: '0.92rem', color: '#e2e8f0', lineHeight: 1.7, fontWeight: 400 }}>
                       {aiForecasts[0].preGameTeaser}
@@ -1961,19 +1992,17 @@ const NewGameScreen = () => {
                           const top = comboHistory.playerStats[0];
                           const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
                           return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)' }}>
-                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'baseline' }}>
-                                <span>👑</span>
-                                <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל ההרכב:</span>
-                                <span>{top.playerName}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', direction: 'rtl', textAlign: 'right' }}>
+                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                                👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל ההרכב:</span>{' '}
+                                {top.playerName}{' '}
                                 <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
                                   ({top.totalProfit >= 0 ? '+' : ''}{Math.round(top.totalProfit)}₪)
                                 </span>
                               </div>
-                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'baseline' }}>
-                                <span>📉</span>
-                                <span style={{ fontWeight: 600 }}>תחתית ההרכב:</span>
-                                <span>{bottom.playerName}</span>
+                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                                📉 <span style={{ fontWeight: 600 }}>תחתית ההרכב:</span>{' '}
+                                {bottom.playerName}{' '}
                                 <span style={{ color: '#f87171' }}>
                                   ({bottom.totalProfit >= 0 ? '+' : ''}{Math.round(bottom.totalProfit)}₪)
                                 </span>
@@ -1982,12 +2011,12 @@ const NewGameScreen = () => {
                           );
                         })()}
 
-                        {/* Patterns */}
-                        {(comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2) || comboHistory.repeatWinners.length > 0) && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem' }}>
+                        {/* Patterns - only show "always" patterns with 2+ games */}
+                        {comboHistory.totalGamesWithCombo >= 2 && (comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) || comboHistory.repeatWinners.length > 0) && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', direction: 'rtl', textAlign: 'right' }}>
                             {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
                               <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
-                                ⭐ תמיד ברווח: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${Math.round(p.winRate)}%)`).join(', ')}
+                                ⭐ תמיד ברווח: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
                               </div>
                             )}
                             {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
@@ -1995,9 +2024,9 @@ const NewGameScreen = () => {
                                 ⚠️ תמיד בהפסד: {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
                               </div>
                             )}
-                            {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && comboHistory.totalGamesWithCombo >= 2 && (
+                            {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
                               <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
-                                🎲 מנצח שונה בכל משחק — מי הלילה?
+                                🎲 מנצח שונה בכל משחק — מי הפעם?
                               </div>
                             )}
                             {comboHistory.repeatWinners.length > 0 && (
@@ -2009,14 +2038,14 @@ const NewGameScreen = () => {
                         )}
 
                         {/* Previous games */}
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', direction: 'rtl', textAlign: 'right' }}>
                           📅 משחקים קודמים:
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
                           {comboHistory.previousGames.slice(-3).map((game, i) => {
                             const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
                             return (
-                              <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8' }}>
+                              <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', direction: 'rtl', textAlign: 'right' }}>
                                 <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
                                 <div>
                                   <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
@@ -2028,10 +2057,6 @@ const NewGameScreen = () => {
                           })}
                         </div>
 
-                        {/* Total money moved */}
-                        <div style={{ fontSize: '0.72rem', color: '#64748b', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.4rem' }}>
-                          💰 סה״כ עבר בהרכב: ₪{Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-{comboHistory.totalGamesWithCombo} משחקים
-                        </div>
                       </div>
                     )}
                   </div>
@@ -2140,7 +2165,7 @@ const NewGameScreen = () => {
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🔮</div>
                   <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
-                    תחזית הלילה
+                    תחזית המשחק
                   </h3>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                     {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}

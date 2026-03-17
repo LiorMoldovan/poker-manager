@@ -1,4 +1,30 @@
-// Convert any number (0–9999) to spoken Hebrew words for TTS
+// Gender-aware Hebrew number words for TTS
+// feminine=true for feminine nouns (קניות, פעמים, דקות)
+// feminine=false for masculine nouns (נצחונות, הפסדים, משחקים, שחקנים, אחוז, שקלים)
+export const hebrewNum = (n: number, feminine: boolean): string => {
+  const abs = Math.round(Math.abs(n));
+  if (abs === 0) return 'אפס';
+  const femOnes = ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
+  const mascOnes = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
+  const ones = feminine ? femOnes : mascOnes;
+  if (abs <= 10) return ones[abs];
+  if (abs <= 19) {
+    const unit = abs - 10;
+    const tenWord = feminine ? 'עשרה' : 'עשר';
+    return `${ones[unit]} ${tenWord}`;
+  }
+  if (abs <= 99) {
+    const tensWords = ['', '', 'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים'];
+    const ten = Math.floor(abs / 10);
+    const unit = abs % 10;
+    if (unit === 0) return tensWords[ten];
+    return `${tensWords[ten]} ו${ones[unit]}`;
+  }
+  if (abs === 100) return 'מאה';
+  return String(abs);
+};
+
+// Convert any number (0–9999) to spoken Hebrew words for TTS (masculine only, used by prepareTTSText)
 export const numberToHebrewTTS = (n: number): string => {
   const abs = Math.round(Math.abs(n));
   if (abs === 0) return 'אפס';

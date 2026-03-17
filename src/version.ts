@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.7.3';
+export const APP_VERSION = '5.8.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.0',
+    date: '2026-03-17',
+    changes: [
+      '🎙️ AI TTS pool — pre-generated contextual voice messages during live games',
+      '🎭 Player traits system — personality-based commentary and reactions',
+      '🏆 Rebuy records tracking with personal and group records',
+      '📣 Social actions — bad beat and big hand announcements',
+      '🎪 Awards ceremony at game end',
+      '🔄 Cursor rules migrated to .mdc format with AGENTS.md',
+    ]
+  },
   {
     version: '5.7.3',
     date: '2026-03-16',

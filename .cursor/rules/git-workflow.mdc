@@ -1,0 +1,79 @@
+---
+description: Git commit/push/merge policy, Vercel deployment, and version bumping workflow
+alwaysApply: true
+---
+
+# Git, Deployment & Version Workflow
+
+## CRITICAL: Merge Policy
+
+**NEVER commit, push, or merge unless the user EXPLICITLY asks.** Do not proactively commit changes.
+
+When the user says "merge" or "push" or "upload" or "push to BB", they mean the full deployment pipeline:
+
+1. **Bump version** in `src/version.ts` — increment `APP_VERSION` and add a `CHANGELOG` entry
+2. **Commit** all changes to git
+3. **Push** to GitHub `main` branch (pull --rebase first if needed)
+4. **Verify** Vercel deployment will trigger (it auto-deploys from `main`)
+
+## Step-by-Step Merge Process
+
+```
+1. Update APP_VERSION and CHANGELOG in src/version.ts
+2. git add .
+3. git status                          # Review what's being committed
+4. git pull --rebase                   # Sync with remote first
+5. git commit -m "vX.Y.Z - description"
+6. git push                            # Triggers Vercel auto-deploy
+```
+
+If push fails with "non-fast-forward":
+```
+git pull --rebase
+git push
+```
+
+If you have uncommitted changes and need to pull:
+```
+git stash
+git pull --rebase
+git stash pop
+```
+
+## Version Bumping
+
+Version lives in `src/version.ts` (NOT `package.json`). Always bump as part of the merge process.
+
+1. Read current `APP_VERSION` from `src/version.ts`
+2. Increment: patch for fixes, minor for features, major for breaking changes
+3. Update `APP_VERSION` constant
+4. Add new entry at TOP of `CHANGELOG` array with today's date and change descriptions
+5. Include the version bump in the same commit
+
+### Commit Message Format
+```
+vX.Y.Z - Brief description of changes
+```
+
+## Remote Repository
+
+- **Host**: GitHub
+- **Repo**: `LiorMoldovan/poker-manager`
+- **Branch**: `main` (only branch)
+- **User refers to GitHub as**: "BB" (push to BB = push to GitHub)
+
+## Vercel Deployment
+
+- **Auto-deploy**: Every push to `main` triggers Vercel build
+- **SPA routing**: `vercel.json` has rewrite rule `/(.*) → /index.html`
+- **Skip deploy**: `vercel.json` has `ignoreCommand` that skips deploy if only non-source files changed
+- **Cache**: `index.html` is `no-cache`, assets are `immutable` with 1-year cache
+
+## Do NOT
+
+- Force push to main
+- Amend commits that have been pushed
+- Change git config
+- Commit `.env` files or secrets
+- Commit without explicit user request
+- Push without bumping version

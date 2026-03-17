@@ -1,0 +1,50 @@
+---
+description: Testing approach — no automated tests, TypeScript checks, algorithm validation, common bugs
+alwaysApply: true
+---
+
+# Testing Guidelines
+
+## No Automated Tests
+
+This project has no test suite. All testing is manual by the user.
+
+## Before Claiming Something Works
+
+1. **TypeScript**: Run `npx tsc --noEmit` — must pass with zero errors
+2. **Lints**: Use ReadLints tool on all modified files
+3. **Imports**: Verify all new imports exist and are correctly pathed
+4. **Logic trace**: Walk through the code mentally for edge cases
+5. **Unused variables**: TypeScript strict mode catches "declared but never read" — always clean up
+
+## Algorithm Validation
+
+When modifying the forecast algorithm or any data-driven logic:
+1. Use `node -e "..."` scripts against real data from `public/full-backup.json`
+2. Run multiple iterations (50-500) to verify statistical properties
+3. Check: zero-sum profits, realistic winner count (3-4 per 7-8 player game), non-deterministic rankings
+
+## Common Bugs
+
+### Browser API Limits
+- `AudioContext`: Max ~6 instances — reuse shared instance
+- `speechSynthesis`: May need resume after user interaction
+- `navigator.share()`: Only works on mobile + HTTPS
+
+### PC vs Mobile
+- Native `<select>` may show blank text with CSS variables on PC
+- `navigator.share()` unavailable on desktop
+
+### LocalStorage
+- ~5-10MB per origin; `canWriteToStorage()` checks before large writes
+- Activity logger caps at 200 entries
+
+### Cloud Sync
+- `writeWithRetry()` handles GitHub API 409 conflicts
+- Always use fresh `lastUpdated` timestamp when pushing
+- `keepalive: true` on fetch for `visibilitychange` handlers
+
+### TypeScript Strict Mode
+- `noUnusedLocals: true` — remove unused variables
+- `noUnusedParameters: true` — prefix unused params with `_`
+- `noFallthroughCasesInSwitch: true` — every case needs break/return

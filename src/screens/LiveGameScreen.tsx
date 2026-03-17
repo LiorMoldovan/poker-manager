@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GamePlayer, GameAction, SharedExpense } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, getAllGames, getAllGamePlayers } from '../database/storage';
+import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
-import { numberToHebrewTTS, speakHebrew } from '../utils/tts';
+import { numberToHebrewTTS, hebrewNum, speakHebrew } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
+import { playerTraitsByName, generateTraitMessages } from '../utils/playerTraits';
+import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
 
@@ -22,6 +24,8 @@ const LiveGameScreen = () => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<SharedExpense | null>(null);
   const [playerToRemove, setPlayerToRemove] = useState<GamePlayer | null>(null);
+  const [socialAction, setSocialAction] = useState<'bad_beat' | 'big_hand' | null>(null);
+  const [showAwardsCeremony, setShowAwardsCeremony] = useState(false);
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
@@ -38,27 +42,115 @@ const LiveGameScreen = () => {
   // Track which players already received a trait-based TTS message this game
   const traitSpokenRef = useRef<Set<string>>(new Set());
 
+  // AI TTS pool (loaded from localStorage on mount)
+  const ttsPoolRef = useRef<LiveGameTTSPool | null>(null);
+  const isSpeakingRef = useRef(false);
+  const firstBloodFiredRef = useRef(false);
+  const lastTTSActivityRef = useRef(Date.now());
+  const autoAnnounceCountRef = useRef(0);
+
+  // Load AI TTS pool on mount
+  useEffect(() => {
+    if (gameId) {
+      const pool = loadTTSPool<LiveGameTTSPool>(gameId);
+      if (pool) {
+        ttsPoolRef.current = pool;
+        console.log('🎙️ AI TTS pool loaded for game', gameId);
+      }
+    }
+  }, [gameId]);
+
+  const fillPlaceholders = (
+    msg: TTSMessage,
+    vars: { PLAYER?: string; COUNT?: number; POT?: number; RECORD?: number; RIVAL?: string; RANK?: number }
+  ): string | null => {
+    let text = msg.text;
+    const placeholders = msg.placeholders || [];
+    for (const ph of placeholders) {
+      switch (ph) {
+        case '{PLAYER}':
+          if (!vars.PLAYER) return null;
+          text = text.replace('{PLAYER}', vars.PLAYER);
+          break;
+        case '{COUNT}':
+          if (vars.COUNT == null) return null;
+          text = text.replace('{COUNT}', hebrewNum(vars.COUNT, true));
+          break;
+        case '{POT}':
+          if (vars.POT == null) return null;
+          text = text.replace('{POT}', String(vars.POT));
+          break;
+        case '{RECORD}':
+          if (vars.RECORD == null) return null;
+          text = text.replace('{RECORD}', hebrewNum(vars.RECORD, false));
+          break;
+        case '{RIVAL}':
+          if (!vars.RIVAL) return null;
+          text = text.replace('{RIVAL}', vars.RIVAL);
+          break;
+        case '{RANK}':
+          if (vars.RANK == null) return null;
+          text = text.replace('{RANK}', hebrewNum(vars.RANK, false));
+          break;
+      }
+    }
+    // Safety: ensure no unfilled placeholders remain
+    if (text.includes('{') && text.includes('}')) return null;
+    return text;
+  };
+
+  const pickFromPool = (
+    messages: TTSMessage[] | undefined,
+    categoryKey: string,
+    vars: { PLAYER?: string; COUNT?: number; POT?: number; RECORD?: number; RIVAL?: string; RANK?: number }
+  ): string | null => {
+    if (!messages || messages.length === 0) return null;
+    const pool = ttsPoolRef.current;
+    if (!pool) return null;
+
+    const usedIndices = pool.usedIndices[categoryKey] || [];
+    const unusedIndices = messages.map((_, i) => i).filter(i => !usedIndices.includes(i));
+    const candidates = unusedIndices.length > 0 ? unusedIndices : messages.map((_, i) => i);
+
+    for (let attempt = 0; attempt < candidates.length; attempt++) {
+      const idx = candidates[Math.floor(Math.random() * candidates.length)];
+      const filled = fillPlaceholders(messages[idx], vars);
+      if (filled) {
+        if (!pool.usedIndices[categoryKey]) pool.usedIndices[categoryKey] = [];
+        pool.usedIndices[categoryKey].push(idx);
+        saveTTSPool(pool.gameId, pool);
+        return filled;
+      }
+    }
+    return null;
+  };
+
+  const pickAnticipated = (
+    playerName: string,
+    category: TTSAnticipatedCategory,
+    vars: { PLAYER?: string; COUNT?: number; POT?: number; RECORD?: number; RIVAL?: string; RANK?: number }
+  ): string | null => {
+    const pool = ttsPoolRef.current;
+    if (!pool) return null;
+    const playerMsgs = pool.players[playerName];
+    if (!playerMsgs?.anticipated?.[category]) return null;
+    return pickFromPool(playerMsgs.anticipated[category], `players.${playerName}.anticipated.${category}`, vars);
+  };
+
+  const pickGeneric = (
+    playerName: string,
+    vars: { PLAYER?: string; COUNT?: number; POT?: number; RECORD?: number; RIVAL?: string; RANK?: number }
+  ): string | null => {
+    const pool = ttsPoolRef.current;
+    if (!pool) return null;
+    const playerMsgs = pool.players[playerName];
+    if (!playerMsgs) return null;
+    return pickFromPool(playerMsgs.generic, `players.${playerName}.generic`, vars);
+  };
+
   const getRebuyRecords = () => {
     if (rebuyRecordsRef.current) return rebuyRecordsRef.current;
-
-    const completedGames = getAllGames().filter(g => {
-      if (g.status !== 'completed') return false;
-      const year = new Date(g.date || g.createdAt).getFullYear();
-      return year >= 2026;
-    });
-    const completedIds = new Set(completedGames.map(g => g.id));
-    const allGP = getAllGamePlayers().filter(gp => completedIds.has(gp.gameId));
-
-    const playerMax = new Map<string, number>();
-    let groupMax = 0;
-
-    for (const gp of allGP) {
-      const current = playerMax.get(gp.playerId) || 0;
-      if (gp.rebuys > current) playerMax.set(gp.playerId, gp.rebuys);
-      if (gp.rebuys > groupMax) groupMax = gp.rebuys;
-    }
-
-    rebuyRecordsRef.current = { playerMax, groupMax };
+    rebuyRecordsRef.current = getRebuyRecordsFromStorage();
     return rebuyRecordsRef.current;
   };
   
@@ -77,14 +169,71 @@ const LiveGameScreen = () => {
   // Pre-load voices (they may not be immediately available)
   useEffect(() => {
     if ('speechSynthesis' in window) {
-      // Trigger voice loading
       window.speechSynthesis.getVoices();
-      // Some browsers need this event to load voices
       window.speechSynthesis.onvoiceschanged = () => {
         window.speechSynthesis.getVoices();
       };
     }
   }, []);
+
+  // Opening ceremony: plays once when entering a live game with an AI pool
+  useEffect(() => {
+    if (!gameId || isLoading || players.length === 0) return;
+    const ceremonyKey = `poker_ceremony_${gameId}`;
+    if (localStorage.getItem(ceremonyKey)) return;
+    const pool = ttsPoolRef.current;
+    if (!pool || pool.shared.opening_ceremony.length === 0) return;
+
+    localStorage.setItem(ceremonyKey, '1');
+
+    const msg = pool.shared.opening_ceremony[Math.floor(Math.random() * pool.shared.opening_ceremony.length)];
+    const text = msg.text;
+    if (!text) return;
+
+    const playOpeningCeremony = async () => {
+      isSpeakingRef.current = true;
+      try {
+        await playRebuyCasinoSound(10);
+        await speakHebrew([text], getGeminiApiKey());
+      } finally {
+        isSpeakingRef.current = false;
+      }
+    };
+
+    const timer = setTimeout(playOpeningCeremony, 1500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, isLoading, players.length]);
+
+  // Auto-announcements: fire every 25 min of quiet, max 4 per game
+  useEffect(() => {
+    if (!gameId || isLoading) return;
+    const AUTO_ANNOUNCE_INTERVAL = 25 * 60 * 1000;
+    const MAX_AUTO_ANNOUNCES = 4;
+
+    const interval = setInterval(() => {
+      if (isSpeakingRef.current) return;
+      if (autoAnnounceCountRef.current >= MAX_AUTO_ANNOUNCES) return;
+      const pool = ttsPoolRef.current;
+      if (!pool || pool.shared.auto_announce.length === 0) return;
+
+      const elapsed = Date.now() - lastTTSActivityRef.current;
+      if (elapsed < AUTO_ANNOUNCE_INTERVAL) return;
+
+      const msg = pickFromPool(pool.shared.auto_announce, 'shared.auto_announce', {});
+      if (!msg) return;
+
+      autoAnnounceCountRef.current++;
+      lastTTSActivityRef.current = Date.now();
+      isSpeakingRef.current = true;
+      speakHebrew([msg], getGeminiApiKey()).finally(() => {
+        isSpeakingRef.current = false;
+      });
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, isLoading]);
 
   const loadData = () => {
     if (!gameId) {
@@ -491,32 +640,6 @@ const LiveGameScreen = () => {
     });
   };
 
-  // Hebrew number with proper gender agreement for nouns
-  // feminine=true for feminine nouns (קניות, פעמים, קנייה)
-  // feminine=false for masculine nouns (נצחונות, הפסדים, משחקים, שחקנים, אחוז)
-  const hebrewNum = (n: number, feminine: boolean): string => {
-    const abs = Math.round(Math.abs(n));
-    if (abs === 0) return 'אפס';
-    const femOnes = ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
-    const mascOnes = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
-    const ones = feminine ? femOnes : mascOnes;
-    if (abs <= 10) return ones[abs];
-    if (abs <= 19) {
-      const unit = abs - 10;
-      const tenWord = feminine ? 'עשרה' : 'עשר';
-      return `${ones[unit]} ${tenWord}`;
-    }
-    if (abs <= 99) {
-      const tensWords = ['', '', 'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים'];
-      const ten = Math.floor(abs / 10);
-      const unit = abs % 10;
-      if (unit === 0) return tensWords[ten];
-      return `${tensWords[ten]} ו${ones[unit]}`;
-    }
-    if (abs === 100) return 'מאה';
-    return String(abs);
-  };
-
   // Creative messages by total buyins count (including the initial buy-in)
   // Numbers in sentences match totalBuyins so they align with "סך הכל X" in the announcement
   // All sentences are gender-neutral (no "אתה/את") for natural female voice
@@ -651,163 +774,6 @@ const LiveGameScreen = () => {
     }
     
     return message;
-  };
-
-  // Personal traits keyed by player NAME for robust matching (IDs may vary across devices)
-  const playerTraitsByName: Record<string, { team?: string; job?: string; style: string[]; nickname?: string; quirks: string[] }> = {
-    'ליאור': { job: 'הייטק', team: 'מכבי הרצליה', style: ['מחושב'], quirks: ['מנצח עם מעט קניות', 'שחקן אסטרטגי'] },
-    'אייל': { job: 'פיננסים', team: 'הפועל פתח תקווה', style: ['אגרסיבי', 'בלופר'], quirks: ['אמרגן הקבוצה', 'מתאם את המשחקים', 'הולך למשחקים של הפועל פתח תקווה למרות שלא באמת אוהד'] },
-    'ארז': { job: 'מהנדס בטיחות', style: ['מחושב', 'אגרסיבי'], quirks: ['צנח חופשי', 'מהנדס בטיחות שמסתכן'] },
-    'אורן': { job: 'מס הכנסה', team: 'הפועל כפר סבא', style: ['אגרסיבי', 'מזלן'], quirks: ['אבא לתינוק חדש', 'תמיד עייף', 'טוען שאין לו מזל'] },
-    'ליכטר': { job: 'רואה חשבון', team: 'הפועל כפר סבא', style: ['בלופר', 'אגרסיבי'], quirks: ['אוהב נרגילה'] },
-    'סגל': { job: 'בוחן תוכנה', nickname: 'איוון סטיבן', style: ['שמרני'], quirks: ['תמיד יוצא באפס', 'לאחרונה התחיל להפסיד', 'שחקן הכי שמרני בשולחן'] },
-    'תומר': { team: 'הפועל פתח תקווה', style: ['מזלן'], quirks: ['מהלכים מוזרים', 'אוהב חטיפים ועוגות', 'אף אחד לא מבין את המשחק שלו'] },
-    'פיליפ': { job: 'מנהל מוצר', team: 'באיירן מינכן', style: ['בלופר', 'מזלן', 'רגשי'], quirks: ['מחפש עסקאות מפוקפקות', 'רגשי על השולחן'] },
-    'אסף': { team: 'מכבי תל אביב', style: ['מחושב', 'אגרסיבי'], quirks: ['אבא לתינוק חדש'] },
-    'פבל': { job: 'IT', style: ['רגשי', 'בלופר', 'מזלן'], quirks: ['אוהב לעשן', 'מכוניות מרוץ'] },
-    'מלמד': { job: 'הייטק', style: ['מחושב'], quirks: ['משחק כדורעף', 'משחק פוקר כמו מחשבון'] },
-  };
-
-  // Generate trait-only messages for a player (standalone for forced selection)
-  const generateTraitMessages = (playerName: string, currentGameRebuys: number): string[] => {
-    const traits = playerTraitsByName[playerName];
-    if (!traits) return [];
-    const cr = hebrewNum(Math.ceil(currentGameRebuys), true);
-    const msgs: string[] = [];
-
-    if (playerName === 'ליאור') {
-      msgs.push(`${playerName} בנה את האפליקציה הזאת, אבל לא בנה אסטרטגיה לערב`);
-      msgs.push(`מכבי הרצליה ו${playerName} עם מסורת משותפת של ציפיות גבוהות ותוצאות מאכזבות`);
-      msgs.push(`הקוד של ${playerName} רץ מושלם, הקלפים שלו קורסים, כבר ${cr}`);
-      msgs.push(`${playerName} כתב אלגוריתם לכל דבר חוץ מאיך לא להפסיד`);
-      msgs.push(`איש ההייטק שפיתח חצי אפליקציה ולא פיתח משחק פוקר, כבר ${cr} קניות`);
-      msgs.push(`${playerName} מריץ דיבאג על הערב, ומוצא רק באגים`);
-      msgs.push(`בדרך כלל ${playerName} סוגר עם מינימום קניות, מי שינה לו את הסטטינגס?`);
-      msgs.push(`${playerName} מחשב הכל, חוץ מהסיכוי שלו הערב, כבר ${cr}`);
-      msgs.push(`${playerName} ניסה לעשות קונטרול זד על הקנייה האחרונה, לא עבד`);
-      msgs.push(`האסטרטג של הקבוצה, הערב שכח את האסטרטגיה בבית`);
-    }
-    if (playerName === 'אייל') {
-      msgs.push(`${playerName} מארגן את הערב, מממן את הערב, ולא מנצח בערב`);
-      msgs.push(`איש הפיננסים קיבל תשואה שלילית של ${cr} קניות, שוק דובי`);
-      msgs.push(`${playerName} הולך למשחקים של הפועל פתח תקווה בלי לאהוד, ומשחק פוקר בלי לנצח`);
-      msgs.push(`האמרגן שמארגן ערב מעולה לכולם חוץ מעצמו, כבר ${cr}`);
-      msgs.push(`${playerName} מנהל תיק השקעות כל היום, הערב התיק שלו במינוס`);
-      msgs.push(`בפיננסים ${playerName} סוגר עסקאות, בפוקר ${playerName} סוגר ארנק, כבר ${cr}`);
-      msgs.push(`${playerName} מתאם משחקים ברמת שיא, משחק ברמת שפל, כבר ${cr} קניות`);
-      msgs.push(`${playerName} יודע לארגן ערב, אבל הערב ארגן לעצמו ${cr} קניות`);
-      msgs.push(`האנליסט הפיננסי ממליץ מכירה חזקה על הקלפים של ${playerName}`);
-      msgs.push(`${playerName} הבטיח שהערב יהיה שווה, הוא צדק, עבור כולם חוץ ממנו`);
-    }
-    if (playerName === 'ארז') {
-      msgs.push(`מהנדס בטיחות בעבודה, מהנדס הרס עצמי בפוקר, כבר ${cr} קניות`);
-      msgs.push(`${playerName} צונח מעשרת אלפים רגל ולא פוחד, אבל מ${cr} קניות כדאי לפחד`);
-      msgs.push(`${playerName} בודק ציוד בטיחות כל יום, הערב שכח לבדוק את הארנק`);
-      msgs.push(`הצנחן של השולחן, הערב הנחיתה בלי מצנח, כבר ${cr}`);
-      msgs.push(`${playerName} קופץ מגובה של אלפי מטרים, הערב קופץ מגובה של ${cr} קניות`);
-      msgs.push(`בצניחה חופשית יש אדרנלין, בפוקר עם ${playerName} יש רק חשבון, כבר ${cr}`);
-      msgs.push(`${playerName} עושה תדריך בטיחות לכולם, חוץ מלארנק שלו`);
-      msgs.push(`אסור לצנוח בלי ציוד, אבל מותר לשחק פוקר בלי תוכנית, שאלו את ${playerName}`);
-      msgs.push(`${playerName} מחשב גובה וזוויות נפילה, אבל לא חישב את הנפילה הזאת`);
-      msgs.push(`מהנדס הבטיחות עבר את כל תקני הסיכון הערב, כבר ${cr} קניות`);
-    }
-    if (playerName === 'אורן') {
-      msgs.push(`${playerName} גובה מיסים מכולם מהבוקר, ובערב כולם גובים ממנו, כבר ${cr}`);
-      msgs.push(`התינוק ישן סוף סוף, ו${playerName} ער כדי לממן את שאר השולחן`);
-      msgs.push(`${playerName} טוען שאין לו מזל, והערב מוכיח את זה עם ${cr} קניות`);
-      msgs.push(`במס הכנסה יודעים לגבות, בפוקר ${playerName} יודע רק לשלם, כבר ${cr}`);
-      msgs.push(`${playerName} לא ישן בלילה בגלל התינוק, ולא מנצח בערב בגלל הקלפים`);
-      msgs.push(`גם הפועל כפר סבא לא מנצחת, אז ${playerName} לפחות בחברה טובה`);
-      msgs.push(`${playerName} עם עיניים עייפות, ארנק ריק, ו${cr} קניות, אבא שנה`);
-      msgs.push(`במס הכנסה לוקחים אחוזים, בפוקר ${playerName} נותן מאה אחוז, כבר ${cr}`);
-      msgs.push(`${playerName} בודק הצהרות הון כל היום, הערב ההצהרה שלו מצערת`);
-      msgs.push(`אם הקניות של ${playerName} היו מוכרות מס, הוא היה יוצא בפלוס`);
-    }
-    if (playerName === 'ליכטר') {
-      msgs.push(`רואה חשבון שלא רואה את הרווחים הערב, כבר ${cr} קניות`);
-      msgs.push(`${playerName} סופר מיליונים בעבודה, ובפוקר סופר קניות, כבר ${cr}`);
-      msgs.push(`${playerName} מעשן נרגילה ושורף כסף, הערב שניהם על טורבו`);
-      msgs.push(`הבלפן הרשמי של השולחן, הערב אפילו הבלוף לא עובד, כבר ${cr}`);
-      msgs.push(`${playerName} מבלף בפוקר ומעשן נרגילה, שניהם עשן, כבר ${cr} קניות`);
-      msgs.push(`רואה חשבון ביום, בלפן בלילה, ובשניהם ${playerName} לא מרוויח הערב`);
-      msgs.push(`הנרגילה של ${playerName} מוציאה יותר עשן מהקלפים שלו, כבר ${cr}`);
-      msgs.push(`${playerName} מאזן ספרים כל היום, הערב המאזן שלו במינוס עמוק`);
-      msgs.push(`גם כפר סבא וגם ${playerName} מאבדים הערב, לפחות ביחד`);
-      msgs.push(`${playerName} מומחה לבלופים, אבל הקלפים לא מאמינים לו הערב`);
-    }
-    if (playerName === 'סגל') {
-      msgs.push(`איוון סטיבן קנה עוד אחד, מישהו יבדוק שזה באמת ${playerName}?`);
-      msgs.push(`${playerName} תמיד יוצא באפס, הערב שובר את המסורת עם ${cr} קניות`);
-      msgs.push(`בוחן תוכנה שלא בדק את הקלפים לפני שישב, כבר ${cr}`);
-      msgs.push(`איוון סטיבן הפך לאיוון קניות, ${cr} ועולה`);
-      msgs.push(`השמרן הכי גדול בשולחן יצא מהכלוב, מה קרה ${playerName}?`);
-      msgs.push(`${playerName} מוצא באגים בתוכנה, אבל לא מוצא קלפים טובים, כבר ${cr}`);
-      msgs.push(`השיטת אפס של ${playerName} נשברה, כבר ${cr} קניות, היסטוריה`);
-      msgs.push(`${playerName} שובר שיגעון, אפס היה פעם, ${cr} קניות זה עכשיו`);
-      msgs.push(`הממלכה השמרנית של ${playerName} קורסת, כבר ${cr} בפנים`);
-      msgs.push(`${playerName} מחפש באגים בקלפים, עדיין לא מצא, כבר ${cr}`);
-    }
-    if (playerName === 'תומר') {
-      msgs.push(`אף אחד לא מבין את המשחק של ${playerName}, כולל ${playerName} עצמו`);
-      msgs.push(`${playerName} משחק כמו הפועל פתח תקווה, טקטיקה מסתורית ותוצאות צפויות`);
-      msgs.push(`לפחות ${playerName} הביא חטיפים, כי קלפים טובים הוא לא הביא, כבר ${cr}`);
-      msgs.push(`${playerName} משחק לפי חוקים שהמציא עכשיו, כמו אימון של פתח תקווה`);
-      msgs.push(`${playerName}, ${cr} קניות ואפס עוגות, תביא לפחות מאפה`);
-      msgs.push(`בפתח תקווה רגילים להפסיד, ${playerName} מרגיש בבית גם על השולחן`);
-      msgs.push(`${playerName} אוכל במבה ומשלם קניות, שני תחביבים יקרים, כבר ${cr}`);
-      msgs.push(`המהלכים של ${playerName} כמו טקטיקה של פתח תקווה, מבלבלים את כולם כולל את עצמו`);
-      msgs.push(`${playerName} הביא אנרגיה לשולחן, חבל שלא הביא מזל, כבר ${cr}`);
-      msgs.push(`תומר, ${cr} קניות, אבל החטיפים שווים את זה, נכון?`);
-    }
-    if (playerName === 'פיליפ') {
-      msgs.push(`${playerName} הציע עוד עסקה מפוקפקת, הפעם קנייה מספר ${cr}`);
-      msgs.push(`מנהל מוצר שהמוצר שלו הערב זה הפסד, כבר ${cr} יחידות`);
-      msgs.push(`${playerName} רגשי על השולחן כרגיל, הרגש הזה עולה ${cr} קניות`);
-      msgs.push(`באיירן מינכן מנצחים בעקביות, ${playerName} מפסיד בעקביות, כבר ${cr}`);
-      msgs.push(`${playerName} מחפש עסקת חייו על השולחן, כבר ${cr} ניסיונות ועדיין מחפש`);
-      msgs.push(`${playerName} אוהד באיירן, אבל הערב משחק כמו קבוצה מליגה ג, כבר ${cr}`);
-      msgs.push(`${playerName} השיק גרסה חדשה של ההפסד, עכשיו עם ${cr} קניות`);
-      msgs.push(`בגרמניה היו כבר פוטרים את ${playerName}, פה רק קונים לו עוד קנייה`);
-      msgs.push(`${playerName} עושה פיבוט מהפסד להפסד, כבר ${cr}, סטארטאפ שורף כסף`);
-      msgs.push(`כל קנייה של ${playerName} מלווה בנאום רגשני, כבר ${cr} נאומים`);
-    }
-    if (playerName === 'אסף') {
-      msgs.push(`${playerName} אבא טרי, הלילות הלבנים עכשיו גם בפוקר, כבר ${cr} קניות`);
-      msgs.push(`מכבי תל אביב בגמר ו${playerName} בתחתית, כבר ${cr} קניות`);
-      msgs.push(`${playerName} מחושב ואגרסיבי, הערב רק אגרסיבי עם הארנק, כבר ${cr}`);
-      msgs.push(`אוהד מכבי ואבא חדש, ${playerName} לא ישן ולא מנצח, קומבו קלאסי`);
-      msgs.push(`${playerName}, ${cr} קניות, הוצאה נוספת לצד חיתולים ומוצצים`);
-      msgs.push(`התינוק בבית בוכה, ${playerName} פה משלם, מי מרוויח? אף אחד`);
-      msgs.push(`${playerName} אוהד מכבי ומפסיד בפוקר, לפחות אחד מהשניים נגמר בצהריים`);
-      msgs.push(`כסף החיתולים, הסמיפורמולה והקניות, ${playerName} ההוצאות לא נגמרות, כבר ${cr}`);
-      msgs.push(`${playerName} מחליף חיתולים ומחליף קניות, כבר ${cr} הערב`);
-      msgs.push(`הלילה הלבן של ${playerName} ממשיך, ${cr} קניות ואפס שעות שינה`);
-    }
-    if (playerName === 'פבל') {
-      msgs.push(`${playerName} יצא לעשן, חזר, וקנה עוד אחד, כבר ${cr}, כמו תחנת דלק`);
-      msgs.push(`איש ה IT שהמערכת שלו קרסה ואין גיבוי, כבר ${cr} קניות`);
-      msgs.push(`${playerName} מתקן מחשבים כל היום, אבל הערב שום דבר לא מתוקן ולא ניתן לתיקון`);
-      msgs.push(`${playerName} נוהג מהר במכוניות מרוץ, הערב הכסף שלו בנסיעת פרידה, כבר ${cr}`);
-      msgs.push(`${playerName} בלף גדול, סיגריה קטנה, ותוצאה עגומה, כבר ${cr} קניות`);
-      msgs.push(`${playerName} במרוצים עוקף את כולם, בפוקר כולם עוקפים אותו, כבר ${cr}`);
-      msgs.push(`${playerName} שורף סיגריות בקצב של שחקן וקניות בקצב של חובבן, כבר ${cr}`);
-      msgs.push(`הפרארי של ${playerName} על המסלול, הכסף שלו מחוץ למסלול, כבר ${cr}`);
-      msgs.push(`${playerName} מפרמט מחשבים ביום ומפרמט ארנקים בלילה, כבר ${cr} קניות`);
-      msgs.push(`${playerName} מעשן סיגריה אחרי כל קנייה, הריאות והארנק סובלים, כבר ${cr}`);
-    }
-    if (playerName === 'מלמד') {
-      msgs.push(`${playerName} משחק כמו מחשבון, הערב מחשבון שלימדו אותו לחשב לא נכון`);
-      msgs.push(`שחקן כדורעף שהכדור נוחת תמיד על הצד השני, כבר ${cr} קניות`);
-      msgs.push(`${playerName} מדויק כמו אלגוריתם, חוץ מכשהוא יושב על שולחן פוקר`);
-      msgs.push(`${playerName} עושה סמאש בכדורעף, בפוקר עושים לו סמאש, כבר ${cr}`);
-      msgs.push(`החישוב של ${playerName} הערב, קנייה כפול ${cr} שווה הפסד`);
-      msgs.push(`בכדורעף יש סט שני, ${playerName} כבר בסט ${cr} בקניות`);
-      msgs.push(`${playerName} מחשב כמו מכונה, אבל הערב מכונה שתקועה על קנייה, כבר ${cr}`);
-      msgs.push(`הייטקיסט שהקוד שלו מושלם, אבל הקלפים שלו מלאים באגים`);
-      msgs.push(`${playerName} סוגר ספרינטים בזמן, סוגר ערבי פוקר במינוס, כבר ${cr}`);
-      msgs.push(`ב${playerName} יש דיוק של מחשבון ומזל של קזינו, כבר ${cr} קניות`);
-    }
-    return msgs;
   };
 
   // Personalized messages using player stats, history, and table context
@@ -1372,8 +1338,14 @@ const LiveGameScreen = () => {
   };
 
   const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, ctx: RebuyContext) => {
-    // Play mood-appropriate casino sound
-    await playRebuyCasinoSound(totalBuyins);
+    // First blood detection: first rebuy of the entire game
+    const isFirstBlood = !firstBloodFiredRef.current && totalBuyins === 2 && !isHalfBuyin;
+    if (isFirstBlood) {
+      firstBloodFiredRef.current = true;
+    }
+
+    // Play mood-appropriate casino sound (dramatic for first blood)
+    await playRebuyCasinoSound(isFirstBlood ? 10 : totalBuyins);
     
     // Check if total has half (0.5) - use tolerance for floating point
     const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
@@ -1389,30 +1361,88 @@ const LiveGameScreen = () => {
 
     const buyAction = isHalfBuyin ? 'עוד חצי' : 'עוד אחד';
 
-    // Decide which extra announcement to make (priority system)
-    // Rebuy leader/tied/record announcements only kick in at 4+ rebuys (totalBuyins >= 5)
-    let extraMessage: string;
+    // 16-step priority cascade for extra message
+    // Tries AI pool first for each category, falls back to hardcoded
+    let extraMessage: string | null = null;
     const ceilBuyins = Math.ceil(totalBuyins);
     const rebuyThresholdMet = totalBuyins >= 5;
+    const aiVars = { PLAYER: playerName, COUNT: ceilBuyins, RECORD: ctx.previousGroupRecord || ctx.previousPersonalRecord, RANK: 0 };
+    const hasAIPool = !!ttsPoolRef.current;
 
-    if (rebuyThresholdMet && ctx.isGroupRecord) {
-      extraMessage = getGroupRecordMessage(playerName, ctx.previousGroupRecord, ceilBuyins);
-    } else if (rebuyThresholdMet && ctx.isExtendingGroupRecord) {
-      extraMessage = getExtendingRecordMessage(playerName, true, ceilBuyins);
-    } else if (rebuyThresholdMet && ctx.isPersonalRecord) {
-      extraMessage = getPersonalRecordMessage(playerName, ctx.previousPersonalRecord, ceilBuyins);
-    } else if (rebuyThresholdMet && ctx.isExtendingPersonalRecord) {
-      extraMessage = getExtendingRecordMessage(playerName, false, ceilBuyins);
-    } else if (rebuyThresholdMet && ctx.isNewRebuyLeader) {
-      const leaderMessages = [
-        `ויש לנו מוביל חדש בקניות הערב! ${playerName} עם ${hebrewNum(ceilBuyins, true)} קניות`,
-        `${playerName} תפס את המקום הראשון בקניות. כבר ${hebrewNum(ceilBuyins, true)}!`,
-        `כל הכבוד ${playerName}. מוביל חדש עם ${hebrewNum(ceilBuyins, true)} קניות`,
-      ];
-      extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
-    } else if (rebuyThresholdMet && ctx.isTiedForLead) {
-      extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames, totalBuyins);
-    } else if (isHalfBuyin) {
+    // Compute rank for AI vars
+    if (ctx.allPlayers.length > 0) {
+      const sorted = [...ctx.allPlayers].sort((a, b) => b.rebuys - a.rebuys);
+      const rank = sorted.findIndex(p => p.playerName === playerName) + 1;
+      aiVars.RANK = rank;
+    }
+
+    // Find rival from pool rivalries
+    const rivalName = ttsPoolRef.current?.rivalries?.find(
+      r => r.player1 === playerName || r.player2 === playerName
+    );
+    const rivalPlayerName = rivalName ? (rivalName.player1 === playerName ? rivalName.player2 : rivalName.player1) : undefined;
+
+    // Check anticipated conditions
+    const records = getRebuyRecords();
+    const personalBest = records.playerMax.get(playerId) || 0;
+    const playerStats2026 = getPlayerStats({ start: new Date('2026-01-01') }).find(s => s.playerId === playerId);
+    const avgRebuys = playerStats2026?.avgRebuysPerGame || 0;
+    const isAboveAvg = avgRebuys > 0 && ceilBuyins > avgRebuys * 1.3 && ceilBuyins >= 3;
+    const isRecordTied = personalBest > 0 && ceilBuyins === personalBest && rebuyThresholdMet;
+    const isRivalMatched = rivalPlayerName && ctx.allPlayers.some(
+      p => p.playerName === rivalPlayerName && Math.ceil(p.rebuys) === ceilBuyins && ceilBuyins >= 3
+    );
+
+    // --- Priority cascade ---
+    // 1-2: Group record broken / extending
+    if (!extraMessage && rebuyThresholdMet && ctx.isGroupRecord) {
+      extraMessage = pickAnticipated(playerName, 'record_broken', { ...aiVars, RECORD: ctx.previousGroupRecord });
+      if (!extraMessage) extraMessage = getGroupRecordMessage(playerName, ctx.previousGroupRecord, ceilBuyins);
+    }
+    if (!extraMessage && rebuyThresholdMet && ctx.isExtendingGroupRecord) {
+      extraMessage = pickAnticipated(playerName, 'record_broken', aiVars);
+      if (!extraMessage) extraMessage = getExtendingRecordMessage(playerName, true, ceilBuyins);
+    }
+    // 3-4: Personal record broken / extending
+    if (!extraMessage && rebuyThresholdMet && ctx.isPersonalRecord) {
+      extraMessage = pickAnticipated(playerName, 'record_broken', { ...aiVars, RECORD: ctx.previousPersonalRecord });
+      if (!extraMessage) extraMessage = getPersonalRecordMessage(playerName, ctx.previousPersonalRecord, ceilBuyins);
+    }
+    if (!extraMessage && rebuyThresholdMet && ctx.isExtendingPersonalRecord) {
+      extraMessage = pickAnticipated(playerName, 'record_broken', aiVars);
+      if (!extraMessage) extraMessage = getExtendingRecordMessage(playerName, false, ceilBuyins);
+    }
+    // 5: New rebuy leader
+    if (!extraMessage && rebuyThresholdMet && ctx.isNewRebuyLeader) {
+      extraMessage = pickAnticipated(playerName, 'is_leader', aiVars);
+      if (!extraMessage) {
+        const leaderMessages = [
+          `ויש לנו מוביל חדש בקניות הערב! ${playerName} עם ${hebrewNum(ceilBuyins, true)} קניות`,
+          `${playerName} תפס את המקום הראשון בקניות. כבר ${hebrewNum(ceilBuyins, true)}!`,
+          `כל הכבוד ${playerName}. מוביל חדש עם ${hebrewNum(ceilBuyins, true)} קניות`,
+        ];
+        extraMessage = leaderMessages[Math.floor(Math.random() * leaderMessages.length)];
+      }
+    }
+    // 6: Tied for lead
+    if (!extraMessage && rebuyThresholdMet && ctx.isTiedForLead) {
+      extraMessage = pickAnticipated(playerName, 'tied_for_lead', aiVars);
+      if (!extraMessage) extraMessage = getTiedForLeadMessage(playerName, ctx.tiedLeaderNames, totalBuyins);
+    }
+    // 7: Record tied (anticipated)
+    if (!extraMessage && isRecordTied) {
+      extraMessage = pickAnticipated(playerName, 'record_tied', { ...aiVars, RECORD: personalBest });
+    }
+    // 8: Above average (anticipated)
+    if (!extraMessage && isAboveAvg) {
+      extraMessage = pickAnticipated(playerName, 'above_avg', aiVars);
+    }
+    // 9: Rival matched (anticipated)
+    if (!extraMessage && isRivalMatched && rivalPlayerName) {
+      extraMessage = pickAnticipated(playerName, 'rival_matched', { ...aiVars, RIVAL: rivalPlayerName });
+    }
+    // 10: Half buyin (hardcoded only)
+    if (!extraMessage && isHalfBuyin) {
       const halfMessages = [
         'רק חצי? חסכן או פשוט זהיר?',
         'חצי קנייה, חצי סיכון, כל הכבוד על האיפוק',
@@ -1440,13 +1470,23 @@ const LiveGameScreen = () => {
         'קנייה דיאטטית, פחות קלוריות לארנק',
       ];
       extraMessage = halfMessages[Math.floor(Math.random() * halfMessages.length)];
-    } else {
+    }
+    // 11: AI generic message for this player
+    if (!extraMessage && hasAIPool && !isHalfBuyin) {
+      extraMessage = pickGeneric(playerName, aiVars);
+    }
+    // 12-13: Hardcoded personal + buyin fallback
+    if (!extraMessage && !isHalfBuyin) {
       const personal = getPersonalMessage(playerName, playerId, ceilBuyins, isQuickRebuy, ctx.allPlayers);
       extraMessage = personal || getBuyinMessage(ceilBuyins, isQuickRebuy);
     }
+    // 14: Final safety fallback
+    if (!extraMessage) {
+      extraMessage = getBuyinMessage(ceilBuyins, isQuickRebuy);
+    }
 
-    // Force a trait message at least once per player per game (skip on half buyins to avoid count mismatch)
-    if (!isHalfBuyin && playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
+    // Force a trait message at least once per player per game (skip on half buyins and when AI pool is active)
+    if (!isHalfBuyin && !hasAIPool && playerTraitsByName[playerName] && !traitSpokenRef.current.has(playerName)) {
       const rebuysCount = ceilBuyins - 1;
       const shouldForce = rebuysCount >= 2 || (rebuysCount === 1 && Math.random() < 0.5);
       if (shouldForce) {
@@ -1465,7 +1505,19 @@ const LiveGameScreen = () => {
     const fullMessage = `${playerName}. ${buyAction}. סך הכל ${totalText}. ${extraMessage}`;
 
     // Build follow-up announcements
-    const allMessages: string[] = [fullMessage];
+    const allMessages: string[] = [];
+
+    // First blood: prepend a dramatic message before the regular announcement
+    if (isFirstBlood && ttsPoolRef.current) {
+      const fbMsg = pickFromPool(
+        ttsPoolRef.current.shared.first_blood,
+        'shared.first_blood',
+        { PLAYER: playerName }
+      );
+      if (fbMsg) allMessages.push(fbMsg);
+    }
+
+    allMessages.push(fullMessage);
 
     // Rebuy milestone (initial buyins don't count — subtract player count)
     const playerCount = ctx.allPlayers.length;
@@ -1496,7 +1548,13 @@ const LiveGameScreen = () => {
       allMessages.push(lastManMessages[Math.floor(Math.random() * lastManMessages.length)]);
     }
 
-    speakHebrew(allMessages, getGeminiApiKey());
+    isSpeakingRef.current = true;
+    lastTTSActivityRef.current = Date.now();
+    try {
+      await speakHebrew(allMessages, getGeminiApiKey());
+    } finally {
+      isSpeakingRef.current = false;
+    }
   };
 
   const handleRebuy = (player: GamePlayer, amount: number = 1) => {
@@ -1603,6 +1661,45 @@ const LiveGameScreen = () => {
     speakHebrew([message], getGeminiApiKey());
   };
 
+  const handleSocialMoment = (type: 'bad_beat' | 'big_hand', playerName: string) => {
+    setSocialAction(null);
+    const pool = ttsPoolRef.current;
+    if (!pool) return;
+
+    const shared = type === 'bad_beat' ? pool.shared.bad_beat : pool.shared.big_hand;
+    const generic = type === 'bad_beat' ? pool.shared.bad_beat_generic : pool.shared.big_hand_generic;
+    const categoryKey = `shared.${type}`;
+
+    let msg = pickFromPool(shared[playerName], `${categoryKey}.${playerName}`, { PLAYER: playerName });
+    if (!msg) msg = pickFromPool(generic, `${categoryKey}_generic`, {});
+    if (!msg) {
+      msg = type === 'bad_beat'
+        ? `אאוטש, רגע כואב ל${playerName}`
+        : `יד מטורפת של ${playerName}!`;
+    }
+
+    playRebuyCasinoSound(type === 'bad_beat' ? 8 : 2).then(() => {
+      speakHebrew([msg!], getGeminiApiKey());
+    });
+  };
+
+  const handleBreakTime = () => {
+    const pool = ttsPoolRef.current;
+    let msg: string | null = null;
+    if (pool) {
+      msg = pickFromPool(pool.shared.break_time, 'shared.break_time', {});
+    }
+    if (!msg) {
+      const fallbacks = [
+        'הפסקה! כולם נושמים, הקלפים נחים',
+        'זמן הפסקה, לשתות, לנשום, ולחזור חזק',
+        'הפסקה, הכסף לא בורח, אפשר להירגע',
+      ];
+      msg = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+    speakHebrew([msg], getGeminiApiKey());
+  };
+
   const handleUndo = () => {
     if (actions.length === 0) return;
     
@@ -1627,11 +1724,58 @@ const LiveGameScreen = () => {
     }
   };
 
-  const handleEndGame = () => {
+  const navigateToChipEntry = () => {
     if (gameId) {
       updateGameStatus(gameId, 'chip_entry');
       navigate(`/chip-entry/${gameId}`);
     }
+  };
+
+  const handleEndGame = async () => {
+    if (!gameId) return;
+    const pool = ttsPoolRef.current;
+    if (!pool) {
+      navigateToChipEntry();
+      return;
+    }
+
+    setShowAwardsCeremony(true);
+    const messages: string[] = [];
+
+    // Generosity award: player with most rebuys
+    const sorted = [...players].sort((a, b) => b.rebuys - a.rebuys);
+    const topRebuyer = sorted[0];
+    if (topRebuyer && topRebuyer.rebuys > 1) {
+      const genMsg = pickFromPool(pool.shared.awards_generosity, 'shared.awards_generosity', {
+        PLAYER: topRebuyer.playerName, COUNT: Math.ceil(topRebuyer.rebuys),
+      });
+      messages.push(genMsg || `פרס הנדיבות של הערב: ${topRebuyer.playerName} עם ${hebrewNum(Math.ceil(topRebuyer.rebuys), true)} קניות!`);
+    }
+
+    // Survival award: player with fewest rebuys (preferring rebuys=1 i.e. no extra buyin)
+    const survivors = [...players].sort((a, b) => a.rebuys - b.rebuys);
+    const survivor = survivors[0];
+    if (survivor && survivor.rebuys <= 1) {
+      const surMsg = pickFromPool(pool.shared.awards_survival, 'shared.awards_survival', {
+        PLAYER: survivor.playerName,
+      });
+      messages.push(surMsg || `פרס ההישרדות: ${survivor.playerName} שרד את כל הערב!`);
+    }
+
+    if (messages.length > 0) {
+      isSpeakingRef.current = true;
+      try {
+        await playRebuyCasinoSound(2);
+        await speakHebrew(messages, getGeminiApiKey());
+      } finally {
+        isSpeakingRef.current = false;
+      }
+    }
+
+    setTimeout(() => {
+      setShowAwardsCeremony(false);
+      navigateToChipEntry();
+    }, 1000);
   };
 
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
@@ -1815,9 +1959,99 @@ const LiveGameScreen = () => {
         </div>
       )}
 
+      {/* Social Moment Buttons (admin only) */}
+      {isAdmin && ttsPoolRef.current && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-sm"
+            style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
+            onClick={() => setSocialAction('bad_beat')}
+          >
+            💔 Bad Beat
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ background: 'var(--success, #28a745)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
+            onClick={() => setSocialAction('big_hand')}
+          >
+            🔥 Big Hand
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{ background: 'var(--surface-light, #555)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
+            onClick={handleBreakTime}
+          >
+            ☕ Break
+          </button>
+        </div>
+      )}
+
+      {/* Player picker for social moments */}
+      {socialAction && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={() => setSocialAction(null)}
+        >
+          <div
+            className="card"
+            style={{ maxWidth: '350px', margin: '1rem', padding: '1.5rem', textAlign: 'center' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: '1rem' }}>
+              {socialAction === 'bad_beat' ? '💔 Bad Beat — מי?' : '🔥 Big Hand — מי?'}
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center' }}>
+              {players.map(p => (
+                <button
+                  key={p.id}
+                  className="btn btn-sm btn-secondary"
+                  style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+                  onClick={() => handleSocialMoment(socialAction, p.playerName)}
+                >
+                  {p.playerName}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn btn-sm"
+              style={{ marginTop: '1rem', color: 'var(--text-muted, #aaa)' }}
+              onClick={() => setSocialAction(null)}
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Awards Ceremony Overlay */}
+      {showAwardsCeremony && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 2000, flexDirection: 'column', gap: '1rem',
+          }}
+        >
+          <div style={{ fontSize: '3rem' }}>🏆</div>
+          <div style={{ fontSize: '1.3rem', color: '#fff', fontWeight: 600 }}>טקס סיום הערב...</div>
+          <button
+            className="btn btn-sm"
+            style={{ color: '#aaa', marginTop: '1rem' }}
+            onClick={() => { setShowAwardsCeremony(false); navigateToChipEntry(); }}
+          >
+            דלג ←
+          </button>
+        </div>
+      )}
+
       <button 
         className="btn btn-primary btn-lg btn-block mt-3"
         onClick={handleEndGame}
+        disabled={showAwardsCeremony}
       >
         🏁 End Game & Count Chips
       </button>
