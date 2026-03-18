@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary } from '../database/storage';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
-import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights } from '../utils/geminiAI';
+import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import { speakHebrew } from '../utils/tts';
 import { usePermissions } from '../App';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 
 const hebrewNum = (n: number, feminine: boolean): string => {
   const abs = Math.round(Math.abs(n));
@@ -182,7 +184,7 @@ const GameSummaryScreen = () => {
       } else if (getGeminiApiKey()) {
         setIsLoadingComment(true);
         try {
-          const comment = await generateForecastComparison(game.forecasts, sortedPlayers);
+          const comment = await withAITiming('forecast_comparison', () => generateForecastComparison(game.forecasts!, sortedPlayers));
           setForecastComment(comment);
           saveForecastComment(game.id, comment);
         } catch (err) {
@@ -679,10 +681,10 @@ const GameSummaryScreen = () => {
       };
 
       setAiSummaryError(null);
-      generateGameNightSummary(summaryPayload)
+      withAITiming('game_summary', () => generateGameNightSummary(summaryPayload))
         .then(async result => {
           setAiSummary(result.text);
-          setAiSummaryModel(result.meta.model);
+          setAiSummaryModel(getModelDisplayName(result.meta.model));
           setAiSummaryError(null);
           saveGameAiSummary(game.id, result.text);
           if (shouldAutoGenerate) {
@@ -731,24 +733,29 @@ const GameSummaryScreen = () => {
           return hebrewNum(whole, true);
         };
 
+        const wFem = isPlayerFemale(winner.playerName);
+        const wg = (m: string, f: string) => wFem ? f : m;
+        const lFem = isPlayerFemale(loser.playerName);
+        const lg = (m: string, f: string) => lFem ? f : m;
+
         const winMessages = [
-          `המנצח הגדול של הערב הוא ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
-          `${winner.playerName} לוקח הכל הערב! פלוס ${cleanNumber(winner.profit)} שקל`,
+          `${wg('המנצח הגדול', 'המנצחת הגדולה')} של הערב ${wg('הוא', 'היא')} ${winner.playerName} עם פלוס ${cleanNumber(winner.profit)} שקל!`,
+          `${winner.playerName} ${wg('לוקח', 'לוקחת')} הכל הערב! פלוס ${cleanNumber(winner.profit)} שקל`,
           `ונצחון גדול של ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל`,
-          `${winner.playerName} הולך הביתה עם פלוס ${cleanNumber(winner.profit)} שקל. כל הכבוד!`,
-          `${winner.playerName} שולט הערב. פלוס ${cleanNumber(winner.profit)} שקל`,
+          `${winner.playerName} ${wg('הולך', 'הולכת')} הביתה עם פלוס ${cleanNumber(winner.profit)} שקל. כל הכבוד!`,
+          `${winner.playerName} ${wg('שולט', 'שולטת')} הערב. פלוס ${cleanNumber(winner.profit)} שקל`,
           `הכסף הולך אל ${winner.playerName}! פלוס ${cleanNumber(winner.profit)} שקל בכיס`,
-          `${winner.playerName} סוגר את הערב עם חיוך. פלוס ${cleanNumber(winner.profit)} שקל`,
-          `ו${winner.playerName} יוצא עם ${cleanNumber(winner.profit)} שקל יותר ממה שנכנס!`,
+          `${winner.playerName} ${wg('סוגר', 'סוגרת')} את הערב עם חיוך. פלוס ${cleanNumber(winner.profit)} שקל`,
+          `ו${winner.playerName} ${wg('יוצא', 'יוצאת')} עם ${cleanNumber(winner.profit)} שקל יותר ממה ${wg('שנכנס', 'שנכנסה')}!`,
         ];
         const loseMessages = [
-          `והתורם הרשמי של הערב. ${loser.playerName}. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
+          `${lg('והתורם הרשמי', 'והתורמת הרשמית')} של הערב. ${loser.playerName}. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. תודה על המימון!`,
           `${loser.playerName}. תודה על ${cleanNumber(Math.abs(loser.profit))} שקל. נתראה בפעם הבאה`,
-          `ו${loser.playerName} משאיר ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
-          `${loser.playerName} תרם ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן. גיבור אמיתי`,
-          `${loser.playerName} מפסיד ${cleanNumber(Math.abs(loser.profit))} שקל. אבל מי סופר`,
-          `${loser.playerName} חוזר הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. הערב לא היה שלו`,
-          `ו${loser.playerName} שילם את החשבון הערב. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
+          `ו${loser.playerName} ${lg('משאיר', 'משאירה')} ${cleanNumber(Math.abs(loser.profit))} שקל על השולחן. קלאסי`,
+          `${loser.playerName} ${lg('תרם', 'תרמה')} ${cleanNumber(Math.abs(loser.profit))} שקל לשולחן. ${lg('גיבור אמיתי', 'גיבורה אמיתית')}`,
+          `${loser.playerName} ${lg('מפסיד', 'מפסידה')} ${cleanNumber(Math.abs(loser.profit))} שקל. אבל מי סופר`,
+          `${loser.playerName} ${lg('חוזר', 'חוזרת')} הביתה עם מינוס ${cleanNumber(Math.abs(loser.profit))} שקל. הערב לא היה ${lg('שלו', 'שלה')}`,
+          `ו${loser.playerName} ${lg('שילם', 'שילמה')} את החשבון הערב. מינוס ${cleanNumber(Math.abs(loser.profit))} שקל`,
           `${loser.playerName}. ${cleanNumber(Math.abs(loser.profit))} שקל מינוס. אבל מה זה כסף בין חברים`,
         ];
         const potMessage = `סך הכל ${formatRebuysHebrew(totalRebuysOnly)} קניות חוזרות הערב.`;
@@ -1260,7 +1267,7 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
               minHeight: '2rem'
             }}>
-              {isLoadingComment && <span style={{ color: '#a855f7' }}>🤖 Summarizing...</span>}
+              {isLoadingComment && <><span style={{ color: '#a855f7' }}>🤖 Summarizing...</span><AIProgressBar operationKey="forecast_comparison" /></>}
               {forecastComment && !isLoadingComment && <span>🤖 {forecastComment}</span>}
               {!forecastComment && !isLoadingComment && <span style={{ color: 'var(--text-muted)' }}>🤖 No summary available</span>}
             </div>
@@ -1463,6 +1470,7 @@ const GameSummaryScreen = () => {
                   }}>
                     <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>✍️</div>
                     Generating summary...
+                    <AIProgressBar operationKey="game_summary" />
                   </div>
                 ) : (
                   <>

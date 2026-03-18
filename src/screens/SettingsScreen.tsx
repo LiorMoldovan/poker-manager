@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Player, PlayerType, ChipValue, Settings } from '../types';
+import { Player, PlayerType, PlayerGender, ChipValue, Settings } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
   getAllPlayers, 
@@ -8,6 +8,7 @@ import {
   deletePlayer,
   updatePlayerType,
   updatePlayerName,
+  updatePlayerGender,
   getChipValues, 
   saveChipValue,
   deleteChipValue,
@@ -43,11 +44,13 @@ const SettingsScreen = () => {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddChip, setShowAddChip] = useState(false);
   const [showEditPlayer, setShowEditPlayer] = useState(false);
-  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; type: PlayerType } | null>(null);
+  const [editingPlayer, setEditingPlayer] = useState<{ id: string; name: string; type: PlayerType; gender: PlayerGender } | null>(null);
   const [editPlayerName, setEditPlayerName] = useState('');
   const [editPlayerType, setEditPlayerType] = useState<PlayerType>('permanent');
+  const [editPlayerGender, setEditPlayerGender] = useState<PlayerGender>('male');
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerType, setNewPlayerType] = useState<PlayerType>('permanent');
+  const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>('male');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
@@ -170,19 +173,21 @@ const SettingsScreen = () => {
       setError('Player already exists');
       return;
     }
-    const player = addPlayer(trimmedName, newPlayerType);
+    const player = addPlayer(trimmedName, newPlayerType, newPlayerGender);
     setPlayers(sortPlayersByType([...players, player]));
     setNewPlayerName('');
     setNewPlayerType('permanent');
+    setNewPlayerGender('male');
     setShowAddPlayer(false);
     setError('');
     syncPlayersToCloud();
   };
 
-  const openEditPlayer = (player: { id: string; name: string; type: PlayerType }) => {
+  const openEditPlayer = (player: Player) => {
     setEditingPlayer(player);
     setEditPlayerName(player.name);
     setEditPlayerType(player.type || 'permanent');
+    setEditPlayerGender(player.gender || 'male');
     setShowEditPlayer(true);
     setError('');
   };
@@ -202,12 +207,14 @@ const SettingsScreen = () => {
       return;
     }
     
-    // Also update type if changed
     if (editPlayerType !== editingPlayer.type) {
       updatePlayerType(editingPlayer.id, editPlayerType);
     }
+    if (editPlayerGender !== editingPlayer.gender) {
+      updatePlayerGender(editingPlayer.id, editPlayerGender);
+    }
     
-    setPlayers(sortPlayersByType(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, type: editPlayerType } : p)));
+    setPlayers(sortPlayersByType(players.map(p => p.id === editingPlayer.id ? { ...p, name: trimmedName, type: editPlayerType, gender: editPlayerGender } : p)));
     setShowEditPlayer(false);
     setEditingPlayer(null);
     setEditPlayerName('');
@@ -703,6 +710,13 @@ const SettingsScreen = () => {
                       color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
                     }}>
                       {player.type === 'permanent' ? '⭐ קבוע' : player.type === 'permanent_guest' ? '🏠 אורח' : '👤 מזדמן'}
+                    </span>
+                    <span style={{
+                      fontSize: '0.65rem',
+                      color: player.gender === 'female' ? '#EC4899' : '#3B82F6',
+                      opacity: 0.7,
+                    }}>
+                      {player.gender === 'female' ? '♀' : '♂'}
                     </span>
                   </div>
                   {(canEditPlayers || canDeletePlayers) && (
@@ -1646,6 +1660,39 @@ const SettingsScreen = () => {
                 </button>
               </div>
             </div>
+            <div className="input-group">
+              <label className="label">Gender</label>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: newPlayerGender === 'male' ? 'rgba(59, 130, 246, 0.2)' : 'var(--surface)',
+                    border: newPlayerGender === 'male' ? '2px solid #3B82F6' : '1px solid var(--border)',
+                    color: newPlayerGender === 'male' ? '#3B82F6' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setNewPlayerGender('male')}
+                >
+                  ♂ זכר
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: newPlayerGender === 'female' ? 'rgba(236, 72, 153, 0.2)' : 'var(--surface)',
+                    border: newPlayerGender === 'female' ? '2px solid #EC4899' : '1px solid var(--border)',
+                    color: newPlayerGender === 'female' ? '#EC4899' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setNewPlayerGender('female')}
+                >
+                  ♀ נקבה
+                </button>
+              </div>
+            </div>
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setShowAddPlayer(false)}>
                 Cancel
@@ -1726,6 +1773,39 @@ const SettingsScreen = () => {
                   onClick={() => setEditPlayerType('guest')}
                 >
                   👤 מזדמן
+                </button>
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="label">Gender</label>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: editPlayerGender === 'male' ? 'rgba(59, 130, 246, 0.2)' : 'var(--surface)',
+                    border: editPlayerGender === 'male' ? '2px solid #3B82F6' : '1px solid var(--border)',
+                    color: editPlayerGender === 'male' ? '#3B82F6' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setEditPlayerGender('male')}
+                >
+                  ♂ זכר
+                </button>
+                <button
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    fontSize: '0.8rem',
+                    padding: '0.5rem',
+                    background: editPlayerGender === 'female' ? 'rgba(236, 72, 153, 0.2)' : 'var(--surface)',
+                    border: editPlayerGender === 'female' ? '2px solid #EC4899' : '1px solid var(--border)',
+                    color: editPlayerGender === 'female' ? '#EC4899' : 'var(--text-muted)'
+                  }}
+                  onClick={() => setEditPlayerGender('female')}
+                >
+                  ♀ נקבה
                 </button>
               </div>
             </div>

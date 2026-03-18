@@ -5,8 +5,10 @@ import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
+import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 
 import { PeriodMarkers } from '../types';
 
@@ -272,10 +274,10 @@ const NewGameScreen = () => {
     if (apiKey) {
       setGeneratingTTS(true);
       try {
-        const allStats = getPlayerStats();
+        const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
         const playerIdArr = Array.from(selectedIds);
         const playerNameArr = playerIdArr.map(id => players.find(p => p.id === id)?.name || '');
-        const pool = await generateLiveGameTTSPool(game.id, playerIdArr, playerNameArr, allStats, location || undefined);
+        const pool = await withAITiming('tts_pool', () => generateLiveGameTTSPool(game.id, playerIdArr, playerNameArr, stats2026, location || undefined));
         if (pool) {
           saveTTSPool(game.id, pool);
           console.log('🎙️ TTS pool saved for game', game.id);
@@ -333,11 +335,9 @@ const NewGameScreen = () => {
 
   // ============ SMART FORECAST SYSTEM WITH DYNAMIC HIGHLIGHTS ============
   
-  // Female names list for correct Hebrew gender (only מור in this group)
-  const FEMALE_NAMES = ['מור'];
-  
   const isFemale = (name: string): boolean => {
-    return FEMALE_NAMES.some(n => name === n || name.includes(n));
+    const player = players.find(p => p.name === name);
+    return player?.gender === 'female';
   };
   
   interface RecentAnalysis {
@@ -366,14 +366,17 @@ const NewGameScreen = () => {
   };
   
   // Generate DYNAMIC personalized highlight based on ACTUAL recency
-  const generateDynamicHighlight = (stats: PlayerStats, daysSince: number): string => {
+  const generateDynamicHighlight = (stats: PlayerStats, daysSince: number, playerName: string): string => {
     const lastGames = stats.lastGameResults || [];
     const gamesCount = lastGames.length;
     if (gamesCount === 0) return '';
     
-    const recentWins = lastGames.filter(g => g.profit > 0).length;
-    const recentLosses = lastGames.filter(g => g.profit < 0).length;
-    const recentProfit = lastGames.reduce((sum, g) => sum + g.profit, 0);
+    const fem = isFemale(playerName);
+    const g = (m: string, f: string) => fem ? f : m;
+    
+    const recentWins = lastGames.filter(g2 => g2.profit > 0).length;
+    const recentLosses = lastGames.filter(g2 => g2.profit < 0).length;
+    const recentProfit = lastGames.reduce((sum, g2) => sum + g2.profit, 0);
     const recentAvg = Math.round(recentProfit / gamesCount);
     const overallAvg = Math.round(stats.avgProfit);
     const streak = stats.currentStreak;
@@ -382,8 +385,8 @@ const NewGameScreen = () => {
     const totalGames = stats.gamesPlayed;
     
     // Find best and worst games
-    const bestRecent = Math.max(...lastGames.map(g => g.profit));
-    const worstRecent = Math.min(...lastGames.map(g => g.profit));
+    const bestRecent = Math.max(...lastGames.map(g2 => g2.profit));
+    const worstRecent = Math.min(...lastGames.map(g2 => g2.profit));
     
     // Determine time context
     const isActive = daysSince <= 60; // played in last 2 months
@@ -396,11 +399,11 @@ const NewGameScreen = () => {
     if (isActive) {
       // HOT STREAK
       if (streak >= 4) {
-        insights.push({ priority: 100, text: `🔥 רצף מטורף של ${streak} נצחונות! השחקן הכי חם כרגע על השולחן` });
-        insights.push({ priority: 98, text: `🔥 ${streak} נצחונות ברצף - מישהו צריך לעצור אותו לפני שהוא לוקח את כל הכסף` });
+        insights.push({ priority: 100, text: `🔥 רצף מטורף של ${streak} נצחונות! ${g('השחקן הכי חם', 'השחקנית הכי חמה')} כרגע על השולחן` });
+        insights.push({ priority: 98, text: `🔥 ${streak} נצחונות ברצף - מישהו צריך ${g('לעצור אותו לפני שהוא לוקח', 'לעצור אותה לפני שהיא לוקחת')} את כל הכסף` });
       } else if (streak >= 3) {
-        insights.push({ priority: 95, text: `🔥 על גל חם עם ${streak} נצחונות רצופים - המומנטום לצידו` });
-        insights.push({ priority: 93, text: `🔥 ${streak} נצחונות ברצף, והביטחון שלו בשמיים` });
+        insights.push({ priority: 95, text: `🔥 על גל חם עם ${streak} נצחונות רצופים - המומנטום ${g('לצידו', 'לצידה')}` });
+        insights.push({ priority: 93, text: `🔥 ${streak} נצחונות ברצף, והביטחון ${g('שלו', 'שלה')} בשמיים` });
       } else if (streak === 2) {
         insights.push({ priority: 60, text: `שני נצחונות רצופים - אולי תחילת רצף חם?` });
       }
@@ -410,30 +413,30 @@ const NewGameScreen = () => {
         insights.push({ priority: 100, text: `❄️ ${Math.abs(streak)} הפסדים ברצף - תקופה קשה, אבל כל רצף נשבר מתישהו` });
         insights.push({ priority: 98, text: `❄️ רצף של ${Math.abs(streak)} הפסדים. המזל חייב להשתנות, לא?` });
       } else if (streak <= -3) {
-        insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים רצופים - צריך שינוי מזל דחוף` });
+        insights.push({ priority: 95, text: `❄️ ${Math.abs(streak)} הפסדים רצופים - ${g('צריך', 'צריכה')} שינוי מזל דחוף` });
       } else if (streak === -2) {
         insights.push({ priority: 60, text: `שני הפסדים אחרונים - הפעם ההזדמנות לשבור את הרצף` });
       }
       
       // IMPROVEMENT vs HISTORY (only if active)
       if (recentAvg > overallAvg + 30) {
-        insights.push({ priority: 90, text: `📈 שיפור דרמטי! ממוצע של +${recentAvg}₪ במשחקים האחרונים, הרבה מעל הממוצע ההיסטורי שלו (${overallAvg}₪)` });
+        insights.push({ priority: 90, text: `📈 שיפור דרמטי! ממוצע של +${recentAvg}₪ במשחקים האחרונים, הרבה מעל הממוצע ההיסטורי (${overallAvg}₪)` });
       } else if (recentAvg > overallAvg + 15 && gamesCount >= 4) {
         insights.push({ priority: 75, text: `📈 בעלייה ברורה: ממוצע ${recentAvg > 0 ? '+' : ''}${recentAvg}₪ במשחקים האחרונים לעומת ${overallAvg}₪ בסה"כ` });
       }
       
       // DECLINE vs HISTORY (only if active)
       if (recentAvg < overallAvg - 30) {
-        insights.push({ priority: 90, text: `📉 ירידה חדה! ממוצע ${recentAvg}₪ במשחקים האחרונים - הרבה מתחת לממוצע ההיסטורי שלו (${overallAvg > 0 ? '+' : ''}${overallAvg}₪)` });
+        insights.push({ priority: 90, text: `📉 ירידה חדה! ממוצע ${recentAvg}₪ במשחקים האחרונים - הרבה מתחת לממוצע ההיסטורי (${overallAvg > 0 ? '+' : ''}${overallAvg}₪)` });
       } else if (recentAvg < overallAvg - 15 && gamesCount >= 4) {
         insights.push({ priority: 75, text: `📉 ירידה בביצועים: ${recentAvg}₪ ממוצע במשחקים האחרונים, לעומת ${overallAvg > 0 ? '+' : ''}${overallAvg}₪ היסטורית` });
       }
       
       // DOMINANT PERFORMANCE
       if (recentWins >= gamesCount - 1 && gamesCount >= 4) {
-        insights.push({ priority: 85, text: `שליטה מוחלטת: ${recentWins} מתוך ${gamesCount} משחקים אחרונים סיים ברווח!` });
+        insights.push({ priority: 85, text: `שליטה מוחלטת: ${recentWins} מתוך ${gamesCount} משחקים אחרונים ${g('סיים', 'סיימה')} ברווח!` });
       } else if (recentLosses >= gamesCount - 1 && gamesCount >= 4) {
-        insights.push({ priority: 85, text: `מתקשה מאוד: רק ${recentWins} מתוך ${gamesCount} משחקים אחרונים ברווח` });
+        insights.push({ priority: 85, text: `${g('מתקשה', 'מתקשה')} מאוד: רק ${recentWins} מתוך ${gamesCount} משחקים אחרונים ברווח` });
       }
     }
     
@@ -441,20 +444,20 @@ const NewGameScreen = () => {
     else {
       // Time since last game - with cynicism!
       if (monthsAgo >= 12) {
-        insights.push({ priority: 95, text: `👻 נעלם לשנה שלמה! חשבנו שעבר דירה או משהו. מתברר שסתם שכח אותנו` });
-        insights.push({ priority: 93, text: `⏰ שנה בלי משחק?! מה קרה, מצאת קבוצה יותר טובה? (ספוילר: אין)` });
-        insights.push({ priority: 91, text: `👻 ${monthsAgo} חודשים! כבר הספקנו למחוק אותו מהוואטסאפ ולהוסיף מחדש` });
+        insights.push({ priority: 95, text: `👻 ${g('נעלם', 'נעלמה')} לשנה שלמה! ${g('חשבנו שעבר', 'חשבנו שעברה')} דירה או משהו. מתברר שסתם ${g('שכח', 'שכחה')} אותנו` });
+        insights.push({ priority: 93, text: `⏰ שנה בלי משחק?! מה קרה, ${g('מצאת', 'מצאת')} קבוצה יותר טובה? (ספוילר: אין)` });
+        insights.push({ priority: 91, text: `👻 ${monthsAgo} חודשים! כבר הספקנו ${g('למחוק אותו', 'למחוק אותה')} מהוואטסאפ ולהוסיף מחדש` });
       } else if (monthsAgo >= 6) {
-        insights.push({ priority: 90, text: `👻 נעלם ל-${monthsAgo} חודשים - בטח היה עסוק בלהפסיד במקומות אחרים` });
+        insights.push({ priority: 90, text: `👻 ${g('נעלם', 'נעלמה')} ל-${monthsAgo} חודשים - בטח ${g('היה עסוק', 'הייתה עסוקה')} בלהפסיד במקומות אחרים` });
         insights.push({ priority: 88, text: `⏰ ${monthsAgo} חודשים בלי ביקור! מה, הארנק היה צריך זמן להתאושש?` });
-        insights.push({ priority: 86, text: `👻 חצי שנה מאז שראינו את הפרצוף שלו - נקווה שלפחות הביא כסף` });
+        insights.push({ priority: 86, text: `👻 חצי שנה מאז שראינו את הפנים - נקווה ${g('שלפחות הביא', 'שלפחות הביאה')} כסף` });
       } else if (monthsAgo >= 3) {
-        insights.push({ priority: 85, text: `⏰ ${monthsAgo} חודשים בהיעדרות - בטח חיכה שנשכח כמה הוא מפסיד` });
-        insights.push({ priority: 83, text: `⏰ היעדרות של ${monthsAgo} חודשים. נקווה שהתאמן ולא רק בנטפליקס` });
-        insights.push({ priority: 81, text: `👻 ${monthsAgo} חודשים! כבר התחלנו לחלק את הכיסא שלו לאחרים` });
+        insights.push({ priority: 85, text: `⏰ ${monthsAgo} חודשים בהיעדרות - בטח ${g('חיכה שנשכח כמה הוא מפסיד', 'חיכתה שנשכח כמה היא מפסידה')}` });
+        insights.push({ priority: 83, text: `⏰ היעדרות של ${monthsAgo} חודשים. נקווה ${g('שהתאמן', 'שהתאמנה')} ולא רק בנטפליקס` });
+        insights.push({ priority: 81, text: `👻 ${monthsAgo} חודשים! כבר התחלנו לחלק את הכיסא לאחרים` });
       } else {
         insights.push({ priority: 75, text: `⏰ חודשיים בלי משחק - מספיק זמן לשכוח הכל` });
-        insights.push({ priority: 73, text: `⏰ לא היה פה חודשיים. מה קרה, פחדת מאיתנו?` });
+        insights.push({ priority: 73, text: `⏰ לא ${g('היה', 'הייתה')} פה חודשיים. מה קרה, ${g('פחדת', 'פחדת')} מאיתנו?` });
       }
     }
     
@@ -462,63 +465,63 @@ const NewGameScreen = () => {
     
     // BIG WINS
     if (bestRecent >= 100) {
-      insights.push({ priority: 70, text: `💰 הנצחון הגדול שלו: +${bestRecent}₪ - מוכיח שכשהוא בפורמה, הוא יכול לקחת הרבה` });
+      insights.push({ priority: 70, text: `💰 הנצחון הגדול: +${bestRecent}₪ - ${g('מוכיח שכשהוא בפורמה, הוא יכול', 'מוכיחה שכשהיא בפורמה, היא יכולה')} לקחת הרבה` });
     } else if (bestRecent >= 60 && recentAvg < 0) {
-      insights.push({ priority: 65, text: `יודע לנצח גדול (+${bestRecent}₪) אבל לא עקבי - תלוי באיזה יום תפסת אותו` });
+      insights.push({ priority: 65, text: `${g('יודע', 'יודעת')} לנצח גדול (+${bestRecent}₪) אבל לא ${g('עקבי', 'עקבית')}` });
     }
     
     // BIG LOSSES
     if (worstRecent <= -100) {
-      insights.push({ priority: 70, text: `💸 הפסד כואב של ${worstRecent}₪ - יודע גם ליפול חזק` });
+      insights.push({ priority: 70, text: `💸 הפסד כואב של ${worstRecent}₪ - ${g('יודע', 'יודעת')} גם ליפול חזק` });
     } else if (worstRecent <= -60 && recentAvg > 0) {
-      insights.push({ priority: 65, text: `גם כשהוא מפסיד, הוא מפסיד גדול (${worstRecent}₪) - אבל בסופו של דבר ברווח` });
+      insights.push({ priority: 65, text: `${g('גם כשהוא מפסיד, הוא מפסיד', 'גם כשהיא מפסידה, היא מפסידה')} גדול (${worstRecent}₪) - אבל בסופו של דבר ברווח` });
     }
     
     // WIN RATE
     if (winPct >= 65) {
-      insights.push({ priority: 70, text: `🎯 אחוז נצחון של ${winPct}% מתוך ${totalGames} משחקים - שחקן מנצח מובהק` });
+      insights.push({ priority: 70, text: `🎯 אחוז נצחון של ${winPct}% מתוך ${totalGames} משחקים - ${g('שחקן מנצח מובהק', 'שחקנית מנצחת מובהקת')}` });
     } else if (winPct <= 35 && totalGames >= 5) {
-      insights.push({ priority: 70, text: `😅 רק ${winPct}% נצחונות מתוך ${totalGames} משחקים - אבל ממשיך לנסות` });
+      insights.push({ priority: 70, text: `😅 רק ${winPct}% נצחונות מתוך ${totalGames} משחקים - אבל ${g('ממשיך', 'ממשיכה')} לנסות` });
     }
     
     // COMEBACK POTENTIAL
     if (totalProfit < -200 && recentAvg > 10 && isActive) {
-      insights.push({ priority: 80, text: `🔄 בדרך לקאמבק? הפסיד ${Math.abs(totalProfit)}₪ בסה"כ, אבל בביצועים האחרונים יש שיפור` });
+      insights.push({ priority: 80, text: `🔄 בדרך לקאמבק? ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)}₪ בסה"כ, אבל בביצועים האחרונים יש שיפור` });
     } else if (totalProfit < -200) {
-      insights.push({ priority: 65, text: `📊 הפסיד ${Math.abs(totalProfit)}₪ לאורך ההיסטוריה - השאלה אם הוא למד משהו` });
+      insights.push({ priority: 65, text: `📊 ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)}₪ לאורך ההיסטוריה - השאלה אם ${g('הוא למד', 'היא למדה')} משהו` });
     }
     
     // LOSING THE EDGE
     if (totalProfit > 200 && recentAvg < -10 && isActive) {
-      insights.push({ priority: 80, text: `⚠️ היה מרוויח גדול (+${totalProfit}₪ כולל) אבל הביצועים האחרונים מדאיגים` });
+      insights.push({ priority: 80, text: `⚠️ ${g('היה מרוויח', 'הייתה מרוויחה')} גדול (+${totalProfit}₪ כולל) אבל הביצועים האחרונים מדאיגים` });
     }
     
     // VOLATILE
     if (bestRecent - worstRecent > 150) {
-      insights.push({ priority: 55, text: `🎢 שחקן של קיצוניות: בין +${bestRecent}₪ ל-${Math.abs(worstRecent)}₪ - אתו אף פעם לא יודעים` });
+      insights.push({ priority: 55, text: `🎢 ${g('שחקן', 'שחקנית')} של קיצוניות: בין +${bestRecent}₪ ל-${Math.abs(worstRecent)}₪ - ${g('איתו', 'איתה')} אף פעם לא יודעים` });
     }
     
     // TOTAL PROFIT MILESTONES
     if (totalProfit > 500) {
-      insights.push({ priority: 50, text: `💎 רווח כולל של +${totalProfit}₪ מ-${totalGames} משחקים - אחד המנצחים הגדולים` });
+      insights.push({ priority: 50, text: `💎 רווח כולל של +${totalProfit}₪ מ-${totalGames} משחקים - ${g('אחד המנצחים הגדולים', 'אחת המנצחות הגדולות')}` });
       insights.push({ priority: 48, text: `💎 +${totalProfit}₪ בקופה - ההיסטוריה מדברת בעד עצמה` });
     } else if (totalProfit < -500) {
-      insights.push({ priority: 50, text: `📊 הפסיד ${Math.abs(totalProfit)}₪ לאורך ${totalGames} משחקים - הספונסר שלנו` });
+      insights.push({ priority: 50, text: `📊 ${g('הפסיד', 'הפסידה')} ${Math.abs(totalProfit)}₪ לאורך ${totalGames} משחקים - הספונסר שלנו` });
     }
     
     // BALANCED
     if (Math.abs(recentAvg) <= 5 && recentWins === recentLosses && gamesCount >= 4) {
-      insights.push({ priority: 50, text: `⚖️ מאוזן להפליא: ${recentWins} נצחונות ו-${recentLosses} הפסדים - לא נוטה לשום כיוון` });
+      insights.push({ priority: 50, text: `⚖️ ${g('מאוזן', 'מאוזנת')} להפליא: ${recentWins} נצחונות ו-${recentLosses} הפסדים - לא נוטה לשום כיוון` });
     }
     
     // DEFAULT summaries based on data quality
     if (totalGames >= 10) {
       insights.push({ priority: 35, text: `${totalGames} משחקים בהיסטוריה, ${winPct}% נצחונות, ממוצע ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪ למשחק` });
-      insights.push({ priority: 33, text: `שחקן ותיק עם ${totalGames} משחקים: סה"כ ${totalProfit >= 0 ? '+' : ''}${totalProfit}₪` });
+      insights.push({ priority: 33, text: `${g('שחקן ותיק', 'שחקנית ותיקה')} עם ${totalGames} משחקים: סה"כ ${totalProfit >= 0 ? '+' : ''}${totalProfit}₪` });
     } else if (totalGames >= 5) {
       insights.push({ priority: 30, text: `${totalGames} משחקים עד היום: ${recentWins} נצחונות, ממוצע ${overallAvg >= 0 ? '+' : ''}${overallAvg}₪` });
     } else {
-      insights.push({ priority: 25, text: `עדיין מתחיל: רק ${totalGames} משחקים בהיסטוריה` });
+      insights.push({ priority: 25, text: `עדיין ${g('מתחיל', 'מתחילה')}: רק ${totalGames} משחקים בהיסטוריה` });
     }
     
     // RANDOM SELECTION from top candidates
@@ -572,7 +575,7 @@ const NewGameScreen = () => {
     }
     
     // Generate dynamic personalized highlight with recency context
-    const highlights = generateDynamicHighlight(stats, daysSinceLastGame);
+    const highlights = generateDynamicHighlight(stats, daysSinceLastGame, stats.playerName);
     
     return { recentWins, recentLosses, recentProfit, recentAvg, gamesCount, trend, highlights, daysSinceLastGame, isActive };
   };
@@ -918,18 +921,63 @@ const NewGameScreen = () => {
             <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboHistory.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
           </div>`;
         }
+        const headerHtml = `<div style="margin-bottom: 0.75rem;">
+            <div style="font-size: 0.88rem; color: #e2e8f0;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong></div>
+            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboHistory.totalGamesWithCombo + 1} שאותם ${comboHistory.playerCount} שחקנים נפגשים</div>
+          </div>`;
+
+        if (comboHistory.totalGamesWithCombo === 1) {
+          const game = comboHistory.previousGames[0];
+          const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+          const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
+          const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
+          const topRebuyer = [...game.results].sort((a, b) => b.rebuys - a.rebuys)[0];
+          const winnersCount = game.results.filter(r => r.profit > 0).length;
+
+          const insightsHtml: string[] = [];
+          if (topRebuyer && topRebuyer.rebuys >= 3 && topRebuyer.playerName !== game.winnerName) {
+            insightsHtml.push(`<div style="font-size: 0.76rem; color: #f59e0b;">💸 ${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) אבל לא ניצח</div>`);
+          } else if (topRebuyer && topRebuyer.playerName === game.winnerName && topRebuyer.rebuys >= 3) {
+            insightsHtml.push(`<div style="font-size: 0.76rem; color: #4ade80;">🔥 ${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) ובכל זאת ניצח</div>`);
+          }
+          if (winnersCount === 1) {
+            insightsHtml.push(`<div style="font-size: 0.76rem; color: #a78bfa;">🎯 רק מנצח אחד מתוך ${game.results.length} — ערב קשה</div>`);
+          } else if (winnersCount >= Math.ceil(game.results.length / 2)) {
+            insightsHtml.push(`<div style="font-size: 0.76rem; color: #94a3b8;">⚖️ ${winnersCount} מתוך ${game.results.length} סיימו ברווח — ערב מאוזן</div>`);
+          }
+          const loserRebuys = game.results[game.results.length - 1]?.rebuys || 0;
+          if (loserRebuys <= 1) {
+            insightsHtml.push(`<div style="font-size: 0.76rem; color: #f87171;">😱 ${game.loserName} הפסיד הכי הרבה עם רק קנייה אחת</div>`);
+          }
+
+          return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
+            ${headerHtml}
+            <div style="padding: 0.4rem 0.55rem; border-radius: 8px; background: rgba(255,255,255,0.04); margin-bottom: 0.5rem;">
+              <div style="color: #64748b; font-size: 0.7rem; margin-bottom: 0.2rem;">${dateStr} (${timeAgoStr})</div>
+              <div style="font-size: 0.8rem;"><span style="color: #4ade80;">👑 ${game.winnerName} (+${Math.round(game.winnerProfit)}₪)</span>  <span style="color: #f87171;">💀 ${game.loserName} (${Math.round(game.loserProfit)}₪)</span></div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.2rem;">${game.totalRebuys} קניות סה"כ • ${game.results.length} שחקנים</div>
+            </div>
+            ${insightsHtml.length > 0 ? `<div style="display: flex; flex-direction: column; gap: 0.2rem;">${insightsHtml.join('')}</div>` : ''}
+          </div>`;
+        }
+
         const top = comboHistory.playerStats[0];
         const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
         const alwaysWon = comboHistory.playerStats.filter(p => p.alwaysWon);
         const alwaysLost = comboHistory.playerStats.filter(p => p.alwaysLost);
 
         let patternsHtml = '';
-        if (comboHistory.totalGamesWithCombo >= 2) {
-          if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
-          if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
-          if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הפעם?</div>`;
-          if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
-        }
+        if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
+        if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הפעם?</div>`;
+        if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+
+        const avgRebuys = Math.round(comboHistory.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / comboHistory.totalGamesWithCombo);
+        const biggestWin = comboHistory.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
+        let insightsHtml = '';
+        if (avgRebuys > 0) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">📊 ממוצע ${avgRebuys} קניות למשחק בהרכב הזה</div>`;
+        if (biggestWin.profit > 0) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">🏆 רווח שיא: ${biggestWin.name} +${Math.round(biggestWin.profit)}₪</div>`;
+        if (comboHistory.spanDays > 30) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">📅 ההרכב הזה משחק יחד כבר ${Math.round(comboHistory.spanDays / 30)} חודשים</div>`;
 
         const gamesHtml = comboHistory.previousGames.slice(-3).map(game => {
           const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
@@ -940,15 +988,13 @@ const NewGameScreen = () => {
         }).join('');
 
         return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
-          <div style="margin-bottom: 0.75rem;">
-            <div style="font-size: 0.88rem; color: #e2e8f0;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong></div>
-            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboHistory.totalGamesWithCombo + 1} שאותם ${comboHistory.playerCount} שחקנים נפגשים</div>
-          </div>
+          ${headerHtml}
           <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.04); font-size: 0.8rem; color: #e2e8f0;">
-            <div>👑 <span style="color: #fbbf24; font-weight: 600;">מוביל ההרכב:</span> ${top.playerName} <span style="color: ${top.totalProfit >= 0 ? '#4ade80' : '#f87171'};">(${top.totalProfit >= 0 ? '+' : ''}${Math.round(top.totalProfit)}₪)</span></div>
-            <div>📉 <span style="font-weight: 600;">תחתית ההרכב:</span> ${bottom.playerName} <span style="color: #f87171;">(${bottom.totalProfit >= 0 ? '+' : ''}${Math.round(bottom.totalProfit)}₪)</span></div>
+            <div>👑 <span style="color: #fbbf24; font-weight: 600;">מוביל ההרכב:</span> ${top.playerName} <span style="color: ${top.totalProfit >= 0 ? '#4ade80' : '#f87171'};">(${top.totalProfit >= 0 ? '+' : ''}${Math.round(top.totalProfit)}₪)</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${top.avgProfit >= 0 ? '+' : ''}${Math.round(top.avgProfit)}₪ • ${top.wins}/${comboHistory.totalGamesWithCombo} נצחונות</span></div>
+            <div>📉 <span style="font-weight: 600;">תחתית ההרכב:</span> ${bottom.playerName} <span style="color: #f87171;">(${bottom.totalProfit >= 0 ? '+' : ''}${Math.round(bottom.totalProfit)}₪)</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${bottom.avgProfit >= 0 ? '+' : ''}${Math.round(bottom.avgProfit)}₪</span></div>
           </div>
           ${patternsHtml ? `<div style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem;">${patternsHtml}</div>` : ''}
+          ${insightsHtml ? `<div style="display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.6rem;">${insightsHtml}</div>` : ''}
           <div style="font-size: 0.75rem; color: #64748b; font-weight: 600; margin-bottom: 0.3rem;">📅 משחקים קודמים:</div>
           <div style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.6rem;">${gamesHtml}</div>
         </div>`;
@@ -1271,9 +1317,9 @@ const NewGameScreen = () => {
         const comboText = buildComboHistoryText(combo);
         setComboHistory(combo);
 
-        const forecasts = await generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined, comboText);
+        const forecasts = await withAITiming('forecast', () => generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined, comboText));
         setAiForecasts(forecasts);
-        setAiModelName(getLastUsedModel());
+        setAiModelName(getModelDisplayName(getLastUsedModel()));
         setIsLoadingAI(false);
         
         const forecastsToSave: GameForecast[] = forecasts.map(f => ({
@@ -1750,6 +1796,11 @@ const NewGameScreen = () => {
           {generatingTTS ? '🎙️ מכין את הערב...' : `🎰 Start Game (${selectedIds.size})`}
         </button>
       </div>
+      {generatingTTS && (
+        <div style={{ padding: '0 0.75rem' }}>
+          <AIProgressBar operationKey="tts_pool" />
+        </div>
+      )}
 
       {/* Add Player Modal */}
       {showAddPlayer && (
@@ -1860,6 +1911,7 @@ const NewGameScreen = () => {
                 <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🤖</div>
                 <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>AI מנתח נתונים...</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>יוצר תחזית מותאמת אישית</p>
+                <AIProgressBar operationKey="forecast" />
               </div>
             )}
             
@@ -1987,76 +2039,156 @@ const NewGameScreen = () => {
                           </div>
                         </div>
 
-                        {/* Combo leader + bottom */}
-                        {comboHistory.playerStats.length >= 2 && (() => {
-                          const top = comboHistory.playerStats[0];
-                          const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
-                          return (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', direction: 'rtl', textAlign: 'right' }}>
-                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל ההרכב:</span>{' '}
-                                {top.playerName}{' '}
-                                <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
-                                  ({top.totalProfit >= 0 ? '+' : ''}{Math.round(top.totalProfit)}₪)
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                📉 <span style={{ fontWeight: 600 }}>תחתית ההרכב:</span>{' '}
-                                {bottom.playerName}{' '}
-                                <span style={{ color: '#f87171' }}>
-                                  ({bottom.totalProfit >= 0 ? '+' : ''}{Math.round(bottom.totalProfit)}₪)
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {/* Patterns - only show "always" patterns with 2+ games */}
-                        {comboHistory.totalGamesWithCombo >= 2 && (comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) || comboHistory.repeatWinners.length > 0) && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', direction: 'rtl', textAlign: 'right' }}>
-                            {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
-                              <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
-                                ⭐ תמיד ברווח: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
-                              </div>
-                            )}
-                            {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
-                              <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
-                                ⚠️ תמיד בהפסד: {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
-                              </div>
-                            )}
-                            {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
-                              <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
-                                🎲 מנצח שונה בכל משחק — מי הפעם?
-                              </div>
-                            )}
-                            {comboHistory.repeatWinners.length > 0 && (
-                              <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
-                                🏆 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Previous games */}
-                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', direction: 'rtl', textAlign: 'right' }}>
-                          📅 משחקים קודמים:
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
-                          {comboHistory.previousGames.slice(-3).map((game, i) => {
+                        {comboHistory.totalGamesWithCombo === 1 ? (
+                          /* === SINGLE GAME: compact result + unique insights === */
+                          (() => {
+                            const game = comboHistory.previousGames[0];
+                            if (!game) return null;
                             const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                            const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
+                            const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
+                            const topRebuyer = [...game.results].sort((a, b) => b.rebuys - a.rebuys)[0];
+                            const winnersCount = game.results.filter(r => r.profit > 0).length;
+
+                            const insights: { emoji: string; text: string; color: string }[] = [];
+                            if (topRebuyer && topRebuyer.rebuys >= 3 && topRebuyer.playerName !== game.winnerName) {
+                              insights.push({ emoji: '💸', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) אבל לא ניצח`, color: '#f59e0b' });
+                            } else if (topRebuyer && topRebuyer.playerName === game.winnerName && topRebuyer.rebuys >= 3) {
+                              insights.push({ emoji: '🔥', text: `${topRebuyer.playerName} קנה הכי הרבה (${topRebuyer.rebuys}) ובכל זאת ניצח`, color: '#4ade80' });
+                            }
+                            if (winnersCount === 1) {
+                              insights.push({ emoji: '🎯', text: `רק מנצח אחד מתוך ${game.results.length} — ערב קשה`, color: '#a78bfa' });
+                            } else if (winnersCount >= Math.ceil(game.results.length / 2)) {
+                              insights.push({ emoji: '⚖️', text: `${winnersCount} מתוך ${game.results.length} סיימו ברווח — ערב מאוזן`, color: '#94a3b8' });
+                            }
+                            const loserRebuys = game.results[game.results.length - 1]?.rebuys || 0;
+                            if (loserRebuys <= 1) {
+                              insights.push({ emoji: '😱', text: `${game.loserName} הפסיד הכי הרבה עם רק קנייה אחת`, color: '#f87171' });
+                            }
+
                             return (
-                              <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', direction: 'rtl', textAlign: 'right' }}>
-                                <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
-                                <div>
-                                  <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
-                                  {'  '}
-                                  <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                              <div>
+                                <div style={{ padding: '0.4rem 0.55rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', marginBottom: '0.5rem' }}>
+                                  <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.2rem' }}>{dateStr} ({timeAgoStr})</div>
+                                  <div style={{ fontSize: '0.8rem' }}>
+                                    <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
+                                    {'  '}
+                                    <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>
+                                    {game.totalRebuys} קניות סה"כ • {game.results.length} שחקנים
+                                  </div>
                                 </div>
+                                {insights.length > 0 && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.3rem' }}>
+                                    {insights.map((ins, i) => (
+                                      <div key={i} style={{ fontSize: '0.76rem', color: ins.color }}>
+                                        {ins.emoji} {ins.text}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             );
-                          })}
-                        </div>
+                          })()
+                        ) : (
+                          /* === MULTIPLE GAMES: Leader/bottom + patterns + insights === */
+                          <div>
+                            {/* Combo leader + bottom with avg */}
+                            {comboHistory.playerStats.length >= 2 && (() => {
+                              const top = comboHistory.playerStats[0];
+                              const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', direction: 'rtl', textAlign: 'right' }}>
+                                  <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                                    👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל ההרכב:</span>{' '}
+                                    {top.playerName}{' '}
+                                    <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
+                                      ({top.totalProfit >= 0 ? '+' : ''}{Math.round(top.totalProfit)}₪)
+                                    </span>
+                                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {top.avgProfit >= 0 ? '+' : ''}{Math.round(top.avgProfit)}₪ • {top.wins}/{comboHistory.totalGamesWithCombo} נצחונות</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
+                                    📉 <span style={{ fontWeight: 600 }}>תחתית ההרכב:</span>{' '}
+                                    {bottom.playerName}{' '}
+                                    <span style={{ color: '#f87171' }}>
+                                      ({bottom.totalProfit >= 0 ? '+' : ''}{Math.round(bottom.totalProfit)}₪)
+                                    </span>
+                                    <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {bottom.avgProfit >= 0 ? '+' : ''}{Math.round(bottom.avgProfit)}₪</span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
+                            {/* Patterns */}
+                            {(comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) || comboHistory.repeatWinners.length > 0) && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', direction: 'rtl', textAlign: 'right' }}>
+                                {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
+                                  <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
+                                    ⭐ תמיד ברווח: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
+                                  </div>
+                                )}
+                                {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
+                                  <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
+                                    ⚠️ תמיד בהפסד: {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
+                                  </div>
+                                )}
+                                {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
+                                  <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
+                                    🎲 מנצח שונה בכל משחק — מי הפעם?
+                                  </div>
+                                )}
+                                {comboHistory.repeatWinners.length > 0 && (
+                                  <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+                                    🏆 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Combo insights */}
+                            {(() => {
+                              const insights: string[] = [];
+                              const avgRebuys = Math.round(comboHistory.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / comboHistory.totalGamesWithCombo);
+                              const biggestWin = comboHistory.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
+                              const biggestLoss = comboHistory.playerStats.reduce((worst, p) => p.worstResult < worst.profit ? { name: p.playerName, profit: p.worstResult } : worst, { name: '', profit: 0 });
+
+                              if (avgRebuys > 0) insights.push(`📊 ממוצע ${avgRebuys} קניות למשחק בהרכב הזה`);
+                              if (biggestWin.profit > 0) insights.push(`🏆 רווח שיא: ${biggestWin.name} +${Math.round(biggestWin.profit)}₪`);
+                              if (biggestLoss.profit < 0) insights.push(`💸 הפסד שיא: ${biggestLoss.name} ${Math.round(biggestLoss.profit)}₪`);
+                              if (comboHistory.spanDays > 30) insights.push(`📅 ההרכב הזה משחק יחד כבר ${Math.round(comboHistory.spanDays / 30)} חודשים`);
+
+                              if (insights.length === 0) return null;
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem', direction: 'rtl', textAlign: 'right' }}>
+                                  {insights.map((insight, i) => (
+                                    <div key={i} style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{insight}</div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Previous games */}
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', direction: 'rtl', textAlign: 'right' }}>
+                              📅 משחקים קודמים:
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
+                              {comboHistory.previousGames.slice(-3).map((game, i) => {
+                                const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                                return (
+                                  <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', direction: 'rtl', textAlign: 'right' }}>
+                                    <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
+                                    <div>
+                                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
+                                      {'  '}
+                                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

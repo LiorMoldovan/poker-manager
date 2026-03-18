@@ -1,5 +1,6 @@
 import { PlayerStats, MilestoneItem, MilestoneSentiment } from '../types';
 import { formatHebrewHalf } from './calculations';
+import { isPlayerFemale } from '../database/storage';
 
 // ═══════════════════════════════════════════════════════════════════
 // COMMON PLAYER SHAPE — adapts both PlayerStats and PlayerForecastData
@@ -485,7 +486,7 @@ function generateNumericGoals(
           emoji: '🎮', category: 'milestone', sentiment: 'positive',
           title: dist === 1 ? `משחק מספר ${gm}` : `${dist} משחקים ל-${gm}!`,
           description: dist === 1
-            ? `הפעם ${p.name} ישחק את המשחק ה-${gm} שלו! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
+            ? `הפעם ${p.name} ${isPlayerFemale(p.name) ? 'תשחק' : 'ישחק'} את המשחק ה-${gm} ${isPlayerFemale(p.name) ? 'שלה' : 'שלו'}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`
             : `${p.name} עוד ${dist} משחקים למשחק ה-${gm}! ממוצע עד כה: ${fmt(p.avgProfit)} למשחק.`,
           priority: 65 + gm / 5 + (3 - dist) * 5,
         });
@@ -563,7 +564,7 @@ function generateForm(
     items.push({
       emoji: '📉', category: 'form', sentiment: 'negative',
       title: `${coldForm.player.name} מתחת לרמה`,
-      description: `בדרך כלל ${fmt(coldForm.player.avgProfit)} למשחק, אבל לאחרונה ${fmt(coldForm.last3Avg)}. הסטטיסטיקה לטובתו - צפוי קאמבק.`,
+      description: `בדרך כלל ${fmt(coldForm.player.avgProfit)} למשחק, אבל לאחרונה ${fmt(coldForm.last3Avg)}. הסטטיסטיקה ${isPlayerFemale(coldForm.player.name) ? 'לטובתה' : 'לטובתו'} - צפוי קאמבק.`,
       priority: 72,
     });
   }
@@ -587,7 +588,7 @@ function generateForm(
       items.push({
         emoji: '🌟', category: 'form', sentiment: 'surprise',
         title: `${p.name} משנה את המגמה!`,
-        description: `${p.name} בדרך כלל מתקשה (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Wins} נצחונות ב-4 אחרונים! הקאמבק שלו?`,
+        description: `${p.name} בדרך כלל ${isPlayerFemale(p.name) ? 'מתקשה' : 'מתקשה'} (${Math.round(p.winPercentage)}% נצחונות), אבל ${last4Wins} נצחונות ב-4 אחרונים! הקאמבק ${isPlayerFemale(p.name) ? 'שלה' : 'שלו'}?`,
         priority: 73,
       });
     }

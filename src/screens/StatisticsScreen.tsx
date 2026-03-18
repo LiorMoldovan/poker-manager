@@ -5,9 +5,11 @@ import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
-import { generatePlayerChronicle, ChroniclePlayerData, getLastUsedModel } from '../utils/geminiAI';
+import { generatePlayerChronicle, ChroniclePlayerData, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import { syncToCloud } from '../database/githubSync';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
 type ViewMode = 'table' | 'records' | 'players';
@@ -3179,17 +3181,17 @@ const StatisticsScreen = () => {
                     };
                   });
 
-                  const profiles = await generatePlayerChronicle({
+                  const profiles = await withAITiming('chronicle', () => generatePlayerChronicle({
                     players: payloadPlayers,
                     periodLabel: getHebrewTimeframeLabel(),
                     totalPeriodGames,
                     isEarlyPeriod: totalPeriodGames <= 3,
                     milestones: computeMilestoneStrings(),
-                  });
+                  }));
 
                   saveChronicleProfiles(periodKey, profiles);
                   setChronicleStories(profiles);
-                  setChronicleModelName(getLastUsedModel());
+                  setChronicleModelName(getModelDisplayName(getLastUsedModel()));
 
                   syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
                 } catch (err) {
@@ -3241,17 +3243,17 @@ const StatisticsScreen = () => {
                   };
                 });
 
-                const profiles = await generatePlayerChronicle({
+                const profiles = await withAITiming('chronicle', () => generatePlayerChronicle({
                   players: payloadPlayers,
                   periodLabel: getHebrewTimeframeLabel(),
                   totalPeriodGames,
                   isEarlyPeriod: totalPeriodGames <= 3,
                   milestones: computeMilestoneStrings(),
-                });
+                }));
 
                 saveChronicleProfiles(periodKey, profiles);
                 setChronicleStories(profiles);
-                setChronicleModelName(getLastUsedModel());
+                setChronicleModelName(getModelDisplayName(getLastUsedModel()));
 
                 syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
               } catch (err) {
@@ -3379,6 +3381,7 @@ const StatisticsScreen = () => {
                     <div style={{ fontSize: '0.85rem', animation: 'pulse 1.5s ease-in-out infinite' }}>
                       מייצר סיפורים...
                     </div>
+                    <AIProgressBar operationKey="chronicle" />
                   </div>
                 )}
 

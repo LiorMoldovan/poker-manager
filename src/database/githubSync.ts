@@ -380,12 +380,17 @@ const replaceGamesWithRemote = (
         localPlayer.type = remotePlayer.type;
         playersChanged++;
       }
+      if (remotePlayer?.gender && localPlayer.gender !== remotePlayer.gender) {
+        localPlayer.gender = remotePlayer.gender;
+        playersChanged++;
+      }
     } else {
       localPlayers.push({
         id: gp.playerId,
         name: gp.playerName,
         createdAt: remotePlayer?.createdAt || new Date().toISOString(),
-        type: remotePlayer?.type || 'permanent'
+        type: remotePlayer?.type || 'permanent',
+        gender: remotePlayer?.gender || 'male',
       });
       localPlayerByName.set(playerNameLower, localPlayers[localPlayers.length - 1]);
       newPlayers++;
@@ -410,12 +415,17 @@ const replaceGamesWithRemote = (
         localPlayer.type = remotePlayer.type;
         playersChanged++;
       }
+      if (remotePlayer.gender && localPlayer.gender !== remotePlayer.gender) {
+        localPlayer.gender = remotePlayer.gender;
+        playersChanged++;
+      }
     } else {
       localPlayers.push({
         id: remotePlayer.id,
         name: remotePlayer.name,
         createdAt: remotePlayer.createdAt || new Date().toISOString(),
-        type: remotePlayer.type || 'permanent'
+        type: remotePlayer.type || 'permanent',
+        gender: remotePlayer.gender || 'male',
       });
       newPlayers++;
     }

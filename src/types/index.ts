@@ -25,11 +25,14 @@ export type Permission =
   // View (all roles have this)
   | 'view:all';
 
+export type PlayerGender = 'male' | 'female';
+
 export interface Player {
   id: string;
   name: string;
   createdAt: string;
   type: PlayerType;
+  gender: PlayerGender;
 }
 
 export interface GameForecast {
@@ -238,18 +241,18 @@ export interface LiveGameTTSPool {
   generatedAt: string;
   players: Record<string, TTSPlayerMessages>;
   shared: {
-    first_blood: TTSMessage[];
-    opening_ceremony: TTSMessage[];
+    first_blood: Record<string, TTSMessage[]>;
     bad_beat: Record<string, TTSMessage[]>;
     bad_beat_generic: TTSMessage[];
     big_hand: Record<string, TTSMessage[]>;
     big_hand_generic: TTSMessage[];
     break_time: TTSMessage[];
     auto_announce: TTSMessage[];
-    awards_generosity: TTSMessage[];
-    awards_survival: TTSMessage[];
+    awards_generosity: Record<string, TTSMessage[]>;
+    awards_survival: Record<string, TTSMessage[]>;
   };
   rivalries: TTSRivalry[];
   usedIndices: Record<string, number[]>;
+  spokenTexts: string[];
 }
 

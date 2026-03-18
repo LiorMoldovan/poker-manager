@@ -1,9 +1,10 @@
-import { getGeminiApiKey } from './geminiAI';
+import { getGeminiApiKey, API_CONFIGS, getModelDisplayName } from './geminiAI';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { PlayerStats } from '../types';
 
 let lastUsedTrainingModel = '';
 export const getLastTrainingModel = () => lastUsedTrainingModel;
+export const getLastTrainingModelDisplay = () => getModelDisplayName(lastUsedTrainingModel);
 
 // ════════════════════════════════════════════════════════════
 // TYPES
@@ -323,17 +324,11 @@ export const getAccuracyTrend = (): number[] => {
 // GEMINI API
 // ════════════════════════════════════════════════════════════
 
-const FULL_MODE_MODELS = [
-  { version: 'v1beta', model: 'gemini-3-flash-preview' },
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
-];
+const FULL_MODE_MODELS = API_CONFIGS;
 
 const QUICK_MODE_MODELS = [
-  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
-  { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
-  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  ...API_CONFIGS.slice(1),
+  API_CONFIGS[0],
 ];
 
 const getStyleSummary = (playerProfiles: PlayerProfile[]): string => {

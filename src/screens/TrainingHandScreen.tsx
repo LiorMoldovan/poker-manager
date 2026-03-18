@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 import {
   TrainingHand,
   TrainingOption,
@@ -11,7 +13,7 @@ import {
   saveSession,
   CategoryInfo,
   HERO_NAME,
-  getLastTrainingModel,
+  getLastTrainingModelDisplay,
 } from '../utils/pokerTraining';
 
 // ════════════════════════════════════════════════════════════
@@ -253,7 +255,7 @@ const TrainingHandScreen = () => {
       ? categoryPool[Math.floor(Math.random() * categoryPool.length)]
       : undefined;
     generateTrainingHand(cat, difficulty)
-      .then(h => { setPrefetchedHand(h); setTrainingModelName(getLastTrainingModel()); })
+      .then(h => { setPrefetchedHand(h); setTrainingModelName(getLastTrainingModelDisplay()); })
       .catch(() => {})
       .finally(() => setIsPrefetching(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,9 +281,9 @@ const TrainingHandScreen = () => {
 
     try {
       const handCategory = pickCategory();
-      const newHand = await generateTrainingHand(handCategory, difficulty);
+      const newHand = await withAITiming('training_hand', () => generateTrainingHand(handCategory, difficulty));
       setHand(newHand);
-      setTrainingModelName(getLastTrainingModel());
+      setTrainingModelName(getLastTrainingModelDisplay());
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       if (msg === 'NO_API_KEY') {
@@ -423,6 +425,7 @@ const TrainingHandScreen = () => {
             {difficulty === 'expert' ? 'מחפש אתגר ברמה הגבוהה ביותר' :
               difficulty === 'hard' ? 'מייצר החלטה צמודה' : 'בונה תרחיש מאתגר'}
           </div>
+          <AIProgressBar operationKey="training_hand" />
         </div>
       </div>
     );

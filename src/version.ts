@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.0';
+export const APP_VERSION = '5.8.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.1',
+    date: '2026-03-18',
+    changes: [
+      '🎙️ Enhanced TTS — Hebrew ordinals, construct forms, and richer rebuy announcements',
+      '🏆 Record tracking — once-per-session announcements for personal and group rebuy records',
+      '⏱️ AI progress bar component with timing estimates',
+      '🎭 Player traits and gender-aware Hebrew throughout live game',
+      '📊 2026 stats scoping for TTS pool generation',
+      '🔧 AI model display names and timing instrumentation',
+    ]
+  },
   {
     version: '5.8.0',
     date: '2026-03-17',

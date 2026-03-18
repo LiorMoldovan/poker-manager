@@ -1,4 +1,4 @@
-import { Player, PlayerType, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
+import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
 import { uploadBackupToGitHub, syncToCloud, fetchBackupFromGitHub } from './githubSync';
 
 const STORAGE_KEYS = {
@@ -50,19 +50,19 @@ const DEFAULT_SETTINGS: Settings = {
   gameNightDays: [4, 6],
 };
 
-// Default players (all permanent)
+// Default players (all permanent, all male)
 const DEFAULT_PLAYERS: Player[] = [
-  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString(), type: 'permanent' },
-  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString(), type: 'permanent' },
+  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
+  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
 ];
 
 // Initialize default values if not exist
@@ -128,20 +128,39 @@ export const initializeStorage = (): void => {
 
 // Players
 export const getAllPlayers = (): Player[] => {
-  return getItem<Player[]>(STORAGE_KEYS.PLAYERS, []);
+  const players = getItem<Player[]>(STORAGE_KEYS.PLAYERS, []);
+  let migrated = false;
+  for (const p of players) {
+    if (!p.gender) {
+      p.gender = p.name === 'מור' ? 'female' : 'male';
+      migrated = true;
+    }
+  }
+  if (migrated) setItem(STORAGE_KEYS.PLAYERS, players);
+  return players;
 };
 
-export const addPlayer = (name: string, type: PlayerType = 'permanent'): Player => {
+export const addPlayer = (name: string, type: PlayerType = 'permanent', gender: PlayerGender = 'male'): Player => {
   const players = getAllPlayers();
   const newPlayer: Player = {
     id: generateId(),
     name,
     createdAt: new Date().toISOString(),
     type,
+    gender,
   };
   players.push(newPlayer);
   setItem(STORAGE_KEYS.PLAYERS, players);
   return newPlayer;
+};
+
+export const updatePlayerGender = (playerId: string, gender: PlayerGender): void => {
+  const players = getAllPlayers();
+  const player = players.find(p => p.id === playerId);
+  if (player) {
+    player.gender = gender;
+    setItem(STORAGE_KEYS.PLAYERS, players);
+  }
 };
 
 // Update player type
@@ -188,6 +207,11 @@ export const deletePlayer = (id: string): void => {
 
 export const getPlayerByName = (name: string): Player | undefined => {
   return getAllPlayers().find(p => p.name.toLowerCase() === name.toLowerCase());
+};
+
+export const isPlayerFemale = (name: string): boolean => {
+  const player = getAllPlayers().find(p => p.name === name);
+  return player?.gender === 'female';
 };
 
 // Games
@@ -1275,6 +1299,7 @@ export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): v
 export interface RebuyRecords {
   playerMax: Map<string, number>;
   groupMax: number;
+  groupMaxHolder: string;
 }
 
 export const getRebuyRecords = (): RebuyRecords => {
@@ -1288,20 +1313,28 @@ export const getRebuyRecords = (): RebuyRecords => {
 
   const playerMax = new Map<string, number>();
   let groupMax = 0;
+  let groupMaxPlayerId = '';
 
   for (const gp of allGP) {
     const current = playerMax.get(gp.playerId) || 0;
     if (gp.rebuys > current) playerMax.set(gp.playerId, gp.rebuys);
-    if (gp.rebuys > groupMax) groupMax = gp.rebuys;
+    if (gp.rebuys > groupMax) {
+      groupMax = gp.rebuys;
+      groupMaxPlayerId = gp.playerId;
+    }
   }
 
-  return { playerMax, groupMax };
+  const groupHolder = groupMaxPlayerId
+    ? (getAllPlayers().find(p => p.id === groupMaxPlayerId)?.name || '')
+    : '';
+
+  return { playerMax, groupMax, groupMaxHolder: groupHolder };
 };
 
 // --- TTS Pool Storage ---
 
 const TTS_POOL_PREFIX = 'poker_tts_pool_';
-const TTS_CEREMONY_PREFIX = 'poker_ceremony_';
+
 
 export const saveTTSPool = (gameId: string, pool: unknown): void => {
   localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}`, JSON.stringify(pool));
@@ -1319,7 +1352,6 @@ export const loadTTSPool = <T>(gameId: string): T | null => {
 
 export const deleteTTSPool = (gameId: string): void => {
   localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}`);
-  localStorage.removeItem(`${TTS_CEREMONY_PREFIX}${gameId}`);
 };
 
 export const cleanupOrphanedTTSPools = (): void => {
@@ -1332,10 +1364,6 @@ export const cleanupOrphanedTTSPools = (): void => {
     if (!key) continue;
     if (key.startsWith(TTS_POOL_PREFIX)) {
       const gid = key.slice(TTS_POOL_PREFIX.length);
-      if (!liveGameIds.has(gid)) keysToRemove.push(key);
-    }
-    if (key.startsWith(TTS_CEREMONY_PREFIX)) {
-      const gid = key.slice(TTS_CEREMONY_PREFIX.length);
       if (!liveGameIds.has(gid)) keysToRemove.push(key);
     }
   }

@@ -12,8 +12,10 @@ import { Player, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraphInsights, saveGraphInsights } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
-import { getGeminiApiKey, generateGraphInsights, getLastUsedModel } from '../utils/geminiAI';
+import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
 import { syncToCloud } from '../database/githubSync';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
@@ -255,11 +257,11 @@ const GraphsScreen = () => {
           ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
           : totalGames <= 3;
 
-        const text = await generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod);
+        const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
         saveGraphInsights(key, text);
         setInsightsText(text);
         setInsightsGeneratedAt(new Date().toISOString());
-        setInsightsModelName(getLastUsedModel());
+        setInsightsModelName(getModelDisplayName(getLastUsedModel()));
         syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
       } catch (err) {
         console.error('Graph insights auto-generation failed:', err);
@@ -303,12 +305,12 @@ const GraphsScreen = () => {
         ? (selectedYear === now.getFullYear() && ((timePeriod === 'h1' && currentHalf === 1) || (timePeriod === 'h2' && currentHalf === 2)) && totalGames <= 5)
         : totalGames <= 3;
 
-      const text = await generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod);
+      const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
       const key = getInsightsKey();
       saveGraphInsights(key, text);
       setInsightsText(text);
       setInsightsGeneratedAt(new Date().toISOString());
-      setInsightsModelName(getLastUsedModel());
+      setInsightsModelName(getModelDisplayName(getLastUsedModel()));
       syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
     } catch (err) {
       console.error('Graph insights generation failed:', err);
@@ -1157,6 +1159,7 @@ const GraphsScreen = () => {
               fontSize: '0.8rem',
             }}>
               ⏳ יוצר תובנות AI לתקופה...
+              <AIProgressBar operationKey="graph_insights" />
             </div>
           )}
 

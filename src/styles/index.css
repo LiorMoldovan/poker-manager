@@ -297,7 +297,7 @@ body {
 .player-card {
   background: var(--surface);
   border-radius: 6px;
-  padding: 0.4rem 0.6rem;
+  padding: 0.3rem 0.5rem;
   margin-bottom: 0.1rem;
   display: flex;
   align-items: center;

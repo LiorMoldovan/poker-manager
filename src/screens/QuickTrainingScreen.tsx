@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import AIProgressBar from '../components/AIProgressBar';
+import { withAITiming } from '../utils/aiTiming';
 import {
   QuickScenario,
   SCENARIO_CATEGORIES,
@@ -7,7 +9,7 @@ import {
   recordDecision,
   saveSession,
   SessionResult,
-  getLastTrainingModel,
+  getLastTrainingModelDisplay,
 } from '../utils/pokerTraining';
 
 const ColoredCards = ({ text }: { text: string }) => {
@@ -48,9 +50,9 @@ const QuickTrainingScreen = () => {
     setError(null);
     try {
       const catIds = categoriesParam ? categoriesParam.split(',').filter(Boolean) : undefined;
-      const batch = await generateQuickBatch(maxHands, catIds);
+      const batch = await withAITiming('quick_training', () => generateQuickBatch(maxHands, catIds));
       setScenarios(batch);
-      setQuickModelName(getLastTrainingModel());
+      setQuickModelName(getLastTrainingModelDisplay());
       setCurrentIdx(0);
       setResults([]);
       setSelectedOption(null);
@@ -138,6 +140,7 @@ const QuickTrainingScreen = () => {
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             יוצר סט אימון מהיר
           </div>
+          <AIProgressBar operationKey="quick_training" />
         </div>
       </div>
     );
