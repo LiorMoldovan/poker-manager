@@ -4,247 +4,288 @@
       "id": "a4c80dee-947f-4dc5-ab33-9a26300dd78c",
       "name": "ליאור",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "b1ae0113-3ffc-41f5-a732-778d79c46286",
       "name": "אייל",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "bfed3d3b-c87e-46ad-a3c5-175ea34fab55",
       "name": "אורן",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "ba3830d8-38ce-434c-8b84-ad680abeb79c",
       "name": "ליכטר",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "bb5bde7c-16fd-4a0b-8655-28ceddbe26b6",
       "name": "סגל",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "2cedc21c-7c0d-479c-ac04-483638d01881",
       "name": "תומר",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "3c83791b-f615-4fdb-a8ca-18f7a4c851f8",
       "name": "פיליפ",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "5ff94d57-17a2-41a1-9da3-fbe5a69a8f6c",
       "name": "מלמד",
       "createdAt": "2025-12-18T17:00:27.639Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "60962591-856f-4697-bc55-cd8fec66e41a",
       "name": "נועם",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "213d973b-8146-4c63-b269-d23b71a07182",
       "name": "קובי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "5c6c9fd8-b8c1-4500-9020-cb04ad83af22",
       "name": "פאבל",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "e0804cb1-6aaf-4707-a835-1295e86326df",
       "name": "שיפר",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "07fb9ed4-2667-46ca-8e4a-14ecb62b3f0a",
       "name": "קרני",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "4de87695-112d-40e0-9271-557f8ce983e5",
       "name": "מאור",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "4eda68b1-a4df-49a6-9683-ea0450973e00",
       "name": "פאשה",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "d7a11c55-2cbf-46e4-ad95-7e3627598efb",
       "name": "סער",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "bce0db4f-e093-42a4-871f-a029f284e3bf",
       "name": "דן מאן",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "ec59faa2-e881-459d-9207-8939f22fe60f",
       "name": "גיא לוי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "d1cef559-5f2f-44e7-ade3-fb0a9d0c4a71",
       "name": "גיא אשכנזי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "9c4fb1e8-8483-4480-8d0a-23754a0ecc6d",
       "name": "חרדון",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent"
+      "type": "permanent",
+      "gender": "male"
     },
     {
       "id": "49d82f27-fc9c-4e94-b4f6-35b538b42855",
       "name": "ספי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "5a6af55f-64d4-4286-a869-4ba801663a9c",
       "name": "אריק",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "6ccbcff1-362e-4310-83a8-def1f7277976",
       "name": "אבי קיגל",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "6a50af0c-9a8a-4041-9ce6-e964635538a9",
       "name": "גלעד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "3e4369fe-f4c2-4384-9e93-96b2301b7685",
       "name": "זיו",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "5951d8aa-b389-4fcf-81c9-6dbe13a05114",
       "name": "יגל",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "a5786fa4-97e6-405c-83f8-a6dfd2b41492",
       "name": "מור",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "female"
     },
     {
       "id": "3a18cf3d-92d8-406f-9257-1667662b8aa0",
       "name": "אבי אבני",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "22407299-64c4-4ab8-8870-115333ef2752",
       "name": "רועי דויד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "7757ebae-a185-487f-ace0-86c7f498dbcc",
       "name": "דויד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "2cd7a7ff-2adc-4114-b4e6-9f58974d8058",
       "name": "ליאור ס",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "a992c024-c40e-48d1-b03a-4a6e8afe2acc",
       "name": "דן2 (שכן של ליאור)",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
       "name": "שגיא אחיין",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "34c57744-7869-4b00-933b-6729698f2467",
       "name": "אלרד",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "09974bfb-cb97-481e-86bb-06a1c05d9d5b",
       "name": "אסף טישלר",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "ff0790db-ba60-47d2-bbcb-3afb8187834c",
       "name": "אורי חבר של אבי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "10049f06-364a-4796-9598-0c96a2b0faf8",
       "name": "אסף מוזס",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest"
+      "type": "permanent_guest",
+      "gender": "male"
     },
     {
       "id": "c61774b7-0432-4c83-b69f-a52a56f23469",
       "name": "מאור 2",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "59cfa2a6-c424-44fa-ae31-62807fb74c3d",
       "name": "צחי",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "667130db-04fc-47a2-91d6-92568b1e4599",
       "name": "יהודה",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     },
     {
       "id": "mmnc5cwwiwabk8rhj9",
       "name": "שי",
       "createdAt": "2026-03-12T10:39:08.960Z",
-      "type": "guest"
+      "type": "guest",
+      "gender": "male"
     }
   ],
   "games": [
@@ -19368,7 +19409,7 @@
       "profit": 10.800000000000011
     }
   ],
-  "lastUpdated": "2026-03-18T08:29:09.836Z",
+  "lastUpdated": "2026-03-18T12:17:43.139Z",
   "updatedBy": "admin",
   "chronicleProfiles": {
     "2024": {
@@ -19515,8 +19556,8 @@
   },
   "graphInsights": {
     "H1-2026": {
-      "text": "הליגה של H1 2026 נמצאת בעיצומו של טירוף, כשחרדון פשוט בורח לכולם עם רצף מרשים של ארבעה ניצחונות ורווח כולל של 1100₪, מה שמשאיר את ליאור במרדף עיקש עם פער של 589₪ מהפסגה. ליכטר, למרות תקופה פחות יציבה, עדיין שומר על המקום השלישי, אך חש את הנשיפות בעורף מצד תומר ודן מאן שנאבקים על מיקום גבוה יותר. בתחתית, הקרב רותח כשפיליפ, מלמד ואייל צמודים בטבלה, בעוד שסגל חייב להתעורר מהר אם הוא לא רוצה להישאר הרחק מאחור. עם המומנטום האדיר של חרדון, נראה שכולם יצטרכו להעלות הילוך דרמטי כדי למנוע ממנו לחגוג את האליפות מוקדם מהצפוי, בעוד שאורן ופאבל ינסו לשבור את הנאחס ולהפתיע את הטבלה בהמשך.",
-      "generatedAt": "2026-03-17T17:46:52.382Z"
+      "text": "החצי הראשון של 2026 בשולחן מתאפיין בשליטה אבסולוטית של חרדון, שמוביל בפער ניכר של 589 שקלים, לאחר שצבר 1100 שקלים ב-10 משחקים בלבד, עם שיא של 4 נצחונות ברצף ו-80% הצלחה. אחריו, ליאור מנסה לשמור על קשר, אך עם 511 שקלים בלבד בפער של 117 שקלים, הוא רואה את חרדון מתרחק. ליכטר, למרות אחוזי נצחון נמוכים (38%), הצליח לצבור 394 שקלים, ומתקרב לליאור, בעוד תומר ודן מאן נאבקים על המקום הרביעי והחמישי, עם רווחים צנועים של 165 ו-138 שקלים בהתאמה. בחלק התחתון של הטבלה, פאבל ואורן מתחילים את דרכם עם הפסדים, בעוד אייל, מלמד, פיליפ וסגל נאבקים להרים את הראש, כשסגל סוגר את הטבלה עם הפסד מצטבר של 620 שקלים, רצף של 5 הפסדים, ורק 14% נצחונות. העתיד נראה מבטיח לחרדון, אך יריבים כמו ליאור וליכטר בהחלט עשויים להפתיע.",
+      "generatedAt": "2026-03-18T12:17:43.130Z"
     },
     "all": {
       "text": "בסאגת \"כל הזמנים\" הזו, ליאור ניצב על פסגה מבודדת עם רווח מפלצתי של 12,009₪ ו-75% ניצחונות, מותיר את מלמד הרחק מאחור עם פער של 8,704₪ שמסמן אותו כרודף העיקרי. בזמן שמלמד נאבק לשמור על יציבות, חרדון לוהט עם רצף של 4 ניצחונות ומנסה לצמצם את הפער של 758₪ בינו לבין המקום השני. אייל נותר עקבי אך תקוע, בעוד דן מאן נהנה ממומנטום צנוע, אך מאחוריהם מתנהל קרב הישרדות כואב: ליכטר, סגל, אורן ופיליפ שקועים עמוק במינוס, כשפיליפ מנסה להתאושש מהתהום. בקצה הטבלה, תומר ופאבל מדממים כספית בקרב עקוב מדם, כשפאבל נועל את הרשימה לאחר רצף של 4 הפסדים. הדינמיקה הזו צפויה להמשיך בשליטה מוחלטת של ליאור, אלא אם מישהו יצליח לעצור את הרצף שלו ולשבור את ההגמוניה.",
