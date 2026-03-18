@@ -28,7 +28,8 @@ import {
   StorageUsage
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
-import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey } from '../utils/geminiAI';
+import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, API_CONFIGS, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -76,6 +77,13 @@ const SettingsScreen = () => {
   const [geminiMessage, setGeminiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
 
+  // AI Status state
+  const [aiStatus, setAiStatus] = useState<AIStatusData | null>(null);
+  const [aiTestResults, setAiTestResults] = useState<ModelTestResult[] | null>(null);
+  const [isTestingModels, setIsTestingModels] = useState(false);
+  const [showAiLog, setShowAiLog] = useState(false);
+  const [aiTick, setAiTick] = useState(0);
+
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -103,12 +111,12 @@ const SettingsScreen = () => {
   };
 
   // Determine default tab based on permissions: players for admin/member, backup for viewer
-  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' => {
-    if (canAddPlayers) return 'players';  // Admin or Member
-    return 'backup';  // Viewer
+  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' => {
+    if (canAddPlayers) return 'players';
+    return 'backup';
   };
   
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai'>(getDefaultTab());
 
   useEffect(() => {
     loadData();
@@ -119,6 +127,17 @@ const SettingsScreen = () => {
     if (activeTab === 'activity' && role === 'admin' && activityLog.length === 0 && !activityLoading) {
       loadActivityLog();
     }
+  }, [activeTab]);
+
+  // Load AI status when AI tab is selected + tick for countdowns
+  useEffect(() => {
+    if (activeTab !== 'ai') return;
+    setAiStatus(getAIStatus());
+    const interval = setInterval(() => {
+      setAiStatus(getAIStatus());
+      setAiTick(t => t + 1);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
@@ -408,6 +427,7 @@ const SettingsScreen = () => {
     { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, adminOnly: false },
     { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, adminOnly: false },
     { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, adminOnly: false },
+    { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, adminOnly: true },
     { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, adminOnly: true },
     { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, adminOnly: false },
   ];
@@ -1084,121 +1104,226 @@ const SettingsScreen = () => {
             </div>
           )}
 
-          {/* Gemini AI for Forecast - Admin Only */}
-          {role === 'admin' && (
-            <div style={{ 
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(236, 72, 153, 0.1))',
-              borderRadius: '8px',
-              padding: '0.75rem',
-              border: '1px solid rgba(168, 85, 247, 0.3)',
-              marginBottom: '1rem'
-            }}>
+        </div>
+      )}
+
+      {/* AI Tab - Admin Only */}
+      {activeTab === 'ai' && role === 'admin' && (() => {
+        const status = aiStatus || getAIStatus();
+        const todayActions = getTodayActions();
+        const todayTokens = getTodayTokens();
+        const todayLog = getTodayLog();
+        void aiTick;
+
+        const getModelStatus = (model: string): { color: string; label: string; isActive: boolean } => {
+          const testResult = aiTestResults?.find(r => r.model === model);
+          const tracked = status.statuses[model];
+
+          if (tracked?.rateLimitResetsAt) {
+            const resetTime = new Date(tracked.rateLimitResetsAt);
+            if (resetTime.getTime() > Date.now()) {
+              const secsLeft = Math.ceil((resetTime.getTime() - Date.now()) / 1000);
+              if (secsLeft > 3600) {
+                const resetLocal = resetTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+                return { color: '#F59E0B', label: `מוגבל · מחר ${resetLocal}`, isActive: false };
+              }
+              const mins = Math.ceil(secsLeft / 60);
+              return { color: '#F59E0B', label: mins > 1 ? `מוגבל · ~${mins} דקות` : `מוגבל · ~${secsLeft} שניות`, isActive: false };
+            }
+          }
+
+          if (testResult?.status === 'error') return { color: '#EF4444', label: 'שגיאה', isActive: false };
+          if (tracked?.isActive) return { color: '#10B981', label: 'פעיל', isActive: true };
+          if (testResult?.status === 'available') return { color: '#10B981', label: 'זמין', isActive: false };
+          if (tracked?.lastSuccess) return { color: '#64748B', label: 'המתנה', isActive: false };
+          return { color: '#475569', label: 'לא נבדק', isActive: false };
+        };
+
+        const formatTokens = (n: number): string => {
+          if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+          if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+          return String(n);
+        };
+
+        const actionSummary = Object.entries(todayActions)
+          .filter(([, count]) => count > 0)
+          .map(([action, count]) => `${action} ×${count}`)
+          .join(' · ');
+
+        return (
+          <>
+            {/* Model Status Card */}
+            <div className="card" style={{ padding: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 className="card-title" style={{ margin: 0 }}>🤖 סטטוס AI</h2>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button
+                    className="btn btn-sm"
+                    onClick={async () => {
+                      setIsTestingModels(true);
+                      const results = await testModelAvailability();
+                      setAiTestResults(results);
+                      setAiStatus(getAIStatus());
+                      setIsTestingModels(false);
+                    }}
+                    disabled={isTestingModels || !geminiKey}
+                    style={{ fontSize: '0.65rem', padding: '0.25rem 0.5rem', background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  >
+                    {isTestingModels ? '⏳' : '🔍'} בדיקה
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => { if (confirm('לאפס את כל נתוני השימוש?')) { resetUsage(); setAiStatus(getAIStatus()); setAiTestResults(null); } }}
+                    style={{ fontSize: '0.65rem', padding: '0.25rem 0.5rem', background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  >
+                    🗑️ איפוס
+                  </button>
+                </div>
+              </div>
+
+              {/* Pipeline */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '1rem', direction: 'ltr' }}>
+                {API_CONFIGS.map((config, idx) => {
+                  const ms = getModelStatus(config.model);
+                  return (
+                    <div key={config.model} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem',
+                        padding: '0.5rem 0.6rem', borderRadius: '10px',
+                        background: ms.isActive ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface)',
+                        border: ms.isActive ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border)',
+                        minWidth: '80px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ms.color, boxShadow: ms.isActive ? `0 0 6px ${ms.color}` : 'none' }} />
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)' }}>
+                            {getModelDisplayName(config.model)}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.55rem', color: ms.color, whiteSpace: 'nowrap' }}>
+                          {ms.label}
+                        </span>
+                      </div>
+                      {idx < API_CONFIGS.length - 1 && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>▶</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Divider */}
+              <div style={{ height: '1px', background: 'var(--border)', margin: '0 0 0.75rem' }} />
+
+              {/* Today's Actions */}
+              <div style={{ direction: 'rtl', textAlign: 'right' }}>
+                {actionSummary ? (
+                  <>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: '0.2rem' }}>
+                      היום: {actionSummary}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                      {Object.values(todayActions).reduce((s, c) => s + c, 0)} קריאות · {formatTokens(todayTokens)} טוקנים
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                    אין פעילות AI היום
+                  </div>
+                )}
+
+                {status.allTimeCalls > 0 && (
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.4rem', opacity: 0.7 }}>
+                    סה״כ: {status.allTimeCalls} קריאות · {formatTokens(status.allTimeTokens)} טוקנים
+                  </div>
+                )}
+              </div>
+
+              {/* Activity Log (collapsible) */}
+              {todayLog.length > 0 && (
+                <>
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '0.75rem 0' }} />
+                  <button
+                    onClick={() => setShowAiLog(!showAiLog)}
+                    style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text-muted)' }}
+                  >
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>📋 לוג פעילות ({todayLog.length})</span>
+                    <span style={{ fontSize: '0.6rem', transform: showAiLog ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                  </button>
+
+                  {showAiLog && (
+                    <div style={{ marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                      {[...todayLog].reverse().map((entry, i) => {
+                        const time = new Date(entry.timestamp).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+                        const displayModel = getModelDisplayName(entry.model);
+                        const hasFallback = !!entry.fallbackFrom;
+                        return (
+                          <div key={i} style={{
+                            display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0',
+                            borderRight: hasFallback ? '2px solid #F59E0B' : '2px solid transparent',
+                            paddingRight: '0.4rem', fontSize: '0.65rem', direction: 'ltr',
+                          }}>
+                            <span style={{ color: 'var(--text-muted)', minWidth: '36px' }}>{time}</span>
+                            <span style={{ color: 'var(--text)', minWidth: '50px', fontWeight: 500 }}>{entry.action}</span>
+                            <span style={{ color: '#A855F7', minWidth: '60px' }}>{displayModel}</span>
+                            <span style={{ color: entry.success ? 'var(--text-muted)' : '#F59E0B', flex: 1, textAlign: 'right' }}>
+                              {entry.success
+                                ? (entry.tokens > 0 ? `${formatTokens(entry.tokens)} tok` : '✓')
+                                : `⚠ 429`}
+                              {hasFallback && ` ← ${getModelDisplayName(entry.fallbackFrom!)}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* API Key Card */}
+            <div className="card" style={{ padding: '0.75rem' }}>
               <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#A855F7', marginBottom: '0.5rem' }}>
-                🤖 AI Forecast (Gemini)
+                🔑 Gemini API Key
               </p>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                Use Google Gemini AI to generate creative, personalized forecasts. 
-                <a 
-                  href="https://aistudio.google.com/app/apikey" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{ color: '#A855F7', marginLeft: '0.25rem' }}
-                >
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7' }}>
                   Get free API key →
                 </a>
               </p>
-              
-              {/* API Key Input */}
               <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
-                  Gemini API Key
-                </label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type={showGeminiKey ? 'text' : 'password'}
                     value={geminiKey}
                     onChange={(e) => setGeminiKey(e.target.value)}
                     placeholder="AIza..."
-                    style={{
-                      flex: 1,
-                      padding: '0.5rem',
-                      borderRadius: '6px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                      color: 'var(--text)',
-                      fontSize: '0.8rem'
-                    }}
+                    style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.8rem' }}
                   />
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => setShowGeminiKey(!showGeminiKey)}
-                    style={{ padding: '0.5rem' }}
-                  >
+                  <button className="btn btn-sm" onClick={() => setShowGeminiKey(!showGeminiKey)} style={{ padding: '0.5rem' }}>
                     {showGeminiKey ? '🙈' : '👁️'}
                   </button>
                 </div>
               </div>
-              
-              {/* Action Buttons */}
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                  className="btn btn-sm"
-                  onClick={() => {
-                    setGeminiApiKey(geminiKey);
-                    setGeminiMessage({ type: 'success', text: 'API key saved!' });
-                    setTimeout(() => setGeminiMessage(null), 2000);
-                  }}
-                  disabled={!geminiKey}
-                  style={{ 
-                    flex: 1,
-                    background: geminiKey ? '#A855F7' : 'var(--surface)',
-                    color: geminiKey ? 'white' : 'var(--text-muted)'
-                  }}
-                >
+                <button className="btn btn-sm" onClick={() => { setGeminiApiKey(geminiKey); setGeminiMessage({ type: 'success', text: 'API key saved!' }); setTimeout(() => setGeminiMessage(null), 2000); }} disabled={!geminiKey}
+                  style={{ flex: 1, background: geminiKey ? '#A855F7' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
                   💾 Save Key
                 </button>
-                <button
-                  className="btn btn-sm"
-                  onClick={async () => {
-                    setIsTestingGemini(true);
-                    const isValid = await testGeminiApiKey(geminiKey);
-                    setGeminiMessage({ 
-                      type: isValid ? 'success' : 'error', 
-                      text: isValid ? '✅ API key works!' : '❌ Invalid API key' 
-                    });
-                    setIsTestingGemini(false);
-                    setTimeout(() => setGeminiMessage(null), 3000);
-                  }}
-                  disabled={!geminiKey || isTestingGemini}
-                  style={{ 
-                    flex: 1,
-                    background: geminiKey ? 'linear-gradient(135deg, #A855F7, #EC4899)' : 'var(--surface)',
-                    color: geminiKey ? 'white' : 'var(--text-muted)'
-                  }}
-                >
+                <button className="btn btn-sm" onClick={async () => { setIsTestingGemini(true); const isValid = await testGeminiApiKey(geminiKey); setGeminiMessage({ type: isValid ? 'success' : 'error', text: isValid ? '✅ API key works!' : '❌ Invalid API key' }); setIsTestingGemini(false); setTimeout(() => setGeminiMessage(null), 3000); }} disabled={!geminiKey || isTestingGemini}
+                  style={{ flex: 1, background: geminiKey ? 'linear-gradient(135deg, #A855F7, #EC4899)' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
                   {isTestingGemini ? '⏳ Testing...' : '🧪 Test Key'}
                 </button>
               </div>
-              
-              {/* Gemini Message */}
               {geminiMessage && (
-                <div style={{
-                  marginTop: '0.5rem',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  background: geminiMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                  color: geminiMessage.type === 'success' ? '#10B981' : '#EF4444',
-                  fontSize: '0.8rem',
-                  textAlign: 'center'
-                }}>
+                <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '6px', background: geminiMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: geminiMessage.type === 'success' ? '#10B981' : '#EF4444', fontSize: '0.8rem', textAlign: 'center' }}>
                   {geminiMessage.text}
                 </div>
               )}
             </div>
-          )}
-
-        </div>
-      )}
+          </>
+        );
+      })()}
 
       {/* About Tab */}
       {activeTab === 'about' && (

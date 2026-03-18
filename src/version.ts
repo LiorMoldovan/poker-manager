@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.2';
+export const APP_VERSION = '5.8.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.3',
+    date: '2026-03-18',
+    changes: [
+      '📊 AI usage tracker — monitor Gemini API calls and token consumption',
+      '⚙️ Settings screen enhancements and AI usage dashboard',
+    ]
+  },
   {
     version: '5.8.2',
     date: '2026-03-18',

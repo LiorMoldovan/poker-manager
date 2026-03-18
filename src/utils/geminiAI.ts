@@ -9,6 +9,7 @@ import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, T
 import { playerTraitsByName } from './playerTraits';
 import { getRebuyRecords, isPlayerFemale } from '../database/storage';
 import { getComboHistory } from './comboHistory';
+import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
@@ -51,6 +52,7 @@ interface FallbackCallOptions {
 const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: string; model: string; usage?: Record<string, number> }> => {
   const { prompt, apiKey, temperature = 0.7, maxOutputTokens = 4096, topP, topK, responseMimeType, label = 'AI' } = opts;
   let lastError = '';
+  let fallbackFrom: string | undefined;
 
   for (const config of API_CONFIGS) {
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
@@ -78,7 +80,16 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         const errMsg = errData?.error?.message || `Status ${response.status}`;
         console.warn(`   ${label}: ${config.model} failed: ${errMsg}`);
         lastError = errMsg;
-        if (response.status === 429 || response.status === 404 || response.status === 503) continue;
+        if (response.status === 429) {
+          const rlHeaders = readRateLimitHeaders(response);
+          recordRateLimit(config.model, rlHeaders, errMsg);
+          if (!fallbackFrom) fallbackFrom = config.model;
+          continue;
+        }
+        if (response.status === 404 || response.status === 503) {
+          if (!fallbackFrom) fallbackFrom = config.model;
+          continue;
+        }
         if (response.status === 400 && errMsg.includes('API key')) throw new Error('INVALID_API_KEY');
         continue;
       }
@@ -116,6 +127,9 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         thinkingTokens: data.usageMetadata.thoughtsTokenCount || 0,
         totalTokens: data.usageMetadata.totalTokenCount || 0,
       } : undefined;
+
+      const rlHeaders = readRateLimitHeaders(response);
+      recordSuccess(config.model, label, usage?.totalTokens, fallbackFrom, rlHeaders);
 
       return { text, model: config.model, usage };
     } catch (err) {
@@ -1343,6 +1357,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
   console.log('🤖 AI Forecast Request for:', players.map(p => p.name).join(', '));
   
   // Try each model until one works
+  let forecastFallbackFrom: string | undefined;
   for (const config of API_CONFIGS) {
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
     const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
@@ -1374,9 +1389,15 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const errorMsg = errorData?.error?.message || `Status ${response.status}`;
         console.log(`   ❌ ${config.model}: ${errorMsg}`);
         
-        // If rate limited or not found, try next model
-        if (response.status === 429 || response.status === 404) {
-          continue; // Try next model
+        if (response.status === 429) {
+          const rlHeaders = readRateLimitHeaders(response);
+          recordRateLimit(config.model, rlHeaders, errorMsg);
+          if (!forecastFallbackFrom) forecastFallbackFrom = config.model;
+          continue;
+        }
+        if (response.status === 404) {
+          if (!forecastFallbackFrom) forecastFallbackFrom = config.model;
+          continue;
         }
         throw new Error(`API_ERROR: ${response.status} - ${errorMsg}`);
       }
@@ -1385,8 +1406,10 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
       console.log(`   ✅ ${config.model} responded!`);
       lastUsedModel = config.model;
       localStorage.setItem('gemini_working_config', JSON.stringify(config));
+      const forecastRlHeaders = readRateLimitHeaders(response);
 
       const data = await response.json();
+      const forecastTokens = data?.usageMetadata?.totalTokenCount || 0;
       
       // Extract the text from Gemini response
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -1775,8 +1798,9 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         });
       }
 
+      recordSuccess(config.model, 'Forecast', forecastTokens, forecastFallbackFrom, forecastRlHeaders);
       return forecasts;
-      
+
     } catch (fetchError) {
       console.log(`   ❌ ${config.model} fetch error:`, fetchError);
       continue; // Try next model
@@ -1906,6 +1930,70 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
   
   return false;
 };
+
+// ─── Live Model Availability Test ────────────────────────────────────────────
+
+export interface ModelTestResult {
+  model: string;
+  displayName: string;
+  status: 'available' | 'rate_limited' | 'error';
+  rateLimitResetsAt?: string;
+  responseTimeMs?: number;
+}
+
+export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return API_CONFIGS.map(c => ({ model: c.model, displayName: getModelDisplayName(c.model), status: 'error' as const }));
+
+  const results: ModelTestResult[] = [];
+
+  for (const config of API_CONFIGS) {
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+    const start = Date.now();
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Say: OK' }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 5 },
+        }),
+      });
+
+      const elapsed = Date.now() - start;
+      const rlHeaders = readRateLimitHeaders(response);
+
+      if (response.ok) {
+        recordSuccess(config.model, 'test', 0, undefined, rlHeaders);
+        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'available', responseTimeMs: elapsed });
+      } else if (response.status === 429) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData?.error?.message || '';
+        recordRateLimit(config.model, rlHeaders, errMsg);
+        const status = getAIStatusForTest();
+        const resetAt = status.statuses[config.model]?.rateLimitResetsAt;
+        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'rate_limited', rateLimitResetsAt: resetAt, responseTimeMs: elapsed });
+      } else {
+        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error', responseTimeMs: elapsed });
+      }
+    } catch {
+      results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error' });
+    }
+  }
+
+  return results;
+};
+
+// import getAIStatus inline to avoid circular — just reads localStorage directly
+function getAIStatusForTest(): { statuses: Record<string, { rateLimitResetsAt?: string }> } {
+  try {
+    const raw = localStorage.getItem('poker_ai_status');
+    if (!raw) return { statuses: {} };
+    return JSON.parse(raw);
+  } catch { return { statuses: {} }; }
+}
 
 /**
  * Generate a short comment comparing forecast to actual results
