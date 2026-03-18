@@ -13,16 +13,16 @@ import { getComboHistory } from './comboHistory';
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
 export const API_CONFIGS = [
-  { version: 'v1beta', model: 'gemini-2.5-pro' },
+  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
   { version: 'v1beta', model: 'gemini-2.5-flash' },
-  { version: 'v1beta', model: 'gemini-2.5-flash-lite' },
 ];
 
 // Friendly display names for UI badge
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
-  'gemini-2.5-pro': '2.5 Pro',
+  'gemini-3-flash-preview': '3 Flash',
+  'gemini-3.1-flash-lite-preview': '3.1 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
-  'gemini-2.5-flash-lite': '2.5 Flash-Lite',
 };
 
 export const getModelDisplayName = (model: string): string =>
@@ -2208,7 +2208,7 @@ export interface ChroniclePayload {
 
 export const generatePlayerChronicle = async (
   payload: ChroniclePayload
-): Promise<Record<string, string>> => {
+): Promise<{ profiles: Record<string, string>; model: string }> => {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('NO_API_KEY');
 
@@ -2294,6 +2294,8 @@ abc123:::בזמן שכולם מחפשים את הנוסחה, הוא כבר מצ�
   });
 
   const cleaned = result.text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`/g, '')
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
     .replace(/^#{1,3}\s+/gm, '')
@@ -2304,9 +2306,25 @@ abc123:::בזמן שכולם מחפשים את הנוסחה, הוא כבר מצ�
   for (const line of lines) {
     const sepIdx = line.indexOf(':::');
     if (sepIdx === -1) continue;
-    const id = line.substring(0, sepIdx).trim();
+    const rawId = line.substring(0, sepIdx).trim();
+    const id = rawId.replace(/^[-–—•\s]+/, '').trim();
     const story = line.substring(sepIdx + 3).trim();
     if (id && story) profiles[id] = story;
+  }
+
+  if (Object.keys(profiles).length === 0) {
+    console.warn('Chronicle raw response (no parseable profiles):', result.text.substring(0, 500));
+    const playerIds = players.map(p => p.playerId);
+    const allLines = cleaned.split('\n').filter(l => l.trim().length > 20);
+    for (const line of allLines) {
+      for (const pid of playerIds) {
+        if (line.includes(pid) && !profiles[pid]) {
+          const afterId = line.substring(line.indexOf(pid) + pid.length).replace(/^[\s:—\-|]+/, '').trim();
+          if (afterId.length > 20) profiles[pid] = afterId;
+          break;
+        }
+      }
+    }
   }
 
   if (Object.keys(profiles).length === 0) {
@@ -2314,7 +2332,7 @@ abc123:::בזמן שכולם מחפשים את הנוסחה, הוא כבר מצ�
   }
 
   console.log(`Chronicle generated via ${result.model}: ${Object.keys(profiles).length} profiles`);
-  return profiles;
+  return { profiles, model: result.model };
 };
 
 // ─── AI Graph Insights (group-level narrative for Graphs page) ──────────────

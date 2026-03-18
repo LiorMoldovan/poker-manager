@@ -1318,10 +1318,11 @@ const NewGameScreen = () => {
         setComboHistory(combo);
 
         const forecasts = await withAITiming('forecast', () => generateAIForecasts(playerData, globalRankings, finalMarkers, loc || undefined, comboText));
+        const modelDisplay = getModelDisplayName(getLastUsedModel());
         setAiForecasts(forecasts);
-        setAiModelName(getModelDisplayName(getLastUsedModel()));
+        setAiModelName(modelDisplay);
         setIsLoadingAI(false);
-        
+
         const forecastsToSave: GameForecast[] = forecasts.map(f => ({
           playerName: f.name,
           expectedProfit: f.expectedProfit,
@@ -1329,7 +1330,7 @@ const NewGameScreen = () => {
           sentence: f.sentence,
           isSurprise: f.isSurprise
         }));
-        savePendingForecast(Array.from(selectedIds), forecastsToSave, forecasts[0]?.preGameTeaser);
+        savePendingForecast(Array.from(selectedIds), forecastsToSave, forecasts[0]?.preGameTeaser, modelDisplay);
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);

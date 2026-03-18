@@ -910,13 +910,14 @@ export const getPendingForecast = (): PendingForecast | null => {
 };
 
 // Save pending forecast
-export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[], preGameTeaser?: string): PendingForecast => {
+export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[], preGameTeaser?: string, aiModel?: string): PendingForecast => {
   const pendingForecast: PendingForecast = {
     id: generateId(),
     createdAt: new Date().toISOString(),
     playerIds,
     forecasts,
     ...(preGameTeaser && { preGameTeaser }),
+    ...(aiModel && { aiModel }),
   };
   setItem(STORAGE_KEYS.PENDING_FORECAST, pendingForecast);
   return pendingForecast;
@@ -1096,11 +1097,12 @@ export const saveForecastComment = (gameId: string, comment: string): void => {
 };
 
 // Save AI-generated game night summary on game record (so it's not re-generated)
-export const saveGameAiSummary = (gameId: string, summary: string): void => {
+export const saveGameAiSummary = (gameId: string, summary: string, model?: string): void => {
   const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex].aiSummary = summary;
+    if (model) games[gameIndex].aiSummaryModel = model;
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -1219,6 +1221,7 @@ const CHRONICLE_STORAGE_KEY = 'poker_chronicle_profiles';
 export interface ChronicleEntry {
   profiles: Record<string, string>;
   generatedAt: string;
+  model?: string;
 }
 
 export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null => {
@@ -1232,10 +1235,10 @@ export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null =
   }
 };
 
-export const saveChronicleProfiles = (periodKey: string, profiles: Record<string, string>): void => {
+export const saveChronicleProfiles = (periodKey: string, profiles: Record<string, string>, model?: string): void => {
   const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
   const all: Record<string, ChronicleEntry> = raw ? JSON.parse(raw) : {};
-  all[periodKey] = { profiles, generatedAt: new Date().toISOString() };
+  all[periodKey] = { profiles, generatedAt: new Date().toISOString(), model };
   localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
 };
 
@@ -1260,6 +1263,7 @@ const GRAPH_INSIGHTS_KEY = 'poker_graph_insights';
 export interface GraphInsightsEntry {
   text: string;
   generatedAt: string;
+  model?: string;
 }
 
 export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null => {
@@ -1273,10 +1277,10 @@ export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null =
   }
 };
 
-export const saveGraphInsights = (periodKey: string, text: string): void => {
+export const saveGraphInsights = (periodKey: string, text: string, model?: string): void => {
   const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
   const all: Record<string, GraphInsightsEntry> = raw ? JSON.parse(raw) : {};
-  all[periodKey] = { text, generatedAt: new Date().toISOString() };
+  all[periodKey] = { text, generatedAt: new Date().toISOString(), model };
   localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
 };
 

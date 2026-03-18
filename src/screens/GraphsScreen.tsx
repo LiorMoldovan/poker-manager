@@ -178,9 +178,11 @@ const GraphsScreen = () => {
     if (cached) {
       setInsightsText(cached.text);
       setInsightsGeneratedAt(cached.generatedAt);
+      setInsightsModelName(cached.model || '');
     } else {
       setInsightsText('');
       setInsightsGeneratedAt('');
+      setInsightsModelName('');
     }
     setInsightsError(null);
     insightsGenRef.current = false;
@@ -258,10 +260,11 @@ const GraphsScreen = () => {
           : totalGames <= 3;
 
         const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
-        saveGraphInsights(key, text);
+        const modelDisplay = getModelDisplayName(getLastUsedModel());
+        saveGraphInsights(key, text, modelDisplay);
         setInsightsText(text);
         setInsightsGeneratedAt(new Date().toISOString());
-        setInsightsModelName(getModelDisplayName(getLastUsedModel()));
+        setInsightsModelName(modelDisplay);
         syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
       } catch (err) {
         console.error('Graph insights auto-generation failed:', err);
@@ -307,10 +310,11 @@ const GraphsScreen = () => {
 
       const text = await withAITiming('graph_insights', () => generateGraphInsights(stats, periodLabel, totalGames, isEarlyPeriod));
       const key = getInsightsKey();
-      saveGraphInsights(key, text);
+      const modelDisplay = getModelDisplayName(getLastUsedModel());
+      saveGraphInsights(key, text, modelDisplay);
       setInsightsText(text);
       setInsightsGeneratedAt(new Date().toISOString());
-      setInsightsModelName(getModelDisplayName(getLastUsedModel()));
+      setInsightsModelName(modelDisplay);
       syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
     } catch (err) {
       console.error('Graph insights generation failed:', err);

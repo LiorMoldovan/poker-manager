@@ -50,6 +50,7 @@ export interface PendingForecast {
   forecasts: GameForecast[];
   linkedGameId?: string;  // Set when game starts
   preGameTeaser?: string; // AI-generated pre-game teaser text (group-level)
+  aiModel?: string; // Model used to generate the forecast
 }
 
 export interface PeriodMarkers {
@@ -94,6 +95,7 @@ export interface Game {
   };
   sharedExpenses?: SharedExpense[]; // Shared expenses (food, etc.) during the game
   aiSummary?: string; // Cached AI-generated game night narrative summary
+  aiSummaryModel?: string; // Model used to generate the AI summary
   preGameTeaser?: string; // AI-generated pre-game teaser text
   periodMarkers?: PeriodMarkers; // Period context stored at game creation
 }

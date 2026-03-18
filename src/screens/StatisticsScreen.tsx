@@ -5,7 +5,7 @@ import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
-import { generatePlayerChronicle, ChroniclePlayerData, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
+import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName } from '../utils/geminiAI';
 import { usePermissions } from '../App';
 import { syncToCloud } from '../database/githubSync';
 import AIProgressBar from '../components/AIProgressBar';
@@ -1060,8 +1060,10 @@ const StatisticsScreen = () => {
     const cached = getChronicleProfiles(periodKey);
     if (cached) {
       setChronicleStories(cached.profiles);
+      setChronicleModelName(cached.model || '');
     } else {
       setChronicleStories({});
+      setChronicleModelName('');
     }
     setChronicleError(null);
     chronicleGenRef.current = false;
@@ -3181,7 +3183,7 @@ const StatisticsScreen = () => {
                     };
                   });
 
-                  const profiles = await withAITiming('chronicle', () => generatePlayerChronicle({
+                  const result = await withAITiming('chronicle', () => generatePlayerChronicle({
                     players: payloadPlayers,
                     periodLabel: getHebrewTimeframeLabel(),
                     totalPeriodGames,
@@ -3189,9 +3191,10 @@ const StatisticsScreen = () => {
                     milestones: computeMilestoneStrings(),
                   }));
 
-                  saveChronicleProfiles(periodKey, profiles);
-                  setChronicleStories(profiles);
-                  setChronicleModelName(getModelDisplayName(getLastUsedModel()));
+                  const modelDisplay = getModelDisplayName(result.model);
+                  saveChronicleProfiles(periodKey, result.profiles, modelDisplay);
+                  setChronicleStories(result.profiles);
+                  setChronicleModelName(modelDisplay);
 
                   syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
                 } catch (err) {
@@ -3243,7 +3246,7 @@ const StatisticsScreen = () => {
                   };
                 });
 
-                const profiles = await withAITiming('chronicle', () => generatePlayerChronicle({
+                const result = await withAITiming('chronicle', () => generatePlayerChronicle({
                   players: payloadPlayers,
                   periodLabel: getHebrewTimeframeLabel(),
                   totalPeriodGames,
@@ -3251,9 +3254,10 @@ const StatisticsScreen = () => {
                   milestones: computeMilestoneStrings(),
                 }));
 
-                saveChronicleProfiles(periodKey, profiles);
-                setChronicleStories(profiles);
-                setChronicleModelName(getModelDisplayName(getLastUsedModel()));
+                const modelDisplay = getModelDisplayName(result.model);
+                saveChronicleProfiles(periodKey, result.profiles, modelDisplay);
+                setChronicleStories(result.profiles);
+                setChronicleModelName(modelDisplay);
 
                 syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
               } catch (err) {

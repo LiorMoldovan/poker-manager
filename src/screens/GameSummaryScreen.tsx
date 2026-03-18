@@ -543,6 +543,7 @@ const GameSummaryScreen = () => {
     const shouldAutoGenerate = locationState?.autoAI && !isCachedValid;
     if (isCachedValid && !forceGenerateRef.current) {
       setAiSummary(cachedSummary);
+      setAiSummaryModel(game.aiSummaryModel || '');
     } else if ((forceGenerateRef.current || shouldAutoGenerate) && getGeminiApiKey() && game.status === 'completed') {
       forceGenerateRef.current = false;
       setIsLoadingAiSummary(true);
@@ -683,10 +684,11 @@ const GameSummaryScreen = () => {
       setAiSummaryError(null);
       withAITiming('game_summary', () => generateGameNightSummary(summaryPayload))
         .then(async result => {
+          const modelDisplay = getModelDisplayName(result.meta.model);
           setAiSummary(result.text);
-          setAiSummaryModel(getModelDisplayName(result.meta.model));
+          setAiSummaryModel(modelDisplay);
           setAiSummaryError(null);
-          saveGameAiSummary(game.id, result.text);
+          saveGameAiSummary(game.id, result.text, modelDisplay);
           if (shouldAutoGenerate) {
             try {
               const { syncToCloud } = await import('../database/githubSync');
