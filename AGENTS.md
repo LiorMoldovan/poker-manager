@@ -15,6 +15,7 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 | AI | Google Gemini API (gemini-2.0-flash) |
 | Cloud sync | GitHub API → GitHub Pages repo |
 | Deployment | Vercel (auto-deploy from `main`) |
+| Dev server | `npm run dev` → **http://localhost:3000** (NEVER 3001) |
 | Data | LocalStorage (client-side only) |
 | Styling | Inline React styles + CSS variables (dark theme) |
 | Font | Outfit (Google Fonts) |

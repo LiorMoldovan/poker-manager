@@ -14,6 +14,7 @@ alwaysApply: true
 - **Data**: LocalStorage (no backend/database)
 - **Cloud**: GitHub Pages repo as storage via GitHub API
 - **Deployment**: Vercel (auto-deploys from `main` branch)
+- **Dev server**: `npm run dev` → **http://localhost:3000** (NEVER use port 3001)
 - **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
 - **Language**: Hebrew (RTL) — all user-facing text in Hebrew
 - **Target**: Mobile-first, must also work on desktop

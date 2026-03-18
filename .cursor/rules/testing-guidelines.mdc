@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Testing Guidelines
 
+## Dev Server
+
+The app runs on **http://localhost:3000**. NEVER use port 3001. This is configured in `vite.config.ts`.
+
 ## No Automated Tests
 
 This project has no test suite. All testing is manual by the user.

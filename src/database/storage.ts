@@ -1298,6 +1298,11 @@ export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): v
   localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
 };
 
+export const invalidateAICaches = (): void => {
+  localStorage.removeItem(CHRONICLE_STORAGE_KEY);
+  localStorage.removeItem(GRAPH_INSIGHTS_KEY);
+};
+
 // --- Rebuy Records (2026+) ---
 
 export interface RebuyRecords {
@@ -1340,8 +1345,9 @@ export const getRebuyRecords = (): RebuyRecords => {
 const TTS_POOL_PREFIX = 'poker_tts_pool_';
 
 
-export const saveTTSPool = (gameId: string, pool: unknown): void => {
+export const saveTTSPool = (gameId: string, pool: unknown, model?: string): void => {
   localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}`, JSON.stringify(pool));
+  if (model) localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}_model`, model);
 };
 
 export const loadTTSPool = <T>(gameId: string): T | null => {
@@ -1354,8 +1360,13 @@ export const loadTTSPool = <T>(gameId: string): T | null => {
   }
 };
 
+export const loadTTSPoolModel = (gameId: string): string | null => {
+  return localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}_model`);
+};
+
 export const deleteTTSPool = (gameId: string): void => {
   localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}`);
+  localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}_model`);
 };
 
 export const cleanupOrphanedTTSPools = (): void => {

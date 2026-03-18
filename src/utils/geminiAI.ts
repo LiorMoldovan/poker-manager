@@ -1181,7 +1181,9 @@ export const generateAIForecasts = async (
   console.log('🎭 Assigned angles:', playerAngles.map(a => `${a.name}: ${a.angle}`).join(', '));
 
   // ========== BUILD STAT CARDS ==========
-  const playerDataText = playersWithYearStats.map(p => {
+  // Shuffle player order in the prompt to avoid AI bias toward first-listed players
+  const shuffledPlayers = [...playersWithYearStats].sort(() => Math.random() - 0.5);
+  const playerDataText = shuffledPlayers.map(p => {
     const lastGame = p.gameHistory[0];
     const isNewPlayer = p.gamesPlayed === 0 || p.gameHistory.length === 0;
     const lastGameResult = lastGame 
@@ -1348,6 +1350,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 • אסור להזכיר הפסד מצטבר/כולל/היסטורי!
 • אסור תבנית חוזרת בין משפטים!
 • "מטורף", "מדהים", "היסטורי" → רק לנתונים באמת חריגים (רצף 5+, פער 150₪+)
+• sentence קצר מ-20 מילים = פסילה! כל שחקן חייב לקבל אותה רמת תשומת לב ואיכות, כולל האחרון ברשימה
 
 כללי כתיבה:
 • דירוגים: רק מטבלת התקופה (⭐). מקום 1 = הכי טוב
@@ -1378,7 +1381,7 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 12288,
             responseMimeType: 'application/json',
           }
         })

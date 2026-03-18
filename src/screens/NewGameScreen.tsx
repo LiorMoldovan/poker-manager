@@ -279,8 +279,9 @@ const NewGameScreen = () => {
         const playerNameArr = playerIdArr.map(id => players.find(p => p.id === id)?.name || '');
         const pool = await withAITiming('tts_pool', () => generateLiveGameTTSPool(game.id, playerIdArr, playerNameArr, stats2026, location || undefined));
         if (pool) {
-          saveTTSPool(game.id, pool);
-          console.log('🎙️ TTS pool saved for game', game.id);
+          const ttsModel = getModelDisplayName(getLastUsedModel());
+          saveTTSPool(game.id, pool, ttsModel);
+          console.log('🎙️ TTS pool saved for game', game.id, `(model: ${ttsModel})`);
         }
       } catch (err) {
         console.warn('TTS pool generation failed (non-blocking):', err);

@@ -237,6 +237,86 @@ export function getTodayLog(): ActionEntry[] {
   return data.log.filter(e => e.timestamp.startsWith(today));
 }
 
+// Known free-tier daily request limits (RPD) per model — conservative estimates
+const MODEL_RPD_LIMITS: Record<string, number> = {
+  'gemini-3-flash-preview': 500,
+  'gemini-3.1-flash-lite-preview': 1000,
+  'gemini-2.5-flash': 500,
+};
+const DEFAULT_RPD = 500;
+
+// API calls per user-facing action
+export const ACTION_COSTS: { label: string; calls: number }[] = [
+  { label: 'התחלת משחק', calls: 2 },
+  { label: 'תחזית', calls: 1 },
+  { label: 'סיכום', calls: 1 },
+  { label: 'כרוניקה', calls: 1 },
+  { label: 'תובנות', calls: 1 },
+  { label: 'השוואה', calls: 1 },
+];
+
+export function getModelDailyUsage(): Record<string, { used: number; limit: number }> {
+  const data = loadData();
+  const today = getToday();
+  const usage: Record<string, { used: number; limit: number }> = {};
+
+  for (const entry of data.log) {
+    if (!entry.timestamp.startsWith(today)) continue;
+    if (!usage[entry.model]) {
+      usage[entry.model] = { used: 0, limit: MODEL_RPD_LIMITS[entry.model] || DEFAULT_RPD };
+    }
+    usage[entry.model].used++;
+  }
+
+  // Ensure all known models appear even if unused today
+  for (const [model, limit] of Object.entries(MODEL_RPD_LIMITS)) {
+    if (!usage[model]) usage[model] = { used: 0, limit };
+  }
+
+  return usage;
+}
+
+export interface RemainingEstimates {
+  estimates: { label: string; remaining: number }[];
+  activeModel: string;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export function getRemainingEstimates(
+  statuses: Record<string, ModelStatus>,
+  modelOrder: string[],
+): RemainingEstimates | null {
+  const dailyUsage = getModelDailyUsage();
+
+  for (const model of modelOrder) {
+    const ms = statuses[model];
+    if (ms?.rateLimitResetsAt && new Date(ms.rateLimitResetsAt).getTime() > Date.now()) continue;
+
+    // Prefer header-based data, fall back to local tracking
+    let remaining: number;
+    let total: number;
+    const modelUsage = dailyUsage[model] || { used: 0, limit: MODEL_RPD_LIMITS[model] || DEFAULT_RPD };
+
+    if (ms?.rateLimitRemaining != null && ms?.rateLimitTotal != null) {
+      remaining = ms.rateLimitRemaining;
+      total = ms.rateLimitTotal;
+    } else {
+      total = modelUsage.limit;
+      remaining = Math.max(0, total - modelUsage.used);
+    }
+
+    const estimates = ACTION_COSTS.map(a => ({
+      label: a.label,
+      remaining: Math.floor(remaining / a.calls),
+    }));
+
+    return { estimates, activeModel: model, used: modelUsage.used, limit: total, remaining };
+  }
+  return null;
+}
+
 export function resetUsage(): void {
   localStorage.removeItem(STORAGE_KEY);
 }

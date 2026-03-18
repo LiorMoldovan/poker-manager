@@ -145,30 +145,80 @@ function prepareGeminiTTSText(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// TTS Status Reporting (debug overlay in LiveGameScreen subscribes)
+// ---------------------------------------------------------------------------
+
+type TTSStatusCallback = (entry: { text: string; type: 'info' | 'warn' | 'success' | 'error' }) => void;
+let _ttsStatusCb: TTSStatusCallback | null = null;
+
+export function setTTSStatusCallback(cb: TTSStatusCallback | null) {
+  _ttsStatusCb = cb;
+}
+
+function ttsStatus(text: string, type: 'info' | 'warn' | 'success' | 'error' = 'info') {
+  _ttsStatusCb?.({ text, type });
+}
+
+
+// ---------------------------------------------------------------------------
 // Gemini TTS (uses same API key as AI features — best Hebrew quality)
 // ---------------------------------------------------------------------------
 
 const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const GEMINI_TTS_MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'];
-const GEMINI_TTS_VOICES = ['Kore', 'Aoede', 'Charon', 'Puck'];
+const GEMINI_TTS_VOICES = ['Kore', 'Aoede', 'Charon', 'Puck', 'Orus', 'Zephyr'];
 
 let _geminiTTSModel: string | null = null;
 let _geminiTTSVoice: string | null = null;
-let _geminiTTSFailed = false;
+const _modelBlocked = new Set<string>();
 
 const GEMINI_TTS_STYLE = `Audio Profile: מגיש פוקר ישראלי. אנרגטי, חברי, עם חיוך בקול.
 Director's Notes: קרא את הטקסט בעברית טבעית ישראלית. הגייה ברורה וטבעית. הנח הפסקה קצרה בכל נקודה.`;
 
+function trimLeadingSilence(pcmBytes: Uint8Array, sampleRate: number): Uint8Array {
+  try {
+    const bytesPerSample = 2;
+    const totalSamples = Math.floor(pcmBytes.length / bytesPerSample);
+    if (totalSamples < sampleRate * 0.1) return pcmBytes;
+
+    const threshold = 250;
+    const maxScanSamples = Math.min(totalSamples, sampleRate * 4);
+    const stride = 32;
+    let firstLoudSample = 0;
+
+    for (let i = 0; i < maxScanSamples; i += stride) {
+      const offset = i * bytesPerSample;
+      const sample = pcmBytes[offset] | (pcmBytes[offset + 1] << 8);
+      const signed = sample > 32767 ? sample - 65536 : sample;
+      if (Math.abs(signed) > threshold) {
+        firstLoudSample = Math.max(0, i - Math.floor(sampleRate * 0.02));
+        break;
+      }
+    }
+
+    const maxTrimBySamples = Math.floor(totalSamples * 0.6);
+    const maxTrimByTime = sampleRate * 3;
+    const maxTrim = Math.min(maxTrimBySamples, maxTrimByTime);
+    if (firstLoudSample > maxTrim) firstLoudSample = maxTrim;
+
+    const trimBytes = firstLoudSample * bytesPerSample;
+    return trimBytes > 0 ? pcmBytes.slice(trimBytes) : pcmBytes;
+  } catch {
+    return pcmBytes;
+  }
+}
+
 function pcmToWavUrl(pcmBase64: string): string {
   const binaryStr = atob(pcmBase64);
-  const pcmBytes = new Uint8Array(binaryStr.length);
+  const rawPcmBytes = new Uint8Array(binaryStr.length);
   for (let i = 0; i < binaryStr.length; i++) {
-    pcmBytes[i] = binaryStr.charCodeAt(i);
+    rawPcmBytes[i] = binaryStr.charCodeAt(i);
   }
 
   const sampleRate = 24000;
   const numChannels = 1;
   const bitsPerSample = 16;
+  const pcmBytes = trimLeadingSilence(rawPcmBytes, sampleRate);
   const dataSize = pcmBytes.length;
   const headerSize = 44;
 
@@ -200,18 +250,32 @@ function pcmToWavUrl(pcmBase64: string): string {
 }
 
 async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<boolean> {
-  if (_geminiTTSFailed || !apiKey || messages.length === 0) return false;
+  if (!apiKey || messages.length === 0) return false;
 
-  // Combine messages into one text for a single API call
+  const availableModels = GEMINI_TTS_MODELS.filter(m => !_modelBlocked.has(m));
+  if (availableModels.length === 0) {
+    ttsStatus('All Gemini models in cooldown', 'warn');
+    return false;
+  }
+
   const combinedText = messages.map(m => prepareGeminiTTSText(m)).join('. ');
   const fullPrompt = `${GEMINI_TTS_STYLE}\n\n${combinedText}`;
 
-  const modelsToTry = _geminiTTSModel ? [_geminiTTSModel] : GEMINI_TTS_MODELS;
-  const voicesToTry = _geminiTTSVoice ? [_geminiTTSVoice] : GEMINI_TTS_VOICES;
+  const modelsToTry = _geminiTTSModel && availableModels.includes(_geminiTTSModel)
+    ? [_geminiTTSModel, ...availableModels.filter(m => m !== _geminiTTSModel)]
+    : availableModels;
+  const voicesToTry = _geminiTTSVoice
+    ? [_geminiTTSVoice, ...GEMINI_TTS_VOICES.filter(v => v !== _geminiTTSVoice)]
+    : GEMINI_TTS_VOICES;
+
+  const shortModel = (m: string) => m.replace('gemini-2.5-', '').replace('-preview-tts', '');
 
   for (const model of modelsToTry) {
+    let modelBroken = false;
     for (const voice of voicesToTry) {
       try {
+        ttsStatus(`Trying ${shortModel(model)} / ${voice}...`, 'info');
+        const t0 = Date.now();
         const res = await fetch(
           `${GEMINI_TTS_URL}${model}:generateContent?key=${apiKey}`,
           {
@@ -232,12 +296,35 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
             }),
           }
         );
+        const elapsed = Date.now() - t0;
 
-        if (!res.ok) continue;
+        if (!res.ok) {
+          const status = res.status;
+          console.warn(`🔇 Gemini TTS: ${model}/${voice} → HTTP ${status}`);
+          if (status === 429) {
+            _modelBlocked.add(model);
+            ttsStatus(`${shortModel(model)} rate-limited (429)`, 'warn');
+            modelBroken = true;
+            break;
+          }
+          if (status === 404 || status === 503) {
+            ttsStatus(`${shortModel(model)} unavailable (${status})`, 'warn');
+            modelBroken = true;
+            break;
+          }
+          ttsStatus(`${shortModel(model)}/${voice} → ${status}`, 'warn');
+          continue;
+        }
         const data = await res.json();
 
         const audioBase64 = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!audioBase64) continue;
+        if (!audioBase64) {
+          console.warn(`🔇 Gemini TTS: ${model}/${voice} → no audio data`);
+          ttsStatus(`${shortModel(model)}/${voice} → no audio`, 'warn');
+          continue;
+        }
+
+        ttsStatus(`Playing audio (${shortModel(model)}/${voice}, ${elapsed}ms)`, 'success');
 
         const wavUrl = pcmToWavUrl(audioBase64);
         try {
@@ -248,29 +335,19 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
 
         _geminiTTSModel = model;
         _geminiTTSVoice = voice;
+        _modelBlocked.delete(model);
         return true;
-      } catch {
+      } catch (e) {
+        console.warn(`🔇 Gemini TTS: ${model}/${voice} → exception:`, e);
+        ttsStatus(`${shortModel(model)}/${voice} → error`, 'error');
         continue;
       }
     }
+    if (modelBroken) continue;
   }
 
-  _geminiTTSFailed = true;
   return false;
 }
-
-// ---------------------------------------------------------------------------
-// Google Cloud TTS (needs API key with TTS API enabled)
-// ---------------------------------------------------------------------------
-
-const CLOUD_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
-const CLOUD_VOICES = [
-  'he-IL-Wavenet-C', 'he-IL-Wavenet-A',
-  'he-IL-Neural2-A',
-  'he-IL-Standard-C', 'he-IL-Standard-A',
-];
-let _cloudVoice: string | null = null;
-let _cloudFailed = false;
 
 function playAudioUrl(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -281,42 +358,17 @@ function playAudioUrl(url: string): Promise<void> {
   });
 }
 
-async function speakWithCloudTTS(text: string, apiKey: string): Promise<boolean> {
-  if (_cloudFailed || !apiKey) return false;
-
-  const processedText = prepareTTSText(text);
-  const voicesToTry = _cloudVoice ? [_cloudVoice] : CLOUD_VOICES;
-
-  for (const voiceName of voicesToTry) {
-    try {
-      const res = await fetch(`${CLOUD_TTS_URL}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: { text: processedText },
-          voice: { languageCode: 'he-IL', name: voiceName },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: 0.9, pitch: 0 },
-        }),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!data.audioContent) continue;
-
-      await playAudioUrl(`data:audio/mp3;base64,${data.audioContent}`);
-      _cloudVoice = voiceName;
-      return true;
-    } catch {
-      continue;
-    }
-  }
-
-  _cloudFailed = true;
-  return false;
-}
-
 // ---------------------------------------------------------------------------
 // Browser SpeechSynthesis (always available)
 // ---------------------------------------------------------------------------
+
+// Pre-warm voice loading — Chrome loads voices async, first getVoices() returns []
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener?.('voiceschanged', () => {
+    window.speechSynthesis.getVoices();
+  });
+}
 
 export const getBestHebrewVoice = (): SpeechSynthesisVoice | null => {
   const voices = window.speechSynthesis.getVoices();
@@ -339,17 +391,31 @@ export const createHebrewUtterance = (text: string, voice: SpeechSynthesisVoice 
   return utt;
 };
 
-function speakWithBrowser(messages: string[]): void {
-  if (!('speechSynthesis' in window) || messages.length === 0) return;
-
-  const voice = getBestHebrewVoice();
-  const utterances = messages.map(msg => createHebrewUtterance(msg, voice));
-
-  for (let i = 0; i < utterances.length - 1; i++) {
-    const next = utterances[i + 1];
-    utterances[i].onend = () => window.speechSynthesis.speak(next);
+function speakWithBrowser(messages: string[]): boolean {
+  if (!('speechSynthesis' in window) || messages.length === 0) {
+    return false;
   }
-  window.speechSynthesis.speak(utterances[0]);
+
+  // Chrome bug: cancel() right before speak() can freeze the queue.
+  // A small delay after cancel lets the engine reset.
+  window.speechSynthesis.cancel();
+
+  let voice = getBestHebrewVoice();
+  if (!voice) {
+    const allVoices = window.speechSynthesis.getVoices();
+    if (allVoices.length > 0) {
+      voice = allVoices[0];
+    }
+  }
+
+  console.log(`🔊 Browser TTS: speaking ${messages.length} msg(s), voice="${voice?.name || 'default'}"`);
+
+  const combined = messages.join('. ');
+  const utt = createHebrewUtterance(combined, voice);
+  utt.onerror = (e) => console.warn('🔇 Browser TTS error:', e);
+
+  setTimeout(() => window.speechSynthesis.speak(utt), 50);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,41 +425,27 @@ function speakWithBrowser(messages: string[]): void {
 /**
  * Speak Hebrew messages with the best available TTS engine:
  * 1. Gemini TTS — AI-powered, uses same API key as AI features (excellent Hebrew)
- * 2. Google Cloud TTS — if TTS API enabled on key (good Hebrew, Wavenet voices)
- * 3. Browser SpeechSynthesis — always available (basic quality, depends on browser)
+ * 2. Browser SpeechSynthesis — fallback, depends on device Hebrew voice support
  */
 export async function speakHebrew(messages: string[], apiKey: string | null): Promise<void> {
   if (messages.length === 0) return;
 
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
+  ttsStatus(`TTS start (${messages.length} msg, ${messages[0].slice(0, 40)}...)`, 'info');
+  _modelBlocked.clear();
 
-  // 1. Gemini TTS — batches all messages in one API call
-  if (apiKey && !_geminiTTSFailed) {
+  if (apiKey) {
     try {
       const ok = await speakWithGeminiTTS(messages, apiKey);
-      if (ok) return;
-    } catch { /* fall through */ }
-  }
-
-  // 2. Cloud TTS — per message, tracks progress for partial-failure fallback
-  if (apiKey && !_cloudFailed) {
-    try {
-      let spoken = 0;
-      for (const msg of messages) {
-        const ok = await speakWithCloudTTS(msg, apiKey);
-        if (!ok) break;
-        spoken++;
-      }
-      if (spoken === messages.length) return;
-      if (spoken > 0) {
-        speakWithBrowser(messages.slice(spoken));
+      if (ok) {
+        ttsStatus('Done ✓', 'success');
         return;
       }
-    } catch { /* fall through */ }
+    } catch (_e) {
+      // fall through to browser
+    }
   }
 
-  // 3. Browser SpeechSynthesis — final fallback
-  speakWithBrowser(messages);
+  ttsStatus('Falling back to Browser TTS', 'warn');
+  const ok = speakWithBrowser(messages);
+  ttsStatus(ok ? 'Browser TTS playing' : 'ALL engines failed', ok ? 'success' : 'error');
 }

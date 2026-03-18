@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, saveTTSPool, isPlayerFemale } from '../database/storage';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
-import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew } from '../utils/tts';
+import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
@@ -46,6 +46,27 @@ const LiveGameScreen = () => {
   const firstBloodFiredRef = useRef(false);
   const lastTTSActivityRef = useRef(Date.now());
   const autoAnnounceCountRef = useRef(0);
+  const [ttsModelName, setTtsModelName] = useState<string>('');
+  const ttsQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  // TTS debug overlay
+  const [ttsLog, setTtsLog] = useState<Array<{ text: string; type: string; ts: number }>>([]);
+  const [showTtsDebug, setShowTtsDebug] = useState(false);
+  const ttsDebugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setTTSStatusCallback((entry) => {
+      const now = Date.now();
+      setTtsLog(prev => [...prev.slice(-14), { text: entry.text, type: entry.type, ts: now }]);
+      setShowTtsDebug(true);
+      if (ttsDebugTimerRef.current) clearTimeout(ttsDebugTimerRef.current);
+      ttsDebugTimerRef.current = setTimeout(() => setShowTtsDebug(false), 30000);
+    });
+    return () => {
+      setTTSStatusCallback(null);
+      if (ttsDebugTimerRef.current) clearTimeout(ttsDebugTimerRef.current);
+    };
+  }, []);
 
   // Load AI TTS pool on mount
   useEffect(() => {
@@ -55,6 +76,8 @@ const LiveGameScreen = () => {
         ttsPoolRef.current = pool;
         console.log('🎙️ AI TTS pool loaded for game', gameId);
       }
+      const model = loadTTSPoolModel(gameId);
+      if (model) setTtsModelName(model);
     }
   }, [gameId]);
 
@@ -1381,8 +1404,12 @@ const LiveGameScreen = () => {
       firstBloodFiredRef.current = true;
     }
 
-    // Play mood-appropriate casino sound (dramatic for first blood)
-    await playRebuyCasinoSound(isFirstBlood ? 10 : totalBuyins);
+    // Wait for any previous TTS to finish before starting
+    await ttsQueueRef.current;
+
+    // Play attention sound and start speaking shortly after — don't wait for full sound
+    playRebuyCasinoSound(isFirstBlood ? 10 : totalBuyins);
+    await new Promise(r => setTimeout(r, 350));
     
     // Check if total has half (0.5) - use tolerance for floating point
     const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
@@ -1558,11 +1585,11 @@ const LiveGameScreen = () => {
     if (crossedMilestone) {
       const numWord = hebrewNumConstruct(crossedMilestone, true);
       const milestoneMessages = [
-        `סך הכל ${numWord} קניות הערב!`,
-        `כבר ${numWord} קניות הערב!`,
-        `${numWord} קניות על השולחן הערב!`,
-        `וואו. סך הכל ${numWord} קניות הערב!`,
-        `הגענו כבר ל${numWord} קניות הערב!`,
+        `ובמבט על השולחן כולו, כבר ${numWord} קניות הערב!`,
+        `רגע, כל השולחן ביחד? ${numWord} קניות!`,
+        `עדכון כללי. על השולחן כולו כבר ${numWord} קניות הערב!`,
+        `ועוד עדכון. כל השחקנים ביחד, ${numWord} קניות הערב!`,
+        `מבט על התמונה הגדולה, השולחן הגיע ל${numWord} קניות הערב!`,
       ];
       allMessages.push(pickUniqueHardcoded(milestoneMessages));
     }
@@ -1680,9 +1707,10 @@ const LiveGameScreen = () => {
       lastManStanding,
     };
 
-    // Announce in Hebrew with creative message
+    // Announce in Hebrew with creative message — queued to prevent concurrent TTS calls
     const isHalfBuyin = amount === 0.5;
-    speakBuyin(player.playerName, player.playerId, newRebuys, isQuickRebuy, isHalfBuyin, ctx);
+    const ttsPromise = speakBuyin(player.playerName, player.playerId, newRebuys, isQuickRebuy, isHalfBuyin, ctx);
+    ttsQueueRef.current = ttsPromise.catch(() => {});
   };
 
   // Voice notification for undo
@@ -1705,23 +1733,23 @@ const LiveGameScreen = () => {
   const handleSocialMoment = (type: 'bad_beat' | 'big_hand', playerName: string) => {
     setSocialAction(null);
     const pool = ttsPoolRef.current;
-    if (!pool) return;
 
-    const shared = type === 'bad_beat' ? pool.shared.bad_beat : pool.shared.big_hand;
-    const generic = type === 'bad_beat' ? pool.shared.bad_beat_generic : pool.shared.big_hand_generic;
-    const categoryKey = `shared.${type}`;
-
-    let msg = pickFromPool(shared[playerName], `${categoryKey}.${playerName}`, { PLAYER: playerName });
-    if (!msg) msg = pickFromPool(generic, `${categoryKey}_generic`, {});
+    let msg: string | null = null;
+    if (pool) {
+      const shared = type === 'bad_beat' ? pool.shared.bad_beat : pool.shared.big_hand;
+      const generic = type === 'bad_beat' ? pool.shared.bad_beat_generic : pool.shared.big_hand_generic;
+      const categoryKey = `shared.${type}`;
+      msg = pickFromPool(shared[playerName], `${categoryKey}.${playerName}`, { PLAYER: playerName });
+      if (!msg) msg = pickFromPool(generic, `${categoryKey}_generic`, {});
+    }
     if (!msg) {
       msg = type === 'bad_beat'
         ? `אאוטש. רגע כואב ל${playerName} על השולחן`
         : `יד ענקית של ${playerName}! רגע גדול`;
     }
 
-    playRebuyCasinoSound(type === 'bad_beat' ? 8 : 2).then(() => {
-      speakHebrew([msg!], getGeminiApiKey());
-    });
+    playRebuyCasinoSound(type === 'bad_beat' ? 8 : 2);
+    setTimeout(() => speakHebrew([msg!], getGeminiApiKey()), 350);
   };
 
   const handleBreakTime = () => {
@@ -1829,10 +1857,12 @@ const LiveGameScreen = () => {
     // Fire-and-forget: play sound + speak, but NEVER block navigation
     if (messages.length > 0) {
       isSpeakingRef.current = true;
-      playRebuyCasinoSound(2)
-        .then(() => speakHebrew(messages, getGeminiApiKey()))
-        .catch(() => {})
-        .finally(() => { isSpeakingRef.current = false; });
+      playRebuyCasinoSound(2);
+      setTimeout(() => {
+        speakHebrew(messages, getGeminiApiKey())
+          .catch(() => {})
+          .finally(() => { isSpeakingRef.current = false; });
+      }, 350);
     }
 
     // Always navigate after a short delay — never depend on TTS completing
@@ -1849,7 +1879,41 @@ const LiveGameScreen = () => {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title">Live Game</h1>
-        <p className="page-subtitle">Track buyins during the game</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            Track buyins during the game
+            {ttsModelName && (
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
+                🤖 {ttsModelName}
+              </span>
+            )}
+          </p>
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                onClick={() => setSocialAction('bad_beat')}
+              >
+                💔
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--success, #28a745)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                onClick={() => setSocialAction('big_hand')}
+              >
+                🔥
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--surface-light, #555)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                onClick={handleBreakTime}
+              >
+                ☕
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
@@ -1862,110 +1926,6 @@ const LiveGameScreen = () => {
           <div className="summary-value">{totalRebuys % 1 !== 0 ? totalRebuys.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : cleanNumber(totalRebuys)}</div>
         </div>
       </div>
-
-      {/* Shared Expenses Section - Compact */}
-      <div className="card" style={{ padding: '0.6rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>🍕 Expenses</span>
-          <button 
-            className="btn btn-sm btn-primary"
-            onClick={() => setShowExpenseModal(true)}
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-          >
-            + Add
-          </button>
-        </div>
-        
-        {sharedExpenses.length === 0 ? (
-          <div className="text-muted" style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem' }}>
-            No expenses yet
-          </div>
-        ) : (
-          <>
-            {sharedExpenses.map(expense => {
-              const perPerson = expense.participants.length > 0 ? expense.amount / expense.participants.length : 0;
-              return (
-                <div key={expense.id} style={{ 
-                  padding: '0.4rem', 
-                  background: 'rgba(255,255,255,0.03)', 
-                  borderRadius: '4px',
-                  marginBottom: '0.3rem',
-                  fontSize: '0.75rem'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span style={{ fontWeight: '600' }}>{expense.description}</span>
-                      <span className="text-muted" style={{ marginLeft: '0.3rem' }}>
-                        ₪{cleanNumber(expense.amount)}
-                      </span>
-                      <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: '0.65rem' }}>
-                        (₪{cleanNumber(perPerson)}/person)
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.15rem' }}>
-                      <button 
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => handleEditExpense(expense)}
-                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => handleRemoveExpense(expense.id)}
-                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-muted" style={{ fontSize: '0.65rem', marginTop: '0.2rem', direction: 'rtl' }}>
-                    <span style={{ fontSize: '0.8rem' }}>🍕</span> {expense.paidByName}
-                    {' • '}
-                    <span style={{ fontSize: '0.55rem' }}>🍕</span> {expense.participantNames.join(', ')}
-                  </div>
-                </div>
-              );
-            })}
-            <div style={{ 
-              padding: '0.3rem', 
-              background: 'rgba(16, 185, 129, 0.1)', 
-              borderRadius: '4px',
-              textAlign: 'center',
-              fontSize: '0.75rem',
-            }}>
-              Total: <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Social Moment Buttons (admin only) */}
-      {isAdmin && ttsPoolRef.current && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-sm"
-            style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
-            onClick={() => setSocialAction('bad_beat')}
-          >
-            💔 יד כואבת
-          </button>
-          <button
-            className="btn btn-sm"
-            style={{ background: 'var(--success, #28a745)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
-            onClick={() => setSocialAction('big_hand')}
-          >
-            🔥 יד ענקית
-          </button>
-          <button
-            className="btn btn-sm"
-            style={{ background: 'var(--surface-light, #555)', color: '#fff', fontSize: '0.8rem', padding: '0.4rem 0.7rem' }}
-            onClick={handleBreakTime}
-          >
-            ☕ הפסקה
-          </button>
-        </div>
-      )}
 
       <div className="card">
         <div className="card-header">
@@ -2049,6 +2009,83 @@ const LiveGameScreen = () => {
           </div>
         </div>
       )}
+
+      {/* Shared Expenses Section - Compact */}
+      <div className="card" style={{ padding: '0.6rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>🍕 Expenses</span>
+          <button 
+            className="btn btn-sm btn-primary"
+            onClick={() => setShowExpenseModal(true)}
+            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+          >
+            + Add
+          </button>
+        </div>
+        
+        {sharedExpenses.length === 0 ? (
+          <div className="text-muted" style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem' }}>
+            No expenses yet
+          </div>
+        ) : (
+          <>
+            {sharedExpenses.map(expense => {
+              const perPerson = expense.participants.length > 0 ? expense.amount / expense.participants.length : 0;
+              return (
+                <div key={expense.id} style={{ 
+                  padding: '0.4rem', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  borderRadius: '4px',
+                  marginBottom: '0.3rem',
+                  fontSize: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontWeight: '600' }}>{expense.description}</span>
+                      <span className="text-muted" style={{ marginLeft: '0.3rem' }}>
+                        ₪{cleanNumber(expense.amount)}
+                      </span>
+                      <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: '0.65rem' }}>
+                        (₪{cleanNumber(perPerson)}/person)
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.15rem' }}>
+                      <button 
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleEditExpense(expense)}
+                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleRemoveExpense(expense.id)}
+                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '0.65rem', marginTop: '0.2rem', direction: 'rtl' }}>
+                    <span style={{ fontSize: '0.8rem' }}>🍕</span> {expense.paidByName}
+                    {' • '}
+                    <span style={{ fontSize: '0.55rem' }}>🍕</span> {expense.participantNames.join(', ')}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ 
+              padding: '0.3rem', 
+              background: 'rgba(16, 185, 129, 0.1)', 
+              borderRadius: '4px',
+              textAlign: 'center',
+              fontSize: '0.75rem',
+            }}>
+              Total: <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Player picker for social moments */}
       {socialAction && (
@@ -2180,6 +2217,52 @@ const LiveGameScreen = () => {
                 הסר שחקן
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TTS Debug Overlay — centered, grows with content, auto-hides after 15s */}
+      {showTtsDebug && ttsLog.length > 0 && (
+        <div
+          onClick={() => setShowTtsDebug(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(15,23,42,0.95)',
+              borderRadius: 12,
+              padding: '12px 16px',
+              margin: '0 16px',
+              minWidth: 280,
+              maxWidth: 420,
+              border: '1px solid rgba(148,163,184,0.2)',
+              fontSize: '0.75rem',
+              fontFamily: 'monospace',
+              direction: 'ltr',
+              textAlign: 'left',
+            }}
+          >
+            <div style={{ color: '#94a3b8', marginBottom: 6, fontWeight: 600, fontSize: '0.8rem' }}>🔊 TTS Debug</div>
+            {ttsLog.map((e, i) => {
+              const color = e.type === 'success' ? '#4ade80'
+                : (e.type === 'warn' || e.type === 'error') ? '#f87171'
+                : '#e2e8f0';
+              const timeStr = new Date(e.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              return (
+                <div key={i} style={{ color, lineHeight: 1.5 }}>
+                  <span style={{ color: '#64748b' }}>{timeStr}</span> {e.text}
+                </div>
+              );
+            })}
+            <div style={{ color: '#475569', marginTop: 8, fontSize: '0.65rem', textAlign: 'center' }}>tap to dismiss</div>
           </div>
         </div>
       )}

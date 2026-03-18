@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.3';
+export const APP_VERSION = '5.8.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.4',
+    date: '2026-03-18',
+    changes: [
+      '🤖 Background AI processing for game-end summaries',
+      '📊 AI usage tracker enhancements with detailed metrics',
+      '🔊 TTS engine improvements and reliability fixes',
+      '🎮 Live game and game summary UI refinements',
+      '📝 Dev server port 3000 documented in project rules',
+    ]
+  },
   {
     version: '5.8.3',
     date: '2026-03-18',

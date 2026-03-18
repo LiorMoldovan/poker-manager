@@ -9,7 +9,8 @@ import {
   updateGamePlayerResults,
   updateGameStatus,
   updateGameChipGap,
-  createGameEndBackup
+  createGameEndBackup,
+  invalidateAICaches
 } from '../database/storage';
 import { syncToCloud } from '../database/githubSync';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
@@ -225,6 +226,7 @@ const ChipEntryScreen = () => {
   // Player selector state
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
+  const [showUncountedWarning, setShowUncountedWarning] = useState(false);
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
@@ -442,7 +444,6 @@ const ChipEntryScreen = () => {
   };
 
   const allPlayersCounted = completedPlayers.size === players.length;
-  const [showUncountedWarning, setShowUncountedWarning] = useState(false);
 
   const handleCalculate = () => {
     if (!gameId) return;
@@ -478,6 +479,7 @@ const ChipEntryScreen = () => {
     }
     
     updateGameStatus(gameId, 'completed');
+    invalidateAICaches();
     
     // Create auto backup after game ends
     createGameEndBackup();

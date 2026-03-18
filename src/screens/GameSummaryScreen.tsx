@@ -195,9 +195,9 @@ const GameSummaryScreen = () => {
       }
     }
     
-    // Compute combo history for this game's player set
+    // Compute combo history for this game's player set (include tonight's game)
     const comboPlayerIds = gamePlayers.map(gp => gp.playerId);
-    const combo = getComboHistory(comboPlayerIds, gameId);
+    const combo = getComboHistory(comboPlayerIds);
     setComboHistory(combo);
 
     // Calculate highlights — prioritized, period-focused, always exactly 10
@@ -695,6 +695,9 @@ const GameSummaryScreen = () => {
               await syncToCloud();
               console.log('Background: synced after auto AI summary');
             } catch (e) { console.warn('Background sync failed:', e); }
+            import('../utils/backgroundAI').then(({ regenerateAIInBackground }) => {
+              regenerateAIInBackground();
+            }).catch(() => {});
           }
         })
         .catch(err => {
@@ -828,7 +831,15 @@ const GameSummaryScreen = () => {
     
     setIsSharing(true);
     
+    // Expand all sections before capturing screenshots
+    const savedCollapsed = { ...collapsedSections };
+    const allExpanded: Record<string, boolean> = {};
+    for (const key of Object.keys(collapsedSections)) allExpanded[key] = false;
+    setCollapsedSections(allExpanded);
+    await new Promise(r => setTimeout(r, 150));
+
     try {
+
       const files: File[] = [];
       
       // Capture the Results section
@@ -964,6 +975,7 @@ const GameSummaryScreen = () => {
       console.error('Error sharing:', error);
       alert('Could not share. Please try again.');
     } finally {
+      setCollapsedSections(savedCollapsed);
       setIsSharing(false);
     }
   };
@@ -1561,28 +1573,77 @@ const GameSummaryScreen = () => {
                   marginBottom: '0.75rem',
                   fontWeight: 600,
                 }}>
-                  אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo + 1} פעמים (כולל הערב)
+                  אותם {comboHistory.playerCount} שחקנים שיחקו יחד {comboHistory.totalGamesWithCombo} פעמים
                 </div>
 
-                {/* Previous games list */}
+                {/* Player leaderboard for this combo */}
+                <div style={{
+                  fontSize: '0.75rem',
+                  marginBottom: '0.4rem',
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                }}>
+                  📊 דירוג מצטבר בהרכב הזה:
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginBottom: '0.75rem' }}>
+                  {comboHistory.playerStats.map((ps, i) => (
+                    <div key={i} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '0.78rem',
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '6px',
+                      background: ps.alwaysWon ? 'rgba(34, 197, 94, 0.08)' : ps.alwaysLost ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                    }}>
+                      <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
+                        {i === 0 ? '👑' : i === comboHistory.playerStats.length - 1 ? '💀' : `${i + 1}.`} {ps.playerName}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
+                          {ps.wins}/{comboHistory.totalGamesWithCombo} נצ׳
+                        </span>
+                        <span style={{
+                          fontWeight: 600,
+                          color: ps.totalProfit > 0 ? 'var(--success)' : ps.totalProfit < 0 ? 'var(--danger)' : '#94a3b8',
+                          fontSize: '0.78rem',
+                          minWidth: '3.5rem',
+                          textAlign: 'left',
+                        }}>
+                          {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Games list */}
+                <div style={{
+                  fontSize: '0.75rem',
+                  marginBottom: '0.4rem',
+                  color: '#94a3b8',
+                  fontWeight: 600,
+                }}>
+                  📅 היסטוריית משחקים:
+                </div>
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '0.4rem',
-                  marginBottom: '0.75rem',
+                  gap: '0.3rem',
+                  marginBottom: '0.6rem',
                 }}>
                   {comboHistory.previousGames.map((game, i) => {
-                    const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return game.date; } })();
+                    const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
+                    const isTonight = game.gameId === gameId;
                     return (
                       <div key={i} style={{
-                        fontSize: '0.78rem',
+                        fontSize: '0.76rem',
                         color: '#94a3b8',
-                        padding: '0.4rem 0.6rem',
-                        borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.06)',
+                        padding: '0.3rem 0.5rem',
+                        borderRadius: '6px',
+                        background: isTonight ? 'rgba(251, 191, 36, 0.08)' : 'rgba(255,255,255,0.03)',
                       }}>
-                        <span style={{ color: '#64748b' }}>📅 {dateStr}</span>
+                        <span style={{ color: isTonight ? '#fbbf24' : '#64748b' }}>{isTonight ? '⭐' : '📅'} {dateStr}</span>
                         {' · '}
                         <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
                         {' · '}
@@ -1592,80 +1653,54 @@ const GameSummaryScreen = () => {
                   })}
                 </div>
 
-                {/* Player leaderboard for this combo */}
-                <div style={{
-                  fontSize: '0.75rem',
-                  marginBottom: '0.5rem',
-                  color: '#94a3b8',
-                  fontWeight: 600,
-                }}>
-                  📊 דירוג שחקנים בהרכב הזה (כל המשחקים):
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  {comboHistory.playerStats.map((ps, i) => {
-                    const isInProfit = ps.totalProfit > 0;
-                    const currentGamePlayer = players.find(p => p.playerName === ps.playerName);
-                    const tonightProfit = currentGamePlayer?.profit || 0;
-                    return (
-                      <div key={i} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: '0.78rem',
-                        padding: '0.3rem 0.5rem',
-                        borderRadius: '6px',
-                        background: ps.alwaysWon ? 'rgba(34, 197, 94, 0.08)' : ps.alwaysLost ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
-                        borderRight: ps.alwaysWon ? '3px solid rgba(34, 197, 94, 0.5)' : ps.alwaysLost ? '3px solid rgba(239, 68, 68, 0.5)' : '3px solid transparent',
-                      }}>
-                        <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
-                          {ps.wins}/{comboHistory.totalGamesWithCombo} ({Math.round(ps.winRate)}%)
-                          {ps.alwaysWon && ' ⭐'}
-                          {ps.alwaysLost && ' ⚠️'}
-                        </span>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{
-                            fontWeight: 600,
-                            color: isInProfit ? 'var(--success)' : 'var(--danger)',
-                            fontSize: '0.75rem',
-                          }}>
-                            {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
-                          </span>
-                          <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
-                            {i === 0 && '👑 '}{ps.playerName}
-                          </span>
-                          {tonightProfit !== 0 && (
-                            <span style={{
-                              fontSize: '0.65rem',
-                              color: tonightProfit > 0 ? '#4ade80' : '#f87171',
-                              opacity: 0.8,
-                            }}>
-                              (הערב: {tonightProfit >= 0 ? '+' : ''}{Math.round(tonightProfit)}₪)
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Combo insights */}
+                {comboHistory.totalGamesWithCombo >= 2 && (() => {
+                  const insights: { emoji: string; text: string; color: string }[] = [];
+                  const n = comboHistory.totalGamesWithCombo;
+                  const stats = comboHistory.playerStats;
 
-                {/* Fun facts */}
-                <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
-                    <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
-                      🎲 מנצח שונה בכל משחק!
+                  const alwaysWon = stats.filter(p => p.alwaysWon);
+                  const alwaysLost = stats.filter(p => p.alwaysLost);
+                  const neverWon = stats.filter(p => p.wins === 0);
+                  const neverLost = stats.filter(p => p.losses === 0);
+
+                  if (comboHistory.uniqueWinners.length === n) {
+                    insights.push({ emoji: '🎲', text: `מנצח שונה בכל אחד מ-${n} המשחקים!`, color: '#a78bfa' });
+                  }
+                  if (alwaysWon.length > 0) {
+                    insights.push({ emoji: '⭐', text: `תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${n})`).join(', ')}`, color: '#4ade80' });
+                  }
+                  if (neverWon.length > 0 && neverWon.length <= 3) {
+                    insights.push({ emoji: '📉', text: `אף פעם לא ניצחו בהרכב: ${neverWon.map(p => p.playerName).join(', ')}`, color: '#f87171' });
+                  }
+                  if (alwaysLost.length > 0) {
+                    insights.push({ emoji: '💀', text: `תמיד בהפסד: ${alwaysLost.map(p => `${p.playerName} (${p.losses}/${n})`).join(', ')}`, color: '#f87171' });
+                  } else if (neverLost.length > 0 && neverLost.length <= 3) {
+                    insights.push({ emoji: '🛡️', text: `אף פעם לא הפסידו בהרכב: ${neverLost.map(p => p.playerName).join(', ')}`, color: '#94a3b8' });
+                  }
+
+                  const topRebuyer = [...stats].sort((a, b) => b.avgRebuys - a.avgRebuys)[0];
+                  const lowestRebuyer = [...stats].sort((a, b) => a.avgRebuys - b.avgRebuys)[0];
+                  if (topRebuyer && lowestRebuyer && topRebuyer.avgRebuys > lowestRebuyer.avgRebuys * 2) {
+                    insights.push({ emoji: '💸', text: `${topRebuyer.playerName} קונה בממוצע ${topRebuyer.avgRebuys.toFixed(1)} לעומת ${lowestRebuyer.playerName} עם ${lowestRebuyer.avgRebuys.toFixed(1)} בלבד`, color: '#f59e0b' });
+                  }
+
+                  const bigSwing = [...stats].sort((a, b) => (b.bestResult - b.worstResult) - (a.bestResult - a.worstResult))[0];
+                  if (bigSwing && n >= 2) {
+                    insights.push({ emoji: '🎢', text: `התנודה הגדולה: ${bigSwing.playerName} — בין +${Math.round(bigSwing.bestResult)}₪ ל-${Math.round(bigSwing.worstResult)}₪`, color: '#94a3b8' });
+                  }
+
+                  if (insights.length === 0) return null;
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      {insights.map((ins, i) => (
+                        <div key={i} style={{ fontSize: '0.78rem', color: ins.color }}>
+                          {ins.emoji} {ins.text}
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  {comboHistory.repeatWinners.length > 0 && (
-                    <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
-                      👑 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}
-                    </div>
-                  )}
-                  {comboHistory.repeatLosers.length > 0 && (
-                    <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
-                      💀 סיימו אחרונים יותר מפעם: {comboHistory.repeatLosers.map(l => `${l.name} (${l.count}x)`).join(', ')}
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
             ))}
           </div>

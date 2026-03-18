@@ -29,7 +29,7 @@ import {
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, API_CONFIGS, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
-import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
+import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, getRemainingEstimates, getModelDailyUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
@@ -1101,6 +1101,47 @@ const SettingsScreen = () => {
                   {syncMessage.text}
                 </div>
               )}
+
+              {/* Gemini API Key */}
+              <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#A855F7', marginBottom: '0.5rem' }}>
+                  🔑 Gemini API Key
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7' }}>
+                    Get free API key →
+                  </a>
+                </p>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type={showGeminiKey ? 'text' : 'password'}
+                      value={geminiKey}
+                      onChange={(e) => setGeminiKey(e.target.value)}
+                      placeholder="AIza..."
+                      style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.8rem' }}
+                    />
+                    <button className="btn btn-sm" onClick={() => setShowGeminiKey(!showGeminiKey)} style={{ padding: '0.5rem' }}>
+                      {showGeminiKey ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn btn-sm" onClick={() => { setGeminiApiKey(geminiKey); setGeminiMessage({ type: 'success', text: 'API key saved!' }); setTimeout(() => setGeminiMessage(null), 2000); }} disabled={!geminiKey}
+                    style={{ flex: 1, background: geminiKey ? '#A855F7' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
+                    💾 Save Key
+                  </button>
+                  <button className="btn btn-sm" onClick={async () => { setIsTestingGemini(true); const isValid = await testGeminiApiKey(geminiKey); setGeminiMessage({ type: isValid ? 'success' : 'error', text: isValid ? '✅ API key works!' : '❌ Invalid API key' }); setIsTestingGemini(false); setTimeout(() => setGeminiMessage(null), 3000); }} disabled={!geminiKey || isTestingGemini}
+                    style={{ flex: 1, background: geminiKey ? 'linear-gradient(135deg, #A855F7, #EC4899)' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
+                    {isTestingGemini ? '⏳ Testing...' : '🧪 Test Key'}
+                  </button>
+                </div>
+                {geminiMessage && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '6px', background: geminiMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: geminiMessage.type === 'success' ? '#10B981' : '#EF4444', fontSize: '0.8rem', textAlign: 'center' }}>
+                    {geminiMessage.text}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1115,28 +1156,37 @@ const SettingsScreen = () => {
         const todayLog = getTodayLog();
         void aiTick;
 
-        const getModelStatus = (model: string): { color: string; label: string; isActive: boolean } => {
-          const testResult = aiTestResults?.find(r => r.model === model);
+        const isModelRateLimited = (model: string): { limited: boolean; label?: string } => {
           const tracked = status.statuses[model];
-
           if (tracked?.rateLimitResetsAt) {
             const resetTime = new Date(tracked.rateLimitResetsAt);
             if (resetTime.getTime() > Date.now()) {
               const secsLeft = Math.ceil((resetTime.getTime() - Date.now()) / 1000);
               if (secsLeft > 3600) {
                 const resetLocal = resetTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-                return { color: '#F59E0B', label: `מוגבל · מחר ${resetLocal}`, isActive: false };
+                return { limited: true, label: `מוגבל · ${resetLocal}` };
               }
               const mins = Math.ceil(secsLeft / 60);
-              return { color: '#F59E0B', label: mins > 1 ? `מוגבל · ~${mins} דקות` : `מוגבל · ~${secsLeft} שניות`, isActive: false };
+              return { limited: true, label: mins > 1 ? `מוגבל · ~${mins} דקות` : `מוגבל · ~${secsLeft} שניות` };
             }
           }
+          const testResult = aiTestResults?.find(r => r.model === model);
+          if (testResult?.status === 'error') return { limited: true, label: 'שגיאה' };
+          return { limited: false };
+        };
 
-          if (testResult?.status === 'error') return { color: '#EF4444', label: 'שגיאה', isActive: false };
-          if (tracked?.isActive) return { color: '#10B981', label: 'פעיל', isActive: true };
-          if (testResult?.status === 'available') return { color: '#10B981', label: 'זמין', isActive: false };
-          if (tracked?.lastSuccess) return { color: '#64748B', label: 'המתנה', isActive: false };
-          return { color: '#475569', label: 'לא נבדק', isActive: false };
+        // Determine which model will handle the next request based on cascade priority
+        let nextActiveModel: string | null = null;
+        for (const config of API_CONFIGS) {
+          const rl = isModelRateLimited(config.model);
+          if (!rl.limited) { nextActiveModel = config.model; break; }
+        }
+
+        const getModelStatus = (model: string): { color: string; label: string; isActive: boolean } => {
+          const rl = isModelRateLimited(model);
+          if (rl.limited) return { color: rl.label?.includes('שגיאה') ? '#EF4444' : '#F59E0B', label: rl.label!, isActive: false };
+          if (model === nextActiveModel) return { color: '#10B981', label: 'הבא בתור ✓', isActive: true };
+          return { color: '#64748B', label: 'גיבוי', isActive: false };
         };
 
         const formatTokens = (n: number): string => {
@@ -1182,35 +1232,73 @@ const SettingsScreen = () => {
               </div>
 
               {/* Pipeline */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '1rem', direction: 'ltr' }}>
-                {API_CONFIGS.map((config, idx) => {
-                  const ms = getModelStatus(config.model);
-                  return (
-                    <div key={config.model} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                      <div style={{
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem',
-                        padding: '0.5rem 0.6rem', borderRadius: '10px',
-                        background: ms.isActive ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface)',
-                        border: ms.isActive ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border)',
-                        minWidth: '80px',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ms.color, boxShadow: ms.isActive ? `0 0 6px ${ms.color}` : 'none' }} />
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)' }}>
-                            {getModelDisplayName(config.model)}
-                          </span>
+              {(() => {
+                const dailyUsage = getModelDailyUsage();
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '1rem', direction: 'ltr' }}>
+                    {API_CONFIGS.map((config, idx) => {
+                      const ms = getModelStatus(config.model);
+                      const mu = dailyUsage[config.model];
+                      return (
+                        <div key={config.model} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem',
+                            padding: '0.5rem 0.6rem', borderRadius: '10px',
+                            background: ms.isActive ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface)',
+                            border: ms.isActive ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border)',
+                            minWidth: '80px',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ms.color, boxShadow: ms.isActive ? `0 0 6px ${ms.color}` : 'none' }} />
+                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)' }}>
+                                {getModelDisplayName(config.model)}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.55rem', color: ms.color, whiteSpace: 'nowrap' }}>
+                              {ms.label}
+                            </span>
+                            {mu && (
+                              <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                {mu.used}/{mu.limit} היום
+                              </span>
+                            )}
+                          </div>
+                          {idx < API_CONFIGS.length - 1 && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>▶</span>
+                          )}
                         </div>
-                        <span style={{ fontSize: '0.55rem', color: ms.color, whiteSpace: 'nowrap' }}>
-                          {ms.label}
-                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Remaining Capacity Estimates */}
+              {(() => {
+                const est = getRemainingEstimates(status.statuses, API_CONFIGS.map(c => c.model));
+                if (!est) return null;
+                return (
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.4rem',
+                    marginBottom: '0.75rem', direction: 'rtl',
+                  }}>
+                    {est.estimates.map(e => (
+                      <div key={e.label} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.25rem',
+                        padding: '0.2rem 0.5rem', borderRadius: '6px',
+                        background: e.remaining > 5 ? 'rgba(16, 185, 129, 0.08)' : e.remaining > 0 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                        border: `1px solid ${e.remaining > 5 ? 'rgba(16, 185, 129, 0.2)' : e.remaining > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                      }}>
+                        <span style={{
+                          fontSize: '0.7rem', fontWeight: 700,
+                          color: e.remaining > 5 ? '#10B981' : e.remaining > 0 ? '#F59E0B' : '#EF4444',
+                        }}>{e.remaining}</span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{e.label}</span>
                       </div>
-                      {idx < API_CONFIGS.length - 1 && (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>▶</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Divider */}
               <div style={{ height: '1px', background: 'var(--border)', margin: '0 0 0.75rem' }} />
@@ -1281,46 +1369,6 @@ const SettingsScreen = () => {
               )}
             </div>
 
-            {/* API Key Card */}
-            <div className="card" style={{ padding: '0.75rem' }}>
-              <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#A855F7', marginBottom: '0.5rem' }}>
-                🔑 Gemini API Key
-              </p>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7' }}>
-                  Get free API key →
-                </a>
-              </p>
-              <div style={{ marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input
-                    type={showGeminiKey ? 'text' : 'password'}
-                    value={geminiKey}
-                    onChange={(e) => setGeminiKey(e.target.value)}
-                    placeholder="AIza..."
-                    style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.8rem' }}
-                  />
-                  <button className="btn btn-sm" onClick={() => setShowGeminiKey(!showGeminiKey)} style={{ padding: '0.5rem' }}>
-                    {showGeminiKey ? '🙈' : '👁️'}
-                  </button>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button className="btn btn-sm" onClick={() => { setGeminiApiKey(geminiKey); setGeminiMessage({ type: 'success', text: 'API key saved!' }); setTimeout(() => setGeminiMessage(null), 2000); }} disabled={!geminiKey}
-                  style={{ flex: 1, background: geminiKey ? '#A855F7' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
-                  💾 Save Key
-                </button>
-                <button className="btn btn-sm" onClick={async () => { setIsTestingGemini(true); const isValid = await testGeminiApiKey(geminiKey); setGeminiMessage({ type: isValid ? 'success' : 'error', text: isValid ? '✅ API key works!' : '❌ Invalid API key' }); setIsTestingGemini(false); setTimeout(() => setGeminiMessage(null), 3000); }} disabled={!geminiKey || isTestingGemini}
-                  style={{ flex: 1, background: geminiKey ? 'linear-gradient(135deg, #A855F7, #EC4899)' : 'var(--surface)', color: geminiKey ? 'white' : 'var(--text-muted)' }}>
-                  {isTestingGemini ? '⏳ Testing...' : '🧪 Test Key'}
-                </button>
-              </div>
-              {geminiMessage && (
-                <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '6px', background: geminiMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: geminiMessage.type === 'success' ? '#10B981' : '#EF4444', fontSize: '0.8rem', textAlign: 'center' }}>
-                  {geminiMessage.text}
-                </div>
-              )}
-            </div>
           </>
         );
       })()}
