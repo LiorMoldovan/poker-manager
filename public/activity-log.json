@@ -125,10 +125,11 @@
     "screenSize": "412x892",
     "screensVisited": [
       "Statistics",
-      "Graphs"
+      "Graphs",
+      "New Game"
     ],
-    "sessionDuration": 9,
-    "lastActive": "2026-03-19T19:57:00.192Z",
+    "sessionDuration": 11,
+    "lastActive": "2026-03-19T19:58:46.054Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 750",
       "cores": 8,
