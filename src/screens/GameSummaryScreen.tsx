@@ -52,6 +52,7 @@ const GameSummaryScreen = () => {
   const cameFromPlayers = locationState?.from === 'players';
   const cameFromTable = locationState?.from === 'statistics';
   const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
+  const cameFromChipEntry = locationState?.from === 'chip-entry';
   const { role } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -989,6 +990,8 @@ const GameSummaryScreen = () => {
           selectedYear: locationState?.selectedYear,
         } 
       });
+    } else if (cameFromChipEntry) {
+      navigate('/');
     } else {
       navigate('/history');
     }
@@ -1000,7 +1003,7 @@ const GameSummaryScreen = () => {
         className="btn btn-sm btn-secondary mb-2"
         onClick={navigateBack}
       >
-        ← {cameFromRecords ? 'Back to Records' : cameFromStatistics ? 'Back to Statistics' : 'Back to History'}
+        ← {cameFromRecords ? 'Back to Records' : cameFromStatistics ? 'Back to Statistics' : cameFromChipEntry ? 'Home' : 'Back to History'}
       </button>
 
       {/* Results Section - for screenshot */}
@@ -1419,30 +1422,32 @@ const GameSummaryScreen = () => {
       {(aiSummary || isLoadingAiSummary || funStats.length > 0) && (
         <div ref={funStatsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
-            <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
+            <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? '🎭 Game Night Summary' : '🎭 Game Highlights'}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (
-                  <span
-                    className="btn btn-sm"
-                    style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#A855F7', border: '1px solid rgba(168, 85, 247, 0.3)', fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                    onClick={(e) => { e.stopPropagation(); handleRegenerateAiSummary(); }}
-                  >
-                    🔄 Regenerate
-                  </span>
-                )}
-                {!collapsedSections.aiSummary && role === 'admin' && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
-                  <span
-                    className="btn btn-sm"
-                    style={{ background: 'linear-gradient(135deg, #A855F7, #EC4899)', color: 'white', fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
-                    onClick={(e) => { e.stopPropagation(); handleRegenerateAiSummary(); }}
-                  >
-                    ✨ Generate AI Summary
-                  </span>
-                )}
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
-              </div>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
+            {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
+                <span
+                  className="btn btn-sm"
+                  style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#A855F7', border: '1px solid rgba(168, 85, 247, 0.3)', fontSize: '0.7rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+                  onClick={() => handleRegenerateAiSummary()}
+                >
+                  🔄 Regenerate
+                </span>
+              </div>
+            )}
+            {!collapsedSections.aiSummary && role === 'admin' && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
+                <span
+                  className="btn btn-sm"
+                  style={{ background: 'linear-gradient(135deg, #A855F7, #EC4899)', color: 'white', fontSize: '0.7rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
+                  onClick={() => handleRegenerateAiSummary()}
+                >
+                  ✨ Generate AI Summary
+                </span>
+              </div>
+            )}
             {!collapsedSections.aiSummary && (
               <>
                 {aiSummary ? (
@@ -1615,42 +1620,6 @@ const GameSummaryScreen = () => {
                   ))}
                 </div>
 
-                {/* Games list */}
-                <div style={{
-                  fontSize: '0.75rem',
-                  marginBottom: '0.4rem',
-                  color: '#94a3b8',
-                  fontWeight: 600,
-                }}>
-                  📅 היסטוריית משחקים:
-                </div>
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.3rem',
-                  marginBottom: '0.6rem',
-                }}>
-                  {comboHistory.previousGames.map((game, i) => {
-                    const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
-                    const isTonight = game.gameId === gameId;
-                    return (
-                      <div key={i} style={{
-                        fontSize: '0.76rem',
-                        color: '#94a3b8',
-                        padding: '0.3rem 0.5rem',
-                        borderRadius: '6px',
-                        background: isTonight ? 'rgba(251, 191, 36, 0.08)' : 'rgba(255,255,255,0.03)',
-                      }}>
-                        <span style={{ color: isTonight ? '#fbbf24' : '#64748b' }}>{isTonight ? '⭐' : '📅'} {dateStr}</span>
-                        {' · '}
-                        <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
-                        {' · '}
-                        <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
-                      </div>
-                    );
-                  })}
-                </div>
-
                 {/* Combo insights */}
                 {comboHistory.totalGamesWithCombo >= 2 && (() => {
                   const insights: { emoji: string; text: string; color: string }[] = [];
@@ -1690,12 +1659,17 @@ const GameSummaryScreen = () => {
 
                   if (insights.length === 0) return null;
                   return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {insights.map((ins, i) => (
-                        <div key={i} style={{ fontSize: '0.78rem', color: ins.color }}>
-                          {ins.emoji} {ins.text}
-                        </div>
-                      ))}
+                    <div>
+                      <div style={{ fontSize: '0.75rem', marginBottom: '0.4rem', color: '#94a3b8', fontWeight: 600 }}>
+                        💡 תובנות מההרכב:
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {insights.map((ins, i) => (
+                          <div key={i} style={{ fontSize: '0.78rem', color: '#e2e8f0' }}>
+                            {ins.emoji} {ins.text}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1827,7 +1801,7 @@ const GameSummaryScreen = () => {
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
         <button className="btn btn-secondary btn-lg" onClick={navigateBack}>
-          {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : '📜 History'}
+          {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : cameFromChipEntry ? '🏠 Home' : '📜 History'}
         </button>
         <button 
           className="btn btn-primary btn-lg" 
