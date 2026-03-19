@@ -1166,7 +1166,7 @@ export const getStorageUsage = (): StorageUsage => {
 
   // Calculate size of each poker-related key
   for (const key of Object.keys(localStorage)) {
-    if (key.startsWith('poker_') || key === 'github_token' || key === 'gemini_api_key') {
+    if (key.startsWith('poker_') || key === 'github_token' || key === 'gemini_api_key' || key === 'elevenlabs_api_key') {
       const value = localStorage.getItem(key) || '';
       // localStorage uses UTF-16, so each character is 2 bytes
       const size = (key.length + value.length) * 2;

@@ -172,7 +172,23 @@ const GEMINI_TTS_VOICES = ['Kore', 'Aoede', 'Charon', 'Puck', 'Orus', 'Zephyr'];
 
 let _geminiTTSModel: string | null = null;
 let _geminiTTSVoice: string | null = null;
-const _modelBlocked = new Set<string>();
+const _modelBlockedUntil = new Map<string, number>();
+const GEMINI_BLOCK_DURATION_MS = 60 * 1000;
+const GEMINI_FETCH_TIMEOUT_MS = 9000;
+
+function isModelBlocked(model: string): boolean {
+  const until = _modelBlockedUntil.get(model);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    _modelBlockedUntil.delete(model);
+    return false;
+  }
+  return true;
+}
+
+function blockModel(model: string) {
+  _modelBlockedUntil.set(model, Date.now() + GEMINI_BLOCK_DURATION_MS);
+}
 
 const GEMINI_TTS_STYLE = `Audio Profile: מגיש פוקר ישראלי. אנרגטי, חברי, עם חיוך בקול.
 Director's Notes: קרא את הטקסט בעברית טבעית ישראלית. הגייה ברורה וטבעית. הנח הפסקה קצרה בכל נקודה.`;
@@ -254,9 +270,9 @@ function pcmToWavUrl(pcmBase64: string): string {
 async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<boolean> {
   if (!apiKey || messages.length === 0) return false;
 
-  const availableModels = GEMINI_TTS_MODELS.filter(m => !_modelBlocked.has(m));
+  const availableModels = GEMINI_TTS_MODELS.filter(m => !isModelBlocked(m));
   if (availableModels.length === 0) {
-    ttsStatus('All Gemini models in cooldown', 'warn');
+    ttsStatus('Gemini TTS blocked, skipping', 'info');
     return false;
   }
 
@@ -266,86 +282,84 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
   const modelsToTry = _geminiTTSModel && availableModels.includes(_geminiTTSModel)
     ? [_geminiTTSModel, ...availableModels.filter(m => m !== _geminiTTSModel)]
     : availableModels;
-  const voicesToTry = _geminiTTSVoice
-    ? [_geminiTTSVoice, ...GEMINI_TTS_VOICES.filter(v => v !== _geminiTTSVoice)]
-    : GEMINI_TTS_VOICES;
+  const voiceToUse = _geminiTTSVoice || GEMINI_TTS_VOICES[Math.floor(Math.random() * GEMINI_TTS_VOICES.length)];
 
   const shortModel = (m: string) => m.includes('-preview-tts') ? 'flash-tts' : m.replace('gemini-', '').replace('-preview', '');
 
   for (const model of modelsToTry) {
-    let modelBroken = false;
-    for (const voice of voicesToTry) {
-      try {
-        ttsStatus(`Trying ${shortModel(model)} / ${voice}...`, 'info');
-        const t0 = Date.now();
-        const res = await fetch(
-          `${GEMINI_TTS_URL}${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: fullPrompt }] }],
-              generationConfig: {
-                responseModalities: ['AUDIO'],
-                speechConfig: {
-                  voiceConfig: {
-                    prebuiltVoiceConfig: {
-                      voiceName: voice,
-                    },
+    const voice = voiceToUse;
+    try {
+      ttsStatus(`Trying ${shortModel(model)} / ${voice}...`, 'info');
+      const t0 = Date.now();
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GEMINI_FETCH_TIMEOUT_MS);
+
+      const res = await fetch(
+        `${GEMINI_TTS_URL}${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: fullPrompt }] }],
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: voice,
                   },
                 },
               },
-            }),
-          }
-        );
-        const elapsed = Date.now() - t0;
-
-        if (!res.ok) {
-          const status = res.status;
-          console.warn(`🔇 Gemini TTS: ${model}/${voice} → HTTP ${status}`);
-          if (status === 429) {
-            _modelBlocked.add(model);
-            ttsStatus(`${shortModel(model)} rate-limited (429)`, 'warn');
-            modelBroken = true;
-            break;
-          }
-          if (status === 404 || status === 503) {
-            ttsStatus(`${shortModel(model)} unavailable (${status})`, 'warn');
-            modelBroken = true;
-            break;
-          }
-          ttsStatus(`${shortModel(model)}/${voice} → ${status}`, 'warn');
-          continue;
+            },
+          }),
         }
-        const data = await res.json();
+      );
+      clearTimeout(timeoutId);
+      const elapsed = Date.now() - t0;
 
-        const audioBase64 = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!audioBase64) {
-          console.warn(`🔇 Gemini TTS: ${model}/${voice} → no audio data`);
-          ttsStatus(`${shortModel(model)}/${voice} → no audio`, 'warn');
-          continue;
+      if (!res.ok) {
+        const status = res.status;
+        console.warn(`🔇 Gemini TTS: ${model}/${voice} → HTTP ${status}`);
+        if (status === 429) {
+          blockModel(model);
+          ttsStatus(`${shortModel(model)} rate-limited — retry in 1 min`, 'warn');
+        } else {
+          ttsStatus(`${shortModel(model)} → ${status}`, 'warn');
         }
-
-        ttsStatus(`Playing audio (${shortModel(model)}/${voice}, ${elapsed}ms)`, 'success');
-
-        const wavUrl = pcmToWavUrl(audioBase64);
-        try {
-          await playAudioUrl(wavUrl);
-        } finally {
-          URL.revokeObjectURL(wavUrl);
-        }
-
-        _geminiTTSModel = model;
-        _geminiTTSVoice = voice;
-        _modelBlocked.delete(model);
-        return true;
-      } catch (e) {
-        console.warn(`🔇 Gemini TTS: ${model}/${voice} → exception:`, e);
-        ttsStatus(`${shortModel(model)}/${voice} → error`, 'error');
         continue;
       }
+      const data = await res.json();
+
+      const audioBase64 = data?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!audioBase64) {
+        console.warn(`🔇 Gemini TTS: ${model}/${voice} → no audio data`);
+        ttsStatus(`${shortModel(model)} → no audio`, 'warn');
+        continue;
+      }
+
+      ttsStatus(`Playing audio (${shortModel(model)}/${voice}, ${elapsed}ms)`, 'success');
+
+      const wavUrl = pcmToWavUrl(audioBase64);
+      try {
+        await playAudioUrl(wavUrl);
+      } finally {
+        URL.revokeObjectURL(wavUrl);
+      }
+
+      _geminiTTSModel = model;
+      _geminiTTSVoice = voice;
+      _modelBlockedUntil.delete(model);
+      return true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const isTimeout = msg.includes('abort');
+      console.warn(`🔇 Gemini TTS: ${model}/${voice} → exception:`, msg);
+      if (isTimeout) blockModel(model);
+      ttsStatus(`${shortModel(model)} → ${isTimeout ? 'timeout, retry in 1 min' : 'error'}`, 'warn');
+      continue;
     }
-    if (modelBroken) continue;
   }
 
   return false;
@@ -361,10 +375,200 @@ function playAudioUrl(url: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// ElevenLabs TTS — high-quality neural voices (free tier: 10,000 chars/month)
+// Requires API key with Text to Speech + Voices Read permissions
+// ---------------------------------------------------------------------------
+
+const ELEVENLABS_API = 'https://api.elevenlabs.io/v1/text-to-speech';
+const ELEVENLABS_VOICES = [
+  'CwhRBWXzGAHq8TQ4Fs17',  // Roger
+  'JBFqnCBsd6RMkjVDRZzb',  // George
+  'pNInz6obpgDQGcFmaJgB',  // Adam
+];
+const ELEVENLABS_TIMEOUT_MS = 10000;
+const ELEVENLABS_KEY_STORAGE = 'elevenlabs_api_key';
+
+export const getElevenLabsApiKey = (): string | null => {
+  return localStorage.getItem(ELEVENLABS_KEY_STORAGE);
+};
+
+export const setElevenLabsApiKey = (key: string): void => {
+  localStorage.setItem(ELEVENLABS_KEY_STORAGE, key);
+};
+
+export async function getElevenLabsUsageLive(apiKey: string): Promise<{ used: number; limit: number; remaining: number; resetDate: string } | null> {
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
+      headers: { 'xi-api-key': apiKey },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const used = data.character_count ?? 0;
+    const limit = data.character_limit ?? 10000;
+    const resetUnix = data.next_character_count_reset_unix;
+    const resetDate = resetUnix ? new Date(resetUnix * 1000).toLocaleDateString('he-IL') : '';
+    return { used, limit, remaining: Math.max(0, limit - used), resetDate };
+  } catch {
+    return null;
+  }
+}
+
+let _elevenLabsVoice: string | null = null;
+let _elevenLabsCharsUsedSession = 0;
+let _currentGameId: string | null = null;
+let _currentGameChars = 0;
+
+const EL_GAME_HISTORY_KEY = 'elevenlabs_game_history';
+const EL_MAX_HISTORY = 20;
+
+export interface ElevenLabsGameEntry {
+  gameId: string;
+  date: string;
+  charsUsed: number;
+  calls: number;
+}
+
+function saveGameUsage() {
+  if (!_currentGameId || _currentGameChars === 0) return;
+  try {
+    const raw = localStorage.getItem(EL_GAME_HISTORY_KEY);
+    const history: ElevenLabsGameEntry[] = raw ? JSON.parse(raw) : [];
+    const existing = history.find(h => h.gameId === _currentGameId);
+    if (existing) {
+      existing.charsUsed = _currentGameChars;
+      existing.calls++;
+    } else {
+      history.unshift({
+        gameId: _currentGameId,
+        date: new Date().toISOString(),
+        charsUsed: _currentGameChars,
+        calls: 1,
+      });
+    }
+    localStorage.setItem(EL_GAME_HISTORY_KEY, JSON.stringify(history.slice(0, EL_MAX_HISTORY)));
+  } catch { /* localStorage full or unavailable */ }
+}
+
+export function getElevenLabsGameHistory(): ElevenLabsGameEntry[] {
+  try {
+    const raw = localStorage.getItem(EL_GAME_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function speakWithElevenLabs(messages: string[], apiKey: string): Promise<boolean> {
+  if (!apiKey || messages.length === 0) return false;
+
+  // eleven_v3 handles Hebrew natively — only clean symbols/emoji, don't expand numbers
+  const combinedText = messages.map(m => fixHebrewForTTS(m)).join('. ');
+
+  // Quota guard: skip if this text would exceed the monthly limit
+  const estimatedCost = combinedText.length;
+  if (_elevenLabsCharsUsedSession + estimatedCost > 10000) {
+    const remaining = Math.max(0, 10000 - _elevenLabsCharsUsedSession);
+    ttsStatus(`ElevenLabs → quota exhausted (~${remaining} left), falling back`, 'info');
+    return false;
+  }
+
+  const voice = _elevenLabsVoice || ELEVENLABS_VOICES[Math.floor(Math.random() * ELEVENLABS_VOICES.length)];
+
+  ttsStatus('Trying ElevenLabs TTS...', 'info');
+  const t0 = Date.now();
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ELEVENLABS_TIMEOUT_MS);
+
+    const res = await fetch(
+      `${ELEVENLABS_API}/${voice}?output_format=mp3_22050_32`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': apiKey,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          text: combinedText,
+          model_id: 'eleven_v3',
+          language_code: 'he',
+        }),
+      }
+    );
+    clearTimeout(timeoutId);
+    const elapsed = Date.now() - t0;
+
+    if (!res.ok) {
+      const status = res.status;
+      console.warn(`🔇 ElevenLabs TTS: HTTP ${status}`);
+      if (status === 401 || status === 402) {
+        ttsStatus('ElevenLabs → key/permissions error', 'error');
+      } else if (status === 429) {
+        ttsStatus('ElevenLabs → quota exceeded', 'warn');
+      } else {
+        ttsStatus(`ElevenLabs → ${status}`, 'warn');
+      }
+      return false;
+    }
+
+    const charCost = parseInt(res.headers.get('character-cost') || '0', 10);
+    if (charCost > 0) {
+      _elevenLabsCharsUsedSession += charCost;
+      _currentGameChars += charCost;
+      saveGameUsage();
+    }
+
+    const blob = await res.blob();
+    if (!blob || blob.size < 100) {
+      ttsStatus('ElevenLabs → empty audio', 'warn');
+      return false;
+    }
+
+    const remaining = Math.max(0, 10000 - _elevenLabsCharsUsedSession);
+    ttsStatus(`Playing ElevenLabs (${elapsed}ms) | ${charCost} used, ~${remaining} left`, 'success');
+
+    const url = URL.createObjectURL(blob);
+    try {
+      await playAudioUrl(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+
+    _elevenLabsVoice = voice;
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('🔇 ElevenLabs TTS failed:', msg);
+    ttsStatus(`ElevenLabs → ${msg.includes('abort') ? 'timeout' : 'failed'}`, 'warn');
+    return false;
+  }
+}
+
+export function initElevenLabsSession(usedChars: number, gameId?: string) {
+  _elevenLabsCharsUsedSession = usedChars;
+  if (gameId) {
+    _currentGameId = gameId;
+    _currentGameChars = 0;
+    const history = getElevenLabsGameHistory();
+    const existing = history.find(h => h.gameId === gameId);
+    if (existing) _currentGameChars = existing.charsUsed;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Edge TTS — Microsoft Neural voices via WebSocket (free, no API key)
 // ---------------------------------------------------------------------------
 
-const EDGE_TTS_VOICES = ['he-IL-HilaNeural', 'he-IL-AvriNeural'];
+const EDGE_TTS_VOICES_HEBREW = ['he-IL-HilaNeural', 'he-IL-AvriNeural'];
+const EDGE_TTS_VOICES_MULTILINGUAL = [
+  'en-US-AvaMultilingualNeural',
+  'en-US-AndrewMultilingualNeural',
+  'en-US-EmmaMultilingualNeural',
+  'en-US-BrianMultilingualNeural',
+];
+export const EDGE_TTS_ALL_VOICES = [...EDGE_TTS_VOICES_HEBREW, ...EDGE_TTS_VOICES_MULTILINGUAL];
 const EDGE_TTS_TIMEOUT_MS = 8000;
 
 export function isEdgeBrowser(): boolean {
@@ -383,12 +587,12 @@ async function speakWithEdgeTTS(messages: string[]): Promise<boolean> {
     const { default: EdgeTTSBrowser } = await import('@kingdanx/edge-tts-browser');
 
     const combinedText = messages.map(m => prepareTTSText(m)).join('. ');
-    const voice = EDGE_TTS_VOICES[Math.floor(Math.random() * EDGE_TTS_VOICES.length)];
+    const voice = EDGE_TTS_VOICES_HEBREW[Math.floor(Math.random() * EDGE_TTS_VOICES_HEBREW.length)];
 
     ttsStatus(`Trying Edge TTS / ${voice.replace('he-IL-', '')}...`, 'info');
     const t0 = Date.now();
 
-    const tts = new EdgeTTSBrowser({ text: combinedText, voice, rate: '-5%' });
+    const tts = new EdgeTTSBrowser({ text: combinedText, voice });
 
     const blob: Blob = await Promise.race([
       tts.ttsToFile(),
@@ -484,27 +688,50 @@ function speakWithBrowser(messages: string[]): boolean {
 // Main entry point — cascading TTS engine selection
 // ---------------------------------------------------------------------------
 
+export interface SpeakOptions {
+  freeOnly?: boolean;
+}
+
 /**
  * Speak Hebrew messages with the best available TTS engine:
  * 1. Gemini TTS — AI-powered, uses same API key as AI features (excellent Hebrew)
- * 2. Edge TTS — Microsoft Neural voices via WebSocket (free, good Hebrew)
- * 3. Browser SpeechSynthesis — fallback, depends on device Hebrew voice support
+ * 2. ElevenLabs TTS — high-quality neural voices (free tier: 10,000 chars/month)
+ * 3. Edge TTS — Microsoft Neural voices via WebSocket (free, good Hebrew)
+ * 4. Browser SpeechSynthesis — fallback, depends on device Hebrew voice support
+ *
+ * Pass { freeOnly: true } to skip paid engines (Gemini/ElevenLabs) and save quota.
  */
-export async function speakHebrew(messages: string[], apiKey: string | null): Promise<void> {
+export async function speakHebrew(messages: string[], apiKey: string | null, options?: SpeakOptions): Promise<void> {
   if (messages.length === 0) return;
 
-  ttsStatus(`TTS start (${messages.length} msg, ${messages[0].slice(0, 40)}...)`, 'info');
-  _modelBlocked.clear();
+  const freeOnly = options?.freeOnly ?? false;
 
-  if (apiKey) {
-    try {
-      const ok = await speakWithGeminiTTS(messages, apiKey);
-      if (ok) {
-        ttsStatus('Done ✓', 'success');
-        return;
+  ttsStatus(`TTS start (${messages.length} msg${freeOnly ? ', free-only' : ''}, ${messages[0].slice(0, 40)}...)`, 'info');
+
+  if (!freeOnly) {
+    if (apiKey) {
+      try {
+        const ok = await speakWithGeminiTTS(messages, apiKey);
+        if (ok) {
+          ttsStatus('Done ✓', 'success');
+          return;
+        }
+      } catch (_e) {
+        // fall through to ElevenLabs
       }
-    } catch (_e) {
-      // fall through to Edge TTS
+    }
+
+    const elKey = getElevenLabsApiKey();
+    if (elKey) {
+      try {
+        const ok = await speakWithElevenLabs(messages, elKey);
+        if (ok) {
+          ttsStatus('Done ✓', 'success');
+          return;
+        }
+      } catch (_e) {
+        // fall through to Edge TTS
+      }
     }
   }
 

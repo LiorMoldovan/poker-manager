@@ -768,7 +768,7 @@ const GameSummaryScreen = () => {
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
 
-        speakHebrew([`סיכום המשחק. ${potMessage}`, winMsg, loseMsg], getGeminiApiKey());
+        speakHebrew([`סיכום המשחק. ${potMessage}`, winMsg, loseMsg], getGeminiApiKey(), { freeOnly: true });
       }, 1500);
     }
   };

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
-import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback } from '../utils/tts';
+import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
@@ -43,7 +43,6 @@ const LiveGameScreen = () => {
   // AI TTS pool (loaded from localStorage on mount)
   const ttsPoolRef = useRef<LiveGameTTSPool | null>(null);
   const isSpeakingRef = useRef(false);
-  const firstBloodFiredRef = useRef(false);
   const lastTTSActivityRef = useRef(Date.now());
   const autoAnnounceCountRef = useRef(0);
   const [ttsModelName, setTtsModelName] = useState<string>('');
@@ -218,6 +217,12 @@ const LiveGameScreen = () => {
   useEffect(() => {
     if (gameId) {
       loadData();
+      const elKey = getElevenLabsApiKey();
+      if (elKey) {
+        getElevenLabsUsageLive(elKey).then(usage => {
+          if (usage) initElevenLabsSession(usage.used, gameId);
+        });
+      }
     } else {
       setGameNotFound(true);
       setIsLoading(false);
@@ -1398,17 +1403,11 @@ const LiveGameScreen = () => {
   };
 
   const speakBuyin = async (playerName: string, playerId: string, totalBuyins: number, isQuickRebuy: boolean, isHalfBuyin: boolean, ctx: RebuyContext) => {
-    // First blood detection: first rebuy of the entire game
-    const isFirstBlood = !firstBloodFiredRef.current && ((totalBuyins === 2 && !isHalfBuyin) || (totalBuyins === 1.5 && isHalfBuyin));
-    if (isFirstBlood) {
-      firstBloodFiredRef.current = true;
-    }
-
     // Wait for any previous TTS to finish before starting
     await ttsQueueRef.current;
 
     // Play attention sound and start speaking shortly after — don't wait for full sound
-    playRebuyCasinoSound(isFirstBlood ? 10 : totalBuyins);
+    playRebuyCasinoSound(totalBuyins);
     await new Promise(r => setTimeout(r, 350));
     
     // Check if total has half (0.5) - use tolerance for floating point
@@ -1558,16 +1557,6 @@ const LiveGameScreen = () => {
 
     // Build all TTS messages as separate items for sequential playback
     const allMessages: string[] = [];
-
-    // First blood: prepend a dramatic message before the regular announcement
-    if (isFirstBlood && ttsPoolRef.current) {
-      const fbMsg = pickFromPool(
-        ttsPoolRef.current.shared.first_blood[playerName],
-        `shared.first_blood.${playerName}`,
-        { PLAYER: playerName }
-      );
-      if (fbMsg) allMessages.push(fbMsg);
-    }
 
     allMessages.push(structuralMsg);
 
@@ -1827,16 +1816,8 @@ const LiveGameScreen = () => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">Live Game</h1>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            Track buyins during the game
-            {ttsModelName && (
-              <span style={{ marginLeft: '0.5rem', fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
-                🤖 {ttsModelName}
-              </span>
-            )}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 className="page-title" style={{ margin: 0 }}>Live Game</h1>
           {isAdmin && (
             <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
               <button
@@ -1844,7 +1825,7 @@ const LiveGameScreen = () => {
                 style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
                 onClick={() => setSocialAction('bad_beat')}
               >
-                💔
+                💀
               </button>
               <button
                 className="btn btn-sm"
@@ -1863,6 +1844,14 @@ const LiveGameScreen = () => {
             </div>
           )}
         </div>
+        <p className="page-subtitle" style={{ margin: 0 }}>
+          Track buyins during the game
+          {ttsModelName && (
+            <span style={{ marginLeft: '0.5rem', fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
+              🤖 {ttsModelName}
+            </span>
+          )}
+        </p>
       </div>
 
       <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>

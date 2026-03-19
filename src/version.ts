@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.5';
+export const APP_VERSION = '5.8.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.6',
+    date: '2026-03-19',
+    changes: [
+      '🔊 TTS engine major upgrade — improved voice quality and reliability',
+      '⚙️ Settings TTS configuration and testing panel',
+      '🎮 Live game TTS refinements',
+    ]
+  },
   {
     version: '5.8.5',
     date: '2026-03-19',

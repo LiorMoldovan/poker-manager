@@ -29,6 +29,7 @@ import {
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { getElevenLabsApiKey, setElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory } from '../utils/tts';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
@@ -78,6 +79,12 @@ const SettingsScreen = () => {
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
+  // ElevenLabs TTS state
+  const [elKey, setElKey] = useState<string>('');
+  const [showElKey, setShowElKey] = useState(false);
+  const [elMessage, setElMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [isTestingEl, setIsTestingEl] = useState(false);
+  const [elUsageLive, setElUsageLive] = useState<{ used: number; limit: number; remaining: number; resetDate: string } | null>(null);
 
   // AI Status state
   const [, setAiStatus] = useState<AIStatusData | null>(null);
@@ -135,6 +142,10 @@ const SettingsScreen = () => {
   useEffect(() => {
     if (activeTab !== 'ai') return;
     setAiStatus(getAIStatus());
+    const savedElKey = getElevenLabsApiKey();
+    if (savedElKey) {
+      getElevenLabsUsageLive(savedElKey).then(u => { if (u) setElUsageLive(u); });
+    }
     const interval = setInterval(() => {
       setAiStatus(getAIStatus());
       setAiTick(t => t + 1);
@@ -170,6 +181,9 @@ const SettingsScreen = () => {
     // Load Gemini API key
     const savedGeminiKey = getGeminiApiKey();
     if (savedGeminiKey) setGeminiKey(savedGeminiKey);
+    // Load ElevenLabs API key
+    const savedElKey = getElevenLabsApiKey();
+    if (savedElKey) setElKey(savedElKey);
   };
 
   const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[]) => {
@@ -1209,6 +1223,77 @@ const SettingsScreen = () => {
                   </div>
                 )}
               </div>
+
+              {/* ElevenLabs API Key */}
+              <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#10B981', marginBottom: '0.5rem' }}>
+                  🎙️ ElevenLabs API Key (TTS)
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#10B981' }}>
+                    Get free API key →
+                  </a>
+                  <span style={{ fontSize: '0.65rem', marginRight: '0.5rem' }}> (Text to Speech + Voices Read)</span>
+                </p>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type={showElKey ? 'text' : 'password'}
+                      value={elKey}
+                      onChange={(e) => setElKey(e.target.value)}
+                      placeholder="sk_..."
+                      style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.8rem' }}
+                    />
+                    <button className="btn btn-sm" onClick={() => setShowElKey(!showElKey)} style={{ padding: '0.5rem' }}>
+                      {showElKey ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="btn btn-sm" onClick={() => { setElevenLabsApiKey(elKey); setElMessage({ type: 'success', text: 'API key saved!' }); setTimeout(() => setElMessage(null), 2000); }} disabled={!elKey}
+                    style={{ flex: 1, background: elKey ? '#10B981' : 'var(--surface)', color: elKey ? 'white' : 'var(--text-muted)' }}>
+                    💾 Save Key
+                  </button>
+                  <button className="btn btn-sm" onClick={async () => {
+                    setIsTestingEl(true);
+                    try {
+                      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
+                        body: JSON.stringify({ text: 'שלום, זוהי בדיקת מערכת הקול. הכל תקין!', model_id: 'eleven_v3', language_code: 'he' }),
+                      });
+                      if (res.ok) {
+                        const blob = await res.blob();
+                        if (blob.size > 100) {
+                          const url = URL.createObjectURL(blob);
+                          const audio = new Audio(url);
+                          audio.onended = () => URL.revokeObjectURL(url);
+                          audio.play();
+                        }
+                        setElMessage({ type: 'success', text: '✅ Key works!' });
+                      } else {
+                        const errBody = await res.text().catch(() => '');
+                        let detail = '';
+                        try { detail = JSON.parse(errBody)?.detail?.message || errBody.slice(0, 100); } catch { detail = errBody.slice(0, 100); }
+                        setElMessage({ type: 'error', text: `❌ ${res.status}: ${detail || res.statusText}` });
+                      }
+                    } catch (e) {
+                      setElMessage({ type: 'error', text: `❌ ${e instanceof Error ? e.message : 'Connection failed'}` });
+                    }
+                    setIsTestingEl(false);
+                    setTimeout(() => setElMessage(null), 5000);
+                  }} disabled={!elKey || isTestingEl}
+                    style={{ flex: 1, background: elKey ? 'linear-gradient(135deg, #10B981, #059669)' : 'var(--surface)', color: elKey ? 'white' : 'var(--text-muted)' }}>
+                    {isTestingEl ? '⏳ Testing...' : '🧪 Test Key'}
+                  </button>
+                </div>
+                {elMessage && (
+                  <div style={{ marginTop: '0.5rem', padding: '0.5rem', borderRadius: '6px', background: elMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: elMessage.type === 'success' ? '#10B981' : '#EF4444', fontSize: '0.8rem', textAlign: 'center' }}>
+                    {elMessage.text}
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 
@@ -1285,6 +1370,32 @@ const SettingsScreen = () => {
                       }
                     }
 
+                    // Test ElevenLabs TTS
+                    if (elKey) {
+                      try {
+                        const [ttsRes, elUsage] = await Promise.all([
+                          fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
+                            body: JSON.stringify({ text: 'בדיקה קצרה', model_id: 'eleven_v3', language_code: 'he' }),
+                          }),
+                          getElevenLabsUsageLive(elKey),
+                        ]);
+                        const remaining = elUsage?.remaining;
+                        const limit = elUsage?.limit;
+                        const resetDate = elUsage?.resetDate;
+                        if (ttsRes.ok) {
+                          ttsTests.push({ model: 'elevenlabs-tts', displayName: `ElevenLabs${resetDate ? ` (מתחדש ${resetDate})` : ''}`, status: 'available', remaining, limit });
+                        } else if (ttsRes.status === 429) {
+                          ttsTests.push({ model: 'elevenlabs-tts', displayName: `ElevenLabs${resetDate ? ` (מתחדש ${resetDate})` : ''}`, status: 'rate_limited', remaining, limit });
+                        } else {
+                          ttsTests.push({ model: 'elevenlabs-tts', displayName: 'ElevenLabs', status: 'error' });
+                        }
+                      } catch {
+                        ttsTests.push({ model: 'elevenlabs-tts', displayName: 'ElevenLabs', status: 'error' });
+                      }
+                    }
+
                     // Test Edge TTS (Microsoft Neural voices — only works in Edge browser)
                     if (isEdgeBrowser()) {
                       try {
@@ -1352,7 +1463,6 @@ const SettingsScreen = () => {
                   {(() => {
                     const contentOk = !!contentModel;
                     const ttsOk = ttsResults.some(r => r.status === 'available');
-                    const ttsAvailable = ttsResults.find(r => r.status === 'available');
 
                     const featureRow = (icon: string, label: string, ok: boolean, modelName?: string, remaining?: number, limit?: number, capacityLabel?: string) => (
                       <div style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)', direction: 'rtl' }}>
@@ -1388,28 +1498,154 @@ const SettingsScreen = () => {
                     const contentLimit = contentModel?.limit;
                     const contentCapacity = contentRemaining != null ? `~${Math.floor(contentRemaining / 2)} משחקים` : undefined;
 
-                    const ttsRemaining = ttsAvailable?.remaining;
-                    const ttsLimit = ttsAvailable?.limit;
-                    const ttsCapacity = ttsRemaining != null ? `~${ttsRemaining} הכרזות` : undefined;
+                    const geminiTts = ttsResults.find(r => r.model.startsWith('gemini'));
+                    const geminiTtsCapacity = geminiTts?.remaining != null ? `~${geminiTts.remaining} הכרזות` : undefined;
 
                     return (
                       <div style={{ marginBottom: '0.5rem' }}>
                         {featureRow('🔮', 'תחזית לפני משחק', contentOk, contentModel?.displayName, contentRemaining, contentLimit, contentCapacity)}
                         {featureRow('📝', 'סיכום אחרי משחק', contentOk, contentModel?.displayName)}
-                        {featureRow('🔊', 'הכרזות קול במשחק', ttsOk, ttsAvailable?.displayName, ttsRemaining, ttsLimit, ttsCapacity)}
-                        {!ttsOk && ttsResults.length > 0 && (
-                          <div style={{ fontSize: '0.7rem', color: '#F59E0B', paddingRight: '1.75rem', direction: 'rtl', marginTop: '0.3rem' }}>
-                            {isEdgeBrowser()
-                              ? 'הקול ייפול ל-Edge TTS (Microsoft) או לדפדפן'
-                              : 'הקול ייפול לדפדפן — פתח ב-Edge לאיכות טובה יותר'}
+
+                        {/* TTS engines — show each individually */}
+                        <div style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)', direction: 'rtl' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                            <span style={{ fontSize: '1rem' }}>🔊</span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', flex: 1 }}>הכרזות קול במשחק</span>
+                            <span style={{
+                              fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: 6,
+                              background: ttsOk ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                              color: ttsOk ? '#10B981' : '#EF4444',
+                            }}>
+                              {ttsOk ? 'עובד' : 'חסום'}
+                            </span>
                           </div>
-                        )}
+
+                          {ttsResults.map(r => {
+                            const isOk = r.status === 'available';
+                            const isRateLimited = r.status === 'rate_limited';
+                            const statusColor = isOk ? '#10B981' : isRateLimited ? '#F59E0B' : '#EF4444';
+                            const statusText = isOk ? '✓' : isRateLimited ? 'מוגבל' : '✗';
+                            return (
+                              <div key={r.model} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingRight: '1.75rem', marginTop: '0.25rem' }}>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: statusColor, minWidth: '1rem' }}>{statusText}</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text)', flex: 1 }}>{r.displayName}</span>
+                                {r.remaining != null && r.limit != null && (
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                                    {r.model === 'elevenlabs-tts'
+                                      ? `${r.remaining.toLocaleString()} / ${r.limit.toLocaleString()} תווים (~${Math.floor(r.remaining / 1300)} משחקים)`
+                                      : `${r.remaining} / ${r.limit} קריאות${geminiTtsCapacity && r.model.startsWith('gemini') ? ` (${geminiTtsCapacity})` : ''}`
+                                    }
+                                  </span>
+                                )}
+                                {r.model === 'edge-tts' && isOk && (
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>ללא הגבלה</span>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {!ttsOk && ttsResults.length > 0 && (
+                            <div style={{ fontSize: '0.65rem', color: '#F59E0B', paddingRight: '1.75rem', direction: 'rtl', marginTop: '0.4rem' }}>
+                              {isEdgeBrowser()
+                                ? 'הקול ייפול ל-Edge TTS (Microsoft) או לדפדפן'
+                                : 'הקול ייפול לדפדפן — פתח ב-Edge לאיכות טובה יותר'}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })()}
                 </>
               )}
             </div>
+
+            {/* ElevenLabs TTS Usage Card */}
+            {elKey && (() => {
+              const history = getElevenLabsGameHistory();
+              const totalGameChars = history.reduce((s, h) => s + h.charsUsed, 0);
+              const avgPerGame = history.length > 0 ? Math.round(totalGameChars / history.length) : 0;
+              const used = elUsageLive?.used ?? 0;
+              const limit = elUsageLive?.limit ?? 10000;
+              const remaining = elUsageLive?.remaining ?? (limit - used);
+              const resetDate = elUsageLive?.resetDate;
+              const usedPct = Math.round((used / limit) * 100);
+              const gamesLeft = avgPerGame > 0 ? Math.floor(remaining / avgPerGame) : Math.floor(remaining / 1300);
+
+              return (
+                <div className="card" style={{ padding: '1rem' }}>
+                  <h2 className="card-title" style={{ margin: '0 0 0.75rem' }}>🎙️ שימוש ElevenLabs TTS</h2>
+                  <div style={{ direction: 'rtl', textAlign: 'right' }}>
+
+                    {/* Monthly quota bar */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)' }}>
+                          {elUsageLive ? `${used.toLocaleString()} / ${limit.toLocaleString()} תווים` : 'טוען...'}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: usedPct > 80 ? '#EF4444' : usedPct > 50 ? '#F59E0B' : '#10B981', fontWeight: 600 }}>
+                          {elUsageLive ? `${remaining.toLocaleString()} נשאר` : ''}
+                        </span>
+                      </div>
+                      <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${usedPct}%`, height: '100%', borderRadius: 4, transition: 'width 0.5s',
+                          background: usedPct > 80 ? '#EF4444' : usedPct > 50 ? '#F59E0B' : '#10B981',
+                        }} />
+                      </div>
+                      {resetDate && (
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                          מתאפס ב-{resetDate} · ~{gamesLeft} משחקים נותרו
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stats row */}
+                    {history.length > 0 && (
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div style={{ background: 'rgba(168,85,247,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#A855F7' }}>{avgPerGame.toLocaleString()}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>ממוצע למשחק</div>
+                        </div>
+                        <div style={{ background: 'rgba(59,130,246,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#3B82F6' }}>{history.length}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>משחקים עם TTS</div>
+                        </div>
+                        <div style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#10B981' }}>{totalGameChars.toLocaleString()}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>סה״כ תווים</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Per-game breakdown */}
+                    {history.length > 0 ? (
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>שימוש לפי משחק</div>
+                        {history.slice(0, 10).map((h, i) => {
+                          const d = new Date(h.date);
+                          const dateStr = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+                          const dayStr = d.toLocaleDateString('he-IL', { weekday: 'short' });
+                          const pct = Math.round((h.charsUsed / limit) * 100);
+                          return (
+                            <div key={h.gameId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', borderBottom: i < Math.min(history.length, 10) - 1 ? '1px solid var(--border)' : 'none' }}>
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', minWidth: '55px' }}>{dayStr} {dateStr}</span>
+                              <div style={{ flex: 1, height: 6, background: 'var(--surface)', borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ width: `${Math.min(pct * 4, 100)}%`, height: '100%', background: pct > 15 ? '#F59E0B' : '#10B981', borderRadius: 3 }} />
+                              </div>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text)', minWidth: '48px', textAlign: 'left' }}>{h.charsUsed.toLocaleString()} תו</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.5rem 0', borderTop: '1px solid var(--border)' }}>
+                        נתוני שימוש למשחק יופיעו אחרי המשחק הבא
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Today's Usage Card */}
             <div className="card" style={{ padding: '1rem' }}>
