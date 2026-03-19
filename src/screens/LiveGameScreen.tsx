@@ -25,7 +25,7 @@ const LiveGameScreen = () => {
   const [editingExpense, setEditingExpense] = useState<SharedExpense | null>(null);
   const [playerToRemove, setPlayerToRemove] = useState<GamePlayer | null>(null);
   const [socialAction, setSocialAction] = useState<'bad_beat' | 'big_hand' | null>(null);
-  const [showAwardsCeremony, setShowAwardsCeremony] = useState(false);
+
   
   // Track last rebuy time per player for quick rebuy detection
   const lastRebuyTimeRef = useRef<Map<string, number>>(new Map());
@@ -1818,58 +1818,7 @@ const LiveGameScreen = () => {
 
   const handleEndGame = () => {
     if (!gameId) return;
-    const pool = ttsPoolRef.current;
-    if (!pool) {
-      navigateToChipEntry();
-      return;
-    }
-
-    setShowAwardsCeremony(true);
-    const messages: string[] = [];
-
-    try {
-      const sorted = [...players].sort((a, b) => b.rebuys - a.rebuys);
-      const topRebuyer = sorted[0];
-      if (topRebuyer && topRebuyer.rebuys > 1) {
-        const genMsg = pickFromPool(
-          pool.shared.awards_generosity[topRebuyer.playerName],
-          `shared.awards_generosity.${topRebuyer.playerName}`,
-          { PLAYER: topRebuyer.playerName, COUNT: topRebuyer.rebuys }
-        );
-        messages.push(genMsg || `פרס הנדיבות של הערב: ${topRebuyer.playerName} עם ${formatBuyins(topRebuyer.rebuys, true)} קניות!`);
-      }
-
-      const survivors = [...players].sort((a, b) => a.rebuys - b.rebuys);
-      const survivor = survivors[0];
-      if (survivor && survivor.rebuys <= 1) {
-        const surMsg = pickFromPool(
-          pool.shared.awards_survival[survivor.playerName],
-          `shared.awards_survival.${survivor.playerName}`,
-          { PLAYER: survivor.playerName }
-        );
-        const surFem = isPlayerFemale(survivor.playerName);
-        messages.push(surMsg || `פרס ההישרדות: ${survivor.playerName} ${surFem ? 'שרדה' : 'שרד'} את כל הערב!`);
-      }
-    } catch (err) {
-      console.warn('Awards message build failed:', err);
-    }
-
-    // Fire-and-forget: play sound + speak, but NEVER block navigation
-    if (messages.length > 0) {
-      isSpeakingRef.current = true;
-      playRebuyCasinoSound(2);
-      setTimeout(() => {
-        speakHebrew(messages, getGeminiApiKey())
-          .catch(() => {})
-          .finally(() => { isSpeakingRef.current = false; });
-      }, 350);
-    }
-
-    // Always navigate after a short delay — never depend on TTS completing
-    setTimeout(() => {
-      setShowAwardsCeremony(false);
-      navigateToChipEntry();
-    }, messages.length > 0 ? 3000 : 500);
+    navigateToChipEntry();
   };
 
   const totalPot = players.reduce((sum, p) => sum + p.rebuys * rebuyValue, 0);
@@ -2128,31 +2077,9 @@ const LiveGameScreen = () => {
         </div>
       )}
 
-      {/* Awards Ceremony Overlay */}
-      {showAwardsCeremony && (
-        <div
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', zIndex: 2000, flexDirection: 'column', gap: '1rem',
-          }}
-        >
-          <div style={{ fontSize: '3rem' }}>🏆</div>
-          <div style={{ fontSize: '1.3rem', color: '#fff', fontWeight: 600 }}>טקס סיום הערב...</div>
-          <button
-            className="btn btn-sm"
-            style={{ color: '#aaa', marginTop: '1rem' }}
-            onClick={() => { setShowAwardsCeremony(false); navigateToChipEntry(); }}
-          >
-            דלג ←
-          </button>
-        </div>
-      )}
-
       <button 
         className="btn btn-primary btn-lg btn-block mt-3"
         onClick={handleEndGame}
-        disabled={showAwardsCeremony}
       >
         🏁 End Game & Count Chips
       </button>

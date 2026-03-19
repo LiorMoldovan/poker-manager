@@ -28,11 +28,12 @@ import {
   StorageUsage
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
-import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, API_CONFIGS, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
-import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, getRemainingEstimates, getModelDailyUsage, type AIStatusData } from '../utils/aiUsageTracker';
+import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
+import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
+import { isEdgeBrowser } from '../utils/tts';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 
@@ -53,6 +54,7 @@ const SettingsScreen = () => {
   const [newPlayerType, setNewPlayerType] = useState<PlayerType>('permanent');
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>('male');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
+  const [newLocation, setNewLocation] = useState('');
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
@@ -78,7 +80,7 @@ const SettingsScreen = () => {
   const [isTestingGemini, setIsTestingGemini] = useState(false);
 
   // AI Status state
-  const [aiStatus, setAiStatus] = useState<AIStatusData | null>(null);
+  const [, setAiStatus] = useState<AIStatusData | null>(null);
   const [aiTestResults, setAiTestResults] = useState<ModelTestResult[] | null>(null);
   const [isTestingModels, setIsTestingModels] = useState(false);
   const [showAiLog, setShowAiLog] = useState(false);
@@ -170,7 +172,7 @@ const SettingsScreen = () => {
     if (savedGeminiKey) setGeminiKey(savedGeminiKey);
   };
 
-  const handleSettingsChange = (key: keyof Settings, value: number | number[]) => {
+  const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[]) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     saveSettings(newSettings);
@@ -645,6 +647,71 @@ const SettingsScreen = () => {
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Used to auto-detect first/last game of a period
             </p>
+          </div>
+
+          <div className="input-group">
+            <label className="label">📍 מיקומים</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+              {(settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל']).map(loc => (
+                <div key={loc} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.3rem',
+                  padding: '0.3rem 0.5rem', borderRadius: '6px',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  fontSize: '0.8rem', color: 'var(--text)',
+                }}>
+                  <span>{loc}</span>
+                  {canEditSettings && (
+                    <button
+                      onClick={() => {
+                        const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                        handleSettingsChange('locations', current.filter(l => l !== loc));
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--text-muted)', fontSize: '0.7rem', padding: '0 0.1rem',
+                        lineHeight: 1,
+                      }}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {canEditSettings && (
+              <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                <input
+                  type="text"
+                  className="input"
+                  value={newLocation}
+                  onChange={e => setNewLocation(e.target.value)}
+                  placeholder="מיקום חדש..."
+                  style={{ flex: 1, fontSize: '0.85rem', direction: 'rtl' }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newLocation.trim()) {
+                      const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                      if (!current.includes(newLocation.trim())) {
+                        handleSettingsChange('locations', [...current, newLocation.trim()]);
+                      }
+                      setNewLocation('');
+                    }
+                  }}
+                />
+                <button
+                  className="btn btn-sm"
+                  disabled={!newLocation.trim()}
+                  onClick={() => {
+                    const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                    if (!current.includes(newLocation.trim())) {
+                      handleSettingsChange('locations', [...current, newLocation.trim()]);
+                    }
+                    setNewLocation('');
+                  }}
+                  style={{
+                    fontSize: '0.8rem', padding: '0.35rem 0.7rem',
+                    background: 'var(--primary)', color: 'white', border: 'none',
+                  }}
+                >+ הוסף</button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1150,44 +1217,10 @@ const SettingsScreen = () => {
 
       {/* AI Tab - Admin Only */}
       {activeTab === 'ai' && role === 'admin' && (() => {
-        const status = aiStatus || getAIStatus();
         const todayActions = getTodayActions();
         const todayTokens = getTodayTokens();
         const todayLog = getTodayLog();
         void aiTick;
-
-        const isModelRateLimited = (model: string): { limited: boolean; label?: string } => {
-          const tracked = status.statuses[model];
-          if (tracked?.rateLimitResetsAt) {
-            const resetTime = new Date(tracked.rateLimitResetsAt);
-            if (resetTime.getTime() > Date.now()) {
-              const secsLeft = Math.ceil((resetTime.getTime() - Date.now()) / 1000);
-              if (secsLeft > 3600) {
-                const resetLocal = resetTime.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-                return { limited: true, label: `מוגבל · ${resetLocal}` };
-              }
-              const mins = Math.ceil(secsLeft / 60);
-              return { limited: true, label: mins > 1 ? `מוגבל · ~${mins} דקות` : `מוגבל · ~${secsLeft} שניות` };
-            }
-          }
-          const testResult = aiTestResults?.find(r => r.model === model);
-          if (testResult?.status === 'error') return { limited: true, label: 'שגיאה' };
-          return { limited: false };
-        };
-
-        // Determine which model will handle the next request based on cascade priority
-        let nextActiveModel: string | null = null;
-        for (const config of API_CONFIGS) {
-          const rl = isModelRateLimited(config.model);
-          if (!rl.limited) { nextActiveModel = config.model; break; }
-        }
-
-        const getModelStatus = (model: string): { color: string; label: string; isActive: boolean } => {
-          const rl = isModelRateLimited(model);
-          if (rl.limited) return { color: rl.label?.includes('שגיאה') ? '#EF4444' : '#F59E0B', label: rl.label!, isActive: false };
-          if (model === nextActiveModel) return { color: '#10B981', label: 'הבא בתור ✓', isActive: true };
-          return { color: '#64748B', label: 'גיבוי', isActive: false };
-        };
 
         const formatTokens = (n: number): string => {
           if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -1195,136 +1228,213 @@ const SettingsScreen = () => {
           return String(n);
         };
 
-        const actionSummary = Object.entries(todayActions)
-          .filter(([, count]) => count > 0)
-          .map(([action, count]) => `${action} ×${count}`)
-          .join(' · ');
+        const contentModel = aiTestResults?.find(r => r.status === 'available');
+        const contentBlocked = aiTestResults && !contentModel;
+        const ttsResults = aiTestResults?.filter(r => r.model.includes('-tts')) || [];
+
+        const gameReady = aiTestResults
+          ? (!!contentModel && ttsResults.some(r => r.status === 'available'))
+          : null;
 
         return (
           <>
-            {/* Model Status Card */}
+            {/* Game Readiness Card */}
             <div className="card" style={{ padding: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 className="card-title" style={{ margin: 0 }}>🤖 סטטוס AI</h2>
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
-                  <button
-                    className="btn btn-sm"
-                    onClick={async () => {
-                      setIsTestingModels(true);
-                      const results = await testModelAvailability();
-                      setAiTestResults(results);
-                      setAiStatus(getAIStatus());
-                      setIsTestingModels(false);
-                    }}
-                    disabled={isTestingModels || !geminiKey}
-                    style={{ fontSize: '0.65rem', padding: '0.25rem 0.5rem', background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                  >
-                    {isTestingModels ? '⏳' : '🔍'} בדיקה
-                  </button>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => { if (confirm('לאפס את כל נתוני השימוש?')) { resetUsage(); setAiStatus(getAIStatus()); setAiTestResults(null); } }}
-                    style={{ fontSize: '0.65rem', padding: '0.25rem 0.5rem', background: 'var(--surface-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-                  >
-                    🗑️ איפוס
-                  </button>
-                </div>
+                <h2 className="card-title" style={{ margin: 0 }}>🤖 מוכנות AI למשחק</h2>
+                <button
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    setIsTestingModels(true);
+                    setAiTestResults(null);
+
+                    const contentTests = await testModelAvailability();
+
+                    const ttsModels = ['gemini-2.5-flash-preview-tts'];
+                    const ttsTests: ModelTestResult[] = [];
+                    for (const model of ttsModels) {
+                      try {
+                        const res = await fetch(
+                          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              contents: [{ parts: [{ text: 'קרא את הטקסט הבא בעברית:\n\nשלום, זוהי בדיקת מערכת הקול. הכל תקין.' }] }],
+                              generationConfig: {
+                                responseModalities: ['AUDIO'],
+                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                              },
+                            }),
+                          }
+                        );
+                        const shortName = 'Flash TTS';
+                        const remStr = res.headers.get('x-ratelimit-remaining');
+                        const limStr = res.headers.get('x-ratelimit-limit');
+                        const remaining = remStr ? Number(remStr) : undefined;
+                        const limit = limStr ? Number(limStr) : undefined;
+                        if (res.ok) {
+                          ttsTests.push({ model, displayName: shortName, status: 'available', remaining, limit });
+                        } else if (res.status === 429) {
+                          ttsTests.push({ model, displayName: shortName, status: 'rate_limited', remaining, limit });
+                        } else {
+                          ttsTests.push({ model, displayName: shortName, status: 'error' });
+                        }
+                      } catch {
+                        ttsTests.push({ model, displayName: 'Flash TTS', status: 'error' });
+                      }
+                    }
+
+                    // Test Edge TTS (Microsoft Neural voices — only works in Edge browser)
+                    if (isEdgeBrowser()) {
+                      try {
+                        const { default: EdgeTTSBrowser } = await import('@kingdanx/edge-tts-browser');
+                        const edgeTts = new EdgeTTSBrowser({ text: 'שלום, בדיקה', voice: 'he-IL-HilaNeural' });
+                        const blob = await Promise.race([
+                          edgeTts.ttsToFile(),
+                          new Promise<never>((_r, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+                        ]);
+                        if (blob && blob.size > 100) {
+                          ttsTests.push({ model: 'edge-tts', displayName: 'Edge TTS (Microsoft)', status: 'available' });
+                        } else {
+                          ttsTests.push({ model: 'edge-tts', displayName: 'Edge TTS (Microsoft)', status: 'error' });
+                        }
+                      } catch {
+                        ttsTests.push({ model: 'edge-tts', displayName: 'Edge TTS (Microsoft)', status: 'error' });
+                      }
+                    }
+
+                    setAiTestResults([...contentTests, ...ttsTests]);
+                    setAiStatus(getAIStatus());
+                    setIsTestingModels(false);
+                  }}
+                  disabled={isTestingModels || !geminiKey}
+                  style={{ fontSize: '0.7rem', padding: '0.3rem 0.7rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 8 }}
+                >
+                  {isTestingModels ? '⏳ בודק...' : '🔍 בדוק עכשיו'}
+                </button>
               </div>
 
-              {/* Pipeline */}
-              {(() => {
-                const dailyUsage = getModelDailyUsage();
-                return (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', marginBottom: '1rem', direction: 'ltr' }}>
-                    {API_CONFIGS.map((config, idx) => {
-                      const ms = getModelStatus(config.model);
-                      const mu = dailyUsage[config.model];
-                      return (
-                        <div key={config.model} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <div style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem',
-                            padding: '0.5rem 0.6rem', borderRadius: '10px',
-                            background: ms.isActive ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface)',
-                            border: ms.isActive ? '1.5px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border)',
-                            minWidth: '80px',
+              {!geminiKey && (
+                <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  הגדר מפתח Gemini API למעלה כדי להשתמש בתכונות AI
+                </div>
+              )}
+
+              {geminiKey && !aiTestResults && !isTestingModels && (
+                <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  לחץ ״בדוק עכשיו״ לבדוק אם אפשר להתחיל משחק
+                </div>
+              )}
+
+              {isTestingModels && (
+                <div style={{ textAlign: 'center', padding: '1rem 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  ⏳ בודק חיבור לכל המודלים...
+                </div>
+              )}
+
+              {/* Results */}
+              {aiTestResults && !isTestingModels && (
+                <>
+                  {/* Big readiness indicator */}
+                  <div style={{
+                    textAlign: 'center', padding: '0.8rem', borderRadius: 10, marginBottom: '1rem',
+                    background: gameReady ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                    border: `1px solid ${gameReady ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.3rem' }}>{gameReady ? '✅' : '⚠️'}</div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: gameReady ? '#10B981' : '#EF4444', direction: 'rtl' }}>
+                      {gameReady ? 'אפשר להתחיל משחק!' : contentBlocked ? 'אי אפשר לייצר תחזית וסיכום כרגע' : 'חלק מהתכונות לא זמינות'}
+                    </div>
+                  </div>
+
+                  {/* Feature checklist */}
+                  {(() => {
+                    const contentOk = !!contentModel;
+                    const ttsOk = ttsResults.some(r => r.status === 'available');
+                    const ttsAvailable = ttsResults.find(r => r.status === 'available');
+
+                    const featureRow = (icon: string, label: string, ok: boolean, modelName?: string, remaining?: number, limit?: number, capacityLabel?: string) => (
+                      <div style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)', direction: 'rtl' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '1rem' }}>{icon}</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)', flex: 1 }}>{label}</span>
+                          <span style={{
+                            fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: 6,
+                            background: ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                            color: ok ? '#10B981' : '#EF4444',
                           }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ms.color, boxShadow: ms.isActive ? `0 0 6px ${ms.color}` : 'none' }} />
-                              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)' }}>
-                                {getModelDisplayName(config.model)}
+                            {ok ? 'עובד' : 'חסום'}
+                          </span>
+                        </div>
+                        {(modelName || (remaining != null && limit != null)) && (
+                          <div style={{ display: 'flex', gap: '0.75rem', paddingRight: '1.75rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                            {modelName && (
+                              <span style={{ fontSize: '0.65rem', color: '#A855F7' }}>
+                                מודל: {modelName}
                               </span>
-                            </div>
-                            <span style={{ fontSize: '0.55rem', color: ms.color, whiteSpace: 'nowrap' }}>
-                              {ms.label}
-                            </span>
-                            {mu && (
-                              <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                {mu.used}/{mu.limit} היום
+                            )}
+                            {remaining != null && limit != null && (
+                              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                נשאר {remaining} מתוך {limit} קריאות{capacityLabel ? ` (${capacityLabel})` : ''}
                               </span>
                             )}
                           </div>
-                          {idx < API_CONFIGS.length - 1 && (
-                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', opacity: 0.5 }}>▶</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              {/* Remaining Capacity Estimates */}
-              {(() => {
-                const est = getRemainingEstimates(status.statuses, API_CONFIGS.map(c => c.model));
-                if (!est) return null;
-                return (
-                  <div style={{
-                    display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.4rem',
-                    marginBottom: '0.75rem', direction: 'rtl',
-                  }}>
-                    {est.estimates.map(e => (
-                      <div key={e.label} style={{
-                        display: 'flex', alignItems: 'center', gap: '0.25rem',
-                        padding: '0.2rem 0.5rem', borderRadius: '6px',
-                        background: e.remaining > 5 ? 'rgba(16, 185, 129, 0.08)' : e.remaining > 0 ? 'rgba(245, 158, 11, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                        border: `1px solid ${e.remaining > 5 ? 'rgba(16, 185, 129, 0.2)' : e.remaining > 0 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
-                      }}>
-                        <span style={{
-                          fontSize: '0.7rem', fontWeight: 700,
-                          color: e.remaining > 5 ? '#10B981' : e.remaining > 0 ? '#F59E0B' : '#EF4444',
-                        }}>{e.remaining}</span>
-                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{e.label}</span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                );
-              })()}
+                    );
 
-              {/* Divider */}
-              <div style={{ height: '1px', background: 'var(--border)', margin: '0 0 0.75rem' }} />
+                    const contentRemaining = contentModel?.remaining;
+                    const contentLimit = contentModel?.limit;
+                    const contentCapacity = contentRemaining != null ? `~${Math.floor(contentRemaining / 2)} משחקים` : undefined;
 
-              {/* Today's Actions */}
+                    const ttsRemaining = ttsAvailable?.remaining;
+                    const ttsLimit = ttsAvailable?.limit;
+                    const ttsCapacity = ttsRemaining != null ? `~${ttsRemaining} הכרזות` : undefined;
+
+                    return (
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        {featureRow('🔮', 'תחזית לפני משחק', contentOk, contentModel?.displayName, contentRemaining, contentLimit, contentCapacity)}
+                        {featureRow('📝', 'סיכום אחרי משחק', contentOk, contentModel?.displayName)}
+                        {featureRow('🔊', 'הכרזות קול במשחק', ttsOk, ttsAvailable?.displayName, ttsRemaining, ttsLimit, ttsCapacity)}
+                        {!ttsOk && ttsResults.length > 0 && (
+                          <div style={{ fontSize: '0.7rem', color: '#F59E0B', paddingRight: '1.75rem', direction: 'rtl', marginTop: '0.3rem' }}>
+                            {isEdgeBrowser()
+                              ? 'הקול ייפול ל-Edge TTS (Microsoft) או לדפדפן'
+                              : 'הקול ייפול לדפדפן — פתח ב-Edge לאיכות טובה יותר'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+
+            {/* Today's Usage Card */}
+            <div className="card" style={{ padding: '1rem' }}>
+              <h2 className="card-title" style={{ margin: '0 0 0.75rem' }}>📊 שימוש היום</h2>
               <div style={{ direction: 'rtl', textAlign: 'right' }}>
-                {actionSummary ? (
-                  <>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: '0.2rem' }}>
-                      היום: {actionSummary}
+                {(() => {
+                  const actionSummary = Object.entries(todayActions)
+                    .filter(([, count]) => count > 0)
+                    .map(([action, count]) => `${action} ×${count}`)
+                    .join(' · ');
+                  return actionSummary ? (
+                    <>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text)', marginBottom: '0.2rem' }}>
+                        {actionSummary}
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        {Object.values(todayActions).reduce((s, c) => s + c, 0)} קריאות · {formatTokens(todayTokens)} טוקנים
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                      אין פעילות AI היום
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                      {Object.values(todayActions).reduce((s, c) => s + c, 0)} קריאות · {formatTokens(todayTokens)} טוקנים
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    אין פעילות AI היום
-                  </div>
-                )}
-
-                {status.allTimeCalls > 0 && (
-                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.4rem', opacity: 0.7 }}>
-                    סה״כ: {status.allTimeCalls} קריאות · {formatTokens(status.allTimeTokens)} טוקנים
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Activity Log (collapsible) */}
@@ -1367,8 +1477,17 @@ const SettingsScreen = () => {
                   )}
                 </>
               )}
-            </div>
 
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => { if (confirm('לאפס את כל נתוני השימוש?')) { resetUsage(); setAiStatus(getAIStatus()); setAiTestResults(null); } }}
+                  style={{ fontSize: '0.6rem', padding: '0.2rem 0.5rem', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                >
+                  🗑️ איפוס נתונים
+                </button>
+              </div>
+            </div>
           </>
         );
       })()}

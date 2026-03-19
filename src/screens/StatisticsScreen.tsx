@@ -88,6 +88,7 @@ const StatisticsScreen = () => {
   const [chronicleError, setChronicleError] = useState<string | null>(null);
   const [isSharingChronicle, setIsSharingChronicle] = useState(false);
   const [chronicleModelName, setChronicleModelName] = useState<string>('');
+  const [chronicleGeneratedAt, setChronicleGeneratedAt] = useState<string>('');
   const chronicleGenRef = useRef(false);
 
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
@@ -1053,7 +1054,7 @@ const StatisticsScreen = () => {
     }
   }, [filterActiveOnly, stats.length, availableStats]);
 
-  // Load cached chronicle stories on period change; auto-generate for admin if new data
+  // Load cached chronicle stories on period change
   useEffect(() => {
     if (viewMode !== 'players' || playerSubTab !== 'stories') return;
     const periodKey = getChronicleKey();
@@ -1061,9 +1062,11 @@ const StatisticsScreen = () => {
     if (cached) {
       setChronicleStories(cached.profiles);
       setChronicleModelName(cached.model || '');
+      setChronicleGeneratedAt(cached.generatedAt || '');
     } else {
       setChronicleStories({});
       setChronicleModelName('');
+      setChronicleGeneratedAt('');
     }
     setChronicleError(null);
     chronicleGenRef.current = false;
@@ -3141,7 +3144,8 @@ const StatisticsScreen = () => {
             const periodKey = getChronicleKey();
             const isAdmin = role === 'admin';
             const cached = getChronicleProfiles(periodKey);
-            const hasNewData = latestGameDate && (!cached || latestGameDate.toISOString() > cached.generatedAt);
+            // Only auto-generate if there are games newer than the cached chronicle
+            const hasNewData = latestGameDate && (!cached || latestGameDate.getTime() > new Date(cached.generatedAt).getTime());
 
             if (isAdmin && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
               chronicleGenRef.current = true;
@@ -3192,9 +3196,11 @@ const StatisticsScreen = () => {
                   }));
 
                   const modelDisplay = getModelDisplayName(result.model);
+                  const genTime = new Date().toISOString();
                   saveChronicleProfiles(periodKey, result.profiles, modelDisplay);
                   setChronicleStories(result.profiles);
                   setChronicleModelName(modelDisplay);
+                  setChronicleGeneratedAt(genTime);
 
                   syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
                 } catch (err) {
@@ -3255,9 +3261,11 @@ const StatisticsScreen = () => {
                 }));
 
                 const modelDisplay = getModelDisplayName(result.model);
+                const genTime = new Date().toISOString();
                 saveChronicleProfiles(periodKey, result.profiles, modelDisplay);
                 setChronicleStories(result.profiles);
                 setChronicleModelName(modelDisplay);
+                setChronicleGeneratedAt(genTime);
 
                 syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
               } catch (err) {
@@ -3349,9 +3357,11 @@ const StatisticsScreen = () => {
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
                         {totalPeriodGames} משחקים | {numPlayers} שחקנים פעילים
                       </div>
-                      {chronicleModelName && hasAiStories && (
+                      {hasAiStories && (chronicleModelName || chronicleGeneratedAt) && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.15rem', opacity: 0.6 }}>
-                          model: {chronicleModelName}
+                          {chronicleModelName && <>model: {chronicleModelName}</>}
+                          {chronicleModelName && chronicleGeneratedAt && ' · '}
+                          {chronicleGeneratedAt && new Date(chronicleGeneratedAt).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) + ' ' + new Date(chronicleGeneratedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       )}
                     </div>

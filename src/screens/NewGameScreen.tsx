@@ -12,8 +12,7 @@ import { withAITiming } from '../utils/aiTiming';
 
 import { PeriodMarkers } from '../types';
 
-// Default location options
-const LOCATION_OPTIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+const DEFAULT_LOCATIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
 
 const PERIOD_OPTIONS: { value: string; label: string; getMarkerOverrides: () => Partial<PeriodMarkers> }[] = [
   { value: 'regular', label: '🎮 משחק רגיל', getMarkerOverrides: () => ({ isFirstGameOfMonth: false, isLastGameOfMonth: false, isFirstGameOfHalf: false, isLastGameOfHalf: false, isFirstGameOfYear: false, isLastGameOfYear: false }) },
@@ -1628,7 +1627,7 @@ const NewGameScreen = () => {
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>📍 מיקום:</span>
-          {LOCATION_OPTIONS.map(loc => (
+          {(getSettings().locations || DEFAULT_LOCATIONS).map(loc => (
             <button
               key={loc}
               onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}

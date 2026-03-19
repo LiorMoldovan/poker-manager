@@ -1942,6 +1942,8 @@ export interface ModelTestResult {
   status: 'available' | 'rate_limited' | 'error';
   rateLimitResetsAt?: string;
   responseTimeMs?: number;
+  remaining?: number;
+  limit?: number;
 }
 
 export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
@@ -1968,16 +1970,17 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
       const elapsed = Date.now() - start;
       const rlHeaders = readRateLimitHeaders(response);
 
+      const remaining = rlHeaders?.remaining;
+      const limit = rlHeaders?.limit;
+
       if (response.ok) {
         recordSuccess(config.model, 'test', 0, undefined, rlHeaders);
-        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'available', responseTimeMs: elapsed });
+        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'available', responseTimeMs: elapsed, remaining, limit });
       } else if (response.status === 429) {
         const errData = await response.json().catch(() => ({}));
         const errMsg = errData?.error?.message || '';
         recordRateLimit(config.model, rlHeaders, errMsg);
-        const status = getAIStatusForTest();
-        const resetAt = status.statuses[config.model]?.rateLimitResetsAt;
-        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'rate_limited', rateLimitResetsAt: resetAt, responseTimeMs: elapsed });
+        results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'rate_limited', responseTimeMs: elapsed, remaining, limit });
       } else {
         results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error', responseTimeMs: elapsed });
       }
@@ -1988,15 +1991,6 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
 
   return results;
 };
-
-// import getAIStatus inline to avoid circular — just reads localStorage directly
-function getAIStatusForTest(): { statuses: Record<string, { rateLimitResetsAt?: string }> } {
-  try {
-    const raw = localStorage.getItem('poker_ai_status');
-    if (!raw) return { statuses: {} };
-    return JSON.parse(raw);
-  } catch { return { statuses: {} }; }
-}
 
 /**
  * Generate a short comment comparing forecast to actual results

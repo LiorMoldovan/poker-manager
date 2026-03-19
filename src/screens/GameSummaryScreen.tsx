@@ -768,9 +768,7 @@ const GameSummaryScreen = () => {
         const winMsg = winMessages[Math.floor(Math.random() * winMessages.length)];
         const loseMsg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
 
-        const fullMessage = `סיכום המשחק. ${potMessage} ${winMsg} ${loseMsg}`;
-
-        speakHebrew([fullMessage], getGeminiApiKey());
+        speakHebrew([`סיכום המשחק. ${potMessage}`, winMsg, loseMsg], getGeminiApiKey());
       }, 1500);
     }
   };
@@ -1421,7 +1419,7 @@ const GameSummaryScreen = () => {
       {(aiSummary || isLoadingAiSummary || funStats.length > 0) && (
         <div ref={funStatsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
-            <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
+            <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '0.5rem', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? '🎭 Game Night Summary' : '🎭 Game Highlights'}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (

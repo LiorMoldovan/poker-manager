@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.4';
+export const APP_VERSION = '5.8.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.5',
+    date: '2026-03-19',
+    changes: [
+      '🔊 Edge TTS integration for higher quality Hebrew voice',
+      '⚙️ Settings screen overhaul with improved layout and controls',
+      '🎮 Live game cleanup and refinements',
+      '📊 Statistics and graphs minor fixes',
+    ]
+  },
   {
     version: '5.8.4',
     date: '2026-03-18',

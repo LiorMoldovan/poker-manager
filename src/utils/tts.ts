@@ -165,7 +165,9 @@ function ttsStatus(text: string, type: 'info' | 'warn' | 'success' | 'error' = '
 // ---------------------------------------------------------------------------
 
 const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
-const GEMINI_TTS_MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'];
+const GEMINI_TTS_MODELS = [
+  'gemini-2.5-flash-preview-tts',
+];
 const GEMINI_TTS_VOICES = ['Kore', 'Aoede', 'Charon', 'Puck', 'Orus', 'Zephyr'];
 
 let _geminiTTSModel: string | null = null;
@@ -268,7 +270,7 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
     ? [_geminiTTSVoice, ...GEMINI_TTS_VOICES.filter(v => v !== _geminiTTSVoice)]
     : GEMINI_TTS_VOICES;
 
-  const shortModel = (m: string) => m.replace('gemini-2.5-', '').replace('-preview-tts', '');
+  const shortModel = (m: string) => m.includes('-preview-tts') ? 'flash-tts' : m.replace('gemini-', '').replace('-preview', '');
 
   for (const model of modelsToTry) {
     let modelBroken = false;
@@ -359,6 +361,66 @@ function playAudioUrl(url: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Edge TTS — Microsoft Neural voices via WebSocket (free, no API key)
+// ---------------------------------------------------------------------------
+
+const EDGE_TTS_VOICES = ['he-IL-HilaNeural', 'he-IL-AvriNeural'];
+const EDGE_TTS_TIMEOUT_MS = 8000;
+
+export function isEdgeBrowser(): boolean {
+  return /Edg[eA]?\//i.test(navigator.userAgent);
+}
+
+async function speakWithEdgeTTS(messages: string[]): Promise<boolean> {
+  if (messages.length === 0) return false;
+
+  if (!isEdgeBrowser()) {
+    ttsStatus('Edge TTS → skipped (not Edge browser)', 'info');
+    return false;
+  }
+
+  try {
+    const { default: EdgeTTSBrowser } = await import('@kingdanx/edge-tts-browser');
+
+    const combinedText = messages.map(m => prepareTTSText(m)).join('. ');
+    const voice = EDGE_TTS_VOICES[Math.floor(Math.random() * EDGE_TTS_VOICES.length)];
+
+    ttsStatus(`Trying Edge TTS / ${voice.replace('he-IL-', '')}...`, 'info');
+    const t0 = Date.now();
+
+    const tts = new EdgeTTSBrowser({ text: combinedText, voice, rate: '-5%' });
+
+    const blob: Blob = await Promise.race([
+      tts.ttsToFile(),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error('timeout')), EDGE_TTS_TIMEOUT_MS)
+      ),
+    ]);
+
+    if (!blob || blob.size < 100) {
+      ttsStatus('Edge TTS → empty audio', 'warn');
+      return false;
+    }
+
+    const elapsed = Date.now() - t0;
+    ttsStatus(`Playing Edge TTS (${voice.replace('he-IL-', '')}, ${elapsed}ms)`, 'success');
+
+    const url = URL.createObjectURL(blob);
+    try {
+      await playAudioUrl(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    return true;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('🔇 Edge TTS failed:', msg);
+    ttsStatus(`Edge TTS → ${msg.includes('timeout') ? 'timeout' : 'failed'}`, 'warn');
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Browser SpeechSynthesis (always available)
 // ---------------------------------------------------------------------------
 
@@ -425,7 +487,8 @@ function speakWithBrowser(messages: string[]): boolean {
 /**
  * Speak Hebrew messages with the best available TTS engine:
  * 1. Gemini TTS — AI-powered, uses same API key as AI features (excellent Hebrew)
- * 2. Browser SpeechSynthesis — fallback, depends on device Hebrew voice support
+ * 2. Edge TTS — Microsoft Neural voices via WebSocket (free, good Hebrew)
+ * 3. Browser SpeechSynthesis — fallback, depends on device Hebrew voice support
  */
 export async function speakHebrew(messages: string[], apiKey: string | null): Promise<void> {
   if (messages.length === 0) return;
@@ -441,8 +504,18 @@ export async function speakHebrew(messages: string[], apiKey: string | null): Pr
         return;
       }
     } catch (_e) {
-      // fall through to browser
+      // fall through to Edge TTS
     }
+  }
+
+  try {
+    const ok = await speakWithEdgeTTS(messages);
+    if (ok) {
+      ttsStatus('Done ✓', 'success');
+      return;
+    }
+  } catch (_e) {
+    // fall through to browser
   }
 
   ttsStatus('Falling back to Browser TTS', 'warn');

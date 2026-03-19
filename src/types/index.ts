@@ -123,6 +123,7 @@ export interface Settings {
   chipsPerRebuy: number;
   minTransfer: number;
   gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
+  locations?: string[];
 }
 
 export interface Settlement {
