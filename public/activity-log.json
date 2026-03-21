@@ -5,9 +5,11 @@
     "timestamp": "2026-03-21T22:57:24.508Z",
     "device": "iPhone / iOS 18 / Safari",
     "screenSize": "430x932",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-21T22:57:24.509Z",
+    "screensVisited": [
+      "Graphs"
+    ],
+    "sessionDuration": 1,
+    "lastActive": "2026-03-21T22:58:05.093Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
