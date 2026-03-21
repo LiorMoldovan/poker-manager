@@ -6,10 +6,11 @@
     "device": "iPhone / iOS 18 / Safari",
     "screenSize": "430x932",
     "screensVisited": [
-      "Graphs"
+      "Graphs",
+      "Statistics"
     ],
-    "sessionDuration": 1,
-    "lastActive": "2026-03-21T22:58:05.093Z",
+    "sessionDuration": 10,
+    "lastActive": "2026-03-21T23:07:48.884Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
