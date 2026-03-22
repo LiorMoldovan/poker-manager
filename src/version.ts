@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.8';
+export const APP_VERSION = '5.8.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.9',
+    date: '2026-03-11',
+    changes: [
+      '💸 Settlement blocked transfers — prevent specific player-to-player payments',
+    ]
+  },
   {
     version: '5.8.8',
     date: '2026-03-11',

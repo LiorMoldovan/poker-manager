@@ -23,6 +23,14 @@ export const calculateProfitLoss = (
 // ---------------------------------------------------------------------------
 
 type BalanceEntry = { name: string; balance: number };
+type BlockedPair = { from: string; to: string };
+
+const BLOCKED_TRANSFERS: BlockedPair[] = [
+  { from: 'פיליפ', to: 'תומר' },
+];
+
+const isBlocked = (from: string, to: string): boolean =>
+  BLOCKED_TRANSFERS.some(b => b.from === from && b.to === to);
 
 /**
  * Partition players into the maximum number of independent zero-sum groups.
@@ -96,12 +104,21 @@ function greedySettle(balances: BalanceEntry[]): Settlement[] {
     const debtors = work.filter(b => b.balance < -0.001).sort((a, b) => a.balance - b.balance);
     if (creditors.length === 0 || debtors.length === 0) break;
 
-    const amount = Math.min(creditors[0].balance, Math.abs(debtors[0].balance));
-    if (amount < 0.001) break;
-
-    transfers.push({ from: debtors[0].name, to: creditors[0].name, amount });
-    creditors[0].balance -= amount;
-    debtors[0].balance += amount;
+    let matched = false;
+    for (const db of debtors) {
+      for (const cr of creditors) {
+        if (isBlocked(db.name, cr.name)) continue;
+        const amount = Math.min(cr.balance, Math.abs(db.balance));
+        if (amount < 0.001) continue;
+        transfers.push({ from: db.name, to: cr.name, amount });
+        cr.balance -= amount;
+        db.balance += amount;
+        matched = true;
+        break;
+      }
+      if (matched) break;
+    }
+    if (!matched) break;
   }
   return transfers;
 }
@@ -120,6 +137,7 @@ function bestSettleRecursive(
 
   if (creditors.length === 0 || debtors.length === 0) return [];
   if (creditors.length === 1 && debtors.length === 1) {
+    if (isBlocked(debtors[0].name, creditors[0].name)) return [];
     const amt = Math.min(creditors[0].balance, Math.abs(debtors[0].balance));
     return amt > 0.001 ? [{ from: debtors[0].name, to: creditors[0].name, amount: amt }] : [];
   }
@@ -132,6 +150,7 @@ function bestSettleRecursive(
 
   for (const cr of creditors) {
     for (const db of debtors) {
+      if (isBlocked(db.name, cr.name)) continue;
       const amount = Math.min(cr.balance, Math.abs(db.balance));
       if (amount < 0.001) continue;
 
