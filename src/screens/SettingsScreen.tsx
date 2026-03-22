@@ -1988,22 +1988,20 @@ const SettingsScreen = () => {
                         </div>
                       )}
 
-                      {/* Device identity line */}
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', lineHeight: '1.45' }}>
-                        <span style={{ color: 'var(--text)', fontWeight: 500 }}>{latest.device}</span>
-                        {!label && (
-                          <>
-                            <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
-                            {latest.screenSize}
-                            {fp && fp.gpu !== 'Unknown' && (
-                              <>
-                                <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
-                                <span title={fp.gpu}>{shortenGPU(fp.gpu)}</span>
-                              </>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {/* Device identity line - only for unidentified devices */}
+                      {!label && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.35rem', lineHeight: '1.45', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                          <span style={{ color: 'var(--text)', fontWeight: 500 }}>{latest.device}</span>
+                          <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
+                          {latest.screenSize}
+                          {fp && fp.gpu !== 'Unknown' && (
+                            <>
+                              <span style={{ margin: '0 0.3rem', opacity: 0.4 }}>|</span>
+                              <span title={fp.gpu}>{shortenGPU(fp.gpu)}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       {/* Fingerprint details - only for unidentified devices */}
                       {!label && fp && (
@@ -2058,7 +2056,7 @@ const SettingsScreen = () => {
 
                       {/* Stats row */}
                       <div style={{
-                        display: 'flex', gap: '0.6rem', alignItems: 'center',
+                        display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap',
                         fontSize: '0.68rem', color: 'var(--text-muted)',
                         padding: '0.3rem 0', borderTop: '1px solid var(--border)',
                       }}>
@@ -2079,7 +2077,7 @@ const SettingsScreen = () => {
                             borderRadius: '6px',
                             background: 'var(--background)',
                             fontSize: '0.68rem',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
                           }}
                         >
                           <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flex: 1, minWidth: 0 }}>

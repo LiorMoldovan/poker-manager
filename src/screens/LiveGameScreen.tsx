@@ -1822,21 +1822,21 @@ const LiveGameScreen = () => {
             <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
               <button
                 className="btn btn-sm"
-                style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                style={{ background: 'var(--danger, #dc3545)', color: '#fff', fontSize: '0.85rem', padding: '0.3rem 0.5rem', lineHeight: 1 }}
                 onClick={() => setSocialAction('bad_beat')}
               >
                 💀
               </button>
               <button
                 className="btn btn-sm"
-                style={{ background: 'var(--success, #28a745)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                style={{ background: 'var(--success, #28a745)', color: '#fff', fontSize: '0.85rem', padding: '0.3rem 0.5rem', lineHeight: 1 }}
                 onClick={() => setSocialAction('big_hand')}
               >
                 🔥
               </button>
               <button
                 className="btn btn-sm"
-                style={{ background: 'var(--surface-light, #555)', color: '#fff', fontSize: '0.65rem', padding: '0.2rem 0.4rem', lineHeight: 1 }}
+                style={{ background: 'var(--surface-light, #555)', color: '#fff', fontSize: '0.85rem', padding: '0.3rem 0.5rem', lineHeight: 1 }}
                 onClick={handleBreakTime}
               >
                 ☕

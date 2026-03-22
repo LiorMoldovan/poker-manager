@@ -146,8 +146,8 @@ const GraphsScreen = () => {
   const getInsightsPeriodLabel = useCallback(() => {
     if (timePeriod === 'all') return 'כל הזמנים';
     if (timePeriod === 'year') return `${selectedYear}`;
-    if (timePeriod === 'h1') return `H1 ${selectedYear}`;
-    if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'h1') return `חציון ראשון ${selectedYear}`;
+    if (timePeriod === 'h2') return `חציון שני ${selectedYear}`;
     if (timePeriod === 'month') {
       const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
       return `${months[selectedMonth - 1]} ${selectedYear}`;

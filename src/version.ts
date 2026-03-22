@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.7';
+export const APP_VERSION = '5.8.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.8.8',
+    date: '2026-03-11',
+    changes: [
+      '☁️ Pending forecast cloud sync between devices',
+      '📊 Combo history insights deduplication and refinements',
+      '🌐 Hebrew labels for graph period selectors',
+      '🎮 Larger social action buttons in live game',
+      '📱 Activity log device display cleanup',
+    ]
+  },
   {
     version: '5.8.7',
     date: '2026-03-19',

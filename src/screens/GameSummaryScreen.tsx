@@ -1060,7 +1060,7 @@ const GameSummaryScreen = () => {
             </table>
           </div>
           
-          {chipGap !== null && chipGap !== 0 && (
+          {chipGap !== null && Math.abs(chipGap) > 1 && (
             <div style={{ 
               marginTop: '1rem', 
               padding: '0.75rem', 
@@ -1600,7 +1600,7 @@ const GameSummaryScreen = () => {
                       background: ps.alwaysWon ? 'rgba(34, 197, 94, 0.08)' : ps.alwaysLost ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
                     }}>
                       <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
-                        {i === 0 ? '👑' : i === comboHistory.playerStats.length - 1 ? '💀' : `${i + 1}.`} {ps.playerName}
+                        {i + 1}. {ps.playerName} {i === 0 ? '👑' : i === comboHistory.playerStats.length - 1 ? '💀' : ''}
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                         <span style={{ color: '#64748b', fontSize: '0.7rem' }}>
@@ -1637,13 +1637,20 @@ const GameSummaryScreen = () => {
                   if (alwaysWon.length > 0) {
                     insights.push({ emoji: '⭐', text: `תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${n})`).join(', ')}`, color: '#4ade80' });
                   }
-                  if (neverWon.length > 0 && neverWon.length <= 3) {
-                    insights.push({ emoji: '📉', text: `אף פעם לא ניצחו בהרכב: ${neverWon.map(p => p.playerName).join(', ')}`, color: '#f87171' });
-                  }
                   if (alwaysLost.length > 0) {
                     insights.push({ emoji: '💀', text: `תמיד בהפסד: ${alwaysLost.map(p => `${p.playerName} (${p.losses}/${n})`).join(', ')}`, color: '#f87171' });
-                  } else if (neverLost.length > 0 && neverLost.length <= 3) {
-                    insights.push({ emoji: '🛡️', text: `אף פעם לא הפסידו בהרכב: ${neverLost.map(p => p.playerName).join(', ')}`, color: '#94a3b8' });
+                    const neverWonNotAlwaysLost = neverWon.filter(p => !p.alwaysLost);
+                    if (neverWonNotAlwaysLost.length > 0 && neverWonNotAlwaysLost.length <= 3) {
+                      insights.push({ emoji: '📉', text: `אף פעם לא ניצחו בהרכב: ${neverWonNotAlwaysLost.map(p => p.playerName).join(', ')}`, color: '#f87171' });
+                    }
+                  } else if (neverWon.length > 0 && neverWon.length <= 3) {
+                    insights.push({ emoji: '📉', text: `אף פעם לא ניצחו בהרכב: ${neverWon.map(p => p.playerName).join(', ')}`, color: '#f87171' });
+                  }
+                  {
+                    const neverLostNotAlwaysWon = neverLost.filter(p => !p.alwaysWon);
+                    if (neverLostNotAlwaysWon.length > 0 && neverLostNotAlwaysWon.length <= 3) {
+                      insights.push({ emoji: '🛡️', text: `אף פעם לא הפסידו בהרכב: ${neverLostNotAlwaysWon.map(p => p.playerName).join(', ')}`, color: '#94a3b8' });
+                    }
                   }
 
                   const topRebuyer = [...stats].sort((a, b) => b.avgRebuys - a.avgRebuys)[0];

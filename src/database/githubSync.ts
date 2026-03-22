@@ -9,7 +9,7 @@
  * - Version tracking prevents unnecessary syncs
  */
 
-import { Player, Game, GamePlayer } from '../types';
+import { Player, Game, GamePlayer, PendingForecast } from '../types';
 import { getEmbeddedToken } from './embeddedToken';
 import { ChronicleEntry, GraphInsightsEntry } from './storage';
 
@@ -35,6 +35,7 @@ export interface SyncData {
   updatedBy: string;
   chronicleProfiles?: Record<string, ChronicleEntry>;
   graphInsights?: Record<string, GraphInsightsEntry>;
+  pendingForecast?: PendingForecast | null;
 }
 
 // Get stored GitHub token
@@ -324,6 +325,9 @@ export const getLocalSyncData = (): SyncData => {
   
   console.log(`Sync data: ${completedGames.length} completed games (${allGames.length - completedGames.length} incomplete games excluded)`);
   
+  const pendingForecastRaw = localStorage.getItem('poker_pending_forecast');
+  const pendingForecast: PendingForecast | null = pendingForecastRaw ? JSON.parse(pendingForecastRaw) : null;
+
   return {
     players,
     games: completedGames,
@@ -332,6 +336,7 @@ export const getLocalSyncData = (): SyncData => {
     updatedBy: 'admin',
     chronicleProfiles,
     graphInsights,
+    pendingForecast,
   };
 };
 
@@ -459,6 +464,11 @@ const replaceGamesWithRemote = (
   // Sync graph insights from cloud (cloud is authoritative)
   if (remoteData.graphInsights) {
     localStorage.setItem('poker_graph_insights', JSON.stringify(remoteData.graphInsights));
+  }
+
+  // Sync pending forecast from cloud (only if local doesn't already have one)
+  if (remoteData.pendingForecast && !localStorage.getItem('poker_pending_forecast')) {
+    localStorage.setItem('poker_pending_forecast', JSON.stringify(remoteData.pendingForecast));
   }
   
   return { gamesChanged, deletedGames, newPlayers, playersChanged };
