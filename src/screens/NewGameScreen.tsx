@@ -14,6 +14,18 @@ import { PeriodMarkers } from '../types';
 
 const DEFAULT_LOCATIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
 
+const getNextGameNightDate = (gameNightDays: number[]): Date => {
+  const now = new Date();
+  const today = now.getDay();
+  if (gameNightDays.includes(today)) return now;
+  for (let offset = 1; offset <= 7; offset++) {
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + offset);
+    if (gameNightDays.includes(candidate.getDay())) return candidate;
+  }
+  return now;
+};
+
 const PERIOD_OPTIONS: { value: string; label: string; getMarkerOverrides: () => Partial<PeriodMarkers> }[] = [
   { value: 'regular', label: '🎮 משחק רגיל', getMarkerOverrides: () => ({ isFirstGameOfMonth: false, isLastGameOfMonth: false, isFirstGameOfHalf: false, isLastGameOfHalf: false, isFirstGameOfYear: false, isLastGameOfYear: false }) },
   { value: 'firstMonth', label: '🗓️ ראשון בחודש', getMarkerOverrides: () => ({ isFirstGameOfMonth: true, isLastGameOfMonth: false }) },
@@ -89,7 +101,8 @@ const NewGameScreen = () => {
     try {
       const settings = getSettings();
       const allGames = getAllGames();
-      const markers = detectPeriodMarkers(new Date(), allGames, settings.gameNightDays || [4, 6]);
+      const days = settings.gameNightDays || [4, 6];
+      const markers = detectPeriodMarkers(getNextGameNightDate(days), allGames, days);
       setPeriodMarkers(markers);
     } catch (e) { console.warn('Period detection failed:', e); }
     return () => {
@@ -1307,7 +1320,8 @@ const NewGameScreen = () => {
         const globalRankings = calculateGlobalRankings();
 
         const settings = getSettings();
-        const resolvedMarkers = detectPeriodMarkers(new Date(), allGames, settings.gameNightDays || [4, 6]);
+        const days = settings.gameNightDays || [4, 6];
+        const resolvedMarkers = detectPeriodMarkers(getNextGameNightDate(days), allGames, days);
         const finalMarkers = applyPeriodOverride(resolvedMarkers, periodOverride);
         setPeriodMarkers(finalMarkers);
 

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.8.9';
+export const APP_VERSION = '5.9.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.0',
+    date: '2026-03-11',
+    changes: [
+      '🎙️ TTS prompt refined — prioritize dynamic game stats over personal facts',
+      '📅 Period marker detection uses next game night date instead of today',
+      '🔇 Removed auto-announce timer from live game',
+    ]
+  },
   {
     version: '5.8.9',
     date: '2026-03-11',

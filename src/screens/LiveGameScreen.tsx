@@ -44,7 +44,6 @@ const LiveGameScreen = () => {
   const ttsPoolRef = useRef<LiveGameTTSPool | null>(null);
   const isSpeakingRef = useRef(false);
   const lastTTSActivityRef = useRef(Date.now());
-  const autoAnnounceCountRef = useRef(0);
   const [ttsModelName, setTtsModelName] = useState<string>('');
   const ttsQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -240,34 +239,6 @@ const LiveGameScreen = () => {
   }, []);
 
   // Auto-announcements: fire every 25 min of quiet, max 4 per game
-  useEffect(() => {
-    if (!gameId || isLoading) return;
-    const AUTO_ANNOUNCE_INTERVAL = 25 * 60 * 1000;
-    const MAX_AUTO_ANNOUNCES = 4;
-
-    const interval = setInterval(() => {
-      if (isSpeakingRef.current) return;
-      if (autoAnnounceCountRef.current >= MAX_AUTO_ANNOUNCES) return;
-      const pool = ttsPoolRef.current;
-      if (!pool || pool.shared.auto_announce.length === 0) return;
-
-      const elapsed = Date.now() - lastTTSActivityRef.current;
-      if (elapsed < AUTO_ANNOUNCE_INTERVAL) return;
-
-      const msg = pickFromPool(pool.shared.auto_announce, 'shared.auto_announce', {});
-      if (!msg) return;
-
-      autoAnnounceCountRef.current++;
-      lastTTSActivityRef.current = Date.now();
-      isSpeakingRef.current = true;
-      speakHebrew([msg], getGeminiApiKey()).finally(() => {
-        isSpeakingRef.current = false;
-      });
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId, isLoading]);
 
   const loadData = () => {
     if (!gameId) {
