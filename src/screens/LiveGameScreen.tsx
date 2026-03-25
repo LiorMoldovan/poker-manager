@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
-import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession } from '../utils/tts';
+import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
@@ -53,6 +53,7 @@ const LiveGameScreen = () => {
   const ttsDebugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    warmupAudioContext();
     setTTSStatusCallback((entry) => {
       const now = Date.now();
       setTtsLog(prev => [...prev.slice(-14), { text: entry.text, type: entry.type, ts: now }]);
@@ -1377,9 +1378,9 @@ const LiveGameScreen = () => {
     // Wait for any previous TTS to finish before starting
     await ttsQueueRef.current;
 
-    // Play attention sound and start speaking shortly after — don't wait for full sound
+    // Play attention sound and start speaking shortly after
     playRebuyCasinoSound(totalBuyins);
-    await new Promise(r => setTimeout(r, 350));
+    await new Promise(r => setTimeout(r, 150));
     
     // Check if total has half (0.5) - use tolerance for floating point
     const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;

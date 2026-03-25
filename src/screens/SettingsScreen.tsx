@@ -29,9 +29,9 @@ import {
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
-import { getElevenLabsApiKey, setElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory } from '../utils/tts';
+import { getElevenLabsApiKey, setElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
-import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
+import { fetchActivityLog, clearActivityLog, deleteDeviceEntries } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
@@ -1633,6 +1633,11 @@ const SettingsScreen = () => {
                                 <div style={{ width: `${Math.min(pct * 4, 100)}%`, height: '100%', background: pct > 15 ? '#F59E0B' : '#10B981', borderRadius: 3 }} />
                               </div>
                               <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text)', minWidth: '48px', textAlign: 'left' }}>{h.charsUsed.toLocaleString()} תו</span>
+                              <button
+                                onClick={() => { deleteElevenLabsGameEntry(h.gameId); setAiTick(t => t + 1); }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0 0.15rem', opacity: 0.4 }}
+                                title="מחק רשומה"
+                              >✕</button>
                             </div>
                           );
                         })}
@@ -1919,7 +1924,7 @@ const SettingsScreen = () => {
                         border: label ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border)',
                       }}
                     >
-                      {/* Header: Label/Name + role badge */}
+                      {/* Header: Label/Name + role badge + delete */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isEditing ? '0.25rem' : '0.4rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
                           {!isEditing && (
@@ -1940,13 +1945,32 @@ const SettingsScreen = () => {
                             </button>
                           )}
                         </div>
-                        <span style={{
-                          fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
-                          background: `${roleInfo.color}20`, color: roleInfo.color, fontWeight: '600',
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {roleInfo.emoji} {roleInfo.name}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                          <span style={{
+                            fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
+                            background: `${roleInfo.color}20`, color: roleInfo.color, fontWeight: '600',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {roleInfo.emoji} {roleInfo.name}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Delete all ${totalSessions} session(s) for this device?`)) return;
+                              await deleteDeviceEntries(deviceId);
+                              setActivityLog(prev => prev.filter(e => e.deviceId !== deviceId));
+                            }}
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              fontSize: '0.7rem', color: 'var(--text-muted)', padding: '0.1rem 0.2rem',
+                              opacity: 0.5, transition: 'opacity 0.2s',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                            onMouseLeave={e => (e.currentTarget.style.opacity = '0.5')}
+                            title="Delete this device's activity"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                       {isEditing && (
                         <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.4rem' }}>
@@ -2080,14 +2104,14 @@ const SettingsScreen = () => {
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
                           }}
                         >
-                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'baseline', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
                             {entry.sessionDuration > 0 && (
                               <span style={{ color: '#818cf8', fontWeight: 500, whiteSpace: 'nowrap' }}>
                                 {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)}m
                               </span>
                             )}
                             {entry.screensVisited.length > 0 && (
-                              <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: 'var(--text-muted)', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                                 {entry.screensVisited.join(' > ')}
                               </span>
                             )}

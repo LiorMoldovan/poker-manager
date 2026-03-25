@@ -174,7 +174,7 @@ let _geminiTTSModel: string | null = null;
 let _geminiTTSVoice: string | null = null;
 const _modelBlockedUntil = new Map<string, number>();
 const GEMINI_BLOCK_DURATION_MS = 60 * 1000;
-const GEMINI_FETCH_TIMEOUT_MS = 9000;
+const GEMINI_FETCH_TIMEOUT_MS = 7000;
 
 function isModelBlocked(model: string): boolean {
   const until = _modelBlockedUntil.get(model);
@@ -197,11 +197,11 @@ function trimLeadingSilence(pcmBytes: Uint8Array, sampleRate: number): Uint8Arra
   try {
     const bytesPerSample = 2;
     const totalSamples = Math.floor(pcmBytes.length / bytesPerSample);
-    if (totalSamples < sampleRate * 0.1) return pcmBytes;
+    if (totalSamples < sampleRate * 0.05) return pcmBytes;
 
-    const threshold = 250;
+    const threshold = 150;
     const maxScanSamples = Math.min(totalSamples, sampleRate * 4);
-    const stride = 32;
+    const stride = 16;
     let firstLoudSample = 0;
 
     for (let i = 0; i < maxScanSamples; i += stride) {
@@ -209,7 +209,7 @@ function trimLeadingSilence(pcmBytes: Uint8Array, sampleRate: number): Uint8Arra
       const sample = pcmBytes[offset] | (pcmBytes[offset + 1] << 8);
       const signed = sample > 32767 ? sample - 65536 : sample;
       if (Math.abs(signed) > threshold) {
-        firstLoudSample = Math.max(0, i - Math.floor(sampleRate * 0.02));
+        firstLoudSample = Math.max(0, i - Math.floor(sampleRate * 0.01));
         break;
       }
     }
@@ -365,13 +365,43 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
   return false;
 }
 
-function playAudioUrl(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const audio = new Audio(url);
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error('audio_error'));
-    audio.play().catch(reject);
-  });
+let _audioCtx: AudioContext | null = null;
+
+function getAudioContext(): AudioContext {
+  if (!_audioCtx || _audioCtx.state === 'closed') {
+    _audioCtx = new AudioContext();
+  }
+  if (_audioCtx.state === 'suspended') {
+    _audioCtx.resume();
+  }
+  return _audioCtx;
+}
+
+export function warmupAudioContext(): void {
+  try { getAudioContext(); } catch { /* ignore */ }
+}
+
+async function playAudioUrl(url: string): Promise<void> {
+  try {
+    const ctx = getAudioContext();
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(ctx.destination);
+    return new Promise<void>((resolve) => {
+      source.onended = () => resolve();
+      source.start(0);
+    });
+  } catch {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio(url);
+      audio.onended = () => resolve();
+      audio.onerror = () => reject(new Error('audio_error'));
+      audio.play().catch(reject);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -456,6 +486,14 @@ export function getElevenLabsGameHistory(): ElevenLabsGameEntry[] {
   } catch {
     return [];
   }
+}
+
+export function deleteElevenLabsGameEntry(gameId: string): void {
+  try {
+    const raw = localStorage.getItem(EL_GAME_HISTORY_KEY);
+    const history: ElevenLabsGameEntry[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem(EL_GAME_HISTORY_KEY, JSON.stringify(history.filter(h => h.gameId !== gameId)));
+  } catch { /* ignore */ }
 }
 
 async function speakWithElevenLabs(messages: string[], apiKey: string): Promise<boolean> {
@@ -680,7 +718,7 @@ function speakWithBrowser(messages: string[]): boolean {
   const utt = createHebrewUtterance(combined, voice);
   utt.onerror = (e) => console.warn('🔇 Browser TTS error:', e);
 
-  setTimeout(() => window.speechSynthesis.speak(utt), 50);
+  window.speechSynthesis.speak(utt);
   return true;
 }
 

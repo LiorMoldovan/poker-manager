@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.0';
+export const APP_VERSION = '5.9.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.1',
+    date: '2026-03-11',
+    changes: [
+      '⚡ TTS latency optimization — AudioContext playback, aggressive silence trim, faster cascade',
+      '🗑️ Delete individual device activity records',
+      '🗑️ Delete individual ElevenLabs TTS game usage entries',
+      '📱 Activity log session path text wrapping fix',
+    ]
+  },
   {
     version: '5.9.0',
     date: '2026-03-11',

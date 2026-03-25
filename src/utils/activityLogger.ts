@@ -317,6 +317,28 @@ export const fetchActivityLog = async (): Promise<ActivityLogEntry[]> => {
   return entries;
 };
 
+export const deleteActivityEntry = async (deviceId: string, timestamp: string): Promise<boolean> => {
+  const token = getEmbeddedToken();
+  if (!token) return false;
+
+  return await writeWithRetry(
+    token,
+    (entries) => entries.filter(e => !(e.deviceId === deviceId && e.timestamp === timestamp)),
+    'Activity: entry deleted'
+  );
+};
+
+export const deleteDeviceEntries = async (deviceId: string): Promise<boolean> => {
+  const token = getEmbeddedToken();
+  if (!token) return false;
+
+  return await writeWithRetry(
+    token,
+    (entries) => entries.filter(e => e.deviceId !== deviceId),
+    'Activity: device entries deleted'
+  );
+};
+
 export const clearActivityLog = async (): Promise<boolean> => {
   const token = getEmbeddedToken();
   if (!token) return false;
