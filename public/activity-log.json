@@ -188,29 +188,5 @@
       "timezone": "Asia/Jerusalem",
       "canvasHash": "8paehw"
     }
-  },
-  {
-    "deviceId": "b09f345a-534b-4c25-b3c9-9570bdea06ff",
-    "role": "viewer",
-    "timestamp": "2026-03-26T14:27:08.552Z",
-    "device": "Android Phone / Android 10 / Chrome",
-    "screenSize": "360x792",
-    "screensVisited": [
-      "Statistics",
-      "History",
-      "Game Details",
-      "Settings"
-    ],
-    "sessionDuration": 2,
-    "lastActive": "2026-03-26T14:29:11.513Z",
-    "fingerprint": {
-      "gpu": "Adreno (TM) 830",
-      "cores": 8,
-      "memory": 8,
-      "touchPoints": 5,
-      "language": "en-IL",
-      "timezone": "Asia/Jerusalem",
-      "canvasHash": "ed0s7f"
-    }
   }
 ]
