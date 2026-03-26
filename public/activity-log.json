@@ -165,5 +165,24 @@
       "timezone": "Asia/Jerusalem",
       "canvasHash": "wtr4re"
     }
+  },
+  {
+    "deviceId": "7ed04786-33ca-4408-a882-99d8d6785bea",
+    "role": "viewer",
+    "timestamp": "2026-03-26T08:41:53.963Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "393x873",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-03-26T08:41:53.965Z",
+    "fingerprint": {
+      "gpu": "Adreno (TM) 619",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "8paehw"
+    }
   }
 ]
