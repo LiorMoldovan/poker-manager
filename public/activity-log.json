@@ -253,10 +253,12 @@
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x892",
     "screensVisited": [
-      "Graphs"
+      "Graphs",
+      "Statistics",
+      "History"
     ],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-27T09:55:32.200Z",
+    "sessionDuration": 199,
+    "lastActive": "2026-03-27T13:14:16.414Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 750",
       "cores": 8,
