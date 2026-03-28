@@ -316,9 +316,13 @@
     "timestamp": "2026-03-28T17:35:19.378Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x892",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-28T17:35:19.378Z",
+    "screensVisited": [
+      "History",
+      "Statistics",
+      "Graphs"
+    ],
+    "sessionDuration": 1,
+    "lastActive": "2026-03-28T17:35:50.631Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 750",
       "cores": 8,
