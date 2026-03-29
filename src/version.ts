@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.1';
+export const APP_VERSION = '5.9.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.2',
+    date: '2026-03-25',
+    changes: [
+      '📅 Monthly summary table on last game of the month',
+      '🚫 Date-based blocked transfers in settlement algorithm',
+      '📊 Combo history hidden when only 1 shared game',
+      '💬 ElevenLabs test text minimized to save quota',
+      '🗑️ Delete confirmation + icon for TTS game entries',
+      '📱 Activity log shows only meaningful sessions',
+    ]
+  },
   {
     version: '5.9.1',
     date: '2026-03-11',

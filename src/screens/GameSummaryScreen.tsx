@@ -75,7 +75,7 @@ const GameSummaryScreen = () => {
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
   const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: true, forecast: true, expenses: true, aiSummary: true, combo: true, standings: true });
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: true, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: false, standings: true });
   const toggleSection = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -87,6 +87,9 @@ const GameSummaryScreen = () => {
   const standingsRef = useRef<HTMLDivElement>(null);
   const [standingsData, setStandingsData] = useState<PlayerStats[]>([]);
   const [standingsLabel, setStandingsLabel] = useState('');
+  const [monthlyStats, setMonthlyStats] = useState<PlayerStats[]>([]);
+  const [monthLabel, setMonthLabel] = useState('');
+  const monthlyRef = useRef<HTMLDivElement>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
 
   const handleRegenerateAiSummary = () => {
@@ -153,18 +156,21 @@ const GameSummaryScreen = () => {
     }
     
     // Calculate settlements - use COMBINED if there are expenses
+    const gameDateStr = game.date || game.createdAt;
     if (gameExpenses.length > 0) {
       const { settlements: settl, smallTransfers: small } = calculateCombinedSettlement(
         gamePlayers,
         gameExpenses,
-        settings.minTransfer
+        settings.minTransfer,
+        gameDateStr
       );
       setSettlements(settl);
       setSkippedTransfers(small);
     } else {
       const { settlements: settl, smallTransfers: small } = calculateSettlement(
         gamePlayers, 
-        settings.minTransfer
+        settings.minTransfer,
+        gameDateStr
       );
       setSettlements(settl);
       setSkippedTransfers(small);
@@ -535,6 +541,44 @@ const GameSummaryScreen = () => {
 
     setStandingsData(activeStats);
     setStandingsLabel(halfLabel);
+
+    // Monthly summary table — primary: user confirmed at game creation; fallback: history-based
+    const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const gameMonthIdx = actualGameDate.getMonth();
+    const isLastGameOfMonth = gameYear >= 2026 && (
+      game.periodMarkers?.isLastGameOfMonth ??
+      !getAllGames().some(g => {
+        if (g.status !== 'completed' || g.id === game.id) return false;
+        const gd = new Date(g.date || g.createdAt);
+        return gd.getFullYear() === gameYear && gd.getMonth() === gameMonthIdx && gd > actualGameDate;
+      })
+    );
+    if (isLastGameOfMonth) {
+      const monthStart = new Date(gameYear, gameMonthIdx, 1);
+      const monthEnd = new Date(gameYear, gameMonthIdx + 1, 0, 23, 59, 59);
+      const mStats = getPlayerStats({ start: monthStart, end: monthEnd });
+      const monthGames = getAllGames().filter(g => {
+        if (g.status !== 'completed') return false;
+        const gd = new Date(g.date || g.createdAt);
+        return gd >= monthStart && gd <= monthEnd;
+      });
+      if (monthGames.length >= 2) {
+        const mThreshold = Math.ceil(monthGames.length * 0.33);
+        const activeMonthly = mStats
+          .filter(s => {
+            const pl = allPlayers.find(p => p.id === s.playerId);
+            return pl && (pl.type === 'permanent' || pl.type === 'permanent_guest' || pl.type === 'guest');
+          })
+          .filter(s => s.gamesPlayed >= mThreshold || tonightPlayerIds.has(s.playerId))
+          .sort((a, b) => b.totalProfit - a.totalProfit);
+        setMonthlyStats(activeMonthly);
+        setMonthLabel(hebrewMonths[gameMonthIdx]);
+      } else {
+        setMonthlyStats([]);
+      }
+    } else {
+      setMonthlyStats([]);
+    }
 
     // --- AI Game Night Summary ---
     // Never auto-generate. Show cached version if it exists, otherwise show "Generate" button.
@@ -1039,7 +1083,7 @@ const GameSummaryScreen = () => {
               <tbody>
                 {players.map((player, index) => (
                   <tr key={player.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <td>
                       {player.playerName}
                       {index === 0 && player.profit > 0 && ' 🥇'}
                       {index === 1 && player.profit > 0 && ' 🥈'}
@@ -1060,7 +1104,7 @@ const GameSummaryScreen = () => {
             </table>
           </div>
           
-          {chipGap !== null && Math.abs(chipGap) > 1 && (
+          {chipGap !== null && Math.abs(chipGap) > 5 && (
             <div style={{ 
               marginTop: '1rem', 
               padding: '0.75rem', 
@@ -1545,7 +1589,7 @@ const GameSummaryScreen = () => {
       )}
 
       {/* Combo History Section */}
-      {comboHistory && (
+      {comboHistory && comboHistory.totalGamesWithCombo > 1 && (
         <div ref={comboHistoryRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('combo')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.combo ? 0 : '0.75rem' }}>
@@ -1682,6 +1726,96 @@ const GameSummaryScreen = () => {
                 })()}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Summary Table — only shown for last game of month */}
+      {monthlyStats.length > 0 && (
+        <div ref={monthlyRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button onClick={() => toggleSection('monthly')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.monthly ? 0 : '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>📅 סיכום חודש {monthLabel}</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+            </button>
+            {!collapsedSections.monthly && (<>
+            <div style={{
+              textAlign: 'center',
+              fontSize: '0.65rem',
+              color: 'var(--text-muted)',
+              marginBottom: '0.5rem',
+              paddingBottom: '0.3rem',
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <span>📊 {monthlyStats.reduce((max, s) => Math.max(max, s.gamesPlayed), 0)} games this month</span>
+            </div>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Profit</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Avg</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>G</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyStats.map((player, index) => {
+                  const isInThisGame = players.some(p => p.playerId === player.playerId);
+                  return (
+                    <tr key={player.playerId} style={{
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      background: isInThisGame ? 'rgba(59, 130, 246, 0.12)' : undefined,
+                      borderRight: isInThisGame ? '3px solid rgba(59, 130, 246, 0.5)' : '3px solid transparent',
+                    }}>
+                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                        {index + 1}
+                        {index === 0 && ' 🥇'}
+                        {index === 1 && ' 🥈'}
+                        {index === 2 && ' 🥉'}
+                      </td>
+                      <td style={{
+                        fontWeight: isInThisGame ? '700' : '500',
+                        padding: '0.25rem 0.2rem',
+                      }}>
+                        {player.playerName}
+                      </td>
+                      <td style={{
+                        textAlign: 'right',
+                        padding: '0.25rem 0.3rem',
+                        whiteSpace: 'nowrap',
+                        fontWeight: '700',
+                        color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                      }}>
+                        {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                      </td>
+                      <td style={{
+                        textAlign: 'right',
+                        padding: '0.25rem 0.3rem',
+                        whiteSpace: 'nowrap',
+                        color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                      }}>
+                        {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                        {player.gamesPlayed}
+                      </td>
+                      <td style={{
+                        textAlign: 'center',
+                        padding: '0.25rem 0.2rem',
+                        whiteSpace: 'nowrap',
+                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                        fontWeight: '600',
+                      }}>
+                        {Math.round(player.winPercentage)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </>)}
           </div>
         </div>
       )}

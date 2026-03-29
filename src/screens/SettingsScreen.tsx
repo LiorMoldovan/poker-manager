@@ -1260,7 +1260,7 @@ const SettingsScreen = () => {
                       const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
-                        body: JSON.stringify({ text: 'שלום, זוהי בדיקת מערכת הקול. הכל תקין!', model_id: 'eleven_v3', language_code: 'he' }),
+                        body: JSON.stringify({ text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' }),
                       });
                       if (res.ok) {
                         const blob = await res.blob();
@@ -1377,7 +1377,7 @@ const SettingsScreen = () => {
                           fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
-                            body: JSON.stringify({ text: 'בדיקה קצרה', model_id: 'eleven_v3', language_code: 'he' }),
+                            body: JSON.stringify({ text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' }),
                           }),
                           getElevenLabsUsageLive(elKey),
                         ]);
@@ -1634,10 +1634,10 @@ const SettingsScreen = () => {
                               </div>
                               <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text)', minWidth: '48px', textAlign: 'left' }}>{h.charsUsed.toLocaleString()} תו</span>
                               <button
-                                onClick={() => { deleteElevenLabsGameEntry(h.gameId); setAiTick(t => t + 1); }}
+                                onClick={() => { if (confirm('למחוק את רשומת השימוש של משחק זה?')) { deleteElevenLabsGameEntry(h.gameId); setAiTick(t => t + 1); } }}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0 0.15rem', opacity: 0.4 }}
                                 title="מחק רשומה"
-                              >✕</button>
+                              >🗑️</button>
                             </div>
                           );
                         })}
@@ -2091,41 +2091,53 @@ const SettingsScreen = () => {
                         <span>Last: {lastSeen}</span>
                       </div>
 
-                      {/* Recent sessions (last 3) */}
-                      {entries.slice(0, 3).map((entry, i) => (
-                        <div
-                          key={`${entry.timestamp}-${i}`}
-                          style={{
-                            marginTop: '0.3rem',
-                            padding: '0.3rem 0.4rem',
-                            borderRadius: '6px',
-                            background: 'var(--background)',
-                            fontSize: '0.68rem',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
-                          }}
-                        >
-                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'baseline', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-                            {entry.sessionDuration > 0 && (
-                              <span style={{ color: '#818cf8', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                                {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)}m
+                      {/* Recent sessions (last 3 with actual activity) */}
+                      {(() => {
+                        const meaningful = entries.filter(e => e.screensVisited.length > 0 || e.sessionDuration > 0);
+                        const shown = meaningful.slice(0, 3);
+                        const remaining = meaningful.length - shown.length;
+                        return (<>
+                          {shown.length === 0 && (
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.6, marginTop: '0.3rem', textAlign: 'center' }}>
+                              No detailed session data
+                            </div>
+                          )}
+                          {shown.map((entry, i) => (
+                            <div
+                              key={`${entry.timestamp}-${i}`}
+                              style={{
+                                marginTop: '0.3rem',
+                                padding: '0.3rem 0.4rem',
+                                borderRadius: '6px',
+                                background: 'var(--background)',
+                                fontSize: '0.68rem',
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap',
+                              }}
+                            >
+                              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'baseline', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+                                {entry.sessionDuration > 0 && (
+                                  <span style={{ color: '#818cf8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                    {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)}m
+                                  </span>
+                                )}
+                                {entry.screensVisited.length > 0 && (
+                                  <span style={{ color: 'var(--text-muted)', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
+                                    {entry.screensVisited.join(' > ')}
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem', opacity: 0.7 }}>
+                                {formatRelativeTime(entry.timestamp)}
                               </span>
-                            )}
-                            {entry.screensVisited.length > 0 && (
-                              <span style={{ color: 'var(--text-muted)', wordBreak: 'break-word', overflowWrap: 'break-word' }}>
-                                {entry.screensVisited.join(' > ')}
-                              </span>
-                            )}
-                          </div>
-                          <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem', opacity: 0.7 }}>
-                            {formatRelativeTime(entry.timestamp)}
-                          </span>
-                        </div>
-                      ))}
-                      {entries.length > 3 && (
-                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.25rem', opacity: 0.6 }}>
-                          +{entries.length - 3} older session{entries.length - 3 !== 1 ? 's' : ''}
-                        </div>
-                      )}
+                            </div>
+                          ))}
+                          {remaining > 0 && (
+                            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.25rem', opacity: 0.6 }}>
+                              +{remaining} older session{remaining !== 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </>);
+                      })()}
                     </div>
                   );
                 })}

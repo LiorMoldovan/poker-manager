@@ -23,14 +23,17 @@ export const calculateProfitLoss = (
 // ---------------------------------------------------------------------------
 
 type BalanceEntry = { name: string; balance: number };
-type BlockedPair = { from: string; to: string };
+type BlockedPair = { from: string; to: string; after: string };
 
 const BLOCKED_TRANSFERS: BlockedPair[] = [
-  { from: 'פיליפ', to: 'תומר' },
+  { from: 'פיליפ', to: 'תומר', after: '2026-03-24' },
+  { from: 'תומר', to: 'פיליפ', after: '2026-03-24' },
 ];
 
+let _activeBlocked: BlockedPair[] = [];
+
 const isBlocked = (from: string, to: string): boolean =>
-  BLOCKED_TRANSFERS.some(b => b.from === from && b.to === to);
+  _activeBlocked.some(b => b.from === from && b.to === to);
 
 /**
  * Partition players into the maximum number of independent zero-sum groups.
@@ -193,8 +196,13 @@ function settleGroup(group: BalanceEntry[]): Settlement[] {
  */
 function optimizedSettle(
   balances: BalanceEntry[],
-  minTransfer: number
+  minTransfer: number,
+  gameDate?: string
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } {
+  _activeBlocked = gameDate
+    ? BLOCKED_TRANSFERS.filter(b => gameDate >= b.after)
+    : [];
+
   const active = balances.filter(b => Math.abs(b.balance) > 0.001);
   if (active.length === 0) return { settlements: [], smallTransfers: [] };
 
@@ -205,8 +213,9 @@ function optimizedSettle(
     allTransfers.push(...settleGroup(group));
   }
 
-  const settlements = allTransfers.filter(t => t.amount >= minTransfer);
-  const smallTransfers = allTransfers.filter(t => t.amount < minTransfer);
+  const rounded = allTransfers.filter(t => Math.round(t.amount) > 0);
+  const settlements = rounded.filter(t => t.amount >= minTransfer);
+  const smallTransfers = rounded.filter(t => t.amount < minTransfer);
 
   settlements.sort((a, b) => {
     const nameCompare = a.from.localeCompare(b.from);
@@ -227,13 +236,14 @@ function optimizedSettle(
 
 export const calculateSettlement = (
   players: GamePlayer[],
-  minTransfer: number
+  minTransfer: number,
+  gameDate?: string
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
   const balances = players
     .filter(p => Math.abs(p.profit) > 0.001)
     .map(p => ({ name: p.playerName, balance: p.profit }));
 
-  return optimizedSettle(balances, minTransfer);
+  return optimizedSettle(balances, minTransfer, gameDate);
 };
 
 // Clean up floating-point artifacts, round to whole numbers, and add thousand separators (e.g., 30.7 -> 31, 1234 -> 1,234)
@@ -339,7 +349,8 @@ export const calculateExpenseSettlements = (
 export const calculateCombinedSettlement = (
   players: GamePlayer[],
   expenses: SharedExpense[],
-  minTransfer: number
+  minTransfer: number,
+  gameDate?: string
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
   const balanceMap = new Map<string, { name: string; balance: number }>();
 
@@ -375,6 +386,6 @@ export const calculateCombinedSettlement = (
     .filter(([_, data]) => Math.abs(data.balance) > 0.001)
     .map(([_, data]) => ({ name: data.name, balance: data.balance }));
 
-  return optimizedSettle(balances, minTransfer);
+  return optimizedSettle(balances, minTransfer, gameDate);
 };
 
