@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import {
   LineChart,
   Line,
@@ -89,6 +90,42 @@ const GraphsScreen = () => {
   const [insightsGeneratedAt, setInsightsGeneratedAt] = useState<string>('');
   const [insightsModelName, setInsightsModelName] = useState<string>('');
   const insightsGenRef = useRef(false);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const insightsRef = useRef<HTMLDivElement>(null);
+  const [isSharingChart, setIsSharingChart] = useState(false);
+  const [isSharingInsights, setIsSharingInsights] = useState(false);
+
+  const handleShareSection = async (ref: React.RefObject<HTMLDivElement | null>, setSharing: (v: boolean) => void, title: string) => {
+    if (!ref.current) return;
+    setSharing(true);
+    try {
+      const canvas = await html2canvas(ref.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setSharing(false); return; }
+        const file = new File([blob], `poker-${title}.png`, { type: 'image/png' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: `Poker ${title}` });
+          } catch { /* user cancelled */ }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `poker-${title}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+        setSharing(false);
+      }, 'image/png');
+    } catch {
+      setSharing(false);
+    }
+  };
 
   // Color mapping - stable by player order in permanent list
   const playerColorMap = useMemo(() => {
@@ -1078,7 +1115,7 @@ const GraphsScreen = () => {
 
       {/* CUMULATIVE PROFIT CHART */}
       {viewMode === 'cumulative' && cumulativeData.length > 0 && (
-        <div className="card">
+        <div ref={chartRef} className="card">
           <h2 className="card-title mb-2">📈 Cumulative Profit Over Time</h2>
           <div style={{ 
             fontSize: '0.7rem', 
@@ -1130,10 +1167,21 @@ const GraphsScreen = () => {
           <CustomLegend />
         </div>
       )}
+      {viewMode === 'cumulative' && cumulativeData.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+          <button
+            onClick={() => handleShareSection(chartRef, setIsSharingChart, 'cumulative-profit')}
+            disabled={isSharingChart}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+          >
+            {isSharingChart ? '📸...' : '📤 שתף גרף'}
+          </button>
+        </div>
+      )}
 
       {/* 🤖 AI GRAPH INSIGHTS */}
       {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin') && (
-        <div className="card">
+        <div ref={insightsRef} className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>🤖 תובנות AI</h2>
             {role === 'admin' && !insightsLoading && filteredGames.length > 0 && (
@@ -1219,6 +1267,17 @@ const GraphsScreen = () => {
               אין תובנות AI לתקופה זו עדיין
             </div>
           )}
+        </div>
+      )}
+      {viewMode === 'cumulative' && insightsText && !insightsLoading && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+          <button
+            onClick={() => handleShareSection(insightsRef, setIsSharingInsights, 'ai-insights')}
+            disabled={isSharingInsights}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
+          >
+            {isSharingInsights ? '📸...' : '📤 שתף תובנות'}
+          </button>
         </div>
       )}
 
@@ -1971,6 +2030,7 @@ const GraphsScreen = () => {
             const limited = impactData
               .filter(r => isLowConf(r))
               .sort((a, b) => confidenceScore(b) - confidenceScore(a));
+            const formatSignedShekelLocal = (value: number) => `${value > 0 ? '+' : value < 0 ? '-' : ''}₪${cleanNumber(Math.abs(value))}`;
 
             const getImpactIcon = (row: typeof impactData[0], isLimited: boolean): string | null => {
               if (isLimited) return null;
@@ -1979,18 +2039,11 @@ const GraphsScreen = () => {
               const sampleBalance = minSide / maxSide;
               if (sampleBalance < 0.08) return null;
 
-              const signFlip = (row.avgWith > 0 && row.avgWithout < 0) || (row.avgWith < 0 && row.avgWithout > 0);
               const winRateDelta = row.winRateWith - row.winRateWithout;
               const contradicts = (row.impact > 0 && winRateDelta < -10) || (row.impact < 0 && winRateDelta > 10);
               if (contradicts) return null;
 
-              if (signFlip && Math.abs(row.impact) >= 15) {
-                return row.impact > 0 ? '🍀' : '💀';
-              }
-              if (Math.abs(row.impact) >= 25 && Math.abs(winRateDelta) >= 8) {
-                return row.impact > 0 ? '🍀' : '💀';
-              }
-              if (Math.abs(row.impact) >= 15 && Math.abs(winRateDelta) >= 15) {
+              if (Math.abs(row.impact) >= 15) {
                 return row.impact > 0 ? '🍀' : '💀';
               }
               return null;
@@ -2007,6 +2060,80 @@ const GraphsScreen = () => {
               const avgWithoutColor = avgWithoutRounded === 0 ? 'var(--text-muted)' : avgWithoutRounded > 0 ? '#10B981' : '#EF4444';
               const totalGames = row.withGames + row.withoutGames;
               const withPct = totalGames > 0 ? (row.withGames / totalGames) * 100 : 50;
+              const rowInsightLines = (() => {
+                const lines: string[] = [];
+                const wrWith = Math.round(row.winRateWith);
+                const wrWithout = Math.round(row.winRateWithout);
+                const wrDelta = wrWith - wrWithout;
+                const minSide = Math.min(row.withGames, row.withoutGames);
+                const totalWith = Math.round(row.totalWith);
+                const avgW = Math.round(row.avgWith);
+                const avgWo = Math.round(row.avgWithout);
+                const together = row.withGames;
+                const apart = row.withoutGames;
+                const total = together + apart;
+                const pctTogether = Math.round((together / total) * 100);
+                const winsWithCount = Math.round((wrWith / 100) * together);
+                const winsWithoutCount = Math.round((wrWithout / 100) * apart);
+                const lossesWithCount = together - winsWithCount;
+
+                if (minSide >= 2 && wrWithout === 0 && wrWith > 0) {
+                  lines.push(`0 נצחונות בלעדיו ב-${apart} משחקים, ${wrWith}% כשמשחקים ביחד`);
+                } else if (minSide >= 2 && wrWith === 0 && wrWithout > 0) {
+                  lines.push(`0 נצחונות ביחד ב-${together} משחקים, ${wrWithout}% בלעדיו`);
+                } else if (wrWith === 100 && together >= 3) {
+                  lines.push(`${together} מתוך ${together} נצחונות ביחד — רצף מושלם`);
+                } else if (wrWithout === 100 && apart >= 3) {
+                  lines.push(`${apart} מתוך ${apart} נצחונות בלעדיו`);
+                }
+
+                if (avgW > 0 && avgWo < 0) {
+                  const ratio = Math.abs(avgW) > Math.abs(avgWo) ? Math.round(Math.abs(avgW) / Math.max(1, Math.abs(avgWo))) : null;
+                  lines.push(ratio && ratio >= 2
+                    ? `הופך הפסד ממוצע של ₪${cleanNumber(Math.abs(avgWo))} לרווח של ₪${cleanNumber(avgW)} — פי ${ratio}`
+                    : `הופך ממפסיד (${formatSignedShekelLocal(avgWo)}) למרוויח (${formatSignedShekelLocal(avgW)}) למשחק`);
+                } else if (avgW < 0 && avgWo > 0) {
+                  lines.push(`הופך ממרוויח (${formatSignedShekelLocal(avgWo)}) למפסיד (${formatSignedShekelLocal(avgW)}) למשחק`);
+                } else if (avgW > 0 && avgWo > 0 && avgW > avgWo * 1.5 && avgW > 10) {
+                  lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} איתו לעומת ${formatSignedShekelLocal(avgWo)} בלעדיו`);
+                } else if (avgW < 0 && avgWo < 0 && Math.abs(avgW) > Math.abs(avgWo) * 1.5) {
+                  lines.push(`הפסד גדל מ-₪${cleanNumber(Math.abs(avgWo))} ל-₪${cleanNumber(Math.abs(avgW))} למשחק איתו`);
+                }
+
+                if (Math.abs(wrDelta) >= 8 && !lines.some(l => l.includes('נצחונות'))) {
+                  lines.push(`${wrWith}% נצחונות איתו (${winsWithCount}/${together}) לעומת ${wrWithout}% בלעדיו (${winsWithoutCount}/${apart})`);
+                }
+
+                if (together >= 5 && lossesWithCount <= 1 && wrWith >= 80 && !lines.some(l => l.includes('רצף'))) {
+                  lines.push(`הפסיד ${lossesWithCount === 0 ? 'אפס' : 'רק פעם אחת'} ב-${together} משחקים משותפים`);
+                }
+
+                if (pctTogether >= 80 && together >= 10) {
+                  lines.push(`משחקים ביחד ${pctTogether}% מהזמן (${together} מתוך ${total})`);
+                } else if (pctTogether <= 20 && apart >= 10) {
+                  lines.push(`לעתים נדירות ביחד — רק ${together} מתוך ${total} משחקים`);
+                }
+
+                if (Math.abs(totalWith) >= 100) {
+                  lines.push(totalWith > 0
+                    ? `סה"כ +₪${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
+                    : `סה"כ -₪${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
+                }
+
+                if (lines.length === 0) {
+                  const impactRound = Math.round(row.impact);
+                  if (impactRound > 0) {
+                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה חיובית`);
+                  } else if (impactRound < 0) {
+                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה שלילית`);
+                  } else {
+                    lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} למשחק איתו, ${formatSignedShekelLocal(avgWo)} בלעדיו — השפעה ניטרלית`);
+                  }
+                  lines.push(`${winsWithCount} נצחונות מתוך ${together} ביחד, ${winsWithoutCount} מתוך ${apart} בלעדיו`);
+                }
+
+                return lines.slice(0, 2);
+              })();
 
               return (
                 <div key={row.otherPlayerId} style={{
@@ -2023,14 +2150,21 @@ const GraphsScreen = () => {
                     alignItems: 'center',
                     marginBottom: '0.6rem',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        color: row.otherColor, 
-                        fontSize: '1rem',
-                      }}>
-                        {row.otherPlayerName}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{
+                          fontWeight: '700',
+                          color: row.otherColor,
+                          fontSize: '1rem',
+                        }}>
+                          {row.otherPlayerName}
+                        </span>
+                        {rowInsightLines && rowInsightLines.map((line, li) => (
+                          <div key={li} style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: li === 0 ? '0.1rem' : '0.05rem', textAlign: 'left' }}>
+                            {li === 0 ? '💡' : '📊'} {line}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div style={{ 
                       display: 'flex',
@@ -2220,14 +2354,19 @@ const GraphsScreen = () => {
               const maxSide = Math.max(r.withGames, r.withoutGames);
               const sampleBalance = minSide / maxSide;
               if (sampleBalance < 0.08) return false;
-              const signFlip = (r.avgWith > 0 && r.avgWithout < 0) || (r.avgWith < 0 && r.avgWithout > 0);
               const winRateDelta = r.winRateWith - r.winRateWithout;
               const contradicts = (r.impact > 0 && winRateDelta < -10) || (r.impact < 0 && winRateDelta > 10);
               if (contradicts) return false;
-              if (signFlip && Math.abs(r.impact) >= 15) return true;
-              if (Math.abs(r.impact) >= 25 && Math.abs(winRateDelta) >= 8) return true;
-              if (Math.abs(r.impact) >= 15 && Math.abs(winRateDelta) >= 15) return true;
+              if (Math.abs(r.impact) >= 15) return true;
               return false;
+            };
+
+            // Rarely-apart mode: allow strong monetary signal even on very unbalanced samples.
+            const isStrongChemistryRare = (r: typeof impactData[0]) => {
+              const winRateDelta = r.winRateWith - r.winRateWithout;
+              const contradicts = (r.impact > 0 && winRateDelta < -10) || (r.impact < 0 && winRateDelta > 10);
+              if (contradicts) return false;
+              return Math.abs(r.impact) >= 15;
             };
 
             const luckyCharms = reliableOnly
@@ -2236,29 +2375,142 @@ const GraphsScreen = () => {
             const kryptonite = reliableOnly
               .filter(r => r.impact < 0 && isStrongChemistry(r))
               .slice(-3).reverse();
+            const rareLuckyCharms = impactData
+              .filter(r => Math.min(r.withGames, r.withoutGames) < minGamesThreshold)
+              .filter(r => r.impact > 0 && isStrongChemistryRare(r))
+              .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+              .slice(0, 5);
+            const rareKryptonite = impactData
+              .filter(r => Math.min(r.withGames, r.withoutGames) < minGamesThreshold)
+              .filter(r => r.impact < 0 && isStrongChemistryRare(r))
+              .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+              .slice(0, 5);
             const selectedName = getPlayerName(impactPlayerId);
+            const formatSignedShekel = (value: number) => `${value > 0 ? '+' : value < 0 ? '-' : ''}₪${cleanNumber(Math.abs(value))}`;
 
-            const charmSummary = (row: typeof impactData[0]) => {
-              const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
-              const avgWith = Math.round(row.avgWith);
-              let text = `${selectedName} מרוויח בממוצע +₪${cleanNumber(avgWith)} למשחק כש${row.otherPlayerName} משתתף`;
-              if (wrDelta > 0) text += `, עם ${Math.round(row.winRateWith)}% נצחונות (לעומת ${Math.round(row.winRateWithout)}% בלעדיו)`;
-              else if (wrDelta === 0) text += `, עם אחוז נצחונות זהה`;
-              return text;
-            };
+            const chemistryInsights = (row: typeof impactData[0], headlineMentioned: Set<string>): string[] => {
+              const isInHeadline = headlineMentioned.has(row.otherPlayerId);
+              const lines: string[] = [];
+              const wrWith = Math.round(row.winRateWith);
+              const wrWithout = Math.round(row.winRateWithout);
+              const wrDelta = wrWith - wrWithout;
+              const minSide = Math.min(row.withGames, row.withoutGames);
+              const totalWith = Math.round(row.totalWith);
+              const avgW = Math.round(row.avgWith);
+              const avgWo = Math.round(row.avgWithout);
+              const together = row.withGames;
+              const apart = row.withoutGames;
+              const total = together + apart;
+              const winsWithCount = Math.round((wrWith / 100) * together);
+              const lossesWithCount = together - winsWithCount;
+              const winsWithoutCount = Math.round((wrWithout / 100) * apart);
+              const pctTogether = Math.round((together / total) * 100);
+              const signFlip = (avgW > 0 && avgWo < 0) || (avgW < 0 && avgWo > 0);
 
-            const kryptoniteSummary = (row: typeof impactData[0]) => {
-              const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
-              const avgWith = Math.round(row.avgWith);
-              let text: string;
-              if (avgWith < 0) {
-                text = `${selectedName} יורד לממוצע של ₪${cleanNumber(avgWith)} כש${row.otherPlayerName} על השולחן`;
-              } else {
-                text = `${selectedName} יורד מ-+₪${cleanNumber(Math.round(row.avgWithout))} ל-+₪${cleanNumber(avgWith)} ממוצע כש${row.otherPlayerName} משתתף`;
+              if (minSide >= 2 && wrWithout === 0 && wrWith > 0 && !isInHeadline) {
+                lines.push(`${apart} משחקים בלעדיו — אפס נצחונות. איתו ${winsWithCount} מתוך ${together}`);
+              } else if (minSide >= 2 && wrWith === 0 && wrWithout > 0 && !isInHeadline) {
+                lines.push(`${together} משחקים ביחד — אפס נצחונות. בלעדיו ${winsWithoutCount} מתוך ${apart}`);
+              } else if (wrWith === 100 && together >= 3 && !isInHeadline) {
+                lines.push(`${together} משחקים ביחד, ${together} נצחונות — רצף מושלם`);
+              } else if (wrWithout === 100 && apart >= 3) {
+                lines.push(`${apart} נצחונות רצופים בלעדיו`);
               }
-              if (wrDelta < 0) text += `, אחוז נצחונות יורד ל-${Math.round(row.winRateWith)}%`;
-              return text;
+
+              if (signFlip && !isInHeadline) {
+                if (avgW > 0) {
+                  const ratio = Math.round(Math.abs(avgW) / Math.max(1, Math.abs(avgWo)));
+                  lines.push(ratio >= 3
+                    ? `ממוצע ${formatSignedShekel(avgW)} איתו לעומת ${formatSignedShekel(avgWo)} בלעדיו — פער של פי ${ratio}`
+                    : `הופך ממפסיד (${formatSignedShekel(avgWo)}) למרוויח (${formatSignedShekel(avgW)}) למשחק`);
+                } else {
+                  lines.push(`יורד מ-${formatSignedShekel(avgWo)} ל-${formatSignedShekel(avgW)} למשחק כשמשחקים ביחד`);
+                }
+              } else if (!signFlip) {
+                if (avgW > 0 && avgWo > 0 && avgW >= avgWo * 1.5) {
+                  lines.push(`ממוצע ${formatSignedShekel(avgW)} איתו לעומת ${formatSignedShekel(avgWo)} בלעדיו`);
+                } else if (avgW < 0 && avgWo < 0 && Math.abs(avgW) >= Math.abs(avgWo) * 1.5) {
+                  lines.push(`הפסד גדל מ-₪${cleanNumber(Math.abs(avgWo))} ל-₪${cleanNumber(Math.abs(avgW))} למשחק איתו`);
+                }
+              }
+
+              if (Math.abs(wrDelta) >= 8 && !lines.some(l => l.includes('נצחונות'))) {
+                lines.push(`${wrWith}% נצחונות ביחד (${winsWithCount}/${together}) לעומת ${wrWithout}% בלעדיו (${winsWithoutCount}/${apart})`);
+              }
+
+              if (together >= 5 && lossesWithCount <= 1 && wrWith >= 80 && !lines.some(l => l.includes('רצף'))) {
+                lines.push(`הפסיד ${lossesWithCount === 0 ? 'אפס' : 'רק פעם אחת'} ב-${together} משחקים משותפים`);
+              }
+
+              if (pctTogether >= 80 && together >= 10 && lines.length < 3) {
+                lines.push(`שותפים קבועים — ${pctTogether}% מהמשחקים ביחד (${together} מתוך ${total})`);
+              } else if (pctTogether <= 20 && together >= 3 && lines.length < 3) {
+                lines.push(`לעתים נדירות ביחד — רק ${together} מתוך ${total} משחקים`);
+              }
+
+              if (Math.abs(totalWith) >= 100) {
+                lines.push(totalWith > 0
+                  ? `סה"כ +₪${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
+                  : `סה"כ -₪${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
+              }
+
+              if (lines.length === 0) {
+                lines.push(`ממוצע ${formatSignedShekel(avgW)} למשחק איתו, ${formatSignedShekel(avgWo)} בלעדיו`);
+                lines.push(`${winsWithCount} נצחונות מתוך ${together} ביחד, ${winsWithoutCount} מתוך ${apart} בלעדיו`);
+              }
+
+              return lines.slice(0, 3);
             };
+
+            const { headlineLines: headlineInsights, mentionedIds: headlineMentionedIds } = (() => {
+              const allRows = [...luckyCharms, ...kryptonite, ...rareLuckyCharms, ...rareKryptonite];
+              const mentioned = new Set<string>();
+              if (allRows.length === 0) return { headlineLines: [] as string[], mentionedIds: mentioned };
+              const lines: string[] = [];
+              const seen = new Set<string>();
+
+              for (const r of allRows) {
+                const wrWith = Math.round(r.winRateWith);
+                const wrWithout = Math.round(r.winRateWithout);
+                const avgW = Math.round(r.avgWith);
+                const avgWo = Math.round(r.avgWithout);
+                const signFlip = (avgW > 0 && avgWo < 0) || (avgW < 0 && avgWo > 0);
+                const minSide = Math.min(r.withGames, r.withoutGames);
+
+                if (signFlip && !seen.has('flip')) {
+                  seen.add('flip');
+                  mentioned.add(r.otherPlayerId);
+                  lines.push(avgW > 0
+                    ? `${selectedName} עובר מהפסד לרווח עם ${r.otherPlayerName} (${formatSignedShekel(avgWo)} → ${formatSignedShekel(avgW)})`
+                    : `${selectedName} עובר מרווח להפסד עם ${r.otherPlayerName} (${formatSignedShekel(avgWo)} → ${formatSignedShekel(avgW)})`);
+                } else if (minSide >= 2 && wrWithout === 0 && wrWith > 0 && !seen.has('zero_wr')) {
+                  seen.add('zero_wr');
+                  mentioned.add(r.otherPlayerId);
+                  lines.push(`אפס נצחונות בלי ${r.otherPlayerName} (${r.withoutGames} משחקים)`);
+                } else if (minSide >= 2 && wrWith === 0 && wrWithout > 0 && !seen.has('zero_wr_with')) {
+                  seen.add('zero_wr_with');
+                  mentioned.add(r.otherPlayerId);
+                  lines.push(`אפס נצחונות עם ${r.otherPlayerName} (${r.withGames} משחקים)`);
+                } else if (wrWith === 100 && r.withGames >= 3 && !seen.has('perfect')) {
+                  seen.add('perfect');
+                  mentioned.add(r.otherPlayerId);
+                  lines.push(`${r.withGames} נצחונות רצופים עם ${r.otherPlayerName}`);
+                } else if (Math.abs(r.impact) >= 40 && !seen.has(r.otherPlayerId)) {
+                  seen.add(r.otherPlayerId);
+                  mentioned.add(r.otherPlayerId);
+                  lines.push(`השפעה של ${formatSignedShekel(Math.round(r.impact))} למשחק עם ${r.otherPlayerName}`);
+                }
+              }
+
+              if (lines.length === 0) {
+                const strongest = allRows.reduce((a, b) => Math.abs(a.impact) > Math.abs(b.impact) ? a : b);
+                mentioned.add(strongest.otherPlayerId);
+                lines.push(`ההשפעה החזקה ביותר: ${strongest.otherPlayerName} (${formatSignedShekel(Math.round(strongest.impact))} למשחק)`);
+              }
+
+              return { headlineLines: lines.slice(0, 3), mentionedIds: mentioned };
+            })();
+
 
             return (
               <div className="card">
@@ -2267,10 +2519,45 @@ const GraphsScreen = () => {
                   fontSize: '0.7rem', 
                   color: 'var(--text-muted)',
                   textAlign: 'center',
-                  marginBottom: '0.75rem' 
+                  marginBottom: headlineInsights.length > 0 ? '0.35rem' : '0.75rem',
                 }}>
                   Based on balanced samples only ({minGamesThreshold}+ games on each side)
                 </div>
+                {headlineInsights.length > 0 && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ 
+                      fontSize: '0.7rem', 
+                      fontWeight: '700', 
+                      color: '#A78BFA', 
+                      marginBottom: '0.4rem',
+                    }}>
+                      🔍 Key Insights
+                    </div>
+                    <div style={{
+                      padding: '0.4rem 0.5rem',
+                      background: 'rgba(139, 92, 246, 0.08)',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      direction: 'rtl',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.2rem',
+                    }}>
+                      {headlineInsights.map((line, i) => (
+                        <div key={i} style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: '0.3rem',
+                          color: 'var(--text)',
+                          fontWeight: '500',
+                        }}>
+                          <span style={{ flexShrink: 0 }}>📌</span>
+                          <span>{line}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ marginBottom: '0.75rem' }}>
                   <div style={{ 
@@ -2310,9 +2597,12 @@ const GraphsScreen = () => {
                               )}
                             </div>
                           </div>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.3' }}>
-                            {charmSummary(row)}
-                          </div>
+                          {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                              <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
+                              <span>{line}</span>
+                            </div>
+                          ))}
                         </div>
                         );
                       })}
@@ -2328,6 +2618,46 @@ const GraphsScreen = () => {
                       fontStyle: 'italic',
                     }}>
                       No standout lucky charm — {selectedName} performs consistently regardless of company
+                    </div>
+                  )}
+                  {rareLuckyCharms.length > 0 && (
+                    <div style={{ marginTop: '0.45rem' }}>
+                      <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                        Rarely Apart (מדגם קטן)
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        {rareLuckyCharms.map((row, idx) => {
+                          const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+                          return (
+                            <div key={`rare-lucky-${idx}`} style={{ padding: '0.4rem 0.5rem', background: 'rgba(16, 185, 129, 0.08)', borderRadius: '6px', fontSize: '0.75rem', opacity: 0.9 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                                    {' '}({row.withGames} games together)
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontWeight: '700', color: '#10B981' }}>
+                                    +₪{cleanNumber(row.impact)}
+                                  </span>
+                                  {wrDelta !== 0 && (
+                                    <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
+                                      {wrDelta > 0 ? '↑' : '↓'}{Math.abs(wrDelta)}%W
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                                  <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
+                                  <span>{line}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2370,9 +2700,12 @@ const GraphsScreen = () => {
                               )}
                             </div>
                           </div>
-                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.3' }}>
-                            {kryptoniteSummary(row)}
-                          </div>
+                          {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                              <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
+                              <span>{line}</span>
+                            </div>
+                          ))}
                         </div>
                         );
                       })}
@@ -2388,6 +2721,46 @@ const GraphsScreen = () => {
                       fontStyle: 'italic',
                     }}>
                       No clear kryptonite — {selectedName} holds strong against everyone
+                    </div>
+                  )}
+                  {rareKryptonite.length > 0 && (
+                    <div style={{ marginTop: '0.45rem' }}>
+                      <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                        Rarely Apart (מדגם קטן)
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        {rareKryptonite.map((row, idx) => {
+                          const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+                          return (
+                            <div key={`rare-krypto-${idx}`} style={{ padding: '0.4rem 0.5rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '6px', fontSize: '0.75rem', opacity: 0.9 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                  <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                                    {' '}({row.withGames} games together)
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <span style={{ fontWeight: '700', color: '#EF4444' }}>
+                                    ₪{cleanNumber(row.impact)}
+                                  </span>
+                                  {wrDelta !== 0 && (
+                                    <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
+                                      {wrDelta > 0 ? '↑' : '↓'}{Math.abs(wrDelta)}%W
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                                  <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
+                                  <span>{line}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

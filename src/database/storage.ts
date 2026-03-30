@@ -956,6 +956,15 @@ export const clearPendingForecast = (): void => {
   localStorage.removeItem(STORAGE_KEYS.PENDING_FORECAST);
 };
 
+// Publish/unpublish pending forecast (makes it visible to all roles)
+export const publishPendingForecast = (publish: boolean): void => {
+  const pending = getPendingForecast();
+  if (pending) {
+    pending.published = publish;
+    setItem(STORAGE_KEYS.PENDING_FORECAST, pending);
+  }
+};
+
 // Check if pending forecast matches current players (100% match)
 export const checkForecastMatch = (currentPlayerIds: string[]): { 
   matches: boolean; 

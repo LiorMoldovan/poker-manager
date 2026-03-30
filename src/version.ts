@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.4';
+export const APP_VERSION = '5.9.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.5',
+    date: '2026-03-11',
+    changes: [
+      '🧪 Massively enriched Chemistry insights — diverse, non-repetitive per-player observations',
+      '🔍 New Key Insights headline section with deduplicated top findings',
+      '🎯 Every player row now always shows at least one insight with total profit/loss',
+      '🧹 Removed duplicated summary layer — insights are the single source of truth',
+    ]
+  },
   {
     version: '5.9.4',
     date: '2026-03-30',

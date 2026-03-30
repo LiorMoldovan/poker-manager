@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
@@ -91,12 +91,18 @@ const NewGameScreen = () => {
   const [periodMarkers, setPeriodMarkers] = useState<PeriodMarkers | null>(null);
   const [periodOverride, setPeriodOverride] = useState<string | null>(null); // null = auto-detect
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  const [publishedForecast, setPublishedForecast] = useState<ReturnType<typeof getPendingForecast>>(null);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadPlayers();
     checkForActiveGame();
+    // Load published forecast if exists
+    const pending = getPendingForecast();
+    if (pending?.published && !pending.linkedGameId) {
+      setPublishedForecast(pending);
+    }
     // Auto-detect period markers
     try {
       const settings = getSettings();
@@ -275,8 +281,9 @@ const NewGameScreen = () => {
     
     if (forecasts) {
       linkForecastToGame(game.id);
-      clearPendingForecast();
     }
+    clearPendingForecast();
+    setPublishedForecast(null);
 
     if (periodMarkers) {
       updateGame(game.id, { periodMarkers });
@@ -309,6 +316,7 @@ const NewGameScreen = () => {
   const handleUpdateForecast = () => {
     setShowMismatchDialog(false);
     clearPendingForecast();
+    setPublishedForecast(null);
     handleShowForecast(); // Generate new forecast for current players
   };
   
@@ -325,9 +333,40 @@ const NewGameScreen = () => {
   const handleStartWithoutForecast = () => {
     setShowMismatchDialog(false);
     clearPendingForecast();
+    setPublishedForecast(null);
     startGameWithForecast(undefined);
   };
   
+  const handlePublishForecast = () => {
+    publishPendingForecast(true);
+    setPublishedForecast(getPendingForecast());
+  };
+
+  const handleUnpublishForecast = () => {
+    publishPendingForecast(false);
+    setPublishedForecast(null);
+  };
+
+  const handleDeleteForecast = () => {
+    clearPendingForecast();
+    setPublishedForecast(null);
+  };
+
+  const handleSharePublished = () => {
+    if (!publishedForecast) return;
+    const restored: ForecastResult[] = publishedForecast.forecasts.map((f, i) => ({
+      name: f.playerName,
+      expectedProfit: f.expectedProfit,
+      highlight: f.highlight || '',
+      sentence: f.sentence || '',
+      isSurprise: f.isSurprise || false,
+      preGameTeaser: i === 0 ? (publishedForecast.preGameTeaser || '') : '',
+    }));
+    setAiForecasts(restored);
+    if (publishedForecast.aiModel) setAiModelName(publishedForecast.aiModel);
+    setShowForecast(true);
+  };
+
   const handleShareAndStart = async () => {
     await shareForecast();
     if (pendingGameId) {
@@ -1817,6 +1856,132 @@ const NewGameScreen = () => {
         </div>
       )}
 
+      {/* Published Forecast - visible to all roles */}
+      {publishedForecast && !publishedForecast.linkedGameId && (
+        <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
+          <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>🔮</div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text)' }}>
+              {publishedForecast.aiModel ? 'תחזית AI' : 'תחזית'}
+            </h3>
+            {publishedForecast.aiModel && (
+              <div style={{ fontSize: '0.65rem', color: '#A855F7', marginTop: '0.15rem' }}>
+                Powered by Gemini ✨ · {publishedForecast.aiModel}
+              </div>
+            )}
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+              {new Date(publishedForecast.createdAt).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+
+          {publishedForecast.preGameTeaser && (
+            <div style={{
+              padding: '0.75rem',
+              marginBottom: '0.75rem',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.08))',
+              border: '1px solid rgba(139, 92, 246, 0.25)',
+              textAlign: 'right',
+              direction: 'rtl',
+            }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa', marginBottom: '0.3rem' }}>🎙️ טיזר המשחק</div>
+              <div style={{ fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.6 }}>
+                {publishedForecast.preGameTeaser}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {publishedForecast.forecasts.map((f, idx) => (
+              <div key={idx} style={{
+                padding: '0.5rem 0.6rem',
+                borderRadius: '8px',
+                background: 'var(--surface)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '700', width: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
+                    {idx + 1}
+                  </span>
+                  <span style={{ flex: 1, fontWeight: '600', fontSize: '0.85rem', color: 'var(--text)' }}>
+                    {f.playerName}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: f.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: '600', flexShrink: 0 }}>
+                    {f.expectedProfit >= 0 ? '+' : ''}₪{cleanNumber(f.expectedProfit)}
+                  </span>
+                </div>
+                {f.sentence && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', paddingRight: '2rem', direction: 'rtl', lineHeight: 1.5 }}>
+                    {f.sentence}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {role === 'admin' && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleSharePublished}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  background: 'rgba(34, 197, 94, 0.1)',
+                  color: '#22c55e',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                📤 שתף
+              </button>
+              <button
+                onClick={handleShowForecast}
+                disabled={selectedIds.size < 2}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  color: '#a78bfa',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🔄 חדש
+              </button>
+              <button
+                onClick={handleUnpublishForecast}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-muted)',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🔒 הסתר
+              </button>
+              <button
+                onClick={handleDeleteForecast}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#ef4444',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🗑️ מחק
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add Player Modal */}
       {showAddPlayer && (
         <div className="modal-overlay" onClick={() => setShowAddPlayer(false)}>
@@ -2440,20 +2605,46 @@ const NewGameScreen = () => {
 
             {/* Action buttons - outside screenshot */}
             {(aiForecasts || cachedForecasts) && !isLoadingAI && (
-              <div className="actions" style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}
-                >
-                  סגור
-                </button>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={shareForecast}
-                  disabled={isSharing}
+              <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div className="actions">
+                  <button 
+                    className="btn btn-secondary" 
+                    onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}
+                  >
+                    סגור
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={shareForecast}
+                    disabled={isSharing}
                 >
                   {isSharing ? '📸...' : '📤 שתף'}
                 </button>
+                </div>
+                {role === 'admin' && (
+                  <button
+                    onClick={() => handlePublishForecast()}
+                    disabled={!!publishedForecast}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem',
+                      borderRadius: '8px',
+                      border: publishedForecast
+                        ? '1px solid rgba(16, 185, 129, 0.2)'
+                        : '1px solid rgba(16, 185, 129, 0.4)',
+                      background: publishedForecast
+                        ? 'rgba(16, 185, 129, 0.05)'
+                        : 'rgba(16, 185, 129, 0.1)',
+                      color: publishedForecast ? '#6ee7b7' : '#10b981',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: publishedForecast ? 'default' : 'pointer',
+                      opacity: publishedForecast ? 0.7 : 1,
+                    }}
+                  >
+                    {publishedForecast ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
+                  </button>
+                )}
               </div>
             )}
           </div>
