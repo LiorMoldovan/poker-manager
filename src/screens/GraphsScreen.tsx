@@ -2148,24 +2148,15 @@ const GraphsScreen = () => {
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'center',
-                    marginBottom: '0.6rem',
+                    marginBottom: rowInsightLines ? '0.25rem' : '0.6rem',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <span style={{
-                          fontWeight: '700',
-                          color: row.otherColor,
-                          fontSize: '1rem',
-                        }}>
-                          {row.otherPlayerName}
-                        </span>
-                        {rowInsightLines && rowInsightLines.map((line, li) => (
-                          <div key={li} style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: li === 0 ? '0.1rem' : '0.05rem', textAlign: 'left' }}>
-                            {li === 0 ? '💡' : '📊'} {line}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <span style={{
+                      fontWeight: '700',
+                      color: row.otherColor,
+                      fontSize: '1rem',
+                    }}>
+                      {row.otherPlayerName}
+                    </span>
                     <div style={{ 
                       display: 'flex',
                       alignItems: 'center',
@@ -2173,6 +2164,8 @@ const GraphsScreen = () => {
                       padding: '0.25rem 0.6rem',
                       background: row.impact > 0 ? 'rgba(16, 185, 129, 0.15)' : row.impact < 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
                       borderRadius: '12px',
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
                     }}>
                       {impactIcon && <span style={{ fontSize: '0.9rem' }}>{impactIcon}</span>}
                       <span style={{ 
@@ -2184,6 +2177,15 @@ const GraphsScreen = () => {
                       </span>
                     </div>
                   </div>
+                  {rowInsightLines && (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      {rowInsightLines.map((line, li) => (
+                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4' }}>
+                          {li === 0 ? '💡' : '📊'} {line}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   
                   {/* Two cards side by side */}
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -2598,7 +2600,7 @@ const GraphsScreen = () => {
                             </div>
                           </div>
                           {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
                               <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                               <span>{line}</span>
                             </div>
@@ -2649,7 +2651,7 @@ const GraphsScreen = () => {
                                 </div>
                               </div>
                               {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
                                   <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                                   <span>{line}</span>
                                 </div>
@@ -2701,7 +2703,7 @@ const GraphsScreen = () => {
                             </div>
                           </div>
                           {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
                               <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                               <span>{line}</span>
                             </div>
@@ -2752,7 +2754,7 @@ const GraphsScreen = () => {
                                 </div>
                               </div>
                               {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.6rem', color: 'var(--text)', marginTop: li === 0 ? '0.25rem' : '0.08rem', direction: 'rtl', lineHeight: '1.3' }}>
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
                                   <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                                   <span>{line}</span>
                                 </div>

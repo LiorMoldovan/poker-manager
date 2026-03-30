@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.5';
+export const APP_VERSION = '5.9.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.6',
+    date: '2026-03-11',
+    changes: [
+      '📱 Mobile-friendly insight layout — text moved below name row to prevent wrapping',
+      '🔤 Larger insight text (0.7rem) for better readability on phones',
+      '🎨 Key Insights section with header, consistent card styling',
+    ]
+  },
   {
     version: '5.9.5',
     date: '2026-03-11',
