@@ -48,6 +48,9 @@ const DEFAULT_SETTINGS: Settings = {
   chipsPerRebuy: 10000,
   minTransfer: 5,
   gameNightDays: [4, 6],
+  blockedTransfers: [
+    { playerA: 'פיליפ', playerB: 'תומר', after: '2026-03-24' },
+  ],
 };
 
 // Default players (all permanent, all male)
@@ -80,6 +83,12 @@ export const initializeStorage = (): void => {
   }
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+  } else {
+    const settings = getItem<Settings>(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    if (!settings.blockedTransfers) {
+      settings.blockedTransfers = DEFAULT_SETTINGS.blockedTransfers;
+      setItem(STORAGE_KEYS.SETTINGS, settings);
+    }
   }
   // Initialize players - use defaults if no players exist or if array is empty
   const existingPlayers = localStorage.getItem(STORAGE_KEYS.PLAYERS);

@@ -1,4 +1,4 @@
-import { GamePlayer, ChipValue, Settlement, SkippedTransfer, SharedExpense } from '../types';
+import { GamePlayer, ChipValue, Settlement, SkippedTransfer, SharedExpense, BlockedTransferPair } from '../types';
 
 export const calculateChipTotal = (
   chipCounts: Record<string, number>,
@@ -25,15 +25,16 @@ export const calculateProfitLoss = (
 type BalanceEntry = { name: string; balance: number };
 type BlockedPair = { from: string; to: string; after: string };
 
-const BLOCKED_TRANSFERS: BlockedPair[] = [
-  { from: 'פיליפ', to: 'תומר', after: '2026-03-24' },
-  { from: 'תומר', to: 'פיליפ', after: '2026-03-24' },
-];
-
 let _activeBlocked: BlockedPair[] = [];
 
 const isBlocked = (from: string, to: string): boolean =>
   _activeBlocked.some(b => b.from === from && b.to === to);
+
+const expandBlockedPairs = (pairs: BlockedTransferPair[]): BlockedPair[] =>
+  pairs.flatMap(p => [
+    { from: p.playerA, to: p.playerB, after: p.after },
+    { from: p.playerB, to: p.playerA, after: p.after },
+  ]);
 
 /**
  * Partition players into the maximum number of independent zero-sum groups.
@@ -123,6 +124,21 @@ function greedySettle(balances: BalanceEntry[]): Settlement[] {
     }
     if (!matched) break;
   }
+
+  // Force any remaining unsettled balances (blocked pairs allowed as last resort)
+  for (;;) {
+    const creditors = work.filter(b => b.balance > 0.001).sort((a, b) => b.balance - a.balance);
+    const debtors = work.filter(b => b.balance < -0.001).sort((a, b) => a.balance - b.balance);
+    if (creditors.length === 0 || debtors.length === 0) break;
+    const db = debtors[0];
+    const cr = creditors[0];
+    const amount = Math.min(cr.balance, Math.abs(db.balance));
+    if (amount < 0.001) break;
+    transfers.push({ from: db.name, to: cr.name, amount });
+    cr.balance -= amount;
+    db.balance += amount;
+  }
+
   return transfers;
 }
 
@@ -140,7 +156,6 @@ function bestSettleRecursive(
 
   if (creditors.length === 0 || debtors.length === 0) return [];
   if (creditors.length === 1 && debtors.length === 1) {
-    if (isBlocked(debtors[0].name, creditors[0].name)) return [];
     const amt = Math.min(creditors[0].balance, Math.abs(debtors[0].balance));
     return amt > 0.001 ? [{ from: debtors[0].name, to: creditors[0].name, amount: amt }] : [];
   }
@@ -197,10 +212,12 @@ function settleGroup(group: BalanceEntry[]): Settlement[] {
 function optimizedSettle(
   balances: BalanceEntry[],
   minTransfer: number,
-  gameDate?: string
+  gameDate?: string,
+  blockedPairs?: BlockedTransferPair[]
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } {
+  const allBlocked = blockedPairs ? expandBlockedPairs(blockedPairs) : [];
   _activeBlocked = gameDate
-    ? BLOCKED_TRANSFERS.filter(b => gameDate >= b.after)
+    ? allBlocked.filter(b => gameDate >= b.after)
     : [];
 
   const active = balances.filter(b => Math.abs(b.balance) > 0.001);
@@ -237,13 +254,14 @@ function optimizedSettle(
 export const calculateSettlement = (
   players: GamePlayer[],
   minTransfer: number,
-  gameDate?: string
+  gameDate?: string,
+  blockedPairs?: BlockedTransferPair[]
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
   const balances = players
     .filter(p => Math.abs(p.profit) > 0.001)
     .map(p => ({ name: p.playerName, balance: p.profit }));
 
-  return optimizedSettle(balances, minTransfer, gameDate);
+  return optimizedSettle(balances, minTransfer, gameDate, blockedPairs);
 };
 
 // Clean up floating-point artifacts, round to whole numbers, and add thousand separators (e.g., 30.7 -> 31, 1234 -> 1,234)
@@ -350,7 +368,8 @@ export const calculateCombinedSettlement = (
   players: GamePlayer[],
   expenses: SharedExpense[],
   minTransfer: number,
-  gameDate?: string
+  gameDate?: string,
+  blockedPairs?: BlockedTransferPair[]
 ): { settlements: Settlement[]; smallTransfers: SkippedTransfer[] } => {
   const balanceMap = new Map<string, { name: string; balance: number }>();
 
@@ -386,6 +405,6 @@ export const calculateCombinedSettlement = (
     .filter(([_, data]) => Math.abs(data.balance) > 0.001)
     .map(([_, data]) => ({ name: data.name, balance: data.balance }));
 
-  return optimizedSettle(balances, minTransfer, gameDate);
+  return optimizedSettle(balances, minTransfer, gameDate, blockedPairs);
 };
 

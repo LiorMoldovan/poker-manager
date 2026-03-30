@@ -1,38 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale } from '../database/storage';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, Game } from '../types';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
-import { speakHebrew } from '../utils/tts';
+import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
-
-const hebrewNum = (n: number, feminine: boolean): string => {
-  const abs = Math.round(Math.abs(n));
-  if (abs === 0) return 'אפס';
-  const femOnes = ['', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע', 'עשר'];
-  const mascOnes = ['', 'אחד', 'שניים', 'שלושה', 'ארבעה', 'חמישה', 'שישה', 'שבעה', 'שמונה', 'תשעה', 'עשרה'];
-  const ones = feminine ? femOnes : mascOnes;
-  if (abs <= 10) return ones[abs];
-  if (abs <= 19) {
-    const unit = abs - 10;
-    const tenWord = feminine ? 'עשרה' : 'עשר';
-    return `${ones[unit]} ${tenWord}`;
-  }
-  if (abs <= 99) {
-    const tensWords = ['', '', 'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים'];
-    const ten = Math.floor(abs / 10);
-    const unit = abs % 10;
-    if (unit === 0) return tensWords[ten];
-    return `${tensWords[ten]} ו${ones[unit]}`;
-  }
-  if (abs === 100) return 'מאה';
-  return String(abs);
-};
 
 const GameSummaryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -53,7 +30,7 @@ const GameSummaryScreen = () => {
   const cameFromTable = locationState?.from === 'statistics';
   const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const cameFromChipEntry = locationState?.from === 'chip-entry';
-  const { role } = usePermissions();
+  const { role, playerName: identityName } = usePermissions();
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -75,7 +52,8 @@ const GameSummaryScreen = () => {
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
   const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
   const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: true, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: false, standings: true });
+  const isPayModeInit = new URLSearchParams(location.search).get('pay') === '1';
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: !isPayModeInit, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: true, standings: true });
   const toggleSection = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -87,10 +65,58 @@ const GameSummaryScreen = () => {
   const standingsRef = useRef<HTMLDivElement>(null);
   const [standingsData, setStandingsData] = useState<PlayerStats[]>([]);
   const [standingsLabel, setStandingsLabel] = useState('');
+  const [previousRankMap, setPreviousRankMap] = useState<Record<string, number>>({});
   const [monthlyStats, setMonthlyStats] = useState<PlayerStats[]>([]);
   const [monthLabel, setMonthLabel] = useState('');
   const monthlyRef = useRef<HTMLDivElement>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
+  const [paidSettlements, setPaidSettlements] = useState<{ from: string; to: string; paidAt: string }[]>([]);
+  const [paymentModal, setPaymentModal] = useState<{ from: string; to: string; amount: number } | null>(null);
+  const settlementsSectionRef = useRef<HTMLDivElement>(null);
+  const isPayMode = new URLSearchParams(location.search).get('pay') === '1';
+
+  useEffect(() => {
+    if (isPayMode && settlements.length > 0 && settlementsSectionRef.current) {
+      setTimeout(() => {
+        settlementsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 500);
+    }
+  }, [isPayMode, settlements]);
+
+  const handleReopenChipEntry = () => {
+    if (!gameId) return;
+    updateGameStatus(gameId, 'chip_entry');
+    updateGame(gameId, { aiSummary: '', forecastComment: '', forecastAccuracy: undefined, chipGap: undefined, chipGapPerPlayer: undefined });
+    invalidateAICaches();
+    navigate(`/chip-entry/${gameId}`);
+  };
+
+  const isSettlementPaid = (from: string, to: string) =>
+    paidSettlements.some(p => p.from === from && p.to === to);
+
+  const toggleSettlementPaid = (from: string, to: string) => {
+    if (!gameId) return;
+    let updated: Game['paidSettlements'];
+    if (isSettlementPaid(from, to)) {
+      updated = paidSettlements.filter(p => !(p.from === from && p.to === to));
+    } else {
+      updated = [...paidSettlements, { from, to, paidAt: new Date().toISOString() }];
+    }
+    setPaidSettlements(updated || []);
+    updateGame(gameId, { paidSettlements: updated });
+  };
+
+  const openPaymentApp = async (app: 'bit' | 'paybox', amount: number) => {
+    const roundedAmount = Math.round(amount);
+    try { await navigator.clipboard.writeText(String(roundedAmount)); } catch { /* fallback: no clipboard */ }
+    if (app === 'bit') {
+      window.location.href = 'https://www.bitpay.co.il/app';
+    } else {
+      window.location.href = 'https://payboxapp.page.link/send';
+    }
+    setPaymentModal(null);
+  };
 
   const handleRegenerateAiSummary = () => {
     if (!gameId) return;
@@ -142,6 +168,7 @@ const GameSummaryScreen = () => {
     const settings = getSettings();
     
     setGameDate(game.date);
+    setPaidSettlements(game.paidSettlements || []);
     setChipGap(game.chipGap || null);
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
     setPreGameTeaser(game.preGameTeaser || null);
@@ -157,12 +184,14 @@ const GameSummaryScreen = () => {
     
     // Calculate settlements - use COMBINED if there are expenses
     const gameDateStr = game.date || game.createdAt;
+    const blockedPairs = settings.blockedTransfers;
     if (gameExpenses.length > 0) {
       const { settlements: settl, smallTransfers: small } = calculateCombinedSettlement(
         gamePlayers,
         gameExpenses,
         settings.minTransfer,
-        gameDateStr
+        gameDateStr,
+        blockedPairs
       );
       setSettlements(settl);
       setSkippedTransfers(small);
@@ -170,7 +199,8 @@ const GameSummaryScreen = () => {
       const { settlements: settl, smallTransfers: small } = calculateSettlement(
         gamePlayers, 
         settings.minTransfer,
-        gameDateStr
+        gameDateStr,
+        blockedPairs
       );
       setSettlements(settl);
       setSkippedTransfers(small);
@@ -206,6 +236,10 @@ const GameSummaryScreen = () => {
     const comboPlayerIds = gamePlayers.map(gp => gp.playerId);
     const combo = getComboHistory(comboPlayerIds);
     setComboHistory(combo);
+
+    // Pre-load shared data once to avoid repeated localStorage parsing
+    const cachedAllGames = getAllGames();
+    const cachedAllGP = getAllGamePlayers();
 
     // Calculate highlights — prioritized, period-focused, always exactly 10
     type Highlight = { emoji: string; label: string; detail: string; priority: number };
@@ -268,10 +302,10 @@ const GameSummaryScreen = () => {
     try {
       const allStats = getPlayerStats();
       const periodStats = getPlayerStats({ start: periodStart });
-      const allGP = getAllGamePlayers();
+      const allGP = cachedAllGP;
       const previousGP = allGP.filter(gp => gp.gameId !== gameId);
 
-      const periodGames = getAllGames().filter(g => {
+      const periodGames = cachedAllGames.filter(g => {
         if (g.status !== 'completed' || g.id === gameId) return false;
         return new Date(g.date || g.createdAt) >= periodStart;
       });
@@ -466,7 +500,7 @@ const GameSummaryScreen = () => {
         bank.push({ emoji: '🌟', label: 'שיא קבוצתי — נצחון', detail: `${bigWinner.playerName} +₪${cleanNumber(bigWinner.profit)} (היה +₪${cleanNumber(historicalMaxProfit)})`, priority: 1 });
       }
 
-      const allCompletedGames = getAllGames().filter(g => g.status === 'completed' && g.id !== gameId);
+      const allCompletedGames = cachedAllGames.filter(g => g.status === 'completed' && g.id !== gameId);
       let historicalMaxPot = 0;
       for (const g of allCompletedGames) {
         const gPlayers = allGP.filter(gp => gp.gameId === g.id);
@@ -521,7 +555,7 @@ const GameSummaryScreen = () => {
     const halfStats = getPlayerStats({ start: halfStart, end: halfEnd });
     const allPlayers = getAllPlayers();
 
-    const halfGames = getAllGames().filter(g => {
+    const halfGames = cachedAllGames.filter(g => {
       if (g.status !== 'completed') return false;
       const gd = new Date(g.date || g.createdAt);
       return gd >= halfStart && gd <= halfEnd;
@@ -542,12 +576,29 @@ const GameSummaryScreen = () => {
     setStandingsData(activeStats);
     setStandingsLabel(halfLabel);
 
+    // Compute previous rankings (before this game) for ranking change indicators
+    const thisGameProfitMap = new Map<string, number>();
+    sortedPlayers.forEach(p => thisGameProfitMap.set(p.playerId, p.profit));
+
+    const prevStats = activeStats
+      .map(s => ({
+        playerId: s.playerId,
+        totalProfit: s.totalProfit - (thisGameProfitMap.get(s.playerId) ?? 0),
+        gamesPlayed: s.gamesPlayed - (thisGameProfitMap.has(s.playerId) ? 1 : 0),
+      }))
+      .filter(s => s.gamesPlayed > 0)
+      .sort((a, b) => b.totalProfit - a.totalProfit);
+
+    const prevRankMap: Record<string, number> = {};
+    prevStats.forEach((s, i) => { prevRankMap[s.playerId] = i + 1; });
+    setPreviousRankMap(prevRankMap);
+
     // Monthly summary table — primary: user confirmed at game creation; fallback: history-based
     const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
     const gameMonthIdx = actualGameDate.getMonth();
     const isLastGameOfMonth = gameYear >= 2026 && (
       game.periodMarkers?.isLastGameOfMonth ??
-      !getAllGames().some(g => {
+      !cachedAllGames.some(g => {
         if (g.status !== 'completed' || g.id === game.id) return false;
         const gd = new Date(g.date || g.createdAt);
         return gd.getFullYear() === gameYear && gd.getMonth() === gameMonthIdx && gd > actualGameDate;
@@ -557,7 +608,7 @@ const GameSummaryScreen = () => {
       const monthStart = new Date(gameYear, gameMonthIdx, 1);
       const monthEnd = new Date(gameYear, gameMonthIdx + 1, 0, 23, 59, 59);
       const mStats = getPlayerStats({ start: monthStart, end: monthEnd });
-      const monthGames = getAllGames().filter(g => {
+      const monthGames = cachedAllGames.filter(g => {
         if (g.status !== 'completed') return false;
         const gd = new Date(g.date || g.createdAt);
         return gd >= monthStart && gd <= monthEnd;
@@ -680,7 +731,7 @@ const GameSummaryScreen = () => {
 
       const resolvedPeriodMarkers: PeriodMarkers | undefined = game.periodMarkers || (() => {
         try {
-          const allGamesForPeriod = getAllGames();
+          const allGamesForPeriod = cachedAllGames;
           const s = getSettings();
           return detectPeriodMarkers(new Date(game.date || game.createdAt), allGamesForPeriod, s.gameNightDays || [4, 6]);
         } catch { return undefined; }
@@ -689,8 +740,8 @@ const GameSummaryScreen = () => {
       // Build location insights for the summary (only if genuinely interesting)
       const summaryLocInsights = (() => {
         if (!game.location) return undefined;
-        const allGp = getAllGamePlayers();
-        const allGm = getAllGames().filter(g => g.status === 'completed');
+        const allGp = cachedAllGP;
+        const allGm = cachedAllGames.filter(g => g.status === 'completed');
         const tonightNames = sortedPlayers.map(p => p.playerName);
         const playerHistories = tonightNames.map(name => {
           const playerGames = allGp.filter(gp => gp.playerName === name);
@@ -988,10 +1039,14 @@ const GameSummaryScreen = () => {
         files.push(new File([standingsBlob], 'poker-standings.png', { type: 'image/png' }));
       }
       
+      const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
+      const shareText = `🃏 תוצאות ערב הפוקר\n\n📲 לצפייה בתוצאות ותשלום דרך Bit/PayBox:\n${payLink}`;
+
       // Try native share first (works on mobile)
       if (navigator.share && navigator.canShare({ files })) {
         await navigator.share({
           files,
+          text: shareText,
           title: 'Poker Game Summary',
         });
       } else {
@@ -1005,13 +1060,7 @@ const GameSummaryScreen = () => {
           URL.revokeObjectURL(url);
         });
         
-        // Then open WhatsApp
-        const dateStr = new Date(gameDate).toLocaleDateString('en-US', { 
-          weekday: 'short', 
-          month: 'short', 
-          day: 'numeric' 
-        });
-        const text = `🃏 Poker Night Results - ${dateStr}\n\n(${files.length} images downloaded - attach them to this message)`;
+        const text = `${shareText}\n\n(${files.length} images downloaded - attach them to this message)`;
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
       }
     } catch (error) {
@@ -1082,7 +1131,7 @@ const GameSummaryScreen = () => {
               </thead>
               <tbody>
                 {players.map((player, index) => (
-                  <tr key={player.id}>
+                  <tr key={player.id} style={identityName && player.playerName === identityName ? { background: 'rgba(99, 102, 241, 0.18)', boxShadow: 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' } : undefined}>
                     <td>
                       {player.playerName}
                       {index === 0 && player.profit > 0 && ' 🥇'}
@@ -1132,21 +1181,42 @@ const GameSummaryScreen = () => {
 
       {/* Settlements Section - for separate screenshot */}
       {settlements.length > 0 && (
-        <div ref={settlementsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+        <div ref={(el) => { (settlementsRef as React.MutableRefObject<HTMLDivElement | null>).current = el; (settlementsSectionRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('settlements')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.settlements ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.settlements && (<>
-              {settlements.map((s, index) => (
-                <div key={index} className="settlement-row">
-                  <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                  <span className="settlement-arrow">➜</span>
-                  <span>{renderPlayerWithFoodIcon(s.to)}</span>
-                  <span className="settlement-amount">{formatCurrency(s.amount)}</span>
-                </div>
-              ))}
+              {settlements.map((s, index) => {
+                const paid = isSettlementPaid(s.from, s.to);
+                const isMySettlement = identityName && (s.from === identityName || s.to === identityName);
+                return (
+                  <div
+                    key={index}
+                    className="settlement-row"
+                    style={{
+                      cursor: 'pointer',
+                      opacity: paid ? 0.5 : 1,
+                      background: isPayMode && isMySettlement ? 'rgba(99, 102, 241, 0.15)' : undefined,
+                      borderRadius: '8px',
+                      padding: '0.3rem 0.4rem',
+                      margin: '0.1rem -0.4rem',
+                      position: 'relative',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onClick={() => !paid && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
+                  >
+                    <span>{renderPlayerWithFoodIcon(s.from)}</span>
+                    <span className="settlement-arrow">➜</span>
+                    <span>{renderPlayerWithFoodIcon(s.to)}</span>
+                    <span className="settlement-amount" style={{ textDecoration: paid ? 'line-through' : undefined }}>
+                      {formatCurrency(s.amount)}
+                    </span>
+                    {paid && <span style={{ marginLeft: '0.3rem', fontSize: '0.85rem' }}>✅</span>}
+                  </div>
+                );
+              })}
               {sharedExpenses.length > 0 && (
                 <div style={{ 
                   marginTop: '0.75rem', 
@@ -1763,11 +1833,12 @@ const GameSummaryScreen = () => {
               <tbody>
                 {monthlyStats.map((player, index) => {
                   const isInThisGame = players.some(p => p.playerId === player.playerId);
+                  const isMe = identityName && player.playerName === identityName;
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isInThisGame ? 'rgba(59, 130, 246, 0.12)' : undefined,
-                      borderRight: isInThisGame ? '3px solid rgba(59, 130, 246, 0.5)' : '3px solid transparent',
+                      background: isMe ? 'rgba(99, 102, 241, 0.18)' : isInThisGame ? 'rgba(59, 130, 246, 0.12)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : isInThisGame ? 'inset 3px 0 0 rgba(59, 130, 246, 0.5)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {index + 1}
@@ -1872,17 +1943,29 @@ const GameSummaryScreen = () => {
               <tbody>
                 {standingsData.map((player, index) => {
                   const isInThisGame = players.some(p => p.playerId === player.playerId);
+                  const currentRank = index + 1;
+                  const prevRank = previousRankMap[player.playerId];
+                  const rankDiff = prevRank ? prevRank - currentRank : 0;
+                  const isNewEntry = !prevRank;
+                  const isMe = identityName && player.playerName === identityName;
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isInThisGame ? 'rgba(168, 85, 247, 0.15)' : undefined,
-                      borderRight: isInThisGame ? '3px solid rgba(168, 85, 247, 0.6)' : '3px solid transparent',
+                      background: isMe ? 'rgba(99, 102, 241, 0.18)' : isInThisGame ? 'rgba(168, 85, 247, 0.15)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : isInThisGame ? 'inset 3px 0 0 rgba(168, 85, 247, 0.6)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
-                        {index + 1}
+                        <span>{currentRank}</span>
                         {index === 0 && ' 🥇'}
                         {index === 1 && ' 🥈'}
                         {index === 2 && ' 🥉'}
+                        {isNewEntry ? (
+                          <span style={{ fontSize: '0.55rem', color: '#60a5fa', marginLeft: '0.2rem', fontWeight: 700 }}>NEW</span>
+                        ) : rankDiff > 0 ? (
+                          <span style={{ fontSize: '0.6rem', color: 'var(--success)', marginLeft: '0.15rem' }}>▲{rankDiff}</span>
+                        ) : rankDiff < 0 ? (
+                          <span style={{ fontSize: '0.6rem', color: 'var(--danger)', marginLeft: '0.15rem' }}>▼{Math.abs(rankDiff)}</span>
+                        ) : null}
                       </td>
                       <td style={{
                         fontWeight: isInThisGame ? '700' : '500',
@@ -1940,7 +2023,7 @@ const GameSummaryScreen = () => {
       )}
 
       {/* Action buttons - outside the screenshot area */}
-      <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+      <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <button className="btn btn-secondary btn-lg" onClick={navigateBack}>
           {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : cameFromChipEntry ? '🏠 Home' : '📜 History'}
         </button>
@@ -1952,6 +2035,111 @@ const GameSummaryScreen = () => {
           {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ Waiting for summary...' : '📤 Share'}
         </button>
       </div>
+
+      {/* Re-open chip entry - admin only */}
+      {role === 'admin' && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+          {!showReopenConfirm ? (
+            <button
+              className="btn btn-sm"
+              style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.75rem' }}
+              onClick={() => setShowReopenConfirm(true)}
+            >
+              🔄 Re-open Chip Entry
+            </button>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+              <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginBottom: '0.5rem', direction: 'rtl' }}>
+                פעולה זו תפתח מחדש את ספירת הצ׳יפים. הסיכום וה-AI יאופסו.
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowReopenConfirm(false)}>ביטול</button>
+                <button className="btn btn-sm" style={{ background: '#f59e0b', color: 'white' }} onClick={handleReopenChipEntry}>אישור</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {paymentModal && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.7)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => setPaymentModal(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
+              maxWidth: '320px', width: '100%', direction: 'rtl', textAlign: 'center',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)' }}>
+              {paymentModal.from} ➜ {paymentModal.to}
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.25rem', color: 'var(--primary)' }}>
+              ₪{cleanNumber(paymentModal.amount)}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              הסכום יועתק ללוח — הדביקו באפליקציה
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
+              <button
+                onClick={() => openPaymentApp('bit', paymentModal.amount)}
+                style={{
+                  flex: 1, padding: '0.75rem', borderRadius: '12px', border: 'none',
+                  background: 'linear-gradient(135deg, #00d4aa, #00b894)', color: 'white',
+                  fontSize: '1rem', fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                💚 Bit
+              </button>
+              <button
+                onClick={() => openPaymentApp('paybox', paymentModal.amount)}
+                style={{
+                  flex: 1, padding: '0.75rem', borderRadius: '12px', border: 'none',
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)', color: 'white',
+                  fontSize: '1rem', fontWeight: '600', cursor: 'pointer',
+                }}
+              >
+                💜 PayBox
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                toggleSettlementPaid(paymentModal.from, paymentModal.to);
+                setPaymentModal(null);
+              }}
+              style={{
+                width: '100%', padding: '0.6rem', borderRadius: '10px',
+                border: '1px solid var(--border)', background: 'transparent',
+                color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer',
+                marginBottom: '0.5rem',
+              }}
+            >
+              {isSettlementPaid(paymentModal.from, paymentModal.to) ? '↩️ סמן כלא שולם' : '✅ סמן כשולם'}
+            </button>
+
+            <button
+              onClick={() => setPaymentModal(null)}
+              style={{
+                width: '100%', padding: '0.5rem', borderRadius: '10px',
+                border: 'none', background: 'transparent',
+                color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer',
+              }}
+            >
+              סגור
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

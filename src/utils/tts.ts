@@ -174,7 +174,7 @@ let _geminiTTSModel: string | null = null;
 let _geminiTTSVoice: string | null = null;
 const _modelBlockedUntil = new Map<string, number>();
 const GEMINI_BLOCK_DURATION_MS = 60 * 1000;
-const GEMINI_FETCH_TIMEOUT_MS = 7000;
+const GEMINI_FETCH_TIMEOUT_MS = 9000;
 
 function isModelBlocked(model: string): boolean {
   const until = _modelBlockedUntil.get(model);
@@ -267,7 +267,7 @@ function pcmToWavUrl(pcmBase64: string): string {
   return URL.createObjectURL(blob);
 }
 
-async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<boolean> {
+async function speakWithGeminiTTS(messages: string[], apiKey: string, onBeforePlay?: () => void | Promise<void>): Promise<boolean> {
   if (!apiKey || messages.length === 0) return false;
 
   const availableModels = GEMINI_TTS_MODELS.filter(m => !isModelBlocked(m));
@@ -341,6 +341,7 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string): Promise<b
 
       ttsStatus(`Playing audio (${shortModel(model)}/${voice}, ${elapsed}ms)`, 'success');
 
+      await onBeforePlay?.();
       const wavUrl = pcmToWavUrl(audioBase64);
       try {
         await playAudioUrl(wavUrl);
@@ -496,7 +497,7 @@ export function deleteElevenLabsGameEntry(gameId: string): void {
   } catch { /* ignore */ }
 }
 
-async function speakWithElevenLabs(messages: string[], apiKey: string): Promise<boolean> {
+async function speakWithElevenLabs(messages: string[], apiKey: string, onBeforePlay?: () => void | Promise<void>): Promise<boolean> {
   if (!apiKey || messages.length === 0) return false;
 
   // eleven_v3 handles Hebrew natively — only clean symbols/emoji, don't expand numbers
@@ -567,6 +568,7 @@ async function speakWithElevenLabs(messages: string[], apiKey: string): Promise<
     const remaining = Math.max(0, 10000 - _elevenLabsCharsUsedSession);
     ttsStatus(`Playing ElevenLabs (${elapsed}ms) | ${charCost} used, ~${remaining} left`, 'success');
 
+    await onBeforePlay?.();
     const url = URL.createObjectURL(blob);
     try {
       await playAudioUrl(url);
@@ -613,7 +615,7 @@ export function isEdgeBrowser(): boolean {
   return /Edg[eA]?\//i.test(navigator.userAgent);
 }
 
-async function speakWithEdgeTTS(messages: string[]): Promise<boolean> {
+async function speakWithEdgeTTS(messages: string[], onBeforePlay?: () => void | Promise<void>): Promise<boolean> {
   if (messages.length === 0) return false;
 
   if (!isEdgeBrowser()) {
@@ -647,6 +649,7 @@ async function speakWithEdgeTTS(messages: string[]): Promise<boolean> {
     const elapsed = Date.now() - t0;
     ttsStatus(`Playing Edge TTS (${voice.replace('he-IL-', '')}, ${elapsed}ms)`, 'success');
 
+    await onBeforePlay?.();
     const url = URL.createObjectURL(blob);
     try {
       await playAudioUrl(url);
@@ -695,7 +698,7 @@ export const createHebrewUtterance = (text: string, voice: SpeechSynthesisVoice 
   return utt;
 };
 
-function speakWithBrowser(messages: string[]): boolean {
+function speakWithBrowser(messages: string[], onBeforePlay?: () => void | Promise<void>): boolean {
   if (!('speechSynthesis' in window) || messages.length === 0) {
     return false;
   }
@@ -718,6 +721,7 @@ function speakWithBrowser(messages: string[]): boolean {
   const utt = createHebrewUtterance(combined, voice);
   utt.onerror = (e) => console.warn('🔇 Browser TTS error:', e);
 
+  onBeforePlay?.();
   window.speechSynthesis.speak(utt);
   return true;
 }
@@ -728,6 +732,7 @@ function speakWithBrowser(messages: string[]): boolean {
 
 export interface SpeakOptions {
   freeOnly?: boolean;
+  onBeforePlay?: () => void | Promise<void>;
 }
 
 /**
@@ -744,12 +749,14 @@ export async function speakHebrew(messages: string[], apiKey: string | null, opt
 
   const freeOnly = options?.freeOnly ?? false;
 
+  const onBeforePlay = options?.onBeforePlay;
+
   ttsStatus(`TTS start (${messages.length} msg${freeOnly ? ', free-only' : ''}, ${messages[0].slice(0, 40)}...)`, 'info');
 
   if (!freeOnly) {
     if (apiKey) {
       try {
-        const ok = await speakWithGeminiTTS(messages, apiKey);
+        const ok = await speakWithGeminiTTS(messages, apiKey, onBeforePlay);
         if (ok) {
           ttsStatus('Done ✓', 'success');
           return;
@@ -762,7 +769,7 @@ export async function speakHebrew(messages: string[], apiKey: string | null, opt
     const elKey = getElevenLabsApiKey();
     if (elKey) {
       try {
-        const ok = await speakWithElevenLabs(messages, elKey);
+        const ok = await speakWithElevenLabs(messages, elKey, onBeforePlay);
         if (ok) {
           ttsStatus('Done ✓', 'success');
           return;
@@ -774,7 +781,7 @@ export async function speakHebrew(messages: string[], apiKey: string | null, opt
   }
 
   try {
-    const ok = await speakWithEdgeTTS(messages);
+    const ok = await speakWithEdgeTTS(messages, onBeforePlay);
     if (ok) {
       ttsStatus('Done ✓', 'success');
       return;
@@ -784,6 +791,6 @@ export async function speakHebrew(messages: string[], apiKey: string | null, opt
   }
 
   ttsStatus('Falling back to Browser TTS', 'warn');
-  const ok = speakWithBrowser(messages);
+  const ok = speakWithBrowser(messages, onBeforePlay);
   ttsStatus(ok ? 'Browser TTS playing' : 'ALL engines failed', ok ? 'success' : 'error');
 }

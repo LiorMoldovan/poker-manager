@@ -19,7 +19,7 @@ type RecordsSubTab = 'global' | 'playerRecords';
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role } = usePermissions();
+  const { role, playerName: identityName } = usePermissions();
   const locationState = location.state as { 
     viewMode?: ViewMode;
     recordInfo?: { title: string; playerId: string; recordType: string };
@@ -90,6 +90,7 @@ const StatisticsScreen = () => {
   const [chronicleModelName, setChronicleModelName] = useState<string>('');
   const [chronicleGeneratedAt, setChronicleGeneratedAt] = useState<string>('');
   const chronicleGenRef = useRef(false);
+  const isInitialActiveFilterRef = useRef(true);
 
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -1039,18 +1040,25 @@ const StatisticsScreen = () => {
     }
   }, [selectedPlayers, availableStats]);
 
-  // Update selected players when active filter or stats change — default to permanent players only
+  // Update selected players when active filter or stats change
+  // On initial mount: default to permanent players only
+  // On subsequent active filter toggles: select ALL qualifying players
   useEffect(() => {
     if (availableStats.length > 0) {
-      const permanentPlayerIds = new Set(
-        players.filter(p => p.type === 'permanent').map(p => p.id)
-      );
-      const permanentStatsIds = availableStats
-        .filter(s => permanentPlayerIds.has(s.playerId))
-        .map(s => s.playerId);
-      setSelectedPlayers(new Set(
-        permanentStatsIds.length > 0 ? permanentStatsIds : availableStats.map(p => p.playerId)
-      ));
+      if (isInitialActiveFilterRef.current) {
+        isInitialActiveFilterRef.current = false;
+        const permanentPlayerIds = new Set(
+          players.filter(p => p.type === 'permanent').map(p => p.id)
+        );
+        const permanentStatsIds = availableStats
+          .filter(s => permanentPlayerIds.has(s.playerId))
+          .map(s => s.playerId);
+        setSelectedPlayers(new Set(
+          permanentStatsIds.length > 0 ? permanentStatsIds : availableStats.map(p => p.playerId)
+        ));
+      } else {
+        setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
+      }
     }
   }, [filterActiveOnly, stats.length, availableStats]);
 
@@ -2492,14 +2500,15 @@ const StatisticsScreen = () => {
                     const currentRank = index + 1;
                     const prevRank = previousRankings.get(player.playerId);
                     const movement = prevRank ? prevRank - currentRank : 0; // positive = moved up
+                    const isMe = identityName && player.playerName === identityName;
                     
                     return (
                       <tr 
                         key={player.playerId}
                         onClick={() => showPlayerGames(player)}
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = ''}
+                        style={{ cursor: 'pointer', background: isMe ? 'rgba(99, 102, 241, 0.18)' : undefined, boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : undefined }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(99, 102, 241, 0.25)' : 'var(--surface)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = isMe ? 'rgba(99, 102, 241, 0.18)' : ''}
                       >
                         <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px' }}>
                           {currentRank}

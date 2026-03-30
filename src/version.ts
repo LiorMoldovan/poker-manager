@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.2';
+export const APP_VERSION = '5.9.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.3',
+    date: '2026-03-26',
+    changes: [
+      '🔄 Merged latest app improvements across gameplay, screens, and AI/TTS utilities',
+    ]
+  },
   {
     version: '5.9.2',
     date: '2026-03-25',

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Player, PlayerType, PlayerGender, ChipValue, Settings } from '../types';
+import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
   getAllPlayers, 
@@ -56,6 +56,9 @@ const SettingsScreen = () => {
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>('male');
   const [newChip, setNewChip] = useState({ color: '', value: '', displayColor: '#3B82F6' });
   const [newLocation, setNewLocation] = useState('');
+  const [newBlockedA, setNewBlockedA] = useState('');
+  const [newBlockedB, setNewBlockedB] = useState('');
+  const [newBlockedDate, setNewBlockedDate] = useState(new Date().toISOString().split('T')[0]);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [showFullChangelog, setShowFullChangelog] = useState(false);
@@ -186,7 +189,7 @@ const SettingsScreen = () => {
     if (savedElKey) setElKey(savedElKey);
   };
 
-  const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[]) => {
+  const handleSettingsChange = (key: keyof Settings, value: number | number[] | string[] | BlockedTransferPair[]) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     saveSettings(newSettings);
@@ -724,6 +727,91 @@ const SettingsScreen = () => {
                     background: 'var(--primary)', color: 'white', border: 'none',
                   }}
                 >+ הוסף</button>
+              </div>
+            )}
+          </div>
+
+          {/* Blocked Transfers */}
+          <div className="setting-group" style={{ marginTop: '1rem' }}>
+            <label className="label">🚫 העברות חסומות</label>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem', direction: 'rtl' }}>
+              זוגות שחקנים שלא יבוצעו ביניהם העברות ישירות בהתחשבנות
+            </div>
+            {(settings.blockedTransfers || []).map((pair, idx) => (
+              <div key={idx} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.4rem 0.6rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px',
+                marginBottom: '0.3rem', direction: 'rtl', fontSize: '0.8rem'
+              }}>
+                <span style={{ flex: 1 }}>
+                  {pair.playerA} ↔ {pair.playerB}
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginRight: '0.5rem' }}>
+                    (מ-{new Date(pair.after).toLocaleDateString('he-IL')})
+                  </span>
+                </span>
+                {canEditSettings && (
+                  <button
+                    onClick={() => {
+                      const updated = (settings.blockedTransfers || []).filter((_, i) => i !== idx);
+                      handleSettingsChange('blockedTransfers', updated);
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.9rem' }}
+                  >✕</button>
+                )}
+              </div>
+            ))}
+            {canEditSettings && (
+              <div style={{ marginTop: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
+                  <select
+                    value={newBlockedA}
+                    onChange={e => setNewBlockedA(e.target.value)}
+                    className="input"
+                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                  >
+                    <option value="">שחקן א׳</option>
+                    {players.filter(p => p.type === 'permanent').map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={newBlockedB}
+                    onChange={e => setNewBlockedB(e.target.value)}
+                    className="input"
+                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                  >
+                    <option value="">שחקן ב׳</option>
+                    {players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => (
+                      <option key={p.id} value={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                  <input
+                    type="date"
+                    value={newBlockedDate}
+                    onChange={e => setNewBlockedDate(e.target.value)}
+                    className="input"
+                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                  />
+                  <button
+                    disabled={!newBlockedA || !newBlockedB || newBlockedA === newBlockedB}
+                    onClick={() => {
+                      const current = settings.blockedTransfers || [];
+                      const exists = current.some(p =>
+                        (p.playerA === newBlockedA && p.playerB === newBlockedB) ||
+                        (p.playerA === newBlockedB && p.playerB === newBlockedA)
+                      );
+                      if (!exists) {
+                        handleSettingsChange('blockedTransfers', [...current, { playerA: newBlockedA, playerB: newBlockedB, after: newBlockedDate }]);
+                      }
+                      setNewBlockedA('');
+                      setNewBlockedB('');
+                    }}
+                    className="btn btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem', background: 'var(--primary)', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
+                  >+ הוסף</button>
+                </div>
               </div>
             )}
           </div>
@@ -1735,6 +1823,30 @@ const SettingsScreen = () => {
 
       {/* About Tab */}
       {activeTab === 'about' && (
+        <>
+        {/* Identity section */}
+        <div className="card" style={{ marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', direction: 'rtl' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>מזוהה כ:</div>
+              <div style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text)' }}>
+                {(() => { const n = localStorage.getItem('poker_player_identity'); return n || '—'; })()}
+              </div>
+            </div>
+            {role !== 'admin' && (
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => {
+                  localStorage.removeItem('poker_player_identity');
+                  signOut();
+                }}
+                style={{ fontSize: '0.75rem' }}
+              >
+                🔄 החלף שם
+              </button>
+            )}
+          </div>
+        </div>
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">ℹ️ App Version</h2>
@@ -1814,6 +1926,7 @@ const SettingsScreen = () => {
             ))}
           </div>
         </div>
+        </>
       )}
 
       {/* Activity Tab - Admin Only */}
@@ -1905,7 +2018,8 @@ const SettingsScreen = () => {
                 </div>
 
                 {devices.map(([deviceId, { entries, latest }]) => {
-                  const label = deviceLabels[deviceId];
+                  const latestPlayerName = entries.find(e => e.playerName)?.playerName;
+                  const label = latestPlayerName || deviceLabels[deviceId];
                   const isEditing = editingDeviceId === deviceId;
                   const roleInfo = getRoleInfo(latest.role);
                   const fp = latest.fingerprint;

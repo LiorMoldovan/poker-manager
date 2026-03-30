@@ -98,6 +98,7 @@ export interface Game {
   aiSummaryModel?: string; // Model used to generate the AI summary
   preGameTeaser?: string; // AI-generated pre-game teaser text
   periodMarkers?: PeriodMarkers; // Period context stored at game creation
+  paidSettlements?: { from: string; to: string; paidAt: string }[];
 }
 
 export interface GamePlayer {
@@ -118,12 +119,19 @@ export interface ChipValue {
   displayColor: string;
 }
 
+export interface BlockedTransferPair {
+  playerA: string;
+  playerB: string;
+  after: string; // ISO date string — rule active for games after this date
+}
+
 export interface Settings {
   rebuyValue: number;
   chipsPerRebuy: number;
   minTransfer: number;
   gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
   locations?: string[];
+  blockedTransfers?: BlockedTransferPair[];
 }
 
 export interface Settlement {
@@ -209,6 +217,7 @@ export interface ActivityLogEntry {
   sessionDuration: number;
   lastActive: string;
   fingerprint?: DeviceFingerprint;
+  playerName?: string;
 }
 
 // --- Live Game AI TTS Pool ---

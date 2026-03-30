@@ -4,7 +4,7 @@ import { usePermissions } from '../App';
 const Navigation = () => {
   const { hasPermission, role } = usePermissions();
   const canCreateGame = hasPermission('game:create');
-  const canViewGraphs = role === 'admin' || role === 'member';
+  const canViewGraphs = role === 'admin' || role === 'member' || role === 'viewer';
 
   return (
     <nav className="bottom-nav">

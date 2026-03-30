@@ -243,7 +243,7 @@ export const getDeviceFingerprint = (): DeviceFingerprint => ({
   canvasHash: getCanvasHash(),
 });
 
-export const logActivity = async (role: PermissionRole): Promise<void> => {
+export const logActivity = async (role: PermissionRole, playerName?: string): Promise<void> => {
   if (role === 'admin') return;
 
   const token = getEmbeddedToken();
@@ -259,6 +259,7 @@ export const logActivity = async (role: PermissionRole): Promise<void> => {
     sessionDuration: 0,
     lastActive: new Date().toISOString(),
     fingerprint: getDeviceFingerprint(),
+    playerName: playerName || undefined,
   };
 
   currentSessionTimestamp = entry.timestamp;

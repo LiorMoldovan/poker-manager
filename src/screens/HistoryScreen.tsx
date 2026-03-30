@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GameWithDetails } from '../types';
-import { getAllGames, getGamePlayers, getSettings, deleteGame } from '../database/storage';
+import { getAllGames, getGamePlayers, getSettings, deleteGame, getAllPlayers } from '../database/storage';
 import { syncToCloud } from '../database/githubSync';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
@@ -12,6 +12,13 @@ const HistoryScreen = () => {
   const [games, setGames] = useState<GameWithDetails[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPlayers, setFilterPlayers] = useState<string[]>([]);
+  const [filterLocation, setFilterLocation] = useState<string | null>(null);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({ permanent_guest: true, guest: true });
   
   const canDeleteGames = hasPermission('game:delete');
   const canSyncToCloud = role === 'admin' || role === 'memberSync';
@@ -63,6 +70,100 @@ const HistoryScreen = () => {
     return sorted[0];
   };
 
+  const hebrewMonthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+  type PlayerGroup = { label: string; key: string; names: string[] };
+
+  const { playerGroups, locations, years, monthsByYear } = useMemo(() => {
+    const playerCount: Record<string, number> = {};
+    const locSet = new Set<string>();
+    const ymSet = new Set<string>();
+    for (const g of games) {
+      for (const p of g.players) playerCount[p.playerName] = (playerCount[p.playerName] || 0) + 1;
+      if (g.location) locSet.add(g.location);
+      const d = new Date(g.date || g.createdAt);
+      ymSet.add(`${d.getFullYear()}-${d.getMonth()}`);
+    }
+    const allP = getAllPlayers();
+    const typeMap: Record<string, string> = {};
+    for (const p of allP) typeMap[p.name] = p.type;
+
+    const groups: PlayerGroup[] = [
+      { label: '🏠 קבועים', key: 'permanent', names: [] },
+      { label: '👤 אורחים קבועים', key: 'permanent_guest', names: [] },
+      { label: '🎲 מזדמנים', key: 'guest', names: [] },
+    ];
+    const sortedNames = Object.entries(playerCount).sort((a, b) => b[1] - a[1]).map(([name]) => name);
+    for (const name of sortedNames) {
+      const type = typeMap[name] || 'guest';
+      const group = groups.find(g => g.key === type);
+      if (group) group.names.push(name);
+    }
+
+    const yearSet = new Set<number>();
+    const mByY: Record<number, number[]> = {};
+    for (const ym of ymSet) {
+      const [y, m] = ym.split('-').map(Number);
+      yearSet.add(y);
+      if (!mByY[y]) mByY[y] = [];
+      mByY[y].push(m);
+    }
+    for (const y of Object.keys(mByY)) mByY[Number(y)].sort((a, b) => a - b);
+    return {
+      playerGroups: groups.filter(g => g.names.length > 0),
+      locations: Array.from(locSet),
+      years: Array.from(yearSet).sort((a, b) => b - a),
+      monthsByYear: mByY,
+    };
+  }, [games]);
+
+  const activeYear = filterYear ?? years[0] ?? new Date().getFullYear();
+  const availableMonths = monthsByYear[activeYear] ?? [];
+
+  const hasActiveFilter = !!searchQuery || filterPlayers.length > 0 || !!filterLocation || filterYear !== null || filterMonth !== null;
+
+  const filteredGames = useMemo(() => {
+    let result = games;
+    if (filterPlayers.length > 0) {
+      result = result.filter(g => filterPlayers.every(fp => g.players.some(p => p.playerName === fp)));
+    }
+    if (filterLocation) {
+      result = result.filter(g => g.location === filterLocation);
+    }
+    if (filterYear !== null) {
+      result = result.filter(g => {
+        const d = new Date(g.date || g.createdAt);
+        if (d.getFullYear() !== filterYear) return false;
+        if (filterMonth !== null && d.getMonth() !== filterMonth) return false;
+        return true;
+      });
+    } else if (filterMonth !== null) {
+      result = result.filter(g => {
+        const d = new Date(g.date || g.createdAt);
+        return d.getFullYear() === activeYear && d.getMonth() === filterMonth;
+      });
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(game => {
+        if (game.players.some(p => p.playerName.toLowerCase().includes(q))) return true;
+        if (game.location && game.location.toLowerCase().includes(q)) return true;
+        const dateStr = new Date(game.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        if (dateStr.toLowerCase().includes(q)) return true;
+        return false;
+      });
+    }
+    return result;
+  }, [games, searchQuery, filterPlayers, filterLocation, filterYear, filterMonth, activeYear]);
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setFilterPlayers([]);
+    setFilterLocation(null);
+    setFilterYear(null);
+    setFilterMonth(null);
+  };
+
   return (
     <div className="fade-in">
       {/* Sync Status Banner */}
@@ -88,6 +189,209 @@ const HistoryScreen = () => {
         <p className="page-subtitle">{games.length} completed game{games.length !== 1 ? 's' : ''}</p>
       </div>
 
+      {games.length > 0 && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          {/* Filter toggle + active filter summary */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', direction: 'rtl' }}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.3rem',
+                padding: '0.4rem 0.7rem',
+                borderRadius: '8px',
+                border: hasActiveFilter ? '1px solid var(--primary)' : '1px solid var(--border)',
+                background: hasActiveFilter ? 'rgba(99, 102, 241, 0.15)' : 'var(--surface)',
+                color: hasActiveFilter ? 'var(--primary)' : 'var(--text)',
+                fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer',
+                fontFamily: 'Outfit, sans-serif',
+                flexShrink: 0,
+              }}
+            >
+              🔍 סינון
+              {hasActiveFilter && <span style={{ background: 'var(--primary)', color: 'white', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem' }}>
+                {filterPlayers.length + (filterLocation ? 1 : 0) + ((filterYear !== null || filterMonth !== null) ? 1 : 0) + (searchQuery ? 1 : 0)}
+              </span>}
+            </button>
+
+            {/* Active filter pills */}
+            {hasActiveFilter && (
+              <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                {filterPlayers.map(fp => (
+                  <span key={fp} onClick={() => setFilterPlayers(prev => prev.filter(n => n !== fp))} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.2rem 0.5rem', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', fontSize: '0.7rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    👤 {fp} ✕
+                  </span>
+                ))}
+                {filterLocation && (
+                  <span onClick={() => setFilterLocation(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.2rem 0.5rem', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', fontSize: '0.7rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    📍 {filterLocation} ✕
+                  </span>
+                )}
+                {(filterYear !== null || filterMonth !== null) && (
+                  <span onClick={() => { setFilterYear(null); setFilterMonth(null); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.2rem 0.5rem', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', fontSize: '0.7rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    📅 {filterMonth !== null ? `${hebrewMonthNames[filterMonth]} ` : ''}{filterYear ?? activeYear} ✕
+                  </span>
+                )}
+                {searchQuery && (
+                  <span onClick={() => setSearchQuery('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.2rem 0.5rem', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.2)', color: 'var(--primary)', fontSize: '0.7rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    "{searchQuery}" ✕
+                  </span>
+                )}
+                <span onClick={clearAllFilters} style={{ fontSize: '0.65rem', color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' }}>נקה הכל</span>
+              </div>
+            )}
+
+            {hasActiveFilter && !showFilters && (
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', flexShrink: 0 }}>
+                {filteredGames.length}/{games.length}
+              </span>
+            )}
+          </div>
+
+          {/* Expanded filter panel */}
+          {showFilters && (
+            <div style={{ marginTop: '0.5rem', padding: '0.6rem', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--border)', direction: 'rtl' }}>
+              {/* Text search */}
+              <div style={{ position: 'relative', marginBottom: '0.5rem' }}>
+                <input
+                  type="text"
+                  placeholder="חיפוש חופשי..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%', padding: '0.45rem 0.6rem',
+                    borderRadius: '8px', border: '1px solid var(--border)',
+                    background: 'var(--bg)', color: 'var(--text)',
+                    fontSize: '0.8rem', direction: 'rtl',
+                    fontFamily: 'Outfit, sans-serif', outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* Player chips by group */}
+              <div style={{ marginBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.25rem', direction: 'rtl' }}>👤 שחקן</div>
+                {playerGroups.map(group => {
+                  const isCollapsed = !!collapsedGroups[group.key];
+                  const selectedCount = group.names.filter(n => filterPlayers.includes(n)).length;
+                  return (
+                    <div key={group.key} style={{ marginBottom: '0.3rem' }}>
+                      <button
+                        onClick={() => setCollapsedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '0.15rem 0',
+                          display: 'flex', alignItems: 'center', gap: '0.3rem', direction: 'rtl', justifyContent: 'flex-start',
+                          color: 'var(--text-muted)', fontSize: '0.65rem', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        {group.label} ({group.names.length})
+                        {selectedCount > 0 && <span style={{ background: 'var(--primary)', color: 'white', borderRadius: '50%', width: '14px', height: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem' }}>{selectedCount}</span>}
+                        <span style={{ transform: isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block', fontSize: '0.55rem' }}>▼</span>
+                      </button>
+                      {!isCollapsed && (
+                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', direction: 'rtl', marginTop: '0.15rem' }}>
+                          {group.names.map(name => (
+                            <button
+                              key={name}
+                              onClick={() => setFilterPlayers(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name])}
+                              style={{
+                                padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.7rem',
+                                border: filterPlayers.includes(name) ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                background: filterPlayers.includes(name) ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                                color: filterPlayers.includes(name) ? 'var(--primary)' : 'var(--text)',
+                                cursor: 'pointer', fontFamily: 'Outfit, sans-serif', fontWeight: filterPlayers.includes(name) ? '600' : '400',
+                              }}
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Location chips */}
+              {locations.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.25rem', direction: 'rtl' }}>📍 מיקום</div>
+                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', direction: 'rtl' }}>
+                    {locations.map(loc => (
+                      <button
+                        key={loc}
+                        onClick={() => setFilterLocation(filterLocation === loc ? null : loc)}
+                        style={{
+                          padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.7rem',
+                          border: filterLocation === loc ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: filterLocation === loc ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                          color: filterLocation === loc ? 'var(--primary)' : 'var(--text)',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif', fontWeight: filterLocation === loc ? '600' : '400',
+                        }}
+                      >
+                        {loc}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Date filter: year selector + month chips */}
+              {years.length > 0 && (
+                <div style={{ marginTop: '0.4rem' }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.25rem', direction: 'rtl' }}>📅 תאריך</div>
+                  {/* Year row */}
+                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', direction: 'rtl', marginBottom: '0.3rem' }}>
+                    {years.map(y => (
+                      <button
+                        key={y}
+                        onClick={() => {
+                          if (filterYear === y) { setFilterYear(null); setFilterMonth(null); }
+                          else { setFilterYear(y); setFilterMonth(null); }
+                        }}
+                        style={{
+                          padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600',
+                          border: activeYear === y ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: activeYear === y ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                          color: activeYear === y ? 'var(--primary)' : 'var(--text)',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Month row for selected year */}
+                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', direction: 'rtl' }}>
+                    {availableMonths.map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setFilterMonth(filterMonth === m ? null : m)}
+                        style={{
+                          padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.7rem',
+                          border: filterMonth === m ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: filterMonth === m ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                          color: filterMonth === m ? 'var(--primary)' : 'var(--text)',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif', fontWeight: filterMonth === m ? '600' : '400',
+                        }}
+                      >
+                        {hebrewMonthNames[m]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Result count */}
+              {hasActiveFilter && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem', textAlign: 'center', direction: 'rtl' }}>
+                  {filteredGames.length} מתוך {games.length} משחקים
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {games.length === 0 ? (
         <div className="card">
           <div className="empty-state">
@@ -96,8 +400,13 @@ const HistoryScreen = () => {
             <p className="text-muted">Your completed games will appear here</p>
           </div>
         </div>
+      ) : filteredGames.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🔍</div>
+          <div style={{ fontSize: '0.85rem' }}>לא נמצאו משחקים עבור "{searchQuery}"</div>
+        </div>
       ) : (
-        games.map(game => {
+        filteredGames.map(game => {
           const winner = getWinner(game);
           return (
             <div 

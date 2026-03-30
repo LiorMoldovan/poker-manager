@@ -50,6 +50,9 @@ interface FallbackCallOptions {
  * Returns { text, model } on success, throws on total failure.
  */
 const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: string; model: string; usage?: Record<string, number> }> => {
+  if (!navigator.onLine) {
+    throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
+  }
   const { prompt, apiKey, temperature = 0.7, maxOutputTokens = 4096, topP, topK, responseMimeType, label = 'AI' } = opts;
   let lastError = '';
   let fallbackFrom: string | undefined;
@@ -146,6 +149,8 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
+
+export const isOnline = (): boolean => navigator.onLine;
 
 export const getGeminiApiKey = (): string | null => {
   return localStorage.getItem(API_KEY_STORAGE);

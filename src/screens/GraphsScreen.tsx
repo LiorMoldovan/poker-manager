@@ -1266,6 +1266,7 @@ const GraphsScreen = () => {
                   minWidth: '80px',
                 }}>
                   Total Profit
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>סה״כ במשחקים משותפים</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
@@ -1307,6 +1308,7 @@ const GraphsScreen = () => {
                   minWidth: '80px',
                 }}>
                   Wins
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>משחקים שסיימו ברווח</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
@@ -1347,6 +1349,7 @@ const GraphsScreen = () => {
                   minWidth: '80px',
                 }}>
                   Avg/Game
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>ממוצע למשחק משותף</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
@@ -1387,6 +1390,7 @@ const GraphsScreen = () => {
                   minWidth: '80px',
                 }}>
                   Biggest Win
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>שיא רווח במשחק בודד</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
@@ -1427,6 +1431,7 @@ const GraphsScreen = () => {
                   minWidth: '80px',
                 }}>
                   Biggest Loss
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>שיא הפסד במשחק בודד</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
@@ -1955,7 +1960,10 @@ const GraphsScreen = () => {
             const confidenceScore = (r: typeof impactData[0]) => {
               const min = Math.min(r.withGames, r.withoutGames);
               const max = Math.max(r.withGames, r.withoutGames);
-              return Math.abs(r.impact) * (min / max) * Math.sqrt(min);
+              const winRateDelta = r.winRateWith - r.winRateWithout;
+              const agrees = (r.impact > 0 && winRateDelta >= 0) || (r.impact < 0 && winRateDelta <= 0) || Math.round(r.impact) === 0;
+              const winRateWeight = agrees ? 1 + Math.abs(winRateDelta) / 100 : 0.6;
+              return Math.abs(r.impact) * (min / max) * Math.sqrt(min) * winRateWeight;
             };
             const reliable = impactData
               .filter(r => !isLowConf(r))
@@ -1973,11 +1981,16 @@ const GraphsScreen = () => {
 
               const signFlip = (row.avgWith > 0 && row.avgWithout < 0) || (row.avgWith < 0 && row.avgWithout > 0);
               const winRateDelta = row.winRateWith - row.winRateWithout;
+              const contradicts = (row.impact > 0 && winRateDelta < -10) || (row.impact < 0 && winRateDelta > 10);
+              if (contradicts) return null;
 
               if (signFlip && Math.abs(row.impact) >= 15) {
                 return row.impact > 0 ? '🍀' : '💀';
               }
-              if (Math.abs(row.impact) >= 30 && Math.abs(winRateDelta) >= 10) {
+              if (Math.abs(row.impact) >= 25 && Math.abs(winRateDelta) >= 8) {
+                return row.impact > 0 ? '🍀' : '💀';
+              }
+              if (Math.abs(row.impact) >= 15 && Math.abs(winRateDelta) >= 15) {
                 return row.impact > 0 ? '🍀' : '💀';
               }
               return null;
@@ -2208,8 +2221,13 @@ const GraphsScreen = () => {
               const sampleBalance = minSide / maxSide;
               if (sampleBalance < 0.08) return false;
               const signFlip = (r.avgWith > 0 && r.avgWithout < 0) || (r.avgWith < 0 && r.avgWithout > 0);
-              const winRateDelta = Math.abs(r.winRateWith - r.winRateWithout);
-              return (signFlip && Math.abs(r.impact) >= 15) || (Math.abs(r.impact) >= 30 && winRateDelta >= 10);
+              const winRateDelta = r.winRateWith - r.winRateWithout;
+              const contradicts = (r.impact > 0 && winRateDelta < -10) || (r.impact < 0 && winRateDelta > 10);
+              if (contradicts) return false;
+              if (signFlip && Math.abs(r.impact) >= 15) return true;
+              if (Math.abs(r.impact) >= 25 && Math.abs(winRateDelta) >= 8) return true;
+              if (Math.abs(r.impact) >= 15 && Math.abs(winRateDelta) >= 15) return true;
+              return false;
             };
 
             const luckyCharms = reliableOnly
@@ -2219,6 +2237,29 @@ const GraphsScreen = () => {
               .filter(r => r.impact < 0 && isStrongChemistry(r))
               .slice(-3).reverse();
             const selectedName = getPlayerName(impactPlayerId);
+
+            const charmSummary = (row: typeof impactData[0]) => {
+              const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+              const avgWith = Math.round(row.avgWith);
+              let text = `${selectedName} מרוויח בממוצע +₪${cleanNumber(avgWith)} למשחק כש${row.otherPlayerName} משתתף`;
+              if (wrDelta > 0) text += `, עם ${Math.round(row.winRateWith)}% נצחונות (לעומת ${Math.round(row.winRateWithout)}% בלעדיו)`;
+              else if (wrDelta === 0) text += `, עם אחוז נצחונות זהה`;
+              return text;
+            };
+
+            const kryptoniteSummary = (row: typeof impactData[0]) => {
+              const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+              const avgWith = Math.round(row.avgWith);
+              let text: string;
+              if (avgWith < 0) {
+                text = `${selectedName} יורד לממוצע של ₪${cleanNumber(avgWith)} כש${row.otherPlayerName} על השולחן`;
+              } else {
+                text = `${selectedName} יורד מ-+₪${cleanNumber(Math.round(row.avgWithout))} ל-+₪${cleanNumber(avgWith)} ממוצע כש${row.otherPlayerName} משתתף`;
+              }
+              if (wrDelta < 0) text += `, אחוז נצחונות יורד ל-${Math.round(row.winRateWith)}%`;
+              return text;
+            };
+
             return (
               <div className="card">
                 <h2 className="card-title mb-2">🧪 {selectedName}'s Chemistry</h2>
@@ -2242,27 +2283,39 @@ const GraphsScreen = () => {
                   </div>
                   {luckyCharms.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {luckyCharms.map((row, idx) => (
+                      {luckyCharms.map((row, idx) => {
+                        const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+                        return (
                         <div key={idx} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
                           padding: '0.4rem 0.5rem',
                           background: 'rgba(16, 185, 129, 0.08)',
                           borderRadius: '6px',
                           fontSize: '0.75rem',
                         }}>
-                          <div>
-                            <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
-                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                              {' '}({row.withGames} games together)
-                            </span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                                {' '}({row.withGames} games together)
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span style={{ fontWeight: '700', color: '#10B981' }}>
+                                +₪{cleanNumber(row.impact)}
+                              </span>
+                              {wrDelta !== 0 && (
+                                <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
+                                  {wrDelta > 0 ? '↑' : '↓'}{Math.abs(wrDelta)}%W
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <span style={{ fontWeight: '700', color: '#10B981' }}>
-                            +₪{cleanNumber(row.impact)}
-                          </span>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.3' }}>
+                            {charmSummary(row)}
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{
@@ -2290,27 +2343,39 @@ const GraphsScreen = () => {
                   </div>
                   {kryptonite.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                      {kryptonite.map((row, idx) => (
+                      {kryptonite.map((row, idx) => {
+                        const wrDelta = Math.round(row.winRateWith - row.winRateWithout);
+                        return (
                         <div key={idx} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
                           padding: '0.4rem 0.5rem',
                           background: 'rgba(239, 68, 68, 0.08)',
                           borderRadius: '6px',
                           fontSize: '0.75rem',
                         }}>
-                          <div>
-                            <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
-                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                              {' '}({row.withGames} games together)
-                            </span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
+                              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
+                                {' '}({row.withGames} games together)
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span style={{ fontWeight: '700', color: '#EF4444' }}>
+                                ₪{cleanNumber(row.impact)}
+                              </span>
+                              {wrDelta !== 0 && (
+                                <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
+                                  {wrDelta > 0 ? '↑' : '↓'}{Math.abs(wrDelta)}%W
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <span style={{ fontWeight: '700', color: '#EF4444' }}>
-                            ₪{cleanNumber(row.impact)}
-                          </span>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem', lineHeight: '1.3' }}>
+                            {kryptoniteSummary(row)}
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{
@@ -2333,7 +2398,7 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginTop: '0.6rem',
                 }}>
-                  Impact = difference in avg profit per game • {getTimeframeLabel()}
+                  Impact = avg profit difference + win rate alignment • {getTimeframeLabel()}
                 </div>
               </div>
             );

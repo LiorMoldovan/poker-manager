@@ -1378,10 +1378,6 @@ const LiveGameScreen = () => {
     // Wait for any previous TTS to finish before starting
     await ttsQueueRef.current;
 
-    // Play attention sound and start speaking shortly after
-    playRebuyCasinoSound(totalBuyins);
-    await new Promise(r => setTimeout(r, 150));
-    
     // Check if total has half (0.5) - use tolerance for floating point
     const hasHalf = Math.abs((totalBuyins % 1) - 0.5) < 0.01;
     const whole = Math.floor(totalBuyins);
@@ -1572,7 +1568,9 @@ const LiveGameScreen = () => {
     isSpeakingRef.current = true;
     lastTTSActivityRef.current = Date.now();
     try {
-      await speakHebrew(allMessages, getGeminiApiKey());
+      await speakHebrew(allMessages, getGeminiApiKey(), {
+        onBeforePlay: () => playRebuyCasinoSound(totalBuyins),
+      });
     } finally {
       isSpeakingRef.current = false;
     }
@@ -1709,8 +1707,10 @@ const LiveGameScreen = () => {
         : `יד ענקית של ${playerName}! רגע גדול`;
     }
 
-    playRebuyCasinoSound(type === 'bad_beat' ? 8 : 2);
-    setTimeout(() => speakHebrew([msg!], getGeminiApiKey()), 350);
+    const soundTotalBuyins = type === 'bad_beat' ? 8 : 2;
+    speakHebrew([msg!], getGeminiApiKey(), {
+      onBeforePlay: () => playRebuyCasinoSound(soundTotalBuyins),
+    });
   };
 
   const handleBreakTime = () => {
