@@ -435,5 +435,25 @@
       "canvasHash": "t85vsi"
     },
     "playerName": "סגל"
+  },
+  {
+    "deviceId": "acdbf693-5f44-4a9e-96b5-5b67752be3f9",
+    "role": "viewer",
+    "timestamp": "2026-03-30T13:37:14.977Z",
+    "device": "Windows PC / Windows 10/11 / Chrome",
+    "screenSize": "1920x1080",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-03-30T13:37:14.978Z",
+    "fingerprint": {
+      "gpu": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 0,
+      "language": "en-US",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "t85vsi"
+    },
+    "playerName": "קובי"
   }
 ]
