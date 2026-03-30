@@ -503,5 +503,25 @@
       "canvasHash": "20ear9"
     },
     "playerName": "אייל"
+  },
+  {
+    "deviceId": "b09f345a-534b-4c25-b3c9-9570bdea06ff",
+    "role": "member",
+    "timestamp": "2026-03-30T17:54:59.740Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "360x792",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-03-30T17:54:59.741Z",
+    "fingerprint": {
+      "gpu": "Adreno (TM) 830",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "en-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "ed0s7f"
+    },
+    "playerName": "ליאור"
   }
 ]
