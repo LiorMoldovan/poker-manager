@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.3';
+export const APP_VERSION = '5.9.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.4',
+    date: '2026-03-30',
+    changes: [
+      '✨ Settlement UX improvements and personal highlighting across summary/statistics',
+      '📱 History and statistics polish updates',
+    ]
+  },
   {
     version: '5.9.3',
     date: '2026-03-26',

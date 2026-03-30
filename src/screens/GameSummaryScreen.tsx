@@ -31,6 +31,7 @@ const GameSummaryScreen = () => {
   const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const cameFromChipEntry = locationState?.from === 'chip-entry';
   const { role, playerName: identityName } = usePermissions();
+  const highlightName = cameFromChipEntry ? null : identityName;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [skippedTransfers, setSkippedTransfers] = useState<SkippedTransfer[]>([]);
@@ -107,15 +108,26 @@ const GameSummaryScreen = () => {
     updateGame(gameId, { paidSettlements: updated });
   };
 
-  const openPaymentApp = async (app: 'bit' | 'paybox', amount: number) => {
+  const [amountCopied, setAmountCopied] = useState(false);
+
+  const copyAmount = async (amount: number) => {
     const roundedAmount = Math.round(amount);
-    try { await navigator.clipboard.writeText(String(roundedAmount)); } catch { /* fallback: no clipboard */ }
-    if (app === 'bit') {
-      window.location.href = 'https://www.bitpay.co.il/app';
-    } else {
-      window.location.href = 'https://payboxapp.page.link/send';
-    }
-    setPaymentModal(null);
+    try {
+      await navigator.clipboard.writeText(String(roundedAmount));
+      setAmountCopied(true);
+      setTimeout(() => setAmountCopied(false), 2000);
+    } catch { /* fallback: no clipboard */ }
+  };
+
+  const openPaymentApp = async (app: 'bit' | 'paybox', amount: number) => {
+    await copyAmount(amount);
+    setTimeout(() => {
+      if (app === 'bit') {
+        window.location.href = 'https://www.bitpay.co.il/app';
+      } else {
+        window.location.href = 'https://payboxapp.page.link/send';
+      }
+    }, 300);
   };
 
   const handleRegenerateAiSummary = () => {
@@ -1131,8 +1143,8 @@ const GameSummaryScreen = () => {
               </thead>
               <tbody>
                 {players.map((player, index) => (
-                  <tr key={player.id} style={identityName && player.playerName === identityName ? { background: 'rgba(99, 102, 241, 0.18)', boxShadow: 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' } : undefined}>
-                    <td>
+                  <tr key={player.id} style={highlightName && player.playerName === highlightName ? { background: 'rgba(59, 130, 246, 0.14)', boxShadow: 'inset 3px 0 0 #3b82f6' } : undefined}>
+                    <td style={highlightName && player.playerName === highlightName ? { color: '#60a5fa' } : undefined}>
                       {player.playerName}
                       {index === 0 && player.profit > 0 && ' 🥇'}
                       {index === 1 && player.profit > 0 && ' 🥈'}
@@ -1188,32 +1200,74 @@ const GameSummaryScreen = () => {
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.settlements && (<>
+              {(() => {
+                const iOwe = identityName && settlements.some(s => s.from === identityName && !isSettlementPaid(s.from, s.to));
+                const iReceive = identityName && settlements.some(s => s.to === identityName && !isSettlementPaid(s.from, s.to));
+                if (iOwe) return (
+                  <div style={{ direction: 'rtl', fontSize: '0.75rem', color: '#3b82f6', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: 'rgba(59, 130, 246, 0.08)', borderRadius: '6px', textAlign: 'center' }}>
+                    יש לך תשלום — לחץ על <strong>שלם</strong> בשורה שלך
+                  </div>
+                );
+                if (iReceive) return (
+                  <div style={{ direction: 'rtl', fontSize: '0.75rem', color: 'var(--text-muted)', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '6px', textAlign: 'center' }}>
+                    ממתין לתשלומים אליך
+                  </div>
+                );
+                return null;
+              })()}
               {settlements.map((s, index) => {
                 const paid = isSettlementPaid(s.from, s.to);
-                const isMySettlement = identityName && (s.from === identityName || s.to === identityName);
+                const iAmFrom = identityName && s.from === identityName;
+                const iAmTo = identityName && s.to === identityName;
+                const isMySettlement = iAmFrom || iAmTo;
+                const isClickable = iAmFrom && !paid;
                 return (
                   <div
                     key={index}
                     className="settlement-row"
                     style={{
-                      cursor: 'pointer',
+                      cursor: isClickable ? 'pointer' : 'default',
                       opacity: paid ? 0.5 : 1,
-                      background: isPayMode && isMySettlement ? 'rgba(99, 102, 241, 0.15)' : undefined,
+                      background: isMySettlement && !paid ? 'rgba(59, 130, 246, 0.1)' : undefined,
+                      boxShadow: isMySettlement && !paid ? 'inset 3px 0 0 #3b82f6' : undefined,
                       borderRadius: '8px',
-                      padding: '0.3rem 0.4rem',
+                      padding: '0.3rem 0.6rem',
                       margin: '0.1rem -0.4rem',
                       position: 'relative',
                       transition: 'all 0.2s ease',
                     }}
-                    onClick={() => !paid && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
+                    onClick={() => isClickable && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
                   >
-                    <span>{renderPlayerWithFoodIcon(s.from)}</span>
+                    <span style={iAmFrom ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.from)}</span>
                     <span className="settlement-arrow">➜</span>
-                    <span>{renderPlayerWithFoodIcon(s.to)}</span>
-                    <span className="settlement-amount" style={{ textDecoration: paid ? 'line-through' : undefined }}>
-                      {formatCurrency(s.amount)}
+                    <span style={iAmTo ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.to)}</span>
+                    <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                      {isClickable && (
+                        <button
+                          style={{
+                            background: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.7rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPaymentModal({ from: s.from, to: s.to, amount: s.amount });
+                          }}
+                        >
+                          💳 שלם
+                        </button>
+                      )}
+                      <span className="settlement-amount" style={{ textDecoration: paid ? 'line-through' : undefined, marginLeft: 0 }}>
+                        {formatCurrency(s.amount)}
+                      </span>
+                      {paid && <span style={{ fontSize: '0.85rem' }}>✅</span>}
                     </span>
-                    {paid && <span style={{ marginLeft: '0.3rem', fontSize: '0.85rem' }}>✅</span>}
                   </div>
                 );
               })}
@@ -1256,7 +1310,7 @@ const GameSummaryScreen = () => {
                   <span>{renderPlayerWithFoodIcon(s.from)}</span>
                   <span className="settlement-arrow">➜</span>
                   <span>{renderPlayerWithFoodIcon(s.to)}</span>
-                  <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
+                  <span style={{ color: 'var(--warning)', fontWeight: '700', marginLeft: 'auto' }}>{formatCurrency(s.amount)}</span>
                 </div>
               ))}
             </div>
@@ -1833,12 +1887,12 @@ const GameSummaryScreen = () => {
               <tbody>
                 {monthlyStats.map((player, index) => {
                   const isInThisGame = players.some(p => p.playerId === player.playerId);
-                  const isMe = identityName && player.playerName === identityName;
+                  const isMe = highlightName && player.playerName === highlightName;
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isMe ? 'rgba(99, 102, 241, 0.18)' : isInThisGame ? 'rgba(59, 130, 246, 0.12)' : undefined,
-                      boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : isInThisGame ? 'inset 3px 0 0 rgba(59, 130, 246, 0.5)' : undefined,
+                      background: isMe ? 'rgba(59, 130, 246, 0.14)' : isInThisGame ? 'rgba(59, 130, 246, 0.08)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(59, 130, 246, 0.4)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {index + 1}
@@ -1849,6 +1903,7 @@ const GameSummaryScreen = () => {
                       <td style={{
                         fontWeight: isInThisGame ? '700' : '500',
                         padding: '0.25rem 0.2rem',
+                        color: isMe ? '#60a5fa' : undefined,
                       }}>
                         {player.playerName}
                       </td>
@@ -1947,12 +2002,12 @@ const GameSummaryScreen = () => {
                   const prevRank = previousRankMap[player.playerId];
                   const rankDiff = prevRank ? prevRank - currentRank : 0;
                   const isNewEntry = !prevRank;
-                  const isMe = identityName && player.playerName === identityName;
+                  const isMe = highlightName && player.playerName === highlightName;
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isMe ? 'rgba(99, 102, 241, 0.18)' : isInThisGame ? 'rgba(168, 85, 247, 0.15)' : undefined,
-                      boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : isInThisGame ? 'inset 3px 0 0 rgba(168, 85, 247, 0.6)' : undefined,
+                      background: isMe ? 'rgba(59, 130, 246, 0.14)' : isInThisGame ? 'rgba(168, 85, 247, 0.12)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(168, 85, 247, 0.5)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         <span>{currentRank}</span>
@@ -1971,6 +2026,7 @@ const GameSummaryScreen = () => {
                         fontWeight: isInThisGame ? '700' : '500',
                         padding: '0.25rem 0.2rem',
                         whiteSpace: 'nowrap',
+                        color: isMe ? '#60a5fa' : undefined,
                       }}>
                         {player.playerName}
                       </td>
@@ -2036,8 +2092,8 @@ const GameSummaryScreen = () => {
         </button>
       </div>
 
-      {/* Re-open chip entry - admin only */}
-      {role === 'admin' && (
+      {/* Re-open chip entry - admin only, only from game flow */}
+      {role === 'admin' && cameFromChipEntry && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
           {!showReopenConfirm ? (
             <button
@@ -2082,11 +2138,28 @@ const GameSummaryScreen = () => {
             <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)' }}>
               {paymentModal.from} ➜ {paymentModal.to}
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.25rem', color: 'var(--primary)' }}>
-              ₪{cleanNumber(paymentModal.amount)}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-              הסכום יועתק ללוח — הדביקו באפליקציה
+            <button
+              onClick={() => copyAmount(paymentModal.amount)}
+              style={{
+                background: amountCopied ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
+                border: amountCopied ? '1px solid rgba(16, 185, 129, 0.4)' : '1px dashed var(--border)',
+                borderRadius: '10px',
+                padding: '0.5rem 1rem',
+                marginBottom: '0.5rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                width: '100%',
+              }}
+            >
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>
+                ₪{cleanNumber(paymentModal.amount)}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: amountCopied ? 'var(--success)' : 'var(--text-muted)', fontWeight: amountCopied ? '600' : '400' }}>
+                {amountCopied ? '✅ הסכום הועתק!' : '📋 לחץ להעתקת הסכום'}
+              </div>
+            </button>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.75rem', direction: 'rtl' }}>
+              העתיקו את הסכום והדביקו באפליקציית התשלום
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>

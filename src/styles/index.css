@@ -719,7 +719,7 @@ th {
 .settlement-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.4rem;
   padding: 1rem;
   background: var(--surface-light);
   border-radius: 8px;
@@ -729,6 +729,9 @@ th {
 .settlement-arrow {
   color: var(--primary);
   font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
+  width: 1.2rem;
 }
 
 .settlement-amount {

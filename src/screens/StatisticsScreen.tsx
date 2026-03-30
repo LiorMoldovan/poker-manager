@@ -16,6 +16,12 @@ type ViewMode = 'table' | 'records' | 'players';
 type PlayerSubTab = 'stats' | 'stories';
 type RecordsSubTab = 'global' | 'playerRecords';
 
+const ME_BG = 'rgba(59, 130, 246, 0.14)';
+const ME_SHADOW = 'inset 3px 0 0 #3b82f6';
+const ME_NAME_COLOR = '#60a5fa';
+const meRowStyle = { background: ME_BG, boxShadow: ME_SHADOW } as const;
+const meNameStyle = { color: ME_NAME_COLOR } as const;
+
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1372,7 +1378,7 @@ const StatisticsScreen = () => {
           }}
           onClick={canShowDetails ? () => showRecordDetails(recordTitle, players[0], recordType) : undefined}
         >
-          <span style={{ fontWeight: '700' }}>{players[0].playerName}</span>
+          <span style={{ fontWeight: '700', ...(identityName && players[0].playerName === identityName ? meNameStyle : {}) }}>{players[0].playerName}</span>
           {hasTies && (
             <span 
               style={{ 
@@ -1409,7 +1415,7 @@ const StatisticsScreen = () => {
                 }}
                 onClick={canShowDetails ? () => showRecordDetails(recordTitle!, p, recordType!) : undefined}
               >
-                <span style={{ fontWeight: '500' }}>{p.playerName}</span>
+                <span style={{ fontWeight: '500', ...(identityName && p.playerName === identityName ? meNameStyle : {}) }}>{p.playerName}</span>
                 {canShowDetails && (
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>❯</span>
                 )}
@@ -1861,7 +1867,9 @@ const StatisticsScreen = () => {
                   </div>
                   {podiumData.h1.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {podiumData.h1.map((player, idx) => (
+                      {podiumData.h1.map((player, idx) => {
+                        const isMe = identityName && player.playerName === identityName;
+                        return (
                         <div key={player.playerId} style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1871,19 +1879,21 @@ const StatisticsScreen = () => {
                                      idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
                                      'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
                           borderRadius: '4px',
-                          fontSize: '0.65rem'
+                          fontSize: '0.65rem',
+                          ...(isMe ? { outline: '1.5px solid #3b82f6' } : {})
                         }}>
                           <span style={{ fontSize: '0.9rem' }}>
                             {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}
                           </span>
-                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>
                             {player.playerName}
                           </span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                             {formatCurrency(player.profit)}
                           </span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
@@ -1911,7 +1921,9 @@ const StatisticsScreen = () => {
                   </div>
                   {podiumData.h2.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {podiumData.h2.map((player, idx) => (
+                      {podiumData.h2.map((player, idx) => {
+                        const isMe = identityName && player.playerName === identityName;
+                        return (
                         <div key={player.playerId} style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1921,13 +1933,15 @@ const StatisticsScreen = () => {
                                      idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
                                      'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
                           borderRadius: '4px',
-                          fontSize: '0.65rem'
+                          fontSize: '0.65rem',
+                          ...(isMe ? { outline: '1.5px solid #3b82f6' } : {})
                         }}>
                           <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.playerName}</span>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
@@ -1955,7 +1969,9 @@ const StatisticsScreen = () => {
                   </div>
                   {podiumData.yearly.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      {podiumData.yearly.map((player, idx) => (
+                      {podiumData.yearly.map((player, idx) => {
+                        const isMe = identityName && player.playerName === identityName;
+                        return (
                         <div key={player.playerId} style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1965,13 +1981,15 @@ const StatisticsScreen = () => {
                                      idx === 1 ? 'linear-gradient(135deg, rgba(156, 163, 175, 0.2), rgba(156, 163, 175, 0.1))' :
                                      'linear-gradient(135deg, rgba(217, 119, 6, 0.2), rgba(217, 119, 6, 0.1))',
                           borderRadius: '4px',
-                          fontSize: '0.65rem'
+                          fontSize: '0.65rem',
+                          ...(isMe ? { outline: '1.5px solid #3b82f6' } : {})
                         }}>
                           <span style={{ fontSize: '0.9rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                          <span style={{ flex: 1, fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{player.playerName}</span>
+                          <span style={{ flex: 1, fontWeight: isMe ? '700' : '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>{player.playerName}</span>
                           <span style={{ fontWeight: '600', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
@@ -2042,7 +2060,7 @@ const StatisticsScreen = () => {
                         {yearData.h1Top3.length > 0 ? yearData.h1Top3.map((player, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
                             <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
                             <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                           </div>
                         )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
@@ -2051,7 +2069,7 @@ const StatisticsScreen = () => {
                         {yearData.h2Top3.length > 0 ? yearData.h2Top3.map((player, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
                             <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontWeight: idx === 0 ? '600' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
                             <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                           </div>
                         )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
@@ -2060,7 +2078,7 @@ const StatisticsScreen = () => {
                         {yearData.yearlyTop3.length > 0 ? yearData.yearlyTop3.map((player, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', justifyContent: 'center' }}>
                             <span style={{ fontSize: '0.6rem' }}>{idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉'}</span>
-                            <span style={{ fontWeight: idx === 0 ? '700' : '400', color: idx === 0 ? '#fbbf24' : 'var(--text)', fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
+                            <span style={{ fontWeight: idx === 0 ? '700' : '400', color: identityName && player.playerName === identityName ? ME_NAME_COLOR : (idx === 0 ? '#fbbf24' : 'var(--text)'), fontSize: idx === 0 ? '0.58rem' : '0.52rem' }}>{player.playerName}</span>
                             <span style={{ fontSize: '0.48rem', color: player.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>{formatCurrency(player.profit)}</span>
                           </div>
                         )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.5rem', textAlign: 'center' }}>-</span>}
@@ -2098,18 +2116,21 @@ const StatisticsScreen = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {top20WinsAllTime.map((entry, idx) => (
+                      {top20WinsAllTime.map((entry, idx) => {
+                        const isMe = identityName && entry.playerName === identityName;
+                        return (
                         <tr 
                           key={idx}
-                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
                           onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500' }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2506,9 +2527,9 @@ const StatisticsScreen = () => {
                       <tr 
                         key={player.playerId}
                         onClick={() => showPlayerGames(player)}
-                        style={{ cursor: 'pointer', background: isMe ? 'rgba(99, 102, 241, 0.18)' : undefined, boxShadow: isMe ? 'inset 3px 0 0 rgba(99, 102, 241, 0.7)' : undefined }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(99, 102, 241, 0.25)' : 'var(--surface)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = isMe ? 'rgba(99, 102, 241, 0.18)' : ''}
+                        style={{ cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = isMe ? ME_BG : ''}
                       >
                         <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px' }}>
                           {currentRank}
@@ -2524,7 +2545,7 @@ const StatisticsScreen = () => {
                         </span>
                           )}
                       </td>
-                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
+                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>
                           {player.playerName}
                       </td>
                         {tableMode === 'profit' ? (
@@ -2619,10 +2640,11 @@ const StatisticsScreen = () => {
                     <tbody>
                       {rebuyStats.map((player, index) => {
                         const avgBuyins = player.totalBuyins / player.gamesPlayed;
+                        const isMe = identityName && player.playerName === identityName;
                         return (
                           <tr 
                             key={index}
-                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
                           >
                             <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
                               {index + 1}
@@ -2630,7 +2652,8 @@ const StatisticsScreen = () => {
                             <td style={{ 
                               padding: '0.3rem 0.2rem', 
                               whiteSpace: 'nowrap',
-                              fontWeight: '500'
+                              fontWeight: '500',
+                              ...(isMe ? meNameStyle : {})
                             }}>
                               {player.playerName}
                             </td>
@@ -2709,18 +2732,21 @@ const StatisticsScreen = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {top20Wins.slice(0, 10).map((entry, idx) => (
+                      {top20Wins.slice(0, 10).map((entry, idx) => {
+                        const isMe = identityName && entry.playerName === identityName;
+                        return (
                         <tr 
                           key={idx}
-                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
                           onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'table', timePeriod, selectedYear, selectedMonth } })}
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500' }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2803,10 +2829,12 @@ const StatisticsScreen = () => {
                     👤 Player Stats ({getTimeframeLabel()})
                   </div>
 
-                  {sortedStats.map((player, index) => (
-            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease' }}>
+                  {sortedStats.map((player, index) => {
+                    const isMe = identityName && player.playerName === identityName;
+                    return (
+            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}) }}>
               <div className="card-header">
-                <h3 className="card-title">
+                <h3 className="card-title" style={isMe ? meNameStyle : undefined}>
                   {player.playerName}
                   {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                     sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
@@ -3006,7 +3034,8 @@ const StatisticsScreen = () => {
                 </div>
                   </div>
                 </div>
-          ))}
+          );
+          })}
                 </>
               )}
 

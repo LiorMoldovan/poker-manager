@@ -8,7 +8,7 @@ import { usePermissions } from '../App';
 
 const HistoryScreen = () => {
   const navigate = useNavigate();
-  const { role, hasPermission } = usePermissions();
+  const { role, hasPermission, playerName: identityName } = usePermissions();
   const [games, setGames] = useState<GameWithDetails[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -413,7 +413,7 @@ const HistoryScreen = () => {
               key={game.id} 
               className="card" 
               style={{ cursor: 'pointer' }}
-              onClick={() => navigate(`/game-summary/${game.id}`)}
+              onClick={() => navigate(`/game-summary/${game.id}`, { state: { from: 'history' } })}
             >
                 <div className="card-header">
                 <div>
@@ -449,15 +449,18 @@ const HistoryScreen = () => {
               
               {/* All players sorted by profit */}
               <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-                {game.players.map(p => (
+                {game.players.map(p => {
+                  const isMe = identityName && p.playerName === identityName;
+                  return (
                   <span 
                     key={p.id}
                     className={`badge ${p.profit > 0 ? 'badge-success' : p.profit < 0 ? 'badge-danger' : ''}`}
-                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem' }}
+                    style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', ...(isMe ? { outline: '1.5px solid #3b82f6', fontWeight: '700' } : {}) }}
                   >
                     {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{cleanNumber(p.profit)}
                   </span>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Actions row */}
@@ -475,7 +478,7 @@ const HistoryScreen = () => {
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/game-summary/${game.id}`);
+                    navigate(`/game-summary/${game.id}`, { state: { from: 'history' } });
                   }}
                 >
                   📊 פרטים
