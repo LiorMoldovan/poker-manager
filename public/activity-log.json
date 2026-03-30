@@ -446,10 +446,11 @@
       "History",
       "Statistics",
       "Graphs",
-      "New Game"
+      "New Game",
+      "Game Details"
     ],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-30T15:39:32.023Z",
+    "sessionDuration": 2,
+    "lastActive": "2026-03-30T15:41:32.971Z",
     "fingerprint": {
       "gpu": "ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.279)",
       "cores": 10,
