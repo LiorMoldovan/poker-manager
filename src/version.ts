@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.0';
+export const APP_VERSION = '5.10.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.1',
+    date: '2026-03-11',
+    changes: [
+      '🎯 Personalized training banner — dynamic messages based on player stats, streak, accuracy, and activity',
+      '🛡️ Pool generation crash recovery — auto-saves draft and resumes from where it left off',
+      '🤖 Pool gen uses best model only with retry-on-rate-limit instead of falling back to lite',
+      '🔧 Truncated JSON salvage — recovers partial scenarios from cut-off AI responses',
+      '♾️ Unlimited mode score display — compact counter replaces dots when >20 scenarios',
+    ]
+  },
   {
     version: '5.10.0',
     date: '2026-03-11',

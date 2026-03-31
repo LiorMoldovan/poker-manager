@@ -1310,7 +1310,13 @@ export const generatePoolBatch = async (
   const requestCount = count + 5;
   const prompt = buildPoolBatchPrompt(category, requestCount, existing);
 
-  for (const config of API_CONFIGS) {
+  // Pool generation uses only the best model (no fallback to lite) for consistent quality.
+  // On rate-limit (429/503), retry same model after a delay instead of downgrading.
+  const POOL_MODEL = API_CONFIGS[0];
+  const MAX_RETRIES = 2;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const config = POOL_MODEL;
     const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
     const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
 
@@ -1323,7 +1329,7 @@ export const generatePoolBatch = async (
           generationConfig: {
             temperature: 0.85,
             topP: 0.95,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 16384,
             responseMimeType: 'application/json',
           },
         }),
@@ -1332,9 +1338,12 @@ export const generatePoolBatch = async (
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         const msg = (err as { error?: { message?: string } })?.error?.message || `HTTP ${response.status}`;
-        if (response.status === 429 || response.status === 503) continue;
+        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 10000 * (attempt + 1)));
+          continue;
+        }
         if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
-        console.warn(`Pool gen [${config.model}]: ${msg}`);
+        console.warn(`Pool gen [${config.model}] attempt ${attempt}: ${msg}`);
         continue;
       }
 
@@ -1346,8 +1355,25 @@ export const generatePoolBatch = async (
       if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
       else if (text.includes('```')) jsonText = text.split('```')[1].split('```')[0];
 
-      const rawScenarios = JSON.parse(jsonText.trim());
-      if (!Array.isArray(rawScenarios)) continue;
+      let rawScenarios: unknown[];
+      try {
+        const parsed = JSON.parse(jsonText.trim());
+        if (!Array.isArray(parsed)) continue;
+        rawScenarios = parsed;
+      } catch {
+        // Truncated JSON — salvage complete objects before the cut-off
+        const lastComplete = jsonText.lastIndexOf('}');
+        if (lastComplete === -1) continue;
+        const salvaged = jsonText.slice(0, lastComplete + 1).trim().replace(/,\s*$/, '') + ']';
+        try {
+          const parsed = JSON.parse(salvaged.startsWith('[') ? salvaged : '[' + salvaged);
+          if (!Array.isArray(parsed)) continue;
+          rawScenarios = parsed;
+          console.warn(`Pool gen: salvaged ${parsed.length} scenarios from truncated response`);
+        } catch {
+          continue;
+        }
+      }
 
       const existingIds = new Set(existingScenarios.map(s => s.poolId));
       const valid: PoolScenario[] = [];

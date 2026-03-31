@@ -8,6 +8,8 @@ import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import AIProgressBar from '../components/AIProgressBar';
+import { getSharedProgress } from '../utils/pokerTraining';
+import { formatCurrency } from '../utils/calculations';
 import { withAITiming } from '../utils/aiTiming';
 import { syncToCloud } from '../database/githubSync';
 
@@ -56,7 +58,7 @@ const applyPeriodOverride = (base: PeriodMarkers, override: string | null): Peri
 
 const NewGameScreen = () => {
   const navigate = useNavigate();
-  const { role, signOut } = usePermissions();
+  const { role, signOut, playerName } = usePermissions();
   const isAdmin = role === 'admin';
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1442,15 +1444,14 @@ const NewGameScreen = () => {
   };
 
 
-  // Render player tile - balanced size
   const renderPlayerTile = (player: Player) => (
     <div
       key={player.id}
       onClick={() => togglePlayer(player.id)}
       style={{
-        padding: '0.5rem 0.4rem',
-        borderRadius: '10px',
-        fontSize: '0.9rem',
+        padding: '0.35rem 0.3rem',
+        borderRadius: '8px',
+        fontSize: '0.8rem',
         fontWeight: '600',
         cursor: 'pointer',
         border: selectedIds.has(player.id) ? '2px solid var(--primary)' : '2px solid var(--border)',
@@ -1538,30 +1539,134 @@ const NewGameScreen = () => {
       )}
 
       {/* Training Banner */}
-      <div
-        onClick={() => navigate('/shared-training')}
-        style={{
-          background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.12))',
-          border: '1px solid rgba(99,102,241,0.3)',
-          borderRadius: '12px',
-          padding: '0.75rem 1rem',
-          marginBottom: '0.75rem',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          direction: 'rtl',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '1.3rem' }}>🎯</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>אימון פוקר</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>תרגל ושפר את המשחק שלך</div>
+      {(() => {
+        const tp = playerName ? getSharedProgress(playerName) : null;
+        const myStats = playerName ? playerStats.find(s => s.playerName === playerName) : null;
+        const hasTraining = tp && tp.totalQuestions > 0;
+        const lastProfit = myStats?.lastGameResults?.[0]?.profit ?? 0;
+        const lastDate = myStats?.lastGameResults?.[0]?.date;
+        const daysSinceGame = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
+        const last3 = myStats?.lastGameResults?.slice(0, 3) || [];
+        const last3Avg = last3.length >= 3 ? last3.reduce((s, g) => s + g.profit, 0) / last3.length : null;
+        const acc = hasTraining ? Math.round((tp.totalCorrect / tp.totalQuestions) * 100) : 0;
+
+        // Daily seed so the message changes once per day, not per render
+        const daySeed = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+        const pick = <T,>(arr: T[]): T => arr[(daySeed + (playerName?.length || 0)) % arr.length];
+
+        type Msg = { icon: string; title: string; sub: string };
+        const msgs: Msg[] = [];
+        const n = playerName || '';
+        const wp = myStats ? Math.round(myStats.winPercentage) : 0;
+
+        if (hasTraining && myStats) {
+          if (daysSinceGame !== null && daysSinceGame >= 21) {
+            const weeks = Math.floor(daysSinceGame / 7);
+            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות — תתחמם באימון` });
+            msgs.push({ icon: '🔔', title: `${n}, מתגעגעים לשולחן?`, sub: `${acc}% דיוק באימונים · ${formatCurrency(myStats.totalProfit)} סה"כ` });
+          }
+          if (tp.streak.current >= 3) {
+            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · סה"כ ${formatCurrency(myStats.totalProfit)} במשחקים` });
+          }
+          if (acc < 45) {
+            msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק — יש מה לשפר`, sub: `שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))} · ${tp.totalQuestions} שאלות` });
+          }
+          if (acc >= 70) {
+            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — האימון עובד`, sub: `שיא רווח ${formatCurrency(myStats.biggestWin)} · סה"כ ${formatCurrency(myStats.totalProfit)}` });
+          }
+          if (myStats.currentStreak < 0) {
+            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות — תמשיך להתאמן` });
+          }
+          msgs.push({ icon: '⚡', title: `${n}, ${acc}% דיוק · ${wp}% נצחונות`, sub: `${tp.sessionsCompleted} אימונים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          msgs.push({ icon: '💪', title: `${n}, ${tp.totalQuestions} שאלות באימונים`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${myStats.gamesPlayed} משחקים` });
+        } else if (hasTraining) {
+          if (tp.streak.current >= 3) {
+            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות` });
+          }
+          if (acc >= 70) {
+            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — אתה חד`, sub: `${tp.sessionsCompleted} אימונים · ${tp.totalQuestions} שאלות` });
+          }
+          msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק`, sub: `${tp.totalQuestions} שאלות · ${tp.sessionsCompleted} אימונים` });
+          msgs.push({ icon: '⚡', title: `${n}, ${tp.sessionsCompleted} אימונים עד עכשיו`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות` });
+        } else if (myStats && myStats.gamesPlayed > 0) {
+          if (daysSinceGame !== null && daysSinceGame >= 21) {
+            const weeks = Math.floor(daysSinceGame / 7);
+            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק — תתחמם`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${wp}% נצחונות` });
+            msgs.push({ icon: '🔔', title: `${n}, חזרת! בוא נתאמן`, sub: `${myStats.gamesPlayed} משחקים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          }
+          if (myStats.currentStreak <= -3) {
+            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף — תתאמן`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))}` });
+          }
+          if (lastProfit < -100) {
+            msgs.push({ icon: '💪', title: `${n}, הפסדת ${formatCurrency(Math.abs(lastProfit))} — בוא נתאמן`, sub: `ממוצע ${formatCurrency(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
+          }
+          if (lastProfit < 0 && lastProfit >= -100) {
+            msgs.push({ icon: '💪', title: `${n}, הפסדת ${formatCurrency(Math.abs(lastProfit))} — בוא נתאמן`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${wp}% נצחונות` });
+          }
+          if (last3Avg !== null && last3Avg < -50) {
+            msgs.push({ icon: '⚡', title: `${n}, ממוצע ${formatCurrency(Math.round(last3Avg))} ב-3 אחרונים`, sub: `${wp}% נצחונות · סה"כ ${formatCurrency(myStats.totalProfit)}` });
+          }
+          if (myStats.winPercentage < 40 && myStats.gamesPlayed >= 5) {
+            msgs.push({ icon: '🔥', title: `${n}, ${wp}% נצחונות — אימון ישנה`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          }
+          if (lastProfit > 100) {
+            msgs.push({ icon: '🏆', title: `${n}, ניצחת ${formatCurrency(lastProfit)} לאחרונה!`, sub: `שיא רווח ${formatCurrency(myStats.biggestWin)} · ${myStats.winCount} נצחונות` });
+          }
+          if (Math.abs(lastProfit) <= 100) {
+            msgs.push({ icon: '⚡', title: `${n}, סיימת בלי רווח — אימון יעזור`, sub: `ממוצע ${formatCurrency(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
+          }
+          msgs.push({ icon: '💪', title: `${n}, ${myStats.gamesPlayed} משחקים — תוסיף אימון`, sub: `${wp}% נצחונות · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          if (myStats.biggestWin > 0) {
+            msgs.push({ icon: '🏆', title: `${n}, שיא הרווח שלך ${formatCurrency(myStats.biggestWin)}`, sub: `${wp}% נצחונות · ${myStats.gamesPlayed} משחקים — תשבור אותו` });
+          }
+          if (myStats.totalProfit < 0) {
+            msgs.push({ icon: '🔥', title: `${n}, סה"כ ${formatCurrency(myStats.totalProfit)} — אימון יעזור`, sub: `${myStats.lossCount} הפסדים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          }
+          if (myStats.totalProfit > 0) {
+            msgs.push({ icon: '🏆', title: `${n}, סה"כ ${formatCurrency(myStats.totalProfit)} ברווח`, sub: `${myStats.winCount} נצחונות · שיא ${formatCurrency(myStats.biggestWin)} — תשמור על זה` });
+          }
+          if (myStats.longestWinStreak >= 2) {
+            msgs.push({ icon: '🔥', title: `${n}, שיא הרצף שלך ${myStats.longestWinStreak} נצחונות`, sub: `${wp}% נצחונות · סה"כ ${formatCurrency(myStats.totalProfit)}` });
+          }
+        } else if (playerName) {
+          msgs.push({ icon: '✨', title: `${n}, מוכן לאימון ראשון?`, sub: '' });
+          msgs.push({ icon: '🔥', title: `${n}, בוא נתחיל להתאמן`, sub: '' });
+        }
+
+        if (msgs.length === 0) {
+          msgs.push({ icon: '🔥', title: 'אימון פוקר', sub: 'תרגל ושפר את המשחק שלך' });
+        }
+
+        const chosen = pick(msgs);
+        const icon = chosen.icon;
+        const title = chosen.title;
+        const sub = chosen.sub;
+
+        return (
+          <div
+            onClick={() => navigate('/shared-training')}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '0.6rem 0.8rem',
+              marginBottom: '0.5rem',
+              cursor: 'pointer',
+              direction: 'rtl',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
+              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
+            </div>
+            <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> אימון פוקר ←</button>
           </div>
-        </div>
-        <span style={{ fontSize: '1.1rem', opacity: 0.6 }}>←</span>
-      </div>
+        );
+      })()}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>New Game</h1>
@@ -1596,19 +1701,19 @@ const NewGameScreen = () => {
       )}
 
       {/* Permanent Players */}
-      <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
+      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
         {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '0.75rem' }}>
-            <div style={{ fontSize: '1.5rem' }}>👥</div>
-            <p style={{ margin: '0.25rem 0', fontWeight: '500', fontSize: '0.9rem' }}>No players yet</p>
+          <div style={{ textAlign: 'center', padding: '0.5rem' }}>
+            <div style={{ fontSize: '1.3rem' }}>👥</div>
+            <p style={{ margin: '0.2rem 0', fontWeight: '500', fontSize: '0.8rem' }}>No players yet</p>
           </div>
         ) : (
           <>
             {permanentPlayers.length > 0 && (
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-                gap: '0.5rem'
+                gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+                gap: '0.3rem'
               }}>
                 {permanentPlayers.map(renderPlayerTile)}
               </div>
@@ -1620,13 +1725,13 @@ const NewGameScreen = () => {
           onClick={() => setShowAddPlayer(true)}
           style={{
             width: '100%',
-            marginTop: permanentPlayers.length > 0 ? '0.6rem' : '0',
-            padding: '0.4rem',
+            marginTop: permanentPlayers.length > 0 ? '0.4rem' : '0',
+            padding: '0.3rem',
             border: '2px dashed var(--border)',
             borderRadius: '6px',
             background: 'transparent',
             color: 'var(--text-muted)',
-            fontSize: '0.8rem',
+            fontSize: '0.75rem',
             cursor: 'pointer'
           }}
         >
@@ -1636,7 +1741,7 @@ const NewGameScreen = () => {
 
       {/* Guests Section */}
       {permanentGuestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
+        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
           <button
             onClick={() => setShowPermanentGuests(!showPermanentGuests)}
             style={{
@@ -1651,10 +1756,10 @@ const NewGameScreen = () => {
               color: 'var(--text)'
             }}
           >
-            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
               🏠 אורח ({permanentGuestPlayers.length})
             </span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {showPermanentGuests ? '▲' : '▼'}
             </span>
           </button>
@@ -1662,9 +1767,9 @@ const NewGameScreen = () => {
           {showPermanentGuests && (
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-              gap: '0.5rem',
-              marginTop: '0.5rem'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+              gap: '0.3rem',
+              marginTop: '0.35rem'
             }}>
               {permanentGuestPlayers.map(renderPlayerTile)}
             </div>
@@ -1674,7 +1779,7 @@ const NewGameScreen = () => {
 
       {/* Occasional Players Section */}
       {guestPlayers.length > 0 && (
-        <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
+        <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
           <button
             onClick={() => setShowGuests(!showGuests)}
             style={{
@@ -1689,10 +1794,10 @@ const NewGameScreen = () => {
               color: 'var(--text)'
             }}
           >
-            <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
               👤 מזדמן ({guestPlayers.length})
             </span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {showGuests ? '▲' : '▼'}
             </span>
           </button>
@@ -1700,9 +1805,9 @@ const NewGameScreen = () => {
           {showGuests && (
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-              gap: '0.5rem',
-              marginTop: '0.5rem'
+              gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+              gap: '0.3rem',
+              marginTop: '0.35rem'
             }}>
               {guestPlayers.map(renderPlayerTile)}
             </div>

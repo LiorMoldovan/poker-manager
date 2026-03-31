@@ -42,7 +42,8 @@ const SharedQuickPlayScreen = () => {
   const { playerName } = usePermissions();
   const [searchParams] = useSearchParams();
   const categoriesParam = searchParams.get('categories') || '';
-  const sessionLength = parseInt(searchParams.get('count') || '10', 10) || null;
+  const rawCount = searchParams.get('count');
+  const sessionLength = rawCount ? (parseInt(rawCount, 10) || null) : null;
 
   const [scenarios, setScenarios] = useState<PoolScenario[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -425,9 +426,9 @@ const SharedQuickPlayScreen = () => {
         <div style={{ height: '100%', width: `${progressPct}%`, background: 'var(--primary)', transition: 'width 0.3s ease', borderRadius: '2px' }} />
       </div>
 
-      {/* Score dots */}
-      {results.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center', marginBottom: '0.75rem' }}>
+      {/* Score dots (capped at 20 to prevent overflow in unlimited mode) */}
+      {results.length > 0 && scenarios.length <= 20 && (
+        <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
           {results.map((r, i) => (
             <div key={i} style={{
               width: '10px', height: '10px', borderRadius: '50%',
@@ -437,6 +438,11 @@ const SharedQuickPlayScreen = () => {
           {Array.from({ length: Math.max(0, scenarios.length - results.length) }).map((_, i) => (
             <div key={`e-${i}`} style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--border)' }} />
           ))}
+        </div>
+      )}
+      {results.length > 0 && scenarios.length > 20 && (
+        <div style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+          ✅ {results.filter(r => r.correct).length} / {results.length}
         </div>
       )}
 

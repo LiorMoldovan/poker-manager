@@ -108,7 +108,43 @@ const TrainingAdminTab = () => {
     return alerts;
   };
 
-  // ── Generate full pool ──
+  // ── Build pool object from scenarios ──
+  const buildPoolObject = (scenarios: PoolScenario[]): TrainingPool => {
+    const byCategory: Record<string, number> = {};
+    scenarios.forEach(s => {
+      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
+    });
+    return {
+      generatedAt: new Date().toISOString(),
+      totalScenarios: scenarios.length,
+      byCategory,
+      scenarios,
+    };
+  };
+
+  const POOL_DRAFT_KEY = 'training_pool_draft';
+
+  const savePoolDraft = (scenarios: PoolScenario[]) => {
+    try { localStorage.setItem(POOL_DRAFT_KEY, JSON.stringify(scenarios)); } catch { /* full */ }
+  };
+
+  const loadPoolDraft = (): PoolScenario[] | null => {
+    try {
+      const raw = localStorage.getItem(POOL_DRAFT_KEY);
+      if (!raw) return null;
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) && arr.length > 0 ? arr : null;
+    } catch { return null; }
+  };
+
+  const clearPoolDraft = () => localStorage.removeItem(POOL_DRAFT_KEY);
+
+  // Upload to GitHub every N categories to protect against crashes
+  const SAVE_INTERVAL = 4;
+
+  const MIN_PER_CATEGORY = 20;
+
+  // ── Generate full pool (with auto-resume) ──
   const handleGeneratePool = async () => {
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
@@ -118,20 +154,61 @@ const TrainingAdminTab = () => {
 
     setGenerating(true);
     setGenMessage(null);
-    const allScenarios: PoolScenario[] = pool?.scenarios || [];
-    const total = SCENARIO_CATEGORIES.length;
+
+    // Start from draft if available (crash recovery), else from current pool
+    const draft = loadPoolDraft();
+    const allScenarios: PoolScenario[] = draft || pool?.scenarios || [];
+    if (draft) {
+      setGenMessage(`ממשיך מטיוטה (${draft.length} שאלות קיימות)...`);
+    }
+
+    // Count existing scenarios per category to know which to skip
+    const existingPerCat: Record<string, number> = {};
+    allScenarios.forEach(s => {
+      existingPerCat[s.categoryId] = (existingPerCat[s.categoryId] || 0) + 1;
+    });
+
+    const catsToGenerate = SCENARIO_CATEGORIES.filter(
+      cat => (existingPerCat[cat.id] || 0) < MIN_PER_CATEGORY
+    );
+
+    if (catsToGenerate.length === 0) {
+      setGenerating(false);
+      const newPool = buildPoolObject(allScenarios);
+      const result = await uploadTrainingPool(newPool);
+      clearPoolDraft();
+      if (result.success) setPool(newPool);
+      setGenMessage(`כל הקטגוריות מלאות! סה"כ: ${allScenarios.length} שאלות`);
+      return;
+    }
+
+    const skipped = SCENARIO_CATEGORIES.length - catsToGenerate.length;
+    if (skipped > 0) {
+      setGenMessage(`דילוג על ${skipped} קטגוריות שלמות, מייצר ${catsToGenerate.length} נותרות...`);
+    }
+
+    const total = catsToGenerate.length;
     let successCount = 0;
 
     for (let i = 0; i < total; i++) {
-      const cat = SCENARIO_CATEGORIES[i];
+      const cat = catsToGenerate[i];
+      const existing = existingPerCat[cat.id] || 0;
+      const needed = 30 - existing;
       setGenProgress({ current: i + 1, total, category: cat.name });
 
       try {
-        const batch = await generatePoolBatch(cat, 30, allScenarios, apiKey);
+        const batch = await generatePoolBatch(cat, needed, allScenarios, apiKey);
         allScenarios.push(...batch);
         successCount += batch.length;
       } catch (err) {
         console.error(`Pool gen failed for ${cat.id}:`, err);
+      }
+
+      savePoolDraft(allScenarios);
+
+      if ((i + 1) % SAVE_INTERVAL === 0) {
+        setGenMessage(`שומר התקדמות... (${allScenarios.length} שאלות)`);
+        await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => {});
       }
 
       if (i < total - 1) {
@@ -139,20 +216,10 @@ const TrainingAdminTab = () => {
       }
     }
 
-    const byCategory: Record<string, number> = {};
-    allScenarios.forEach(s => {
-      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
-    });
-
-    const newPool: TrainingPool = {
-      generatedAt: new Date().toISOString(),
-      totalScenarios: allScenarios.length,
-      byCategory,
-      scenarios: allScenarios,
-    };
-
+    const newPool = buildPoolObject(allScenarios);
     const result = await uploadTrainingPool(newPool);
     setGenerating(false);
+    clearPoolDraft();
 
     if (result.success) {
       setPool(newPool);
@@ -204,25 +271,22 @@ const TrainingAdminTab = () => {
         console.error(`Expand failed for ${cat.id}:`, err);
       }
 
+      savePoolDraft(allScenarios);
+
+      if ((i + 1) % SAVE_INTERVAL === 0) {
+        setGenMessage(`שומר התקדמות... (${allScenarios.length} שאלות)`);
+        await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => {});
+      }
+
       if (i < depletedCats.length - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
     }
 
-    const byCategory: Record<string, number> = {};
-    allScenarios.forEach(s => {
-      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
-    });
-
-    const newPool: TrainingPool = {
-      generatedAt: new Date().toISOString(),
-      totalScenarios: allScenarios.length,
-      byCategory,
-      scenarios: allScenarios,
-    };
-
+    const newPool = buildPoolObject(allScenarios);
     const result = await uploadTrainingPool(newPool);
     setGenerating(false);
+    clearPoolDraft();
 
     if (result.success) {
       setPool(newPool);
@@ -408,6 +472,60 @@ ${dataBlock}
           ))}
         </div>
       )}
+
+      {/* Draft recovery banner */}
+      {!generating && (() => {
+        const draft = loadPoolDraft();
+        if (!draft) return null;
+
+        const draftPerCat: Record<string, number> = {};
+        draft.forEach(s => { draftPerCat[s.categoryId] = (draftPerCat[s.categoryId] || 0) + 1; });
+        const doneCats = SCENARIO_CATEGORIES.filter(c => (draftPerCat[c.id] || 0) >= MIN_PER_CATEGORY).length;
+
+        return (
+          <div style={{
+            padding: '0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+            background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)',
+          }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f97316', marginBottom: '0.4rem' }}>
+              🔄 נמצא טיוטה: {draft.length} שאלות ({doneCats}/{SCENARIO_CATEGORIES.length} קטגוריות)
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+              לחץ "המשך ייצור" כדי להשלים את הקטגוריות החסרות, או "שחזר והעלה" כדי להעלות מה שיש.
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button onClick={handleGeneratePool} style={{
+                flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
+                fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+              }}>
+                ▶ המשך ייצור ({SCENARIO_CATEGORIES.length - doneCats} קטגוריות)
+              </button>
+              <button onClick={async () => {
+                const recovered = buildPoolObject(draft);
+                const result = await uploadTrainingPool(recovered);
+                if (result.success) {
+                  setPool(recovered);
+                  clearPoolDraft();
+                  setGenMessage(`שוחזרו ${draft.length} שאלות מטיוטה`);
+                }
+              }} style={{
+                padding: '0.5rem 0.75rem', borderRadius: '8px', border: 'none',
+                background: '#f97316', color: 'white', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+              }}>
+                שחזר
+              </button>
+              <button onClick={() => { clearPoolDraft(); setGenMessage(null); }} style={{
+                padding: '0.5rem 0.5rem', borderRadius: '8px',
+                border: '1px solid var(--border)', background: 'var(--surface)',
+                color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer',
+              }}>
+                מחק
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Pool Management */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
