@@ -1,0 +1,714 @@
+import { useState, useEffect, useCallback } from 'react';
+import {
+  TrainingPool,
+  TrainingAnswersFile,
+  TrainingInsightsFile,
+  TrainingPlayerData,
+  TrainingExploitationLocal,
+  PoolScenario,
+} from '../types';
+import {
+  fetchTrainingPool,
+  fetchTrainingAnswers,
+  fetchTrainingInsights,
+  uploadTrainingPool,
+  uploadTrainingInsights,
+  removeFromTrainingPool,
+} from '../database/githubSync';
+import {
+  SCENARIO_CATEGORIES,
+  generatePoolBatch,
+  CategoryInfo,
+} from '../utils/pokerTraining';
+import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
+
+const RATE_LIMIT_DELAY = 7500;
+
+const TrainingAdminTab = () => {
+  const [pool, setPool] = useState<TrainingPool | null>(null);
+  const [answers, setAnswers] = useState<TrainingAnswersFile | null>(null);
+  const [insights, setInsights] = useState<TrainingInsightsFile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<string | null>(null);
+
+  // Pool generation
+  const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState({ current: 0, total: 0, category: '' });
+  const [genMessage, setGenMessage] = useState<string | null>(null);
+
+  // Expanded player
+  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
+
+  // AI insight generation
+  const [generatingInsight, setGeneratingInsight] = useState<string | null>(null);
+  const [insightMsg, setInsightMsg] = useState<string | null>(null);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [p, a, i] = await Promise.all([
+        fetchTrainingPool(),
+        fetchTrainingAnswers(),
+        fetchTrainingInsights(),
+      ]);
+      setPool(p);
+      setAnswers(a);
+      setInsights(i);
+      setLastRefresh(new Date().toLocaleTimeString('he-IL'));
+    } catch (err) {
+      console.error('Failed to load training data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+  // ── Alerts ──
+  const getAlerts = (): { text: string; color: string }[] => {
+    const alerts: { text: string; color: string }[] = [];
+
+    if (!pool || pool.totalScenarios === 0) {
+      alerts.push({ text: 'אין מאגר שאלות - צור מאגר חדש', color: '#ef4444' });
+    }
+
+    if (answers) {
+      // Check depleted categories
+      const maxSeen = new Map<string, number>();
+      answers.players.forEach(player => {
+        const seen = new Set(player.sessions.flatMap(s => s.results.map(r => r.poolId)));
+        if (pool) {
+          SCENARIO_CATEGORIES.forEach(cat => {
+            const catPool = pool.scenarios.filter(s => s.categoryId === cat.id);
+            const catUnseen = catPool.filter(s => !seen.has(s.poolId)).length;
+            const current = maxSeen.get(cat.id) ?? Infinity;
+            maxSeen.set(cat.id, Math.min(current, catUnseen));
+          });
+        }
+      });
+      const lowCats = [...maxSeen.entries()].filter(([, v]) => v < 5).length;
+      if (lowCats > 0) {
+        alerts.push({ text: `${lowCats} קטגוריות עם פחות מ-5 שאלות לשחקן הפעיל ביותר`, color: '#f59e0b' });
+      }
+
+      // Flagged questions
+      const flagCounts = new Map<string, number>();
+      answers.players.forEach(p => {
+        p.sessions.forEach(s => {
+          (s.flaggedPoolIds || []).forEach(id => {
+            flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+          });
+        });
+      });
+      if (flagCounts.size > 0) {
+        alerts.push({ text: `${flagCounts.size} שאלות מדווחות לבדיקה`, color: '#f59e0b' });
+      }
+    }
+
+    return alerts;
+  };
+
+  // ── Generate full pool ──
+  const handleGeneratePool = async () => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      setGenMessage('חסר מפתח Gemini API');
+      return;
+    }
+
+    setGenerating(true);
+    setGenMessage(null);
+    const allScenarios: PoolScenario[] = pool?.scenarios || [];
+    const total = SCENARIO_CATEGORIES.length;
+    let successCount = 0;
+
+    for (let i = 0; i < total; i++) {
+      const cat = SCENARIO_CATEGORIES[i];
+      setGenProgress({ current: i + 1, total, category: cat.name });
+
+      try {
+        const batch = await generatePoolBatch(cat, 30, allScenarios, apiKey);
+        allScenarios.push(...batch);
+        successCount += batch.length;
+      } catch (err) {
+        console.error(`Pool gen failed for ${cat.id}:`, err);
+      }
+
+      if (i < total - 1) {
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+    }
+
+    const byCategory: Record<string, number> = {};
+    allScenarios.forEach(s => {
+      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
+    });
+
+    const newPool: TrainingPool = {
+      generatedAt: new Date().toISOString(),
+      totalScenarios: allScenarios.length,
+      byCategory,
+      scenarios: allScenarios,
+    };
+
+    const result = await uploadTrainingPool(newPool);
+    setGenerating(false);
+
+    if (result.success) {
+      setPool(newPool);
+      setGenMessage(`נוצרו ${successCount} שאלות חדשות! סה"כ: ${allScenarios.length}`);
+    } else {
+      setGenMessage(`שגיאה בהעלאה: ${result.message}`);
+    }
+  };
+
+  // ── Smart expand ──
+  const handleExpandPool = async () => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey || !pool || !answers) return;
+
+    const seenByPlayer = new Map<string, Set<string>>();
+    answers.players.forEach(p => {
+      seenByPlayer.set(p.playerName, new Set(p.sessions.flatMap(s => s.results.map(r => r.poolId))));
+    });
+
+    const depletedCats: CategoryInfo[] = [];
+    SCENARIO_CATEGORIES.forEach(cat => {
+      const catPool = pool.scenarios.filter(s => s.categoryId === cat.id);
+      const anyLow = [...seenByPlayer.values()].some(seen => {
+        const unseen = catPool.filter(s => !seen.has(s.poolId)).length;
+        return unseen < 5;
+      });
+      if (anyLow) depletedCats.push(cat);
+    });
+
+    if (depletedCats.length === 0) {
+      setGenMessage('אין קטגוריות שצריכות הרחבה');
+      return;
+    }
+
+    setGenerating(true);
+    setGenMessage(null);
+    const allScenarios = [...pool.scenarios];
+    let added = 0;
+
+    for (let i = 0; i < depletedCats.length; i++) {
+      const cat = depletedCats[i];
+      setGenProgress({ current: i + 1, total: depletedCats.length, category: cat.name });
+
+      try {
+        const batch = await generatePoolBatch(cat, 15, allScenarios, apiKey);
+        allScenarios.push(...batch);
+        added += batch.length;
+      } catch (err) {
+        console.error(`Expand failed for ${cat.id}:`, err);
+      }
+
+      if (i < depletedCats.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+      }
+    }
+
+    const byCategory: Record<string, number> = {};
+    allScenarios.forEach(s => {
+      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
+    });
+
+    const newPool: TrainingPool = {
+      generatedAt: new Date().toISOString(),
+      totalScenarios: allScenarios.length,
+      byCategory,
+      scenarios: allScenarios,
+    };
+
+    const result = await uploadTrainingPool(newPool);
+    setGenerating(false);
+
+    if (result.success) {
+      setPool(newPool);
+      setGenMessage(`הורחב: ${added} שאלות ב-${depletedCats.length} קטגוריות`);
+    } else {
+      setGenMessage(`שגיאה: ${result.message}`);
+    }
+  };
+
+  // ── Remove flagged ──
+  const handleRemoveFlagged = async (poolIds: string[]) => {
+    const result = await removeFromTrainingPool(poolIds);
+    if (result.success) {
+      await loadAll();
+      setGenMessage(`הוסרו ${poolIds.length} שאלות מדווחות`);
+    }
+  };
+
+  // ── Generate AI insights ──
+  const handleGenerateInsight = async (player: TrainingPlayerData) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+
+    setGeneratingInsight(player.playerName);
+    setInsightMsg(null);
+
+    const catAccuracy = SCENARIO_CATEGORIES.map(cat => {
+      const results = player.sessions.flatMap(s => s.results.filter(r => r.categoryId === cat.id));
+      const total = results.length;
+      const correct = results.filter(r => r.correct).length;
+      return { name: cat.name, id: cat.id, total, correct, accuracy: total > 0 ? (correct / total) * 100 : -1 };
+    }).filter(c => c.total > 0);
+
+    const weakCats = catAccuracy.filter(c => c.accuracy < 50).sort((a, b) => a.accuracy - b.accuracy);
+    const strongCats = catAccuracy.filter(c => c.accuracy >= 70).sort((a, b) => b.accuracy - a.accuracy);
+
+    const wrongPatterns = player.sessions.flatMap(s =>
+      s.results.filter(r => !r.correct).map(r => `${r.categoryId}: chose ${r.chosenId}`)
+    ).slice(-30);
+
+    const dataBlock = `שחקן: ${player.playerName}
+סה"כ שאלות: ${player.totalQuestions}, נכונות: ${player.totalCorrect} (${player.accuracy.toFixed(1)}%)
+אימונים: ${player.sessions.length}
+
+קטגוריות חלשות: ${weakCats.map(c => `${c.name} (${c.accuracy.toFixed(0)}%, ${c.total} שאלות)`).join(', ') || 'אין'}
+קטגוריות חזקות: ${strongCats.map(c => `${c.name} (${c.accuracy.toFixed(0)}%, ${c.total} שאלות)`).join(', ') || 'אין'}
+
+דוגמאות טעויות אחרונות: ${wrongPatterns.join('; ')}`;
+
+    try {
+      // 1. Player-facing improvement tips
+      const improvementPrompt = `אתה מאמן פוקר. בהתבסס על הנתונים הבאים, כתוב 3-4 טיפים מעשיים לשיפור בעברית פשוטה. התייחס לנקודות החלשות הספציפיות. אל תחזור על הנתונים עצמם.
+
+${dataBlock}
+
+כתוב טיפים קצרים ומעשיים, כל אחד בשורה חדשה. עברית בלבד.`;
+
+      const improvResult = await callGemini(apiKey, improvementPrompt);
+
+      // 2. Admin-facing exploitation analysis
+      const exploitPrompt = `אתה יועץ פוקר אסטרטגי. בהתבסס על הנתונים הבאים, נתח איך לנצל את החולשות של השחקן הזה במשחק. תן עצות קונקרטיות ומעשיות שאפשר להשתמש בהן בזמן אמת בשולחן.
+
+${dataBlock}
+
+כתוב 3-5 טקטיקות ניצול ספציפיות. לדוגמה: "כשהוא על הריבר, הימור גדול יגרום לו לוותר ב-X% מהמקרים". עברית בלבד.`;
+
+      const exploitResult = await callGemini(apiKey, exploitPrompt);
+
+      // Save improvement to GitHub
+      const currentInsights = insights || { lastUpdated: '', insights: {} };
+      currentInsights.insights[player.playerName] = {
+        generatedAt: new Date().toISOString(),
+        sessionsAtGeneration: player.sessions.length,
+        improvement: improvResult,
+      };
+      currentInsights.lastUpdated = new Date().toISOString();
+      await uploadTrainingInsights(currentInsights);
+      setInsights({ ...currentInsights });
+
+      // Save exploitation to admin localStorage ONLY
+      const exploitData: TrainingExploitationLocal = {
+        generatedAt: new Date().toISOString(),
+        sessionsAtGeneration: player.sessions.length,
+        text: exploitResult,
+      };
+      localStorage.setItem(`training_exploitation_${player.playerName}`, JSON.stringify(exploitData));
+
+      setInsightMsg(`תובנות נוצרו עבור ${player.playerName}`);
+    } catch (err) {
+      setInsightMsg(`שגיאה: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setGeneratingInsight(null);
+    }
+  };
+
+  const callGemini = async (apiKey: string, prompt: string): Promise<string> => {
+    for (const config of API_CONFIGS) {
+      const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+      const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+          }),
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } catch { continue; }
+    }
+    throw new Error('All models failed');
+  };
+
+  // ── Flagged questions ──
+  const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario | undefined; flagCount: number }[] => {
+    if (!answers || !pool) return [];
+    const flagCounts = new Map<string, number>();
+    answers.players.forEach(p => {
+      p.sessions.forEach(s => {
+        (s.flaggedPoolIds || []).forEach(id => {
+          flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+        });
+      });
+    });
+    return [...flagCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([poolId, flagCount]) => ({
+        poolId,
+        scenario: pool.scenarios.find(s => s.poolId === poolId),
+        flagCount,
+      }));
+  };
+
+  const alerts = getAlerts();
+  const flagged = getFlaggedQuestions();
+  const players = answers?.players || [];
+  const sortedPlayers = [...players].sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🎯</div>
+        <div style={{ color: 'var(--text-muted)' }}>טוען נתוני אימון...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ direction: 'rtl' }}>
+      {/* Header */}
+      <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>🎯 ניהול אימונים</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {lastRefresh && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{lastRefresh}</span>}
+            <button onClick={loadAll} style={{
+              fontSize: '0.75rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+              background: 'var(--surface-hover)', color: 'var(--text-muted)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+            }}>
+              🔄
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts */}
+      {alerts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.5rem' }}>
+          {alerts.map((a, i) => (
+            <div key={i} style={{
+              padding: '0.5rem 0.75rem', borderRadius: '8px',
+              background: `${a.color}15`, border: `1px solid ${a.color}40`,
+              fontSize: '0.8rem', color: a.color, fontWeight: 500,
+            }}>
+              ⚠️ {a.text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pool Management */}
+      <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.5rem', marginTop: 0 }}>📦 מאגר שאלות</h3>
+
+        {pool && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            סה"כ: {pool.totalScenarios} שאלות | נוצר: {new Date(pool.generatedAt).toLocaleDateString('he-IL')}
+          </div>
+        )}
+
+        {generating ? (
+          <div style={{ textAlign: 'center', padding: '1rem' }}>
+            <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>⚡</div>
+            <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>
+              מייצר: {genProgress.category} ({genProgress.current}/{genProgress.total})
+            </div>
+            <div style={{ height: '4px', borderRadius: '2px', background: 'var(--surface-light)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: '2px',
+                background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                width: `${(genProgress.current / Math.max(genProgress.total, 1)) * 100}%`,
+                transition: 'width 0.5s ease',
+              }} />
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+              ~{Math.ceil((genProgress.total - genProgress.current) * 15 / 60)} דקות נותרו
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={handleGeneratePool} style={{
+              flex: 1, padding: '0.6rem', borderRadius: '10px', border: 'none',
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
+              fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+            }}>
+              {pool ? '🔄 ייצור מחדש' : '✨ צור מאגר חדש'}
+            </button>
+            {pool && answers && answers.players.length > 0 && (
+              <button onClick={handleExpandPool} style={{
+                flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid var(--primary)',
+                background: 'transparent', color: 'var(--primary)',
+                fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+              }}>
+                📈 הרחב מאגר
+              </button>
+            )}
+          </div>
+        )}
+
+        {genMessage && (
+          <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+            {genMessage}
+          </div>
+        )}
+
+        {/* Per-category breakdown (collapsed by default) */}
+        {pool && (
+          <details style={{ marginTop: '0.75rem' }}>
+            <summary style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 500 }}>
+              פירוט לפי קטגוריה
+            </summary>
+            <div style={{ marginTop: '0.4rem' }}>
+              {SCENARIO_CATEGORIES.map(cat => {
+                const count = pool.byCategory[cat.id] || 0;
+                return (
+                  <div key={cat.id} style={{
+                    display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0',
+                    fontSize: '0.75rem',
+                  }}>
+                    <span>{cat.icon} {cat.name}</span>
+                    <span style={{ color: count >= 20 ? '#22c55e' : count >= 10 ? '#eab308' : '#ef4444', fontWeight: 600 }}>
+                      {count}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        )}
+      </div>
+
+      {/* Player Summary Table */}
+      <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.5rem', marginTop: 0 }}>👥 שחקנים</h3>
+
+        {sortedPlayers.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            אין נתוני אימון עדיין
+          </div>
+        ) : (
+          <div>
+            {sortedPlayers.map((player, i) => {
+              const isExpanded = expandedPlayer === player.playerName;
+              const exploit = getExploitLocal(player.playerName);
+              const insight = insights?.insights?.[player.playerName];
+              const sessionsSinceInsight = insight ? player.sessions.length - insight.sessionsAtGeneration : player.sessions.length;
+              const staleness = sessionsSinceInsight <= 2 ? '#22c55e' : sessionsSinceInsight <= 5 ? '#eab308' : '#ef4444';
+
+              const medals = ['🥇', '🥈', '🥉'];
+
+              return (
+                <div key={player.playerName} style={{ marginBottom: '0.3rem' }}>
+                  {/* Row */}
+                  <div
+                    onClick={() => setExpandedPlayer(isExpanded ? null : player.playerName)}
+                    style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '0.5rem 0.4rem', borderRadius: '8px', cursor: 'pointer',
+                      background: isExpanded ? 'rgba(99,102,241,0.08)' : 'transparent',
+                      border: isExpanded ? '1px solid rgba(99,102,241,0.15)' : '1px solid transparent',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ width: '24px', textAlign: 'center', fontSize: '0.8rem' }}>{medals[i] || `${i + 1}`}</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{player.playerName}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: staleness }} title={`${sessionsSinceInsight} sessions since insight`} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{player.totalQuestions}Q</span>
+                      <span style={{
+                        fontWeight: 700,
+                        color: player.accuracy >= 60 ? '#22c55e' : player.accuracy >= 40 ? '#eab308' : '#ef4444',
+                      }}>
+                        {player.accuracy.toFixed(0)}%
+                      </span>
+                      <span style={{ fontSize: '0.7rem' }}>{isExpanded ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+
+                  {/* Expanded card */}
+                  {isExpanded && (
+                    <div style={{
+                      padding: '0.75rem', borderRadius: '0 0 8px 8px',
+                      background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.1)',
+                      borderTop: 'none', marginTop: '-2px',
+                    }}>
+                      {/* Stats */}
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '0.4rem', borderRadius: '6px', background: 'var(--surface)' }}>
+                          <div style={{ fontSize: '1rem', fontWeight: 700 }}>{player.sessions.length}</div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>אימונים</div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '0.4rem', borderRadius: '6px', background: 'var(--surface)' }}>
+                          <div style={{ fontSize: '1rem', fontWeight: 700 }}>{player.totalQuestions}</div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>שאלות</div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '0.4rem', borderRadius: '6px', background: 'var(--surface)' }}>
+                          <div style={{ fontSize: '1rem', fontWeight: 700 }}>
+                            {pool ? `${Math.round((new Set(player.sessions.flatMap(s => s.results.map(r => r.poolId))).size / pool.totalScenarios) * 100)}%` : '—'}
+                          </div>
+                          <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>ניצול מאגר</div>
+                        </div>
+                      </div>
+
+                      {/* Weak/Strong cats */}
+                      {(() => {
+                        const catData = SCENARIO_CATEGORIES.map(cat => {
+                          const results = player.sessions.flatMap(s => s.results.filter(r => r.categoryId === cat.id));
+                          const total = results.length;
+                          const correct = results.filter(r => r.correct).length;
+                          return { ...cat, total, correct, accuracy: total > 0 ? (correct / total) * 100 : -1 };
+                        }).filter(c => c.total >= 3);
+
+                        const weakest = catData.filter(c => c.accuracy < 50).sort((a, b) => a.accuracy - b.accuracy).slice(0, 3);
+                        const strongest = catData.filter(c => c.accuracy >= 70).sort((a, b) => b.accuracy - a.accuracy).slice(0, 3);
+
+                        return (
+                          <div style={{ fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                            {weakest.length > 0 && (
+                              <div style={{ marginBottom: '0.3rem' }}>
+                                <span style={{ color: '#ef4444', fontWeight: 600 }}>חלש: </span>
+                                {weakest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%)`).join(', ')}
+                              </div>
+                            )}
+                            {strongest.length > 0 && (
+                              <div>
+                                <span style={{ color: '#22c55e', fontWeight: 600 }}>חזק: </span>
+                                {strongest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%)`).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                      {/* AI Insights */}
+                      {insight && (
+                        <div style={{
+                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                          background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+                        }}>
+                          <div style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 600, marginBottom: '0.2rem' }}>
+                            מה השחקן רואה:
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            {insight.improvement}
+                          </div>
+                        </div>
+                      )}
+
+                      {exploit && (
+                        <div style={{
+                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                          background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
+                        }}>
+                          <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.2rem' }}>
+                            🔒 לעיניך בלבד:
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            {exploit.text}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Generate insight button */}
+                      <button
+                        onClick={() => handleGenerateInsight(player)}
+                        disabled={generatingInsight === player.playerName}
+                        style={{
+                          width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none',
+                          background: generatingInsight === player.playerName ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                          color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                        }}
+                      >
+                        {generatingInsight === player.playerName ? '⏳ מייצר...' : `✨ ${insight ? 'עדכן' : 'צור'} תובנות`}
+                        {sessionsSinceInsight > 0 && insight && (
+                          <span style={{ fontSize: '0.65rem', opacity: 0.8, marginRight: '0.3rem' }}>
+                            ({sessionsSinceInsight} אימונים חדשים)
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Flagged Questions */}
+      {flagged.length > 0 && (
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות מדווחות ({flagged.length})</h3>
+            <button
+              onClick={() => handleRemoveFlagged(flagged.map(f => f.poolId))}
+              style={{
+                fontSize: '0.7rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer',
+              }}
+            >
+              הסר הכל
+            </button>
+          </div>
+          {flagged.map(f => (
+            <div key={f.poolId} style={{
+              padding: '0.5rem', borderRadius: '8px', marginBottom: '0.3rem',
+              background: f.flagCount >= 2 ? 'rgba(239,68,68,0.08)' : 'var(--surface)',
+              border: f.flagCount >= 2 ? '1px solid rgba(239,68,68,0.2)' : '1px solid var(--border)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  {f.scenario?.situation?.slice(0, 100)}...
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.5rem', flexShrink: 0 }}>
+                  <span style={{ fontSize: '0.7rem', color: '#ef4444' }}>x{f.flagCount}</span>
+                  <button
+                    onClick={() => handleRemoveFlagged([f.poolId])}
+                    style={{
+                      fontSize: '0.65rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
+                      background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                      border: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    הסר
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {insightMsg && (
+        <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
+          {insightMsg}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const getExploitLocal = (playerName: string): TrainingExploitationLocal | null => {
+  try {
+    const raw = localStorage.getItem(`training_exploitation_${playerName}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+export default TrainingAdminTab;

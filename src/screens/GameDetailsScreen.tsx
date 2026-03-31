@@ -307,7 +307,7 @@ const GameDetailsScreen = () => {
                     {Math.round(player.rebuys)}
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
-                    {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                    {player.profit >= 0 ? '\u200E+' : ''}{formatCurrency(player.profit)}
                   </td>
                 </tr>
               ))}
@@ -327,11 +327,11 @@ const GameDetailsScreen = () => {
               </div>
               <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
                 {chipGap > 0 ? (
-                  <>Counted ₪{cleanNumber(chipGap)} more than expected</>
+                  <>Counted {cleanNumber(chipGap)} more than expected</>
                 ) : (
-                  <>Counted ₪{cleanNumber(Math.abs(chipGap))} less than expected</>
+                  <>Counted {cleanNumber(Math.abs(chipGap))} less than expected</>
                 )}
-                {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player
+                {' '}• Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player
               </div>
             </div>
           )}
@@ -362,7 +362,7 @@ const GameDetailsScreen = () => {
                     marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
                   }}>
                     <div>
-                      <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - ₪{cleanNumber(expense.amount)}
+                      <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - {cleanNumber(expense.amount)}
                     </div>
                     <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
                       שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
@@ -380,7 +380,7 @@ const GameDetailsScreen = () => {
           <div className="card">
             <h2 className="card-title mb-2">💡 Small Amounts</h2>
             <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-              Payments below ₪{cleanNumber(getSettings().minTransfer)} are not mandatory
+              Payments below {cleanNumber(getSettings().minTransfer)} are not mandatory
             </p>
             {skippedTransfers.map((s, index) => (
               <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
@@ -409,10 +409,10 @@ const GameDetailsScreen = () => {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: '600' }}>{expense.description}</span>
-                    <span>₪{cleanNumber(expense.amount)}</span>
+                    <span>{cleanNumber(expense.amount)}</span>
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.8rem' }}>
-                    {expense.paidByName} paid • {expense.participantNames.length} participants • ₪{cleanNumber(expense.amount / expense.participants.length)} each
+                    {expense.paidByName} paid • {expense.participantNames.length} participants • {cleanNumber(expense.amount / expense.participants.length)} each
                   </div>
                 </div>
               ))}
@@ -427,7 +427,7 @@ const GameDetailsScreen = () => {
               textAlign: 'center',
             }}>
               <span className="text-muted">Total: </span>
-              <span style={{ fontWeight: '600', color: '#f59e0b' }}>₪{cleanNumber(totalExpenseAmount)}</span>
+              <span style={{ fontWeight: '600', color: '#f59e0b' }}>{cleanNumber(totalExpenseAmount)}</span>
             </div>
             
             {/* Note about combined settlements */}
@@ -478,9 +478,9 @@ const GameDetailsScreen = () => {
                     }}>
                       <span style={{ color: '#64748b' }}>📅 {dateStr}</span>
                       {' · '}
-                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} (+{Math.round(game.winnerProfit)}₪)</span>
+                      <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
                       {' · '}
-                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({Math.round(game.loserProfit)}₪)</span>
+                      <span style={{ color: '#f87171' }}>💀 {game.loserName} ({'\u200E'}{Math.round(game.loserProfit)})</span>
                     </div>
                   );
                 })}
@@ -521,7 +521,7 @@ const GameDetailsScreen = () => {
                           color: isInProfit ? 'var(--success)' : 'var(--danger)',
                           fontSize: '0.75rem',
                         }}>
-                          {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
+                          {ps.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(ps.totalProfit)}
                         </span>
                         <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
                           {i === 0 && '👑 '}{ps.playerName}
@@ -532,7 +532,7 @@ const GameDetailsScreen = () => {
                             color: tonightProfit > 0 ? '#4ade80' : '#f87171',
                             opacity: 0.8,
                           }}>
-                            (הערב: {tonightProfit >= 0 ? '+' : ''}{Math.round(tonightProfit)}₪)
+                            (הערב: {tonightProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(tonightProfit)})
                           </span>
                         )}
                       </span>
@@ -560,7 +560,7 @@ const GameDetailsScreen = () => {
               </div>
 
               <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.4rem' }}>
-                💰 סה״כ עבר בהרכב: ₪{Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-{comboHistory.totalGamesWithCombo} משחקים
+                💰 סה״כ עבר בהרכב: {Math.round(comboHistory.totalMoneyMoved).toLocaleString()} ב-{comboHistory.totalGamesWithCombo} משחקים
               </div>
             </div>
           </div>

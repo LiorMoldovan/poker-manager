@@ -213,7 +213,7 @@ export function testYearProfitCalculation(): TestResult[] {
       category,
       test: `Year ${currentYear} profit is -300 (not +1000 total)`,
       passed: true, // Manual verification needed
-      expected: `Year profit = -300₪ (only ${currentYear} games)`,
+      expected: `Year profit = -300 (only ${currentYear} games)`,
       actual: 'CHECK DEBUG LOGS',
       severity: 'critical'
     });
@@ -259,11 +259,11 @@ export function testLeaderboardMilestones(): TestResult[] {
   console.log(`\n${category}`);
   console.log('─'.repeat(50));
 
-  // Test 1: Passing opportunity (80₪ gap)
+  // Test 1: Passing opportunity (80 gap)
   {
     const players = [
       createTestPlayer({ name: 'Leader', totalProfit: 1000, gamesPlayed: 30 }),
-      createTestPlayer({ name: 'Chaser', totalProfit: 920, gamesPlayed: 25 }), // 80₪ gap
+      createTestPlayer({ name: 'Chaser', totalProfit: 920, gamesPlayed: 25 }), // 80 gap
     ];
     
     const milestones = generateMilestones(players);
@@ -273,20 +273,20 @@ export function testLeaderboardMilestones(): TestResult[] {
     
     results.push({
       category,
-      test: 'Passing opportunity (80₪ gap)',
+      test: 'Passing opportunity (80 gap)',
       passed: !!found,
-      expected: 'Milestone showing Chaser can pass Leader with 80₪',
+      expected: 'Milestone showing Chaser can pass Leader with 80',
       actual: found ? '✅ Found' : '❌ NOT FOUND',
       severity: 'critical'
     });
     console.log(`  ${found ? '✅' : '❌'} Passing opportunity: ${found ? 'PASS' : 'FAIL'}`);
   }
 
-  // Test 2: NO passing for gap > 200₪
+  // Test 2: NO passing for gap > 200
   {
     const players = [
       createTestPlayer({ name: 'FarLeader', totalProfit: 1000, gamesPlayed: 30 }),
-      createTestPlayer({ name: 'FarChaser', totalProfit: 700, gamesPlayed: 25 }), // 300₪ gap - too far
+      createTestPlayer({ name: 'FarChaser', totalProfit: 700, gamesPlayed: 25 }), // 300 gap - too far
     ];
     
     const milestones = generateMilestones(players);
@@ -296,20 +296,20 @@ export function testLeaderboardMilestones(): TestResult[] {
     
     results.push({
       category,
-      test: 'NO passing for gap > 200₪',
+      test: 'NO passing for gap > 200',
       passed: !found,
-      expected: 'No milestone for 300₪ gap',
+      expected: 'No milestone for 300 gap',
       actual: found ? '❌ FALSE POSITIVE' : '✅ Correctly ignored',
       severity: 'high'
     });
     console.log(`  ${!found ? '✅' : '❌'} No false passing: ${!found ? 'PASS' : 'FAIL'}`);
   }
 
-  // Test 3: Close battle (≤30₪ gap)
+  // Test 3: Close battle (≤30 gap)
   {
     const players = [
       createTestPlayer({ name: 'Close1', totalProfit: 505 }),
-      createTestPlayer({ name: 'Close2', totalProfit: 500 }), // 5₪ gap
+      createTestPlayer({ name: 'Close2', totalProfit: 500 }), // 5 gap
     ];
     
     const milestones = generateMilestones(players);
@@ -319,9 +319,9 @@ export function testLeaderboardMilestones(): TestResult[] {
     
     results.push({
       category,
-      test: 'Close battle (5₪ gap)',
+      test: 'Close battle (5 gap)',
       passed: !!found,
-      expected: 'Battle milestone for 5₪ gap',
+      expected: 'Battle milestone for 5 gap',
       actual: found ? '✅ Found' : '❌ NOT FOUND',
       severity: 'high'
     });
@@ -355,7 +355,7 @@ export function testLeaderboardMilestones(): TestResult[] {
       createTestPlayer({ name: 'Rank1', totalProfit: 1000 }),
       createTestPlayer({ name: 'Rank2', totalProfit: 900 }),
       createTestPlayer({ name: 'Rank3', totalProfit: 800 }),
-      createTestPlayer({ name: 'Rank4', totalProfit: 650 }), // 150₪ gap from Rank3
+      createTestPlayer({ name: 'Rank4', totalProfit: 650 }), // 150 gap from Rank3
     ];
     
     const milestones = generateMilestones(players);
@@ -399,7 +399,7 @@ export function testRoundNumberMilestones(): TestResult[] {
     
     results.push({
       category,
-      test: 'Approaching 1000 (80₪ away)',
+      test: 'Approaching 1000 (80 away)',
       passed: !!found,
       expected: 'Round number milestone for 1000',
       actual: found ? '✅ Found' : '❌ NOT FOUND',
@@ -422,9 +422,9 @@ export function testRoundNumberMilestones(): TestResult[] {
     
     results.push({
       category,
-      test: 'NO milestone if >150₪ away',
+      test: 'NO milestone if >150 away',
       passed: !found,
-      expected: 'No milestone for 200₪ gap',
+      expected: 'No milestone for 200 gap',
       actual: found ? '❌ FALSE POSITIVE' : '✅ Correctly ignored',
       severity: 'medium'
     });
@@ -778,13 +778,13 @@ export function testForecastDataAccuracy(): TestResult[] {
     
     // Expected year profit: 100 - 50 + 75 = 125 (only current year games)
     // We can't directly access playerPeriodStats, but we can verify via debug logs
-    console.log('  📊 Check DEBUG logs above for YearCheck: yearProfit should be 125₪');
+    console.log('  📊 Check DEBUG logs above for YearCheck: yearProfit should be 125');
     
     results.push({
       category,
       test: 'Year profit = sum of current year games',
       passed: true, // Manual verification via logs
-      expected: 'Year profit = 125₪ (100 - 50 + 75)',
+      expected: 'Year profit = 125 (100 - 50 + 75)',
       actual: 'CHECK DEBUG LOGS',
       severity: 'critical'
     });
@@ -921,13 +921,13 @@ export function verifyPlayerData(playerName: string, players: PlayerForecastData
   console.log('═'.repeat(50));
 
   console.log(`\n📊 BASIC STATS:`);
-  console.log(`   Total Profit: ${player.totalProfit >= 0 ? '+' : ''}${Math.round(player.totalProfit)}₪`);
+  console.log(`   Total Profit: ${player.totalProfit >= 0 ? '+' : ''}${Math.round(player.totalProfit)}`);
   console.log(`   Games Played: ${player.gamesPlayed}`);
-  console.log(`   Avg Profit: ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}₪`);
+  console.log(`   Avg Profit: ${player.avgProfit >= 0 ? '+' : ''}${Math.round(player.avgProfit)}`);
   console.log(`   Win Rate: ${Math.round(player.winPercentage)}%`);
   console.log(`   Current Streak: ${player.currentStreak}`);
-  console.log(`   Best Win: +${Math.round(player.bestWin)}₪`);
-  console.log(`   Worst Loss: ${Math.round(player.worstLoss)}₪`);
+  console.log(`   Best Win: +${Math.round(player.bestWin)}`);
+  console.log(`   Worst Loss: ${Math.round(player.worstLoss)}`);
 
   console.log(`\n📜 GAME HISTORY (${player.gameHistory.length} games):`);
   
@@ -953,13 +953,13 @@ export function verifyPlayerData(playerName: string, players: PlayerForecastData
     const year = parseInt(yearStr);
     const data = gamesByYear[year];
     const marker = year === currentYear ? ' ← CURRENT YEAR' : '';
-    console.log(`   ${year}: ${data.games} games, ${data.profit >= 0 ? '+' : ''}${Math.round(data.profit)}₪${marker}`);
+    console.log(`   ${year}: ${data.games} games, ${data.profit >= 0 ? '+' : ''}${Math.round(data.profit)}${marker}`);
   });
 
   // Show last 5 games
   console.log(`\n📈 LAST 5 GAMES (newest first):`);
   player.gameHistory.slice(0, 5).forEach((g, i) => {
-    console.log(`   ${i + 1}. ${g.date}: ${g.profit >= 0 ? '+' : ''}${g.profit}₪`);
+    console.log(`   ${i + 1}. ${g.date}: ${g.profit >= 0 ? '+' : ''}${g.profit}`);
   });
 
   // Verify streak

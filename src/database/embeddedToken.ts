@@ -40,3 +40,12 @@ export const hasEmbeddedToken = (): boolean => {
   return token.length > 0 && token.startsWith('ghp_');
 };
 
+/**
+ * Paths the embedded token is allowed to write to (non-admin users).
+ * Training answers need write access for silent tracking.
+ */
+export const EMBEDDED_TOKEN_WRITE_PATHS = [
+  'public/activity-log.json',
+  'public/training-answers.json',
+];
+

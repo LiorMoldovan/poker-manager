@@ -275,13 +275,13 @@ const GameSummaryScreen = () => {
     const rebuyKings = sortedPlayers.filter(p => p.rebuys === maxRebuys);
     if (maxRebuys >= 5) {
       const names = rebuyKings.map(p => p.playerName).join(' ו');
-      bank.push({ emoji: '👑', label: 'מלך הקניות', detail: `${names} — ${maxRebuys} קניות (₪${cleanNumber(maxRebuys * settings2.rebuyValue)})`, priority: 3 });
+      bank.push({ emoji: '👑', label: 'מלך הקניות', detail: `${names} — ${maxRebuys} קניות (${cleanNumber(maxRebuys * settings2.rebuyValue)})`, priority: 3 });
     }
 
     // 2. Comeback Win
     const comebackWinners = sortedPlayers.filter(p => p.profit > 0 && p.rebuys >= 5);
     if (comebackWinners.length > 0) {
-      const parts = comebackWinners.sort((a, b) => b.rebuys - a.rebuys).map(p => `${p.playerName} (${p.rebuys} קניות, +₪${cleanNumber(p.profit)})`);
+      const parts = comebackWinners.sort((a, b) => b.rebuys - a.rebuys).map(p => `${p.playerName} (${p.rebuys} קניות, \u200E+${cleanNumber(p.profit)})`);
       bank.push({ emoji: '🔄', label: 'קאמבק', detail: parts.join(', '), priority: 2 });
     }
 
@@ -412,7 +412,7 @@ const GameSummaryScreen = () => {
           const allTimeBefore = allTimeStats.totalProfit - player.profit;
           for (const m of [1000, 2000, 3000, 5000]) {
             if (allTimeBefore < m && allTimeStats.totalProfit >= m) {
-              bank.push({ emoji: '⭐', label: 'שיא כל הזמנים', detail: `${player.playerName} חצה +₪${m} רווח כולל!`, priority: 1 });
+              bank.push({ emoji: '⭐', label: 'שיא כל הזמנים', detail: `${player.playerName} חצה \u200E+${m} רווח כולל!`, priority: 1 });
               break;
             }
           }
@@ -434,7 +434,7 @@ const GameSummaryScreen = () => {
       // --- Build combined entries ---
 
       if (periodBestWins.length > 0) {
-        const parts = periodBestWins.map(w => `${w.name} (+₪${cleanNumber(w.profit)})`);
+        const parts = periodBestWins.map(w => `${w.name} (\u200E+${cleanNumber(w.profit)})`);
         bank.push({ emoji: '🏆', label: `שיא נצחון ב${pLabel}`, detail: parts.join(', '), priority: 2 });
       }
       if (periodWorstLosses.length > 0) {
@@ -468,11 +468,11 @@ const GameSummaryScreen = () => {
         bank.push({ emoji: '🆕', label: `משחק ראשון ב${pLabel}`, detail: firstInPeriod.join(', '), priority: 5 });
       }
       if (periodProfitMilestones.length > 0) {
-        const parts = periodProfitMilestones.map(m => `${m.name} — חצה +₪${m.amount}`);
+        const parts = periodProfitMilestones.map(m => `${m.name} — חצה \u200E+${m.amount}`);
         bank.push({ emoji: '💰', label: `אבן דרך רווח ב${pLabel}`, detail: parts.join(', '), priority: 2 });
       }
       if (periodTurnarounds.length > 0) {
-        const parts = periodTurnarounds.map(t => `${t.name} (+₪${cleanNumber(t.newTotal)})`);
+        const parts = periodTurnarounds.map(t => `${t.name} (\u200E+${cleanNumber(t.newTotal)})`);
         bank.push({ emoji: '↗️', label: `עברו לרווח ב${pLabel}`, detail: parts.join(', '), priority: 3 });
       }
       if (periodSpenders.length > 0) {
@@ -496,7 +496,7 @@ const GameSummaryScreen = () => {
       const periodRanked = [...periodStats].filter(s => s.gamesPlayed >= 2).sort((a, b) => b.totalProfit - a.totalProfit);
       if (periodRanked.length > 0) {
         const leader = periodRanked[0];
-        bank.push({ emoji: '🥇', label: `מוביל ${pLabel}`, detail: `${leader.playerName} — +₪${cleanNumber(leader.totalProfit)}`, priority: 2 });
+        bank.push({ emoji: '🥇', label: `מוביל ${pLabel}`, detail: `${leader.playerName} — \u200E+${cleanNumber(leader.totalProfit)}`, priority: 2 });
       }
 
       // --- Global records ---
@@ -509,7 +509,7 @@ const GameSummaryScreen = () => {
       const bigWinner = sortedPlayers[0];
       const historicalMaxProfit = previousGP.length > 0 ? Math.max(0, ...previousGP.map(gp => gp.profit)) : 0;
       if (bigWinner && bigWinner.profit > 0 && bigWinner.profit > historicalMaxProfit && historicalMaxProfit > 0) {
-        bank.push({ emoji: '🌟', label: 'שיא קבוצתי — נצחון', detail: `${bigWinner.playerName} +₪${cleanNumber(bigWinner.profit)} (היה +₪${cleanNumber(historicalMaxProfit)})`, priority: 1 });
+        bank.push({ emoji: '🌟', label: 'שיא קבוצתי — נצחון', detail: `${bigWinner.playerName} \u200E+${cleanNumber(bigWinner.profit)} (היה \u200E+${cleanNumber(historicalMaxProfit)})`, priority: 1 });
       }
 
       const allCompletedGames = cachedAllGames.filter(g => g.status === 'completed' && g.id !== gameId);
@@ -520,25 +520,25 @@ const GameSummaryScreen = () => {
         if (pot > historicalMaxPot) historicalMaxPot = pot;
       }
       if (tonightsPot > historicalMaxPot && historicalMaxPot > 0) {
-        bank.push({ emoji: '🏦', label: 'שיא קבוצתי — קופה', detail: `₪${cleanNumber(tonightsPot)} (היה ₪${cleanNumber(historicalMaxPot)})`, priority: 1 });
+        bank.push({ emoji: '🏦', label: 'שיא קבוצתי — קופה', detail: `${cleanNumber(tonightsPot)} (היה ${cleanNumber(historicalMaxPot)})`, priority: 1 });
       }
 
       if (periodPrevGP.length > 0) {
         const periodMaxProfit = Math.max(0, ...periodPrevGP.map(gp => gp.profit));
         const topWinner = sortedPlayers[0];
         if (topWinner && topWinner.profit > 0 && topWinner.profit > periodMaxProfit && periodMaxProfit > 0) {
-          bank.push({ emoji: '🌟', label: `שיא ${pLabel} — נצחון`, detail: `${topWinner.playerName} +₪${cleanNumber(topWinner.profit)} (היה +₪${cleanNumber(periodMaxProfit)})`, priority: 1 });
+          bank.push({ emoji: '🌟', label: `שיא ${pLabel} — נצחון`, detail: `${topWinner.playerName} \u200E+${cleanNumber(topWinner.profit)} (היה \u200E+${cleanNumber(periodMaxProfit)})`, priority: 1 });
         }
       }
 
       // --- Fillers ---
 
-      bank.push({ emoji: '💵', label: 'קופה הערב', detail: `₪${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
+      bank.push({ emoji: '💵', label: 'קופה הערב', detail: `${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
 
       const topProfit = sortedPlayers[0]?.profit || 0;
       const bottomProfit = sortedPlayers[sortedPlayers.length - 1]?.profit || 0;
       if (topProfit > 0 && bottomProfit < 0) {
-        bank.push({ emoji: '📏', label: 'פער הערב', detail: `₪${cleanNumber(topProfit - bottomProfit)} — ${sortedPlayers[0].playerName} מול ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
+        bank.push({ emoji: '📏', label: 'פער הערב', detail: `${cleanNumber(topProfit - bottomProfit)} — ${sortedPlayers[0].playerName} מול ${sortedPlayers[sortedPlayers.length - 1].playerName}`, priority: 8 });
       }
 
       bank.push({ emoji: '🎲', label: `מספר משחק ב${pLabel}`, detail: `#${periodGames.length + 1}`, priority: 9 });
@@ -1157,7 +1157,7 @@ const GameSummaryScreen = () => {
                       {player.rebuys}
                     </td>
                     <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className={getProfitColor(player.profit)}>
-                      {player.profit >= 0 ? '+' : ''}{formatCurrency(player.profit)}
+                      {player.profit >= 0 ? '\u200E+' : ''}{formatCurrency(player.profit)}
                     </td>
                   </tr>
                 ))}
@@ -1178,13 +1178,13 @@ const GameSummaryScreen = () => {
               </div>
               <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
                 {chipGap > 0 ? (
-                  <>Counted ₪{cleanNumber(chipGap)} more than expected (extra chips)</>
+                  <>Counted {cleanNumber(chipGap)} more than expected (extra chips)</>
                 ) : (
-                  <>Counted ₪{cleanNumber(Math.abs(chipGap))} less than expected (missing chips)</>
+                  <>Counted {cleanNumber(Math.abs(chipGap))} less than expected (missing chips)</>
                 )}
               </div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}₪{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player to balance
+                Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player to balance
               </div>
             </div>
           )}
@@ -1285,7 +1285,7 @@ const GameSummaryScreen = () => {
                       marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
                     }}>
                       <div>
-                        <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - ₪{cleanNumber(expense.amount)}
+                        <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - {cleanNumber(expense.amount)}
                       </div>
                       <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
                         שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
@@ -1303,7 +1303,7 @@ const GameSummaryScreen = () => {
             <div className="card">
               <h2 className="card-title mb-2">💡 Small Amounts</h2>
               <p className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-                Payments below ₪{cleanNumber(getSettings().minTransfer)} are not mandatory
+                Payments below {cleanNumber(getSettings().minTransfer)} are not mandatory
               </p>
               {skippedTransfers.map((s, index) => (
                 <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
@@ -1385,7 +1385,7 @@ const GameSummaryScreen = () => {
                           padding: '0.25rem 0.2rem',
                           color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)'
                         }}>
-                          {forecast.expectedProfit >= 0 ? '+' : ''}{Math.round(forecast.expectedProfit)}
+                          {forecast.expectedProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(forecast.expectedProfit)}
                         </td>
                         <td style={{ 
                           textAlign: 'center',
@@ -1393,7 +1393,7 @@ const GameSummaryScreen = () => {
                           color: actualProfit >= 0 ? 'var(--success)' : 'var(--danger)',
                           fontWeight: '600'
                         }}>
-                          {actualProfit >= 0 ? '+' : ''}{Math.round(actualProfit)}
+                          {actualProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(actualProfit)}
                         </td>
                         <td style={{ 
                           textAlign: 'center',
@@ -1432,7 +1432,7 @@ const GameSummaryScreen = () => {
                   direction: 'rtl'
                 }}>
                   <span>🎯 כיוון: <span style={{ color: dirHits >= matched.length * 0.6 ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>{dirHits}/{matched.length}</span></span>
-                  <span>📊 פער ממוצע: <span style={{ color: avgGap <= 40 ? 'var(--success)' : avgGap <= 70 ? 'var(--warning)' : 'var(--danger)', fontWeight: 600 }}>{avgGap}₪</span></span>
+                  <span>📊 פער ממוצע: <span style={{ color: avgGap <= 40 ? 'var(--success)' : avgGap <= 70 ? 'var(--warning)' : 'var(--danger)', fontWeight: 600 }}>{avgGap}</span></span>
                 </div>
               );
             })()}
@@ -1511,7 +1511,7 @@ const GameSummaryScreen = () => {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                        {forecast.expectedProfit >= 0 ? '+' : ''}{forecast.expectedProfit}₪
+                        {forecast.expectedProfit >= 0 ? '\u200E+' : '\u200E'}{forecast.expectedProfit}
                       </span>
                       <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{forecast.playerName}</span>
                     </div>
@@ -1550,10 +1550,10 @@ const GameSummaryScreen = () => {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: '600' }}>{expense.description}</span>
-                    <span>₪{cleanNumber(expense.amount)}</span>
+                    <span>{cleanNumber(expense.amount)}</span>
                   </div>
                   <div className="text-muted" style={{ fontSize: '0.8rem' }}>
-                    {expense.paidByName} paid • {expense.participantNames.length} participants • ₪{cleanNumber(expense.participants.length > 0 ? expense.amount / expense.participants.length : 0)} each
+                    {expense.paidByName} paid • {expense.participantNames.length} participants • {cleanNumber(expense.participants.length > 0 ? expense.amount / expense.participants.length : 0)} each
                   </div>
                 </div>
               ))}
@@ -1568,7 +1568,7 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
             }}>
               <span className="text-muted">Total: </span>
-              <span style={{ fontWeight: '600', color: '#f59e0b' }}>₪{cleanNumber(totalExpenseAmount)}</span>
+              <span style={{ fontWeight: '600', color: '#f59e0b' }}>{cleanNumber(totalExpenseAmount)}</span>
             </div>
             
             {/* Note about combined settlements */}
@@ -1781,7 +1781,7 @@ const GameSummaryScreen = () => {
                           minWidth: '3.5rem',
                           textAlign: 'left',
                         }}>
-                          {ps.totalProfit >= 0 ? '+' : ''}{Math.round(ps.totalProfit)}₪
+                          {ps.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(ps.totalProfit)}
                         </span>
                       </span>
                     </div>
@@ -1829,7 +1829,7 @@ const GameSummaryScreen = () => {
 
                   const bigSwing = [...stats].sort((a, b) => (b.bestResult - b.worstResult) - (a.bestResult - a.worstResult))[0];
                   if (bigSwing && n >= 2) {
-                    insights.push({ emoji: '🎢', text: `התנודה הגדולה: ${bigSwing.playerName} — בין +${Math.round(bigSwing.bestResult)}₪ ל-${Math.round(bigSwing.worstResult)}₪`, color: '#94a3b8' });
+                    insights.push({ emoji: '🎢', text: `התנודה הגדולה: ${bigSwing.playerName} — בין \u200E+${Math.round(bigSwing.bestResult)} ל-\u200E${Math.round(bigSwing.worstResult)}`, color: '#94a3b8' });
                   }
 
                   if (insights.length === 0) return null;
@@ -1891,8 +1891,8 @@ const GameSummaryScreen = () => {
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isMe ? 'rgba(59, 130, 246, 0.14)' : isInThisGame ? 'rgba(59, 130, 246, 0.08)' : undefined,
-                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(59, 130, 246, 0.4)' : undefined,
+                      background: isMe ? 'rgba(59, 130, 246, 0.18)' : isInThisGame ? 'rgba(251, 191, 36, 0.08)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(251, 191, 36, 0.4)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {index + 1}
@@ -1901,7 +1901,7 @@ const GameSummaryScreen = () => {
                         {index === 2 && ' 🥉'}
                       </td>
                       <td style={{
-                        fontWeight: isInThisGame ? '700' : '500',
+                        fontWeight: isMe ? '700' : isInThisGame ? '600' : '500',
                         padding: '0.25rem 0.2rem',
                         color: isMe ? '#60a5fa' : undefined,
                       }}>
@@ -1914,7 +1914,7 @@ const GameSummaryScreen = () => {
                         fontWeight: '700',
                         color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)',
                       }}>
-                        {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                        {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
                       </td>
                       <td style={{
                         textAlign: 'right',
@@ -1922,7 +1922,7 @@ const GameSummaryScreen = () => {
                         whiteSpace: 'nowrap',
                         color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)',
                       }}>
-                        {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                        {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                       </td>
                       <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {player.gamesPlayed}
@@ -1978,8 +1978,8 @@ const GameSummaryScreen = () => {
                   width: '8px',
                   height: '8px',
                   borderRadius: '2px',
-                  background: 'rgba(168, 85, 247, 0.25)',
-                  border: '1px solid rgba(168, 85, 247, 0.5)',
+                  background: 'rgba(251, 191, 36, 0.25)',
+                  border: '1px solid rgba(251, 191, 36, 0.5)',
                 }} />
                 Played tonight
               </span>
@@ -2006,8 +2006,8 @@ const GameSummaryScreen = () => {
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isMe ? 'rgba(59, 130, 246, 0.14)' : isInThisGame ? 'rgba(168, 85, 247, 0.12)' : undefined,
-                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(168, 85, 247, 0.5)' : undefined,
+                      background: isMe ? 'rgba(59, 130, 246, 0.18)' : isInThisGame ? 'rgba(251, 191, 36, 0.08)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(251, 191, 36, 0.4)' : undefined,
                     }}>
                       <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         <span>{currentRank}</span>
@@ -2023,7 +2023,7 @@ const GameSummaryScreen = () => {
                         ) : null}
                       </td>
                       <td style={{
-                        fontWeight: isInThisGame ? '700' : '500',
+                        fontWeight: isMe ? '700' : isInThisGame ? '600' : '500',
                         padding: '0.25rem 0.2rem',
                         whiteSpace: 'nowrap',
                         color: isMe ? '#60a5fa' : undefined,
@@ -2037,7 +2037,7 @@ const GameSummaryScreen = () => {
                         fontWeight: '700',
                         color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)',
                       }}>
-                        {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                        {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
                       </td>
                       <td style={{
                         textAlign: 'right',
@@ -2045,7 +2045,7 @@ const GameSummaryScreen = () => {
                         whiteSpace: 'nowrap',
                         color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)',
                       }}>
-                        {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                        {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                       </td>
                       <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
                         {player.gamesPlayed}
@@ -2152,7 +2152,7 @@ const GameSummaryScreen = () => {
               }}
             >
               <div style={{ fontSize: '1.5rem', fontWeight: '700', color: 'var(--primary)' }}>
-                ₪{cleanNumber(paymentModal.amount)}
+                {cleanNumber(paymentModal.amount)}
               </div>
               <div style={{ fontSize: '0.65rem', color: amountCopied ? 'var(--success)' : 'var(--text-muted)', fontWeight: amountCopied ? '600' : '400' }}>
                 {amountCopied ? '✅ הסכום הועתק!' : '📋 לחץ להעתקת הסכום'}

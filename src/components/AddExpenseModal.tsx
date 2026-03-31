@@ -109,7 +109,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
           </div>
           <div style={{ width: '100px' }}>
             <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              סכום ₪
+              סכום
             </label>
             <input
               type="number"
@@ -203,7 +203,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
           }}>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>לכל אחד:</span>
             <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>
-              ₪{perPersonCost.toFixed(0)}
+              {perPersonCost.toFixed(0)}
             </span>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
               ({participants.length})

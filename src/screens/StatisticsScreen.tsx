@@ -2126,7 +2126,7 @@ const StatisticsScreen = () => {
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
                           <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>{'\u200E'}+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
                         );
@@ -2221,7 +2221,7 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'leader',
                       records.leaders,
-                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.totalProfit)}</div>,
+                      (p) => <div className="profit" style={{ fontWeight: '700' }}>{'\u200E'}+{formatCurrency(p.totalProfit)}</div>,
                       undefined,
                       'all',
                       '🥇 כל המשחקים'
@@ -2250,7 +2250,7 @@ const StatisticsScreen = () => {
                     {renderRecord(
                       'biggestWin',
                       records.biggestWinPlayers,
-                      (p) => <div className="profit" style={{ fontWeight: '700' }}>+{formatCurrency(p.biggestWin)}</div>,
+                      (p) => <div className="profit" style={{ fontWeight: '700' }}>{'\u200E'}+{formatCurrency(p.biggestWin)}</div>,
                       undefined,
                       'biggestWin',
                       '💰 הניצחון הגדול'
@@ -2316,7 +2316,7 @@ const StatisticsScreen = () => {
                         {renderRecord(
                           'highestAvgProfit',
                           records.highestAvgProfits,
-                          (p) => <div className="profit" style={{ fontWeight: '700' }}>{p.avgProfit >= 0 ? '+' : ''}{formatCurrency(p.avgProfit)}</div>,
+                          (p) => <div className="profit" style={{ fontWeight: '700' }}>{p.avgProfit >= 0 ? '\u200E+' : ''}{formatCurrency(p.avgProfit)}</div>,
                           undefined,
                           'all',
                           '📈 ממוצע למשחק'
@@ -2551,19 +2551,19 @@ const StatisticsScreen = () => {
                         {tableMode === 'profit' ? (
                           <>
                             <td style={{ textAlign: 'right', fontWeight: '700', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.totalProfit)}>
-                              {player.totalProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.totalProfit))}
+                              {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
                             </td>
                             <td style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }} className={getProfitColor(player.avgProfit)}>
-                              {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                              {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                             </td>
                           </>
                         ) : (
                           <>
                             <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>
-                              +₪{cleanNumber(player.totalGains)}
+                              {'\u200E'}+{cleanNumber(player.totalGains)}
                             </td>
                             <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>
-                              -₪{cleanNumber(player.totalLosses)}
+                              {'\u200E'}-{cleanNumber(player.totalLosses)}
                             </td>
                           </>
                         )}
@@ -2742,7 +2742,7 @@ const StatisticsScreen = () => {
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
                           <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>+{formatCurrency(entry.profit)}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>{'\u200E'}+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
                         );
@@ -2840,7 +2840,7 @@ const StatisticsScreen = () => {
                     sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
                 </h3>
                 <span className={getProfitColor(player.totalProfit)} style={{ fontSize: '1.25rem', fontWeight: '700' }}>
-                  {player.totalProfit >= 0 ? '+' : '-'}{formatCurrency(Math.abs(player.totalProfit))}
+                  {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{formatCurrency(Math.abs(player.totalProfit))}
                 </span>
               </div>
 
@@ -2965,7 +2965,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💰 Biggest Win</div>
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
-                    {player.biggestWin > 0 ? `+₪${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                    {player.biggestWin > 0 ? `\u200E+${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
                 <div 
@@ -2975,7 +2975,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💸 Biggest Loss</div>
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
-                    {player.biggestLoss < 0 ? `-₪${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                    {player.biggestLoss < 0 ? `\u200E-${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
@@ -3009,13 +3009,13 @@ const StatisticsScreen = () => {
                 <div className="stat-card" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📈 Avg Win</div>
                   <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.avgWin > 0 ? `+₪${cleanNumber(player.avgWin)}` : '-'}
+                    {player.avgWin > 0 ? `\u200E+${cleanNumber(player.avgWin)}` : '-'}
                   </div>
                 </div>
                 <div className="stat-card" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📉 Avg Loss</div>
                   <div className="stat-value" style={{ color: player.avgLoss > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.avgLoss > 0 ? `-₪${cleanNumber(player.avgLoss)}` : '-'}
+                    {player.avgLoss > 0 ? `\u200E-${cleanNumber(player.avgLoss)}` : '-'}
                   </div>
                 </div>
               </div>
@@ -3025,7 +3025,7 @@ const StatisticsScreen = () => {
                 <div className="stat-card" style={{ background: player.avgProfit >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.avgProfit >= 0 ? '📈' : '📉'} Avg/Game</div>
                   <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                    {player.avgProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(player.avgProfit))}
+                    {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                   </div>
                 </div>
                 <div className="stat-card">
@@ -3459,11 +3459,11 @@ const StatisticsScreen = () => {
                               <span style={{ fontSize: '1rem', fontWeight: '600' }}>{player.playerName}</span>
                             </div>
                             <span style={{ fontWeight: '700', fontSize: '1rem', color: profitColor }}>
-                              {player.totalProfit >= 0 ? '+' : ''}{formatCurrency(player.totalProfit)}
+                              {player.totalProfit >= 0 ? '\u200E+' : ''}{formatCurrency(player.totalProfit)}
                             </span>
                           </div>
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.4rem', paddingRight: '1.7rem' }}>
-                            {player.gamesPlayed} משחקים | {Math.round(player.winPercentage)}% נצחונות | ממוצע {player.avgProfit >= 0 ? '+' : ''}{Math.round(player.avgProfit)}₪
+                            {player.gamesPlayed} משחקים | {Math.round(player.winPercentage)}% נצחונות | ממוצע {player.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(player.avgProfit)}
                           </div>
 
                           {buildSparkline(player)}
@@ -3616,7 +3616,7 @@ const StatisticsScreen = () => {
                     fontWeight: '600',
                     color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text)'
                   }}>
-                    {game.profit > 0 ? '+' : ''}{formatCurrency(game.profit)}
+                    {game.profit > 0 ? '\u200E+' : ''}{formatCurrency(game.profit)}
                   </span>
             </div>
           ))}
@@ -3731,7 +3731,7 @@ const StatisticsScreen = () => {
                     fontWeight: '600',
                     color: game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--text)'
                   }}>
-                    {game.profit > 0 ? '+' : ''}{formatCurrency(game.profit)}
+                    {game.profit > 0 ? '\u200E+' : ''}{formatCurrency(game.profit)}
                   </span>
                 </div>
               ))}

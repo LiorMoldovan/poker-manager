@@ -37,6 +37,7 @@ import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
+import TrainingAdminTab from '../components/TrainingAdminTab';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
@@ -123,12 +124,12 @@ const SettingsScreen = () => {
   };
 
   // Determine default tab based on permissions: players for admin/member, backup for viewer
-  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' => {
+  const getDefaultTab = (): 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' => {
     if (canAddPlayers) return 'players';
     return 'backup';
   };
   
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai'>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training'>(getDefaultTab());
 
   useEffect(() => {
     loadData();
@@ -447,6 +448,7 @@ const SettingsScreen = () => {
     { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, adminOnly: false },
     { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, adminOnly: false },
     { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, adminOnly: true },
+    { id: 'training', label: '🎯 Training', icon: '🎯', requiresPermission: null, adminOnly: true },
     { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, adminOnly: true },
     { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, adminOnly: false },
   ];
@@ -574,7 +576,7 @@ const SettingsScreen = () => {
           )}
           
           <div className="input-group">
-            <label className="label">Buyin Value (₪)</label>
+            <label className="label">Buyin Value</label>
             <input
               type="number"
               className="input"
@@ -596,14 +598,14 @@ const SettingsScreen = () => {
               disabled={!canEditSettings}
             />
             <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              Each buyin of ₪{cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
+              Each buyin of {cleanNumber(settings.rebuyValue)} gives {(settings.chipsPerRebuy || 10000).toLocaleString()} chips
               <br />
-              Value per 1000 chips: ₪{Math.round((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000)}
+              Value per 1000 chips: {Math.round((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000)}
             </p>
           </div>
 
           <div className="input-group">
-            <label className="label">Minimum Transfer (₪)</label>
+            <label className="label">Minimum Transfer</label>
             <input
               type="number"
               className="input"
@@ -1928,6 +1930,9 @@ const SettingsScreen = () => {
         </div>
         </>
       )}
+
+      {/* Training Admin Tab - Admin Only */}
+      {activeTab === 'training' && role === 'admin' && <TrainingAdminTab />}
 
       {/* Activity Tab - Admin Only */}
       {activeTab === 'activity' && role === 'admin' && (

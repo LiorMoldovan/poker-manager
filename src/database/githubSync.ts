@@ -9,7 +9,7 @@
  * - Version tracking prevents unnecessary syncs
  */
 
-import { Player, Game, GamePlayer, PendingForecast } from '../types';
+import { Player, Game, GamePlayer, PendingForecast, TrainingPool, TrainingAnswersFile, TrainingInsightsFile } from '../types';
 import { getEmbeddedToken } from './embeddedToken';
 import { ChronicleEntry, GraphInsightsEntry } from './storage';
 
@@ -20,6 +20,9 @@ const GITHUB_FILE_PATH = 'public/sync-data.json';
 const GITHUB_BACKUP_PATH = 'public/full-backup.json';  // Full backup file
 const GITHUB_TRAINING_PATH = 'public/training-data.json';  // Training progress (admin only)
 export const GITHUB_ACTIVITY_PATH = 'public/activity-log.json';  // User activity log
+export const GITHUB_TRAINING_POOL_PATH = 'public/training-pool.json';
+export const GITHUB_TRAINING_ANSWERS_PATH = 'public/training-answers.json';
+export const GITHUB_TRAINING_INSIGHTS_PATH = 'public/training-insights.json';
 export const GITHUB_BRANCH = 'main';
 
 // Storage keys
@@ -466,9 +469,11 @@ const replaceGamesWithRemote = (
     localStorage.setItem('poker_graph_insights', JSON.stringify(remoteData.graphInsights));
   }
 
-  // Sync pending forecast from cloud (only if local doesn't already have one)
-  if (remoteData.pendingForecast && !localStorage.getItem('poker_pending_forecast')) {
+  // Sync pending forecast from cloud (always use cloud version — admin is authoritative)
+  if (remoteData.pendingForecast) {
     localStorage.setItem('poker_pending_forecast', JSON.stringify(remoteData.pendingForecast));
+  } else {
+    localStorage.removeItem('poker_pending_forecast');
   }
   
   return { gamesChanged, deletedGames, newPlayers, playersChanged };
@@ -725,4 +730,181 @@ export const restoreTrainingFromGitHub = async (): Promise<{ success: boolean; r
     console.error('Error restoring training data:', error);
     return { success: false, restored: false, message: 'Failed to restore training data' };
   }
+};
+
+// ════════════════════════════════════════════════════════════
+// SHARED TRAINING POOL SYNC
+// ════════════════════════════════════════════════════════════
+
+const decodeGitHubContent = (fileInfo: { content: string }): string => {
+  const base64Clean = fileInfo.content.replace(/\n/g, '');
+  const binaryString = atob(base64Clean);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new TextDecoder('utf-8').decode(bytes);
+};
+
+const uploadGitHubFile = async (
+  token: string,
+  path: string,
+  data: unknown,
+  message: string,
+  keepalive = false
+): Promise<{ success: boolean; message: string }> => {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
+    let sha: string | undefined;
+
+    const getResp = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
+      keepalive,
+    });
+    if (getResp.ok) {
+      sha = (await getResp.json()).sha;
+    }
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const putResp = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message, content, sha, branch: GITHUB_BRANCH }),
+      keepalive,
+    });
+
+    if (!putResp.ok) {
+      const err = await putResp.json();
+      throw new Error(err.message || `Upload failed: ${putResp.status}`);
+    }
+    return { success: true, message: 'OK' };
+  } catch (error) {
+    console.error(`Error uploading ${path}:`, error);
+    return { success: false, message: error instanceof Error ? error.message : 'Upload failed' };
+  }
+};
+
+const fetchGitHubJson = async <T>(path: string, token?: string): Promise<T | null> => {
+  try {
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`;
+    const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      if (resp.status === 404) return null;
+      throw new Error(`GitHub fetch failed: ${resp.status}`);
+    }
+    const fileInfo = await resp.json();
+    return JSON.parse(decodeGitHubContent(fileInfo)) as T;
+  } catch (error) {
+    console.error(`Error fetching ${path}:`, error);
+    return null;
+  }
+};
+
+export const uploadTrainingPool = async (pool: TrainingPool): Promise<{ success: boolean; message: string }> => {
+  const token = getEffectiveToken(false);
+  if (!token) return { success: false, message: 'No GitHub token' };
+  return uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Training pool update - ${pool.totalScenarios} scenarios`);
+};
+
+export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
+  const token = getEffectiveToken(true);
+  return fetchGitHubJson<TrainingPool>(GITHUB_TRAINING_POOL_PATH, token || undefined);
+};
+
+export const fetchTrainingAnswers = async (): Promise<TrainingAnswersFile | null> => {
+  const token = getEffectiveToken(true);
+  return fetchGitHubJson<TrainingAnswersFile>(GITHUB_TRAINING_ANSWERS_PATH, token || undefined);
+};
+
+export const fetchTrainingInsights = async (): Promise<TrainingInsightsFile | null> => {
+  const token = getEffectiveToken(true);
+  return fetchGitHubJson<TrainingInsightsFile>(GITHUB_TRAINING_INSIGHTS_PATH, token || undefined);
+};
+
+export const uploadTrainingInsights = async (data: TrainingInsightsFile): Promise<{ success: boolean; message: string }> => {
+  const token = getEffectiveToken(false);
+  if (!token) return { success: false, message: 'No GitHub token' };
+  return uploadGitHubFile(token, GITHUB_TRAINING_INSIGHTS_PATH, data, 'Training insights update');
+};
+
+export const writeTrainingAnswersWithRetry = async (
+  mutate: (data: TrainingAnswersFile) => TrainingAnswersFile,
+  keepalive = false
+): Promise<boolean> => {
+  const token = getEffectiveToken(true);
+  if (!token) return false;
+
+  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_TRAINING_ANSWERS_PATH}`;
+
+  const fetchFile = async (): Promise<{ data: TrainingAnswersFile; sha: string | undefined }> => {
+    const resp = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
+      keepalive,
+    });
+    if (!resp.ok) {
+      return { data: { lastUpdated: new Date().toISOString(), players: [] }, sha: undefined };
+    }
+    const fileInfo = await resp.json();
+    try {
+      const parsed = JSON.parse(decodeGitHubContent(fileInfo)) as TrainingAnswersFile;
+      return { data: parsed, sha: fileInfo.sha };
+    } catch {
+      return { data: { lastUpdated: new Date().toISOString(), players: [] }, sha: fileInfo.sha };
+    }
+  };
+
+  const writeFile = async (data: TrainingAnswersFile, sha: string | undefined): Promise<boolean> => {
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: 'Training answers update', content, sha, branch: GITHUB_BRANCH }),
+      keepalive,
+    });
+    return resp.ok;
+  };
+
+  try {
+    const { data, sha } = await fetchFile();
+    const updated = mutate(data);
+    const ok = await writeFile(updated, sha);
+    if (!ok) {
+      const fresh = await fetchFile();
+      const retryData = mutate(fresh.data);
+      return await writeFile(retryData, fresh.sha);
+    }
+    return true;
+  } catch (err) {
+    console.warn('Training answers write failed:', err);
+    return false;
+  }
+};
+
+export const removeFromTrainingPool = async (poolIdsToRemove: string[]): Promise<{ success: boolean; message: string }> => {
+  const token = getEffectiveToken(false);
+  if (!token) return { success: false, message: 'No GitHub token' };
+
+  const pool = await fetchTrainingPool();
+  if (!pool) return { success: false, message: 'Could not fetch pool' };
+
+  const removeSet = new Set(poolIdsToRemove);
+  pool.scenarios = pool.scenarios.filter(s => !removeSet.has(s.poolId));
+  pool.totalScenarios = pool.scenarios.length;
+  pool.byCategory = {};
+  pool.scenarios.forEach(s => {
+    pool.byCategory[s.categoryId] = (pool.byCategory[s.categoryId] || 0) + 1;
+  });
+
+  return uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Removed ${poolIdsToRemove.length} flagged scenarios`);
 };

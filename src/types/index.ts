@@ -224,6 +224,94 @@ export interface ActivityLogEntry {
 
 // --- Live Game AI TTS Pool ---
 
+// ═══ Shared Training Pool ═══
+
+export interface PoolScenario {
+  poolId: string;
+  situation: string;
+  yourCards: string;
+  options: {
+    id: string;
+    text: string;
+    isCorrect: boolean;
+    explanation: string;
+  }[];
+  category: string;
+  categoryId: string;
+}
+
+export interface TrainingPool {
+  generatedAt: string;
+  totalScenarios: number;
+  byCategory: Record<string, number>;
+  scenarios: PoolScenario[];
+}
+
+export interface TrainingAnswerResult {
+  poolId: string;
+  categoryId: string;
+  correct: boolean;
+  chosenId: string;
+}
+
+export interface TrainingSession {
+  date: string;
+  questionsAnswered: number;
+  correctAnswers: number;
+  results: TrainingAnswerResult[];
+  flaggedPoolIds?: string[];
+}
+
+export interface TrainingPlayerData {
+  playerName: string;
+  sessions: TrainingSession[];
+  totalQuestions: number;
+  totalCorrect: number;
+  accuracy: number;
+}
+
+export interface TrainingAnswersFile {
+  lastUpdated: string;
+  players: TrainingPlayerData[];
+}
+
+export interface TrainingInsightsFile {
+  lastUpdated: string;
+  insights: Record<string, {
+    generatedAt: string;
+    sessionsAtGeneration: number;
+    improvement: string;
+  }>;
+}
+
+export interface TrainingExploitationLocal {
+  generatedAt: string;
+  sessionsAtGeneration: number;
+  text: string;
+}
+
+export interface TrainingBadge {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  check: (progress: SharedTrainingProgress) => boolean;
+}
+
+export interface SharedTrainingProgress {
+  totalQuestions: number;
+  totalCorrect: number;
+  sessionsCompleted: number;
+  byCategory: Record<string, { total: number; correct: number }>;
+  streak: { current: number; lastTrainingDate: string | null };
+  maxStreak: number;
+  longestCorrectRun: number;
+  currentCorrectRun: number;
+  earnedBadgeIds: string[];
+  seenPoolIds: string[];
+  flaggedPoolIds: string[];
+}
+
 export type TTSPlaceholder = '{PLAYER}' | '{COUNT}' | '{POT}' | '{RECORD}' | '{RIVAL}' | '{RANK}';
 
 export interface TTSMessage {

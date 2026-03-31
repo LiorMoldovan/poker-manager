@@ -191,16 +191,16 @@ export const inferPlayerStyle = (stats: PlayerStats): PlayerProfile => {
     description = `מחכה לידיים טובות ומנצל. ${winPercentage.toFixed(0)}% נצחונות.`;
   } else if (!isHighRebuyer && isWinner && !isHighWinRate) {
     style = 'סבלני';
-    description = `מרוויח עם אחוז נצחונות בינוני - כשמנצח, מנצח גדול. ממוצע: +₪${avgProfit.toFixed(0)}.`;
+    description = `מרוויח עם אחוז נצחונות בינוני - כשמנצח, מנצח גדול. ממוצע: \u200E+${avgProfit.toFixed(0)}.`;
   } else if (!isHighRebuyer && isLoser) {
     style = 'שמרני';
-    description = `לא קונה הרבה אבל מתקשה להרוויח. ממוצע: ₪${avgProfit.toFixed(0)}.`;
+    description = `לא קונה הרבה אבל מתקשה להרוויח. ממוצע: ${avgProfit.toFixed(0)}.`;
   } else if (isVolatile) {
     style = 'תנודתי';
-    description = `נצחון עד +₪${Math.round(biggestWin)} או הפסד עד ₪${Math.round(Math.abs(biggestLoss))}. קשה לקרוא.`;
+    description = `נצחון עד \u200E+${Math.round(biggestWin)} או הפסד עד ${Math.round(Math.abs(biggestLoss))}. קשה לקרוא.`;
   } else {
     style = 'מאוזן';
-    description = `${gamesPlayed} משחקים. ממוצע: ${avgProfit >= 0 ? '+' : ''}₪${avgProfit.toFixed(0)}.`;
+    description = `${gamesPlayed} משחקים. ממוצע: ${avgProfit >= 0 ? '\u200E+' : '\u200E'}${avgProfit.toFixed(0)}.`;
   }
 
   if (Math.abs(currentStreak) >= 3) {
@@ -889,4 +889,567 @@ export const generateQuickBatch = async (
   }
 
   throw new Error(`ALL_MODELS_FAILED:${lastError}`);
+};
+
+// ════════════════════════════════════════════════════════════
+// SHARED TRAINING (pool-based, for all players)
+// ════════════════════════════════════════════════════════════
+
+import {
+  TrainingPool,
+  PoolScenario,
+  SharedTrainingProgress,
+  TrainingBadge,
+  TrainingSession,
+  TrainingAnswersFile,
+} from '../types';
+import {
+  fetchTrainingPool,
+  writeTrainingAnswersWithRetry,
+} from '../database/githubSync';
+
+const POOL_CACHE_KEY = 'training_pool_cached';
+const POOL_GENERATED_AT_KEY = 'training_pool_generatedAt';
+
+const getProgressKey = (playerName: string) => `shared_training_progress_${playerName}`;
+
+const DEFAULT_SHARED_PROGRESS: SharedTrainingProgress = {
+  totalQuestions: 0,
+  totalCorrect: 0,
+  sessionsCompleted: 0,
+  byCategory: {},
+  streak: { current: 0, lastTrainingDate: null },
+  maxStreak: 0,
+  longestCorrectRun: 0,
+  currentCorrectRun: 0,
+  earnedBadgeIds: [],
+  seenPoolIds: [],
+  flaggedPoolIds: [],
+};
+
+export const getSharedProgress = (playerName: string): SharedTrainingProgress => {
+  try {
+    const raw = localStorage.getItem(getProgressKey(playerName));
+    if (!raw) return { ...DEFAULT_SHARED_PROGRESS };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_SHARED_PROGRESS, ...parsed };
+  } catch {
+    return { ...DEFAULT_SHARED_PROGRESS };
+  }
+};
+
+export const saveSharedProgress = (playerName: string, progress: SharedTrainingProgress): void => {
+  localStorage.setItem(getProgressKey(playerName), JSON.stringify(progress));
+};
+
+// ── Pool loading ──
+
+export const loadFromPool = async (
+  playerName: string,
+  count: number | null,
+  categoryIds?: string[]
+): Promise<{ scenarios: PoolScenario[]; exhaustedCategory: boolean; exhaustedAll: boolean }> => {
+  let pool: TrainingPool | null = null;
+
+  const cachedRaw = localStorage.getItem(POOL_CACHE_KEY);
+  const cachedGenAt = localStorage.getItem(POOL_GENERATED_AT_KEY);
+
+  if (cachedRaw) {
+    try {
+      pool = JSON.parse(cachedRaw) as TrainingPool;
+    } catch { /* ignore */ }
+  }
+
+  if (!pool || !cachedGenAt) {
+    const remote = await fetchTrainingPool();
+    if (!remote) {
+      return { scenarios: [], exhaustedCategory: false, exhaustedAll: false };
+    }
+    pool = remote;
+    localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(pool));
+    localStorage.setItem(POOL_GENERATED_AT_KEY, pool.generatedAt);
+  } else {
+    fetchTrainingPool().then(remote => {
+      if (remote && remote.generatedAt !== cachedGenAt) {
+        localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(remote));
+        localStorage.setItem(POOL_GENERATED_AT_KEY, remote.generatedAt);
+      }
+    }).catch(() => {});
+  }
+
+  const progress = getSharedProgress(playerName);
+  const seenSet = new Set(progress.seenPoolIds);
+
+  let available = pool.scenarios.filter(s => !seenSet.has(s.poolId));
+  let exhaustedCategory = false;
+  let exhaustedAll = false;
+
+  if (categoryIds && categoryIds.length > 0) {
+    const catSet = new Set(categoryIds);
+    const catFiltered = available.filter(s => catSet.has(s.categoryId));
+    if (catFiltered.length === 0 && available.length > 0) {
+      exhaustedCategory = true;
+    } else {
+      available = catFiltered;
+    }
+  }
+
+  if (available.length === 0) {
+    progress.seenPoolIds = [];
+    saveSharedProgress(playerName, progress);
+    available = pool.scenarios;
+    if (categoryIds && categoryIds.length > 0) {
+      available = available.filter(s => new Set(categoryIds).has(s.categoryId));
+    }
+    exhaustedAll = true;
+  }
+
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  const picked = count ? shuffled.slice(0, count) : shuffled;
+
+  return { scenarios: picked, exhaustedCategory, exhaustedAll };
+};
+
+export const refreshPoolCache = async (): Promise<TrainingPool | null> => {
+  const remote = await fetchTrainingPool();
+  if (remote) {
+    localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(remote));
+    localStorage.setItem(POOL_GENERATED_AT_KEY, remote.generatedAt);
+  }
+  return remote;
+};
+
+// ── Streaks ──
+
+const STREAK_BREAK_HOURS = 48;
+
+export const updateStreak = (progress: SharedTrainingProgress): void => {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const last = progress.streak.lastTrainingDate;
+
+  if (!last) {
+    progress.streak = { current: 1, lastTrainingDate: today };
+    progress.maxStreak = Math.max(progress.maxStreak, 1);
+    return;
+  }
+
+  if (last === today) return;
+
+  const lastDate = new Date(last + 'T23:59:59');
+  const hoursDiff = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
+
+  if (hoursDiff <= STREAK_BREAK_HOURS) {
+    progress.streak.current += 1;
+    progress.streak.lastTrainingDate = today;
+    progress.maxStreak = Math.max(progress.maxStreak, progress.streak.current);
+  } else {
+    progress.streak = { current: 1, lastTrainingDate: today };
+  }
+};
+
+// ── Badges ──
+
+export const TRAINING_BADGES: TrainingBadge[] = [
+  {
+    id: 'beginner', name: 'מתחיל', icon: '🌱',
+    description: 'השלמת אימון ראשון',
+    check: (p) => p.sessionsCompleted >= 1,
+  },
+  {
+    id: 'dedicated', name: 'חרוץ', icon: '💪',
+    description: '10 אימונים',
+    check: (p) => p.sessionsCompleted >= 10,
+  },
+  {
+    id: 'addicted', name: 'מכור', icon: '🔥',
+    description: '25 אימונים',
+    check: (p) => p.sessionsCompleted >= 25,
+  },
+  {
+    id: 'answer_machine', name: 'מכונת תשובות', icon: '⚡',
+    description: '10 תשובות נכונות ברצף',
+    check: (p) => p.longestCorrectRun >= 10,
+  },
+  {
+    id: 'hot_streak', name: 'רצף חם', icon: '🔥',
+    description: 'רצף אימונים 7 ימים',
+    check: (p) => p.maxStreak >= 7,
+  },
+  {
+    id: 'poker_guru', name: 'גורו הפוקר', icon: '🧠',
+    description: '70%+ דיוק עם 50+ שאלות',
+    check: (p) => p.totalQuestions >= 50 && (p.totalCorrect / p.totalQuestions) >= 0.7,
+  },
+  {
+    id: 'reporter', name: 'מדווח', icon: '🚩',
+    description: 'דיווחת על שאלה לא תקינה',
+    check: (p) => p.flaggedPoolIds.length >= 1,
+  },
+];
+
+export const getCategoryExpertBadges = (progress: SharedTrainingProgress): { id: string; name: string; icon: string; earned: boolean }[] => {
+  return SCENARIO_CATEGORIES.map(cat => {
+    const data = progress.byCategory[cat.id];
+    const earned = !!data && data.total >= 5 && (data.correct / data.total) >= 0.8;
+    return {
+      id: `expert_${cat.id}`,
+      name: `מומחה: ${cat.name}`,
+      icon: cat.icon,
+      earned,
+    };
+  });
+};
+
+export const checkNewBadges = (progress: SharedTrainingProgress): string[] => {
+  const newBadges: string[] = [];
+  for (const badge of TRAINING_BADGES) {
+    if (!progress.earnedBadgeIds.includes(badge.id) && badge.check(progress)) {
+      newBadges.push(badge.id);
+    }
+  }
+  for (const cat of SCENARIO_CATEGORIES) {
+    const badgeId = `expert_${cat.id}`;
+    if (progress.earnedBadgeIds.includes(badgeId)) continue;
+    const data = progress.byCategory[cat.id];
+    if (data && data.total >= 5 && (data.correct / data.total) >= 0.8) {
+      newBadges.push(badgeId);
+    }
+  }
+  return newBadges;
+};
+
+// ── Rule-based tips ──
+
+export const CATEGORY_TIPS: Record<string, string[]> = {
+  wet_board_top_pair: [
+    'כשיש לך זוג עליון על לוח מסוכן, תמיד שאל את עצמך: "האם היריב יכול להחזיק סדרה או צבע?"',
+    'הימור גדול על לוח רטוב מגן על היד שלך מפני משיכות - אל תתן מחיר זול לראות קלף נוסף',
+  ],
+  flush_draw: [
+    'עם 4 קלפים לצבע בפלופ, יש לך ~35% לסגור עד הריבר - מספיק טוב להמר אגרסיבית ברוב המקרים',
+    'אם פספסת את הצבע בטרן, יש לך רק ~19% בריבר - חשב אם הסיכויים שווים את המחיר',
+  ],
+  straight_draw: [
+    'סדרה פתוחה משני הצדדים נותנת ~31% עד הריבר - יותר חזק ממה שנראה',
+    'סדרה עם כניסה אחת נותנת רק ~16% - לרוב לא שווה לקרוא הימור גדול',
+  ],
+  missed_draw: [
+    'כשפספסת משיכה, שאל: "האם היריב יאמין שסגרתי?" - אם כן, בלוף יכול לעבוד',
+    'לא כל פספוס שווה בלוף - בלוף עובד רק כשהסיפור שלך הגיוני מנקודת המבט של היריב',
+  ],
+  medium_pairs: [
+    'זוגות בינוניים (77-TT) חזקים בפריפלופ אבל מסוכנים כשיורדים קלפים גבוהים',
+    'עם זוג בינוני מול העלאה, שאל: "האם אני מוכן להיכנס לקופה גדולה עם הזוג הזה?"',
+  ],
+  dominated_hands: [
+    'ידיים כמו A-9 או K-J נראות טוב אבל מפסידות ליד דומה חזקה - היזהר מקופות גדולות',
+    'אם עשית זוג עם הקיקר החלש, הסיכוי שמישהו מחזיק את אותו זוג עם קיקר חזק הוא אמיתי',
+  ],
+  set_mining: [
+    'הסיכוי לשלישייה בפלופ הוא ~11.7% - צריך לזכות פי 8-10 מההשקעה כדי שזה ישתלם',
+    'שלישייה היא יד מוסתרת ומסוכנת ליריבים - אם סגרת, נצל את זה למקסימום',
+  ],
+  second_pair: [
+    'זוג שני הוא יד בינונית - טוב מספיק לקריאה קטנה אבל לא לקופה ענקית',
+    'כשהיריב ממשיך להמר על לוח עם זוג עליון אפשרי, זוג שני לרוב לא מספיק',
+  ],
+  two_pair_plus: [
+    'שני זוגות או שלישייה על לוח מסוכן - הגן על היד עם הימור, אל תתן קלפים חינם',
+    'גם יד חזקה יכולה להפסיד - לפעמים צריך לדעת לוותר',
+  ],
+  cbet: [
+    'המשך הימור עובד טוב על לוחות יבשים - שם ליריב קשה יותר להמשיך',
+    'לא חייבים תמיד להמשיך להמר - לפעמים צ\'ק עם יד טובה צובר יותר',
+  ],
+  thin_value: [
+    'הימור ערך דק - שואלים "האם יריב יקרא עם יד חלשה יותר?"',
+    'אם היריב שמרני ויקרא רק עם ידיים חזקות, הימור ערך דק הופך מסוכן',
+  ],
+  slow_play: [
+    'משחק איטי עם יד מפלצתית עובד נגד אגרסיביים - תן להם להמר בשבילך',
+    'הסכנה: אתה נותן ליריב קלפים חינם שיכולים להפוך את המשחק',
+  ],
+  overbet: [
+    'הימור ענק עובד כשיש לך יד מאוד חזקה או בלוף - לא באמצע',
+    'הימור ענק לוחץ על היריב - כלי חזק אבל משתמשים בו במשורה',
+  ],
+  bluff_catching: [
+    'כשהיריב מהמר גדול בריבר, חשב על הסיכויים - אם הקופה נותנת 3:1, מספיק שתצדק 25%',
+    'שחקן שמרני שמהמר גדול בריבר לרוב לא מבלף',
+  ],
+  pot_odds: [
+    '"כמה אני משלם לעומת כמה יש בקופה?" - אם הסיכוי גבוה מהיחס, קרא',
+    'סיכויי קופה של 30%+ בדרך כלל מצדיקים קריאה עם משיכה טובה',
+  ],
+  check_raise: [
+    'צ\'ק-רייז עובד מצוין כשאתה בטוח שהיריב ימשיך להמר',
+    'אל תעשה צ\'ק-רייז נגד שמרני שיעשה צ\'ק מאחוריך',
+  ],
+  multiway_pots: [
+    'בקופה עם הרבה שחקנים צריך יד חזקה יותר - הסיכוי שלמישהו יש משהו גדול עולה',
+    'בלוף עובד גרוע בקופה מולטי-ווי - קשה לגרום ל-3 שחקנים לוותר',
+  ],
+  three_bet_pots: [
+    'בקופה עם 3-bet הקופה כבר גדולה - כל החלטה שווה הרבה כסף',
+    'אם עשית 3-bet, בדרך כלל תרצה להמשיך להוביל עם הימור בפלופ',
+  ],
+  squeeze_isolation: [
+    'העלאה גדולה "סוחטת" ומבודדת - כלי חזק מהמיקומים המאוחרים',
+    'גודל הלחיצה צריך להיות גדול מספיק שיריבים לא יקבלו מחיר טוב להישאר',
+  ],
+  blind_defense: [
+    'מהבליינד אתה כבר השקעת - לפעמים שווה להגן עם ידיים בינוניות',
+    'הגנת בליינד לא אומרת לקרוא עם הכל - עם ידיים חלשות עדיף לוותר',
+  ],
+  stack_depth: [
+    'ערימה קצרה (מתחת ל-50 בליינדים) - שחק ישר, פחות מקום לתמרן',
+    'ערימה עמוקה (מעל 100 בליינדים) - יותר מקום לבלוף ולמשחק מורכב',
+  ],
+  position_play: [
+    'מיקום מאוחר הוא היתרון הגדול ביותר - תראה מה כולם עושים לפניך',
+    'ממיקום מוקדם צריך ידיים חזקות יותר כי עוד הרבה שחקנים יפעלו אחריך',
+  ],
+  preflop_open: [
+    'מהכפתור או הקאטאוף אפשר לפתוח עם יותר ידיים - יש יתרון מיקום',
+    'גודל הפתיחה צריך להיות עקבי: 2.5-3 בליינדים, כדי לא לחשוף מידע',
+  ],
+  preflop_vs_raise: [
+    'מול העלאה: "האם היד שלי מספיק חזקה להתמודד עם הטווח שלו?"',
+    'עם זוג נמוך מול העלאה - קרא רק אם הערימות עמוקות מספיק',
+  ],
+};
+
+export const getTipsForPlayer = (progress: SharedTrainingProgress): { categoryId: string; categoryName: string; tips: string[] }[] => {
+  const weak = Object.entries(progress.byCategory)
+    .filter(([, d]) => d.total >= 3 && (d.correct / d.total) < 0.5)
+    .sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total))
+    .slice(0, 3);
+
+  return weak.map(([catId]) => {
+    const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
+    return {
+      categoryId: catId,
+      categoryName: cat?.name || catId,
+      tips: CATEGORY_TIPS[catId] || [],
+    };
+  });
+};
+
+// ── Pool generation (admin) ──
+
+const buildPoolBatchPrompt = (
+  category: CategoryInfo,
+  count: number,
+  existingSummaries: string[]
+): string => {
+  const avoidContext = existingSummaries.length > 0
+    ? `\n\nשאלות שכבר קיימות (תמנע מלחזור עליהן):\n${existingSummaries.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n`
+    : '';
+
+  return `בנה ${count} שאלות אימון פוקר מהירות למשחק ביתי. עברית פשוטה בלבד.
+
+נושא: **${category.name}** - ${category.description}
+
+כללים:
+- כל שאלה = נקודת החלטה אחת. תאר מה קרה **עד** הרגע שבו השחקן צריך להחליט. **אל תכתוב מה השחקן עושה/מחליט!**
+- בדיוק 3 אופציות, בדיוק אחת נכונה
+- אסור מונחים באנגלית (equity, EV, SPR, range, c-bet, semi-bluff, value bet וכו')
+- יריבים לפי סגנון בלבד ("שחקן אגרסיבי", "שחקן שמרני"), בלי שמות אמיתיים
+- בליינדס 50/100, ערימות 8,000-25,000, העלאות 400-1000
+
+חוקים קריטיים:
+- אם מישהו המר → האופציות: קריאה [סכום ההימור], העלאה ל-[סכום], ויתור
+- אם אף אחד לא המר → האופציות: צ'ק, הימור [סכום], (אול-אין/ויתור)
+- "קריאה" = סכום שצריך לשלם, לא סכום הקופה!
+
+איכות:
+- כל מצב צריך להיות מפורט: 2-4 משפטים שמצוירים תמונה ברורה
+- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב - לא עצות גנריות
+- גם תשובות שגויות צריכות הסבר משכנע למה מישהו היה בוחר בהן
+- גוון: מיקומים שונים (UTG/MP/CO/BTN/BB), קלפים שונים, עומקי ערימה שונים, סגנונות יריבים שונים
+${avoidContext}
+JSON בלבד, מערך של ${count}:
+[{"id":1,"situation":"תיאור מפורט 2-4 משפטים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"explanation":"הסבר מפורט למה זו לא התשובה הטובה"},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר מפורט למה זו התשובה הנכונה"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר מפורט למה לוותר פה זו טעות"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
+};
+
+const hashScenario = (s: { situation: string; yourCards: string; options: { text: string }[] }): string => {
+  const raw = `${s.situation}|${s.yourCards}|${s.options[0]?.text || ''}`;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+const validatePoolScenario = (s: unknown): s is PoolScenario => {
+  const sc = s as Record<string, unknown>;
+  if (!sc || typeof sc !== 'object') return false;
+  if (typeof sc.situation !== 'string' || !sc.situation) return false;
+  if (typeof sc.yourCards !== 'string' || !sc.yourCards) return false;
+  if (!Array.isArray(sc.options) || sc.options.length < 2) return false;
+  const opts = sc.options as { id?: string; text?: string; isCorrect?: boolean; explanation?: string }[];
+  if (!opts.every(o => o.id && typeof o.text === 'string' && o.text)) return false;
+  const correctCount = opts.filter(o => o.isCorrect).length;
+  if (correctCount !== 1) return false;
+  return true;
+};
+
+export const generatePoolBatch = async (
+  category: CategoryInfo,
+  count: number,
+  existingScenarios: PoolScenario[],
+  apiKey: string,
+): Promise<PoolScenario[]> => {
+  const existing = existingScenarios
+    .filter(s => s.categoryId === category.id)
+    .slice(-15)
+    .map(s => `${s.yourCards}: ${s.situation.slice(0, 80)}`);
+
+  const requestCount = count + 5;
+  const prompt = buildPoolBatchPrompt(category, requestCount, existing);
+
+  for (const config of API_CONFIGS) {
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.85,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const msg = (err as { error?: { message?: string } })?.error?.message || `HTTP ${response.status}`;
+        if (response.status === 429 || response.status === 503) continue;
+        if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
+        console.warn(`Pool gen [${config.model}]: ${msg}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) continue;
+
+      let jsonText = text;
+      if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
+      else if (text.includes('```')) jsonText = text.split('```')[1].split('```')[0];
+
+      const rawScenarios = JSON.parse(jsonText.trim());
+      if (!Array.isArray(rawScenarios)) continue;
+
+      const existingIds = new Set(existingScenarios.map(s => s.poolId));
+      const valid: PoolScenario[] = [];
+
+      for (const raw of rawScenarios) {
+        if (!validatePoolScenario(raw)) continue;
+        const scenario = raw as PoolScenario;
+        scenario.poolId = hashScenario(scenario);
+        scenario.categoryId = category.id;
+        scenario.category = category.name;
+        if (existingIds.has(scenario.poolId)) continue;
+        existingIds.add(scenario.poolId);
+        valid.push(scenario);
+        if (valid.length >= count) break;
+      }
+
+      return valid;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'INVALID_API_KEY') throw error;
+      console.error(`Pool gen [${config.model}]:`, error);
+      continue;
+    }
+  }
+
+  return [];
+};
+
+// ── Silent tracking upload ──
+
+const PENDING_UPLOAD_KEY = 'shared_training_pending_upload';
+
+export const bufferSessionForUpload = (playerName: string, session: TrainingSession): void => {
+  try {
+    const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
+    const pending: { playerName: string; session: TrainingSession }[] = raw ? JSON.parse(raw) : [];
+    pending.push({ playerName, session });
+    localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
+  } catch { /* ignore */ }
+};
+
+export const flushPendingUploads = async (keepalive = false): Promise<void> => {
+  const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
+  if (!raw) return;
+
+  let pending: { playerName: string; session: TrainingSession }[];
+  try {
+    pending = JSON.parse(raw);
+  } catch { return; }
+
+  if (pending.length === 0) return;
+  localStorage.removeItem(PENDING_UPLOAD_KEY);
+
+  const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
+    for (const { playerName, session } of pending) {
+      let player = data.players.find(p => p.playerName === playerName);
+      if (!player) {
+        player = { playerName, sessions: [], totalQuestions: 0, totalCorrect: 0, accuracy: 0 };
+        data.players.push(player);
+      }
+      player.sessions.push(session);
+      player.totalQuestions += session.questionsAnswered;
+      player.totalCorrect += session.correctAnswers;
+      player.accuracy = player.totalQuestions > 0 ? (player.totalCorrect / player.totalQuestions) * 100 : 0;
+    }
+    data.lastUpdated = new Date().toISOString();
+    return data;
+  }, keepalive);
+
+  if (!ok) {
+    try {
+      const existing = localStorage.getItem(PENDING_UPLOAD_KEY);
+      const existingPending = existing ? JSON.parse(existing) : [];
+      localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify([...pending, ...existingPending]));
+    } catch { /* ignore */ }
+  }
+};
+
+// ── WhatsApp sharing ──
+
+export const generateLeaderboardText = (players: { playerName: string; accuracy: number; totalQuestions: number }[]): string => {
+  const sorted = [...players]
+    .filter(p => p.totalQuestions >= 5)
+    .sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
+
+  const medals = ['🥇', '🥈', '🥉'];
+  let text = '🎯 *Poker Training Leaderboard*\n━━━━━━━━━━━━━━━━\n';
+
+  sorted.forEach((p, i) => {
+    const medal = medals[i] || `${i + 1}.`;
+    text += `${medal} ${p.playerName} — ${p.accuracy.toFixed(0)}% (${p.totalQuestions} Qs)\n`;
+  });
+
+  text += '━━━━━━━━━━━━━━━━\n💪 Train at poker-manager.vercel.app';
+  return text;
+};
+
+export const generateSessionShareText = (
+  playerName: string,
+  correct: number,
+  total: number,
+  accuracy: number
+): string => {
+  const emoji = accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪';
+  return `${emoji} *${playerName}* just trained!\n${correct}/${total} correct (${accuracy.toFixed(0)}%)\n\n🎯 poker-manager.vercel.app`;
 };

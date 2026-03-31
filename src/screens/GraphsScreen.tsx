@@ -1149,7 +1149,7 @@ const GraphsScreen = () => {
                 <YAxis 
                   stroke="var(--text-muted)" 
                   fontSize={10}
-                  tickFormatter={(value) => `₪${cleanNumber(value)}`}
+                  tickFormatter={(value) => cleanNumber(value)}
                   tickLine={false}
                   axisLine={false}
                 />
@@ -1318,7 +1318,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--danger)'
                 }}>
-                  {headToHeadData.player1Stats.totalProfit >= 0 ? '+' : ''}₪{cleanNumber(headToHeadData.player1Stats.totalProfit)}
+                  {headToHeadData.player1Stats.totalProfit >= 0 ? '\u200E+' : ''}{cleanNumber(headToHeadData.player1Stats.totalProfit)}
                 </div>
                 <div style={{ 
                   padding: '0.25rem 0.75rem',
@@ -1340,7 +1340,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--danger)'
                 }}>
-                  {headToHeadData.player2Stats.totalProfit >= 0 ? '+' : ''}₪{cleanNumber(headToHeadData.player2Stats.totalProfit)}
+                  {headToHeadData.player2Stats.totalProfit >= 0 ? '\u200E+' : ''}{cleanNumber(headToHeadData.player2Stats.totalProfit)}
                 </div>
               </div>
 
@@ -1401,7 +1401,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--danger)'
                 }}>
-                  {headToHeadData.player1Stats.avgProfit >= 0 ? '+' : ''}₪{cleanNumber(headToHeadData.player1Stats.avgProfit)}
+                  {headToHeadData.player1Stats.avgProfit >= 0 ? '\u200E+' : ''}{cleanNumber(headToHeadData.player1Stats.avgProfit)}
                 </div>
                 <div style={{ 
                   padding: '0.25rem 0.75rem',
@@ -1422,7 +1422,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--danger)'
                 }}>
-                  {headToHeadData.player2Stats.avgProfit >= 0 ? '+' : ''}₪{cleanNumber(headToHeadData.player2Stats.avgProfit)}
+                  {headToHeadData.player2Stats.avgProfit >= 0 ? '\u200E+' : ''}{cleanNumber(headToHeadData.player2Stats.avgProfit)}
                 </div>
               </div>
 
@@ -1442,7 +1442,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--text)'
                 }}>
-                  +₪{cleanNumber(headToHeadData.player1Stats.biggestWin)}
+                  {'\u200E'}+{cleanNumber(headToHeadData.player1Stats.biggestWin)}
                 </div>
                 <div style={{ 
                   padding: '0.25rem 0.75rem',
@@ -1463,7 +1463,7 @@ const GraphsScreen = () => {
                     ? 'var(--success)' 
                     : 'var(--text)'
                 }}>
-                  +₪{cleanNumber(headToHeadData.player2Stats.biggestWin)}
+                  {'\u200E'}+{cleanNumber(headToHeadData.player2Stats.biggestWin)}
                 </div>
               </div>
 
@@ -1483,7 +1483,7 @@ const GraphsScreen = () => {
                     ? 'var(--text)' 
                     : 'var(--danger)'
                 }}>
-                  ₪{cleanNumber(headToHeadData.player1Stats.biggestLoss)}
+                  {cleanNumber(headToHeadData.player1Stats.biggestLoss)}
                 </div>
                 <div style={{ 
                   padding: '0.25rem 0.75rem',
@@ -1504,7 +1504,7 @@ const GraphsScreen = () => {
                     ? 'var(--text)' 
                     : 'var(--danger)'
                 }}>
-                  ₪{cleanNumber(headToHeadData.player2Stats.biggestLoss)}
+                  {cleanNumber(headToHeadData.player2Stats.biggestLoss)}
                 </div>
               </div>
             </div>
@@ -1648,7 +1648,7 @@ const GraphsScreen = () => {
                       fontSize: '0.85rem',
                       color: game.p1Profit >= 0 ? 'var(--success)' : 'var(--danger)',
                     }}>
-                      {game.p1Profit >= 0 ? '+' : ''}₪{cleanNumber(game.p1Profit)}
+                      {game.p1Profit >= 0 ? '\u200E+' : ''}{cleanNumber(game.p1Profit)}
                     </div>
                     <div style={{ 
                       padding: '0.15rem 0.5rem',
@@ -1671,7 +1671,7 @@ const GraphsScreen = () => {
                       fontSize: '0.85rem',
                       color: game.p2Profit >= 0 ? 'var(--success)' : 'var(--danger)',
                     }}>
-                      {game.p2Profit >= 0 ? '+' : ''}₪{cleanNumber(game.p2Profit)}
+                      {game.p2Profit >= 0 ? '\u200E+' : ''}{cleanNumber(game.p2Profit)}
                     </div>
                   </div>
                 ))}
@@ -1730,10 +1730,10 @@ const GraphsScreen = () => {
                 fontSize: '0.55rem',
                 color: 'var(--text-muted)',
               }}>
-                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;₪150</span>
-                <span><span style={{ color: '#6EE7B7' }}>■</span> Win ₪1-150</span>
-                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss ₪1-150</span>
-                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;₪150</span>
+                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;150</span>
+                <span><span style={{ color: '#6EE7B7' }}>■</span> Win 1-150</span>
+                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss 1-150</span>
+                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;150</span>
               </div>
               
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1867,7 +1867,7 @@ const GraphsScreen = () => {
                     fontWeight: '700',
                     color: headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? '#10B981' : 'var(--text)',
                   }}>
-                    ₪{cleanNumber(headToHeadData.volatility.p1)}
+                    {cleanNumber(headToHeadData.volatility.p1)}
                   </div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                     {headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? '🎯 More Consistent' : '🎲 More Volatile'}
@@ -1884,7 +1884,7 @@ const GraphsScreen = () => {
                     fontWeight: '700',
                     color: headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? '#3B82F6' : 'var(--text)',
                   }}>
-                    ₪{cleanNumber(headToHeadData.volatility.p2)}
+                    {cleanNumber(headToHeadData.volatility.p2)}
                   </div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                     {headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? '🎯 More Consistent' : '🎲 More Volatile'}
@@ -1926,7 +1926,7 @@ const GraphsScreen = () => {
                     <YAxis 
                       stroke="var(--text-muted)" 
                       fontSize={10}
-                      tickFormatter={(value) => `₪${cleanNumber(value)}`}
+                      tickFormatter={(value) => cleanNumber(value)}
                       tickLine={false}
                       axisLine={false}
                     />
@@ -2034,7 +2034,7 @@ const GraphsScreen = () => {
             const limited = impactData
               .filter(r => isLowConf(r))
               .sort((a, b) => confidenceScore(b) - confidenceScore(a));
-            const formatSignedShekelLocal = (value: number) => `${value > 0 ? '+' : value < 0 ? '-' : ''}₪${cleanNumber(Math.abs(value))}`;
+            const formatSignedShekelLocal = (value: number) => `\u200E${value > 0 ? '+' : value < 0 ? '-' : ''}${cleanNumber(Math.abs(value))}`;
 
             const getImpactIcon = (row: typeof impactData[0], isLimited: boolean): string | null => {
               if (isLimited) return null;
@@ -2094,14 +2094,14 @@ const GraphsScreen = () => {
                 if (avgW > 0 && avgWo < 0) {
                   const ratio = Math.abs(avgW) > Math.abs(avgWo) ? Math.round(Math.abs(avgW) / Math.max(1, Math.abs(avgWo))) : null;
                   lines.push(ratio && ratio >= 2
-                    ? `הופך הפסד ממוצע של ₪${cleanNumber(Math.abs(avgWo))} לרווח של ₪${cleanNumber(avgW)} — פי ${ratio}`
+                    ? `הופך הפסד ממוצע של ${cleanNumber(Math.abs(avgWo))} לרווח של ${cleanNumber(avgW)} — פי ${ratio}`
                     : `הופך ממפסיד (${formatSignedShekelLocal(avgWo)}) למרוויח (${formatSignedShekelLocal(avgW)}) למשחק`);
                 } else if (avgW < 0 && avgWo > 0) {
                   lines.push(`הופך ממרוויח (${formatSignedShekelLocal(avgWo)}) למפסיד (${formatSignedShekelLocal(avgW)}) למשחק`);
                 } else if (avgW > 0 && avgWo > 0 && avgW > avgWo * 1.5 && avgW > 10) {
                   lines.push(`ממוצע ${formatSignedShekelLocal(avgW)} איתו לעומת ${formatSignedShekelLocal(avgWo)} בלעדיו`);
                 } else if (avgW < 0 && avgWo < 0 && Math.abs(avgW) > Math.abs(avgWo) * 1.5) {
-                  lines.push(`הפסד גדל מ-₪${cleanNumber(Math.abs(avgWo))} ל-₪${cleanNumber(Math.abs(avgW))} למשחק איתו`);
+                  lines.push(`הפסד גדל מ-${cleanNumber(Math.abs(avgWo))} ל-${cleanNumber(Math.abs(avgW))} למשחק איתו`);
                 }
 
                 if (Math.abs(wrDelta) >= 8 && !lines.some(l => l.includes('נצחונות'))) {
@@ -2132,8 +2132,8 @@ const GraphsScreen = () => {
 
                 if (Math.abs(totalWith) >= 100) {
                   lines.push(totalWith > 0
-                    ? `סה"כ +₪${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
-                    : `סה"כ -₪${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
+                    ? `סה"כ \u200E+${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
+                    : `סה"כ \u200E-${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
                 }
 
                 if (lines.length === 0) {
@@ -2189,7 +2189,7 @@ const GraphsScreen = () => {
                         fontSize: '0.95rem',
                         color: impactColor,
                       }}>
-                        {isZero ? '₪0' : `${row.impact > 0 ? '+' : ''}₪${cleanNumber(row.impact)}`}
+                        {isZero ? '0' : `${row.impact > 0 ? '\u200E+' : ''}${cleanNumber(row.impact)}`}
                       </span>
                     </div>
                   </div>
@@ -2229,7 +2229,7 @@ const GraphsScreen = () => {
                         color: avgWithColor,
                         marginBottom: '0.15rem',
                       }}>
-                        {avgWithRounded === 0 ? '₪0' : `${avgWithRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWith)}`}
+                        {avgWithRounded === 0 ? '0' : `${avgWithRounded > 0 ? '\u200E+' : ''}${cleanNumber(row.avgWith)}`}
                       </div>
                       <div style={{ 
                         fontSize: '0.7rem', 
@@ -2263,7 +2263,7 @@ const GraphsScreen = () => {
                         color: avgWithoutColor,
                         marginBottom: '0.15rem',
                       }}>
-                        {avgWithoutRounded === 0 ? '₪0' : `${avgWithoutRounded > 0 ? '+' : ''}₪${cleanNumber(row.avgWithout)}`}
+                        {avgWithoutRounded === 0 ? '0' : `${avgWithoutRounded > 0 ? '\u200E+' : ''}${cleanNumber(row.avgWithout)}`}
                       </div>
                       <div style={{ 
                         fontSize: '0.7rem', 
@@ -2415,7 +2415,7 @@ const GraphsScreen = () => {
               .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
               .slice(0, 5);
             const selectedName = getPlayerName(impactPlayerId);
-            const formatSignedShekel = (value: number) => `${value > 0 ? '+' : value < 0 ? '-' : ''}₪${cleanNumber(Math.abs(value))}`;
+            const formatSignedShekel = (value: number) => `\u200E${value > 0 ? '+' : value < 0 ? '-' : ''}${cleanNumber(Math.abs(value))}`;
 
             const chemistryInsights = (row: typeof impactData[0], headlineMentioned: Set<string>): string[] => {
               const isInHeadline = headlineMentioned.has(row.otherPlayerId);
@@ -2459,7 +2459,7 @@ const GraphsScreen = () => {
                 if (avgW > 0 && avgWo > 0 && avgW >= avgWo * 1.5) {
                   lines.push(`ממוצע ${formatSignedShekel(avgW)} איתו לעומת ${formatSignedShekel(avgWo)} בלעדיו`);
                 } else if (avgW < 0 && avgWo < 0 && Math.abs(avgW) >= Math.abs(avgWo) * 1.5) {
-                  lines.push(`הפסד גדל מ-₪${cleanNumber(Math.abs(avgWo))} ל-₪${cleanNumber(Math.abs(avgW))} למשחק איתו`);
+                  lines.push(`הפסד גדל מ-${cleanNumber(Math.abs(avgWo))} ל-${cleanNumber(Math.abs(avgW))} למשחק איתו`);
                 }
               }
 
@@ -2479,8 +2479,8 @@ const GraphsScreen = () => {
 
               if (Math.abs(totalWith) >= 100) {
                 lines.push(totalWith > 0
-                  ? `סה"כ +₪${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
-                  : `סה"כ -₪${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
+                  ? `סה"כ \u200E+${cleanNumber(totalWith)} ב-${together} משחקים משותפים`
+                  : `סה"כ \u200E-${cleanNumber(Math.abs(totalWith))} ב-${together} משחקים משותפים`);
               }
 
               if (lines.length === 0) {
@@ -2501,7 +2501,7 @@ const GraphsScreen = () => {
               const allCheck = impactData.filter(r => r.withGames >= 3);
               if (allCheck.length >= 3) {
                 // Sign flips only count as dependencies when the negative side is significant.
-                // A -₪6 average doesn't mean "goes to loss" — many individual games were still profitable.
+                // A -6 average doesn't mean "goes to loss" — many individual games were still profitable.
                 const SIGN_FLIP_MIN = 15;
                 const criticalDeps = allCheck.filter(r => Math.round(r.avgWith) > 0 && r.avgWithout < -SIGN_FLIP_MIN);
                 const toxicWith = allCheck.filter(r => r.avgWith < -SIGN_FLIP_MIN && Math.round(r.avgWithout) > 0);
@@ -2572,7 +2572,7 @@ const GraphsScreen = () => {
                 if (reliableOnly.length >= 3 && lines.length < 2) {
                   const avgImpactSpread = reliableOnly.reduce((sum, r) => sum + Math.abs(r.impact), 0) / reliableOnly.length;
                   if (avgImpactSpread < 8) {
-                    lines.push(`${selectedName} עקבי — ההרכב כמעט לא משפיע על הביצועים (פער ממוצע ₪${cleanNumber(Math.round(avgImpactSpread))})`);
+                    lines.push(`${selectedName} עקבי — ההרכב כמעט לא משפיע על הביצועים (פער ממוצע ${cleanNumber(Math.round(avgImpactSpread))})`);
                   }
                 }
               }
@@ -2698,7 +2698,7 @@ const GraphsScreen = () => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               <span style={{ fontWeight: '700', color: '#10B981' }}>
-                                +₪{cleanNumber(row.impact)}
+                                {'\u200E'}+{cleanNumber(row.impact)}
                               </span>
                               {wrDelta !== 0 && (
                                 <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
@@ -2749,7 +2749,7 @@ const GraphsScreen = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                   <span style={{ fontWeight: '700', color: '#10B981' }}>
-                                    +₪{cleanNumber(row.impact)}
+                                    {'\u200E'}+{cleanNumber(row.impact)}
                                   </span>
                                   {wrDelta !== 0 && (
                                     <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
@@ -2801,7 +2801,7 @@ const GraphsScreen = () => {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                               <span style={{ fontWeight: '700', color: '#EF4444' }}>
-                                ₪{cleanNumber(row.impact)}
+                                {cleanNumber(row.impact)}
                               </span>
                               {wrDelta !== 0 && (
                                 <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>
@@ -2852,7 +2852,7 @@ const GraphsScreen = () => {
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                   <span style={{ fontWeight: '700', color: '#EF4444' }}>
-                                    ₪{cleanNumber(row.impact)}
+                                    {cleanNumber(row.impact)}
                                   </span>
                                   {wrDelta !== 0 && (
                                     <span style={{ fontSize: '0.6rem', color: wrDelta > 0 ? '#10B981' : '#EF4444', fontWeight: '600' }}>

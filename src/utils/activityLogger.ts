@@ -111,6 +111,7 @@ export const getScreenName = (pathname: string): string => {
   if (pathname.startsWith('/live-game/')) return 'Live Game';
   if (pathname.startsWith('/chip-entry/')) return 'Chip Entry';
   if (pathname.startsWith('/game-summary/') || pathname.startsWith('/game/')) return 'Game Details';
+  if (pathname.startsWith('/shared-training')) return 'Shared Training';
   if (pathname.startsWith('/training/')) return 'Training';
   return 'Other';
 };

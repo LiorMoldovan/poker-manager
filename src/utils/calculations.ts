@@ -267,12 +267,12 @@ export const calculateSettlement = (
 // Clean up floating-point artifacts, round to whole numbers, and add thousand separators (e.g., 30.7 -> 31, 1234 -> 1,234)
 export const cleanNumber = (num: number): string => {
   const rounded = Math.round(num);
-  return rounded.toLocaleString('en-US');
+  return `\u200E${rounded.toLocaleString('en-US')}`;
 };
 
 export const formatCurrency = (amount: number): string => {
   const sign = amount >= 0 ? '' : '-';
-  return `${sign}₪${cleanNumber(Math.abs(amount))}`;
+  return `\u200E${sign}${cleanNumber(Math.abs(amount))}`;
 };
 
 export const formatHebrewHalf = (half: number, year: number): string => {

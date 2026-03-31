@@ -20,6 +20,8 @@ import GraphsScreen from './screens/GraphsScreen';
 import TrainingScreen from './screens/TrainingScreen';
 import TrainingHandScreen from './screens/TrainingHandScreen';
 import QuickTrainingScreen from './screens/QuickTrainingScreen';
+import SharedTrainingScreen from './screens/SharedTrainingScreen';
+import SharedQuickPlayScreen from './screens/SharedQuickPlayScreen';
 
 // Error boundary — catches runtime rendering crashes and shows a recovery UI
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -482,6 +484,8 @@ function App() {
                 <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
                 <Route path="/graphs" element={<GraphsScreen />} />
                 <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/shared-training" element={<SharedTrainingScreen />} />
+                <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
                 {/* Redirect everything else to statistics */}
                 <Route path="*" element={<Navigate to="/statistics" replace />} />
               </Routes>
@@ -495,7 +499,7 @@ function App() {
 
   // Admin and Member - full/partial access
   // Hide navigation on game flow screens
-  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play'].some(path => 
+  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play', '/shared-training/play'].some(path => 
     location.pathname.startsWith(path)
   );
 
@@ -608,6 +612,9 @@ function App() {
               {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
               {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
               {role === 'admin' && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
+              {/* Shared training - all roles */}
+              <Route path="/shared-training" element={<SharedTrainingScreen />} />
+              <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
               {/* Catch-all route - redirect unknown URLs to home */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

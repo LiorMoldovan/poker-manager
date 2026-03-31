@@ -50,8 +50,8 @@ export const generateGameSummary = (
     else if (index === 2 && player.profit > 0) medal = ' 🥉';
     
     const profitText = player.profit >= 0 
-      ? `+₪${cleanNumber(player.profit)}` 
-      : `-₪${cleanNumber(Math.abs(player.profit))}`;
+      ? `\u200E+${cleanNumber(player.profit)}` 
+      : `-${cleanNumber(Math.abs(player.profit))}`;
     
     const chips = chipValues ? Math.round(getTotalChipsForPlayer(player, chipValues) / 1000) : 0;
     const chipsText = chipValues ? `${chips}k` : '';
@@ -66,9 +66,9 @@ export const generateGameSummary = (
   if (chipGap && chipGap !== 0) {
     summary += `\n⚠️ Chip adjustment: `;
     if (chipGap > 0) {
-      summary += `₪${cleanNumber(Math.abs(chipGapPerPlayer || 0))}/player (extra chips)\n`;
+      summary += `${cleanNumber(Math.abs(chipGapPerPlayer || 0))}/player (extra chips)\n`;
     } else {
-      summary += `+₪${cleanNumber(Math.abs(chipGapPerPlayer || 0))}/player (missing chips)\n`;
+      summary += `\u200E+${cleanNumber(Math.abs(chipGapPerPlayer || 0))}/player (missing chips)\n`;
     }
   }
 
@@ -76,7 +76,7 @@ export const generateGameSummary = (
   if (settlements.length > 0) {
     summary += `\n💸 *PAYMENTS*\n`;
     settlements.forEach(s => {
-      summary += `${LTR}• ${s.from} ➜ ${s.to}: *₪${cleanNumber(s.amount)}*\n`;
+      summary += `${LTR}• ${s.from} ➜ ${s.to}: *${cleanNumber(s.amount)}*\n`;
     });
   }
 
@@ -84,7 +84,7 @@ export const generateGameSummary = (
   if (skippedTransfers.length > 0) {
     summary += `\n💡 _Small amounts (optional):_\n`;
     skippedTransfers.forEach(s => {
-      summary += `${LTR}• ${s.from} ➜ ${s.to}: ₪${cleanNumber(s.amount)}\n`;
+      summary += `${LTR}• ${s.from} ➜ ${s.to}: ${cleanNumber(s.amount)}\n`;
     });
   }
 

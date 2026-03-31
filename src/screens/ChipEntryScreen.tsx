@@ -555,7 +555,7 @@ const ChipEntryScreen = () => {
               {expectedChipPoints.toLocaleString()}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              ₪{cleanNumber(totalBuyIns)}
+              {cleanNumber(totalBuyIns)}
             </div>
           </div>
           
@@ -576,7 +576,7 @@ const ChipEntryScreen = () => {
               {totalChipPoints.toLocaleString()}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              ₪{cleanNumber(totalChipPoints * valuePerChip)}
+              {cleanNumber(totalChipPoints * valuePerChip)}
             </div>
           </div>
         </div>
@@ -600,7 +600,7 @@ const ChipEntryScreen = () => {
           ) : (
             <span style={{ color: getProgressColor(progressPercentage), fontWeight: '600', fontSize: '0.85rem' }}>
               {totalChipPoints > expectedChipPoints 
-                ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()} over` 
+                ? `\u200E+${(totalChipPoints - expectedChipPoints).toLocaleString()} over` 
                 : `${(expectedChipPoints - totalChipPoints).toLocaleString()} remaining`}
             </span>
           )}
@@ -649,7 +649,7 @@ const ChipEntryScreen = () => {
                     color: profit >= 0 ? 'var(--success)' : 'var(--danger)',
                     marginTop: '0.15rem'
                   }}>
-                    {profit >= 0 ? '+' : ''}₪{cleanNumber(profit)}
+                    {profit >= 0 ? '\u200E+' : ''}{cleanNumber(profit)}
                   </span>
                 )}
               </button>
@@ -664,12 +664,12 @@ const ChipEntryScreen = () => {
           <div className="card-header">
             <h3 className="card-title" style={{ margin: 0 }}>{selectedPlayer.playerName}</h3>
             <span className={getProfitColor(getPlayerProfit(selectedPlayer.id))} style={{ fontWeight: '700' }}>
-              {getPlayerProfit(selectedPlayer.id) >= 0 ? '+' : ''}₪{cleanNumber(getPlayerProfit(selectedPlayer.id))}
+              {getPlayerProfit(selectedPlayer.id) >= 0 ? '\u200E+' : ''}{cleanNumber(getPlayerProfit(selectedPlayer.id))}
             </span>
           </div>
           
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {cleanNumber(selectedPlayer.rebuys)} buy-in{selectedPlayer.rebuys !== 1 ? 's' : ''} (₪{cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()} chips expected)
+            {cleanNumber(selectedPlayer.rebuys)} buy-in{selectedPlayer.rebuys !== 1 ? 's' : ''} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()} chips expected)
           </div>
 
           {/* Chip Grid */}
@@ -735,7 +735,7 @@ const ChipEntryScreen = () => {
                 {getPlayerChipPoints(selectedPlayer.id).toLocaleString()} chips
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                = ₪{cleanNumber(getPlayerMoneyValue(selectedPlayer.id))}
+                = {cleanNumber(getPlayerMoneyValue(selectedPlayer.id))}
               </div>
             </div>
             <button
@@ -817,7 +817,7 @@ const ChipEntryScreen = () => {
             color: totalChipPoints > expectedChipPoints ? '#ef4444' : totalChipPoints === expectedChipPoints && totalChipPoints > 0 ? '#22c55e' : '#f59e0b'
           }}>
             {totalChipPoints > expectedChipPoints 
-              ? `+${(totalChipPoints - expectedChipPoints).toLocaleString()}` 
+              ? `\u200E+${(totalChipPoints - expectedChipPoints).toLocaleString()}` 
               : totalChipPoints === expectedChipPoints && totalChipPoints > 0
                 ? '✓'
                 : `-${(expectedChipPoints - totalChipPoints).toLocaleString()}`}

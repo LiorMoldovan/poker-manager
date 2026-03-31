@@ -126,7 +126,7 @@ export function validateAllPlayers(): void {
     const year = (v.yearProfit >= 0 ? '+' : '') + Math.round(v.yearProfit).toString().padStart(4);
     const issues = v.issues.length > 0 ? '⚠️ ' + v.issues.length : '✅';
     
-    console.log(` ${name} | ${games} | ${profit}₪ | ${streak}${streakCheck} | ${year} | ${issues}`);
+    console.log(` ${name} | ${games} | ${profit} | ${streak}${streakCheck} | ${year} | ${issues}`);
   });
   
   console.log('─'.repeat(60));
@@ -170,7 +170,7 @@ export function validateAllPlayers(): void {
   
   byYear.forEach((v, i) => {
     const avg = v.yearGames > 0 ? Math.round(v.yearProfit / v.yearGames) : 0;
-    console.log(`  ${i + 1}. ${v.playerName}: ${v.yearGames} games, ${v.yearProfit >= 0 ? '+' : ''}${Math.round(v.yearProfit)}₪ (avg: ${avg >= 0 ? '+' : ''}${avg}₪)`);
+    console.log(`  ${i + 1}. ${v.playerName}: ${v.yearGames} games, ${v.yearProfit >= 0 ? '+' : ''}${Math.round(v.yearProfit)} (avg: ${avg >= 0 ? '+' : ''}${avg})`);
   });
   
   console.log('\n' + '═'.repeat(60));
@@ -198,11 +198,11 @@ export function showPlayerDetail(playerName: string): void {
   
   console.log('\n📈 ALL-TIME STATS:');
   console.log(`   Games: ${stats.gamesPlayed}`);
-  console.log(`   Total: ${stats.totalProfit >= 0 ? '+' : ''}${Math.round(stats.totalProfit)}₪`);
-  console.log(`   Avg: ${stats.avgProfit >= 0 ? '+' : ''}${Math.round(stats.avgProfit)}₪/game`);
+  console.log(`   Total: ${stats.totalProfit >= 0 ? '+' : ''}${Math.round(stats.totalProfit)}`);
+  console.log(`   Avg: ${stats.avgProfit >= 0 ? '+' : ''}${Math.round(stats.avgProfit)}/game`);
   console.log(`   Win Rate: ${Math.round(stats.winPercentage)}% (${stats.winCount}W / ${stats.lossCount}L)`);
-  console.log(`   Best Win: +${Math.round(stats.biggestWin)}₪`);
-  console.log(`   Worst Loss: ${Math.round(stats.biggestLoss)}₪`);
+  console.log(`   Best Win: +${Math.round(stats.biggestWin)}`);
+  console.log(`   Worst Loss: ${Math.round(stats.biggestLoss)}`);
   
   console.log('\n🔥 STREAKS:');
   console.log(`   Current: ${stats.currentStreak}`);
@@ -224,7 +224,7 @@ export function showPlayerDetail(playerName: string): void {
     const year = parseInt(yearStr);
     const data = gamesByYear[year];
     const marker = year === currentYear ? ' ← CURRENT' : '';
-    console.log(`   ${year}: ${data.games} games, ${data.profit >= 0 ? '+' : ''}${Math.round(data.profit)}₪ (${data.wins}W)${marker}`);
+    console.log(`   ${year}: ${data.games} games, ${data.profit >= 0 ? '+' : ''}${Math.round(data.profit)} (${data.wins}W)${marker}`);
   });
   
   console.log('\n📜 LAST 10 GAMES:');
@@ -232,7 +232,7 @@ export function showPlayerDetail(playerName: string): void {
     const d = new Date(g.date);
     const dateStr = d.toLocaleDateString('he-IL');
     const result = g.profit > 0 ? '✅' : g.profit < 0 ? '❌' : '➡️';
-    console.log(`   ${i + 1}. ${dateStr}: ${g.profit >= 0 ? '+' : ''}${g.profit}₪ ${result}`);
+    console.log(`   ${i + 1}. ${dateStr}: ${g.profit >= 0 ? '+' : ''}${g.profit} ${result}`);
   });
   
   // Verify streak calculation
@@ -292,15 +292,15 @@ export function showTonightRankings(playerNames: string[]): void {
     const gapBelow = playerBelow ? Math.round(p.totalProfit - playerBelow.totalProfit) : null;
     
     console.log(`\n  #${rank} ${p.playerName}`);
-    console.log(`      Total: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}₪`);
+    console.log(`      Total: ${p.totalProfit >= 0 ? '+' : ''}${Math.round(p.totalProfit)}`);
     console.log(`      Streak: ${p.currentStreak}`);
     if (playerAbove) {
-      console.log(`      ↑ ${gapAbove}₪ behind ${playerAbove.playerName}`);
+      console.log(`      ↑ ${gapAbove} behind ${playerAbove.playerName}`);
     } else {
       console.log(`      ★ LEADING TONIGHT'S TABLE`);
     }
     if (playerBelow) {
-      console.log(`      ↓ ${gapBelow}₪ ahead of ${playerBelow.playerName}`);
+      console.log(`      ↓ ${gapBelow} ahead of ${playerBelow.playerName}`);
     } else {
       console.log(`      ⚠️ LAST IN TONIGHT'S TABLE`);
     }
@@ -323,7 +323,7 @@ export function showTonightRankings(playerNames: string[]): void {
   }).sort((a, b) => b.yearProfit - a.yearProfit);
   
   yearData.forEach((p, i) => {
-    console.log(`  #${i + 1} ${p.name}: ${p.yearProfit >= 0 ? '+' : ''}${Math.round(p.yearProfit)}₪ (${p.yearGames} games)`);
+    console.log(`  #${i + 1} ${p.name}: ${p.yearProfit >= 0 ? '+' : ''}${Math.round(p.yearProfit)} (${p.yearGames} games)`);
   });
   
   console.log('\n' + '═'.repeat(50));

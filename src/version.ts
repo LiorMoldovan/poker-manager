@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.8';
+export const APP_VERSION = '5.10.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.0',
+    date: '2026-03-11',
+    changes: [
+      '🎯 Shared Training — pool-based poker training accessible to all players with progress tracking and badges',
+      '🛠️ Training Admin tab in Settings for managing training pool generation',
+      '☁️ Forecast publish/unpublish/delete now auto-syncs to cloud',
+      '🔄 Cloud forecast is authoritative — always syncs from remote',
+      '💱 Removed ₪ currency symbol across all screens for cleaner display',
+    ]
+  },
   {
     version: '5.9.8',
     date: '2026-03-11',

@@ -1829,7 +1829,7 @@ const LiveGameScreen = () => {
       <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
         <div>
           <div className="summary-title">Total Pot</div>
-          <div className="summary-value">₪{cleanNumber(totalPot)}</div>
+          <div className="summary-value">{cleanNumber(totalPot)}</div>
         </div>
         <div>
           <div className="summary-title">Total Buyins</div>
@@ -1872,7 +1872,7 @@ const LiveGameScreen = () => {
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                ₪{cleanNumber(player.rebuys * rebuyValue)} invested
+                {cleanNumber(player.rebuys * rebuyValue)} invested
               </div>
             </div>
             <div className="player-rebuys">
@@ -1953,10 +1953,10 @@ const LiveGameScreen = () => {
                     <div>
                       <span style={{ fontWeight: '600' }}>{expense.description}</span>
                       <span className="text-muted" style={{ marginLeft: '0.3rem' }}>
-                        ₪{cleanNumber(expense.amount)}
+                        {cleanNumber(expense.amount)}
                       </span>
                       <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: '0.65rem' }}>
-                        (₪{cleanNumber(perPerson)}/person)
+                        ({cleanNumber(perPerson)}/person)
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.15rem' }}>
@@ -1991,7 +1991,7 @@ const LiveGameScreen = () => {
               textAlign: 'center',
               fontSize: '0.75rem',
             }}>
-              Total: <span style={{ fontWeight: '600' }}>₪{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+              Total: <span style={{ fontWeight: '600' }}>{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
             </div>
           </>
         )}

@@ -124,7 +124,7 @@ function parseGameDate(dateStr: string): Date {
   return new Date(dateStr);
 }
 
-const fmt = (n: number): string => `${n >= 0 ? '+' : ''}${Math.round(n)}₪`;
+const fmt = (n: number): string => `${n >= 0 ? '\u200E+' : '\u200E'}${Math.round(n)}`;
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
@@ -251,7 +251,7 @@ function generateBattles(
         emoji: '🏆', category: 'battle', sentiment: 'battle',
         title: `אלוף ${periodLabel}!`,
         description: gap <= 150
-          ? `${leader.name} סיים במקום הראשון עם ${fmt(leader.totalProfit)}, בפער של ${gap}₪ בלבד מ-${second.name}! קרב צמוד עד הסוף.`
+          ? `${leader.name} סיים במקום הראשון עם ${fmt(leader.totalProfit)}, בפער של ${gap} בלבד מ-${second.name}! קרב צמוד עד הסוף.`
           : `${leader.name} סיים במקום הראשון עם ${fmt(leader.totalProfit)}${leader.gamesPlayed > 1 ? ` אחרי ${leader.gamesPlayed} משחקים` : ''}.`,
         priority: 98,
       });
@@ -275,8 +275,8 @@ function generateBattles(
         emoji: aboveRank <= 2 ? '👑' : '⚔️', category: 'battle', sentiment: 'battle',
         title: aboveRank <= 2 ? 'קרב על הכתר!' : `קרב על מקום ${aboveRank}`,
         description: opts.mode === 'tonight'
-          ? `${below.name} (מקום ${belowRank}) רק ${gap}₪ מאחורי ${above.name} (מקום ${aboveRank}). נצחון גדול הפעם = עקיפה!`
-          : `${below.name} (מקום ${belowRank}) יכול לעקוף את ${above.name} (מקום ${aboveRank}) עם ${gap}₪ בלבד.`,
+          ? `${below.name} (מקום ${belowRank}) רק ${gap} מאחורי ${above.name} (מקום ${aboveRank}). נצחון גדול הפעם = עקיפה!`
+          : `${below.name} (מקום ${belowRank}) יכול לעקוף את ${above.name} (מקום ${aboveRank}) עם ${gap} בלבד.`,
         priority: 95 - i * 3,
       });
       break;
@@ -297,7 +297,7 @@ function generateBattles(
       items.push({
         emoji: '⚔️', category: 'battle', sentiment: 'battle',
         title: 'קרב צמוד!',
-        description: `${p1.name} (מקום ${r1}) ו${p2.name} (מקום ${r2}) בהפרש של ${Math.round(gap)}₪ בלבד. המשחק הבא יקבע!`,
+        description: `${p1.name} (מקום ${r1}) ו${p2.name} (מקום ${r2}) בהפרש של ${Math.round(gap)} בלבד. המשחק הבא יקבע!`,
         priority: 82 - i * 2,
       });
       break;
@@ -327,7 +327,7 @@ function generateBattles(
       items.push({
         emoji: '📅', category: 'battle', sentiment: 'battle',
         title: `מי יוביל את ${ctx.currentYear}?`,
-        description: `${first.player.name} מוביל עם ${fmt(first.yearProfit)} | ${second.player.name} רודף עם ${fmt(second.yearProfit)} | פער: ${gap}₪`,
+        description: `${first.player.name} מוביל עם ${fmt(first.yearProfit)} | ${second.player.name} רודף עם ${fmt(second.yearProfit)} | פער: ${gap}`,
         priority: 88,
       });
     }
@@ -395,7 +395,7 @@ function generateStreaks(
     items.push({
       emoji: '⚡', category: 'streak', sentiment: 'surprise',
       title: 'אש מול קרח',
-      description: `${hot.name} (+${hot.currentStreak} רצופים) נגד ${cold.name} (${cold.currentStreak} רצופים). מי ישנה כיוון?`,
+      description: `${hot.name} (\u200E+${hot.currentStreak} רצופים) נגד ${cold.name} (${cold.currentStreak} רצופים). מי ישנה כיוון?`,
       priority: 82,
     });
   }
@@ -447,8 +447,8 @@ function generateNumericGoals(
     const best = candidates.sort((a, b) => a.dist - b.dist)[0];
     items.push({
       emoji: '🎯', category: 'milestone', sentiment: 'positive',
-      title: `יעד ${best.target.toLocaleString()}₪`,
-      description: `${best.player.name} על ${fmt(best.player.totalProfit)}. עוד ${Math.round(best.dist)}₪ = חציית רף ${best.target.toLocaleString()}₪!`,
+      title: `יעד ${best.target.toLocaleString()}`,
+      description: `${best.player.name} על ${fmt(best.player.totalProfit)}. עוד ${Math.round(best.dist)} = חציית רף ${best.target.toLocaleString()}!`,
       priority: 78 + Math.round(best.target / 200),
     });
   }
@@ -470,8 +470,8 @@ function generateNumericGoals(
     const worst = negCandidates.sort((a, b) => a.dist - b.dist)[0];
     items.push({
       emoji: '⚠️', category: 'milestone', sentiment: 'negative',
-      title: `אזור סכנה: -${worst.target.toLocaleString()}₪`,
-      description: `${worst.player.name} על ${fmt(worst.player.totalProfit)}. הפסד של ${Math.round(worst.dist)}₪ = ירידה ל-${worst.target.toLocaleString()}₪.`,
+      title: `אזור סכנה: -${worst.target.toLocaleString()}`,
+      description: `${worst.player.name} על ${fmt(worst.player.totalProfit)}. הפסד של ${Math.round(worst.dist)} = ירידה ל-${worst.target.toLocaleString()}.`,
       priority: 73,
     });
   }
@@ -520,7 +520,7 @@ function generateNumericGoals(
     items.push({
       emoji: '🔄', category: 'milestone', sentiment: 'positive',
       title: `חזרה לפלוס ${ctx.currentYear}`,
-      description: `${recoveryCandidate.player.name} על ${fmt(recoveryCandidate.yearProfit)} השנה. פער של ${Math.round(Math.abs(recoveryCandidate.yearProfit))}₪ לסגירה לפלוס שנתי.`,
+      description: `${recoveryCandidate.player.name} על ${fmt(recoveryCandidate.yearProfit)} השנה. פער של ${Math.round(Math.abs(recoveryCandidate.yearProfit))} לסגירה לפלוס שנתי.`,
       priority: 75,
     });
   }
@@ -548,7 +548,7 @@ function generateForm(
     items.push({
       emoji: '📈', category: 'form', sentiment: 'positive',
       title: `${hotForm.player.name} בפורם חם`,
-      description: `ממוצע אחרון: ${fmt(hotForm.last3Avg)} למשחק (לעומת ${fmt(hotForm.player.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}₪!`,
+      description: `ממוצע אחרון: ${fmt(hotForm.last3Avg)} למשחק (לעומת ${fmt(hotForm.player.avgProfit)} היסטורי). שיפור של ${Math.round(hotForm.formDiff)}!`,
       priority: 76,
     });
   }
@@ -657,7 +657,7 @@ function generateDrama(
       items.push({
         emoji: '👀', category: 'drama', sentiment: 'surprise',
         title: 'המוביל בלחץ',
-        description: `${leader.name} (מקום 1) הפסיד ${fmt(leaderPS.lastGameProfit)} במשחק האחרון. הפער מ${second.name}: ${gap}₪ בלבד.`,
+        description: `${leader.name} (מקום 1) הפסיד ${fmt(leaderPS.lastGameProfit)} במשחק האחרון. הפער מ${second.name}: ${gap} בלבד.`,
         priority: 81,
       });
     }
@@ -686,7 +686,7 @@ function generateDrama(
     items.push({
       emoji: '🎢', category: 'drama', sentiment: 'surprise',
       title: 'הרים רוסיים',
-      description: `${v.player.name} בתנודות (סטייה ${Math.round(v.stdDev)}₪): מ${fmt(Math.min(...last4))} עד ${fmt(Math.max(...last4))} ב-4 אחרונים. לאן הפעם?`,
+      description: `${v.player.name} בתנודות (סטייה ${Math.round(v.stdDev)}): מ${fmt(Math.min(...last4))} עד ${fmt(Math.max(...last4))} ב-4 אחרונים. לאן הפעם?`,
       priority: 70,
     });
   }
@@ -781,7 +781,7 @@ function generateH2H(
       items.push({
         emoji: '💸', category: 'h2h', sentiment: 'surprise',
         title: 'נמסיס',
-        description: `${loser} הפסיד סה"כ ${Math.abs(Math.round(flow))}₪ ל${winner} לאורך ${n.sharedGames} משחקים משותפים.`,
+        description: `${loser} הפסיד סה"כ ${Math.abs(Math.round(flow))} ל${winner} לאורך ${n.sharedGames} משחקים משותפים.`,
         priority: 72,
       });
     }
@@ -875,7 +875,7 @@ function generateSeason(
       items.push({
         emoji: '📆', category: 'season', sentiment: 'battle',
         title: `שחקן ${MONTH_NAMES[ctx.currentMonth]}`,
-        description: `${monthLeader.player.name} מוביל את ${MONTH_NAMES[ctx.currentMonth]} עם ${fmt(monthLeader.monthProfit)}. ${monthSecond.player.name} רודף ב-${gap}₪.`,
+        description: `${monthLeader.player.name} מוביל את ${MONTH_NAMES[ctx.currentMonth]} עם ${fmt(monthLeader.monthProfit)}. ${monthSecond.player.name} רודף ב-${gap}.`,
         priority: 68,
       });
     }
@@ -916,7 +916,7 @@ function generateSeason(
       items.push({
         emoji: '📅', category: 'season', sentiment: 'battle',
         title: `מוביל ${ctx.currentYear}`,
-        description: `${yearLeader.player.name} מוביל את ${ctx.currentYear} עם ${fmt(yearLeader.yearProfit)} ב-${yearLeader.yearGames} משחקים. ${yearSecond.player.name} רודף ב-${gap}₪.`,
+        description: `${yearLeader.player.name} מוביל את ${ctx.currentYear} עם ${fmt(yearLeader.yearProfit)} ב-${yearLeader.yearGames} משחקים. ${yearSecond.player.name} רודף ב-${gap}.`,
         priority: 80,
       });
     }
@@ -931,7 +931,7 @@ function generateSeason(
     items.push({
       emoji: '🔄', category: 'season', sentiment: 'positive',
       title: `חזרה לפלוס ב${halfName}`,
-      description: `${halfRecovery.player.name} על ${fmt(halfRecovery.halfProfit)} ב${halfName}. פער של ${Math.abs(Math.round(halfRecovery.halfProfit))}₪ לחצי שנה חיובי!`,
+      description: `${halfRecovery.player.name} על ${fmt(halfRecovery.halfProfit)} ב${halfName}. פער של ${Math.abs(Math.round(halfRecovery.halfProfit))} לחצי שנה חיובי!`,
       priority: 66,
     });
   }
@@ -1035,7 +1035,7 @@ function generateLowData(
       items.push({
         emoji: '💪', category: 'drama', sentiment: 'negative',
         title: 'הזדמנות להתהפך!',
-        description: `${loser.name} הפסיד ${Math.abs(Math.round(loser.totalProfit))}₪ במשחק הראשון. הפעם הזדמנות לחזור לפלוס!`,
+        description: `${loser.name} הפסיד ${Math.abs(Math.round(loser.totalProfit))} במשחק הראשון. הפעם הזדמנות לחזור לפלוס!`,
         priority: 65,
       });
     }

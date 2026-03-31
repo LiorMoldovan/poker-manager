@@ -430,7 +430,7 @@ const HistoryScreen = () => {
                     {game.players.length} players • {(game as any).totalBuyins || 0} buyins
                     {game.sharedExpenses && game.sharedExpenses.length > 0 && (
                       <span style={{ color: '#f59e0b', marginLeft: '0.5rem' }}>
-                        🍕 ₪{cleanNumber(game.sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}
+                        🍕 {cleanNumber(game.sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}
                       </span>
                     )}
                   </div>
@@ -457,7 +457,7 @@ const HistoryScreen = () => {
                     className={`badge ${p.profit > 0 ? 'badge-success' : p.profit < 0 ? 'badge-danger' : ''}`}
                     style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem', ...(isMe ? { outline: '1.5px solid #3b82f6', fontWeight: '700' } : {}) }}
                   >
-                    {p.playerName}: {p.profit >= 0 ? '+' : ''}₪{cleanNumber(p.profit)}
+                    {p.playerName}: {p.profit >= 0 ? '\u200E+' : ''}{cleanNumber(p.profit)}
                   </span>
                   );
                 })}

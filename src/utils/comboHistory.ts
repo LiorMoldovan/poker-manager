@@ -213,7 +213,7 @@ export function buildComboHistoryText(combo: ComboHistory): string {
 
   for (const game of combo.previousGames) {
     const dateStr = formatComboDate(game.date);
-    lines.push(`  • ${dateStr}: מנצח ${game.winnerName} (+${Math.round(game.winnerProfit)}₪), מפסיד ${game.loserName} (${Math.round(game.loserProfit)}₪)`);
+    lines.push(`  • ${dateStr}: מנצח ${game.winnerName} (\u200E+${Math.round(game.winnerProfit)}), מפסיד ${game.loserName} (${Math.round(game.loserProfit)})`);
   }
 
   if (combo.totalGamesWithCombo >= 2) {
@@ -230,8 +230,8 @@ export function buildComboHistoryText(combo: ComboHistory): string {
 
   const topPlayer = combo.playerStats[0];
   const bottomPlayer = combo.playerStats[combo.playerStats.length - 1];
-  lines.push(`  📊 מוביל בהרכב: ${topPlayer.playerName} (סה"כ ${topPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(topPlayer.totalProfit)}₪, ממוצע ${topPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(topPlayer.avgProfit)}₪)`);
-  lines.push(`  📊 בתחתית ההרכב: ${bottomPlayer.playerName} (סה"כ ${bottomPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.totalProfit)}₪, ממוצע ${bottomPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.avgProfit)}₪)`);
+  lines.push(`  📊 מוביל בהרכב: ${topPlayer.playerName} (סה"כ ${topPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(topPlayer.totalProfit)}, ממוצע ${topPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(topPlayer.avgProfit)})`);
+  lines.push(`  📊 בתחתית ההרכב: ${bottomPlayer.playerName} (סה"כ ${bottomPlayer.totalProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.totalProfit)}, ממוצע ${bottomPlayer.avgProfit >= 0 ? '+' : ''}${Math.round(bottomPlayer.avgProfit)})`);
 
   if (combo.repeatWinners.length > 0) {
     lines.push(`  👑 ניצחו יותר מפעם: ${combo.repeatWinners.map(w => `${w.name} (${w.count}x)`).join(', ')}`);

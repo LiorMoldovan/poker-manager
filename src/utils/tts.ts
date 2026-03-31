@@ -110,7 +110,7 @@ function fixHebrewForTTS(text: string): string {
   r = r.replace(/באד ביט/g, 'יד כואבת');
   r = r.replace(/ביג הנד/g, 'יד ענקית');
 
-  // ₪ symbol → "שקל" (TTS reads it as gibberish)
+  // Legacy: ₪ symbol cleanup (no longer used in UI, kept for safety)
   r = r.replace(/₪(\d)/g, '$1 שקל');
   r = r.replace(/₪/g, '');
 
