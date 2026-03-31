@@ -515,7 +515,7 @@ export const syncFromCloud = async (): Promise<{
       return { success: true, message: `${localCompletedCount - remoteCompletedCount} new games pushed to cloud`, synced: true, gamesChanged: 0 };
     }
 
-    if (lastSyncedVersion === remoteData.lastUpdated) {
+    if (lastSyncedVersion === remoteData.lastUpdated && remoteCompletedCount <= localCompletedCount) {
       console.log('Already synced to latest version');
       return { success: true, message: 'Already up to date', synced: false };
     }

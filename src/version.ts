@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.1';
+export const APP_VERSION = '5.10.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.2',
+    date: '2026-03-11',
+    changes: [
+      '🔄 Fix cloud sync skipping updates when remote has more completed games than local',
+    ]
+  },
   {
     version: '5.10.1',
     date: '2026-03-11',
