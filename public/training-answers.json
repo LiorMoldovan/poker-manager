@@ -1,0 +1,51 @@
+{
+  "lastUpdated": "2026-03-31T18:31:31.140Z",
+  "players": [
+    {
+      "playerName": "ליאור",
+      "sessions": [
+        {
+          "date": "2026-03-31T18:31:30.667Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "fyw36m",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iynh6i",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fdxqju",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w7ybtr",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        }
+      ],
+      "totalQuestions": 5,
+      "totalCorrect": 3,
+      "accuracy": 60
+    }
+  ]
+}
