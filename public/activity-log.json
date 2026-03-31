@@ -661,26 +661,6 @@
     "playerName": "אייל"
   },
   {
-    "deviceId": "a69b0ad7-f615-4a16-aafd-c73a62408ca1",
-    "role": "member",
-    "timestamp": "2026-03-31T14:48:00.470Z",
-    "device": "Windows PC / Windows 10/11 / Chrome",
-    "screenSize": "1920x1080",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-31T14:48:00.470Z",
-    "fingerprint": {
-      "gpu": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
-      "cores": 8,
-      "memory": 8,
-      "touchPoints": 0,
-      "language": "en-US",
-      "timezone": "Asia/Jerusalem",
-      "canvasHash": "t85vsi"
-    },
-    "playerName": "ליאור"
-  },
-  {
     "deviceId": "14af79ab-8a3a-42e8-a7c2-4aefec0789b7",
     "role": "member",
     "timestamp": "2026-03-31T18:53:03.565Z",
