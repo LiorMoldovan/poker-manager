@@ -687,10 +687,11 @@
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "384x832",
     "screensVisited": [
-      "Shared Training"
+      "Shared Training",
+      "New Game"
     ],
-    "sessionDuration": 2,
-    "lastActive": "2026-03-31T18:54:38.644Z",
+    "sessionDuration": 19,
+    "lastActive": "2026-03-31T19:12:06.205Z",
     "fingerprint": {
       "gpu": "ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.279)",
       "cores": 10,
