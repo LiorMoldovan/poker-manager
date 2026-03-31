@@ -553,9 +553,11 @@
     "timestamp": "2026-03-31T11:38:58.314Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "384x832",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-03-31T11:38:58.315Z",
+    "screensVisited": [
+      "Graphs"
+    ],
+    "sessionDuration": 2,
+    "lastActive": "2026-03-31T11:41:05.862Z",
     "fingerprint": {
       "gpu": "ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.279)",
       "cores": 10,
