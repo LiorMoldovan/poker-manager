@@ -52,6 +52,7 @@ export interface PendingForecast {
   preGameTeaser?: string; // AI-generated pre-game teaser text (group-level)
   aiModel?: string; // Model used to generate the forecast
   published?: boolean; // When true, visible to all roles on the new game page
+  location?: string; // Location used when generating the forecast
 }
 
 export interface PeriodMarkers {

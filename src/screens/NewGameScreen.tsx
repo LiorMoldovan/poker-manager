@@ -1303,11 +1303,13 @@ const NewGameScreen = () => {
     };
   };
 
-  const handleShowForecast = async () => {
-    if (selectedIds.size < 2) {
+  const handleShowForecast = async (overrideIds?: Set<string>, overrideLocation?: string) => {
+    const ids = overrideIds || selectedIds;
+    if (ids.size < 2) {
       setError('Select at least 2 players');
       return;
     }
+    if (overrideIds) setSelectedIds(overrideIds);
     
     // Check if AI is available
     const hasAIKey = !!getGeminiApiKey();
@@ -1320,7 +1322,7 @@ const NewGameScreen = () => {
       setAiForecasts(null);
       
       try {
-        const selectedPlayers = players.filter(p => selectedIds.has(p.id));
+        const selectedPlayers = players.filter(p => ids.has(p.id));
         const allGames = getAllGames();
         const gameLocationMap = new Map(allGames.map(g => [g.id, g.location]));
         
@@ -1365,9 +1367,9 @@ const NewGameScreen = () => {
         const finalMarkers = applyPeriodOverride(resolvedMarkers, periodOverride);
         setPeriodMarkers(finalMarkers);
 
-        const loc = gameLocation === 'other' ? customLocation.trim() : gameLocation;
+        const loc = overrideLocation || (gameLocation === 'other' ? customLocation.trim() : gameLocation);
 
-        const combo = getComboHistory(Array.from(selectedIds));
+        const combo = getComboHistory(Array.from(ids));
         const comboText = buildComboHistoryText(combo);
         setComboHistory(combo);
 
@@ -1384,7 +1386,7 @@ const NewGameScreen = () => {
           sentence: f.sentence,
           isSurprise: f.isSurprise
         }));
-        savePendingForecast(Array.from(selectedIds), forecastsToSave, forecasts[0]?.preGameTeaser, modelDisplay);
+        savePendingForecast(Array.from(ids), forecastsToSave, forecasts[0]?.preGameTeaser, modelDisplay, loc || undefined);
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
@@ -1430,7 +1432,8 @@ const NewGameScreen = () => {
         expectedProfit: f.expected,
         sentence: f.sentence
       }));
-      savePendingForecast(Array.from(selectedIds), forecastsToSave);
+      const loc = overrideLocation || (gameLocation === 'other' ? customLocation.trim() : gameLocation);
+      savePendingForecast(Array.from(ids), forecastsToSave, undefined, undefined, loc || undefined);
     }
   };
 
@@ -1740,7 +1743,7 @@ const NewGameScreen = () => {
           <>
             <button 
               className="btn btn-secondary"
-              onClick={handleShowForecast}
+              onClick={() => handleShowForecast()}
               disabled={selectedIds.size < 2}
               style={{ padding: '0.5rem 0.4rem', fontSize: '0.7rem', minWidth: '0', flex: '0 0 auto' }}
             >
@@ -1990,8 +1993,7 @@ const NewGameScreen = () => {
                 📤 שתף
               </button>
               <button
-                onClick={handleShowForecast}
-                disabled={selectedIds.size < 2}
+                onClick={() => handleShowForecast(new Set(publishedForecast!.playerIds), publishedForecast!.location)}
                 style={{
                   padding: '0.4rem 0.8rem',
                   borderRadius: '6px',
@@ -2002,7 +2004,7 @@ const NewGameScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                🔄 חדש
+                🔄 רענן
               </button>
               {publishedForecast.published ? (
                 <button

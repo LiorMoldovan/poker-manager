@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.7';
+export const APP_VERSION = '5.9.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.8',
+    date: '2026-03-11',
+    changes: [
+      '🔄 Forecast refresh keeps original players and location context',
+      '📍 Location saved with pending forecast for accurate regeneration',
+    ]
+  },
   {
     version: '5.9.7',
     date: '2026-03-11',

@@ -919,7 +919,7 @@ export const getPendingForecast = (): PendingForecast | null => {
 };
 
 // Save pending forecast
-export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[], preGameTeaser?: string, aiModel?: string): PendingForecast => {
+export const savePendingForecast = (playerIds: string[], forecasts: GameForecast[], preGameTeaser?: string, aiModel?: string, location?: string): PendingForecast => {
   const pendingForecast: PendingForecast = {
     id: generateId(),
     createdAt: new Date().toISOString(),
@@ -927,6 +927,7 @@ export const savePendingForecast = (playerIds: string[], forecasts: GameForecast
     forecasts,
     ...(preGameTeaser && { preGameTeaser }),
     ...(aiModel && { aiModel }),
+    ...(location && { location }),
   };
   setItem(STORAGE_KEYS.PENDING_FORECAST, pendingForecast);
   return pendingForecast;
