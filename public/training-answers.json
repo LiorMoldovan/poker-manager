@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-03-31T19:00:49.831Z",
+  "lastUpdated": "2026-03-31T19:24:00.564Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -117,11 +117,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-03-31T19:24:00.252Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gmxjsv",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ys7ie6",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fyw36m",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "naafbv",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2x5t53",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d4vw1m",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fdxqju",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "yr2g88",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q24l5e",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 10,
-      "totalCorrect": 5,
-      "accuracy": 50
+      "totalQuestions": 20,
+      "totalCorrect": 13,
+      "accuracy": 65
     }
   ]
 }
