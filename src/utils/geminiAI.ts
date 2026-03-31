@@ -1112,6 +1112,8 @@ export const generateAIForecasts = async (
   const maxPerAngle = players.length <= 6 ? 1 : 2;
 
   const playerAngles: { name: string; angle: AngleType; angleHint: string }[] = [];
+  const maxGamesInGroup = Math.max(...playersWithYearStats.map(p => p.gamesPlayed));
+  const veteranThreshold = Math.round(maxGamesInGroup * 0.75);
 
   playersWithYearStats.forEach(p => {
     const currentHalfGames = getHalfGames(p, currentYear, currentHalf);
@@ -1152,7 +1154,7 @@ export const generateAIForecasts = async (
       assign('form', `${dir}: תקופה ${periodAvg >= 0 ? '+' : ''}${periodAvg}₪ vs היסטורי ${allTimeAvg >= 0 ? '+' : ''}${allTimeAvg}₪ ← התמקד בהשוואת המגמה!`);
     } else if (Math.abs(lastGameProfit) > 80 && canUse('big_last_game')) {
       assign('big_last_game', `משחק אחרון: ${lastGameProfit >= 0 ? '+' : ''}${Math.round(lastGameProfit)}₪ ← התמקד בתוצאת המשחק האחרון, לא בממוצע!`);
-    } else if (p.gamesPlayed >= 30 && canUse('veteran')) {
+    } else if (p.gamesPlayed >= veteranThreshold && canUse('veteran')) {
       assign('veteran', `ותיק: ${p.gamesPlayed} משחקים, ${winRate}% נצחונות ← התמקד בניסיון ואחוז נצחונות, לא בממוצע!`);
     } else if (p.avgProfit < -5 && periodAvg > 10 && canUse('dark_horse')) {
       assign('dark_horse', `היסטוריה שלילית אבל פורמה חיובית ← התמקד בשינוי המגמה, לא בממוצע!`);

@@ -92,15 +92,16 @@ const NewGameScreen = () => {
   const [periodOverride, setPeriodOverride] = useState<string | null>(null); // null = auto-detect
   const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
   const [publishedForecast, setPublishedForecast] = useState<ReturnType<typeof getPendingForecast>>(null);
+  const [publishedExpanded, setPublishedExpanded] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadPlayers();
     checkForActiveGame();
-    // Load published forecast if exists
+    // Load forecast if exists (published for all, unpublished for admin)
     const pending = getPendingForecast();
-    if (pending?.published && !pending.linkedGameId) {
+    if (pending && !pending.linkedGameId && (pending.published || role === 'admin')) {
       setPublishedForecast(pending);
     }
     // Auto-detect period markers
@@ -344,7 +345,7 @@ const NewGameScreen = () => {
 
   const handleUnpublishForecast = () => {
     publishPendingForecast(false);
-    setPublishedForecast(null);
+    setPublishedForecast(getPendingForecast());
   };
 
   const handleDeleteForecast = () => {
@@ -1856,10 +1857,46 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Published Forecast - visible to all roles */}
+      {/* Published Forecast - visible to all roles when published, admin can see hidden */}
       {publishedForecast && !publishedForecast.linkedGameId && (
-        <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
-          <div style={{ textAlign: 'center', marginBottom: '0.75rem' }}>
+        <div className="card" style={{ padding: '1rem', marginTop: '0.5rem', opacity: publishedForecast.published ? 1 : 0.7 }}>
+          {/* Hidden state banner for admin */}
+          {!publishedForecast.published && role === 'admin' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '0.5rem 0.75rem',
+              marginBottom: '0.75rem',
+              borderRadius: '8px',
+              background: 'rgba(234, 179, 8, 0.08)',
+              border: '1px solid rgba(234, 179, 8, 0.25)',
+            }}>
+              <span style={{ fontSize: '0.75rem', color: '#eab308' }}>
+                🔒 התחזית מוסתרת מהשחקנים
+              </span>
+              <button
+                onClick={handlePublishForecast}
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  color: '#10b981',
+                  fontSize: '0.7rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                📢 פרסם
+              </button>
+            </div>
+          )}
+
+          <div 
+            onClick={() => setPublishedExpanded(!publishedExpanded)}
+            style={{ textAlign: 'center', marginBottom: publishedExpanded ? '0.75rem' : 0, cursor: 'pointer' }}
+          >
             <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>🔮</div>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text)' }}>
               {publishedForecast.aiModel ? 'תחזית AI' : 'תחזית'}
@@ -1872,9 +1909,14 @@ const NewGameScreen = () => {
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
               {new Date(publishedForecast.createdAt).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </div>
+            {!publishedExpanded && (
+              <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginTop: '0.4rem' }}>
+                לחץ לצפייה בתחזית ▾
+              </div>
+            )}
           </div>
 
-          {publishedForecast.preGameTeaser && (
+          {publishedExpanded && publishedForecast.preGameTeaser && (
             <div style={{
               padding: '0.75rem',
               marginBottom: '0.75rem',
@@ -1891,34 +1933,47 @@ const NewGameScreen = () => {
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {publishedForecast.forecasts.map((f, idx) => (
-              <div key={idx} style={{
-                padding: '0.5rem 0.6rem',
-                borderRadius: '8px',
-                background: 'var(--surface)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: '700', width: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
-                    {idx + 1}
-                  </span>
-                  <span style={{ flex: 1, fontWeight: '600', fontSize: '0.85rem', color: 'var(--text)' }}>
-                    {f.playerName}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: f.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: '600', flexShrink: 0 }}>
-                    {f.expectedProfit >= 0 ? '+' : ''}₪{cleanNumber(f.expectedProfit)}
-                  </span>
-                </div>
-                {f.sentence && (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', paddingRight: '2rem', direction: 'rtl', lineHeight: 1.5 }}>
-                    {f.sentence}
+          {publishedExpanded && <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {[...publishedForecast.forecasts].sort((a, b) => b.expectedProfit - a.expectedProfit).map((f, idx) => {
+              const getStyle = () => {
+                if (f.isSurprise) return { bg: 'rgba(168, 85, 247, 0.15)', border: '#a855f7' };
+                if (f.expectedProfit >= 0) return { bg: 'rgba(34, 197, 94, 0.12)', border: '#22c55e' };
+                return { bg: 'rgba(239, 68, 68, 0.12)', border: '#ef4444' };
+              };
+              const s = getStyle();
+              return (
+                <div key={f.playerName} style={{
+                  padding: '0.65rem 0.75rem',
+                  borderRadius: '10px',
+                  background: s.bg,
+                  borderRight: `4px solid ${s.border}`,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: f.highlight || f.sentence ? '0.3rem' : 0 }}>
+                    <span style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      {idx === 0 && f.expectedProfit > 0 && <span>👑</span>}
+                      {f.playerName}
+                      {f.isSurprise && <span>⚡</span>}
+                    </span>
+                    <span style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text)', fontFamily: 'system-ui' }}>
+                      {f.expectedProfit >= 0 ? '+' : '-'}₪{cleanNumber(Math.abs(f.expectedProfit))}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  {f.highlight && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8, marginBottom: '0.3rem', direction: 'rtl', lineHeight: 1.4 }}>
+                      {f.highlight}
+                    </div>
+                  )}
+                  {f.sentence && (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', direction: 'rtl', lineHeight: 1.45, fontStyle: 'italic' }}>
+                      {f.sentence}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>}
 
-          {role === 'admin' && (
+          {publishedExpanded && role === 'admin' && (
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={handleSharePublished}
@@ -1949,20 +2004,37 @@ const NewGameScreen = () => {
               >
                 🔄 חדש
               </button>
-              <button
-                onClick={handleUnpublishForecast}
-                style={{
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                }}
-              >
-                🔒 הסתר
-              </button>
+              {publishedForecast.published ? (
+                <button
+                  onClick={handleUnpublishForecast}
+                  style={{
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-muted)',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🔒 הסתר
+                </button>
+              ) : (
+                <button
+                  onClick={handlePublishForecast}
+                  style={{
+                    padding: '0.4rem 0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    color: '#10b981',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📢 פרסם
+                </button>
+              )}
               <button
                 onClick={handleDeleteForecast}
                 style={{
@@ -2620,31 +2692,22 @@ const NewGameScreen = () => {
                 >
                   {isSharing ? '📸...' : '📤 שתף'}
                 </button>
+                  {role === 'admin' && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handlePublishForecast()}
+                      disabled={!!publishedForecast}
+                      style={{
+                        color: publishedForecast ? '#6ee7b7' : '#10b981',
+                        borderColor: publishedForecast ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.4)',
+                        opacity: publishedForecast ? 0.7 : 1,
+                        cursor: publishedForecast ? 'default' : 'pointer',
+                      }}
+                    >
+                      {publishedForecast ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
+                    </button>
+                  )}
                 </div>
-                {role === 'admin' && (
-                  <button
-                    onClick={() => handlePublishForecast()}
-                    disabled={!!publishedForecast}
-                    style={{
-                      width: '100%',
-                      padding: '0.6rem',
-                      borderRadius: '8px',
-                      border: publishedForecast
-                        ? '1px solid rgba(16, 185, 129, 0.2)'
-                        : '1px solid rgba(16, 185, 129, 0.4)',
-                      background: publishedForecast
-                        ? 'rgba(16, 185, 129, 0.05)'
-                        : 'rgba(16, 185, 129, 0.1)',
-                      color: publishedForecast ? '#6ee7b7' : '#10b981',
-                      fontSize: '0.85rem',
-                      fontWeight: '600',
-                      cursor: publishedForecast ? 'default' : 'pointer',
-                      opacity: publishedForecast ? 0.7 : 1,
-                    }}
-                  >
-                    {publishedForecast ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
-                  </button>
-                )}
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.9.6';
+export const APP_VERSION = '5.9.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.9.7',
+    date: '2026-03-11',
+    changes: [
+      '🧪 Smart global insights — detects dependency, consistency, and profitability patterns across all players',
+      '🔮 Forecast card redesign — collapsible, colored by profit/surprise, crown for top player',
+      '📢 Unpublished forecast visible to admin with publish/hide controls',
+      '📊 Exact win counts in insights (no rounding), game count labels on With/Without bars',
+      '🎯 Dynamic veteran threshold in AI forecast angle assignment',
+    ]
+  },
   {
     version: '5.9.6',
     date: '2026-03-11',

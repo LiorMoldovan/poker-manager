@@ -632,6 +632,8 @@ const GraphsScreen = () => {
       impact: number;
       winRateWith: number;
       winRateWithout: number;
+      withWins: number;
+      withoutWins: number;
       totalWith: number;
       totalWithout: number;
     }> = [];
@@ -672,6 +674,8 @@ const GraphsScreen = () => {
           impact: avgWith - avgWithout,
           winRateWith: (withWins / withGames) * 100,
           winRateWithout: (withoutWins / withoutGames) * 100,
+          withWins,
+          withoutWins,
           totalWith: withProfit,
           totalWithout: withoutProfit,
         });
@@ -2037,7 +2041,7 @@ const GraphsScreen = () => {
               const minSide = Math.min(row.withGames, row.withoutGames);
               const maxSide = Math.max(row.withGames, row.withoutGames);
               const sampleBalance = minSide / maxSide;
-              if (sampleBalance < 0.08) return null;
+              if (minSide < minGamesThreshold && sampleBalance < 0.08) return null;
 
               const winRateDelta = row.winRateWith - row.winRateWithout;
               const contradicts = (row.impact > 0 && winRateDelta < -10) || (row.impact < 0 && winRateDelta > 10);
@@ -2073,8 +2077,8 @@ const GraphsScreen = () => {
                 const apart = row.withoutGames;
                 const total = together + apart;
                 const pctTogether = Math.round((together / total) * 100);
-                const winsWithCount = Math.round((wrWith / 100) * together);
-                const winsWithoutCount = Math.round((wrWithout / 100) * apart);
+                const winsWithCount = row.withWins;
+                const winsWithoutCount = row.withoutWins;
                 const lossesWithCount = together - winsWithCount;
 
                 if (minSide >= 2 && wrWithout === 0 && wrWith > 0) {
@@ -2106,6 +2110,18 @@ const GraphsScreen = () => {
 
                 if (together >= 5 && lossesWithCount <= 1 && wrWith >= 80 && !lines.some(l => l.includes('רצף'))) {
                   lines.push(`הפסיד ${lossesWithCount === 0 ? 'אפס' : 'רק פעם אחת'} ב-${together} משחקים משותפים`);
+                }
+
+                if (avgW > 0 && avgWo > 0 && Math.abs(row.impact) < 8 && together >= 5 && apart >= 3 && lines.length < 2) {
+                  lines.push(`רווח יציב בשני המצבים — ${row.otherPlayerName} לא באמת משנה את התמונה`);
+                } else if (avgW < 0 && avgWo < 0 && Math.abs(row.impact) < 8 && together >= 5 && apart >= 3 && lines.length < 2) {
+                  lines.push(`הפסד עקבי גם איתו וגם בלעדיו — הבעיה לא ב${row.otherPlayerName}`);
+                }
+
+                if (wrWith >= 60 && wrWithout >= 60 && together >= 5 && apart >= 3 && lines.length < 2) {
+                  lines.push(`אחוז נצחונות גבוה בשני המצבים — ${wrWith}% ביחד, ${wrWithout}% בנפרד`);
+                } else if (wrWith <= 35 && wrWithout <= 35 && together >= 5 && apart >= 3 && lines.length < 2) {
+                  lines.push(`אחוז נצחונות נמוך בשני המצבים — ${wrWith}% ביחד, ${wrWithout}% בנפרד`);
                 }
 
                 if (pctTogether >= 80 && together >= 10) {
@@ -2180,7 +2196,7 @@ const GraphsScreen = () => {
                   {rowInsightLines && (
                     <div style={{ marginBottom: '0.5rem' }}>
                       {rowInsightLines.map((line, li) => (
-                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4' }}>
+                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4', direction: 'rtl', textAlign: 'right' }}>
                           {li === 0 ? '💡' : '📊'} {line}
                         </div>
                       ))}
@@ -2286,6 +2302,17 @@ const GraphsScreen = () => {
                       }} />
                     </div>
                   </div>
+                  <div style={{
+                    fontSize: '0.6rem',
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '0.25rem',
+                    opacity: 0.7,
+                  }}>
+                    <span>{row.withGames} games together</span>
+                    <span>{row.withoutGames} games apart</span>
+                  </div>
                 </div>
               );
             };
@@ -2355,7 +2382,7 @@ const GraphsScreen = () => {
               const minSide = Math.min(r.withGames, r.withoutGames);
               const maxSide = Math.max(r.withGames, r.withoutGames);
               const sampleBalance = minSide / maxSide;
-              if (sampleBalance < 0.08) return false;
+              if (minSide < minGamesThreshold && sampleBalance < 0.08) return false;
               const winRateDelta = r.winRateWith - r.winRateWithout;
               const contradicts = (r.impact > 0 && winRateDelta < -10) || (r.impact < 0 && winRateDelta > 10);
               if (contradicts) return false;
@@ -2403,9 +2430,9 @@ const GraphsScreen = () => {
               const together = row.withGames;
               const apart = row.withoutGames;
               const total = together + apart;
-              const winsWithCount = Math.round((wrWith / 100) * together);
+              const winsWithCount = row.withWins;
               const lossesWithCount = together - winsWithCount;
-              const winsWithoutCount = Math.round((wrWithout / 100) * apart);
+              const winsWithoutCount = row.withoutWins;
               const pctTogether = Math.round((together / total) * 100);
               const signFlip = (avgW > 0 && avgWo < 0) || (avgW < 0 && avgWo > 0);
 
@@ -2467,11 +2494,92 @@ const GraphsScreen = () => {
             const { headlineLines: headlineInsights, mentionedIds: headlineMentionedIds } = (() => {
               const allRows = [...luckyCharms, ...kryptonite, ...rareLuckyCharms, ...rareKryptonite];
               const mentioned = new Set<string>();
-              if (allRows.length === 0) return { headlineLines: [] as string[], mentionedIds: mentioned };
               const lines: string[] = [];
               const seen = new Set<string>();
 
+              // Global patterns — check ALL impactData (with >= 3 games together)
+              const allCheck = impactData.filter(r => r.withGames >= 3);
+              if (allCheck.length >= 3) {
+                // Sign flips only count as dependencies when the negative side is significant.
+                // A -₪6 average doesn't mean "goes to loss" — many individual games were still profitable.
+                const SIGN_FLIP_MIN = 15;
+                const criticalDeps = allCheck.filter(r => Math.round(r.avgWith) > 0 && r.avgWithout < -SIGN_FLIP_MIN);
+                const toxicWith = allCheck.filter(r => r.avgWith < -SIGN_FLIP_MIN && Math.round(r.avgWithout) > 0);
+                const loseToRows = allCheck.filter(r => Math.round(r.avgWith) < 0);
+                const profitRows = allCheck.filter(r => Math.round(r.avgWith) > 0);
+                const alwaysLoss = profitRows.length === 0;
+                const alwaysProfit = loseToRows.length === 0;
+                const noSignFlips = criticalDeps.length === 0 && toxicWith.length === 0;
+
+                // Weak sign flips: avgWithout barely negative (above -SIGN_FLIP_MIN) — not "dependency" but still interesting
+                const weakDeps = allCheck.filter(r => Math.round(r.avgWith) > 0 && Math.round(r.avgWithout) < 0 && r.avgWithout >= -SIGN_FLIP_MIN);
+
+                if (alwaysLoss) {
+                  lines.push(`${selectedName} בהפסד בכל הרכב — לא משנה מי על השולחן`);
+                  seen.add('global');
+                } else if (alwaysProfit && noSignFlips) {
+                  const hurtBy = allCheck.filter(r => r.impact < -10);
+                  if (weakDeps.length >= 1 && weakDeps.length <= 2) {
+                    weakDeps.forEach(r => mentioned.add(r.otherPlayerId));
+                    const wdNames = weakDeps.map(r => r.otherPlayerName).join(' ו');
+                    lines.push(`${selectedName} ברווח עם כל שחקן — בלי ${wdNames} הממוצע יורד למינוס קל`);
+                    if (hurtBy.length > 0) {
+                      const topHurt = [...hurtBy].filter(r => !weakDeps.some(d => d.otherPlayerId === r.otherPlayerId)).sort((a, b) => a.impact - b.impact).slice(0, 3);
+                      if (topHurt.length > 0) {
+                        topHurt.forEach(r => mentioned.add(r.otherPlayerId));
+                        lines.push(`${topHurt.map(r => r.otherPlayerName).join(', ')} ${topHurt.length === 1 ? 'מוריד' : 'מורידים'} את הממוצע`);
+                      }
+                    }
+                  } else if (hurtBy.length === 0) {
+                    lines.push(`${selectedName} ברווח עם כל שחקן — אף אחד לא מוריד את הממוצע`);
+                  } else {
+                    const topHurt = [...hurtBy].sort((a, b) => a.impact - b.impact).slice(0, 3);
+                    topHurt.forEach(r => mentioned.add(r.otherPlayerId));
+                    lines.push(`${selectedName} ברווח עם כל שחקן, אבל ${topHurt.map(r => r.otherPlayerName).join(', ')} ${topHurt.length === 1 ? 'מוריד' : 'מורידים'} את הממוצע`);
+                  }
+                  seen.add('global');
+                } else if (criticalDeps.length >= 1 && criticalDeps.length <= 3) {
+                  criticalDeps.forEach(r => mentioned.add(r.otherPlayerId));
+                  const depNames = criticalDeps.map(r => r.otherPlayerName).join(', ');
+                  lines.push(`${selectedName} תלוי ב${depNames} — בלעדי${criticalDeps.length === 1 ? 'ו' : 'הם'} יורד להפסד`);
+                  seen.add('global');
+                } else if (toxicWith.length >= 1 && toxicWith.length <= 2) {
+                  toxicWith.forEach(r => mentioned.add(r.otherPlayerId));
+                  const toxNames = toxicWith.map(r => r.otherPlayerName).join(' ו');
+                  lines.push(`${selectedName} מפסיד רק עם ${toxNames} — בלעדיהם ברווח`);
+                  seen.add('global');
+                } else if (loseToRows.length === 1) {
+                  mentioned.add(loseToRows[0].otherPlayerId);
+                  lines.push(`${selectedName} ברווח עם כולם חוץ מ${loseToRows[0].otherPlayerName} (${formatSignedShekel(Math.round(loseToRows[0].avgWith))} למשחק)`);
+                  seen.add('global');
+                } else if (profitRows.length === 1) {
+                  mentioned.add(profitRows[0].otherPlayerId);
+                  lines.push(`${selectedName} בהפסד עם כולם — רק כש${profitRows[0].otherPlayerName} על השולחן יוצא ברווח`);
+                  seen.add('global');
+                } else if (loseToRows.length === 2 && allCheck.length >= 5) {
+                  const names = loseToRows.map(r => r.otherPlayerName).join(' ו');
+                  lines.push(`${selectedName} ברווח עם כמעט כולם — מפסיד רק עם ${names}`);
+                  seen.add('global');
+                } else if (profitRows.length >= 1 && profitRows.length <= 2 && allCheck.length >= 5) {
+                  const names = profitRows.map(r => r.otherPlayerName).join(' ו');
+                  lines.push(`${selectedName} מתקשה מול רוב השולחן — ברווח רק עם ${names}`);
+                  seen.add('global');
+                } else if (criticalDeps.length + toxicWith.length >= 4) {
+                  lines.push(`ההרכב משנה הכל — ${selectedName} תלוי מאוד במי שעל השולחן`);
+                  seen.add('global');
+                }
+
+                if (reliableOnly.length >= 3 && lines.length < 2) {
+                  const avgImpactSpread = reliableOnly.reduce((sum, r) => sum + Math.abs(r.impact), 0) / reliableOnly.length;
+                  if (avgImpactSpread < 8) {
+                    lines.push(`${selectedName} עקבי — ההרכב כמעט לא משפיע על הביצועים (פער ממוצע ₪${cleanNumber(Math.round(avgImpactSpread))})`);
+                  }
+                }
+              }
+
+              // Row-specific insights from chemistry rows
               for (const r of allRows) {
+                if (lines.length >= 4) break;
                 const wrWith = Math.round(r.winRateWith);
                 const wrWithout = Math.round(r.winRateWithout);
                 const avgW = Math.round(r.avgWith);
@@ -2479,12 +2587,12 @@ const GraphsScreen = () => {
                 const signFlip = (avgW > 0 && avgWo < 0) || (avgW < 0 && avgWo > 0);
                 const minSide = Math.min(r.withGames, r.withoutGames);
 
-                if (signFlip && !seen.has('flip')) {
+                if (signFlip && !seen.has('flip') && !mentioned.has(r.otherPlayerId)) {
                   seen.add('flip');
                   mentioned.add(r.otherPlayerId);
                   lines.push(avgW > 0
-                    ? `${selectedName} עובר מהפסד לרווח עם ${r.otherPlayerName} (${formatSignedShekel(avgWo)} → ${formatSignedShekel(avgW)})`
-                    : `${selectedName} עובר מרווח להפסד עם ${r.otherPlayerName} (${formatSignedShekel(avgWo)} → ${formatSignedShekel(avgW)})`);
+                    ? `${selectedName} עובר מהפסד לרווח עם ${r.otherPlayerName} (בלעדיו ${formatSignedShekel(avgWo)}, איתו ${formatSignedShekel(avgW)})`
+                    : `${selectedName} עובר מרווח להפסד עם ${r.otherPlayerName} (בלעדיו ${formatSignedShekel(avgWo)}, איתו ${formatSignedShekel(avgW)})`);
                 } else if (minSide >= 2 && wrWithout === 0 && wrWith > 0 && !seen.has('zero_wr')) {
                   seen.add('zero_wr');
                   mentioned.add(r.otherPlayerId);
@@ -2497,20 +2605,20 @@ const GraphsScreen = () => {
                   seen.add('perfect');
                   mentioned.add(r.otherPlayerId);
                   lines.push(`${r.withGames} נצחונות רצופים עם ${r.otherPlayerName}`);
-                } else if (Math.abs(r.impact) >= 40 && !seen.has(r.otherPlayerId)) {
+                } else if (Math.abs(r.impact) >= 30 && !seen.has(r.otherPlayerId) && !mentioned.has(r.otherPlayerId)) {
                   seen.add(r.otherPlayerId);
                   mentioned.add(r.otherPlayerId);
                   lines.push(`השפעה של ${formatSignedShekel(Math.round(r.impact))} למשחק עם ${r.otherPlayerName}`);
                 }
               }
 
-              if (lines.length === 0) {
+              if (lines.length === 0 && allRows.length > 0) {
                 const strongest = allRows.reduce((a, b) => Math.abs(a.impact) > Math.abs(b.impact) ? a : b);
                 mentioned.add(strongest.otherPlayerId);
                 lines.push(`ההשפעה החזקה ביותר: ${strongest.otherPlayerName} (${formatSignedShekel(Math.round(strongest.impact))} למשחק)`);
               }
 
-              return { headlineLines: lines.slice(0, 3), mentionedIds: mentioned };
+              return { headlineLines: lines.slice(0, 4), mentionedIds: mentioned };
             })();
 
 
