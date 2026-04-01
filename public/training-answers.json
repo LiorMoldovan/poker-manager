@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-01T11:09:02.116Z",
+  "lastUpdated": "2026-04-01T11:44:49.811Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -41,11 +41,67 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T11:44:49.339Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "z9c88h",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yr2g88",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmxjsv",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "d4vw1m",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7ay5va",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2e8usf",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tr3g9w",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "txee86",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 5,
-      "totalCorrect": 3,
-      "accuracy": 60
+      "totalQuestions": 13,
+      "totalCorrect": 5,
+      "accuracy": 38.46153846153847
     },
     {
       "playerName": "אייל",
