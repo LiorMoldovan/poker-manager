@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-01T08:25:16.678Z",
+  "lastUpdated": "2026-04-01T09:02:27.598Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -397,11 +397,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T09:02:26.935Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "go7tqk",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vhfy8b",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "6fzlnm",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "5dr13q",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d9hbp1",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9kagj8",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6mz966",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xdqixa",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ndtdjd",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vt0dtz",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 30,
-      "totalCorrect": 15,
-      "accuracy": 50
+      "totalQuestions": 40,
+      "totalCorrect": 21,
+      "accuracy": 52.5
     }
   ]
 }
