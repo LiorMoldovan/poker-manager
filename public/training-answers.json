@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-01T08:20:39.472Z",
+  "lastUpdated": "2026-04-01T08:25:16.678Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -329,10 +329,78 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T08:25:16.255Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "irwm8x",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1yeqhi",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "so3eku",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fyw36m",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kf533m",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wf44o2",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "i166cq",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rj9r30",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "z03yfe",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 20,
-      "totalCorrect": 10,
+      "totalQuestions": 30,
+      "totalCorrect": 15,
       "accuracy": 50
     }
   ]
