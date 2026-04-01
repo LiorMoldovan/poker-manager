@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-01T07:21:05.176Z",
+  "lastUpdated": "2026-04-01T08:20:39.472Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -261,11 +261,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T08:20:39.051Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "v7rjet",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "n749b5",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4yfwbq",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vli78m",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "39l525",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iwytf7",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5optvl",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "lxe9p9",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "hljw47",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4ajnvb",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 10,
-      "totalCorrect": 6,
-      "accuracy": 60
+      "totalQuestions": 20,
+      "totalCorrect": 10,
+      "accuracy": 50
     }
   ]
 }
