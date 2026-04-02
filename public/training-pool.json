@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-04-02T15:03:42.388Z",
-  "totalScenarios": 283,
+  "generatedAt": "2026-04-02T15:37:29.726Z",
+  "totalScenarios": 282,
   "byCategory": {
-    "wet_board_top_pair": 20,
+    "wet_board_top_pair": 19,
     "bluff_catching": 3,
     "multiway_pots": 20,
     "medium_pairs": 15,
@@ -6853,34 +6853,6 @@
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
       "poolId": "ml0nqq"
-    },
-    {
-      "id": 7,
-      "situation": "אתה ב-MP עם Q♣ 9♣. השווית אחרי העלאה של 300 משחקן אגרסיבי. הפלופ הוא Q♦ J♦ T♠. היריב מהמר 800 לתוך קופה של 750.",
-      "yourCards": "Q♣ 9♣",
-      "options": [
-        {
-          "id": "A",
-          "text": "קריאה 800",
-          "isCorrect": false,
-          "explanation": "הלוח הזה קטסטרופלי. כמעט כל יד בטווח של שחקן שהעלה לפני הפלופ מנצחת אותך או נמצאת במצב מצוין מולך (סדרות, שני זוגות, או אס-מלך)."
-        },
-        {
-          "id": "B",
-          "text": "העלאה ל-2,400",
-          "isCorrect": false,
-          "explanation": "העלאה כאן היא התאבדות. אתה לא מבריח אף יד שחזקה ממך, ואתה רק מגדיל את ההפסד שלך מול סדרות מוכנות."
-        },
-        {
-          "id": "C",
-          "text": "ויתור",
-          "isCorrect": true,
-          "explanation": "זהו מצב של 'זוג עליון' שהערך שלו שואף לאפס. הלוח מלא בסדרות אפשריות, צבעים בדרך, ויש לך קיקר חלש. פשוט לוותר."
-        }
-      ],
-      "category": "זוג עליון על לוח מסוכן",
-      "categoryId": "wet_board_top_pair",
-      "poolId": "2b374g"
     },
     {
       "id": 8,
