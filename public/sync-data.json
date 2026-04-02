@@ -228,7 +228,7 @@
       "id": "e3fcbd73-d89a-4b06-8fb2-47de6938b7e1",
       "name": "שגיא אחיין",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest",
+      "type": "permanent",
       "gender": "male"
     },
     {
@@ -20011,7 +20011,7 @@
       "profit": 123
     }
   ],
-  "lastUpdated": "2026-04-02T23:09:55.540Z",
+  "lastUpdated": "2026-04-02T23:12:49.859Z",
   "updatedBy": "admin",
   "chronicleProfiles": {
     "H1-2026": {
