@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-02T15:48:07.975Z",
+  "lastUpdated": "2026-04-02T15:51:04.597Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -795,11 +795,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-02T15:51:04.267Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "f2nh1w",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jdhqan",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "92g4xm",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iik2oe",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "b82fap",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5bnb52",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hwki51",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "el29n3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2rx4x4",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iw1p29",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 60,
-      "totalCorrect": 33,
-      "accuracy": 55.00000000000001
+      "totalQuestions": 70,
+      "totalCorrect": 42,
+      "accuracy": 60
     },
     {
       "playerName": "אורן",
