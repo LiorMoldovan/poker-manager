@@ -891,9 +891,12 @@
     "timestamp": "2026-04-02T16:02:18.080Z",
     "device": "iPhone / iOS 18 / Safari",
     "screenSize": "430x932",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-02T16:02:18.081Z",
+    "screensVisited": [
+      "New Game",
+      "Shared Training"
+    ],
+    "sessionDuration": 2,
+    "lastActive": "2026-04-02T16:04:19.854Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
