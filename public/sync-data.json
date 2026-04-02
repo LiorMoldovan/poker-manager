@@ -172,7 +172,7 @@
       "id": "3e4369fe-f4c2-4384-9e93-96b2301b7685",
       "name": "זיו",
       "createdAt": "2025-12-18T09:24:22.578Z",
-      "type": "permanent_guest",
+      "type": "permanent",
       "gender": "male"
     },
     {
@@ -19789,7 +19789,7 @@
       "profit": 10.050000000000008
     }
   ],
-  "lastUpdated": "2026-04-02T15:19:48.148Z",
+  "lastUpdated": "2026-04-02T15:25:30.877Z",
   "updatedBy": "admin",
   "chronicleProfiles": {
     "H1-2026": {
