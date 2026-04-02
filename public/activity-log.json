@@ -990,5 +990,25 @@
       "canvasHash": "qxzst6"
     },
     "playerName": "פבל"
+  },
+  {
+    "deviceId": "d706de65-ff68-4dac-891e-eac52a7d514c",
+    "role": "viewer",
+    "timestamp": "2026-04-02T23:15:09.033Z",
+    "device": "iPhone / iOS 18 / Safari",
+    "screenSize": "390x844",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-02T23:15:09.034Z",
+    "fingerprint": {
+      "gpu": "Apple GPU",
+      "cores": 4,
+      "memory": 0,
+      "touchPoints": 5,
+      "language": "en-GB",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "y7v3bq"
+    },
+    "playerName": "שגיא אחיין"
   }
 ]
