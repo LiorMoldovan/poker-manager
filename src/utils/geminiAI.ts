@@ -1298,6 +1298,7 @@ export const generateAIForecasts = async (
   const chosenStyle = teaserStyles[Math.floor(Math.random() * teaserStyles.length)];
 
   const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
+💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 🎯 הערב הזה: ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${periodContextText ? `\n${periodContextText}` : ''}
 
@@ -2043,7 +2044,7 @@ export const generateForecastComparison = async (
   const bestPrediction = sortedByGap[0];
   const worstPrediction = sortedByGap[sortedByGap.length - 1];
 
-  const prompt = `אתה מסכם תחזית פוקר בעברית. כתוב משפט סיכום קצר ורלוונטי (עד 25 מילים) על הצלחת התחזית.
+  const prompt = `אתה מסכם תחזית פוקר בעברית. כל הסכומים בשקלים (₪). כתוב משפט סיכום קצר ורלוונטי (עד 25 מילים) על הצלחת התחזית.
 
 נתונים:
 - ציון כולל: ${score}/${maxScore} (${scorePercent}%) - ${rating}
@@ -2198,6 +2199,7 @@ export const generateGameNightSummary = async (
     : '';
 
   const prompt = `כתוב סיכום ערב פוקר שבועי בין חברים. הסיכום ישותף בקבוצת הוואטסאפ.
+💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 🎨 סגנון הערב: ${style.name}
 ${style.desc}
@@ -2339,6 +2341,7 @@ export const generatePlayerChronicle = async (
   const style = styles[Math.floor(Math.random() * styles.length)];
 
   const prompt = `אתה כותב פרופיל אישי קצר לכל שחקן בליגת פוקר בין חברים. הפרופילים יוצגו בדף הסטטיסטיקה.
+💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 🎨 סגנון: ${style.name}
 ${style.desc}
@@ -2477,6 +2480,7 @@ export const generateGraphInsights = async (
   const style = styles[Math.floor(Math.random() * styles.length)];
 
   const prompt = `אתה ${style}. כתוב פסקה אחת רציפה בעברית (60-120 מילים) שמספרת את סיפור הקבוצה בתקופת "${periodLabel}".
+💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 📊 טבלת השחקנים (${totalGames} משחקים${isEarlyPeriod ? ', התקופה רק התחילה' : ''}):
 ${playerLines}
@@ -2606,6 +2610,7 @@ export const generateLiveGameTTSPool = async (
   const numPlayers = players.length;
 
   const prompt = `אתה כותב יצירתי לאפליקציית פוקר. המשימה: ליצור בנק משפטים קצרים בעברית מושלמת להקראה קולית (TTS) בערב פוקר חי.
+💰 כל הסכומים בשקלים. כשאתה מזכיר סכומים, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
 הדרישה המרכזית: כל משפט חייב להיות ספציפי לשחקן ולמצב. אסורים משפטים גנריים שאפשר להגיד על כל אחד. עדיפות ראשונה (לפחות 80% מהמשפטים): נתונים סטטיסטיים אמיתיים מהמשחקים — אחוז נצחונות, רווח/הפסד כולל, רצפים, שיאים, ממוצע קניות, מספר משחקים, תוצאת משחק אחרון, דירוג בטבלה, פער מהשחקן שמעליו/מתחתיו. העדף תמיד נתונים שמשתנים בין משחקים (רצף נוכחי, תוצאה אחרונה, דירוג נוכחי) על פני נתונים קבועים (סה"כ משחקים, אחוז נצחונות כללי). עדיפות שנייה (מקסימום 20%): עובדה אישית אחת בלבד — עבודה, קבוצה, או תכונה. אסור לשלב יותר מעובדה אישית אחת באותו משפט. העובדה האישית היא תבלין ולא המנה העיקרית.
 

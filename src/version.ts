@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.2';
+export const APP_VERSION = '5.10.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.3',
+    date: '2026-03-11',
+    changes: [
+      '📸 Image-based sharing for training results and leaderboard via html2canvas',
+      '🔄 Rebuild local progress from remote data when switching devices',
+      '🎯 Near-miss tracking — marks GTO-valid answers that are suboptimal for home games',
+      '💰 Added ₪/שקלים currency context to all AI prompts for accurate output',
+      '📋 Training admin generation log with per-category status and counts',
+      '🔧 Forecast state updates immediately after generation, local cache updated on flagged removal',
+    ]
+  },
   {
     version: '5.10.2',
     date: '2026-03-11',

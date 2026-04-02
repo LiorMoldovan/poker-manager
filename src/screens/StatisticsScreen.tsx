@@ -17,9 +17,8 @@ type PlayerSubTab = 'stats' | 'stories';
 type RecordsSubTab = 'global' | 'playerRecords';
 
 const ME_BG = 'rgba(59, 130, 246, 0.14)';
-const ME_SHADOW = 'inset 3px 0 0 #3b82f6';
 const ME_NAME_COLOR = '#60a5fa';
-const meRowStyle = { background: ME_BG, boxShadow: ME_SHADOW } as const;
+const meRowStyle = { background: ME_BG, borderRight: '3px solid #3b82f6' } as const;
 const meNameStyle = { color: ME_NAME_COLOR } as const;
 
 const StatisticsScreen = () => {

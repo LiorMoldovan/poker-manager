@@ -1393,6 +1393,7 @@ const NewGameScreen = () => {
           isSurprise: f.isSurprise
         }));
         savePendingForecast(Array.from(ids), forecastsToSave, forecasts[0]?.preGameTeaser, modelDisplay, loc || undefined);
+        setPublishedForecast(getPendingForecast());
       } catch (err: any) {
         console.error('AI forecast error:', err);
         setIsLoadingAI(false);
@@ -1440,6 +1441,7 @@ const NewGameScreen = () => {
       }));
       const loc = overrideLocation || (gameLocation === 'other' ? customLocation.trim() : gameLocation);
       savePendingForecast(Array.from(ids), forecastsToSave, undefined, undefined, loc || undefined);
+      setPublishedForecast(getPendingForecast());
     }
   };
 
@@ -1589,44 +1591,45 @@ const NewGameScreen = () => {
           msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק`, sub: `${tp.totalQuestions} שאלות · ${tp.sessionsCompleted} אימונים` });
           msgs.push({ icon: '⚡', title: `${n}, ${tp.sessionsCompleted} אימונים עד עכשיו`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות` });
         } else if (myStats && myStats.gamesPlayed > 0) {
+          const signed = (v: number) => `${v >= 0 ? '\u200E+' : '\u200E'}${cleanNumber(v)}`;
           if (daysSinceGame !== null && daysSinceGame >= 21) {
             const weeks = Math.floor(daysSinceGame / 7);
-            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק — תתחמם`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${wp}% נצחונות` });
-            msgs.push({ icon: '🔔', title: `${n}, חזרת! בוא נתאמן`, sub: `${myStats.gamesPlayed} משחקים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
+            msgs.push({ icon: '🔔', title: `${n}, חזרת! בוא נתאמן`, sub: `${myStats.gamesPlayed} משחקים · ממוצע ${signed(myStats.avgProfit)} למשחק` });
           }
           if (myStats.currentStreak <= -3) {
-            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף — תתאמן`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))}` });
+            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
           }
           if (lastProfit < -100) {
-            msgs.push({ icon: '💪', title: `${n}, הפסדת ${formatCurrency(Math.abs(lastProfit))} — בוא נתאמן`, sub: `ממוצע ${formatCurrency(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
+            msgs.push({ icon: '💪', title: `${n}, הפסדת ${cleanNumber(Math.abs(lastProfit))}`, sub: `ממוצע ${signed(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
           }
           if (lastProfit < 0 && lastProfit >= -100) {
-            msgs.push({ icon: '💪', title: `${n}, הפסדת ${formatCurrency(Math.abs(lastProfit))} — בוא נתאמן`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${wp}% נצחונות` });
+            msgs.push({ icon: '💪', title: `${n}, הפסדת ${cleanNumber(Math.abs(lastProfit))}`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
           }
           if (last3Avg !== null && last3Avg < -50) {
-            msgs.push({ icon: '⚡', title: `${n}, ממוצע ${formatCurrency(Math.round(last3Avg))} ב-3 אחרונים`, sub: `${wp}% נצחונות · סה"כ ${formatCurrency(myStats.totalProfit)}` });
+            msgs.push({ icon: '⚡', title: `${n}, ממוצע ${signed(Math.round(last3Avg))} ב-3 אחרונים`, sub: `${wp}% נצחונות · סה"כ ${signed(myStats.totalProfit)}` });
           }
           if (myStats.winPercentage < 40 && myStats.gamesPlayed >= 5) {
-            msgs.push({ icon: '🔥', title: `${n}, ${wp}% נצחונות — אימון ישנה`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+            msgs.push({ icon: '🔥', title: `${n}, רק ${wp}% נצחונות`, sub: `סה"כ ${signed(myStats.totalProfit)} · ממוצע ${signed(myStats.avgProfit)} למשחק` });
           }
           if (lastProfit > 100) {
-            msgs.push({ icon: '🏆', title: `${n}, ניצחת ${formatCurrency(lastProfit)} לאחרונה!`, sub: `שיא רווח ${formatCurrency(myStats.biggestWin)} · ${myStats.winCount} נצחונות` });
+            msgs.push({ icon: '🏆', title: `${n}, ניצחת ${signed(lastProfit)}!`, sub: `שיא ${signed(myStats.biggestWin)} · ${myStats.winCount} נצחונות` });
           }
           if (Math.abs(lastProfit) <= 100) {
-            msgs.push({ icon: '⚡', title: `${n}, סיימת בלי רווח — אימון יעזור`, sub: `ממוצע ${formatCurrency(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
+            msgs.push({ icon: '⚡', title: `${n}, סיימת בלי רווח`, sub: `ממוצע ${signed(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
           }
-          msgs.push({ icon: '💪', title: `${n}, ${myStats.gamesPlayed} משחקים — תוסיף אימון`, sub: `${wp}% נצחונות · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+          msgs.push({ icon: '💪', title: `${n}, ${myStats.gamesPlayed} משחקים`, sub: `${wp}% נצחונות · ממוצע ${signed(myStats.avgProfit)} למשחק` });
           if (myStats.biggestWin > 0) {
-            msgs.push({ icon: '🏆', title: `${n}, שיא הרווח שלך ${formatCurrency(myStats.biggestWin)}`, sub: `${wp}% נצחונות · ${myStats.gamesPlayed} משחקים — תשבור אותו` });
+            msgs.push({ icon: '🏆', title: `${n}, שיא רווח ${signed(myStats.biggestWin)}`, sub: `${wp}% נצחונות · ${myStats.gamesPlayed} משחקים` });
           }
           if (myStats.totalProfit < 0) {
-            msgs.push({ icon: '🔥', title: `${n}, סה"כ ${formatCurrency(myStats.totalProfit)} — אימון יעזור`, sub: `${myStats.lossCount} הפסדים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
+            msgs.push({ icon: '🔥', title: `${n}, סה"כ ${signed(myStats.totalProfit)}`, sub: `${myStats.lossCount} הפסדים · ממוצע ${signed(myStats.avgProfit)} למשחק` });
           }
           if (myStats.totalProfit > 0) {
-            msgs.push({ icon: '🏆', title: `${n}, סה"כ ${formatCurrency(myStats.totalProfit)} ברווח`, sub: `${myStats.winCount} נצחונות · שיא ${formatCurrency(myStats.biggestWin)} — תשמור על זה` });
+            msgs.push({ icon: '🏆', title: `${n}, סה"כ ${signed(myStats.totalProfit)} ברווח`, sub: `${myStats.winCount} נצחונות · שיא ${signed(myStats.biggestWin)}` });
           }
           if (myStats.longestWinStreak >= 2) {
-            msgs.push({ icon: '🔥', title: `${n}, שיא הרצף שלך ${myStats.longestWinStreak} נצחונות`, sub: `${wp}% נצחונות · סה"כ ${formatCurrency(myStats.totalProfit)}` });
+            msgs.push({ icon: '🔥', title: `${n}, רצף של ${myStats.longestWinStreak} נצחונות`, sub: `${wp}% נצחונות · סה"כ ${signed(myStats.totalProfit)}` });
           }
         } else if (playerName) {
           msgs.push({ icon: '✨', title: `${n}, מוכן לאימון ראשון?`, sub: '' });
@@ -1660,8 +1663,8 @@ const NewGameScreen = () => {
           >
             <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{icon}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
-              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
             </div>
             <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> אימון פוקר ←</button>
           </div>
@@ -2829,21 +2832,24 @@ const NewGameScreen = () => {
                 >
                   {isSharing ? '📸...' : '📤 שתף'}
                 </button>
-                  {role === 'admin' && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handlePublishForecast()}
-                      disabled={!!publishedForecast}
-                      style={{
-                        color: publishedForecast ? '#6ee7b7' : '#10b981',
-                        borderColor: publishedForecast ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.4)',
-                        opacity: publishedForecast ? 0.7 : 1,
-                        cursor: publishedForecast ? 'default' : 'pointer',
-                      }}
-                    >
-                      {publishedForecast ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
-                    </button>
-                  )}
+                  {role === 'admin' && (() => {
+                    const alreadyPublished = !!publishedForecast?.published;
+                    return (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handlePublishForecast()}
+                        disabled={alreadyPublished}
+                        style={{
+                          color: alreadyPublished ? '#6ee7b7' : '#10b981',
+                          borderColor: alreadyPublished ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.4)',
+                          opacity: alreadyPublished ? 0.7 : 1,
+                          cursor: alreadyPublished ? 'default' : 'pointer',
+                        }}
+                      >
+                        {alreadyPublished ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             )}

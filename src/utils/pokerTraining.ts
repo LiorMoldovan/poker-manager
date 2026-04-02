@@ -902,6 +902,7 @@ import {
   TrainingBadge,
   TrainingSession,
   TrainingAnswersFile,
+  TrainingPlayerData,
 } from '../types';
 import {
   fetchTrainingPool,
@@ -940,6 +941,82 @@ export const getSharedProgress = (playerName: string): SharedTrainingProgress =>
 
 export const saveSharedProgress = (playerName: string, progress: SharedTrainingProgress): void => {
   localStorage.setItem(getProgressKey(playerName), JSON.stringify(progress));
+};
+
+export const rebuildProgressFromRemote = (playerData: TrainingPlayerData): SharedTrainingProgress => {
+  const progress: SharedTrainingProgress = { ...DEFAULT_SHARED_PROGRESS };
+  progress.totalQuestions = playerData.totalQuestions;
+  progress.totalCorrect = playerData.totalCorrect;
+  progress.sessionsCompleted = playerData.sessions.length;
+
+  const byCategory: Record<string, { total: number; correct: number }> = {};
+  const seenPoolIds = new Set<string>();
+  const flaggedPoolIds = new Set<string>();
+  let currentCorrectRun = 0;
+  let longestCorrectRun = 0;
+
+  const sortedSessions = [...playerData.sessions].sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const session of sortedSessions) {
+    for (const r of session.results) {
+      if (!byCategory[r.categoryId]) byCategory[r.categoryId] = { total: 0, correct: 0 };
+      byCategory[r.categoryId].total++;
+      if (r.correct) {
+        byCategory[r.categoryId].correct++;
+        currentCorrectRun++;
+        longestCorrectRun = Math.max(longestCorrectRun, currentCorrectRun);
+      } else {
+        currentCorrectRun = 0;
+      }
+      seenPoolIds.add(r.poolId);
+    }
+    if (session.flaggedPoolIds) {
+      session.flaggedPoolIds.forEach(id => flaggedPoolIds.add(id));
+    }
+  }
+
+  progress.byCategory = byCategory;
+  progress.longestCorrectRun = longestCorrectRun;
+  progress.currentCorrectRun = currentCorrectRun;
+  progress.seenPoolIds = Array.from(seenPoolIds);
+  progress.flaggedPoolIds = Array.from(flaggedPoolIds);
+
+  // Rebuild streak from session dates
+  const sessionDates = [...new Set(sortedSessions.map(s => s.date.slice(0, 10)))].sort().reverse();
+  if (sessionDates.length > 0) {
+    progress.streak.lastTrainingDate = sessionDates[0];
+    let streak = 1;
+    for (let i = 1; i < sessionDates.length; i++) {
+      const prev = new Date(sessionDates[i - 1]);
+      const curr = new Date(sessionDates[i]);
+      const diffDays = Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) streak++;
+      else break;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (sessionDates[0] === today || sessionDates[0] === yesterday) {
+      progress.streak.current = streak;
+    } else {
+      progress.streak.current = 0;
+    }
+    // Approximate max streak (walk all dates)
+    let maxStreak = 1;
+    let runStreak = 1;
+    for (let i = 1; i < sessionDates.length; i++) {
+      const prev = new Date(sessionDates[i - 1]);
+      const curr = new Date(sessionDates[i]);
+      const diffDays = Math.round((prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) { runStreak++; maxStreak = Math.max(maxStreak, runStreak); }
+      else { runStreak = 1; }
+    }
+    progress.maxStreak = maxStreak;
+  }
+
+  // Rebuild badges
+  progress.earnedBadgeIds = checkNewBadges(progress);
+
+  return progress;
 };
 
 // ── Pool loading ──
@@ -1247,30 +1324,56 @@ const buildPoolBatchPrompt = (
     ? `\n\nשאלות שכבר קיימות (תמנע מלחזור עליהן):\n${existingSummaries.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n`
     : '';
 
-  return `בנה ${count} שאלות אימון פוקר מהירות למשחק ביתי. עברית פשוטה בלבד.
+  return `בנה ${count} שאלות אימון פוקר למשחק ביתי חברתי. עברית פשוטה בלבד.
 
 נושא: **${category.name}** - ${category.description}
+
+⚠️ הקשר המשחק — חובה להבין לפני שכותבים שאלות:
+זהו משחק ביתי חברתי בין חבר'ה קבועים (~8 שחקנים), על סכומים קטנים (כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000). המאפיינים:
+- שחקנים קוראים הרבה יותר ממה שצריך — "פולד" לא פופולרי במשחק ביתי
+- בלופים עובדים פחות כי תמיד מישהו יקרא "לראות מה יש לך"
+- הרבה יותר פוטים מולטי-ווי (3-5 שחקנים בכל יד)
+- שחקנים פחות אגרסיביים לפני הפלופ — הרבה לימפים וקריאות
+- פסיכולוגיה של "לא רוצה להפסיד 30 שקלים" — שחקנים משחקים tight כשהם קרובים לאול-אין
+- ערך ההימורים נמוך יחסית לקופה — אי אפשר "ללחוץ" על שחקנים כמו בטורניר
+
+התשובות הנכונות חייבות להיות מותאמות למציאות הזו:
+- העדף ידיים חזקות על בלופים
+- אם "כולם קוראים" → בלוף הוא לא התשובה הנכונה
+- הימור ערך שמן עם יד חזקה עדיף על הימור קטן "לשלוף מידע"
+- ויתור עם יד בינונית מול העלאה גדולה — תקף גם כשהסכום קטן
+- אל תמליץ על מהלכים שדורשים שהיריב ישחק רציונלי/מקצועי
 
 כללים:
 - כל שאלה = נקודת החלטה אחת. תאר מה קרה **עד** הרגע שבו השחקן צריך להחליט. **אל תכתוב מה השחקן עושה/מחליט!**
 - בדיוק 3 אופציות, בדיוק אחת נכונה
 - אסור מונחים באנגלית (equity, EV, SPR, range, c-bet, semi-bluff, value bet וכו')
-- יריבים לפי סגנון בלבד ("שחקן אגרסיבי", "שחקן שמרני"), בלי שמות אמיתיים
-- בליינדס 50/100, ערימות 8,000-25,000, העלאות 400-1000
+- יריבים לפי סגנון בלבד ("שחקן שאוהב לקרוא", "שחקן שמרני", "שחקן לוהט שמהמר על הכל"), בלי שמות אמיתיים
+- בליינדס 50/100, ערימות 8,000-25,000, העלאות 400-1,000
+- כל הסכומים בשקלים (לא דולרים, לא נקודות)
 
 חוקים קריטיים:
 - אם מישהו המר → האופציות: קריאה [סכום ההימור], העלאה ל-[סכום], ויתור
 - אם אף אחד לא המר → האופציות: צ'ק, הימור [סכום], (אול-אין/ויתור)
 - "קריאה" = סכום שצריך לשלם, לא סכום הקופה!
 
+nearMiss — סימון חשוב:
+- לחלק מהתשובות השגויות, הוסף "nearMiss": true — אלה תשובות שהיו **נכונות בפוקר מקצועי/טורניר** אבל לא מתאימות למשחק ביתי
+- דוגמה: בלוף גדול שהיה עובד מול שחקנים רציונליים, אבל במשחק שלנו שחקנים קוראים → nearMiss
+- דוגמה: צ'ק-רייז מתוחכם שדורש שהיריב יבין מה אתה מייצג → nearMiss
+- תשובות שהן פשוט שגויות (קריאה עם יד מתה, ויתור עם אגוזים) → בלי nearMiss
+- בממוצע ~30-40% מהתשובות השגויות צריכות להיות nearMiss
+
 איכות:
 - כל מצב צריך להיות מפורט: 2-4 משפטים שמצוירים תמונה ברורה
-- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב - לא עצות גנריות
+- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב — לא עצות גנריות מספרי פוקר
+- ההסבר צריך לדבר בשפה של משחק ביתי: "הוא תמיד קורא אז בלוף לא ישרת אותך", "בסכום הזה עדיף לנסות לראות קלף"
+- כשתשובה היא nearMiss, ההסבר צריך לציין: "במשחק מקצועי זה היה מהלך טוב, אבל..." ולהסביר למה במשחק ביתי זה לא עובד
 - גם תשובות שגויות צריכות הסבר משכנע למה מישהו היה בוחר בהן
 - גוון: מיקומים שונים (UTG/MP/CO/BTN/BB), קלפים שונים, עומקי ערימה שונים, סגנונות יריבים שונים
 ${avoidContext}
 JSON בלבד, מערך של ${count}:
-[{"id":1,"situation":"תיאור מפורט 2-4 משפטים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"explanation":"הסבר מפורט למה זו לא התשובה הטובה"},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר מפורט למה זו התשובה הנכונה"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר מפורט למה לוותר פה זו טעות"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
+[{"id":1,"situation":"תיאור מפורט 2-4 משפטים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"nearMiss":true,"explanation":"במשחק מקצועי קריאה הגיונית כי... אבל במשחק שלנו..."},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר מפורט למה זו התשובה הנכונה"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר מפורט למה לוותר פה זו טעות"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
 };
 
 const hashScenario = (s: { situation: string; yourCards: string; options: { text: string }[] }): string => {
@@ -1459,14 +1562,14 @@ export const generateLeaderboardText = (players: { playerName: string; accuracy:
     .sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
 
   const medals = ['🥇', '🥈', '🥉'];
-  let text = '🎯 *Poker Training Leaderboard*\n━━━━━━━━━━━━━━━━\n';
+  let text = '🎯 *טבלת אימון פוקר*\n━━━━━━━━━━━━━━━━\n';
 
   sorted.forEach((p, i) => {
     const medal = medals[i] || `${i + 1}.`;
-    text += `${medal} ${p.playerName} — ${p.accuracy.toFixed(0)}% (${p.totalQuestions} Qs)\n`;
+    text += `${medal} ${p.playerName} — ${p.accuracy.toFixed(0)}% דיוק (${p.totalQuestions} שאלות)\n`;
   });
 
-  text += '━━━━━━━━━━━━━━━━\n💪 Train at poker-manager.vercel.app';
+  text += '━━━━━━━━━━━━━━━━\n💪 מי מצטרף לאימון?';
   return text;
 };
 
@@ -1477,5 +1580,5 @@ export const generateSessionShareText = (
   accuracy: number
 ): string => {
   const emoji = accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪';
-  return `${emoji} *${playerName}* just trained!\n${correct}/${total} correct (${accuracy.toFixed(0)}%)\n\n🎯 poker-manager.vercel.app`;
+  return `${emoji} *${playerName}* סיים אימון פוקר!\n${correct}/${total} תשובות נכונות (${accuracy.toFixed(0)}%)\n\n💪 מי הבא?`;
 };

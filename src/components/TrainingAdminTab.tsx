@@ -35,6 +35,7 @@ const TrainingAdminTab = () => {
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ current: 0, total: 0, category: '' });
   const [genMessage, setGenMessage] = useState<string | null>(null);
+  const [genLog, setGenLog] = useState<{ cat: string; icon: string; status: string; count: number }[]>([]);
 
   // Expanded player
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
@@ -91,17 +92,22 @@ const TrainingAdminTab = () => {
         alerts.push({ text: `${lowCats} קטגוריות עם פחות מ-5 שאלות לשחקן הפעיל ביותר`, color: '#f59e0b' });
       }
 
-      // Flagged questions
-      const flagCounts = new Map<string, number>();
-      answers.players.forEach(p => {
-        p.sessions.forEach(s => {
-          (s.flaggedPoolIds || []).forEach(id => {
-            flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+      // Flagged questions (only count those still in pool)
+      if (pool) {
+        const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
+        const flagCounts = new Map<string, number>();
+        answers.players.forEach(p => {
+          p.sessions.forEach(s => {
+            (s.flaggedPoolIds || []).forEach(id => {
+              if (poolIdSet.has(id)) {
+                flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+              }
+            });
           });
         });
-      });
-      if (flagCounts.size > 0) {
-        alerts.push({ text: `${flagCounts.size} שאלות מדווחות לבדיקה`, color: '#f59e0b' });
+        if (flagCounts.size > 0) {
+          alerts.push({ text: `${flagCounts.size} שאלות מדווחות לבדיקה`, color: '#f59e0b' });
+        }
       }
     }
 
@@ -139,9 +145,6 @@ const TrainingAdminTab = () => {
 
   const clearPoolDraft = () => localStorage.removeItem(POOL_DRAFT_KEY);
 
-  // Upload to GitHub every N categories to protect against crashes
-  const SAVE_INTERVAL = 4;
-
   const MIN_PER_CATEGORY = 20;
 
   // ── Generate full pool (with auto-resume) ──
@@ -154,15 +157,11 @@ const TrainingAdminTab = () => {
 
     setGenerating(true);
     setGenMessage(null);
+    setGenLog([]);
 
-    // Start from draft if available (crash recovery), else from current pool
     const draft = loadPoolDraft();
     const allScenarios: PoolScenario[] = draft || pool?.scenarios || [];
-    if (draft) {
-      setGenMessage(`ממשיך מטיוטה (${draft.length} שאלות קיימות)...`);
-    }
 
-    // Count existing scenarios per category to know which to skip
     const existingPerCat: Record<string, number> = {};
     allScenarios.forEach(s => {
       existingPerCat[s.categoryId] = (existingPerCat[s.categoryId] || 0) + 1;
@@ -183,12 +182,20 @@ const TrainingAdminTab = () => {
     }
 
     const skipped = SCENARIO_CATEGORIES.length - catsToGenerate.length;
+    const log: { cat: string; icon: string; status: string; count: number }[] = [];
+
     if (skipped > 0) {
-      setGenMessage(`דילוג על ${skipped} קטגוריות שלמות, מייצר ${catsToGenerate.length} נותרות...`);
+      SCENARIO_CATEGORIES.filter(c => (existingPerCat[c.id] || 0) >= MIN_PER_CATEGORY).forEach(c => {
+        log.push({ cat: c.name, icon: c.icon, status: 'skip', count: existingPerCat[c.id] || 0 });
+      });
+      setGenLog([...log]);
     }
 
     const total = catsToGenerate.length;
-    let successCount = 0;
+    let totalGenerated = 0;
+    let totalFailed = 0;
+    let lastUploadedCount = allScenarios.length;
+    const startTime = Date.now();
 
     for (let i = 0; i < total; i++) {
       const cat = catsToGenerate[i];
@@ -196,36 +203,72 @@ const TrainingAdminTab = () => {
       const needed = 30 - existing;
       setGenProgress({ current: i + 1, total, category: cat.name });
 
+      let batchCount = 0;
+      let catStatus = 'fail';
+
       try {
         const batch = await generatePoolBatch(cat, needed, allScenarios, apiKey);
-        allScenarios.push(...batch);
-        successCount += batch.length;
+        if (batch.length > 0) {
+          allScenarios.push(...batch);
+          batchCount = batch.length;
+          totalGenerated += batch.length;
+          catStatus = batch.length >= needed ? 'ok' : 'partial';
+        } else {
+          totalFailed++;
+        }
       } catch (err) {
         console.error(`Pool gen failed for ${cat.id}:`, err);
+        totalFailed++;
+        catStatus = err instanceof Error && err.message === 'INVALID_API_KEY' ? 'key_error' : 'fail';
+        if (catStatus === 'key_error') {
+          log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: 0 });
+          setGenLog([...log]);
+          setGenMessage('מפתח API לא תקין — עצירה');
+          break;
+        }
       }
 
+      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount });
+      setGenLog([...log]);
       savePoolDraft(allScenarios);
 
-      if ((i + 1) % SAVE_INTERVAL === 0) {
-        setGenMessage(`שומר התקדמות... (${allScenarios.length} שאלות)`);
-        await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => {});
+      // Upload after every successful category
+      if (allScenarios.length > lastUploadedCount) {
+        const uploadResult = await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => ({ success: false }));
+        if (uploadResult.success) {
+          lastUploadedCount = allScenarios.length;
+        }
       }
+
+      // Time estimate based on actual measured pace
+      const elapsed = Date.now() - startTime;
+      const avgPerCat = elapsed / (i + 1);
+      const remaining = total - (i + 1);
+      const etaMin = Math.ceil((remaining * avgPerCat) / 60000);
+      setGenMessage(`${totalGenerated} שאלות נוצרו${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''} · ~${etaMin} דק׳ נותרו`);
 
       if (i < total - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
     }
 
+    // Final upload
     const newPool = buildPoolObject(allScenarios);
     const result = await uploadTrainingPool(newPool);
     setGenerating(false);
     clearPoolDraft();
 
+    const elapsedMin = Math.round((Date.now() - startTime) / 60000);
+
     if (result.success) {
       setPool(newPool);
-      setGenMessage(`נוצרו ${successCount} שאלות חדשות! סה"כ: ${allScenarios.length}`);
+      setGenMessage(
+        `סיום! ${totalGenerated} שאלות חדשות` +
+        (totalFailed > 0 ? ` · ${totalFailed} קטגוריות נכשלו` : '') +
+        ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות`
+      );
     } else {
-      setGenMessage(`שגיאה בהעלאה: ${result.message}`);
+      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — אך ${lastUploadedCount} שאלות כבר נשמרו בענן`);
     }
   };
 
@@ -256,27 +299,52 @@ const TrainingAdminTab = () => {
 
     setGenerating(true);
     setGenMessage(null);
+    setGenLog([]);
     const allScenarios = [...pool.scenarios];
-    let added = 0;
+    const log: { cat: string; icon: string; status: string; count: number }[] = [];
+    let totalAdded = 0;
+    let totalFailed = 0;
+    let lastUploadedCount = allScenarios.length;
+    const startTime = Date.now();
 
     for (let i = 0; i < depletedCats.length; i++) {
       const cat = depletedCats[i];
       setGenProgress({ current: i + 1, total: depletedCats.length, category: cat.name });
 
+      let batchCount = 0;
+      let catStatus = 'fail';
+
       try {
         const batch = await generatePoolBatch(cat, 15, allScenarios, apiKey);
-        allScenarios.push(...batch);
-        added += batch.length;
+        if (batch.length > 0) {
+          allScenarios.push(...batch);
+          batchCount = batch.length;
+          totalAdded += batch.length;
+          catStatus = batch.length >= 10 ? 'ok' : 'partial';
+        } else {
+          totalFailed++;
+        }
       } catch (err) {
         console.error(`Expand failed for ${cat.id}:`, err);
+        totalFailed++;
       }
 
+      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount });
+      setGenLog([...log]);
       savePoolDraft(allScenarios);
 
-      if ((i + 1) % SAVE_INTERVAL === 0) {
-        setGenMessage(`שומר התקדמות... (${allScenarios.length} שאלות)`);
-        await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => {});
+      if (allScenarios.length > lastUploadedCount) {
+        const uploadResult = await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => ({ success: false }));
+        if (uploadResult.success) {
+          lastUploadedCount = allScenarios.length;
+        }
       }
+
+      const elapsed = Date.now() - startTime;
+      const avgPerCat = elapsed / (i + 1);
+      const remaining = depletedCats.length - (i + 1);
+      const etaMin = Math.ceil((remaining * avgPerCat) / 60000);
+      setGenMessage(`${totalAdded} שאלות חדשות${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''} · ~${etaMin} דק׳ נותרו`);
 
       if (i < depletedCats.length - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
@@ -288,20 +356,29 @@ const TrainingAdminTab = () => {
     setGenerating(false);
     clearPoolDraft();
 
+    const elapsedMin = Math.round((Date.now() - startTime) / 60000);
+
     if (result.success) {
       setPool(newPool);
-      setGenMessage(`הורחב: ${added} שאלות ב-${depletedCats.length} קטגוריות`);
+      setGenMessage(
+        `הרחבה הסתיימה! ${totalAdded} שאלות חדשות` +
+        (totalFailed > 0 ? ` · ${totalFailed} נכשלו` : '') +
+        ` · סה"כ ${allScenarios.length} · ${elapsedMin} דקות`
+      );
     } else {
-      setGenMessage(`שגיאה: ${result.message}`);
+      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — ${lastUploadedCount} שאלות נשמרו`);
     }
   };
 
   // ── Remove flagged ──
   const handleRemoveFlagged = async (poolIds: string[]) => {
+    setGenMessage(`מסיר ${poolIds.length} שאלות...`);
     const result = await removeFromTrainingPool(poolIds);
     if (result.success) {
       await loadAll();
-      setGenMessage(`הוסרו ${poolIds.length} שאלות מדווחות`);
+      setGenMessage(`✅ הוסרו ${poolIds.length} שאלות מדווחות`);
+    } else {
+      setGenMessage(`❌ שגיאה: ${result.message}`);
     }
   };
 
@@ -406,13 +483,16 @@ ${dataBlock}
   };
 
   // ── Flagged questions ──
-  const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario | undefined; flagCount: number }[] => {
+  const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario; flagCount: number }[] => {
     if (!answers || !pool) return [];
+    const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
     const flagCounts = new Map<string, number>();
     answers.players.forEach(p => {
       p.sessions.forEach(s => {
         (s.flaggedPoolIds || []).forEach(id => {
-          flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+          if (poolIdSet.has(id)) {
+            flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+          }
         });
       });
     });
@@ -420,7 +500,7 @@ ${dataBlock}
       .sort((a, b) => b[1] - a[1])
       .map(([poolId, flagCount]) => ({
         poolId,
-        scenario: pool.scenarios.find(s => s.poolId === poolId),
+        scenario: pool.scenarios.find(s => s.poolId === poolId)!,
         flagCount,
       }));
   };
@@ -538,22 +618,69 @@ ${dataBlock}
         )}
 
         {generating ? (
-          <div style={{ textAlign: 'center', padding: '1rem' }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>⚡</div>
-            <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>
-              מייצר: {genProgress.category} ({genProgress.current}/{genProgress.total})
+          <div style={{ padding: '0.5rem 0' }}>
+            {/* Current category + progress bar */}
+            <div style={{
+              padding: '0.6rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+              background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                  ⚡ {genProgress.category}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>
+                  {genProgress.current}/{genProgress.total}
+                </span>
+              </div>
+              <div style={{ height: '6px', borderRadius: '3px', background: 'var(--surface-light)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: '3px',
+                  background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                  width: `${(genProgress.current / Math.max(genProgress.total, 1)) * 100}%`,
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+              {genMessage && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                  {genMessage}
+                </div>
+              )}
             </div>
-            <div style={{ height: '4px', borderRadius: '2px', background: 'var(--surface-light)', overflow: 'hidden' }}>
+
+            {/* Live log */}
+            {genLog.length > 0 && (
               <div style={{
-                height: '100%', borderRadius: '2px',
-                background: 'linear-gradient(90deg, #6366f1, #a855f7)',
-                width: `${(genProgress.current / Math.max(genProgress.total, 1)) * 100}%`,
-                transition: 'width 0.5s ease',
-              }} />
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-              ~{Math.ceil((genProgress.total - genProgress.current) * 15 / 60)} דקות נותרו
-            </div>
+                maxHeight: '200px', overflowY: 'auto', fontSize: '0.7rem',
+                display: 'flex', flexDirection: 'column', gap: '2px',
+              }}>
+                {genLog.map((entry, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.3rem',
+                    padding: '0.15rem 0.3rem', borderRadius: '4px',
+                    background: entry.status === 'fail' ? 'rgba(239,68,68,0.08)' :
+                               entry.status === 'partial' ? 'rgba(249,115,22,0.08)' :
+                               entry.status === 'skip' ? 'rgba(107,114,128,0.08)' :
+                               'rgba(34,197,94,0.08)',
+                  }}>
+                    <span>{entry.icon}</span>
+                    <span style={{ flex: 1 }}>{entry.cat}</span>
+                    <span style={{
+                      fontWeight: 600,
+                      color: entry.status === 'fail' ? 'var(--danger)' :
+                             entry.status === 'partial' ? '#f97316' :
+                             entry.status === 'skip' ? 'var(--text-muted)' :
+                             'var(--success)',
+                    }}>
+                      {entry.status === 'ok' ? `✓ ${entry.count}` :
+                       entry.status === 'partial' ? `⚠ ${entry.count}` :
+                       entry.status === 'skip' ? `↷ ${entry.count}` :
+                       entry.status === 'key_error' ? '🔑 שגיאה' :
+                       '✗ נכשל'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -576,10 +703,52 @@ ${dataBlock}
           </div>
         )}
 
-        {genMessage && (
-          <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+        {/* Result message (shown after generation ends) */}
+        {!generating && genMessage && (
+          <div style={{
+            marginTop: '0.5rem', fontSize: '0.8rem', textAlign: 'center', fontWeight: 500,
+            padding: '0.5rem', borderRadius: '8px',
+            background: genMessage.includes('שגיאה') ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+            color: genMessage.includes('שגיאה') ? 'var(--danger)' : 'var(--success)',
+          }}>
             {genMessage}
           </div>
+        )}
+
+        {/* Post-generation log summary */}
+        {!generating && genLog.length > 0 && (
+          <details style={{ marginTop: '0.4rem' }}>
+            <summary style={{ fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              פירוט ייצור ({genLog.filter(l => l.status === 'ok').length} הצליחו / {genLog.filter(l => l.status === 'fail').length} נכשלו)
+            </summary>
+            <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '0.3rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {genLog.map((entry, idx) => (
+                <div key={idx} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.3rem',
+                  padding: '0.15rem 0.3rem', borderRadius: '4px', fontSize: '0.7rem',
+                  background: entry.status === 'fail' ? 'rgba(239,68,68,0.08)' :
+                             entry.status === 'partial' ? 'rgba(249,115,22,0.08)' :
+                             entry.status === 'skip' ? 'rgba(107,114,128,0.08)' :
+                             'rgba(34,197,94,0.08)',
+                }}>
+                  <span>{entry.icon}</span>
+                  <span style={{ flex: 1 }}>{entry.cat}</span>
+                  <span style={{
+                    fontWeight: 600,
+                    color: entry.status === 'fail' ? 'var(--danger)' :
+                           entry.status === 'partial' ? '#f97316' :
+                           entry.status === 'skip' ? 'var(--text-muted)' :
+                           'var(--success)',
+                  }}>
+                    {entry.status === 'ok' ? `✓ ${entry.count}` :
+                     entry.status === 'partial' ? `⚠ ${entry.count}` :
+                     entry.status === 'skip' ? `↷ ${entry.count}` :
+                     '✗ נכשל'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
         )}
 
         {/* Per-category breakdown (collapsed by default) */}
@@ -770,7 +939,7 @@ ${dataBlock}
       {flagged.length > 0 && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות מדווחות ({flagged.length})</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות שדווחו כשגויות ({flagged.length})</h3>
             <button
               onClick={() => handleRemoveFlagged(flagged.map(f => f.poolId))}
               style={{
@@ -779,35 +948,49 @@ ${dataBlock}
                 border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer',
               }}
             >
-              הסר הכל
+              🗑 הסר הכל
             </button>
           </div>
-          {flagged.map(f => (
-            <div key={f.poolId} style={{
-              padding: '0.5rem', borderRadius: '8px', marginBottom: '0.3rem',
-              background: f.flagCount >= 2 ? 'rgba(239,68,68,0.08)' : 'var(--surface)',
-              border: f.flagCount >= 2 ? '1px solid rgba(239,68,68,0.2)' : '1px solid var(--border)',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  {f.scenario?.situation?.slice(0, 100)}...
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            שחקנים דיווחו שהשאלות הבאות שגויות או לא הגיוניות. בדוק והחלט אם להסיר.
+          </div>
+          {flagged.map(f => {
+            const cat = SCENARIO_CATEGORIES.find(c => c.id === f.scenario?.categoryId);
+            const correctOpt = f.scenario?.options?.find(o => o.isCorrect);
+            return (
+              <div key={f.poolId} style={{
+                padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                background: f.flagCount >= 2 ? 'rgba(239,68,68,0.08)' : 'var(--surface)',
+                border: f.flagCount >= 2 ? '1px solid rgba(239,68,68,0.2)' : '1px solid var(--border)',
+              }}>
+                {cat && (
+                  <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                    {cat.icon} {cat.name} · דווח {f.flagCount} {f.flagCount === 1 ? 'פעם' : 'פעמים'}
+                  </div>
+                )}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text)', lineHeight: 1.5, marginBottom: '0.3rem' }}>
+                  {f.scenario?.situation || '(שאלה כבר הוסרה)'}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.5rem', flexShrink: 0 }}>
-                  <span style={{ fontSize: '0.7rem', color: '#ef4444' }}>x{f.flagCount}</span>
+                {correctOpt && (
+                  <div style={{ fontSize: '0.65rem', color: 'var(--success)', marginBottom: '0.3rem' }}>
+                    ✓ תשובה נכונה: {correctOpt.text}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                   <button
                     onClick={() => handleRemoveFlagged([f.poolId])}
                     style={{
-                      fontSize: '0.65rem', padding: '0.15rem 0.35rem', borderRadius: '4px',
-                      background: 'rgba(239,68,68,0.1)', color: '#ef4444',
-                      border: 'none', cursor: 'pointer',
+                      fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
+                      background: '#ef4444', color: 'white',
+                      border: 'none', cursor: 'pointer', fontWeight: 600,
                     }}
                   >
-                    הסר
+                    🗑 הסר שאלה
                   </button>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

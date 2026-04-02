@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import html2canvas from 'html2canvas';
 import { usePermissions } from '../App';
 import {
   PoolScenario,
@@ -15,7 +16,6 @@ import {
   checkNewBadges,
   bufferSessionForUpload,
   flushPendingUploads,
-  generateSessionShareText,
   TRAINING_BADGES,
 } from '../utils/pokerTraining';
 
@@ -56,7 +56,9 @@ const SharedQuickPlayScreen = () => {
   const [exhaustedMsg, setExhaustedMsg] = useState<string | null>(null);
   const [flaggedThisSession, setFlaggedThisSession] = useState<Set<string>>(new Set());
   const [showFlagConfirm, setShowFlagConfirm] = useState(false);
-  const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [showStyleTip, setShowStyleTip] = useState(true);
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   const name = playerName || 'Unknown';
 
@@ -112,16 +114,17 @@ const SharedQuickPlayScreen = () => {
     const scenario = scenarios[currentIdx];
     const chosen = scenario.options.find(o => o.id === optionId);
     const isCorrect = chosen?.isCorrect || false;
+    const isNearMiss = !isCorrect && !!chosen?.nearMiss;
 
     const result: TrainingAnswerResult = {
       poolId: scenario.poolId,
       categoryId: scenario.categoryId,
       correct: isCorrect,
+      nearMiss: isNearMiss || undefined,
       chosenId: optionId,
     };
     setResults(prev => [...prev, result]);
 
-    // Update local progress
     const progress = getSharedProgress(name);
     progress.totalQuestions++;
     if (isCorrect) {
@@ -201,19 +204,36 @@ const SharedQuickPlayScreen = () => {
     setShowFlagConfirm(false);
   };
 
-  const handleShare = () => {
-    const correctCount = results.filter(r => r.correct).length;
-    const total = results.length;
-    const accuracy = total > 0 ? (correctCount / total) * 100 : 0;
-    const text = generateSessionShareText(name, correctCount, total, accuracy);
-
-    if (navigator.share) {
-      navigator.share({ text }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(text).then(() => {
-        setShareMsg('הועתק!');
-        setTimeout(() => setShareMsg(null), 2000);
-      }).catch(() => {});
+  const handleShare = async () => {
+    if (!summaryRef.current) return;
+    setIsSharing(true);
+    try {
+      const canvas = await html2canvas(summaryRef.current, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+      });
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setIsSharing(false); return; }
+        const file = new File([blob], 'poker-training-result.png', { type: 'image/png' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Poker Training Result' });
+          } catch {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'poker-training-result.png'; a.click();
+            URL.revokeObjectURL(url);
+          }
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'poker-training-result.png'; a.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsSharing(false);
+      }, 'image/png');
+    } catch {
+      setIsSharing(false);
     }
   };
 
@@ -246,6 +266,7 @@ const SharedQuickPlayScreen = () => {
   if (showSummary) {
     const total = results.length;
     const correct = results.filter(r => r.correct).length;
+    const nearMissTotal = results.filter(r => r.nearMiss).length;
     const accuracy = total > 0 ? (correct / total) * 100 : 0;
 
     const catBreakdown: Record<string, { total: number; correct: number }> = {};
@@ -259,109 +280,126 @@ const SharedQuickPlayScreen = () => {
 
     return (
       <div className="fade-in" style={{ padding: '1rem', paddingBottom: '6rem', direction: 'rtl' }}>
-        <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
-            {accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪'}
+        {/* Shareable summary area */}
+        <div ref={summaryRef} style={{ background: '#1a1a2e', padding: '0.5rem' }}>
+          <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
+              {accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪'}
+            </div>
+            <h2 style={{ marginBottom: '0.3rem' }}>סיכום אימון — {name}</h2>
+            <p className="text-muted">{total} שאלות</p>
           </div>
-          <h2 style={{ marginBottom: '0.3rem' }}>סיכום אימון</h2>
-          <p className="text-muted">{total} שאלות</p>
-        </div>
 
-        {/* Score */}
-        <div className="card" style={{
-          padding: '1.5rem', textAlign: 'center',
-          background: accuracy >= 70 ? 'rgba(34,197,94,0.1)' : accuracy >= 50 ? 'rgba(59,130,246,0.1)' : 'rgba(239,68,68,0.1)',
-          border: `1px solid ${accuracy >= 70 ? 'rgba(34,197,94,0.3)' : accuracy >= 50 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)'}`,
-        }}>
-          <div style={{
-            fontSize: '3rem', fontWeight: 900,
-            color: accuracy >= 70 ? '#22c55e' : accuracy >= 50 ? '#3b82f6' : '#ef4444',
+          {/* Score */}
+          <div className="card" style={{
+            padding: '1.5rem', textAlign: 'center',
+            background: accuracy >= 70 ? 'rgba(34,197,94,0.1)' : accuracy >= 50 ? 'rgba(59,130,246,0.1)' : 'rgba(239,68,68,0.1)',
+            border: `1px solid ${accuracy >= 70 ? 'rgba(34,197,94,0.3)' : accuracy >= 50 ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)'}`,
           }}>
-            {correct}/{total}
+            <div style={{
+              fontSize: '3rem', fontWeight: 900,
+              color: accuracy >= 70 ? '#22c55e' : accuracy >= 50 ? '#3b82f6' : '#ef4444',
+            }}>
+              {correct}/{total}
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              תשובות נכונות ({accuracy.toFixed(0)}%)
+            </div>
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            תשובות נכונות ({accuracy.toFixed(0)}%)
-          </div>
-        </div>
 
-        {/* Dots */}
-        <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-            {results.map((r, i) => (
-              <div key={i} style={{
-                width: '28px', height: '28px', borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.75rem', fontWeight: 700,
-                background: r.correct ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                color: r.correct ? '#22c55e' : '#ef4444',
-              }}>
-                {r.correct ? '✓' : '✗'}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Category breakdown */}
-        {Object.keys(catBreakdown).length > 0 && (
+          {/* Dots */}
           <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.5rem' }}>
-              לפי נושא
-            </div>
-            {Object.entries(catBreakdown).map(([catId, d]) => {
-              const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
-              const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
-              return (
-                <div key={catId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0', fontSize: '0.85rem' }}>
-                  <span>{cat?.icon} {cat?.name || catId}</span>
-                  <span style={{ color: pct >= 60 ? '#22c55e' : pct >= 40 ? '#eab308' : '#ef4444', fontWeight: 600 }}>
-                    {d.correct}/{d.total} ({pct.toFixed(0)}%)
-                  </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {results.map((r, i) => (
+                <div key={i} style={{
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.75rem', fontWeight: 700,
+                  background: r.correct ? 'rgba(34,197,94,0.15)' : r.nearMiss ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                  color: r.correct ? '#22c55e' : r.nearMiss ? '#f59e0b' : '#ef4444',
+                }}>
+                  {r.correct ? '✓' : r.nearMiss ? '~' : '✗'}
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Streak */}
-        {progress.streak.current > 0 && (
-          <div className="card" style={{
-            padding: '0.75rem 1rem', marginTop: '0.5rem', textAlign: 'center',
-            background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)',
-          }}>
-            <span style={{ fontSize: '1.2rem' }}>🔥</span>
-            <span style={{ fontWeight: 700, marginRight: '0.3rem', marginLeft: '0.3rem' }}>
-              רצף {progress.streak.current} ימים
-            </span>
-            {progress.streak.current >= progress.maxStreak && progress.maxStreak > 1 && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>שיא חדש!</span>
-            )}
-          </div>
-        )}
-
-        {/* New badges */}
-        {newBadgeIds.length > 0 && (
-          <div className="card" style={{
-            padding: '1rem', marginTop: '0.5rem', textAlign: 'center',
-            background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)',
-          }}>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#a855f7', marginBottom: '0.5rem' }}>
-              🏅 הישגים חדשים!
+              ))}
             </div>
-            {newBadgeIds.map(id => {
-              const badge = TRAINING_BADGES.find(b => b.id === id);
-              const catBadge = id.startsWith('expert_');
-              const catId = catBadge ? id.replace('expert_', '') : '';
-              const cat = catBadge ? SCENARIO_CATEGORIES.find(c => c.id === catId) : null;
-              return (
-                <div key={id} style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>
-                  {badge ? `${badge.icon} ${badge.name}` : cat ? `${cat.icon} מומחה: ${cat.name}` : id}
-                </div>
-              );
-            })}
           </div>
-        )}
 
-        {/* Actions */}
+          {/* Category breakdown */}
+          {Object.keys(catBreakdown).length > 0 && (
+            <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.5rem' }}>
+                לפי נושא
+              </div>
+              {Object.entries(catBreakdown).map(([catId, d]) => {
+                const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
+                const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
+                return (
+                  <div key={catId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.3rem 0', fontSize: '0.85rem' }}>
+                    <span>{cat?.icon} {cat?.name || catId}</span>
+                    <span style={{ color: pct >= 60 ? '#22c55e' : pct >= 40 ? '#eab308' : '#ef4444', fontWeight: 600 }}>
+                      {d.correct}/{d.total} ({pct.toFixed(0)}%)
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Home-game context note */}
+          {(nearMissTotal > 0 || accuracy < 60) && (
+            <div style={{
+              padding: '0.5rem 0.75rem', marginTop: '0.5rem', borderRadius: '8px',
+              background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
+              fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6,
+            }}>
+              {nearMissTotal > 0
+                ? `💡 ${nearMissTotal} מהתשובות שלך היו נכונות לפוקר מקצועי, אבל לא אופטימליות למשחק הביתי שלנו`
+                : '💡 השאלות מותאמות למשחק הביתי שלנו — בלופים עובדים פחות ושחקנים קוראים יותר, אז חלק מהתשובות שונות מפוקר מקצועי'
+              }
+            </div>
+          )}
+
+          {/* Streak */}
+          {progress.streak.current > 0 && (
+            <div className="card" style={{
+              padding: '0.75rem 1rem', marginTop: '0.5rem', textAlign: 'center',
+              background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)',
+            }}>
+              <span style={{ fontSize: '1.2rem' }}>🔥</span>
+              <span style={{ fontWeight: 700, marginRight: '0.3rem', marginLeft: '0.3rem' }}>
+                רצף {progress.streak.current} ימים
+              </span>
+              {progress.streak.current >= progress.maxStreak && progress.maxStreak > 1 && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>שיא חדש!</span>
+              )}
+            </div>
+          )}
+
+          {/* New badges */}
+          {newBadgeIds.length > 0 && (
+            <div className="card" style={{
+              padding: '1rem', marginTop: '0.5rem', textAlign: 'center',
+              background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)',
+            }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#a855f7', marginBottom: '0.5rem' }}>
+                🏅 הישגים חדשים!
+              </div>
+              {newBadgeIds.map(id => {
+                const badge = TRAINING_BADGES.find(b => b.id === id);
+                const catBadge = id.startsWith('expert_');
+                const catId = catBadge ? id.replace('expert_', '') : '';
+                const cat = catBadge ? SCENARIO_CATEGORIES.find(c => c.id === catId) : null;
+                return (
+                  <div key={id} style={{ fontSize: '1.2rem', marginBottom: '0.25rem' }}>
+                    {badge ? `${badge.icon} ${badge.name}` : cat ? `${cat.icon} מומחה: ${cat.name}` : id}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Actions — outside the screenshot area */}
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => navigate('/shared-training')}>
             חזרה
@@ -373,17 +411,20 @@ const SharedQuickPlayScreen = () => {
             סבב חדש
           </button>
         </div>
-        <button
-          onClick={handleShare}
-          style={{
-            width: '100%', marginTop: '0.5rem', padding: '0.7rem',
-            borderRadius: '10px', border: '1px solid var(--border)',
-            background: 'var(--surface)', color: 'var(--text)',
-            fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer',
-          }}
-        >
-          {shareMsg || '📤 שתף תוצאה'}
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+          <button
+            onClick={handleShare}
+            disabled={isSharing}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+              fontSize: '0.75rem', padding: '0.4rem 0.8rem',
+              background: 'var(--surface)', color: 'var(--text-muted)',
+              border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer',
+            }}
+          >
+            {isSharing ? '📸...' : '📤 שתף תוצאה'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -432,7 +473,7 @@ const SharedQuickPlayScreen = () => {
           {results.map((r, i) => (
             <div key={i} style={{
               width: '10px', height: '10px', borderRadius: '50%',
-              background: r.correct ? '#22c55e' : '#ef4444', opacity: 0.8,
+              background: r.correct ? '#22c55e' : r.nearMiss ? '#f59e0b' : '#ef4444', opacity: 0.8,
             }} />
           ))}
           {Array.from({ length: Math.max(0, scenarios.length - results.length) }).map((_, i) => (
@@ -443,6 +484,23 @@ const SharedQuickPlayScreen = () => {
       {results.length > 0 && scenarios.length > 20 && (
         <div style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
           ✅ {results.filter(r => r.correct).length} / {results.length}
+        </div>
+      )}
+
+      {/* Home-game style reminder — first question only, dismissible */}
+      {showStyleTip && currentIdx === 0 && !selectedOption && (
+        <div style={{
+          padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+          background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
+          display: 'flex', alignItems: 'flex-start', gap: '0.4rem', direction: 'rtl',
+        }}>
+          <div style={{ flex: 1, fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            💡 התשובות מותאמות למשחק ביתי — שחקנים קוראים יותר, בלופים עובדים פחות
+          </div>
+          <button onClick={() => setShowStyleTip(false)} style={{
+            background: 'none', border: 'none', color: 'var(--text-muted)',
+            cursor: 'pointer', fontSize: '0.7rem', padding: '0', flexShrink: 0,
+          }}>✕</button>
         </div>
       )}
 
@@ -466,6 +524,7 @@ const SharedQuickPlayScreen = () => {
           const isSelected = selectedOption === option.id;
           const isRevealed = !!selectedOption;
           const isCorrectOption = option.isCorrect;
+          const isNearMissOption = !isCorrectOption && !!option.nearMiss;
 
           let borderColor = 'var(--border)';
           let bgColor = 'var(--surface)';
@@ -476,6 +535,10 @@ const SharedQuickPlayScreen = () => {
               borderColor = '#22c55e';
               bgColor = 'rgba(34,197,94,0.1)';
               textColor = '#22c55e';
+            } else if (isSelected && isNearMissOption) {
+              borderColor = '#f59e0b';
+              bgColor = 'rgba(245,158,11,0.1)';
+              textColor = '#f59e0b';
             } else if (isSelected && !isCorrectOption) {
               borderColor = '#ef4444';
               bgColor = 'rgba(239,68,68,0.1)';
@@ -485,6 +548,16 @@ const SharedQuickPlayScreen = () => {
               textColor = 'var(--text-muted)';
             }
           }
+
+          const iconSymbol = isRevealed
+            ? (isCorrectOption ? '✓' : isSelected && isNearMissOption ? '½' : isSelected ? '✗' : option.id)
+            : option.id;
+          const iconBg = isRevealed
+            ? (isCorrectOption ? 'rgba(34,197,94,0.2)' : isSelected && isNearMissOption ? 'rgba(245,158,11,0.2)' : isSelected ? 'rgba(239,68,68,0.2)' : 'var(--surface-light)')
+            : 'var(--surface-light)';
+          const iconColor = isRevealed
+            ? (isCorrectOption ? '#22c55e' : isSelected && isNearMissOption ? '#f59e0b' : isSelected ? '#ef4444' : 'var(--text-muted)')
+            : 'var(--text)';
 
           return (
             <button
@@ -506,20 +579,27 @@ const SharedQuickPlayScreen = () => {
                     width: '26px', height: '26px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontWeight: 700, fontSize: '0.75rem',
-                    background: isRevealed
-                      ? (isCorrectOption ? 'rgba(34,197,94,0.2)' : isSelected ? 'rgba(239,68,68,0.2)' : 'var(--surface-light)')
-                      : 'var(--surface-light)',
-                    color: isRevealed
-                      ? (isCorrectOption ? '#22c55e' : isSelected ? '#ef4444' : 'var(--text-muted)')
-                      : 'var(--text)',
+                    background: iconBg,
+                    color: iconColor,
                   }}>
-                    {isRevealed ? (isCorrectOption ? '✓' : isSelected ? '✗' : option.id) : option.id}
+                    {iconSymbol}
                   </span>
                   <span style={{ fontWeight: 600, fontSize: '0.9rem', color: textColor }}>
                     {option.text}
                   </span>
                 </div>
               </div>
+
+              {/* Near-miss tag */}
+              {isRevealed && isSelected && isNearMissOption && (
+                <div style={{
+                  marginTop: '0.4rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                  background: 'rgba(245,158,11,0.1)', display: 'inline-block',
+                  fontSize: '0.7rem', fontWeight: 600, color: '#f59e0b',
+                }}>
+                  🏠 חצי נקודה — תשובה טובה לפוקר מקצועי, לא אופטימלית למשחק שלנו
+                </div>
+              )}
 
               {/* Show explanation for ALL options when revealed */}
               {isRevealed && option.explanation && (
@@ -534,6 +614,21 @@ const SharedQuickPlayScreen = () => {
           );
         })}
       </div>
+
+      {/* Context note after wrong answer (skip for near-miss — already has its own tag) */}
+      {selectedOption && (() => {
+        const chosen = scenario.options.find(o => o.id === selectedOption);
+        if (!chosen || chosen.isCorrect || chosen.nearMiss) return null;
+        return (
+          <div style={{
+            marginTop: '0.5rem', padding: '0.4rem 0.6rem', borderRadius: '8px',
+            background: 'rgba(99,102,241,0.05)', fontSize: '0.65rem',
+            color: 'var(--text-muted)', direction: 'rtl', lineHeight: 1.5,
+          }}>
+            🏠 התשובות מותאמות למשחק הביתי שלנו — שחקנים קוראים יותר ובלופים עובדים פחות מאשר בפוקר מקצועי
+          </div>
+        );
+      })()}
 
       {/* Flag + Next row */}
       {selectedOption && (
@@ -552,29 +647,27 @@ const SharedQuickPlayScreen = () => {
             {currentIdx >= scenarios.length - 1 ? 'סיכום ←' : 'הבאה ←'}
           </button>
 
-          {/* Flag button */}
           {!isFlagged && !showFlagConfirm && (
             <button
               onClick={() => setShowFlagConfirm(true)}
               style={{
-                width: '44px', height: '44px', borderRadius: '12px',
-                border: '1px solid var(--border)', background: 'var(--surface)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1rem', flexShrink: 0,
+                height: '44px', borderRadius: '12px', padding: '0 0.6rem',
+                border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
+                fontSize: '0.7rem', color: '#ef4444', flexShrink: 0,
               }}
-              title="דווח על שאלה"
             >
-              🚩
+              🚩 שאלה שגויה
             </button>
           )}
           {isFlagged && (
             <div style={{
-              width: '44px', height: '44px', borderRadius: '12px',
+              height: '44px', borderRadius: '12px', padding: '0 0.6rem',
               background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '0.7rem', color: '#ef4444', flexShrink: 0,
             }}>
-              דווח
+              ✓ דווח
             </div>
           )}
         </div>
@@ -587,14 +680,17 @@ const SharedQuickPlayScreen = () => {
           background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>דווח על שאלה לא תקינה?</div>
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.2rem' }}>🚩 דיווח על שאלה שגויה</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+            התשובה לא נכונה או השאלה לא הגיונית? דווח ונבדוק
+          </div>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
             <button className="btn btn-sm" onClick={handleFlag}
               style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
-              כן, דווח
+              דווח והסר
             </button>
             <button className="btn btn-sm" onClick={() => setShowFlagConfirm(false)}
-              style={{ background: 'var(--surface-light)', color: 'var(--text)', border: 'none', padding: '0.4rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
+              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', padding: '0.4rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
               ביטול
             </button>
           </div>

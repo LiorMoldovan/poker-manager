@@ -235,6 +235,7 @@ export interface PoolScenario {
     text: string;
     isCorrect: boolean;
     explanation: string;
+    nearMiss?: boolean; // wrong answer that would be correct in professional/GTO poker
   }[];
   category: string;
   categoryId: string;
@@ -251,6 +252,7 @@ export interface TrainingAnswerResult {
   poolId: string;
   categoryId: string;
   correct: boolean;
+  nearMiss?: boolean; // chose a GTO-valid answer that's suboptimal for home game
   chosenId: string;
 }
 

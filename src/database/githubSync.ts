@@ -905,6 +905,14 @@ export const removeFromTrainingPool = async (poolIdsToRemove: string[]): Promise
   pool.scenarios.forEach(s => {
     pool.byCategory[s.categoryId] = (pool.byCategory[s.categoryId] || 0) + 1;
   });
+  pool.generatedAt = new Date().toISOString();
 
-  return uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Removed ${poolIdsToRemove.length} flagged scenarios`);
+  const result = await uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Removed ${poolIdsToRemove.length} flagged scenarios`);
+
+  if (result.success) {
+    localStorage.setItem('training_pool_cached', JSON.stringify(pool));
+    localStorage.setItem('training_pool_generatedAt', pool.generatedAt);
+  }
+
+  return result;
 };
