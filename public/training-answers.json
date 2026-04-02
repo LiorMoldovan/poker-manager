@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-02T15:51:04.597Z",
+  "lastUpdated": "2026-04-02T16:04:13.414Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -939,11 +939,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-02T16:04:12.893Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 0,
+          "results": [
+            {
+              "poolId": "gmv3lu",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "5jx66w",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kf533m",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "d4vw1m",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gmsrrc",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 10,
+      "totalQuestions": 15,
       "totalCorrect": 6,
-      "accuracy": 60
+      "accuracy": 40
     }
   ]
 }
