@@ -40,6 +40,10 @@ const TrainingAdminTab = () => {
   // Expanded player
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
 
+  // Flagged removal
+  const [removingFlagged, setRemovingFlagged] = useState(false);
+  const [flagMsg, setFlagMsg] = useState<string | null>(null);
+
   // AI insight generation
   const [generatingInsight, setGeneratingInsight] = useState<string | null>(null);
   const [insightMsg, setInsightMsg] = useState<string | null>(null);
@@ -372,13 +376,26 @@ const TrainingAdminTab = () => {
 
   // ── Remove flagged ──
   const handleRemoveFlagged = async (poolIds: string[]) => {
-    setGenMessage(`מסיר ${poolIds.length} שאלות...`);
-    const result = await removeFromTrainingPool(poolIds);
-    if (result.success) {
-      await loadAll();
-      setGenMessage(`✅ הוסרו ${poolIds.length} שאלות מדווחות`);
-    } else {
-      setGenMessage(`❌ שגיאה: ${result.message}`);
+    if (removingFlagged) return;
+    setRemovingFlagged(true);
+    setFlagMsg(`מסיר ${poolIds.length} שאלות...`);
+    try {
+      const result = await removeFromTrainingPool(poolIds);
+      if (result.success) {
+        // Use localStorage cache (already updated by removeFromTrainingPool)
+        // instead of re-fetching from GitHub which may return stale data
+        const cached = localStorage.getItem('training_pool_cached');
+        if (cached) {
+          try { setPool(JSON.parse(cached) as TrainingPool); } catch { /* fall through */ }
+        }
+        setFlagMsg(`✅ הוסרו ${poolIds.length} שאלות`);
+      } else {
+        setFlagMsg(`❌ שגיאה: ${result.message}`);
+      }
+    } catch (err) {
+      setFlagMsg(`❌ שגיאה: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setRemovingFlagged(false);
     }
   };
 
@@ -942,15 +959,29 @@ ${dataBlock}
             <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות שדווחו כשגויות ({flagged.length})</h3>
             <button
               onClick={() => handleRemoveFlagged(flagged.map(f => f.poolId))}
+              disabled={removingFlagged}
               style={{
                 fontSize: '0.7rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
                 background: 'rgba(239,68,68,0.1)', color: '#ef4444',
-                border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer',
+                border: '1px solid rgba(239,68,68,0.2)', cursor: removingFlagged ? 'wait' : 'pointer',
+                opacity: removingFlagged ? 0.5 : 1,
               }}
             >
-              🗑 הסר הכל
+              {removingFlagged ? '⏳ מסיר...' : '🗑 הסר הכל'}
             </button>
           </div>
+
+          {flagMsg && (
+            <div style={{
+              padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem',
+              fontSize: '0.75rem', fontWeight: 500, textAlign: 'center',
+              background: flagMsg.includes('✅') ? 'rgba(34,197,94,0.08)' : flagMsg.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)',
+              color: flagMsg.includes('✅') ? 'var(--success)' : flagMsg.includes('❌') ? 'var(--danger)' : 'var(--text-muted)',
+            }}>
+              {flagMsg}
+            </div>
+          )}
+
           <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
             שחקנים דיווחו שהשאלות הבאות שגויות או לא הגיוניות. בדוק והחלט אם להסיר.
           </div>
@@ -979,13 +1010,15 @@ ${dataBlock}
                 <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                   <button
                     onClick={() => handleRemoveFlagged([f.poolId])}
+                    disabled={removingFlagged}
                     style={{
                       fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
                       background: '#ef4444', color: 'white',
-                      border: 'none', cursor: 'pointer', fontWeight: 600,
+                      border: 'none', cursor: removingFlagged ? 'wait' : 'pointer', fontWeight: 600,
+                      opacity: removingFlagged ? 0.5 : 1,
                     }}
                   >
-                    🗑 הסר שאלה
+                    {removingFlagged ? '⏳' : '🗑 הסר שאלה'}
                   </button>
                 </div>
               </div>

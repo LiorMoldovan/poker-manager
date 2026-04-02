@@ -550,7 +550,7 @@ const SharedQuickPlayScreen = () => {
           }
 
           const iconSymbol = isRevealed
-            ? (isCorrectOption ? '✓' : isSelected && isNearMissOption ? '½' : isSelected ? '✗' : option.id)
+            ? (isCorrectOption ? '✓' : isSelected && isNearMissOption ? '~' : isSelected ? '✗' : option.id)
             : option.id;
           const iconBg = isRevealed
             ? (isCorrectOption ? 'rgba(34,197,94,0.2)' : isSelected && isNearMissOption ? 'rgba(245,158,11,0.2)' : isSelected ? 'rgba(239,68,68,0.2)' : 'var(--surface-light)')
@@ -597,7 +597,7 @@ const SharedQuickPlayScreen = () => {
                   background: 'rgba(245,158,11,0.1)', display: 'inline-block',
                   fontSize: '0.7rem', fontWeight: 600, color: '#f59e0b',
                 }}>
-                  🏠 חצי נקודה — תשובה טובה לפוקר מקצועי, לא אופטימלית למשחק שלנו
+                  🏠 תשובה טובה לפוקר מקצועי, לא אופטימלית למשחק שלנו
                 </div>
               )}
 

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.3';
+export const APP_VERSION = '5.10.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.4',
+    date: '2026-03-11',
+    changes: [
+      '🚩 Flagged question removal — loading state, error handling, uses local cache to avoid stale GitHub reads',
+      '🎯 Near-miss icon changed from ½ to ~, cleaner near-miss label text',
+    ]
+  },
   {
     version: '5.10.3',
     date: '2026-03-11',
