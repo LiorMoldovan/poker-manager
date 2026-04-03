@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T15:13:13.794Z",
+  "lastUpdated": "2026-04-03T16:45:15.883Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -235,11 +235,37 @@
           "flaggedPoolIds": [
             "2b374g"
           ]
+        },
+        {
+          "date": "2026-04-03T16:45:15.305Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "86bnbt",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kryfym",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2ke0kq",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 33,
-      "totalCorrect": 17,
-      "accuracy": 51.515151515151516
+      "totalQuestions": 36,
+      "totalCorrect": 19,
+      "accuracy": 52.77777777777778
     },
     {
       "playerName": "אייל",
