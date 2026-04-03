@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T13:35:06.951Z",
+  "lastUpdated": "2026-04-03T14:02:02.484Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1354,6 +1354,82 @@
       "totalQuestions": 25,
       "totalCorrect": 13,
       "accuracy": 52
+    },
+    {
+      "playerName": "דן מאן",
+      "sessions": [
+        {
+          "date": "2026-04-03T14:02:01.851Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "8nulv0",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iynh6i",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "343leg",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d4vw1m",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dpfps7",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "imlsmw",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "4jiv53",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "l59pod",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1lktke",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r724dg",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        }
+      ],
+      "totalQuestions": 10,
+      "totalCorrect": 7,
+      "accuracy": 70
     }
   ]
 }
