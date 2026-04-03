@@ -1,12 +1,12 @@
 {
-  "lastUpdated": "2026-04-03T18:47:25.942Z",
+  "lastUpdated": "2026-04-03T19:15:21.931Z",
   "players": [
     {
       "playerName": "ליאור",
       "sessions": [
         {
           "date": "2026-03-31T18:31:30.667Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 4,
           "correctAnswers": 3,
           "results": [
             {
@@ -25,7 +25,8 @@
               "poolId": "fdxqju",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "vvpw4h",
@@ -44,14 +45,15 @@
         },
         {
           "date": "2026-04-01T11:44:49.339Z",
-          "questionsAnswered": 8,
+          "questionsAnswered": 3,
           "correctAnswers": 2,
           "results": [
             {
               "poolId": "z9c88h",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "yr2g88",
@@ -69,25 +71,29 @@
               "poolId": "d4vw1m",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "7ay5va",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "2e8usf",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "tr3g9w",
               "categoryId": "bluff_catching",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "txee86",
@@ -100,14 +106,15 @@
         },
         {
           "date": "2026-04-01T23:40:45.610Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 7,
           "correctAnswers": 5,
           "results": [
             {
               "poolId": "myddzc",
               "categoryId": "medium_pairs",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "1998la",
@@ -125,7 +132,8 @@
               "poolId": "4znomq",
               "categoryId": "preflop_open",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "xxr9ki",
@@ -149,7 +157,8 @@
               "poolId": "8nulv0",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "wf44o2",
@@ -168,7 +177,7 @@
         },
         {
           "date": "2026-04-01T23:45:25.280Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 8,
           "correctAnswers": 7,
           "results": [
             {
@@ -205,7 +214,8 @@
               "poolId": "plngn0",
               "categoryId": "position_play",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "6f1acb",
@@ -223,7 +233,8 @@
               "poolId": "uehzgy",
               "categoryId": "three_bet_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "pveiqa",
@@ -264,7 +275,7 @@
         },
         {
           "date": "2026-04-03T18:47:25.564Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 9,
           "correctAnswers": 7,
           "results": [
             {
@@ -336,16 +347,16 @@
           ]
         }
       ],
-      "totalQuestions": 46,
+      "totalQuestions": 34,
       "totalCorrect": 26,
-      "accuracy": 56.52173913043478
+      "accuracy": 76.47058823529412
     },
     {
       "playerName": "אייל",
       "sessions": [
         {
           "date": "2026-03-31T19:00:49.325Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 7,
           "correctAnswers": 5,
           "results": [
             {
@@ -358,13 +369,15 @@
               "poolId": "w7ybtr",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "tr3g9w",
               "categoryId": "bluff_catching",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "xdhd9s",
@@ -376,7 +389,8 @@
               "poolId": "7ay5va",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "343leg",
@@ -413,7 +427,7 @@
         },
         {
           "date": "2026-03-31T19:24:00.252Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 8,
           "correctAnswers": 8,
           "results": [
             {
@@ -444,7 +458,8 @@
               "poolId": "naafbv",
               "categoryId": "medium_pairs",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "2x5t53",
@@ -456,7 +471,8 @@
               "poolId": "d4vw1m",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "fdxqju",
@@ -480,16 +496,16 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 20,
+      "totalQuestions": 15,
       "totalCorrect": 13,
-      "accuracy": 65
+      "accuracy": 86.66666666666667
     },
     {
       "playerName": "ארז",
       "sessions": [
         {
           "date": "2026-04-01T07:21:04.422Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 8,
           "correctAnswers": 6,
           "results": [
             {
@@ -508,7 +524,8 @@
               "poolId": "fdxqju",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "r3x7l7",
@@ -526,7 +543,8 @@
               "poolId": "w7ybtr",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "9x51c2",
@@ -557,14 +575,15 @@
         },
         {
           "date": "2026-04-01T08:20:39.051Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 4,
           "correctAnswers": 4,
           "results": [
             {
               "poolId": "v7rjet",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "n749b5",
@@ -588,25 +607,29 @@
               "poolId": "39l525",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "iwytf7",
               "categoryId": "stack_depth",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "5optvl",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "lxe9p9",
               "categoryId": "stack_depth",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "hljw47",
@@ -618,14 +641,15 @@
               "poolId": "4ajnvb",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             }
           ],
           "flaggedPoolIds": []
         },
         {
           "date": "2026-04-01T08:25:16.255Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 7,
           "correctAnswers": 5,
           "results": [
             {
@@ -650,13 +674,15 @@
               "poolId": "fyw36m",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "kf533m",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "vvpw4h",
@@ -680,7 +706,8 @@
               "poolId": "rj9r30",
               "categoryId": "medium_pairs",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "z03yfe",
@@ -693,7 +720,7 @@
         },
         {
           "date": "2026-04-01T09:02:26.935Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 6,
           "correctAnswers": 6,
           "results": [
             {
@@ -706,7 +733,8 @@
               "poolId": "vhfy8b",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "6fzlnm",
@@ -724,13 +752,15 @@
               "poolId": "d9hbp1",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "9kagj8",
               "categoryId": "slow_play",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "6mz966",
@@ -748,7 +778,8 @@
               "poolId": "ndtdjd",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "vt0dtz",
@@ -761,7 +792,7 @@
         },
         {
           "date": "2026-04-01T09:18:25.347Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 9,
           "correctAnswers": 7,
           "results": [
             {
@@ -816,7 +847,8 @@
               "poolId": "7ay5va",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "yrkowz",
@@ -829,7 +861,7 @@
         },
         {
           "date": "2026-04-02T15:48:07.130Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 8,
           "correctAnswers": 5,
           "results": [
             {
@@ -854,13 +886,15 @@
               "poolId": "gmv3lu",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "cgkdsp",
               "categoryId": "slow_play",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "142ltl",
@@ -964,16 +998,16 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 70,
+      "totalQuestions": 52,
       "totalCorrect": 42,
-      "accuracy": 60
+      "accuracy": 80.76923076923077
     },
     {
       "playerName": "אורן",
       "sessions": [
         {
           "date": "2026-04-01T11:09:01.358Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 9,
           "correctAnswers": 6,
           "results": [
             {
@@ -998,7 +1032,8 @@
               "poolId": "39l525",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "kryfym",
@@ -1041,45 +1076,50 @@
         },
         {
           "date": "2026-04-02T16:04:12.893Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 0,
           "correctAnswers": 0,
           "results": [
             {
               "poolId": "gmv3lu",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "5jx66w",
               "categoryId": "preflop_open",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "kf533m",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "d4vw1m",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "gmsrrc",
               "categoryId": "flush_draw",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             }
           ],
           "flaggedPoolIds": []
         },
         {
           "date": "2026-04-03T11:18:28.575Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 5,
           "correctAnswers": 3,
           "results": [
             {
@@ -1110,31 +1150,36 @@
               "poolId": "3euxq6",
               "categoryId": "slow_play",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "vn4vpp",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "qgx1ya",
               "categoryId": "slow_play",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "z03yfe",
               "categoryId": "preflop_open",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "66p24o",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "4ajnvb",
@@ -1147,14 +1192,15 @@
         },
         {
           "date": "2026-04-03T11:37:01.443Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 7,
           "correctAnswers": 7,
           "results": [
             {
               "poolId": "xgw0b9",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "lszteu",
@@ -1178,7 +1224,8 @@
               "poolId": "3d2cej",
               "categoryId": "stack_depth",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "mx6ber",
@@ -1196,7 +1243,8 @@
               "poolId": "aokiio",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "wxant2",
@@ -1215,14 +1263,15 @@
         },
         {
           "date": "2026-04-03T13:35:06.325Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 4,
           "correctAnswers": 3,
           "results": [
             {
               "poolId": "n2l64h",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "txee86",
@@ -1253,7 +1302,7 @@
         },
         {
           "date": "2026-04-03T15:13:13.316Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 4,
           "correctAnswers": 3,
           "results": [
             {
@@ -1272,7 +1321,8 @@
               "poolId": "f2i4tr",
               "categoryId": "set_mining",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "7swk4w",
@@ -1291,7 +1341,7 @@
         },
         {
           "date": "2026-04-03T17:17:02.387Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 6,
           "correctAnswers": 4,
           "results": [
             {
@@ -1310,13 +1360,15 @@
               "poolId": "mi0ks3",
               "categoryId": "set_mining",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "r3x7l7",
               "categoryId": "flush_draw",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "t7xtib",
@@ -1334,7 +1386,8 @@
               "poolId": "hubnki",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "q24l5e",
@@ -1346,7 +1399,8 @@
               "poolId": "el29n3",
               "categoryId": "set_mining",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "9s6ia4",
@@ -1396,16 +1450,16 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 60,
+      "totalQuestions": 40,
       "totalCorrect": 31,
-      "accuracy": 51.66666666666667
+      "accuracy": 77.5
     },
     {
       "playerName": "מלמד",
       "sessions": [
         {
           "date": "2026-04-03T10:13:50.349Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 3,
           "correctAnswers": 3,
           "results": [
             {
@@ -1418,13 +1472,15 @@
               "poolId": "pfg85t",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "txee86",
               "categoryId": "bluff_catching",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "bpa8x1",
@@ -1443,14 +1499,15 @@
         },
         {
           "date": "2026-04-03T10:45:23.542Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 4,
           "correctAnswers": 3,
           "results": [
             {
               "poolId": "i166cq",
               "categoryId": "preflop_vs_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "bmocnx",
@@ -1481,7 +1538,7 @@
         },
         {
           "date": "2026-04-03T10:53:34.129Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 4,
           "correctAnswers": 3,
           "results": [
             {
@@ -1506,7 +1563,8 @@
               "poolId": "wxant2",
               "categoryId": "multiway_pots",
               "correct": false,
-              "chosenId": "C"
+              "chosenId": "C",
+              "nearMiss": true
             },
             {
               "poolId": "7a97um",
@@ -1519,7 +1577,7 @@
         },
         {
           "date": "2026-04-03T10:55:44.225Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 1,
           "correctAnswers": 1,
           "results": [
             {
@@ -1532,32 +1590,36 @@
               "poolId": "ysj3vn",
               "categoryId": "blind_defense",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "m8mvl9",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "vn4vpp",
               "categoryId": "cbet",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "5jx66w",
               "categoryId": "preflop_open",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             }
           ],
           "flaggedPoolIds": []
         },
         {
           "date": "2026-04-03T11:03:36.250Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 3,
           "correctAnswers": 3,
           "results": [
             {
@@ -1570,7 +1632,8 @@
               "poolId": "qpv756",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "4o7orp",
@@ -1588,29 +1651,31 @@
               "poolId": "eg4r5m",
               "categoryId": "slow_play",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             }
           ],
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 25,
+      "totalQuestions": 15,
       "totalCorrect": 13,
-      "accuracy": 52
+      "accuracy": 86.66666666666667
     },
     {
       "playerName": "דן מאן",
       "sessions": [
         {
           "date": "2026-04-03T14:02:01.851Z",
-          "questionsAnswered": 10,
+          "questionsAnswered": 8,
           "correctAnswers": 7,
           "results": [
             {
               "poolId": "8nulv0",
               "categoryId": "check_raise",
               "correct": false,
-              "chosenId": "A"
+              "chosenId": "A",
+              "nearMiss": true
             },
             {
               "poolId": "iynh6i",
@@ -1628,7 +1693,8 @@
               "poolId": "d4vw1m",
               "categoryId": "wet_board_top_pair",
               "correct": false,
-              "chosenId": "B"
+              "chosenId": "B",
+              "nearMiss": true
             },
             {
               "poolId": "dpfps7",
@@ -1670,9 +1736,9 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 10,
+      "totalQuestions": 8,
       "totalCorrect": 7,
-      "accuracy": 70
+      "accuracy": 87.5
     }
   ]
 }
