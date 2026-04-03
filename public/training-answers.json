@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T16:45:15.883Z",
+  "lastUpdated": "2026-04-03T17:17:03.040Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1215,11 +1215,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T17:17:02.387Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "it1gp2",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r5c0yg",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mi0ks3",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r3x7l7",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "t7xtib",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iqhtut",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hubnki",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "q24l5e",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "el29n3",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "9s6ia4",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 45,
-      "totalCorrect": 22,
-      "accuracy": 48.888888888888886
+      "totalQuestions": 55,
+      "totalCorrect": 26,
+      "accuracy": 47.27272727272727
     },
     {
       "playerName": "מלמד",
