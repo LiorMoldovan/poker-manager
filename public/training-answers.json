@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T21:03:39.038Z",
+  "lastUpdated": "2026-04-03T21:11:23.254Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -358,11 +358,68 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-03T21:11:22.730Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "9tdp1l",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "o60ou7",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "bmocnx",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dzwsgs",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "sgqy9v",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "9tdp1l",
+            "dzwsgs"
+          ],
+          "flagReports": [
+            {
+              "poolId": "9tdp1l",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "השאלה חסרה מידע נוסף, כמה שחקנים, אופי המהמר, כמה יש בקופה , בקיצור חסר מידע",
+              "date": "2026-04-03T21:08:47.004Z"
+            },
+            {
+              "poolId": "dzwsgs",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "הייתי מוסיף עוד מידע",
+              "date": "2026-04-03T21:10:33.336Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 33,
-      "totalCorrect": 29,
-      "accuracy": 87.87878787878788
+      "totalQuestions": 38,
+      "totalCorrect": 33,
+      "accuracy": 86.8421052631579
     },
     {
       "playerName": "אייל",
