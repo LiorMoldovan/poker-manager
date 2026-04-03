@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T20:52:51.928Z",
+  "lastUpdated": "2026-04-03T21:00:02.061Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -317,11 +317,70 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T21:00:01.382Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "arxf6w",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hotnmn",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "c2uv1i",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "swk9e6",
+              "categoryId": "thin_value",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iggo0p",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "arxf6w",
+            "hotnmn"
+          ],
+          "flagReports": [
+            {
+              "poolId": "arxf6w",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "מה זה עמדת המפיץ?",
+              "date": "2026-04-03T20:56:40.342Z"
+            },
+            {
+              "poolId": "hotnmn",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "יש שגיאה באיות המילה אס, כתוב אסה",
+              "date": "2026-04-03T20:57:50.341Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 30,
-      "totalCorrect": 26,
-      "accuracy": 86.66666666666667
+      "totalQuestions": 33,
+      "totalCorrect": 29,
+      "accuracy": 87.87878787878788
     },
     {
       "playerName": "אייל",
