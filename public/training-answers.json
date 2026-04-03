@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T21:01:49.563Z",
+  "lastUpdated": "2026-04-03T21:03:39.038Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -356,18 +356,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "hotnmn"
-          ],
-          "flagReports": [
-            {
-              "poolId": "hotnmn",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "יש שגיאה באיות המילה אס, כתוב אסה",
-              "date": "2026-04-03T20:57:50.341Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 33,
