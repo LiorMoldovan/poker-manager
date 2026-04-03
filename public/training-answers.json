@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T20:00:51.281Z",
+  "lastUpdated": "2026-04-03T20:02:27.465Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1564,11 +1564,105 @@
           "flaggedPoolIds": [
             "ru8emh"
           ]
+        },
+        {
+          "date": "2026-04-03T19:58:58.962Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "lrugv8",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "oy34ga",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "b82fap",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "6jjhzf",
+              "categoryId": "position_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "u9jeor",
+              "categoryId": "postflop",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T20:02:20.911Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "n11a6m",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "kgpgvw",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5178os",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w7yv5n",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mxjt3i",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1ou8ni",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ysj3vn",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 60,
-      "totalCorrect": 42,
-      "accuracy": 70
+      "totalQuestions": 72,
+      "totalCorrect": 46,
+      "accuracy": 63.888888888888886
     },
     {
       "playerName": "מלמד",
