@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-02T16:04:13.414Z",
+  "lastUpdated": "2026-04-03T10:13:50.824Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -982,6 +982,52 @@
       "totalQuestions": 15,
       "totalCorrect": 6,
       "accuracy": 40
+    },
+    {
+      "playerName": "מלמד",
+      "sessions": [
+        {
+          "date": "2026-04-03T10:13:50.349Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "vli78m",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "pfg85t",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "txee86",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bpa8x1",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "if3dan",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        }
+      ],
+      "totalQuestions": 5,
+      "totalCorrect": 3,
+      "accuracy": 60
     }
   ]
 }
