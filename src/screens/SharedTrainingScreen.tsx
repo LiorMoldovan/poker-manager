@@ -157,8 +157,10 @@ const SharedTrainingScreen = () => {
         padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
         background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
         fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6, direction: 'rtl',
+        display: 'flex', gap: '0.35rem',
       }}>
-        💡 השאלות מותאמות למשחק ביתי חברתי — בלופים עובדים פחות, שחקנים קוראים הרבה, והתשובות מתחשבות בסגנון שלנו ולא בפוקר מקצועי
+        <span style={{ flexShrink: 0 }}>💡</span>
+        <span>השאלות מותאמות למשחק ביתי חברתי — בלופים עובדים פחות, שחקנים קוראים הרבה, והתשובות מתחשבות בסגנון שלנו ולא בפוקר מקצועי</span>
       </div>
 
       {/* Start Training */}

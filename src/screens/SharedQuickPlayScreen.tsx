@@ -59,6 +59,9 @@ const SharedQuickPlayScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [showStyleTip, setShowStyleTip] = useState(true);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<TrainingAnswerResult[]>([]);
+  const flaggedRef = useRef<Set<string>>(new Set());
+  const sessionConcludedRef = useRef(false);
 
   const name = playerName || 'Unknown';
 
@@ -81,6 +84,9 @@ const SharedQuickPlayScreen = () => {
       setScenarios(loaded);
       setCurrentIdx(0);
       setResults([]);
+      resultsRef.current = [];
+      flaggedRef.current = new Set();
+      sessionConcludedRef.current = false;
       setSelectedOption(null);
       setShowSummary(false);
       setNewBadgeIds([]);
@@ -95,6 +101,36 @@ const SharedQuickPlayScreen = () => {
   useEffect(() => {
     loadScenarios();
   }, [loadScenarios]);
+
+  // Save partial session on unmount (user navigated away mid-session)
+  useEffect(() => {
+    return () => {
+      if (!sessionConcludedRef.current && resultsRef.current.length > 0) {
+        const r = resultsRef.current;
+        const f = flaggedRef.current;
+        const correctCount = r.filter(x => x.correct).length;
+        const total = r.length;
+
+        const progress = getSharedProgress(name);
+        progress.sessionsCompleted++;
+        updateStreak(progress);
+        const badges = checkNewBadges(progress);
+        if (badges.length > 0) progress.earnedBadgeIds = [...progress.earnedBadgeIds, ...badges];
+        saveSharedProgress(name, progress);
+
+        const session: TrainingSession = {
+          date: new Date().toISOString(),
+          questionsAnswered: total,
+          correctAnswers: correctCount,
+          results: r,
+          flaggedPoolIds: Array.from(f),
+        };
+        bufferSessionForUpload(name, session);
+        flushPendingUploads(true);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Flush pending uploads on visibility change
   useEffect(() => {
@@ -123,7 +159,11 @@ const SharedQuickPlayScreen = () => {
       nearMiss: isNearMiss || undefined,
       chosenId: optionId,
     };
-    setResults(prev => [...prev, result]);
+    setResults(prev => {
+      const updated = [...prev, result];
+      resultsRef.current = updated;
+      return updated;
+    });
 
     const progress = getSharedProgress(name);
     progress.totalQuestions++;
@@ -157,13 +197,17 @@ const SharedQuickPlayScreen = () => {
     setSelectedOption(null);
   };
 
-  const concludeSession = () => {
-    const correctCount = results.filter(r => r.correct).length;
-    const total = results.length;
+  const concludeSession = (resultsToUse?: TrainingAnswerResult[], flaggedToUse?: Set<string>) => {
+    const finalResults = resultsToUse || results;
+    const finalFlagged = flaggedToUse || flaggedThisSession;
+    const correctCount = finalResults.filter(r => r.correct).length;
+    const total = finalResults.length;
     if (total === 0) {
-      navigate('/shared-training');
+      if (!resultsToUse) navigate('/shared-training');
       return;
     }
+
+    sessionConcludedRef.current = true;
 
     const progress = getSharedProgress(name);
     progress.sessionsCompleted++;
@@ -172,7 +216,7 @@ const SharedQuickPlayScreen = () => {
     const badges = checkNewBadges(progress);
     if (badges.length > 0) {
       progress.earnedBadgeIds = [...progress.earnedBadgeIds, ...badges];
-      setNewBadgeIds(badges);
+      if (!resultsToUse) setNewBadgeIds(badges);
     }
 
     saveSharedProgress(name, progress);
@@ -181,18 +225,22 @@ const SharedQuickPlayScreen = () => {
       date: new Date().toISOString(),
       questionsAnswered: total,
       correctAnswers: correctCount,
-      results,
-      flaggedPoolIds: Array.from(flaggedThisSession),
+      results: finalResults,
+      flaggedPoolIds: Array.from(finalFlagged),
     };
     bufferSessionForUpload(name, session);
     flushPendingUploads();
 
-    setShowSummary(true);
+    if (!resultsToUse) setShowSummary(true);
   };
 
   const handleFlag = () => {
     const scenario = scenarios[currentIdx];
-    setFlaggedThisSession(prev => new Set(prev).add(scenario.poolId));
+    setFlaggedThisSession(prev => {
+      const updated = new Set(prev).add(scenario.poolId);
+      flaggedRef.current = updated;
+      return updated;
+    });
 
     const progress = getSharedProgress(name);
     if (!progress.flaggedPoolIds.includes(scenario.poolId)) {
@@ -494,8 +542,9 @@ const SharedQuickPlayScreen = () => {
           background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
           display: 'flex', alignItems: 'flex-start', gap: '0.4rem', direction: 'rtl',
         }}>
-          <div style={{ flex: 1, fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            💡 התשובות מותאמות למשחק ביתי — שחקנים קוראים יותר, בלופים עובדים פחות
+          <div style={{ flex: 1, fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', gap: '0.35rem' }}>
+            <span style={{ flexShrink: 0 }}>💡</span>
+            <span>התשובות מותאמות למשחק ביתי — שחקנים קוראים יותר, בלופים עובדים פחות</span>
           </div>
           <button onClick={() => setShowStyleTip(false)} style={{
             background: 'none', border: 'none', color: 'var(--text-muted)',
@@ -630,13 +679,13 @@ const SharedQuickPlayScreen = () => {
         );
       })()}
 
-      {/* Flag + Next row */}
+      {/* Next + Flag */}
       {selectedOption && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
+        <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <button
             onClick={handleNext}
             style={{
-              flex: 1, padding: '0.85rem', borderRadius: '12px', border: 'none',
+              width: '100%', padding: '0.85rem', borderRadius: '12px', border: 'none',
               background: currentIdx >= scenarios.length - 1
                 ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
                 : 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
@@ -651,23 +700,23 @@ const SharedQuickPlayScreen = () => {
             <button
               onClick={() => setShowFlagConfirm(true)}
               style={{
-                height: '44px', borderRadius: '12px', padding: '0 0.6rem',
+                width: '100%', padding: '0.55rem', borderRadius: '10px',
                 border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.06)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
-                fontSize: '0.7rem', color: '#ef4444', flexShrink: 0,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem',
+                fontSize: '0.75rem', color: '#ef4444',
               }}
             >
-              🚩 שאלה שגויה
+              🚩 השאלה או התשובה לא נכונים? דווח כאן
             </button>
           )}
           {isFlagged && (
             <div style={{
-              height: '44px', borderRadius: '12px', padding: '0 0.6rem',
+              width: '100%', padding: '0.55rem', borderRadius: '10px',
               background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '0.7rem', color: '#ef4444', flexShrink: 0,
+              fontSize: '0.75rem', color: '#ef4444',
             }}>
-              ✓ דווח
+              ✓ דווח בהצלחה
             </div>
           )}
         </div>

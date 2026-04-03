@@ -1840,6 +1840,7 @@ const SettingsScreen = () => {
                 className="btn btn-sm btn-outline"
                 onClick={() => {
                   localStorage.removeItem('poker_player_identity');
+                  localStorage.removeItem('poker_player_identity_id');
                   signOut();
                 }}
                 style={{ fontSize: '0.75rem' }}
@@ -2023,7 +2024,7 @@ const SettingsScreen = () => {
                 </div>
 
                 {devices.map(([deviceId, { entries, latest }]) => {
-                  const latestPlayerName = entries.find(e => e.playerName)?.playerName;
+                  const latestPlayerName = [...entries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).find(e => e.playerName)?.playerName;
                   const label = latestPlayerName || deviceLabels[deviceId];
                   const isEditing = editingDeviceId === deviceId;
                   const roleInfo = getRoleInfo(latest.role);

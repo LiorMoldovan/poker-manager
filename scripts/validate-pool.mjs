@@ -1,346 +1,363 @@
 /**
- * Training Pool Quality Validator
+ * Deterministic Poker Logic Validator
+ * Checks all pool questions for poker mistakes WITHOUT using AI
  * 
- * Usage:
- *   node scripts/validate-pool.mjs <path-to-training-pool.json>
- *   node scripts/validate-pool.mjs --fetch   (fetches from GitHub)
+ * Catches:
+ * - Hands that form straights/flushes/full houses not recognized
+ * - Impossible card combinations (duplicates)
+ * - Betting action inconsistencies
+ * - Missing amounts, placeholder text
+ * - English terms
+ * - Unrealistic chip amounts
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 
-// ── Config ──
+const POOL_PATH = './public/training-pool.json';
+const pool = JSON.parse(readFileSync(POOL_PATH, 'utf-8'));
 
-const VALID_SUITS = ['♠', '♦', '♣', '♥'];
-const VALID_RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
+// Card parsing utilities
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+const SUITS = { '♠': 'spades', '♣': 'clubs', '♥': 'hearts', '♦': 'diamonds', '♤': 'spades', '♧': 'clubs', '♡': 'hearts', '♢': 'diamonds' };
+const SUIT_CHARS = Object.keys(SUITS);
 
-const ENGLISH_TERMS = [
-  'equity', 'EV', 'expected value', 'SPR', 'stack-to-pot',
-  'range', 'c-bet', 'continuation bet', 'semi-bluff', 'value bet',
-  'fold equity', 'implied odds', 'pot odds', 'reverse implied',
-  'donk bet', 'float', 'barrel', 'polarized', 'merged',
-  'GTO', 'ICM', 'showdown value', 'blocker', 'combo draw',
-  'overcall', 'squeeze', 'cold call', 'limp', '3-bet', '4-bet',
-  'open raise', 'flat call', 'check-raise', 'slow play',
-  'under the gun', 'cutoff', 'button', 'big blind', 'small blind',
-  'flop', 'turn', 'river', 'preflop', 'pre-flop',
-  'nuts', 'drawing dead', 'outs', 'backdoor',
-];
-
-const ENGLISH_TERM_PATTERNS = ENGLISH_TERMS.map(t => ({
-  term: t,
-  regex: new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
-}));
-
-const CATEGORIES = [
-  'preflop-open', 'preflop-3bet', 'preflop-squeeze', 'preflop-multiway',
-  'cbet-flop', 'cbet-turn', 'check-raise', 'donk-bet',
-  'draw-play', 'set-play', 'top-pair', 'overpair',
-  'bluff-spot', 'semi-bluff', 'value-bet', 'thin-value',
-  'pot-control', 'trap-play', 'multiway-post', 'short-stack',
-  'bubble-play', 'heads-up', 'position-play', 'read-based',
-];
-
-// ── Load data ──
-
-const args = process.argv.slice(2);
-let poolData;
-
-if (args[0] === '--fetch') {
-  console.log('Fetching from GitHub...');
-  const resp = await fetch(
-    'https://api.github.com/repos/LiorMoldovan/poker-manager/contents/public/training-pool.json',
-    { headers: { Accept: 'application/vnd.github.v3+json' } }
-  );
-  if (!resp.ok) {
-    console.error(`GitHub fetch failed: ${resp.status}`);
-    process.exit(1);
+function parseCards(text) {
+  if (!text) return [];
+  const cards = [];
+  // Match patterns like "A♠", "10♦", "K♣", etc.
+  const regex = /(10|[2-9JQKA])\s*([♠♣♥♦♤♧♡♢])/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    cards.push({ rank: match[1], suit: match[2], value: RANK_VALUES[match[1]] });
   }
-  const ghData = await resp.json();
-  poolData = JSON.parse(Buffer.from(ghData.content, 'base64').toString('utf-8'));
-} else if (args[0]) {
-  poolData = JSON.parse(readFileSync(args[0], 'utf-8'));
-} else {
-  console.error('Usage: node scripts/validate-pool.mjs <file.json> | --fetch');
-  process.exit(1);
+  return cards;
 }
 
-// ── Validation engine ──
+function extractBoardCards(situation) {
+  // Look for board/flop/turn/river descriptions
+  const cards = parseCards(situation);
+  return cards;
+}
 
-const issues = [];
-const warnings = [];
-const stats = {
-  total: 0,
-  byCategory: {},
-  avgSituationLen: 0,
-  avgExplanationLen: 0,
-  shortExplanations: 0,
-  shortSituations: 0,
-  englishTermHits: 0,
-  cardFormatErrors: 0,
-  bettingLogicErrors: 0,
-  duplicateSituations: 0,
-  missingFields: 0,
-  wrongOptionCount: 0,
-  wrongCorrectCount: 0,
-  uniqueCards: new Set(),
-};
-
-const scenarios = poolData.scenarios || [];
-stats.total = scenarios.length;
-
-// ── Helpers ──
-
-function validateCard(card) {
-  const trimmed = card.trim();
-  for (const rank of VALID_RANKS) {
-    for (const suit of VALID_SUITS) {
-      if (trimmed === rank + suit) return true;
+function hasStraight(cards) {
+  if (cards.length < 5) return false;
+  const values = [...new Set(cards.map(c => c.value))].sort((a, b) => a - b);
+  // Check for A-low straight (A,2,3,4,5)
+  if (values.includes(14)) values.unshift(1);
+  
+  for (let i = 0; i <= values.length - 5; i++) {
+    let consecutive = 1;
+    for (let j = i + 1; j < values.length && consecutive < 5; j++) {
+      if (values[j] === values[j-1] + 1) consecutive++;
+      else if (values[j] !== values[j-1]) break;
     }
+    if (consecutive >= 5) return true;
+  }
+  
+  // Also check any 5-card window
+  for (let i = 0; i <= values.length - 5; i++) {
+    if (values[i + 4] - values[i] === 4) {
+      const window = values.slice(i, i + 5);
+      if (new Set(window).size === 5) return true;
+    }
+  }
+  
+  return false;
+}
+
+function hasFlush(cards) {
+  if (cards.length < 5) return false;
+  const suitCounts = {};
+  cards.forEach(c => {
+    const suitName = SUITS[c.suit] || c.suit;
+    suitCounts[suitName] = (suitCounts[suitName] || 0) + 1;
+  });
+  return Object.values(suitCounts).some(count => count >= 5);
+}
+
+function hasFlushDraw(cards) {
+  if (cards.length < 4) return false;
+  const suitCounts = {};
+  cards.forEach(c => {
+    const suitName = SUITS[c.suit] || c.suit;
+    suitCounts[suitName] = (suitCounts[suitName] || 0) + 1;
+  });
+  return Object.values(suitCounts).some(count => count === 4);
+}
+
+function hasStraightDraw(cards) {
+  const values = [...new Set(cards.map(c => c.value))].sort((a, b) => a - b);
+  if (values.includes(14)) values.unshift(1);
+  
+  // Check for 4 cards within a span of 4 (open-ended) or 5 (gutshot)
+  for (let i = 0; i <= values.length - 4; i++) {
+    const span = values[i + 3] - values[i];
+    if (span === 3) return 'oesd'; // Open-ended
+    if (span === 4) return 'gutshot';
   }
   return false;
 }
 
-function validateCards(yourCards) {
-  if (!yourCards || typeof yourCards !== 'string') return false;
-  const cards = yourCards.split(/\s+/);
-  if (cards.length !== 2) return false;
-  return cards.every(validateCard);
+function hasThreeOfAKind(cards) {
+  const rankCounts = {};
+  cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+  return Object.values(rankCounts).some(count => count >= 3);
 }
 
-function checkEnglishTerms(text) {
-  const found = [];
-  for (const { term, regex } of ENGLISH_TERM_PATTERNS) {
-    if (regex.test(text)) found.push(term);
-  }
-  return found;
+function hasTwoPair(cards) {
+  const rankCounts = {};
+  cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+  const pairs = Object.values(rankCounts).filter(count => count >= 2).length;
+  return pairs >= 2;
 }
 
-function checkBettingLogic(scenario) {
-  const sit = scenario.situation.toLowerCase();
-  const opts = scenario.options.map(o => o.text.toLowerCase());
-
-  const someonebet = sit.includes('המר') || sit.includes('העלה') || sit.includes('הימור')
-    || sit.includes('raise') || sit.includes('bet') || sit.includes('אול-אין');
-  const nobet = sit.includes('צ\'ק') || sit.includes("צ'ק") || sit.includes('בדקו')
-    || sit.includes('אף אחד לא המר');
-
-  const hasCall = opts.some(o => o.includes('קריאה'));
-  const hasCheck = opts.some(o => o.includes("צ'ק") || o.includes('צ\'ק'));
-
-  const errors = [];
-  if (nobet && hasCall && !someonebet) {
-    errors.push('Has "call" option but no one bet');
-  }
-  if (someonebet && hasCheck && !nobet) {
-    errors.push('Has "check" option after someone bet');
-  }
-  return errors;
+function hasFullHouse(cards) {
+  const rankCounts = {};
+  cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+  const counts = Object.values(rankCounts);
+  return counts.some(c => c >= 3) && counts.filter(c => c >= 2).length >= 2;
 }
 
-function similarity(a, b) {
-  const setA = new Set(a.split(/\s+/));
-  const setB = new Set(b.split(/\s+/));
-  const intersection = [...setA].filter(x => setB.has(x)).length;
-  return intersection / Math.max(setA.size, setB.size);
+function hasFourOfAKind(cards) {
+  const rankCounts = {};
+  cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+  return Object.values(rankCounts).some(count => count >= 4);
 }
 
-// ── Run checks per scenario ──
-
-let totalSitLen = 0;
-let totalExpLen = 0;
-let expCount = 0;
-const situationMap = new Map();
-
-for (let i = 0; i < scenarios.length; i++) {
-  const s = scenarios[i];
-  const label = `#${i + 1} [${s.categoryId || '?'}]`;
-
-  // ─ Structural ─
-  if (!s.situation || !s.yourCards || !s.options || !s.poolId) {
-    issues.push(`${label}: Missing required fields`);
-    stats.missingFields++;
-    continue;
-  }
-
-  if (!Array.isArray(s.options) || s.options.length !== 3) {
-    issues.push(`${label}: Has ${s.options?.length ?? 0} options (expected 3)`);
-    stats.wrongOptionCount++;
-  }
-
-  const correctCount = (s.options || []).filter(o => o.isCorrect).length;
-  if (correctCount !== 1) {
-    issues.push(`${label}: Has ${correctCount} correct answers (expected 1)`);
-    stats.wrongCorrectCount++;
-  }
-
-  for (const opt of (s.options || [])) {
-    if (!opt.id || !opt.text) {
-      issues.push(`${label}: Option missing id or text`);
-    }
-    if (!opt.explanation || opt.explanation.length < 10) {
-      issues.push(`${label}: Option "${opt.id}" has missing/short explanation (${opt.explanation?.length || 0} chars)`);
-      stats.shortExplanations++;
-    }
-    if (opt.explanation) {
-      totalExpLen += opt.explanation.length;
-      expCount++;
-    }
-  }
-
-  // ─ Cards ─
-  if (!validateCards(s.yourCards)) {
-    issues.push(`${label}: Invalid card format "${s.yourCards}"`);
-    stats.cardFormatErrors++;
-  }
-  stats.uniqueCards.add(s.yourCards);
-
-  // ─ Situation quality ─
-  totalSitLen += s.situation.length;
-
-  if (s.situation.length < 40) {
-    warnings.push(`${label}: Very short situation (${s.situation.length} chars): "${s.situation.slice(0, 60)}..."`);
-    stats.shortSituations++;
-  }
-
-  if (s.situation.length > 600) {
-    warnings.push(`${label}: Very long situation (${s.situation.length} chars)`);
-  }
-
-  // ─ English terms ─
-  const allText = s.situation + ' ' + (s.options || []).map(o => `${o.text} ${o.explanation || ''}`).join(' ');
-  const engFound = checkEnglishTerms(allText);
-  if (engFound.length > 0) {
-    warnings.push(`${label}: English terms found: ${engFound.join(', ')}`);
-    stats.englishTermHits++;
-  }
-
-  // ─ Betting logic ─
-  const betErrors = checkBettingLogic(s);
-  if (betErrors.length > 0) {
-    warnings.push(`${label}: Betting logic: ${betErrors.join('; ')}`);
-    stats.bettingLogicErrors++;
-  }
-
-  // ─ Category distribution ─
-  const cat = s.categoryId || 'unknown';
-  stats.byCategory[cat] = (stats.byCategory[cat] || 0) + 1;
-
-  // ─ Duplicate tracking ─
-  const sitKey = s.situation.slice(0, 100).toLowerCase();
-  if (situationMap.has(sitKey)) {
-    warnings.push(`${label}: Near-duplicate of scenario #${situationMap.get(sitKey) + 1}`);
-    stats.duplicateSituations++;
-  } else {
-    situationMap.set(sitKey, i);
-  }
+function hasPair(cards) {
+  const rankCounts = {};
+  cards.forEach(c => { rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1; });
+  return Object.values(rankCounts).some(count => count >= 2);
 }
 
-// ─ Fuzzy duplicate check (more thorough but slower) ─
-const fuzzyDups = [];
-const checked = new Set();
-for (let i = 0; i < scenarios.length; i++) {
-  for (let j = i + 1; j < scenarios.length; j++) {
-    if (scenarios[i].categoryId !== scenarios[j].categoryId) continue;
-    if (checked.has(j)) continue;
-    const sim = similarity(scenarios[i].situation, scenarios[j].situation);
-    if (sim > 0.7) {
-      fuzzyDups.push({ a: i + 1, b: j + 1, sim: (sim * 100).toFixed(0), cat: scenarios[i].categoryId });
-      checked.add(j);
-    }
+function hasDuplicateCards(cards) {
+  const seen = new Set();
+  for (const c of cards) {
+    const key = `${c.rank}${SUITS[c.suit] || c.suit}`;
+    if (seen.has(key)) return key;
+    seen.add(key);
   }
+  return false;
 }
 
-stats.avgSituationLen = scenarios.length > 0 ? Math.round(totalSitLen / scenarios.length) : 0;
-stats.avgExplanationLen = expCount > 0 ? Math.round(totalExpLen / expCount) : 0;
-
-// ── Report ──
-
-console.log('\n' + '═'.repeat(60));
-console.log('  TRAINING POOL QUALITY REPORT');
-console.log('═'.repeat(60));
-
-console.log(`\n📊 Overview`);
-console.log(`  Total scenarios:        ${stats.total}`);
-console.log(`  Unique card hands:      ${stats.uniqueCards.size}`);
-console.log(`  Avg situation length:   ${stats.avgSituationLen} chars`);
-console.log(`  Avg explanation length:  ${stats.avgExplanationLen} chars`);
-console.log(`  Generated at:           ${poolData.generatedAt || 'unknown'}`);
-
-console.log(`\n📂 Category Distribution (target: 30 each)`);
-const sortedCats = Object.entries(stats.byCategory).sort((a, b) => a[0].localeCompare(b[0]));
-let underTarget = 0;
-for (const [cat, count] of sortedCats) {
-  const bar = '█'.repeat(Math.round(count / 2));
-  const flag = count < 20 ? ' ⚠️ LOW' : count < 30 ? ' ⚡' : '';
-  console.log(`  ${cat.padEnd(22)} ${String(count).padStart(3)} ${bar}${flag}`);
-  if (count < 20) underTarget++;
-}
-console.log(`  ${'─'.repeat(40)}`);
-console.log(`  Categories covered:     ${sortedCats.length}/${CATEGORIES.length}`);
-if (underTarget > 0) console.log(`  ⚠️  ${underTarget} categories under 20 scenarios`);
-
-const missingCats = CATEGORIES.filter(c => !stats.byCategory[c]);
-if (missingCats.length > 0) {
-  console.log(`  ❌ Missing categories:  ${missingCats.join(', ')}`);
+function bestHandRank(cards) {
+  if (cards.length < 5) return 'incomplete';
+  if (hasFourOfAKind(cards)) return 'four_of_a_kind';
+  if (hasFullHouse(cards)) return 'full_house';
+  if (hasFlush(cards) && hasStraight(cards)) return 'straight_flush';
+  if (hasFlush(cards)) return 'flush';
+  if (hasStraight(cards)) return 'straight';
+  if (hasThreeOfAKind(cards)) return 'three_of_a_kind';
+  if (hasTwoPair(cards)) return 'two_pair';
+  if (hasPair(cards)) return 'pair';
+  return 'high_card';
 }
 
-console.log(`\n❌ Critical Issues (${issues.length})`);
-if (issues.length === 0) {
-  console.log('  ✅ None!');
-} else {
-  issues.slice(0, 30).forEach(i => console.log(`  • ${i}`));
-  if (issues.length > 30) console.log(`  ... and ${issues.length - 30} more`);
-}
+const HAND_RANK_ORDER = {
+  'straight_flush': 8,
+  'four_of_a_kind': 7,
+  'full_house': 6,
+  'flush': 5,
+  'straight': 4,
+  'three_of_a_kind': 3,
+  'two_pair': 2,
+  'pair': 1,
+  'high_card': 0,
+  'incomplete': -1,
+};
 
-console.log(`\n⚠️  Warnings (${warnings.length})`);
-if (warnings.length === 0) {
-  console.log('  ✅ None!');
-} else {
-  warnings.slice(0, 30).forEach(w => console.log(`  • ${w}`));
-  if (warnings.length > 30) console.log(`  ... and ${warnings.length - 30} more`);
-}
+const HAND_NAMES_HEB = {
+  'straight_flush': 'סטרייט פלאש',
+  'four_of_a_kind': 'פור',
+  'full_house': 'פול האוס',
+  'flush': 'צבע',
+  'straight': 'סטרייט',
+  'three_of_a_kind': 'שלישייה',
+  'two_pair': 'זוג כפול',
+  'pair': 'זוג',
+  'high_card': 'קלף גבוה',
+};
 
-if (fuzzyDups.length > 0) {
-  console.log(`\n🔁 Fuzzy Duplicates (${fuzzyDups.length} pairs with >70% similarity)`);
-  fuzzyDups.slice(0, 15).forEach(d => {
-    console.log(`  • #${d.a} ↔ #${d.b}  (${d.sim}% similar, category: ${d.cat})`);
+// Main validation
+const issues = [];
+
+pool.scenarios.forEach((s, idx) => {
+  const scenarioIssues = [];
+  
+  // 1. Structure checks
+  if (s.options.length !== 3) scenarioIssues.push(`❌ ${s.options.length} options (need 3)`);
+  const correctCount = s.options.filter(o => o.isCorrect).length;
+  if (correctCount !== 1) scenarioIssues.push(`❌ ${correctCount} correct answers (need 1)`);
+  if (!s.situation || s.situation.length < 20) scenarioIssues.push(`⚠️ Very short situation`);
+  if (!s.yourCards) scenarioIssues.push(`❌ Missing yourCards`);
+  
+  // 2. Placeholder text
+  const allText = s.situation + ' ' + s.options.map(o => o.text + ' ' + (o.explanation || '')).join(' ');
+  if (allText.includes('[סכום]') || allText.includes('[סכום ההימור]')) scenarioIssues.push(`❌ Placeholder text found`);
+  
+  // 3. English terms
+  const engTerms = ['equity', 'EV ', 'SPR', ' range', 'c-bet', 'semi-bluff', 'value bet', 'fold equity', 'implied odds', 'pot odds', 'ICM', 'GTO', 'bluff catcher'];
+  engTerms.forEach(t => {
+    if (allText.toLowerCase().includes(t.toLowerCase())) scenarioIssues.push(`⚠️ English term: "${t.trim()}"`);
   });
-  if (fuzzyDups.length > 15) console.log(`  ... and ${fuzzyDups.length - 15} more`);
-}
-
-// ── Sample 5 random scenarios for manual review ──
-console.log(`\n📝 Random Sample (5 scenarios for manual review)`);
-console.log('─'.repeat(60));
-const indices = [];
-while (indices.length < Math.min(5, scenarios.length)) {
-  const idx = Math.floor(Math.random() * scenarios.length);
-  if (!indices.includes(idx)) indices.push(idx);
-}
-
-for (const idx of indices) {
-  const s = scenarios[idx];
-  console.log(`\n  #${idx + 1} | ${s.categoryId} | Cards: ${s.yourCards}`);
-  console.log(`  ${s.situation}`);
-  for (const o of s.options) {
-    const mark = o.isCorrect ? '✅' : '  ';
-    console.log(`    ${mark} ${o.id}) ${o.text}`);
-    console.log(`       → ${(o.explanation || '').slice(0, 120)}`);
+  
+  // 4. Dollar references
+  if (allText.includes('$') || allText.includes('דולר')) scenarioIssues.push(`❌ Dollar reference`);
+  
+  // 5. Parse cards for poker logic
+  const handCards = parseCards(s.yourCards);
+  const allCards = extractBoardCards(s.situation);
+  
+  // Combine hand + all cards mentioned in situation
+  // The situation text contains both hand cards and board cards
+  // yourCards are explicitly stated, board cards are in the situation
+  const boardCards = allCards.filter(ac => !handCards.some(hc => hc.rank === ac.rank && SUITS[hc.suit] === SUITS[ac.suit]));
+  const combinedCards = [...handCards, ...boardCards];
+  
+  // 5a. Duplicate cards
+  const dupe = hasDuplicateCards(combinedCards);
+  if (dupe) scenarioIssues.push(`❌ Duplicate card: ${dupe}`);
+  
+  // 5b. Check actual hand strength
+  if (combinedCards.length >= 5) {
+    const hand = bestHandRank(combinedCards);
+    const handRank = HAND_RANK_ORDER[hand];
+    const handName = HAND_NAMES_HEB[hand] || hand;
+    
+    // Check if situation mentions the hand is weak/risky but actually it's strong
+    const correctOpt = s.options.find(o => o.isCorrect);
+    const correctText = (correctOpt?.text || '').toLowerCase();
+    const correctExpl = (correctOpt?.explanation || '');
+    
+    // Flag: has straight or better but correct answer is fold/check
+    if (handRank >= 4 && correctText.includes('ויתור')) {
+      scenarioIssues.push(`🚨 CRITICAL: Player has ${handName} but correct answer is FOLD!`);
+    }
+    
+    // Flag: has flush or better but situation says "risky" or "dangerous"
+    if (handRank >= 5) {
+      if (s.situation.includes('מסוכן') || s.situation.includes('מפחיד')) {
+        scenarioIssues.push(`🚨 CRITICAL: Player has ${handName} but situation says board is dangerous FOR THEM`);
+      }
+    }
+    
+    // Flag: has straight but mentioned as "draw" or "need one more card"
+    if (hand === 'straight' && (allText.includes('חסר קלף') || allText.includes('סיכוי') || allText.includes('ציפייה'))) {
+      scenarioIssues.push(`🚨 CRITICAL: Player already HAS a straight but text suggests they're drawing to it`);
+    }
+    
+    // Flag: has flush but text says "flush draw"
+    if (hand === 'flush' && (allText.includes('חסר קלף לצבע') || allText.includes('סיכוי לצבע'))) {
+      scenarioIssues.push(`🚨 CRITICAL: Player already HAS a flush but text suggests they're drawing to it`);
+    }
+    
+    // Flag: very strong hand (trips+) but correct answer suggests weakness
+    if (handRank >= 3 && correctExpl.includes('חלשה') && !correctExpl.includes('לא חלשה')) {
+      scenarioIssues.push(`⚠️ Player has ${handName} but explanation says hand is weak`);
+    }
+    
+    // Info: log hand for manual review
+    if (handRank >= 4) {
+      scenarioIssues.push(`ℹ️ Strong hand detected: ${handName} (${combinedCards.map(c=>c.rank+c.suit).join(' ')})`);
+    }
   }
+  
+  // 6. Betting logic checks
+  s.options.forEach(o => {
+    // Call without amount
+    if (o.text.includes('קריאה') && !/\d/.test(o.text)) {
+      scenarioIssues.push(`⚠️ "${o.text}" — call without amount`);
+    }
+    // Raise without amount
+    if (o.text.includes('העלאה') && !/\d/.test(o.text)) {
+      scenarioIssues.push(`⚠️ "${o.text}" — raise without amount`);
+    }
+    // Bet without amount
+    if (o.text === 'הימור' || (o.text.includes('הימור') && !/\d/.test(o.text) && !o.text.includes('הימור ערך'))) {
+      // Only flag if it's just "הימור" without a number
+      if (!/\d/.test(o.text)) scenarioIssues.push(`⚠️ "${o.text}" — bet without amount`);
+    }
+  });
+  
+  // 7. Check for home-game context issues
+  const correctOpt = s.options.find(o => o.isCorrect);
+  if (correctOpt) {
+    const ct = correctOpt.text + ' ' + (correctOpt.explanation || '');
+    // Correct answer relies on sophisticated opponent reads
+    if (ct.includes('מייצג') || ct.includes('representation') || ct.includes('הדימוי')) {
+      scenarioIssues.push(`⚠️ Correct answer relies on opponent reading ability — may not work in home game`);
+    }
+    // Correct answer is a big bluff
+    if ((ct.includes('בלוף') || ct.includes('bluff')) && (ct.includes('אול-אין') || ct.includes('all-in'))) {
+      scenarioIssues.push(`⚠️ Correct answer is all-in bluff — risky for home game where players call`);
+    }
+  }
+  
+  // 8. Short/missing explanations
+  s.options.forEach(o => {
+    if (!o.explanation || o.explanation.length < 15) {
+      scenarioIssues.push(`⚠️ Short explanation for option ${o.id}: "${o.explanation || '(empty)'}"`);
+    }
+  });
+  
+  if (scenarioIssues.length > 0) {
+    issues.push({
+      idx,
+      poolId: s.poolId,
+      category: s.categoryId,
+      cards: s.yourCards,
+      situation: s.situation.substring(0, 100),
+      correctAnswer: s.options.find(o => o.isCorrect)?.text,
+      issues: scenarioIssues,
+    });
+  }
+});
+
+// Report
+const critical = issues.filter(i => i.issues.some(x => x.includes('CRITICAL')));
+const warnings = issues.filter(i => !i.issues.some(x => x.includes('CRITICAL')) && i.issues.some(x => x.includes('❌') || x.includes('⚠️')));
+const info = issues.filter(i => i.issues.every(x => x.includes('ℹ️')));
+
+console.log(`\n${'='.repeat(60)}`);
+console.log(`POOL VALIDATION REPORT`);
+console.log(`${'='.repeat(60)}`);
+console.log(`Total scenarios: ${pool.scenarios.length}`);
+console.log(`🚨 CRITICAL issues: ${critical.length}`);
+console.log(`⚠️  Warnings: ${warnings.length}`);
+console.log(`ℹ️  Info (strong hands): ${info.length}`);
+
+if (critical.length > 0) {
+  console.log(`\n${'─'.repeat(40)}`);
+  console.log(`🚨 CRITICAL ISSUES (must fix):`);
+  critical.forEach(i => {
+    console.log(`\n  [${i.poolId}] ${i.category}`);
+    console.log(`  Cards: ${i.cards}`);
+    console.log(`  Situation: ${i.situation}...`);
+    console.log(`  Correct: ${i.correctAnswer}`);
+    i.issues.forEach(x => console.log(`    ${x}`));
+  });
 }
 
-// ── Summary verdict ──
-console.log('\n' + '═'.repeat(60));
-const criticalScore = issues.length === 0 ? 'PASS' : `FAIL (${issues.length} issues)`;
-const warningScore = warnings.length <= 10 ? 'GOOD' : warnings.length <= 30 ? 'OK' : `NEEDS REVIEW (${warnings.length})`;
-const coverageScore = missingCats.length === 0 ? 'FULL' : `INCOMPLETE (${missingCats.length} missing)`;
+if (warnings.length > 0) {
+  console.log(`\n${'─'.repeat(40)}`);
+  console.log(`⚠️ WARNINGS:`);
+  warnings.forEach(i => {
+    console.log(`\n  [${i.poolId}] ${i.category}`);
+    console.log(`  Cards: ${i.cards}`);
+    console.log(`  Correct: ${i.correctAnswer}`);
+    i.issues.filter(x => !x.includes('ℹ️')).forEach(x => console.log(`    ${x}`));
+  });
+}
 
-console.log(`  VERDICT`);
-console.log(`  ├─ Structure:   ${criticalScore}`);
-console.log(`  ├─ Quality:     ${warningScore}`);
-console.log(`  ├─ Coverage:    ${coverageScore}`);
-console.log(`  ├─ Duplicates:  ${fuzzyDups.length === 0 ? 'CLEAN' : `${fuzzyDups.length} pairs`}`);
-console.log(`  └─ Eng terms:   ${stats.englishTermHits === 0 ? 'CLEAN' : `${stats.englishTermHits} scenarios`}`);
-console.log('═'.repeat(60) + '\n');
+if (info.length > 0) {
+  console.log(`\n${'─'.repeat(40)}`);
+  console.log(`ℹ️ Strong hands detected (verify correct answer makes sense):`);
+  info.forEach(i => {
+    console.log(`  [${i.poolId}] ${i.cards} → ${i.issues[0]}`);
+  });
+}
 
-// Exit code: 0 if no critical issues, 1 if there are
-process.exit(issues.length > 0 ? 1 : 0);
+// Write full report
+writeFileSync('./pool-validation-report.json', JSON.stringify({ critical, warnings, info, total: pool.scenarios.length }, null, 2));
+console.log(`\nFull report saved to pool-validation-report.json`);

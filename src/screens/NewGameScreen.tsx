@@ -1663,8 +1663,8 @@ const NewGameScreen = () => {
           >
             <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{icon}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
-              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>}
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
+              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
             </div>
             <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> אימון פוקר ←</button>
           </div>

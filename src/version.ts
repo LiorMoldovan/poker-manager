@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.4';
+export const APP_VERSION = '5.10.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.5',
+    date: '2026-03-11',
+    changes: [
+      '🤖 AI pool review — admin can scan entire training pool for logic, language, and nearMiss issues',
+      '💾 Partial session save — training progress saved on navigate-away, not just on completion',
+      '🪪 Identity by player ID — resolves name changes and legacy name corrections automatically',
+      '🎨 Standings screenshot hardcoded dark theme — consistent look for sharing regardless of user theme',
+      '📊 Top wins filter respects selected players, not just player types',
+      '🔧 Training banner text wrapping enabled, tip icon alignment fix',
+    ]
+  },
   {
     version: '5.10.4',
     date: '2026-03-11',

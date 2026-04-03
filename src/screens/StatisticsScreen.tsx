@@ -600,11 +600,10 @@ const StatisticsScreen = () => {
       const playersCount = gamePlayers.length;
       
       for (const gp of gamePlayers) {
-        // Filter by player type
         if (!validPlayerIds.has(gp.playerId)) continue;
+        if (!selectedPlayers.has(gp.playerId)) continue;
         
-        if (gp.profit > 0) { // Only wins
-          // Look up current player name from database
+        if (gp.profit > 0) {
           const currentPlayer = players.find(p => p.id === gp.playerId);
           const playerName = currentPlayer?.name || gp.playerName;
           
@@ -619,11 +618,10 @@ const StatisticsScreen = () => {
       }
     }
     
-    // Sort by profit descending and take top 20
     return allResults
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
-  }, [stats, players, selectedTypes, timePeriod, selectedYear, selectedMonth]);
+  }, [stats, players, selectedTypes, selectedPlayers, timePeriod, selectedYear, selectedMonth]);
 
   // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
   const top20WinsAllTime = useMemo(() => {

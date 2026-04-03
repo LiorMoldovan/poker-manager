@@ -82,6 +82,40 @@ const PermissionContext = createContext<PermissionContextType>({
 });
 
 const IDENTITY_KEY = 'poker_player_identity';
+const IDENTITY_ID_KEY = 'poker_player_identity_id';
+
+const LEGACY_NAME_CORRECTIONS: Record<string, string> = {
+  'פבל': 'פאבל',
+  'ארז': 'חרדון',
+};
+
+function resolveIdentity(): string | null {
+  const players = getAllPlayers();
+
+  const savedId = localStorage.getItem(IDENTITY_ID_KEY);
+  if (savedId) {
+    const player = players.find(p => p.id === savedId);
+    if (player) {
+      localStorage.setItem(IDENTITY_KEY, player.name);
+      return player.name;
+    }
+  }
+
+  let savedName = localStorage.getItem(IDENTITY_KEY);
+  if (!savedName) return null;
+
+  const corrected = LEGACY_NAME_CORRECTIONS[savedName];
+  if (corrected) savedName = corrected;
+
+  const player = players.find(p => p.name === savedName);
+  if (player) {
+    localStorage.setItem(IDENTITY_ID_KEY, player.id);
+    localStorage.setItem(IDENTITY_KEY, player.name);
+    return player.name;
+  }
+
+  return savedName;
+}
 
 export const usePermissions = () => useContext(PermissionContext);
 
@@ -100,20 +134,40 @@ export const useOnlineStatus = () => {
   return online;
 };
 
-function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (name: string) => void }) {
-  const [selectedName, setSelectedName] = useState('');
+function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (name: string, id?: string) => void }) {
+  const [selectedValue, setSelectedValue] = useState('');
   const [customName, setCustomName] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('all');
   const players = getAllPlayers();
   const permanentPlayers = players.filter(p => p.type === 'permanent');
+  const permanentGuestPlayers = players.filter(p => p.type === 'permanent_guest');
   const guestPlayers = players.filter(p => p.type === 'guest');
 
-  const isMember = role === 'member' || role === 'memberSync';
   const isViewer = role === 'viewer';
 
+  const filteredPlayers = typeFilter === 'all' ? players : players.filter(p => p.type === typeFilter);
+
   const handleConfirm = () => {
-    const name = isViewer && selectedName === '__custom__' ? customName.trim() : selectedName;
-    if (name) onSelect(name);
+    if (isViewer && selectedValue === '__custom__') {
+      const name = customName.trim();
+      if (name) onSelect(name);
+    } else {
+      const player = players.find(p => p.id === selectedValue);
+      if (player) onSelect(player.name, player.id);
+    }
   };
+
+  const filterChipStyle = (active: boolean) => ({
+    padding: '0.35rem 0.7rem',
+    fontSize: '0.75rem',
+    fontWeight: active ? '600' : '400' as const,
+    borderRadius: '20px',
+    border: active ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+    background: active ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+    color: active ? 'var(--primary)' : 'var(--text-muted)',
+    cursor: 'pointer' as const,
+    transition: 'all 0.2s ease',
+  });
 
   return (
     <div style={{
@@ -132,14 +186,35 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
           מי אתה?
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          {isMember ? 'בחר את השם שלך מהרשימה' : 'בחר או הקלד את השם שלך'}
+          בחר את השם שלך מהרשימה
         </p>
       </div>
 
       <div style={{ width: '100%', maxWidth: '300px' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button style={filterChipStyle(typeFilter === 'all')} onClick={() => { setTypeFilter('all'); setSelectedValue(''); }}>
+            הכל ({players.length})
+          </button>
+          {permanentPlayers.length > 0 && (
+            <button style={filterChipStyle(typeFilter === 'permanent')} onClick={() => { setTypeFilter('permanent'); setSelectedValue(''); }}>
+              קבועים ({permanentPlayers.length})
+            </button>
+          )}
+          {permanentGuestPlayers.length > 0 && (
+            <button style={filterChipStyle(typeFilter === 'permanent_guest')} onClick={() => { setTypeFilter('permanent_guest'); setSelectedValue(''); }}>
+              אורחים קבועים ({permanentGuestPlayers.length})
+            </button>
+          )}
+          {guestPlayers.length > 0 && (
+            <button style={filterChipStyle(typeFilter === 'guest')} onClick={() => { setTypeFilter('guest'); setSelectedValue(''); }}>
+              אורחים ({guestPlayers.length})
+            </button>
+          )}
+        </div>
+
         <select
-          value={selectedName}
-          onChange={e => setSelectedName(e.target.value)}
+          value={selectedValue}
+          onChange={e => setSelectedValue(e.target.value)}
           style={{
             width: '100%',
             padding: '0.75rem 1rem',
@@ -153,26 +228,35 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
           }}
         >
           <option value="">בחר שם...</option>
-          {isMember && permanentPlayers.map(p => (
-            <option key={p.id} value={p.name}>{p.name}</option>
-          ))}
+          {typeFilter === 'all' ? (
+            <>
+              {permanentPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── שחקנים קבועים ──</option>}
+              {permanentPlayers.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+              {permanentGuestPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── אורחים קבועים ──</option>}
+              {permanentGuestPlayers.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+              {guestPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── אורחים ──</option>}
+              {guestPlayers.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </>
+          ) : (
+            filteredPlayers.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))
+          )}
           {isViewer && (
             <>
-              {guestPlayers.length > 0 && <option disabled>── אורחים ──</option>}
-              {guestPlayers.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
-              ))}
-              {permanentPlayers.length > 0 && <option disabled>── שחקנים ──</option>}
-              {permanentPlayers.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
-              ))}
               <option disabled>──────</option>
               <option value="__custom__">שם אחר...</option>
             </>
           )}
         </select>
 
-        {isViewer && selectedName === '__custom__' && (
+        {isViewer && selectedValue === '__custom__' && (
           <input
             type="text"
             value={customName}
@@ -196,7 +280,7 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
 
         <button
           onClick={handleConfirm}
-          disabled={!selectedName || (selectedName === '__custom__' && !customName.trim())}
+          disabled={!selectedValue || (selectedValue === '__custom__' && !customName.trim())}
           style={{
             width: '100%',
             padding: '0.85rem',
@@ -204,13 +288,13 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
             fontWeight: '600',
             borderRadius: '10px',
             border: 'none',
-            background: (!selectedName || (selectedName === '__custom__' && !customName.trim()))
+            background: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
               ? 'var(--surface-light)'
               : 'var(--primary)',
-            color: (!selectedName || (selectedName === '__custom__' && !customName.trim()))
+            color: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
               ? 'var(--text-muted)'
               : 'white',
-            cursor: (!selectedName || (selectedName === '__custom__' && !customName.trim()))
+            cursor: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
               ? 'not-allowed'
               : 'pointer',
             transition: 'all 0.2s ease',
@@ -252,10 +336,11 @@ function App() {
     setIsInitialized(true);
     const savedRole = sessionStorage.getItem('poker_role') as PermissionRole;
     if (savedRole && Object.keys(ROLE_PINS).includes(savedRole)) {
-      const savedName = savedRole === 'admin' ? 'ליאור' : (sessionStorage.getItem('poker_player_name') || localStorage.getItem(IDENTITY_KEY));
+      const savedName = savedRole === 'admin' ? 'ליאור' : resolveIdentity();
       if (savedName) {
         setRole(savedRole);
         setPlayerName(savedName);
+        sessionStorage.setItem('poker_player_name', savedName);
       } else {
         setPendingRole(savedRole);
       }
@@ -346,7 +431,7 @@ function App() {
         localStorage.setItem(IDENTITY_KEY, name);
         activateRole(userRole, name);
       } else {
-        const savedName = localStorage.getItem(IDENTITY_KEY);
+        const savedName = resolveIdentity();
         if (savedName) {
           activateRole(userRole, savedName);
         } else {
@@ -416,8 +501,9 @@ function App() {
     return (
       <IdentityPrompt
         role={pendingRole}
-        onSelect={(name) => {
+        onSelect={(name, id) => {
           localStorage.setItem(IDENTITY_KEY, name);
+          if (id) localStorage.setItem(IDENTITY_ID_KEY, id);
           activateRole(pendingRole, name);
           setPendingRole(null);
         }}

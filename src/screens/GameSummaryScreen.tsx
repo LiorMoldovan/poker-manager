@@ -1949,19 +1949,19 @@ const GameSummaryScreen = () => {
       {/* Updated Standings Table - for screenshot */}
       {standingsData.length > 0 && (
         <div ref={standingsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
-          <div className="card" style={{ padding: '0.75rem' }}>
-            <button onClick={() => toggleSection('standings')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: 'var(--text)', marginBottom: collapsedSections.standings ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>🏆 Updated Standings — {standingsLabel}</h2>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+          <div style={{ padding: '0.75rem', background: '#1e293b', borderRadius: '12px', border: '1px solid #475569' }}>
+            <button onClick={() => toggleSection('standings')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.standings ? 0 : '0.5rem' }}>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>🏆 Updated Standings — {standingsLabel}</h2>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.standings && (<>
             <div style={{
               textAlign: 'center',
               fontSize: '0.65rem',
-              color: 'var(--text-muted)',
+              color: '#94a3b8',
               marginBottom: '0.5rem',
               paddingBottom: '0.3rem',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: '1px solid #475569',
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
@@ -1978,21 +1978,21 @@ const GameSummaryScreen = () => {
                   width: '8px',
                   height: '8px',
                   borderRadius: '2px',
-                  background: 'rgba(251, 191, 36, 0.25)',
-                  border: '1px solid rgba(251, 191, 36, 0.5)',
+                  background: 'rgba(139, 92, 246, 0.3)',
+                  border: '1px solid rgba(139, 92, 246, 0.6)',
                 }} />
                 Played tonight
               </span>
             </div>
-            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', color: '#f8fafc' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left' }}>#</th>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Profit</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>Avg</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>G</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
+                <tr style={{ borderBottom: '1px solid #475569' }}>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left', color: '#94a3b8' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left', color: '#94a3b8' }}>Player</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Profit</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Avg</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>G</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>W%</th>
                 </tr>
               </thead>
               <tbody>
@@ -2006,10 +2006,10 @@ const GameSummaryScreen = () => {
                   return (
                     <tr key={player.playerId} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      background: isMe ? 'rgba(59, 130, 246, 0.18)' : isInThisGame ? 'rgba(251, 191, 36, 0.08)' : undefined,
-                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(251, 191, 36, 0.4)' : undefined,
+                      background: isMe ? 'rgba(59, 130, 246, 0.22)' : isInThisGame ? 'rgba(139, 92, 246, 0.14)' : undefined,
+                      boxShadow: isMe ? 'inset 3px 0 0 #3b82f6' : isInThisGame ? 'inset 3px 0 0 rgba(139, 92, 246, 0.5)' : undefined,
                     }}>
-                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc' }}>
                         <span>{currentRank}</span>
                         {index === 0 && ' 🥇'}
                         {index === 1 && ' 🥈'}
@@ -2017,16 +2017,16 @@ const GameSummaryScreen = () => {
                         {isNewEntry ? (
                           <span style={{ fontSize: '0.55rem', color: '#60a5fa', marginLeft: '0.2rem', fontWeight: 700 }}>NEW</span>
                         ) : rankDiff > 0 ? (
-                          <span style={{ fontSize: '0.6rem', color: 'var(--success)', marginLeft: '0.15rem' }}>▲{rankDiff}</span>
+                          <span style={{ fontSize: '0.6rem', color: '#22c55e', marginLeft: '0.15rem' }}>▲{rankDiff}</span>
                         ) : rankDiff < 0 ? (
-                          <span style={{ fontSize: '0.6rem', color: 'var(--danger)', marginLeft: '0.15rem' }}>▼{Math.abs(rankDiff)}</span>
+                          <span style={{ fontSize: '0.6rem', color: '#ef4444', marginLeft: '0.15rem' }}>▼{Math.abs(rankDiff)}</span>
                         ) : null}
                       </td>
                       <td style={{
                         fontWeight: isMe ? '700' : isInThisGame ? '600' : '500',
                         padding: '0.25rem 0.2rem',
                         whiteSpace: 'nowrap',
-                        color: isMe ? '#60a5fa' : undefined,
+                        color: isMe ? '#60a5fa' : '#f8fafc',
                       }}>
                         {player.playerName}
                       </td>
@@ -2035,7 +2035,7 @@ const GameSummaryScreen = () => {
                         padding: '0.25rem 0.3rem',
                         whiteSpace: 'nowrap',
                         fontWeight: '700',
-                        color: player.totalProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                        color: player.totalProfit >= 0 ? '#22c55e' : '#ef4444',
                       }}>
                         {player.totalProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.totalProfit))}
                       </td>
@@ -2043,18 +2043,18 @@ const GameSummaryScreen = () => {
                         textAlign: 'right',
                         padding: '0.25rem 0.3rem',
                         whiteSpace: 'nowrap',
-                        color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+                        color: player.avgProfit >= 0 ? '#22c55e' : '#ef4444',
                       }}>
                         {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>
+                      <td style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc' }}>
                         {player.gamesPlayed}
                       </td>
                       <td style={{
                         textAlign: 'center',
                         padding: '0.25rem 0.2rem',
                         whiteSpace: 'nowrap',
-                        color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)',
+                        color: player.winPercentage >= 50 ? '#22c55e' : '#ef4444',
                         fontWeight: '600',
                       }}>
                         {Math.round(player.winPercentage)}%
@@ -2069,7 +2069,7 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
               marginTop: '0.5rem',
               fontSize: '0.75rem',
-              color: 'var(--text-muted)',
+              color: '#94a3b8',
               opacity: 0.7
             }}>
               Poker Manager 🎲

@@ -44,6 +44,12 @@ const TrainingAdminTab = () => {
   const [removingFlagged, setRemovingFlagged] = useState(false);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
 
+  // Pool review
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewProgress, setReviewProgress] = useState({ current: 0, total: 0 });
+  const [reviewMsg, setReviewMsg] = useState<string | null>(null);
+  const [reviewLog, setReviewLog] = useState<string[]>([]);
+
   // AI insight generation
   const [generatingInsight, setGeneratingInsight] = useState<string | null>(null);
   const [insightMsg, setInsightMsg] = useState<string | null>(null);
@@ -399,6 +405,148 @@ const TrainingAdminTab = () => {
     }
   };
 
+  // ── Review pool with AI ──
+  const handleReviewPool = async () => {
+    if (!pool || pool.scenarios.length === 0) return;
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) { setReviewMsg('❌ אין מפתח Gemini'); return; }
+    setReviewing(true);
+    setReviewLog([]);
+    setReviewMsg(null);
+
+    const BATCH = 10;
+    const scenarios = [...pool.scenarios];
+    const totalBatches = Math.ceil(scenarios.length / BATCH);
+    let fixed = 0, removed = 0, ok = 0, errors = 0;
+    const updatedScenarios = [...scenarios];
+
+    for (let b = 0; b < totalBatches; b++) {
+      const start = b * BATCH;
+      const batch = scenarios.slice(start, start + BATCH);
+      setReviewProgress({ current: b + 1, total: totalBatches });
+      setReviewMsg(`סורק אצווה ${b + 1}/${totalBatches}...`);
+
+      const prompt = `אתה מומחה פוקר. בדוק ${batch.length} שאלות אימון למשחק ביתי חברתי (~8 שחקנים, כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000).
+
+⚠️ בדיקות קריטיות:
+1. **לוגיקה פוקרית**: התשובה הנכונה באמת נכונה? בדוק:
+   - הקלפים ביד + על הלוח — האם יוצרים סטרייט/צבע/פול האוס שלא זוהה?
+   - סכומי הימור הגיוניים?
+   - "קריאה" = סכום ההימור, לא הקופה?
+2. **התאמה למשחק ביתי**: בלוף גדול = לא תשובה נכונה (שחקנים קוראים). צ'ק-רייז מתוחכם = לא מתאים.
+3. **nearMiss**: סמן תשובות שגויות שהיו נכונות בפוקר מקצועי
+4. **עברית**: אין מונחים באנגלית, סכומים בשקלים
+5. **שגיאות**: placeholder טקסט, קלפים כפולים
+
+שאלות:
+${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, situation: s.situation, options: s.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })), categoryId: s.categoryId })))}
+
+החזר JSON בלבד, מערך:
+[{"poolId":"xxx","status":"ok"|"fixed"|"remove","issues":["בעיה"],"fixedScenario":{...כל השדות המתוקנים אם fixed},"nearMissFlags":["B"]}]
+
+- "ok": תקין (עדיין הוסף nearMissFlags אם רלוונטי)
+- "fixed": מחזיר fixedScenario מתוקן עם כל השדות (situation, yourCards, options עם id/text/isCorrect/explanation/nearMiss, category, categoryId, poolId)
+- "remove": גרוע מדי
+
+JSON בלבד, בלי markdown:`;
+
+      try {
+        const models = API_CONFIGS.map(c => c.model);
+        let result: unknown[] | null = null;
+
+        for (const model of models) {
+          try {
+            const resp = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+                }),
+              }
+            );
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            result = JSON.parse(text);
+            break;
+          } catch { continue; }
+        }
+
+        if (!result || !Array.isArray(result)) {
+          errors++;
+          setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: שגיאת פענוח`]);
+          await new Promise(r => setTimeout(r, 5000));
+          continue;
+        }
+
+        for (const r of result) {
+          const item = r as { poolId: string; status: string; issues?: string[]; fixedScenario?: PoolScenario; nearMissFlags?: string[] };
+          const idx = updatedScenarios.findIndex(s => s.poolId === item.poolId);
+          if (idx === -1) continue;
+
+          if (item.status === 'remove') {
+            removed++;
+            updatedScenarios.splice(idx, 1);
+            setReviewLog(prev => [...prev, `🗑 ${item.poolId}: ${item.issues?.join(', ')}`]);
+          } else if (item.status === 'fixed' && item.fixedScenario) {
+            fixed++;
+            const orig = updatedScenarios[idx];
+            updatedScenarios[idx] = { ...item.fixedScenario, poolId: orig.poolId, categoryId: orig.categoryId, category: orig.category };
+            setReviewLog(prev => [...prev, `✏️ ${item.poolId}: ${item.issues?.join(', ')}`]);
+          } else {
+            ok++;
+            if (item.nearMissFlags && item.nearMissFlags.length > 0) {
+              updatedScenarios[idx] = {
+                ...updatedScenarios[idx],
+                options: updatedScenarios[idx].options.map(o => ({
+                  ...o,
+                  nearMiss: item.nearMissFlags!.includes(o.id) ? true : o.nearMiss,
+                })),
+              };
+            }
+          }
+        }
+        setReviewLog(prev => [...prev, `✓ אצווה ${b + 1}: ${result.filter((r: unknown) => (r as {status:string}).status === 'ok').length} ok, ${result.filter((r: unknown) => (r as {status:string}).status === 'fixed').length} fixed, ${result.filter((r: unknown) => (r as {status:string}).status === 'remove').length} remove`]);
+      } catch (err) {
+        errors++;
+        setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: ${err instanceof Error ? err.message : 'error'}`]);
+      }
+
+      if (b < totalBatches - 1) await new Promise(r => setTimeout(r, 5000));
+    }
+
+    // Save updated pool
+    const newPool: TrainingPool = {
+      generatedAt: new Date().toISOString(),
+      totalScenarios: updatedScenarios.length,
+      byCategory: {},
+      scenarios: updatedScenarios,
+    };
+    updatedScenarios.forEach(s => {
+      newPool.byCategory[s.categoryId] = (newPool.byCategory[s.categoryId] || 0) + 1;
+    });
+
+    try {
+      const uploadResult = await uploadTrainingPool(newPool);
+      if (uploadResult.success) {
+        localStorage.setItem('training_pool_cached', JSON.stringify(newPool));
+        localStorage.setItem('training_pool_generatedAt', newPool.generatedAt);
+        setPool(newPool);
+        setReviewMsg(`✅ סיום: ${ok} תקינות, ${fixed} תוקנו, ${removed} הוסרו, ${errors} שגיאות`);
+      } else {
+        setReviewMsg(`⚠️ ${ok} ok / ${fixed} fixed / ${removed} removed — שגיאת העלאה: ${uploadResult.message}`);
+      }
+    } catch {
+      setReviewMsg(`⚠️ ${ok} ok / ${fixed} fixed / ${removed} removed — שגיאת העלאה`);
+    }
+
+    setReviewing(false);
+  };
+
   // ── Generate AI insights ──
   const handleGenerateInsight = async (player: TrainingPlayerData) => {
     const apiKey = getGeminiApiKey();
@@ -699,23 +847,88 @@ ${dataBlock}
               </div>
             )}
           </div>
-        ) : (
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button onClick={handleGeneratePool} style={{
-              flex: 1, padding: '0.6rem', borderRadius: '10px', border: 'none',
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
-              fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+        ) : reviewing ? (
+          <div style={{ padding: '0.5rem 0' }}>
+            <div style={{
+              padding: '0.6rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+              background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)',
             }}>
-              {pool ? '🔄 ייצור מחדש' : '✨ צור מאגר חדש'}
-            </button>
-            {pool && answers && answers.players.length > 0 && (
-              <button onClick={handleExpandPool} style={{
-                flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid var(--primary)',
-                background: 'transparent', color: 'var(--primary)',
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+                <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>🔍 סריקת שאלות</span>
+                <span style={{ fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700 }}>
+                  {reviewProgress.current}/{reviewProgress.total}
+                </span>
+              </div>
+              <div style={{ height: '6px', borderRadius: '3px', background: 'var(--surface-light)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: '3px', background: 'linear-gradient(90deg, #f59e0b, #ef4444)',
+                  width: `${(reviewProgress.current / Math.max(reviewProgress.total, 1)) * 100}%`,
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+              {reviewMsg && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>{reviewMsg}</div>}
+            </div>
+            {reviewLog.length > 0 && (
+              <div style={{ maxHeight: '200px', overflowY: 'auto', fontSize: '0.65rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {reviewLog.map((entry, idx) => (
+                  <div key={idx} style={{ padding: '0.15rem 0.3rem', borderRadius: '4px', background: entry.startsWith('❌') ? 'rgba(239,68,68,0.08)' : entry.startsWith('✏️') ? 'rgba(245,158,11,0.08)' : entry.startsWith('🗑') ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)' }}>
+                    {entry}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={handleGeneratePool} style={{
+                flex: 1, padding: '0.6rem', borderRadius: '10px', border: 'none',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
                 fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
               }}>
-                📈 הרחב מאגר
+                {pool ? '🔄 ייצור מחדש' : '✨ צור מאגר חדש'}
               </button>
+              {pool && answers && answers.players.length > 0 && (
+                <button onClick={handleExpandPool} style={{
+                  flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid var(--primary)',
+                  background: 'transparent', color: 'var(--primary)',
+                  fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                }}>
+                  📈 הרחב מאגר
+                </button>
+              )}
+            </div>
+            {pool && pool.totalScenarios > 0 && (
+              <button onClick={handleReviewPool} style={{
+                padding: '0.5rem', borderRadius: '10px', border: '1px solid rgba(245,158,11,0.3)',
+                background: 'rgba(245,158,11,0.06)', color: '#f59e0b',
+                fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+              }}>
+                🔍 סרוק ותקן שאלות (AI review)
+              </button>
+            )}
+            {reviewMsg && !reviewing && (
+              <div style={{
+                fontSize: '0.8rem', textAlign: 'center', fontWeight: 500, padding: '0.5rem', borderRadius: '8px',
+                background: reviewMsg.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)',
+                color: reviewMsg.includes('❌') ? 'var(--danger)' : 'var(--success)',
+              }}>
+                {reviewMsg}
+              </div>
+            )}
+            {!reviewing && reviewLog.length > 0 && (
+              <details>
+                <summary style={{ fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  פירוט סריקה ({reviewLog.filter(l => l.startsWith('✏️')).length} תוקנו, {reviewLog.filter(l => l.startsWith('🗑')).length} הוסרו)
+                </summary>
+                <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '0.3rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  {reviewLog.filter(l => !l.startsWith('✓')).map((entry, idx) => (
+                    <div key={idx} style={{ padding: '0.15rem 0.3rem', borderRadius: '4px', fontSize: '0.65rem', background: entry.startsWith('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)' }}>
+                      {entry}
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
           </div>
         )}
