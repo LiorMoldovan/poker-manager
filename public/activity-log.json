@@ -1544,9 +1544,13 @@
     "timestamp": "2026-04-03T21:34:24.460Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "360x792",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-03T21:34:24.460Z",
+    "screensVisited": [
+      "New Game",
+      "Shared Training",
+      "Settings"
+    ],
+    "sessionDuration": 2,
+    "lastActive": "2026-04-03T21:36:33.536Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 830",
       "cores": 8,
