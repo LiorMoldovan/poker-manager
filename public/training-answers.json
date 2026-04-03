@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T19:40:07.157Z",
+  "lastUpdated": "2026-04-03T19:51:11.557Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1496,10 +1496,82 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T19:49:35.316Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "3uqga6",
+              "categoryId": "second_pair",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ru8emh",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "l6idvd",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "m8mvl9",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1ylsln",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "jaf251",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "jiuxuw",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "eoy8fx",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "n293hy",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tcw2g1",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "ru8emh"
+          ]
         }
       ],
-      "totalQuestions": 50,
-      "totalCorrect": 35,
+      "totalQuestions": 60,
+      "totalCorrect": 42,
       "accuracy": 70
     },
     {
