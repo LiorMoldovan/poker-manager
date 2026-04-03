@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T18:33:26.807Z",
+  "lastUpdated": "2026-04-03T18:47:25.942Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -261,11 +261,84 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T18:47:25.564Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "92g4xm",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmsrrc",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fi209o",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "if3dan",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "n749b5",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "aa9947",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "uyjqcx",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "m8mvl9",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lpcko9",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lrugv8",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "fi209o",
+            "aa9947",
+            "lpcko9"
+          ]
         }
       ],
-      "totalQuestions": 36,
-      "totalCorrect": 19,
-      "accuracy": 52.77777777777778
+      "totalQuestions": 46,
+      "totalCorrect": 26,
+      "accuracy": 56.52173913043478
     },
     {
       "playerName": "אייל",
