@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T19:58:58.896Z",
+  "lastUpdated": "2026-04-03T20:00:51.281Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -316,9 +316,7 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "fi209o"
-          ]
+          "flaggedPoolIds": []
         }
       ],
       "totalQuestions": 30,
