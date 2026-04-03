@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T10:13:50.824Z",
+  "lastUpdated": "2026-04-03T10:45:23.929Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1023,10 +1023,48 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T10:45:23.542Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "i166cq",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bmocnx",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "sb9rfg",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iqhtut",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5q20og",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 5,
-      "totalCorrect": 3,
+      "totalQuestions": 10,
+      "totalCorrect": 6,
       "accuracy": 60
     }
   ]
