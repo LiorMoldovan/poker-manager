@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-03T18:32:22.407Z",
-  "totalScenarios": 517,
+  "generatedAt": "2026-04-03T20:00:41.214Z",
+  "totalScenarios": 516,
   "byCategory": {
     "wet_board_top_pair": 20,
     "bluff_catching": 20,
@@ -23,7 +23,7 @@
     "set_mining": 20,
     "straight_draw": 20,
     "missed_draw": 20,
-    "dominated_hands": 20,
+    "dominated_hands": 19,
     "second_pair": 20,
     "thin_value": 20,
     "pot_odds": 20
@@ -9773,34 +9773,6 @@
           "text": "ויתור",
           "isCorrect": false,
           "explanation": "אין סיבה לוותר עם זוג אס בשלב הזה."
-        }
-      ],
-      "category": "ידיים שנראות טוב אבל מסוכנות",
-      "categoryId": "dominated_hands"
-    },
-    {
-      "poolId": "ru8emh",
-      "situation": "יש לך K-10. בלוח יצא K-8-2. שחקן מהמר 1,000. אתה קורא. בריבר יוצא 10. היריב מהמר 3,000.",
-      "yourCards": "K♣ 10♦",
-      "options": [
-        {
-          "id": "A",
-          "text": "קריאה 3,000",
-          "isCorrect": true,
-          "explanation": "עכשיו יש לך שני זוגות. אתה חייב לקרוא. הוא יכול להמר עם K-9 או K-7, היד שלך מספיק חזקה."
-        },
-        {
-          "id": "B",
-          "text": "העלאה ל-7,000",
-          "isCorrect": false,
-          "explanation": "העלאה תבריח את כל הידיים שהוא מנצח. קריאה היא מספיקה כדי לקחת את הקופה.",
-          "nearMiss": true
-        },
-        {
-          "id": "C",
-          "text": "ויתור",
-          "isCorrect": false,
-          "explanation": "עם שני זוגות בריבר, לוותר זה לא אופציה."
         }
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
