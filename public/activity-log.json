@@ -1208,10 +1208,12 @@
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x924",
     "screensVisited": [
-      "Shared Training"
+      "Shared Training",
+      "New Game",
+      "Statistics"
     ],
-    "sessionDuration": 9,
-    "lastActive": "2026-04-03T10:51:55.263Z",
+    "sessionDuration": 18,
+    "lastActive": "2026-04-03T11:00:43.437Z",
     "fingerprint": {
       "gpu": "Mali-G715",
       "cores": 8,
