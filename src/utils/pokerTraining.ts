@@ -1504,9 +1504,11 @@ export const generatePoolBatch = async (
   return [];
 };
 
-// ── Silent tracking upload ──
+// ── Silent tracking upload (batched with cooldown) ──
 
 const PENDING_UPLOAD_KEY = 'shared_training_pending_upload';
+const LAST_FLUSH_KEY = 'shared_training_last_flush';
+const FLUSH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes between GitHub pushes
 
 export const bufferSessionForUpload = (playerName: string, session: TrainingSession): void => {
   try {
@@ -1527,6 +1529,13 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   } catch { return; }
 
   if (pending.length === 0) return;
+
+  // Cooldown: skip if last flush was recent (unless this is a keepalive/unload flush)
+  if (!keepalive) {
+    const lastFlush = parseInt(localStorage.getItem(LAST_FLUSH_KEY) || '0', 10);
+    if (Date.now() - lastFlush < FLUSH_COOLDOWN_MS) return;
+  }
+
   localStorage.removeItem(PENDING_UPLOAD_KEY);
 
   const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
@@ -1545,7 +1554,9 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
     return data;
   }, keepalive);
 
-  if (!ok) {
+  if (ok) {
+    localStorage.setItem(LAST_FLUSH_KEY, Date.now().toString());
+  } else {
     try {
       const existing = localStorage.getItem(PENDING_UPLOAD_KEY);
       const existingPending = existing ? JSON.parse(existing) : [];

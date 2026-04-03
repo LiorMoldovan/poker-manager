@@ -204,7 +204,6 @@ const TrainingAdminTab = () => {
     const total = catsToGenerate.length;
     let totalGenerated = 0;
     let totalFailed = 0;
-    let lastUploadedCount = allScenarios.length;
     const startTime = Date.now();
 
     for (let i = 0; i < total; i++) {
@@ -242,14 +241,6 @@ const TrainingAdminTab = () => {
       setGenLog([...log]);
       savePoolDraft(allScenarios);
 
-      // Upload after every successful category
-      if (allScenarios.length > lastUploadedCount) {
-        const uploadResult = await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => ({ success: false }));
-        if (uploadResult.success) {
-          lastUploadedCount = allScenarios.length;
-        }
-      }
-
       // Time estimate based on actual measured pace
       const elapsed = Date.now() - startTime;
       const avgPerCat = elapsed / (i + 1);
@@ -278,7 +269,7 @@ const TrainingAdminTab = () => {
         ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות`
       );
     } else {
-      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — אך ${lastUploadedCount} שאלות כבר נשמרו בענן`);
+      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
     }
   };
 
@@ -314,7 +305,6 @@ const TrainingAdminTab = () => {
     const log: { cat: string; icon: string; status: string; count: number }[] = [];
     let totalAdded = 0;
     let totalFailed = 0;
-    let lastUploadedCount = allScenarios.length;
     const startTime = Date.now();
 
     for (let i = 0; i < depletedCats.length; i++) {
@@ -343,13 +333,6 @@ const TrainingAdminTab = () => {
       setGenLog([...log]);
       savePoolDraft(allScenarios);
 
-      if (allScenarios.length > lastUploadedCount) {
-        const uploadResult = await uploadTrainingPool(buildPoolObject(allScenarios)).catch(() => ({ success: false }));
-        if (uploadResult.success) {
-          lastUploadedCount = allScenarios.length;
-        }
-      }
-
       const elapsed = Date.now() - startTime;
       const avgPerCat = elapsed / (i + 1);
       const remaining = depletedCats.length - (i + 1);
@@ -376,7 +359,7 @@ const TrainingAdminTab = () => {
         ` · סה"כ ${allScenarios.length} · ${elapsedMin} דקות`
       );
     } else {
-      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — ${lastUploadedCount} שאלות נשמרו`);
+      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
     }
   };
 
@@ -495,7 +478,22 @@ JSON בלבד, בלי markdown:`;
           } else if (item.status === 'fixed' && item.fixedScenario) {
             fixed++;
             const orig = updatedScenarios[idx];
-            updatedScenarios[idx] = { ...item.fixedScenario, poolId: orig.poolId, categoryId: orig.categoryId, category: orig.category };
+            const f = item.fixedScenario as unknown as Record<string, unknown>;
+            const mappedOpts = (f.options || f.o || orig.options) as Array<Record<string, unknown>>;
+            updatedScenarios[idx] = {
+              poolId: orig.poolId,
+              situation: (f.situation || f.s || orig.situation) as string,
+              yourCards: (f.yourCards || f.c || orig.yourCards) as string,
+              options: mappedOpts.map((o: Record<string, unknown>) => ({
+                id: (o.id || o.i || '') as string,
+                text: (o.text || o.t || '') as string,
+                isCorrect: typeof o.isCorrect === 'boolean' ? o.isCorrect : (typeof o.ok === 'boolean' ? o.ok : false),
+                explanation: (o.explanation || o.e || '') as string,
+                nearMiss: o.nearMiss ? true : undefined,
+              })),
+              category: (f.category || orig.category) as string,
+              categoryId: (f.categoryId || orig.categoryId) as string,
+            };
             setReviewLog(prev => [...prev, `✏️ ${item.poolId}: ${item.issues?.join(', ')}`]);
           } else {
             ok++;

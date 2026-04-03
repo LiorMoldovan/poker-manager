@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.6';
+export const APP_VERSION = '5.10.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.7',
+    date: '2026-03-11',
+    changes: [
+      '⚡ Drastically reduce GitHub auto-commits to prevent Vercel deploy cancellation',
+      '🔄 Pool generation: single upload at the end instead of per-category (47→1 commits)',
+      '⏱️ Training answers: 10-min cooldown between GitHub pushes, buffer locally',
+      '📊 Activity logger: 15-min cooldown between session updates, buffer in localStorage',
+    ]
+  },
   {
     version: '5.10.6',
     date: '2026-03-11',

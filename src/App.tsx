@@ -411,7 +411,7 @@ function App() {
 
       activityIntervalRef.current = setInterval(() => {
         pushSessionUpdate();
-      }, 5 * 60 * 1000);
+      }, 15 * 60 * 1000);
 
       const handleVisibilityChange = () => {
         if (document.visibilityState === 'hidden') {

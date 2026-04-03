@@ -4,6 +4,9 @@ import { GITHUB_OWNER, GITHUB_REPO, GITHUB_ACTIVITY_PATH, GITHUB_BRANCH } from '
 
 const DEVICE_ID_KEY = 'poker_device_id';
 const MAX_LOG_ENTRIES = 200;
+const ACTIVITY_BUFFER_KEY = 'poker_activity_buffer';
+const ACTIVITY_LAST_PUSH_KEY = 'poker_activity_last_push';
+const ACTIVITY_PUSH_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes between GitHub pushes
 
 let currentSessionTimestamp: string | null = null;
 let lastPushedScreens: string[] = [];
@@ -244,11 +247,59 @@ export const getDeviceFingerprint = (): DeviceFingerprint => ({
   canvasHash: getCanvasHash(),
 });
 
-export const logActivity = async (role: PermissionRole, playerName?: string): Promise<void> => {
-  if (role === 'admin') return;
+// Buffer the current session entry locally; push to GitHub on cooldown or app close
+const saveSessionBuffer = (entry: ActivityLogEntry): void => {
+  try { localStorage.setItem(ACTIVITY_BUFFER_KEY, JSON.stringify(entry)); } catch { /* full */ }
+};
+
+const loadSessionBuffer = (): ActivityLogEntry | null => {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_BUFFER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+};
+
+const shouldPushNow = (): boolean => {
+  const last = parseInt(localStorage.getItem(ACTIVITY_LAST_PUSH_KEY) || '0', 10);
+  return Date.now() - last >= ACTIVITY_PUSH_COOLDOWN_MS;
+};
+
+const markPushed = (): void => {
+  localStorage.setItem(ACTIVITY_LAST_PUSH_KEY, Date.now().toString());
+};
+
+const pushBufferToGitHub = async (keepalive = false): Promise<void> => {
+  const entry = loadSessionBuffer();
+  if (!entry) return;
 
   const token = getEmbeddedToken();
   if (!token) return;
+
+  const success = await writeWithRetry(
+    token,
+    (entries) => {
+      const idx = entries.findIndex(
+        e => e.deviceId === entry.deviceId && e.timestamp === entry.timestamp
+      );
+      if (idx !== -1) {
+        entries[idx] = entry;
+      } else {
+        entries.push(entry);
+      }
+      return entries.slice(-MAX_LOG_ENTRIES);
+    },
+    'Activity: session update',
+    keepalive
+  );
+
+  if (success) {
+    markPushed();
+    lastPushedScreens = [...(entry.screensVisited || [])];
+  }
+};
+
+export const logActivity = async (role: PermissionRole, playerName?: string): Promise<void> => {
+  if (role === 'admin') return;
 
   const entry: ActivityLogEntry = {
     deviceId: getDeviceId(),
@@ -265,12 +316,18 @@ export const logActivity = async (role: PermissionRole, playerName?: string): Pr
 
   currentSessionTimestamp = entry.timestamp;
   lastPushedScreens = [];
+  saveSessionBuffer(entry);
+
+  // Push immediately on login (first entry), then cooldown applies for updates
+  const token = getEmbeddedToken();
+  if (!token) return;
 
   await writeWithRetry(
     token,
     (entries) => [...entries, entry].slice(-MAX_LOG_ENTRIES),
     `Activity: ${role} login`
   );
+  markPushed();
 };
 
 export const updateSessionActivity = async (
@@ -280,34 +337,19 @@ export const updateSessionActivity = async (
 ): Promise<void> => {
   if (!currentSessionTimestamp) return;
 
-  // Skip if nothing changed
   if (JSON.stringify(screens) === JSON.stringify(lastPushedScreens)) return;
 
-  const token = getEmbeddedToken();
-  if (!token) return;
+  const buffered = loadSessionBuffer();
+  if (buffered && buffered.timestamp === currentSessionTimestamp) {
+    buffered.screensVisited = [...screens];
+    buffered.sessionDuration = Math.round(durationMinutes);
+    buffered.lastActive = new Date().toISOString();
+    saveSessionBuffer(buffered);
+  }
 
-  const sessionTs = currentSessionTimestamp;
-  const deviceId = getDeviceId();
-
-  const success = await writeWithRetry(
-    token,
-    (entries) => {
-      const idx = entries.findIndex(
-        e => e.deviceId === deviceId && e.timestamp === sessionTs
-      );
-      if (idx !== -1) {
-        entries[idx].screensVisited = [...screens];
-        entries[idx].sessionDuration = Math.round(durationMinutes);
-        entries[idx].lastActive = new Date().toISOString();
-      }
-      return entries;
-    },
-    'Activity: session update',
-    keepalive
-  );
-
-  if (success) {
-    lastPushedScreens = [...screens];
+  // Only push to GitHub if cooldown expired OR this is a keepalive (app closing)
+  if (keepalive || shouldPushNow()) {
+    await pushBufferToGitHub(keepalive);
   }
 };
 
