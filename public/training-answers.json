@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T11:37:01.845Z",
+  "lastUpdated": "2026-04-03T13:35:06.951Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1113,11 +1113,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T13:35:06.325Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "n2l64h",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "txee86",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "yn8sae",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "nnn7y",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ob0itd",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 35,
-      "totalCorrect": 16,
-      "accuracy": 45.714285714285715
+      "totalQuestions": 40,
+      "totalCorrect": 19,
+      "accuracy": 47.5
     },
     {
       "playerName": "מלמד",
