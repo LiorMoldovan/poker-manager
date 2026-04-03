@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   TrainingPool,
   TrainingAnswersFile,
@@ -20,7 +20,6 @@ import {
 import {
   SCENARIO_CATEGORIES,
   generatePoolBatch,
-  CategoryInfo,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
@@ -86,50 +85,64 @@ const TrainingAdminTab = () => {
   const getAlerts = (): { text: string; color: string }[] => {
     const alerts: { text: string; color: string }[] = [];
 
-    if (!pool || pool.totalScenarios === 0) {
-      alerts.push({ text: 'אין מאגר שאלות - צור מאגר חדש', color: '#ef4444' });
-    }
-
-    if (answers) {
-      // Check depleted categories
-      const maxSeen = new Map<string, number>();
-      answers.players.forEach(player => {
-        const seen = new Set(player.sessions.flatMap(s => s.results.map(r => r.poolId)));
-        if (pool) {
-          SCENARIO_CATEGORIES.forEach(cat => {
-            const catPool = pool.scenarios.filter(s => s.categoryId === cat.id);
-            const catUnseen = catPool.filter(s => !seen.has(s.poolId)).length;
-            const current = maxSeen.get(cat.id) ?? Infinity;
-            maxSeen.set(cat.id, Math.min(current, catUnseen));
-          });
-        }
-      });
-      const lowCats = [...maxSeen.entries()].filter(([, v]) => v < 5).length;
-      if (lowCats > 0) {
-        alerts.push({ text: `${lowCats} קטגוריות עם פחות מ-5 שאלות לשחקן הפעיל ביותר`, color: '#f59e0b' });
-      }
-
-      // Flagged questions (only count those still in pool)
-      if (pool) {
-        const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
-        const flagCounts = new Map<string, number>();
-        answers.players.forEach(p => {
-          p.sessions.forEach(s => {
-            (s.flaggedPoolIds || []).forEach(id => {
-              if (poolIdSet.has(id)) {
-                flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
-              }
-            });
+    if (answers && pool) {
+      const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
+      const flagCounts = new Map<string, number>();
+      answers.players.forEach(p => {
+        p.sessions.forEach(s => {
+          (s.flaggedPoolIds || []).forEach(id => {
+            if (poolIdSet.has(id)) {
+              flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
+            }
           });
         });
-        if (flagCounts.size > 0) {
-          alerts.push({ text: `${flagCounts.size} שאלות מדווחות לבדיקה`, color: '#f59e0b' });
-        }
+      });
+      if (flagCounts.size > 0) {
+        alerts.push({ text: `${flagCounts.size} שאלות מדווחות לבדיקה`, color: '#f59e0b' });
       }
     }
 
     return alerts;
   };
+
+  const MIN_PER_CATEGORY = 20;
+
+  // ── Pool health status ──
+  const poolStatus = useMemo(() => {
+    if (!pool || pool.totalScenarios === 0) {
+      return { status: 'empty' as const, label: 'אין מאגר — צריך ליצור', incompleteCats: SCENARIO_CATEGORIES.length, depletedCats: 0 };
+    }
+
+    const perCat: Record<string, number> = {};
+    pool.scenarios.forEach(s => { perCat[s.categoryId] = (perCat[s.categoryId] || 0) + 1; });
+    const incompleteCats = SCENARIO_CATEGORIES.filter(c => (perCat[c.id] || 0) < MIN_PER_CATEGORY).length;
+
+    let depletedCats = 0;
+    if (answers && answers.players.length > 0) {
+      const seenByPlayer = new Map<string, Set<string>>();
+      answers.players.forEach(p => {
+        seenByPlayer.set(p.playerName, new Set(p.sessions.flatMap(s => s.results.map(r => r.poolId))));
+      });
+      SCENARIO_CATEGORIES.forEach(cat => {
+        if ((perCat[cat.id] || 0) < MIN_PER_CATEGORY) return;
+        const catPool = pool.scenarios.filter(s => s.categoryId === cat.id);
+        const anyLow = [...seenByPlayer.values()].some(seen => {
+          return catPool.filter(s => !seen.has(s.poolId)).length < 5;
+        });
+        if (anyLow) depletedCats++;
+      });
+    }
+
+    if (incompleteCats === 0 && depletedCats === 0) {
+      return { status: 'healthy' as const, label: 'מאגר תקין', incompleteCats: 0, depletedCats: 0 };
+    }
+
+    const parts: string[] = [];
+    if (incompleteCats > 0) parts.push(`${incompleteCats} קטגוריות לא מלאות`);
+    if (depletedCats > 0) parts.push(`${depletedCats} נגמרות לשחקנים`);
+
+    return { status: 'needs_work' as const, label: parts.join(' + '), incompleteCats, depletedCats };
+  }, [pool, answers]);
 
   // ── Build pool object from scenarios ──
   const buildPoolObject = (scenarios: PoolScenario[]): TrainingPool => {
@@ -162,10 +175,8 @@ const TrainingAdminTab = () => {
 
   const clearPoolDraft = () => localStorage.removeItem(POOL_DRAFT_KEY);
 
-  const MIN_PER_CATEGORY = 20;
-
-  // ── Generate full pool (with auto-resume) ──
-  const handleGeneratePool = async () => {
+  // ── Smart generate: fill incomplete → expand depleted → upload ──
+  const handleSmartGenerate = async () => {
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
       setGenMessage('חסר מפתח Gemini API');
@@ -177,47 +188,67 @@ const TrainingAdminTab = () => {
     setGenLog([]);
 
     const draft = loadPoolDraft();
-    const allScenarios: PoolScenario[] = draft || pool?.scenarios || [];
+    const allScenarios: PoolScenario[] = draft || (pool ? [...pool.scenarios] : []);
 
     const existingPerCat: Record<string, number> = {};
     allScenarios.forEach(s => {
       existingPerCat[s.categoryId] = (existingPerCat[s.categoryId] || 0) + 1;
     });
 
-    const catsToGenerate = SCENARIO_CATEGORIES.filter(
+    // Pass 1: fill categories below MIN_PER_CATEGORY
+    const incompleteCats = SCENARIO_CATEGORIES.filter(
       cat => (existingPerCat[cat.id] || 0) < MIN_PER_CATEGORY
     );
 
-    if (catsToGenerate.length === 0) {
+    // Pass 2: expand depleted categories (players running out of unseen questions)
+    const seenByPlayer = new Map<string, Set<string>>();
+    if (answers) {
+      answers.players.forEach(p => {
+        seenByPlayer.set(p.playerName, new Set(p.sessions.flatMap(s => s.results.map(r => r.poolId))));
+      });
+    }
+    const depletedCats = SCENARIO_CATEGORIES.filter(cat => {
+      if (incompleteCats.some(ic => ic.id === cat.id)) return false;
+      if (seenByPlayer.size === 0) return false;
+      const catPool = allScenarios.filter(s => s.categoryId === cat.id);
+      return [...seenByPlayer.values()].some(seen => catPool.filter(s => !seen.has(s.poolId)).length < 5);
+    });
+
+    const workItems = [
+      ...incompleteCats.map(cat => ({ cat, needed: 30 - (existingPerCat[cat.id] || 0), phase: 'fill' as const })),
+      ...depletedCats.map(cat => ({ cat, needed: 15, phase: 'expand' as const })),
+    ];
+
+    if (workItems.length === 0) {
       setGenerating(false);
-      const newPool = buildPoolObject(allScenarios);
-      const result = await uploadTrainingPool(newPool);
-      clearPoolDraft();
-      if (result.success) setPool(newPool);
-      setGenMessage(`כל הקטגוריות מלאות! סה"כ: ${allScenarios.length} שאלות`);
+      if (draft) {
+        const newPool = buildPoolObject(allScenarios);
+        const result = await uploadTrainingPool(newPool);
+        clearPoolDraft();
+        if (result.success) setPool(newPool);
+        setGenMessage(`טיוטה הועלתה! סה"כ: ${allScenarios.length} שאלות`);
+      } else {
+        setGenMessage(`מאגר תקין — אין מה לייצר`);
+      }
       return;
     }
 
-    const skipped = SCENARIO_CATEGORIES.length - catsToGenerate.length;
+    // Show skipped categories
     const log: { cat: string; icon: string; status: string; count: number }[] = [];
+    const workIds = new Set(workItems.map(w => w.cat.id));
+    SCENARIO_CATEGORIES.filter(c => !workIds.has(c.id)).forEach(c => {
+      log.push({ cat: c.name, icon: c.icon, status: 'skip', count: existingPerCat[c.id] || 0 });
+    });
+    if (log.length > 0) setGenLog([...log]);
 
-    if (skipped > 0) {
-      SCENARIO_CATEGORIES.filter(c => (existingPerCat[c.id] || 0) >= MIN_PER_CATEGORY).forEach(c => {
-        log.push({ cat: c.name, icon: c.icon, status: 'skip', count: existingPerCat[c.id] || 0 });
-      });
-      setGenLog([...log]);
-    }
-
-    const total = catsToGenerate.length;
     let totalGenerated = 0;
     let totalFailed = 0;
     const startTime = Date.now();
 
-    for (let i = 0; i < total; i++) {
-      const cat = catsToGenerate[i];
-      const existing = existingPerCat[cat.id] || 0;
-      const needed = 30 - existing;
-      setGenProgress({ current: i + 1, total, category: cat.name });
+    for (let i = 0; i < workItems.length; i++) {
+      const { cat, needed, phase } = workItems[i];
+      const phaseLabel = phase === 'fill' ? 'השלמה' : 'הרחבה';
+      setGenProgress({ current: i + 1, total: workItems.length, category: `${phaseLabel}: ${cat.name}` });
 
       let batchCount = 0;
       let catStatus = 'fail';
@@ -228,12 +259,12 @@ const TrainingAdminTab = () => {
           allScenarios.push(...batch);
           batchCount = batch.length;
           totalGenerated += batch.length;
-          catStatus = batch.length >= needed ? 'ok' : 'partial';
+          catStatus = batch.length >= needed * 0.6 ? 'ok' : 'partial';
         } else {
           totalFailed++;
         }
       } catch (err) {
-        console.error(`Pool gen failed for ${cat.id}:`, err);
+        console.error(`Smart gen failed for ${cat.id} (${phase}):`, err);
         totalFailed++;
         catStatus = err instanceof Error && err.message === 'INVALID_API_KEY' ? 'key_error' : 'fail';
         if (catStatus === 'key_error') {
@@ -248,19 +279,17 @@ const TrainingAdminTab = () => {
       setGenLog([...log]);
       savePoolDraft(allScenarios);
 
-      // Time estimate based on actual measured pace
       const elapsed = Date.now() - startTime;
       const avgPerCat = elapsed / (i + 1);
-      const remaining = total - (i + 1);
+      const remaining = workItems.length - (i + 1);
       const etaMin = Math.ceil((remaining * avgPerCat) / 60000);
       setGenMessage(`${totalGenerated} שאלות נוצרו${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''} · ~${etaMin} דק׳ נותרו`);
 
-      if (i < total - 1) {
+      if (i < workItems.length - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
       }
     }
 
-    // Final upload
     const newPool = buildPoolObject(allScenarios);
     const result = await uploadTrainingPool(newPool);
     setGenerating(false);
@@ -272,98 +301,8 @@ const TrainingAdminTab = () => {
       setPool(newPool);
       setGenMessage(
         `סיום! ${totalGenerated} שאלות חדשות` +
-        (totalFailed > 0 ? ` · ${totalFailed} קטגוריות נכשלו` : '') +
-        ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות`
-      );
-    } else {
-      setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
-    }
-  };
-
-  // ── Smart expand ──
-  const handleExpandPool = async () => {
-    const apiKey = getGeminiApiKey();
-    if (!apiKey || !pool || !answers) return;
-
-    const seenByPlayer = new Map<string, Set<string>>();
-    answers.players.forEach(p => {
-      seenByPlayer.set(p.playerName, new Set(p.sessions.flatMap(s => s.results.map(r => r.poolId))));
-    });
-
-    const depletedCats: CategoryInfo[] = [];
-    SCENARIO_CATEGORIES.forEach(cat => {
-      const catPool = pool.scenarios.filter(s => s.categoryId === cat.id);
-      const anyLow = [...seenByPlayer.values()].some(seen => {
-        const unseen = catPool.filter(s => !seen.has(s.poolId)).length;
-        return unseen < 5;
-      });
-      if (anyLow) depletedCats.push(cat);
-    });
-
-    if (depletedCats.length === 0) {
-      setGenMessage('אין קטגוריות שצריכות הרחבה');
-      return;
-    }
-
-    setGenerating(true);
-    setGenMessage(null);
-    setGenLog([]);
-    const allScenarios = [...pool.scenarios];
-    const log: { cat: string; icon: string; status: string; count: number }[] = [];
-    let totalAdded = 0;
-    let totalFailed = 0;
-    const startTime = Date.now();
-
-    for (let i = 0; i < depletedCats.length; i++) {
-      const cat = depletedCats[i];
-      setGenProgress({ current: i + 1, total: depletedCats.length, category: cat.name });
-
-      let batchCount = 0;
-      let catStatus = 'fail';
-
-      try {
-        const batch = await generatePoolBatch(cat, 15, allScenarios, apiKey);
-        if (batch.length > 0) {
-          allScenarios.push(...batch);
-          batchCount = batch.length;
-          totalAdded += batch.length;
-          catStatus = batch.length >= 10 ? 'ok' : 'partial';
-        } else {
-          totalFailed++;
-        }
-      } catch (err) {
-        console.error(`Expand failed for ${cat.id}:`, err);
-        totalFailed++;
-      }
-
-      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount });
-      setGenLog([...log]);
-      savePoolDraft(allScenarios);
-
-      const elapsed = Date.now() - startTime;
-      const avgPerCat = elapsed / (i + 1);
-      const remaining = depletedCats.length - (i + 1);
-      const etaMin = Math.ceil((remaining * avgPerCat) / 60000);
-      setGenMessage(`${totalAdded} שאלות חדשות${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''} · ~${etaMin} דק׳ נותרו`);
-
-      if (i < depletedCats.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-      }
-    }
-
-    const newPool = buildPoolObject(allScenarios);
-    const result = await uploadTrainingPool(newPool);
-    setGenerating(false);
-    clearPoolDraft();
-
-    const elapsedMin = Math.round((Date.now() - startTime) / 60000);
-
-    if (result.success) {
-      setPool(newPool);
-      setGenMessage(
-        `הרחבה הסתיימה! ${totalAdded} שאלות חדשות` +
         (totalFailed > 0 ? ` · ${totalFailed} נכשלו` : '') +
-        ` · סה"כ ${allScenarios.length} · ${elapsedMin} דקות`
+        ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות`
       );
     } else {
       setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
@@ -917,7 +856,7 @@ ${dataBlock}
               לחץ "המשך ייצור" כדי להשלים את הקטגוריות החסרות, או "שחזר והעלה" כדי להעלות מה שיש.
             </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button onClick={handleGeneratePool} style={{
+              <button onClick={handleSmartGenerate} style={{
                 flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
                 background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
                 fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
@@ -1058,24 +997,33 @@ ${dataBlock}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={handleGeneratePool} style={{
-                flex: 1, padding: '0.6rem', borderRadius: '10px', border: 'none',
-                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
-                fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+            {/* Smart generate button + status */}
+            {poolStatus.status === 'healthy' ? (
+              <div style={{
+                padding: '0.5rem 0.75rem', borderRadius: '10px',
+                border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.06)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
               }}>
-                {pool ? '🔄 ייצור מחדש' : '✨ צור מאגר חדש'}
-              </button>
-              {pool && answers && answers.players.length > 0 && (
-                <button onClick={handleExpandPool} style={{
-                  flex: 1, padding: '0.6rem', borderRadius: '10px', border: '1px solid var(--primary)',
-                  background: 'transparent', color: 'var(--primary)',
-                  fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                <span style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.8rem' }}>✅ {poolStatus.label}</span>
+              </div>
+            ) : (
+              <div>
+                <button onClick={handleSmartGenerate} style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '10px', border: 'none',
+                  background: poolStatus.status === 'empty'
+                    ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+                    : 'linear-gradient(135deg, #f59e0b, #f97316)',
+                  color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
                 }}>
-                  📈 הרחב מאגר
+                  {poolStatus.status === 'empty' ? '✨ צור מאגר חדש' : '⚡ השלם מאגר'}
                 </button>
-              )}
-            </div>
+                <div style={{
+                  marginTop: '0.3rem', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center',
+                }}>
+                  {poolStatus.label}
+                </div>
+              </div>
+            )}
             {pool && pool.totalScenarios > 0 && (() => {
               const unreviewed = pool.scenarios.filter(s => !s.reviewedAt).length;
               return unreviewed > 0 ? (

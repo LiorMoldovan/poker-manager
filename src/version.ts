@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.8';
+export const APP_VERSION = '5.10.9';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.9',
+    date: '2026-03-11',
+    changes: [
+      '🛠️ Training admin cleanup — simplified alerts, removed unused imports, memoized computations',
+      '⬅️ Settlement arrows fixed to ← for correct RTL payment direction',
+    ]
+  },
   {
     version: '5.10.8',
     date: '2026-03-11',

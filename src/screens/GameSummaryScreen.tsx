@@ -1162,7 +1162,7 @@ const GameSummaryScreen = () => {
                     onClick={() => isClickable && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
                   >
                     <span style={iAmFrom ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.from)}</span>
-                    <span className="settlement-arrow">➜</span>
+                    <span className="settlement-arrow">←</span>
                     <span style={iAmTo ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.to)}</span>
                     <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
                       {isClickable && (
@@ -1231,7 +1231,7 @@ const GameSummaryScreen = () => {
               {skippedTransfers.map((s, index) => (
                 <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
                   <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                  <span className="settlement-arrow">➜</span>
+                  <span className="settlement-arrow">←</span>
                   <span>{renderPlayerWithFoodIcon(s.to)}</span>
                   <span style={{ color: '#f59e0b', fontWeight: '700', marginLeft: 'auto' }}>{formatCurrency(s.amount)}</span>
                 </div>
@@ -2057,7 +2057,7 @@ const GameSummaryScreen = () => {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)' }}>
-              {paymentModal.from} ➜ {paymentModal.to}
+              {paymentModal.from} ← {paymentModal.to}
             </div>
             <button
               onClick={() => copyAmount(paymentModal.amount)}

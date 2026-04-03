@@ -343,7 +343,7 @@ const GameDetailsScreen = () => {
             {settlements.map((s, index) => (
               <div key={index} className="settlement-row">
                 <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                <span className="settlement-arrow">➜</span>
+                <span className="settlement-arrow">←</span>
                 <span>{renderPlayerWithFoodIcon(s.to)}</span>
                 <span className="settlement-amount">{formatCurrency(s.amount)}</span>
               </div>
@@ -385,7 +385,7 @@ const GameDetailsScreen = () => {
             {skippedTransfers.map((s, index) => (
               <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
                 <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                <span className="settlement-arrow">➜</span>
+                <span className="settlement-arrow">←</span>
                 <span>{renderPlayerWithFoodIcon(s.to)}</span>
                 <span style={{ color: 'var(--warning)' }}>{formatCurrency(s.amount)}</span>
               </div>
