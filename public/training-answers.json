@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T21:00:02.061Z",
+  "lastUpdated": "2026-04-03T21:01:49.563Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -357,17 +357,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "arxf6w",
             "hotnmn"
           ],
           "flagReports": [
-            {
-              "poolId": "arxf6w",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "מה זה עמדת המפיץ?",
-              "date": "2026-04-03T20:56:40.342Z"
-            },
             {
               "poolId": "hotnmn",
               "playerName": "ליאור",
