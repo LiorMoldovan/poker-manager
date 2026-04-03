@@ -84,7 +84,7 @@ const PermissionContext = createContext<PermissionContextType>({
 const IDENTITY_KEY = 'poker_player_identity';
 const IDENTITY_ID_KEY = 'poker_player_identity_id';
 
-const LEGACY_NAME_CORRECTIONS: Record<string, string> = {
+export const LEGACY_NAME_CORRECTIONS: Record<string, string> = {
   'פבל': 'פאבל',
   'ארז': 'חרדון',
 };

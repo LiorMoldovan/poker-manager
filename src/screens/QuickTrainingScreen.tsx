@@ -12,10 +12,13 @@ import {
   getLastTrainingModelDisplay,
 } from '../utils/pokerTraining';
 
+const fixCardBidi = (text: string): string =>
+  text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
+
 const ColoredCards = ({ text }: { text: string }) => {
   const parts = text.split(/(\S+)/g);
   return (
-    <>
+    <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>
       {parts.map((part, i) => {
         const hasRed = part.includes('♥') || part.includes('♦');
         const hasSuit = hasRed || part.includes('♠') || part.includes('♣');
@@ -26,7 +29,7 @@ const ColoredCards = ({ text }: { text: string }) => {
           </span>
         );
       })}
-    </>
+    </span>
   );
 };
 
@@ -366,7 +369,7 @@ const QuickTrainingScreen = () => {
           color: 'var(--text)', direction: 'rtl',
           margin: 0,
         }}>
-          {scenario.situation}
+          {fixCardBidi(scenario.situation)}
         </p>
       </div>
 
@@ -448,7 +451,7 @@ const QuickTrainingScreen = () => {
                   marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6,
                   color: 'var(--text-muted)', paddingRight: '2rem',
                 }}>
-                  {option.explanation || ''}
+                  {fixCardBidi(option.explanation || '')}
                 </div>
               )}
             </button>

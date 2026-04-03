@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import html2canvas from 'html2canvas';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 import {
   LineChart,
   Line,
@@ -99,32 +99,10 @@ const GraphsScreen = () => {
     if (!ref.current) return;
     setSharing(true);
     try {
-      const canvas = await html2canvas(ref.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setSharing(false); return; }
-        const file = new File([blob], `poker-${title}.png`, { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: `Poker ${title}` });
-          } catch { /* user cancelled */ }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `poker-${title}.png`;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setSharing(false);
-      }, 'image/png');
-    } catch {
-      setSharing(false);
-    }
+      const files = await captureAndSplit(ref.current, `poker-${title}`);
+      await shareFiles(files, `Poker ${title}`);
+    } catch { /* */ }
+    finally { setSharing(false); }
   };
 
   // Color mapping - stable by player order in permanent list

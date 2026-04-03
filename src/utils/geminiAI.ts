@@ -9,6 +9,7 @@ import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, T
 import { playerTraitsByName } from './playerTraits';
 import { getRebuyRecords, isPlayerFemale } from '../database/storage';
 import { getComboHistory } from './comboHistory';
+import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
 
 // Models ordered by quality — cascading fallback from best to lightest.
@@ -2520,11 +2521,18 @@ ${playerLines}
 
 // --- Live Game TTS Pool Generator ---
 
+interface TTSPlayerTraining {
+  sessions: number;
+  totalQuestions: number;
+  accuracy: number;
+}
+
 interface TTSPlayerInput {
   id: string;
   name: string;
   stats: PlayerStats | null;
   traits: typeof playerTraitsByName[string] | undefined;
+  training: TTSPlayerTraining | null;
 }
 
 export const generateLiveGameTTSPool = async (
@@ -2540,11 +2548,26 @@ export const generateLiveGameTTSPool = async (
   const rebuyRecords = getRebuyRecords();
   const comboHistory = getComboHistory(playerIds, gameId);
 
+  let trainingByName: Record<string, TTSPlayerTraining> = {};
+  try {
+    const answersFile = await fetchTrainingAnswers();
+    if (answersFile) {
+      for (const pd of answersFile.players) {
+        trainingByName[pd.playerName] = {
+          sessions: pd.sessions.length,
+          totalQuestions: pd.totalQuestions,
+          accuracy: pd.accuracy,
+        };
+      }
+    }
+  } catch { /* training data is optional — don't block TTS generation */ }
+
   const players: TTSPlayerInput[] = playerIds.map((id, i) => ({
     id,
     name: playerNames[i],
     stats: allStats.find(s => s.playerId === id) || null,
     traits: playerTraitsByName[playerNames[i]],
+    training: trainingByName[playerNames[i]] || null,
   }));
 
   const playerDataLines = players.map(p => {
@@ -2573,6 +2596,12 @@ export const generateLiveGameTTSPool = async (
       if (maxRebuys > 0) lines.push(`שיא קניות אישי: ${maxRebuys}`);
     } else {
       lines.push(`שחקן חדש / מעט היסטוריה`);
+    }
+
+    if (p.training) {
+      lines.push(`אימון פוקר: ${p.training.sessions} סשנים, ${p.training.totalQuestions} שאלות, דיוק ${Math.round(p.training.accuracy)}%`);
+    } else {
+      lines.push(`אימון פוקר: לא התאמן כלל`);
     }
 
     return lines.join('\n');
@@ -2650,6 +2679,7 @@ ${rivalryPairs.length > 0 ? `\n═══ קשרים ═══\n${rivalryPairs.ma
 4. שחקן ללא היסטוריה → משפטי "ברוך הבא" ללא המצאת נתונים
 5. בלי פתיחות חוזרות, בלי "נו" חוזר, בלי "עוד קנייה" חוזר
 6. כשיש {COUNT} לפני "קניות" → לכתוב "{COUNT} קניות" (המערכת תתקן לצורת סמיכות אוטומטית)
+7. נתוני אימון פוקר — לכל שחקן מצוין אם התאמן באפליקציה ומה רמת הדיוק שלו. זה מקור מצוין להערות ציניות וחבריות, במיוחד כשמישהו קונה הרבה: שחקן שלא התאמן כלל ועושה קניות → "אולי כדאי להתאמן קצת?". שחקן שהתאמן הרבה עם דיוק נמוך ועדיין קונה → "תאוריה בלי פרקטיקה". שחקן שהתאמן עם דיוק גבוה ועדיין קונה → "הידע לא עוזר הערב". שחקן שהתאמן עם דיוק גבוה ומנצח → "האימונים משתלמים". אל תשתמש בנתוני אימון בכל משפט — זה תבלין, לא מרכיב עיקרי. מקסימום 1-2 משפטים לשחקן שמשלבים אימון.
 
 ═══ קטגוריות ═══
 
@@ -2660,6 +2690,8 @@ ${rivalryPairs.length > 0 ? `\n═══ קשרים ═══\n${rivalryPairs.ma
     - "שיא רווח של שלוש מאות שקל, הערב בכיוון ההפוך. {COUNT} קניות" ← נתון היסטורי
     - "ממוצע של שלוש קניות למשחק, הערב שובר שיאים" ← ממוצע קניות ספציפי
     - "באיירן מנצחים, פיליפ מפסיד. {COUNT} קניות" ← עובדה אישית אחת בודדת
+    - "עשרים שאלות אימון ואפס אחוז דיוק, ו{COUNT} קניות. תורת הפוקר בוכה" ← נתון אימון ספציפי
+    - "לא התאמן פעם אחת אבל קונה כמו מקצוען. {COUNT} קניות" ← חוסר אימון
     דוגמאות רעות (גנריים, אסורים):
     - "עוד קנייה, הערב ארוך" ← אפשר להגיד על כל אחד
     - "{PLAYER} ממשיך להאמין, כבר {COUNT}" ← אפשר להגיד על כל אחד

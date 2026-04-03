@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import html2canvas from 'html2canvas';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { usePermissions } from '../App';
 import {
   PoolScenario,
   TrainingSession,
   TrainingAnswerResult,
+  TrainingFlagReport,
+  FlagReason,
 } from '../types';
 import {
   SCENARIO_CATEGORIES,
@@ -19,10 +21,13 @@ import {
   TRAINING_BADGES,
 } from '../utils/pokerTraining';
 
+const fixCardBidi = (text: string): string =>
+  text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
+
 const ColoredCards = ({ text }: { text: string }) => {
   const parts = text.split(/(\S+)/g);
   return (
-    <>
+    <span style={{ direction: 'ltr', unicodeBidi: 'isolate' }}>
       {parts.map((part, i) => {
         const hasRed = part.includes('\u2665') || part.includes('\u2666');
         const hasSuit = hasRed || part.includes('\u2660') || part.includes('\u2663');
@@ -33,7 +38,7 @@ const ColoredCards = ({ text }: { text: string }) => {
           </span>
         );
       })}
-    </>
+    </span>
   );
 };
 
@@ -55,12 +60,16 @@ const SharedQuickPlayScreen = () => {
   const [newBadgeIds, setNewBadgeIds] = useState<string[]>([]);
   const [exhaustedMsg, setExhaustedMsg] = useState<string | null>(null);
   const [flaggedThisSession, setFlaggedThisSession] = useState<Set<string>>(new Set());
+  const [flagReportsThisSession, setFlagReportsThisSession] = useState<TrainingFlagReport[]>([]);
   const [showFlagConfirm, setShowFlagConfirm] = useState(false);
+  const [flagReason, setFlagReason] = useState<FlagReason | null>(null);
+  const [flagComment, setFlagComment] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [showStyleTip, setShowStyleTip] = useState(true);
   const summaryRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<TrainingAnswerResult[]>([]);
   const flaggedRef = useRef<Set<string>>(new Set());
+  const flagReportsRef = useRef<TrainingFlagReport[]>([]);
   const sessionConcludedRef = useRef(false);
 
   const name = playerName || 'Unknown';
@@ -91,6 +100,8 @@ const SharedQuickPlayScreen = () => {
       setShowSummary(false);
       setNewBadgeIds([]);
       setFlaggedThisSession(new Set());
+      setFlagReportsThisSession([]);
+      flagReportsRef.current = [];
     } catch {
       setError('שגיאה בטעינת שאלות');
     } finally {
@@ -108,8 +119,10 @@ const SharedQuickPlayScreen = () => {
       if (!sessionConcludedRef.current && resultsRef.current.length > 0) {
         const r = resultsRef.current;
         const f = flaggedRef.current;
+        const fr = flagReportsRef.current;
         const correctCount = r.filter(x => x.correct).length;
-        const total = r.length;
+        const nearMissCount = r.filter(x => x.nearMiss).length;
+        const total = r.length - nearMissCount;
 
         const progress = getSharedProgress(name);
         progress.sessionsCompleted++;
@@ -124,6 +137,7 @@ const SharedQuickPlayScreen = () => {
           correctAnswers: correctCount,
           results: r,
           flaggedPoolIds: Array.from(f),
+          flagReports: fr.length > 0 ? fr : undefined,
         };
         bufferSessionForUpload(name, session);
         flushPendingUploads(true);
@@ -166,20 +180,23 @@ const SharedQuickPlayScreen = () => {
     });
 
     const progress = getSharedProgress(name);
-    progress.totalQuestions++;
-    if (isCorrect) {
-      progress.totalCorrect++;
-      progress.currentCorrectRun++;
-      progress.longestCorrectRun = Math.max(progress.longestCorrectRun, progress.currentCorrectRun);
+    if (isNearMiss) {
+      progress.totalNeutral = (progress.totalNeutral || 0) + 1;
     } else {
-      progress.currentCorrectRun = 0;
+      progress.totalQuestions++;
+      if (!progress.byCategory[scenario.categoryId]) {
+        progress.byCategory[scenario.categoryId] = { total: 0, correct: 0 };
+      }
+      progress.byCategory[scenario.categoryId].total++;
+      if (isCorrect) {
+        progress.totalCorrect++;
+        progress.currentCorrectRun++;
+        progress.longestCorrectRun = Math.max(progress.longestCorrectRun, progress.currentCorrectRun);
+        progress.byCategory[scenario.categoryId].correct++;
+      } else {
+        progress.currentCorrectRun = 0;
+      }
     }
-
-    if (!progress.byCategory[scenario.categoryId]) {
-      progress.byCategory[scenario.categoryId] = { total: 0, correct: 0 };
-    }
-    progress.byCategory[scenario.categoryId].total++;
-    if (isCorrect) progress.byCategory[scenario.categoryId].correct++;
 
     if (!progress.seenPoolIds.includes(scenario.poolId)) {
       progress.seenPoolIds.push(scenario.poolId);
@@ -200,9 +217,12 @@ const SharedQuickPlayScreen = () => {
   const concludeSession = (resultsToUse?: TrainingAnswerResult[], flaggedToUse?: Set<string>) => {
     const finalResults = resultsToUse || results;
     const finalFlagged = flaggedToUse || flaggedThisSession;
+    const finalReports = flagReportsThisSession;
     const correctCount = finalResults.filter(r => r.correct).length;
-    const total = finalResults.length;
-    if (total === 0) {
+    const nearMissCount = finalResults.filter(r => r.nearMiss).length;
+    const scoredTotal = finalResults.length - nearMissCount;
+    const total = scoredTotal;
+    if (total === 0 && nearMissCount === 0) {
       if (!resultsToUse) navigate('/shared-training');
       return;
     }
@@ -227,6 +247,7 @@ const SharedQuickPlayScreen = () => {
       correctAnswers: correctCount,
       results: finalResults,
       flaggedPoolIds: Array.from(finalFlagged),
+      flagReports: finalReports.length > 0 ? finalReports : undefined,
     };
     bufferSessionForUpload(name, session);
     flushPendingUploads();
@@ -235,10 +256,25 @@ const SharedQuickPlayScreen = () => {
   };
 
   const handleFlag = () => {
+    if (!flagReason) return;
     const scenario = scenarios[currentIdx];
+
     setFlaggedThisSession(prev => {
       const updated = new Set(prev).add(scenario.poolId);
       flaggedRef.current = updated;
+      return updated;
+    });
+
+    const report: TrainingFlagReport = {
+      poolId: scenario.poolId,
+      playerName: name,
+      reason: flagReason,
+      comment: flagComment.trim() || undefined,
+      date: new Date().toISOString(),
+    };
+    setFlagReportsThisSession(prev => {
+      const updated = [...prev, report];
+      flagReportsRef.current = updated;
       return updated;
     });
 
@@ -249,40 +285,20 @@ const SharedQuickPlayScreen = () => {
     const badges = checkNewBadges(progress);
     if (badges.length > 0) progress.earnedBadgeIds = [...progress.earnedBadgeIds, ...badges];
     saveSharedProgress(name, progress);
+
     setShowFlagConfirm(false);
+    setFlagReason(null);
+    setFlagComment('');
   };
 
   const handleShare = async () => {
     if (!summaryRef.current) return;
     setIsSharing(true);
     try {
-      const canvas = await html2canvas(summaryRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setIsSharing(false); return; }
-        const file = new File([blob], 'poker-training-result.png', { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Poker Training Result' });
-          } catch {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'poker-training-result.png'; a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'poker-training-result.png'; a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharing(false);
-      }, 'image/png');
-    } catch {
-      setIsSharing(false);
-    }
+      const files = await captureAndSplit(summaryRef.current, 'poker-training-result');
+      await shareFiles(files, 'Poker Training Result');
+    } catch { /* */ }
+    finally { setIsSharing(false); }
   };
 
   if (loading) {
@@ -312,13 +328,15 @@ const SharedQuickPlayScreen = () => {
   }
 
   if (showSummary) {
-    const total = results.length;
+    const totalAnswered = results.length;
     const correct = results.filter(r => r.correct).length;
     const nearMissTotal = results.filter(r => r.nearMiss).length;
-    const accuracy = total > 0 ? (correct / total) * 100 : 0;
+    const scoredTotal = totalAnswered - nearMissTotal;
+    const accuracy = scoredTotal > 0 ? (correct / scoredTotal) * 100 : 0;
 
     const catBreakdown: Record<string, { total: number; correct: number }> = {};
     results.forEach(r => {
+      if (r.nearMiss) return;
       if (!catBreakdown[r.categoryId]) catBreakdown[r.categoryId] = { total: 0, correct: 0 };
       catBreakdown[r.categoryId].total++;
       if (r.correct) catBreakdown[r.categoryId].correct++;
@@ -335,7 +353,7 @@ const SharedQuickPlayScreen = () => {
               {accuracy >= 70 ? '🏆' : accuracy >= 50 ? '👍' : '💪'}
             </div>
             <h2 style={{ marginBottom: '0.3rem' }}>סיכום אימון — {name}</h2>
-            <p className="text-muted">{total} שאלות</p>
+            <p className="text-muted">{totalAnswered} שאלות{nearMissTotal > 0 ? ` (${nearMissTotal} ניטרליות)` : ''}</p>
           </div>
 
           {/* Score */}
@@ -348,11 +366,16 @@ const SharedQuickPlayScreen = () => {
               fontSize: '3rem', fontWeight: 900,
               color: accuracy >= 70 ? '#22c55e' : accuracy >= 50 ? '#3b82f6' : '#ef4444',
             }}>
-              {correct}/{total}
+              {correct}/{scoredTotal}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
               תשובות נכונות ({accuracy.toFixed(0)}%)
             </div>
+            {nearMissTotal > 0 && (
+              <div style={{ color: '#f59e0b', fontSize: '0.75rem', marginTop: '0.3rem' }}>
+                ~ {nearMissTotal} תשובות ניטרליות (תקפות לפוקר מקצועי)
+              </div>
+            )}
           </div>
 
           {/* Dots */}
@@ -401,7 +424,7 @@ const SharedQuickPlayScreen = () => {
               fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6,
             }}>
               {nearMissTotal > 0
-                ? `💡 ${nearMissTotal} מהתשובות שלך היו נכונות לפוקר מקצועי, אבל לא אופטימליות למשחק הביתי שלנו`
+                ? `💡 ${nearMissTotal} תשובות ניטרליות — נכונות לפוקר מקצועי אבל לא אופטימליות למשחק שלנו. הן לא נספרות כשגיאה ולא כהצלחה`
                 : '💡 השאלות מותאמות למשחק הביתי שלנו — בלופים עובדים פחות ושחקנים קוראים יותר, אז חלק מהתשובות שונות מפוקר מקצועי'
               }
             </div>
@@ -531,7 +554,7 @@ const SharedQuickPlayScreen = () => {
       )}
       {results.length > 0 && scenarios.length > 20 && (
         <div style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-          ✅ {results.filter(r => r.correct).length} / {results.length}
+          ✅ {results.filter(r => r.correct).length} / {results.filter(r => !r.nearMiss).length}
         </div>
       )}
 
@@ -563,7 +586,7 @@ const SharedQuickPlayScreen = () => {
           🃏 <ColoredCards text={scenario.yourCards} />
         </div>
         <p style={{ fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text)', margin: 0 }}>
-          {scenario.situation}
+          {fixCardBidi(scenario.situation)}
         </p>
       </div>
 
@@ -656,7 +679,7 @@ const SharedQuickPlayScreen = () => {
                   marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6,
                   color: 'var(--text-muted)', paddingRight: '2rem',
                 }}>
-                  {option.explanation}
+                  {fixCardBidi(option.explanation)}
                 </div>
               )}
             </button>
@@ -722,24 +745,67 @@ const SharedQuickPlayScreen = () => {
         </div>
       )}
 
-      {/* Flag confirmation */}
+      {/* Flag report panel */}
       {showFlagConfirm && (
         <div style={{
           marginTop: '0.5rem', padding: '0.75rem', borderRadius: '10px',
           background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
-          textAlign: 'center',
+          direction: 'rtl',
         }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.2rem' }}>🚩 דיווח על שאלה שגויה</div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            התשובה לא נכונה או השאלה לא הגיונית? דווח ונבדוק
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>🚩 דיווח על שאלה</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.6rem', textAlign: 'center' }}>
+            מה הבעיה?
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            <button className="btn btn-sm" onClick={handleFlag}
-              style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.4rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
-              דווח והסר
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.6rem' }}>
+            {([
+              ['wrong_answer', '❌ התשובה הנכונה שגויה'],
+              ['unclear_question', '❓ השאלה לא ברורה או חסרה מידע'],
+              ['wrong_for_home_game', '🏠 מתאים למקצועי אבל לא למשחק שלנו'],
+              ['other', '💬 אחר'],
+            ] as [FlagReason, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setFlagReason(val)}
+                style={{
+                  padding: '0.5rem 0.6rem', borderRadius: '8px', cursor: 'pointer',
+                  fontSize: '0.75rem', textAlign: 'right',
+                  background: flagReason === val ? 'rgba(239,68,68,0.2)' : 'var(--surface)',
+                  border: flagReason === val ? '1px solid #ef4444' : '1px solid var(--border)',
+                  color: flagReason === val ? '#ef4444' : 'var(--text)',
+                  fontWeight: flagReason === val ? 600 : 400,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={flagComment}
+            onChange={e => setFlagComment(e.target.value)}
+            placeholder="פרט את הבעיה (אופציונלי)..."
+            rows={2}
+            style={{
+              width: '100%', padding: '0.5rem', borderRadius: '8px', fontSize: '0.75rem',
+              background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)',
+              resize: 'vertical', direction: 'rtl', fontFamily: 'inherit',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.6rem' }}>
+            <button onClick={handleFlag} disabled={!flagReason}
+              style={{
+                background: flagReason ? '#ef4444' : '#555', color: 'white', border: 'none',
+                padding: '0.45rem 1.2rem', borderRadius: '8px', cursor: flagReason ? 'pointer' : 'not-allowed',
+                fontSize: '0.8rem', fontWeight: 600, opacity: flagReason ? 1 : 0.5,
+              }}>
+              שלח דיווח
             </button>
-            <button className="btn btn-sm" onClick={() => setShowFlagConfirm(false)}
-              style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', padding: '0.4rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem' }}>
+            <button onClick={() => { setShowFlagConfirm(false); setFlagReason(null); setFlagComment(''); }}
+              style={{
+                background: 'var(--surface)', color: 'var(--text-muted)',
+                border: '1px solid var(--border)', padding: '0.45rem 1.2rem', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '0.8rem',
+              }}>
               ביטול
             </button>
           </div>

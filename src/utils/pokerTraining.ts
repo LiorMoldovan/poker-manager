@@ -917,6 +917,7 @@ const getProgressKey = (playerName: string) => `shared_training_progress_${playe
 const DEFAULT_SHARED_PROGRESS: SharedTrainingProgress = {
   totalQuestions: 0,
   totalCorrect: 0,
+  totalNeutral: 0,
   sessionsCompleted: 0,
   byCategory: {},
   streak: { current: 0, lastTrainingDate: null },
@@ -945,8 +946,6 @@ export const saveSharedProgress = (playerName: string, progress: SharedTrainingP
 
 export const rebuildProgressFromRemote = (playerData: TrainingPlayerData): SharedTrainingProgress => {
   const progress: SharedTrainingProgress = { ...DEFAULT_SHARED_PROGRESS };
-  progress.totalQuestions = playerData.totalQuestions;
-  progress.totalCorrect = playerData.totalCorrect;
   progress.sessionsCompleted = playerData.sessions.length;
 
   const byCategory: Record<string, { total: number; correct: number }> = {};
@@ -954,27 +953,37 @@ export const rebuildProgressFromRemote = (playerData: TrainingPlayerData): Share
   const flaggedPoolIds = new Set<string>();
   let currentCorrectRun = 0;
   let longestCorrectRun = 0;
+  let totalQ = 0, totalC = 0, totalN = 0;
 
   const sortedSessions = [...playerData.sessions].sort((a, b) => a.date.localeCompare(b.date));
 
   for (const session of sortedSessions) {
     for (const r of session.results) {
+      seenPoolIds.add(r.poolId);
+      if (r.nearMiss) {
+        totalN++;
+        continue;
+      }
+      totalQ++;
       if (!byCategory[r.categoryId]) byCategory[r.categoryId] = { total: 0, correct: 0 };
       byCategory[r.categoryId].total++;
       if (r.correct) {
+        totalC++;
         byCategory[r.categoryId].correct++;
         currentCorrectRun++;
         longestCorrectRun = Math.max(longestCorrectRun, currentCorrectRun);
       } else {
         currentCorrectRun = 0;
       }
-      seenPoolIds.add(r.poolId);
     }
     if (session.flaggedPoolIds) {
       session.flaggedPoolIds.forEach(id => flaggedPoolIds.add(id));
     }
   }
 
+  progress.totalQuestions = totalQ;
+  progress.totalCorrect = totalC;
+  progress.totalNeutral = totalN;
   progress.byCategory = byCategory;
   progress.longestCorrectRun = longestCorrectRun;
   progress.currentCorrectRun = currentCorrectRun;
@@ -1548,7 +1557,16 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       player.sessions.push(session);
       player.totalQuestions += session.questionsAnswered;
       player.totalCorrect += session.correctAnswers;
-      player.accuracy = player.totalQuestions > 0 ? (player.totalCorrect / player.totalQuestions) * 100 : 0;
+      // Recalculate from all results to properly exclude nearMiss
+      let scored = 0, corr = 0;
+      for (const s of player.sessions) {
+        for (const r of s.results) {
+          if (!r.nearMiss) { scored++; if (r.correct) corr++; }
+        }
+      }
+      player.totalQuestions = scored;
+      player.totalCorrect = corr;
+      player.accuracy = scored > 0 ? (corr / scored) * 100 : 0;
     }
     data.lastUpdated = new Date().toISOString();
     return data;

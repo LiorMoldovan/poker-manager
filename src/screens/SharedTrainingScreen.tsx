@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import html2canvas from 'html2canvas';
-import { usePermissions } from '../App';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
+import { usePermissions, LEGACY_NAME_CORRECTIONS } from '../App';
 import { TrainingPlayerData, SharedTrainingProgress } from '../types';
 import {
   SCENARIO_CATEGORIES,
@@ -14,10 +14,9 @@ import {
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers } from '../database/githubSync';
 
-const ME_BG = 'rgba(59, 130, 246, 0.14)';
-const ME_NAME_COLOR = '#60a5fa';
-const meRowStyle = { background: ME_BG, borderRight: '3px solid #3b82f6' } as const;
-const meNameStyle = { color: ME_NAME_COLOR } as const;
+const meRowStyle = { background: 'rgba(59,130,246,0.14)', borderRight: '3px solid #3b82f6' } as const;
+const meNameStyle = { color: '#60a5fa' } as const;
+
 
 const SharedTrainingScreen = () => {
   const navigate = useNavigate();
@@ -76,33 +75,10 @@ const SharedTrainingScreen = () => {
     if (!leaderboardRef.current) return;
     setIsSharing(true);
     try {
-      const canvas = await html2canvas(leaderboardRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setIsSharing(false); return; }
-        const file = new File([blob], 'poker-training-leaderboard.png', { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Poker Training Leaderboard' });
-          } catch {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'poker-training-leaderboard.png'; a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'poker-training-leaderboard.png'; a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharing(false);
-      }, 'image/png');
-    } catch {
-      setIsSharing(false);
-    }
+      const files = await captureAndSplit(leaderboardRef.current, 'poker-training-leaderboard');
+      await shareFiles(files, 'Poker Training Leaderboard');
+    } catch { /* */ }
+    finally { setIsSharing(false); }
   };
 
   const toggleCategory = (catId: string) => {
@@ -111,7 +87,13 @@ const SharedTrainingScreen = () => {
     );
   };
 
-  const sortedLeaderboard = [...leaderboard]
+  const leaderboardWithNeutral = leaderboard.map(p => {
+    let neutral = 0;
+    p.sessions.forEach(s => s.results.forEach(r => { if (r.nearMiss) neutral++; }));
+    return { ...p, neutral };
+  });
+
+  const sortedLeaderboard = [...leaderboardWithNeutral]
     .filter(p => p.totalQuestions >= 5)
     .sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
 
@@ -122,7 +104,7 @@ const SharedTrainingScreen = () => {
 
   // Build insights data
   const hasProgress = progress.totalQuestions > 0;
-  const catEntries = Object.entries(progress.byCategory).filter(([, v]) => v.total >= 3);
+  const catEntries = Object.entries(progress.byCategory).filter(([, v]) => v.total >= 2);
   const sortedByAcc = [...catEntries].sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total));
   const bestCatEntry = catEntries.length > 0
     ? [...catEntries].sort((a, b) => (b[1].correct / b[1].total) - (a[1].correct / a[1].total))[0]
@@ -240,40 +222,66 @@ const SharedTrainingScreen = () => {
             עוד אין מספיק נתונים (מינימום 5 שאלות)
           </div>
         ) : (
-          <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
-                <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>שחקן</th>
-                <th style={{ padding: '0.3rem 0.2rem', textAlign: 'center', whiteSpace: 'nowrap' }}>שאלות</th>
-                <th style={{ padding: '0.3rem 0.2rem', textAlign: 'center', whiteSpace: 'nowrap' }}>דיוק</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedLeaderboard.map((player, i) => {
-                const isMe = player.playerName === name;
-                return (
-                  <tr key={player.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
-                    <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
-                      {i + 1}{i < 3 ? ` ${['🥇', '🥈', '🥉'][i]}` : ''}
-                    </td>
-                    <td style={{ padding: '0.3rem 0.2rem', textAlign: 'left', fontWeight: isMe ? 700 : 500, ...(isMe ? meNameStyle : {}) }}>
-                      {player.playerName}
-                    </td>
-                    <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      {player.totalQuestions}
-                    </td>
-                    <td style={{
-                      padding: '0.3rem 0.2rem', textAlign: 'center', fontWeight: 700,
-                      color: player.accuracy >= 60 ? 'var(--success)' : player.accuracy >= 40 ? '#eab308' : 'var(--danger)',
-                    }}>
-                      {player.accuracy.toFixed(0)}%
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ padding: '0.3rem 0.15rem', width: '20px' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'left' }}>שחקן</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center' }}>ענו</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#22c55e' }}>✓</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#f59e0b' }}>~</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#ef4444' }}>✗</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center' }}>דיוק</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedLeaderboard.map((player, i) => {
+                  const displayName = LEGACY_NAME_CORRECTIONS[player.playerName] || player.playerName;
+                  const isMe = player.playerName === name || displayName === name;
+                  const totalAnswered = player.totalQuestions + player.neutral;
+                  const wrong = player.totalQuestions - player.totalCorrect;
+                  return (
+                    <tr key={player.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
+                      <td style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>
+                        {i + 1}
+                      </td>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'left', fontWeight: isMe ? 700 : 500, ...(isMe ? meNameStyle : {}) }}>
+                        {displayName}
+                      </td>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        {totalAnswered}
+                      </td>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#22c55e' }}>
+                        {player.totalCorrect}
+                      </td>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#f59e0b' }}>
+                        {player.neutral || '-'}
+                      </td>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#ef4444' }}>
+                        {wrong || '-'}
+                      </td>
+                      <td style={{
+                        padding: '0.3rem 0.15rem', textAlign: 'center', fontWeight: 700,
+                        color: player.accuracy >= 60 ? 'var(--success)' : player.accuracy >= 40 ? '#eab308' : 'var(--danger)',
+                      }}>
+                        {player.accuracy.toFixed(0)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.4rem', direction: 'rtl', lineHeight: 1.5 }}>
+              <span style={{ color: '#22c55e' }}>✓</span> נכון
+              {' · '}
+              <span style={{ color: '#f59e0b' }}>~</span> ניטרלי (תקף לפוקר מקצועי)
+              {' · '}
+              <span style={{ color: '#ef4444' }}>✗</span> שגוי
+              {' · '}
+              דיוק = ✓ מתוך (✓+✗)
+            </div>
+          </>
         )}
       </div>
       {sortedLeaderboard.length > 0 && (
@@ -294,6 +302,16 @@ const SharedTrainingScreen = () => {
       )}
 
       {/* Player insights — below table */}
+      {hasProgress && !(hasCatSpread || weakCats.length > 0) && (
+        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+          <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', color: 'var(--primary)' }}>
+            📋 תובנות אימון
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            צריך עוד כמה שאלות כדי לזהות חוזקות וחולשות — המשך להתאמן!
+          </div>
+        </div>
+      )}
       {hasProgress && (hasCatSpread || weakCats.length > 0) && (
         <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
           <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.5rem', color: 'var(--primary)' }}>

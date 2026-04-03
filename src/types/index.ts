@@ -239,6 +239,7 @@ export interface PoolScenario {
   }[];
   category: string;
   categoryId: string;
+  reviewedAt?: string; // ISO timestamp — set when AI review marks this scenario as ok/fixed
 }
 
 export interface TrainingPool {
@@ -256,12 +257,23 @@ export interface TrainingAnswerResult {
   chosenId: string;
 }
 
+export type FlagReason = 'wrong_answer' | 'unclear_question' | 'wrong_for_home_game' | 'other';
+
+export interface TrainingFlagReport {
+  poolId: string;
+  playerName: string;
+  reason: FlagReason;
+  comment?: string;
+  date: string;
+}
+
 export interface TrainingSession {
   date: string;
   questionsAnswered: number;
   correctAnswers: number;
   results: TrainingAnswerResult[];
   flaggedPoolIds?: string[];
+  flagReports?: TrainingFlagReport[];
 }
 
 export interface TrainingPlayerData {
@@ -303,6 +315,7 @@ export interface TrainingBadge {
 export interface SharedTrainingProgress {
   totalQuestions: number;
   totalCorrect: number;
+  totalNeutral: number;
   sessionsCompleted: number;
   byCategory: Record<string, { total: number; correct: number }>;
   streak: { current: number; lastTrainingDate: string | null };

@@ -6,6 +6,7 @@ import {
   TrainingPlayerData,
   TrainingExploitationLocal,
   PoolScenario,
+  TrainingFlagReport,
 } from '../types';
 import {
   fetchTrainingPool,
@@ -14,6 +15,7 @@ import {
   uploadTrainingPool,
   uploadTrainingInsights,
   removeFromTrainingPool,
+  writeTrainingAnswersWithRetry,
 } from '../database/githubSync';
 import {
   SCENARIO_CATEGORIES,
@@ -21,6 +23,7 @@ import {
   CategoryInfo,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
+import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 const RATE_LIMIT_DELAY = 7500;
 
@@ -40,8 +43,12 @@ const TrainingAdminTab = () => {
   // Expanded player
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
 
-  // Flagged removal
+  // Flagged removal / dismiss / AI fix
   const [removingFlagged, setRemovingFlagged] = useState(false);
+  const [dismissingFlagged, setDismissingFlagged] = useState<string | null>(null);
+  const [fixingFlagged, setFixingFlagged] = useState<string | null>(null);
+  const [fixPreview, setFixPreview] = useState<{ poolId: string; original: PoolScenario; fixed: PoolScenario } | null>(null);
+  const [savingFix, setSavingFix] = useState(false);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
 
   // Pool review
@@ -388,6 +395,145 @@ const TrainingAdminTab = () => {
     }
   };
 
+  // ── Dismiss flag reports (reject reports, keep question) ──
+  const clearFlagsLocally = (data: TrainingAnswersFile, poolId: string): TrainingAnswersFile => {
+    const clone = JSON.parse(JSON.stringify(data)) as TrainingAnswersFile;
+    clone.players.forEach(player => {
+      player.sessions.forEach(session => {
+        if (session.flaggedPoolIds) {
+          session.flaggedPoolIds = session.flaggedPoolIds.filter(id => id !== poolId);
+        }
+        if (session.flagReports) {
+          session.flagReports = session.flagReports.filter(r => r.poolId !== poolId);
+        }
+      });
+    });
+    clone.lastUpdated = new Date().toISOString();
+    return clone;
+  };
+
+  const handleDismissFlagged = async (poolId: string) => {
+    setDismissingFlagged(poolId);
+    setFlagMsg(`דוחה דיווחים...`);
+    try {
+      const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
+      if (ok) {
+        if (answers) setAnswers(clearFlagsLocally(answers, poolId));
+        setFlagMsg('✅ הדיווחים נדחו — השאלה נשארת');
+      } else {
+        setFlagMsg('❌ שגיאה בעדכון');
+      }
+    } catch (err) {
+      setFlagMsg(`❌ שגיאה: ${err instanceof Error ? err.message : 'Unknown'}`);
+    } finally {
+      setDismissingFlagged(null);
+    }
+  };
+
+  // ── AI Fix flagged question (generates preview) ──
+  const handleAIFix = async (poolId: string, reports: TrainingFlagReport[]) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey || !pool) return;
+
+    const scenario = pool.scenarios.find(s => s.poolId === poolId);
+    if (!scenario) return;
+
+    setFixingFlagged(poolId);
+    setFlagMsg(`AI מייצר תיקון...`);
+
+    const reportSummary = reports.map(r => {
+      const reasonLabel: Record<string, string> = {
+        wrong_answer: 'התשובה הנכונה שגויה',
+        unclear_question: 'השאלה לא ברורה',
+        wrong_for_home_game: 'מתאים למקצועי אבל לא למשחק ביתי',
+        other: 'אחר',
+      };
+      return `- ${r.playerName}: ${reasonLabel[r.reason] || r.reason}${r.comment ? ` — "${r.comment}"` : ''}`;
+    }).join('\n');
+
+    const prompt = `אתה מומחה פוקר. שחקנים דיווחו על בעיה בשאלה הבאה. תקן אותה.
+
+שאלה נוכחית:
+${JSON.stringify({
+  poolId: scenario.poolId,
+  situation: scenario.situation,
+  yourCards: scenario.yourCards,
+  options: scenario.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })),
+  category: scenario.category,
+  categoryId: scenario.categoryId,
+})}
+
+דיווחי שחקנים:
+${reportSummary}
+
+הקשר: משחק ביתי חברתי (~8 שחקנים, כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000). שחקנים קוראים הרבה יותר מבמקצועי ובלופים עובדים פחות.
+
+תקן את השאלה כך:
+1. תשובה נכונה אחת בדיוק (isCorrect: true) — נכונה למשחק ביתי
+2. הסברים מפורטים בעברית, סכומים בשקלים
+3. nearMiss: true לתשובות שנכונות בפוקר מקצועי אך לא אופטימליות למשחק ביתי
+4. שמור על poolId, categoryId ו-category מקוריים
+5. שמור על option IDs מקוריים (A, B, C, D)
+
+החזר JSON בלבד, אובייקט אחד:
+{"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},...],"category":"...","categoryId":"..."}
+
+JSON בלבד, בלי markdown:`;
+
+    try {
+      const fixedText = await callGemini(apiKey, prompt);
+      const cleaned = fixedText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const fixedScenario = JSON.parse(cleaned) as PoolScenario;
+
+      if (!fixedScenario.poolId || !fixedScenario.options || fixedScenario.options.length === 0) {
+        setFlagMsg('❌ AI החזיר תוצאה לא תקינה');
+        setFixingFlagged(null);
+        return;
+      }
+
+      fixedScenario.poolId = poolId;
+      fixedScenario.categoryId = scenario.categoryId;
+      fixedScenario.category = scenario.category;
+
+      setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
+      setFlagMsg(null);
+    } catch (err) {
+      setFlagMsg(`❌ שגיאת AI: ${err instanceof Error ? err.message : 'Unknown'}`);
+    } finally {
+      setFixingFlagged(null);
+    }
+  };
+
+  // ── Confirm AI fix (save to pool + clear flags) ──
+  const confirmAIFix = async () => {
+    if (!fixPreview || !pool) return;
+    setSavingFix(true);
+    setFlagMsg('שומר תיקון...');
+
+    const { poolId, fixed } = fixPreview;
+    try {
+      const updatedScenarios = pool.scenarios.map(s => s.poolId === poolId ? fixed : s);
+      const newPool = buildPoolObject(updatedScenarios);
+      const result = await uploadTrainingPool(newPool);
+
+      if (result.success) {
+        setPool(newPool);
+        const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
+        if (ok && answers) {
+          setAnswers(clearFlagsLocally(answers, poolId));
+        }
+        setFlagMsg('✅ השאלה תוקנה — הדיווחים נמחקו');
+      } else {
+        setFlagMsg(`❌ שגיאה בהעלאה: ${result.message}`);
+      }
+    } catch (err) {
+      setFlagMsg(`❌ שגיאה: ${err instanceof Error ? err.message : 'Unknown'}`);
+    } finally {
+      setFixPreview(null);
+      setSavingFix(false);
+    }
+  };
+
   // ── Review pool with AI ──
   const handleReviewPool = async () => {
     if (!pool || pool.scenarios.length === 0) return;
@@ -398,10 +544,26 @@ const TrainingAdminTab = () => {
     setReviewMsg(null);
 
     const BATCH = 10;
-    const scenarios = [...pool.scenarios];
+    const updatedScenarios = [...pool.scenarios];
+    const unreviewedIndices = updatedScenarios
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => !s.reviewedAt)
+      .map(({ i }) => i);
+
+    if (unreviewedIndices.length === 0) {
+      setReviewMsg(`✅ כל ${updatedScenarios.length} השאלות כבר נסרקו — אין מה לבדוק`);
+      setReviewing(false);
+      return;
+    }
+
+    const skipped = updatedScenarios.length - unreviewedIndices.length;
+    if (skipped > 0) {
+      setReviewLog(prev => [...prev, `⏭ דילוג על ${skipped} שאלות שכבר נסרקו`]);
+    }
+
+    const scenarios = unreviewedIndices.map(i => updatedScenarios[i]);
     const totalBatches = Math.ceil(scenarios.length / BATCH);
     let fixed = 0, removed = 0, ok = 0, errors = 0;
-    const updatedScenarios = [...scenarios];
 
     for (let b = 0; b < totalBatches; b++) {
       const start = b * BATCH;
@@ -471,6 +633,8 @@ JSON בלבד, בלי markdown:`;
           const idx = updatedScenarios.findIndex(s => s.poolId === item.poolId);
           if (idx === -1) continue;
 
+          const reviewStamp = new Date().toISOString();
+
           if (item.status === 'remove') {
             removed++;
             updatedScenarios.splice(idx, 1);
@@ -493,19 +657,21 @@ JSON בלבד, בלי markdown:`;
               })),
               category: (f.category || orig.category) as string,
               categoryId: (f.categoryId || orig.categoryId) as string,
+              reviewedAt: reviewStamp,
             };
             setReviewLog(prev => [...prev, `✏️ ${item.poolId}: ${item.issues?.join(', ')}`]);
           } else {
             ok++;
-            if (item.nearMissFlags && item.nearMissFlags.length > 0) {
-              updatedScenarios[idx] = {
-                ...updatedScenarios[idx],
+            updatedScenarios[idx] = {
+              ...updatedScenarios[idx],
+              reviewedAt: reviewStamp,
+              ...(item.nearMissFlags && item.nearMissFlags.length > 0 ? {
                 options: updatedScenarios[idx].options.map(o => ({
                   ...o,
                   nearMiss: item.nearMissFlags!.includes(o.id) ? true : o.nearMiss,
                 })),
-              };
-            }
+              } : {}),
+            };
           }
         }
         setReviewLog(prev => [...prev, `✓ אצווה ${b + 1}: ${result.filter((r: unknown) => (r as {status:string}).status === 'ok').length} ok, ${result.filter((r: unknown) => (r as {status:string}).status === 'fixed').length} fixed, ${result.filter((r: unknown) => (r as {status:string}).status === 'remove').length} remove`]);
@@ -646,10 +812,12 @@ ${dataBlock}
   };
 
   // ── Flagged questions ──
-  const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario; flagCount: number }[] => {
+  const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario; flagCount: number; reports: TrainingFlagReport[] }[] => {
     if (!answers || !pool) return [];
     const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
     const flagCounts = new Map<string, number>();
+    const reportsByPool = new Map<string, TrainingFlagReport[]>();
+
     answers.players.forEach(p => {
       p.sessions.forEach(s => {
         (s.flaggedPoolIds || []).forEach(id => {
@@ -657,14 +825,26 @@ ${dataBlock}
             flagCounts.set(id, (flagCounts.get(id) || 0) + 1);
           }
         });
+        (s.flagReports || []).forEach(report => {
+          if (poolIdSet.has(report.poolId)) {
+            const existing = reportsByPool.get(report.poolId) || [];
+            existing.push(report);
+            reportsByPool.set(report.poolId, existing);
+            if (!flagCounts.has(report.poolId)) {
+              flagCounts.set(report.poolId, 1);
+            }
+          }
+        });
       });
     });
+
     return [...flagCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([poolId, flagCount]) => ({
         poolId,
         scenario: pool.scenarios.find(s => s.poolId === poolId)!,
         flagCount,
+        reports: reportsByPool.get(poolId) || [],
       }));
   };
 
@@ -896,15 +1076,26 @@ ${dataBlock}
                 </button>
               )}
             </div>
-            {pool && pool.totalScenarios > 0 && (
+            {pool && pool.totalScenarios > 0 && (() => {
+              const unreviewed = pool.scenarios.filter(s => !s.reviewedAt).length;
+              return unreviewed > 0 ? (
               <button onClick={handleReviewPool} style={{
                 padding: '0.5rem', borderRadius: '10px', border: '1px solid rgba(245,158,11,0.3)',
                 background: 'rgba(245,158,11,0.06)', color: '#f59e0b',
                 fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
               }}>
-                🔍 סרוק ותקן שאלות (AI review)
+                🔍 סרוק ותקן {unreviewed} שאלות חדשות
               </button>
-            )}
+              ) : (
+              <div style={{
+                padding: '0.5rem', borderRadius: '10px', border: '1px solid rgba(34,197,94,0.3)',
+                background: 'rgba(34,197,94,0.06)', color: '#22c55e',
+                fontWeight: 600, fontSize: '0.75rem', textAlign: 'center',
+              }}>
+                ✅ כל {pool.totalScenarios} השאלות נסרקו
+              </div>
+              );
+            })()}
             {reviewMsg && !reviewing && (
               <div style={{
                 fontSize: '0.8rem', textAlign: 'center', fontWeight: 500, padding: '0.5rem', borderRadius: '8px',
@@ -1016,11 +1207,14 @@ ${dataBlock}
         ) : (
           <div>
             {sortedPlayers.map((player, i) => {
+              const displayName = LEGACY_NAME_CORRECTIONS[player.playerName] || player.playerName;
               const isExpanded = expandedPlayer === player.playerName;
               const exploit = getExploitLocal(player.playerName);
               const insight = insights?.insights?.[player.playerName];
-              const sessionsSinceInsight = insight ? player.sessions.length - insight.sessionsAtGeneration : player.sessions.length;
-              const staleness = sessionsSinceInsight <= 2 ? '#22c55e' : sessionsSinceInsight <= 5 ? '#eab308' : '#ef4444';
+              const sessionsSinceInsight = insight ? player.sessions.length - insight.sessionsAtGeneration : -1;
+              const staleness = !insight ? '#64748b' : sessionsSinceInsight <= 2 ? '#22c55e' : sessionsSinceInsight <= 5 ? '#eab308' : '#ef4444';
+              const stalenessLabel = !insight ? 'אין תובנות' : sessionsSinceInsight <= 2 ? 'תובנות עדכניות' : sessionsSinceInsight <= 5 ? `${sessionsSinceInsight} אימונים מאז תובנות` : `${sessionsSinceInsight} אימונים מאז תובנות — לעדכן`;
+              const allResultsCount = player.sessions.reduce((sum, s) => sum + s.results.length, 0);
 
               const medals = ['🥇', '🥈', '🥉'];
 
@@ -1038,11 +1232,11 @@ ${dataBlock}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <span style={{ width: '24px', textAlign: 'center', fontSize: '0.8rem' }}>{medals[i] || `${i + 1}`}</span>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{player.playerName}</span>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: staleness }} title={`${sessionsSinceInsight} sessions since insight`} />
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{displayName}</span>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: staleness }} title={stalenessLabel} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{player.totalQuestions}Q</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{allResultsCount}Q</span>
                       <span style={{
                         fontWeight: 700,
                         color: player.accuracy >= 60 ? '#22c55e' : player.accuracy >= 40 ? '#eab308' : '#ef4444',
@@ -1067,7 +1261,7 @@ ${dataBlock}
                           <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>אימונים</div>
                         </div>
                         <div style={{ flex: 1, textAlign: 'center', padding: '0.4rem', borderRadius: '6px', background: 'var(--surface)' }}>
-                          <div style={{ fontSize: '1rem', fontWeight: 700 }}>{player.totalQuestions}</div>
+                          <div style={{ fontSize: '1rem', fontWeight: 700 }}>{allResultsCount}</div>
                           <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>שאלות</div>
                         </div>
                         <div style={{ flex: 1, textAlign: 'center', padding: '0.4rem', borderRadius: '6px', background: 'var(--surface)' }}>
@@ -1159,6 +1353,23 @@ ${dataBlock}
                 </div>
               );
             })}
+            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.5rem', direction: 'rtl', lineHeight: 1.6 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#64748b', display: 'inline-block' }} /> אין תובנות
+              </span>
+              {' · '}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} /> עדכניות
+              </span>
+              {' · '}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#eab308', display: 'inline-block' }} /> מיושנות
+              </span>
+              {' · '}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} /> לעדכן
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -1167,7 +1378,7 @@ ${dataBlock}
       {flagged.length > 0 && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות שדווחו כשגויות ({flagged.length})</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>🚩 שאלות שדווחו ({flagged.length})</h3>
             <button
               onClick={() => handleRemoveFlagged(flagged.map(f => f.poolId))}
               disabled={removingFlagged}
@@ -1193,15 +1404,20 @@ ${dataBlock}
             </div>
           )}
 
-          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-            שחקנים דיווחו שהשאלות הבאות שגויות או לא הגיוניות. בדוק והחלט אם להסיר.
-          </div>
           {flagged.map(f => {
             const cat = SCENARIO_CATEGORIES.find(c => c.id === f.scenario?.categoryId);
             const correctOpt = f.scenario?.options?.find(o => o.isCorrect);
+            const isBusy = dismissingFlagged === f.poolId || fixingFlagged === f.poolId || removingFlagged;
+            const reasonLabels: Record<string, string> = {
+              wrong_answer: '❌ תשובה שגויה',
+              unclear_question: '❓ שאלה לא ברורה',
+              wrong_for_home_game: '🏠 לא מתאים למשחק ביתי',
+              other: '💬 אחר',
+            };
+
             return (
               <div key={f.poolId} style={{
-                padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                padding: '0.6rem', borderRadius: '8px', marginBottom: '0.5rem',
                 background: f.flagCount >= 2 ? 'rgba(239,68,68,0.08)' : 'var(--surface)',
                 border: f.flagCount >= 2 ? '1px solid rgba(239,68,68,0.2)' : '1px solid var(--border)',
               }}>
@@ -1213,28 +1429,183 @@ ${dataBlock}
                 <div style={{ fontSize: '0.75rem', color: 'var(--text)', lineHeight: 1.5, marginBottom: '0.3rem' }}>
                   {f.scenario?.situation || '(שאלה כבר הוסרה)'}
                 </div>
+                {f.scenario?.yourCards && (
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                    קלפים: {f.scenario.yourCards}
+                  </div>
+                )}
                 {correctOpt && (
                   <div style={{ fontSize: '0.65rem', color: 'var(--success)', marginBottom: '0.3rem' }}>
                     ✓ תשובה נכונה: {correctOpt.text}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+
+                {/* Reports from players */}
+                {f.reports.length > 0 && (
+                  <div style={{
+                    marginTop: '0.3rem', marginBottom: '0.4rem', padding: '0.4rem',
+                    borderRadius: '6px', background: 'rgba(245,158,11,0.06)',
+                    border: '1px solid rgba(245,158,11,0.15)',
+                  }}>
+                    <div style={{ fontSize: '0.6rem', color: '#f59e0b', fontWeight: 600, marginBottom: '0.25rem' }}>
+                      דיווחים:
+                    </div>
+                    {f.reports.map((report, ri) => (
+                      <div key={ri} style={{
+                        fontSize: '0.65rem', color: 'var(--text-muted)', lineHeight: 1.6,
+                        paddingBottom: ri < f.reports.length - 1 ? '0.2rem' : 0,
+                        borderBottom: ri < f.reports.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                        marginBottom: ri < f.reports.length - 1 ? '0.2rem' : 0,
+                      }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>{report.playerName}</span>
+                        {' — '}
+                        <span>{reasonLabels[report.reason] || report.reason}</span>
+                        {report.comment && (
+                          <div style={{
+                            marginTop: '0.15rem', fontStyle: 'italic', color: 'var(--text-muted)',
+                            paddingRight: '0.5rem',
+                          }}>
+                            "{report.comment}"
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                   <button
-                    onClick={() => handleRemoveFlagged([f.poolId])}
-                    disabled={removingFlagged}
+                    onClick={() => handleDismissFlagged(f.poolId)}
+                    disabled={isBusy}
                     style={{
-                      fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
-                      background: '#ef4444', color: 'white',
-                      border: 'none', cursor: removingFlagged ? 'wait' : 'pointer', fontWeight: 600,
-                      opacity: removingFlagged ? 0.5 : 1,
+                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                      background: 'var(--surface)', color: 'var(--text-muted)',
+                      border: '1px solid var(--border)', cursor: isBusy ? 'wait' : 'pointer',
+                      fontWeight: 500, opacity: isBusy ? 0.5 : 1,
                     }}
                   >
-                    {removingFlagged ? '⏳' : '🗑 הסר שאלה'}
+                    {dismissingFlagged === f.poolId ? '⏳' : '✓ דחה דיווח'}
+                  </button>
+                  <button
+                    onClick={() => handleAIFix(f.poolId, f.reports)}
+                    disabled={isBusy}
+                    style={{
+                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                      background: 'rgba(168,85,247,0.1)', color: '#a855f7',
+                      border: '1px solid rgba(168,85,247,0.2)', cursor: isBusy ? 'wait' : 'pointer',
+                      fontWeight: 600, opacity: isBusy ? 0.5 : 1,
+                    }}
+                  >
+                    {fixingFlagged === f.poolId ? '⏳ מתקן...' : '✨ תקן עם AI'}
+                  </button>
+                  <button
+                    onClick={() => handleRemoveFlagged([f.poolId])}
+                    disabled={isBusy}
+                    style={{
+                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                      background: '#ef4444', color: 'white',
+                      border: 'none', cursor: isBusy ? 'wait' : 'pointer', fontWeight: 600,
+                      opacity: isBusy ? 0.5 : 1,
+                    }}
+                  >
+                    {removingFlagged ? '⏳' : '🗑 הסר'}
                   </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* AI Fix Preview */}
+      {fixPreview && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: '12px', padding: '1rem',
+            maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto', direction: 'rtl',
+            border: '1px solid var(--border)', width: '500px',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+              ✨ תצוגה מקדימה — תיקון AI
+            </div>
+
+            {/* Original */}
+            <div style={{
+              padding: '0.5rem', borderRadius: '8px', marginBottom: '0.5rem',
+              background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+            }}>
+              <div style={{ fontSize: '0.65rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.3rem' }}>מקור:</div>
+              <div style={{ fontSize: '0.75rem', lineHeight: 1.5, marginBottom: '0.2rem' }}>{fixPreview.original.situation}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>קלפים: {fixPreview.original.yourCards}</div>
+              {fixPreview.original.options.map(o => (
+                <div key={o.id} style={{
+                  fontSize: '0.65rem', padding: '0.15rem 0.3rem', marginBottom: '0.1rem',
+                  color: o.isCorrect ? '#22c55e' : o.nearMiss ? '#f59e0b' : 'var(--text-muted)',
+                }}>
+                  {o.id}. {o.text} {o.isCorrect ? '✓' : o.nearMiss ? '~' : ''}
+                </div>
+              ))}
+            </div>
+
+            {/* Fixed */}
+            <div style={{
+              padding: '0.5rem', borderRadius: '8px', marginBottom: '0.75rem',
+              background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
+            }}>
+              <div style={{ fontSize: '0.65rem', color: '#22c55e', fontWeight: 600, marginBottom: '0.3rem' }}>תיקון:</div>
+              <div style={{ fontSize: '0.75rem', lineHeight: 1.5, marginBottom: '0.2rem' }}>{fixPreview.fixed.situation}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>קלפים: {fixPreview.fixed.yourCards}</div>
+              {fixPreview.fixed.options.map(o => (
+                <div key={o.id} style={{ marginBottom: '0.25rem' }}>
+                  <div style={{
+                    fontSize: '0.7rem', padding: '0.15rem 0.3rem',
+                    fontWeight: o.isCorrect ? 600 : 400,
+                    color: o.isCorrect ? '#22c55e' : o.nearMiss ? '#f59e0b' : 'var(--text)',
+                  }}>
+                    {o.id}. {o.text} {o.isCorrect ? '✓' : o.nearMiss ? '~' : ''}
+                  </div>
+                  {o.explanation && (
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', paddingRight: '1rem', lineHeight: 1.4 }}>
+                      {o.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+              <button
+                onClick={confirmAIFix}
+                disabled={savingFix}
+                style={{
+                  padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none',
+                  background: '#22c55e', color: 'white', fontWeight: 700,
+                  fontSize: '0.85rem', cursor: savingFix ? 'wait' : 'pointer',
+                  opacity: savingFix ? 0.6 : 1,
+                }}
+              >
+                {savingFix ? '⏳ שומר...' : '✓ אשר תיקון'}
+              </button>
+              <button
+                onClick={() => setFixPreview(null)}
+                disabled={savingFix}
+                style={{
+                  padding: '0.5rem 1.5rem', borderRadius: '8px',
+                  border: '1px solid var(--border)', background: 'var(--surface)',
+                  color: 'var(--text-muted)', fontWeight: 600,
+                  fontSize: '0.85rem', cursor: 'pointer',
+                }}
+              >
+                ✗ דחה
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
 import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '../utils/calculations';
@@ -130,286 +131,64 @@ const StatisticsScreen = () => {
     return 'all';
   };
 
-  // Share table as screenshot to WhatsApp
   const handleShareTable = async () => {
     if (!tableRef.current) return;
-    
     setIsSharing(true);
     try {
-      const canvas = await html2canvas(tableRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharing(false);
-          return;
-        }
-        
-        const file = new File([blob], 'poker-statistics.png', { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Poker Statistics',
-            });
-          } catch (err) {
-            // User cancelled or share failed - download instead
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'poker-statistics.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          // Fallback: download the image
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'poker-statistics.png';
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharing(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing:', error);
-      setIsSharing(false);
-    }
+      const files = await captureAndSplit(tableRef.current, 'poker-statistics');
+      await shareFiles(files, 'Poker Statistics');
+    } catch (e) { console.error('Error sharing:', e); }
+    finally { setIsSharing(false); }
   };
 
-
-  // Share top 20 table as screenshot
   const handleShareTop20 = async () => {
     if (!top20Ref.current) return;
-    
     setIsSharingTop20(true);
     try {
-      const canvas = await html2canvas(top20Ref.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharingTop20(false);
-          return;
-        }
-        
-        const file = new File([blob], 'poker-top20-wins.png', { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Top 20 Single Night Wins',
-            });
-          } catch (err) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'poker-top20-wins.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'poker-top20-wins.png';
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharingTop20(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing top 20:', error);
-      setIsSharingTop20(false);
-    }
+      const files = await captureAndSplit(top20Ref.current, 'poker-top20-wins');
+      await shareFiles(files, 'Top 20 Single Night Wins');
+    } catch (e) { console.error('Error sharing top 20:', e); }
+    finally { setIsSharingTop20(false); }
   };
 
   const handleShareTop10 = async () => {
     if (!top10Ref.current) return;
     setIsSharingTop10(true);
     try {
-      const canvas = await html2canvas(top10Ref.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setIsSharingTop10(false); return; }
-        const file = new File([blob], 'poker-top10-wins.png', { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Top 10 Single Night Wins' });
-          } catch {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'poker-top10-wins.png'; a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'poker-top10-wins.png'; a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharingTop10(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing top 10:', error);
-      setIsSharingTop10(false);
-    }
+      const files = await captureAndSplit(top10Ref.current, 'poker-top10-wins');
+      await shareFiles(files, 'Top 10 Single Night Wins');
+    } catch (e) { console.error('Error sharing top 10:', e); }
+    finally { setIsSharingTop10(false); }
   };
 
-  // Share rebuy stats as screenshot
   const handleShareRebuyStats = async () => {
     if (!rebuyStatsRef.current) return;
-    
     setIsSharingRebuyStats(true);
     try {
-      const canvas = await html2canvas(rebuyStatsRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharingRebuyStats(false);
-          return;
-        }
-        
-        const file = new File([blob], 'poker-rebuy-stats.png', { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Poker Rebuy Stats',
-            });
-          } catch (err) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'poker-rebuy-stats.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'poker-rebuy-stats.png';
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharingRebuyStats(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing rebuy stats:', error);
-      setIsSharingRebuyStats(false);
-    }
+      const files = await captureAndSplit(rebuyStatsRef.current, 'poker-rebuy-stats');
+      await shareFiles(files, 'Poker Rebuy Stats');
+    } catch (e) { console.error('Error sharing rebuy stats:', e); }
+    finally { setIsSharingRebuyStats(false); }
   };
 
-  // Share podium as screenshot
   const handleSharePodium = async () => {
     if (!podiumRef.current) return;
-    
     setIsSharingPodium(true);
     try {
-      const canvas = await html2canvas(podiumRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharingPodium(false);
-          return;
-        }
-        
-        const file = new File([blob], 'poker-podium.png', { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Poker Podium',
-            });
-          } catch (err) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'poker-podium.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'poker-podium.png';
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharingPodium(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing podium:', error);
-      setIsSharingPodium(false);
-    }
+      const files = await captureAndSplit(podiumRef.current, 'poker-podium');
+      await shareFiles(files, 'Poker Podium');
+    } catch (e) { console.error('Error sharing podium:', e); }
+    finally { setIsSharingPodium(false); }
   };
 
-  // Share Hall of Fame as screenshot
   const handleShareHallOfFame = async () => {
     if (!hallOfFameRef.current) return;
-    
     setIsSharingHallOfFame(true);
     try {
-      const canvas = await html2canvas(hallOfFameRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2,
-      });
-      
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsSharingHallOfFame(false);
-          return;
-        }
-        
-        const file = new File([blob], 'poker-hall-of-fame.png', { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Poker Hall of Fame',
-            });
-          } catch (err) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'poker-hall-of-fame.png';
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'poker-hall-of-fame.png';
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        setIsSharingHallOfFame(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error('Error sharing hall of fame:', error);
-      setIsSharingHallOfFame(false);
-    }
+      const files = await captureAndSplit(hallOfFameRef.current, 'poker-hall-of-fame');
+      await shareFiles(files, 'Poker Hall of Fame');
+    } catch (e) { console.error('Error sharing hall of fame:', e); }
+    finally { setIsSharingHallOfFame(false); }
   };
 
   const handleShareChronicle = async () => {

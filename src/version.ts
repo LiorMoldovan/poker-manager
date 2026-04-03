@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.7';
+export const APP_VERSION = '5.10.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.8',
+    date: '2026-03-11',
+    changes: [
+      '📸 Shared captureAndSplit utility — auto-splits tall screenshots for sharing across all screens',
+      '🚩 Rich flag reports — players can specify reason and comment when flagging questions',
+      '🛠️ Admin flag management — dismiss flags, AI-fix questions, preview before saving',
+      '🎯 Near-miss answers excluded from accuracy calculations across leaderboard and progress',
+      '🗣️ TTS now includes training data per player for contextual commentary',
+      '🃏 Card BiDi fix — playing cards render correctly in RTL text',
+    ]
+  },
   {
     version: '5.10.7',
     date: '2026-03-11',
