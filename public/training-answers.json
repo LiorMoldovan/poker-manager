@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T10:55:44.490Z",
+  "lastUpdated": "2026-04-03T11:03:36.767Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1137,11 +1137,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T11:03:36.250Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "mi0ks3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "qpv756",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "4o7orp",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "n01jlv",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "eg4r5m",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 20,
-      "totalCorrect": 10,
-      "accuracy": 50
+      "totalQuestions": 25,
+      "totalCorrect": 13,
+      "accuracy": 52
     }
   ]
 }
