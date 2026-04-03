@@ -1030,5 +1030,25 @@
       "canvasHash": "y7v3bq"
     },
     "playerName": "שגיא אחיין"
+  },
+  {
+    "deviceId": "14af79ab-8a3a-42e8-a7c2-4aefec0789b7",
+    "role": "member",
+    "timestamp": "2026-04-03T00:17:19.193Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "384x832",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-03T00:17:19.194Z",
+    "fingerprint": {
+      "gpu": "ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.279)",
+      "cores": 10,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "en-US",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "20ear9"
+    },
+    "playerName": "אייל"
   }
 ]
