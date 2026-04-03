@@ -1207,9 +1207,11 @@
     "timestamp": "2026-04-03T10:43:00.006Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x924",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-03T10:43:00.009Z",
+    "screensVisited": [
+      "Shared Training"
+    ],
+    "sessionDuration": 9,
+    "lastActive": "2026-04-03T10:51:55.263Z",
     "fingerprint": {
       "gpu": "Mali-G715",
       "cores": 8,
