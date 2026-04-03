@@ -1437,10 +1437,11 @@
     "screenSize": "430x932",
     "screensVisited": [
       "New Game",
-      "Shared Training"
+      "Shared Training",
+      "Statistics"
     ],
-    "sessionDuration": 4,
-    "lastActive": "2026-04-03T19:43:31.146Z",
+    "sessionDuration": 12,
+    "lastActive": "2026-04-03T19:51:16.819Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
