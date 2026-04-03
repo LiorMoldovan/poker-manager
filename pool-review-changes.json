@@ -1,0 +1,2661 @@
+[
+  {
+    "poolId": "fdxqju",
+    "status": "fixed",
+    "issues": [
+      "הסבר אופציה A שגוי - קריאה לא מאפשרת לראות קלף רביעי בחינם, היא פשוט פסיבית. התיקון: העלאה היא המהלך הנכון להגנה."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "fdxqju",
+      "c": "J♠ J♦",
+      "s": "אתה בפוזיציית כפתור עם זוג נסיכים. השחקן ב-UTG העלה ל-400, אתה השווית. הפלופ הוא נסיך-שמונה-שבע עם שני לבבות. היריב מהמר 600 לתוך קופה של 950.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 600",
+          "ok": false,
+          "e": "קריאה פסיבית מדי. על לוח עם משיכות צבע וסטרייט, אתה חייב להעלות כדי להגן על הסט שלך."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,800",
+          "ok": true,
+          "e": "אתה חייב להעלות כדי לגבות מחיר גבוה ממי שמחזיק משיכת צבע או זוג נמוך יותר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "היד שלך חזקה מדי מכדי לוותר בשלב כזה על פלופ שנותן לך סט."
+        }
+      ],
+      "poolId": "fdxqju",
+      "categoryId": "wet_board_top_pair",
+      "category": "זוג עליון על לוח מסוכן"
+    }
+  },
+  {
+    "poolId": "vvpw4h",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "gmxjsv",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "d4vw1m",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "2e8usf",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "tr3g9w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "txee86",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "iynh6i",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "z9c88h",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "w7ybtr",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "fyw36m",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "yr2g88",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "7ay5va",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "naafbv",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "myddzc",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "q8zfcw",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "xdhd9s",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "ssgtpi",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "4znomq",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "imlsmw",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "ob0itd",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "8fdduu",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "z03yfe",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "5jx66w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "jq2ao",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "142ltl",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "w7yv5n",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "1yeqhi",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "1lktke",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "bpa8x1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "i166cq",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בסוף",
+      "היד 6-6 מול העלאה של פי 10 היא קריאה גרועה, ה-fix מתקן את ההסבר"
+    ],
+    "fixedScenario": {
+      "s": "שחקן מעלה ל-1,000 מעמדה אמצעית (פי 10 מהבליינד). כולם פורשים אליך בביג בליינד. יש לך ערימה של 14,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 900",
+          "ok": false,
+          "e": "ההעלאה גדולה מדי. לשלם 900 כדי לנסות לפגוע בשלישייה כשהסיכוי לכך נמוך זה מהלך לא כלכלי."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-3,000",
+          "ok": false,
+          "e": "הוא הראה עוצמה רבה. להעלות עליו עם זוג 6 זה הימור מסוכן מדי."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": true,
+          "e": "ההעלאה גדולה מדי ביחס לערימות. אין לך מספיק 'סיכויים מרומזים' כדי לרדוף אחרי שלישייה, לכן ויתור הוא המהלך הנכון."
+        }
+      ],
+      "poolId": "i166cq",
+      "categoryId": "preflop_vs_raise",
+      "category": "מישהו העלה לפניך"
+    },
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "p3y535",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בסוף"
+    ],
+    "fixedScenario": {
+      "s": "שחקן אגרסיבי מעלה ל-400. שחקן נוסף קורא את ה-400. אתה בעמדת הדילר עם ערימה של 20,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 400",
+          "ok": true,
+          "e": "יש כבר הרבה כסף בקופה ושני שחקנים בפנים. היד שלך מצוינת למשחק מרובה משתתפים, במיוחד כשיש לך את היתרון של להיות אחרון להחליט."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,600",
+          "ok": false,
+          "e": "העלאה עלולה להבריח את השחקנים או לגרום לשחקן האגרסיבי להעלות עליך שוב, מה שיאלץ אותך לקפל יד עם פוטנציאל."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר על מלכה-נסיך מאותו צבע בעמדת הדילר מול העלאה רגילה זו טעות. זו יד חזקה מאוד לסיטואציה הזו."
+        }
+      ],
+      "poolId": "p3y535",
+      "categoryId": "preflop_vs_raise",
+      "category": "מישהו העלה לפניך"
+    },
+    "nearMissFlags": []
+  },
+  {
+    "poolId": "r724dg",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "6mwmo1",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בסוף"
+    ],
+    "fixedScenario": {
+      "s": "שחקן בעמדה אמצעית מעלה ל-400. אתה בביג בליינד עם ערימה של 9,000. כולם פרשו עד אליך.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 300",
+          "ok": true,
+          "e": "בביג בליינד אתה מקבל 'הנחה' - אתה צריך להוסיף רק 300 כדי לזכות בקופה של 850. עם קלפים מאותו צבע שיכולים להתחבר, זה שווה את ההשקעה."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,200",
+          "ok": false,
+          "e": "להעלות מהביג בליינד עם יד בינונית כמו Q9 זה מהלך אגרסיבי מדי שיכול להכניס אותך לצרות מול ידיים חזקות באמת."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "המחיר שאתה מקבל בביג בליינד הוא טוב מדי. לוותר כאן זה לוותר על יותר מדי הזדמנויות קטנות לרווח."
+        }
+      ],
+      "poolId": "6mwmo1",
+      "categoryId": "preflop_vs_raise",
+      "category": "מישהו העלה לפניך"
+    },
+    "nearMissFlags": []
+  },
+  {
+    "poolId": "q378x2",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "7a97um",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "rl5im9",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "10y5of",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "8q1emk",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "lhz578",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בסוף"
+    ],
+    "fixedScenario": {
+      "s": "שחקן שמרן מעלה ל-400. שחקן נוסף קורא. אתה בביג בליינד עם ערימה של 20,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 300",
+          "ok": false,
+          "e": "עם אסים אתה לא רוצה 'להתחבא'. יש כבר שני שחקנים בקופה, ואתה רוצה לבנות קופה גדולה ולצמצם את מספר המשתתפים."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,800",
+          "ok": true,
+          "e": "זו היד הכי חזקה שיכולה להיות. אתה חייב להעלות כדי להוציא ערך מקסימלי וכדי לא לתת להם לראות פלופ זול שיכול לנצח אותך במקרה של מזל."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "אין מצב בעולם שמוותרים על אסים לפני הפלופ בסיטואציה כזו."
+        }
+      ],
+      "poolId": "lhz578",
+      "categoryId": "preflop_vs_raise",
+      "category": "מישהו העלה לפניך"
+    },
+    "nearMissFlags": []
+  },
+  {
+    "poolId": "wk1qk6",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בסוף"
+    ],
+    "fixedScenario": {
+      "s": "העלית ל-400 מהכפתור עם זוג 4, ושחקן שמרני מהעיוור הגדול שילם. הלוח מראה 4, 8, 9, 10 עם שני לבבות. היריב מהמר 1,000 לתוך קופה של 850. יש לך שלישייה, אבל כל מלכה או 7 יוצרים רצף, ויש אפשרות לצבע.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 1,000",
+          "ok": true,
+          "e": "היד שלך חזקה מאוד אך הלוח מסוכן ביותר. קריאה מאפשרת לך לראות את הקלף הבא בזול יחסית ולשלוט בגובה הקופה מול שחקן שמרני שאולי מחזיק רצף."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-3,500",
+          "ok": false,
+          "e": "העלאה כאן עלולה לגרום לך להפסיד הרבה כסף אם ליריב כבר יש רצף, או להבריח ידיים חלשות יותר שאתה רוצה שימשיכו להמר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר על שלישייה בשלב זה כשיש לך עוד סיכוי להשתפר לבית מלא בנהר זו פחדנות יתר, גם אם הלוח מפחיד."
+        }
+      ],
+      "poolId": "wk1qk6",
+      "categoryId": "two_pair_plus",
+      "category": "יד חזקה על לוח מסוכן"
+    },
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "ou1jwe",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ymg11d",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "6mclid",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "lyf4e3",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "6q6oub",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "yrkowz",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "kryfym",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "irwm8x",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "15l9j",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "dpyop4",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "91tdw1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "e6dhq4",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "lpcko9",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "6fzlnm",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "cyrr6n",
+    "status": "fixed",
+    "issues": [
+      "היד היא רביעייה (4-4-4-4), לא שלישייה כפי שצוין בטקסט המקורי."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "cyrr6n",
+      "c": "4♠ 4♦",
+      "s": "יש לך זוג 4 ביד. הפלופ מראה 4-4-נסיך. יש לך רביעייה. הקופה עומדת על 1,200 ושחקן אגרסיבי מאוד מהמר לפניך 800. הערימה שלך היא 15,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 800",
+          "ok": true,
+          "e": "מול שחקן אגרסיבי עם רביעייה, הכי נכון לתת לו להמשיך להמר ולבלף. העלאה תגרום לו לברוח מהר מדי."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-2,400",
+          "ok": false,
+          "e": "העלאה חזקה כאן תחשוף שיש לך יד מפלצתית ותבריח יריב אגרסיבי שיכול היה להמשיך להמר בסיבובים הבאים."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר עם היד הכי חזקה האפשרית בשולחן זו טעות חמורה בכל מצב."
+        }
+      ],
+      "poolId": "cyrr6n",
+      "categoryId": "slow_play",
+      "category": "משחק איטי"
+    }
+  },
+  {
+    "poolId": "xxr9ki",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "sxapi0",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "cgkdsp",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "hmapjw",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "3euxq6",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "lszteu",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "bis53d",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "9kagj8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "h05xnk",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "qgx1ya",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "8c143o",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "kcab1r",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "v4uyiy",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "eg4r5m",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "kc64w9",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "if3dan",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "vdllfa",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "gmsrrc",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "kg5am3",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: אס ו-5 לבבות עם 3 פיק על הלוח לא נותן צבע אם יצא עוד פיק, אלא אם ה-5 הוא פיק. תוקן לתיאור כללי של פלאש דרו."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "c": "A♠ 5♠",
+      "s": "הגעת לטרן. על השולחן יש 3 קלפי פיק. יש לך אס פיק ו-5 לבבות. היריב מהמר חצי קופה.",
+      "o": [
+        {
+          "i": "A",
+          "t": "ויתור",
+          "ok": false,
+          "e": "יש לך את האס של הצבע על הלוח, אתה חוסם את הצבע הכי גבוה."
+        },
+        {
+          "i": "B",
+          "t": "קריאה",
+          "ok": true,
+          "e": "יש לך את האס של הצבע, מה שנותן לך את ה'נאטס' אם יצא עוד פיק."
+        },
+        {
+          "i": "C",
+          "t": "העלאה",
+          "ok": false,
+          "e": "היריב מראה כוח, קריאה היא הדרך הבטוחה לראות ריבר."
+        }
+      ],
+      "poolId": "kg5am3",
+      "categoryId": "flush_draw",
+      "category": "חסר קלף לצבע"
+    }
+  },
+  {
+    "poolId": "nbcfbk",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "4jpifs",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "jd1te1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "uyjqcx",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "42l0n8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "ohhgos",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ahldpc",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "til50a",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "jtcvr",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "r3x7l7",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "bk52a1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "lrugv8",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: צ'ק הוא לא 'ויתור' (fold), תוקן המינוח."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "c": "A♠ K♣",
+      "s": "העלית ל-400 מעמדה מוקדמת ושחקן אגרסיבי מהכפתור שילם. הפלופ הוא 9, 10 ונסיך, כולם יהלומים. אין לך אף יהלום ביד.",
+      "o": [
+        {
+          "i": "A",
+          "t": "הימור 600",
+          "ok": false,
+          "e": "הלוח מסוכן מאוד, הימור כאן יגרור העלאה שתכריח אותך לפרוש."
+        },
+        {
+          "i": "B",
+          "t": "צ'ק",
+          "ok": true,
+          "e": "כשאין לך כלום על לוח 'רטוב' מול שחקן אגרסיבי, צ'ק-פולד הוא המהלך הנכון אם הוא מהמר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור מיידי",
+          "ok": false,
+          "e": "אתה יכול לעשות צ'ק ולראות מה הוא עושה, לא חייבים לפרוש לפני הימור."
+        }
+      ],
+      "poolId": "lrugv8",
+      "categoryId": "cbet",
+      "category": "המשך הימור"
+    }
+  },
+  {
+    "poolId": "60qhd0",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "kf533m",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "r01pj6",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "4o7orp",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "fi209o",
+    "status": "fixed",
+    "issues": [
+      "הסבר אופציה C שגוי - ניתן להעלות (Raise) אם מישהו הימר, אך כאן אף אחד לא הימר ולכן זו פעולה לא חוקית (Bet)."
+    ],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "vhfy8b",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "66p24o",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "vn4vpp",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "f2nh1w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "z9bldk",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "m8mvl9",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "x404yx",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "qumibl",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "327l5c",
+    "status": "fixed",
+    "issues": [
+      "קריאה (Call) היא אופציה לגיטימית בפוקר מקצועי (Slow play), אך במשחק ביתי העלאה היא אכן עדיפה."
+    ],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "8nulv0",
+    "status": "fixed",
+    "issues": [
+      "קריאה (Call) היא אופציה מצוינת בפוקר מקצועי (Pot control), אך במשחק ביתי העלאה היא אכן עדיפה."
+    ],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "j2lj3n",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "w5q5i8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "aa9947",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "dfgxmu",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "39l525",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "mx95wb",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "qpv756",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "dfwrmp",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "n01jlv",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "d9hbp1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "411gbc",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "xzrzs8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ndtdjd",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "n2l64h",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "r5c0yg",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "hubnki",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: J-J בלוח 8-9-10 הוא 'אובר-פייר' חלש, לא 'רצף'. התיקון מתמקד בסיכון מול 4 שחקנים."
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "hubnki",
+      "c": "J♠ J♦",
+      "s": "יש לך זוג נסיכים J-J בעמדה מוקדמת. העלית ל-500 וארבעה שחקנים השוו. הפלופ הוא 8♠ 9♥ 10♦. אתה הראשון לפעול.",
+      "o": [
+        {
+          "i": "A",
+          "t": "צ'ק",
+          "ok": true,
+          "e": "הלוח מתואם מאוד (קונקטד). עם 4 יריבים, הסיכוי שמישהו כבר השלים רצף או זוגות גבוהים הוא עצום. צ'ק הוא הדרך הבטוחה ביותר לשלוט בגודל הקופה."
+        },
+        {
+          "i": "B",
+          "t": "הימור 2,000",
+          "ok": false,
+          "e": "הימור לתוך 4 שחקנים בלוח כזה הוא מסוכן. אתה לא מקבל ערך מידיים גרועות ורק ידיים טובות יותר ישוו לך."
+        },
+        {
+          "i": "C",
+          "t": "אול-אין",
+          "ok": false,
+          "e": "פעולה פזיזה. בלוח שבו כל 7 או מלכה משלימים רצף, אול-אין הוא התאבדות."
+        }
+      ],
+      "poolId": "hubnki",
+      "categoryId": "multiway_pots",
+      "category": "הרבה שחקנים בקופה"
+    }
+  },
+  {
+    "poolId": "8d0198",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "xdqixa",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: 7-8 בלוח 6-9-2 זה 'גאט-שוט' (צריך 5 או 10), לא רצף פתוח."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "xdqixa",
+      "c": "7♦ 8♦",
+      "s": "אתה בעמדה מאוחרת עם 7-8 יהלום. חמישה שחקנים נכנסו לקופה ב-100. הפלופ הוא 6♦ 9♣ 2♥. השחקן הראשון מהמר 100, ושני שחקנים אחריו משווים.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 100",
+          "ok": true,
+          "e": "יש לך 'גאט-שוט' (צריך 5 או 10 להשלמת רצף). המחיר זול מאוד ביחס לקופה, מה שהופך את הקריאה למשתלמת מתמטית."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,000",
+          "ok": false,
+          "e": "אין טעם להעלות כבלוף מול 3 שחקנים שכולם הראו עניין בקופה."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "המחיר זול מדי מכדי לוותר על סיכוי להשלים רצף."
+        }
+      ],
+      "poolId": "xdqixa",
+      "categoryId": "multiway_pots",
+      "category": "הרבה שחקנים בקופה"
+    }
+  },
+  {
+    "poolId": "nnn7y",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ujq0ce",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "pfg85t",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "wxant2",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "c42re5",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ky76nx",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: J-10 בלוח 7-8-9 זה 'אובר-סטריט' (רצף גבוה), לא רצף מוכן."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "ky76nx",
+      "c": "J♠ 10♦",
+      "s": "אתה בעמדה אמצעית עם J-10. חמישה שחקנים ראו פלופ של 7-8-9. יש לך רצף גבוה (J-10-9-8-7). השחקן לפניך מהמר 500 לתוך קופה של 2,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 500",
+          "ok": false,
+          "e": "אתה חייב להעלות. הלוח רטוב מאוד וכל קלף נוסף יכול להשלים צבע או רצף גבוה יותר ליריב."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-2,500",
+          "ok": true,
+          "e": "יש לך יד חזקה אך פגיעה. העלאה בונה קופה ומגנה עליך מפני ידיים שרודפות אחרי צבע או רצף גבוה יותר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "יש לך את הרצף הגבוה ביותר האפשרי כרגע, לוותר זו טעות."
+        }
+      ],
+      "poolId": "ky76nx",
+      "categoryId": "multiway_pots",
+      "category": "הרבה שחקנים בקופה"
+    }
+  },
+  {
+    "poolId": "mx6ber",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "n749b5",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "4ajnvb",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "wofxpe",
+    "status": "fixed",
+    "issues": [
+      "הסבר שגוי: 9-10 בלוח J-8-2 זה 'גאט-שוט' (צריך 7), לא רצף פתוח."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "wofxpe",
+      "c": "10♥ 9♥",
+      "s": "אתה בעמדה אמצעית עם 9-10 לב. חמישה שחקנים בתוך קופה של 500. הפלופ הוא J♣ 8♠ 2♦. השחקן הראשון מהמר 400. כולם מתקפלים עד אליך.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 400",
+          "ok": true,
+          "e": "יש לך 'גאט-שוט' (צריך 7 להשלמת רצף). המחיר סביר לקופה כזו, אך עליך להיות מוכן לוותר בטרן אם לא תפגע."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,500",
+          "ok": false,
+          "e": "בלוף מול 5 שחקנים בלוח כזה הוא חסר סיכוי."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "המחיר עדיין מאפשר קריאה, אך זו החלטה גבולית."
+        }
+      ],
+      "poolId": "wofxpe",
+      "categoryId": "multiway_pots",
+      "category": "הרבה שחקנים בקופה"
+    }
+  },
+  {
+    "poolId": "hotnmn",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "qmajxm",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "6mz966",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "5dr13q",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "1998la",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "dpfps7",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "ij54uv",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "6osp3y",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "9gj57d",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "2ke0kq",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "8vpr65",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "uehzgy",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "bmocnx",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "jaf251",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "vt0dtz",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "rpfdfa",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "tcw2g1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "so3eku",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "g9wa2q",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "ab7mf5",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "7lrsc8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "18kro1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "jdhqan",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "fhs73w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "w7gak1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "vli78m",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "8hpqj7",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "d0qs5i",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "v7rjet",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "8v94q5",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "yn8sae",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "ysj3vn",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "aokiio",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "go7tqk",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "4yfwbq",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "arxf6w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "1ou8ni",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "85g9aa",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "5optvl",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "jiuxuw",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "gmv3lu",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "yaczm1",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "qlummr",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "iwytf7",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "3d2cej",
+    "status": "fixed",
+    "issues": [
+      "החישוב של 8,000 צ'יפים כ-80 בליינדים שגוי, מדובר ב-80 בליינדים (8,000/100), אך הטיעון על 'ערימה קצרה' לא רלוונטי ל-80 בליינדים."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "3d2cej",
+      "c": "2♣ 2♥",
+      "s": "נשארו לך 1,500 צ'יפים (15 בליינדים). שחקן אגרסיבי בעמדה הראשונה מעלה ל-400. כולם פורשים עד אליך בבליינד הגדול.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 300",
+          "ok": false,
+          "e": "עם 15 בליינדים, קריאה היא טעות. אתה מחויב לקופה (Pot Committed) או שאתה צריך לדחוף אול-אין."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,500 (אול-אין)",
+          "ok": true,
+          "e": "עם 15 בליינדים, זוג 2 הוא יד מצוינת לדחיפה אגרסיבית כדי לנסות לנצח את הקופה מיד או להמר על הטלת מטבע."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "עם 15 בליינדים, אי אפשר לוותר על זוג בבליינד הגדול מול העלאה של שחקן אגרסיבי."
+        }
+      ],
+      "poolId": "3d2cej",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "afwryw",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'",
+      "הסבר קטוע בתשובה ב'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "afwryw",
+      "c": "10♠ 10♦",
+      "s": "יש לך 25,000 צ'יפים. העלית מהעמדה האמצעית ל-300 ושחקן שמרני מהבליינד הגדול (גם עם 25,000) העלה ל-1,000. הפלופ יוצא 8-5-2 בצבעים שונים. הוא מהמר 1,200 לתוך קופה של 2,050. לשניכם ערימות ענקיות.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 1,200",
+          "ok": true,
+          "e": "עם ערימות עמוקות מול שחקן שמרני, עדיף רק לשלם. אם תעלה, הוא יפרוש עם ידיים חלשות יותר ורק ידיים חזקות יותר משלך (כמו נסיכים או מלכים) ימשיכו."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-3,500",
+          "ok": false,
+          "e": "העלאה כאן עלולה לגרום ליריב להכניס את כל הערימה שלו. מול שחקן שמרני שביצע העלאה לפני הפלופ, אתה כנראה מפסיד לזוג גבוה יותר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "יש לך זוג מעל הלוח מול שחקן שיכול להמר גם עם אס-מלך. אתה חייב לראות לפחות עוד קלף אחד לפני שאתה מוותר."
+        }
+      ],
+      "poolId": "afwryw",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "iqhtut",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'",
+      "הסבר קטוע בתשובה ג'"
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "iqhtut",
+      "c": "A♠ 3♠",
+      "s": "יש לך ערימה ענקית של 25,000. אתה בבליינד הקטן. שחקן אגרסיבי מהכפתור מעלה ל-300. הפלופ מגיע 9♠ 7♠ 2♦. יש לך פלוש-דראו (סיכוי לצבע). אתה עושה צ'ק והוא מהמר 400 לתוך 700. לשניכם ערימות עמוקות מאוד.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 400",
+          "ok": true,
+          "e": "עם ערימות עמוקות, קריאה מאפשרת לך לנסות להשלים את הצבע בזול. אם תשלים אותו, תוכל להמר חזק בהמשך ולנסות לקחת לו את כל הערימה."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,500",
+          "ok": false,
+          "e": "בפוקר מקצועי זו אופציה טובה כחצי-בלוף, אבל במשחק ביתי עם ערימות עמוקות, עדיף לא לנפח קופה כשאתה עדיין בלי יד מוכנה."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר על סיכוי לצבע הכי חזק האפשרי כשיש לך כל כך הרבה צ'יפים מאחוריך זו טעות גדולה."
+        }
+      ],
+      "poolId": "iqhtut",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "2bpm65",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה ג'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "2bpm65",
+      "c": "K♠ K♥",
+      "s": "הערימה שלך היא 8,000 בלבד. השולחן אגרסיבי. אתה מעלה ל-300 עם זוג מלכים מהעמדה האמצעית ושחקן אחד קורא. הפלופ הוא A♦ 7♠ 3♣. אתה מהמר 400 והוא מעלה ל-1,200. בגלל הערימה הקצרה שלך, כל החלטה כאן קריטית.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 800",
+          "ok": false,
+          "e": "אם תקרא, תישאר עם ערימה קטנה מאוד כשיש אס על הלוח. היריב כנראה ימשיך להמר ואתה תהיה במצב נחות."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-3,000",
+          "ok": false,
+          "e": "להעלות כשכבר יש אס על הלוח ויש לך רק זוג מלכים זה מסוכן מאוד. אם יש לו אס, אתה פשוט זורק צ'יפים לפח."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": true,
+          "e": "עם ערימה קצרה, אתה לא יכול להרשות לעצמך 'לנחש'. האס על הלוח מפחיד מאוד, והעלאה של היריב מראה שהוא לא חושש ממנו. עדיף לשמור את הצ'יפים ליד אחרת."
+        }
+      ],
+      "poolId": "2bpm65",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "yvu723",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "yvu723",
+      "c": "8♦ 7♦",
+      "s": "שניכם עם 25,000 צ'יפים. אתה בעמדת הבליינד הגדול. שחקן שמרני מעלה ל-300 מהכפתור. יש לך יד עם פוטנציאל לרצף או צבע. בגלל הערימות העמוקות, לידיים 'מחוברות' יש ערך רב יותר.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 200",
+          "ok": true,
+          "e": "זו קריאה קלאסית עם ערימות עמוקות. אתה מקבל מחיר טוב לראות פלופ, ואם תפגע ביד חזקה (רצף/צבע), תוכל לזכות בהרבה צ'יפים מהיריב."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,100",
+          "ok": false,
+          "e": "העלאה כאן תהפוך את היד שלך לבלוף. מול שחקן שמרני, הוא יפרוש רק לידיים גרועות וימשיך עם כל מה שחזק ממך."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר בבליינד הגדול על יד כזו מול העלאה קטנה כשיש לך ערימה עמוקה זה ויתור על רווח פוטנציאלי גדול."
+        }
+      ],
+      "poolId": "yvu723",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "lxe9p9",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה ב'"
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "lxe9p9",
+      "c": "10♠ 10♥",
+      "s": "ערימתך עומדת על 9,000. שחקן אגרסיבי מעלה ל-300, אתה מעלה ל-900 עם זוג עשיריות והוא קורא. הפלופ: J♣ 8♦ 4♠. הוא עושה צ'ק. הקופה היא 1,950. אם תהמר כאן, אתה כמעט 'מחויב' לקופה.",
+      "o": [
+        {
+          "i": "A",
+          "t": "צ'ק",
+          "ok": true,
+          "e": "עם ערימה בינונית-קצרה וקלף גבוה על הלוח (נסיך), צ'ק מאפשר לך לשלוט בגודל הקופה ולא להסתכן באיבוד כל הערימה מול נסיך."
+        },
+        {
+          "i": "B",
+          "t": "הימור 1,000",
+          "ok": false,
+          "e": "בפוקר מקצועי זה הימור המשכיות סטנדרטי, אבל במשחק ביתי היריב לא יפרוש עם נסיך, ואתה תמצא את עצמך מסכן את כל הערימה בנחיתות."
+        },
+        {
+          "i": "C",
+          "t": "אול-אין 8,100",
+          "ok": false,
+          "e": "זהו הימור מוגזם לחלוטין שרק ידיים חזקות בהרבה משלך ישלמו לו. אתה לא רוצה לסכן 81 בליינדים בשביל קופה קטנה."
+        }
+      ],
+      "poolId": "lxe9p9",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "mkci82",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'",
+      "הסבר קטוע בתשובה ב'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "mkci82",
+      "c": "A♠ A♥",
+      "s": "יש לך 25,000 צ'יפים. העלית ל-300 עם זוג אסים וקיבלת שני קוראים. הפלופ הוא 10♣ 7♦ 2♠. הקופה היא 1,050. שחקן אחד מהמר 700. לשלושתכם יש ערימות עמוקות מאוד.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 700",
+          "ok": false,
+          "e": "קריאה בלבד מאפשרת לקלפים מסוכנים להגיע בטרן. עם ערימות עמוקות, אתה רוצה להתחיל לבנות קופה גדולה כבר עכשיו עם היד הכי חזקה."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-2,200",
+          "ok": true,
+          "e": "העלאה כאן מגנה על היד שלך ובונה קופה גדולה. כשיש ערימות עמוקות, אתה רוצה לנצל את היתרון שלך כשיש לך זוג אסים על לוח 'יבש'."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "ויתור עם זוג אסים על לוח כזה הוא טעות חמורה, ללא קשר לגודל הערימה."
+        }
+      ],
+      "poolId": "mkci82",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "wv5m3g",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'",
+      "הסבר קטוע בתשובה ב'"
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "wv5m3g",
+      "c": "A♣ K♥",
+      "s": "ערימות של 25,000. אתה מעלה ל-300 מהעמדה המוקדמת ושחקן אגרסיבי קורא מהכפתור. הפלופ: Q♦ J♦ 10♠. יש לך רצף מוכן! הקופה היא 750. אתה מהמר 500 והוא מעלה ל-2,000. לשניכם יש המון צ'יפים מאחור.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 1,500",
+          "ok": true,
+          "e": "עם ערימות עמוקות מאוד, קריאה היא חכמה כדי לתת לו להמשיך לבלף. אם תעלה שוב, הוא יפרוש עם ידיים חלשות וישלם רק אם יש לו גם רצף או יד חזקה מאוד."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-6,000",
+          "ok": false,
+          "e": "בפוקר מקצועי זו העלאה לערך, אבל במשחק ביתי עמוק, העלאה גדולה כזו עלולה להפחיד אותו ולגרום לו לפרוש עם ידיים שאתה רוצה שימשיכו להמר."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "יש לך את היד הכי חזקה האפשרית כרגע (הנאטס). לוותר זה לא הגיוני בשום מצב."
+        }
+      ],
+      "poolId": "wv5m3g",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "mqu8uu",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "mqu8uu",
+      "c": "A♠ 4♠",
+      "s": "ערימות עמוקות של 25,000. אתה בבליינד הגדול. שחקן אחד מעלה ל-300 ושלושה שחקנים נוספים קוראים. הקופה כבר עומדת על 1,250. יש לך מחיר מצוין להצטרף.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 200",
+          "ok": true,
+          "e": "עם ערימות עמוקות וקופה מרובת משתתפים, אס באותו צבע היא יד מצוינת. הסיכוי לפגוע בצבע הכי חזק ולזכות בערימה של מישהו אחר מצדיק את המחיר."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,500",
+          "ok": false,
+          "e": "העלאה מול 4 שחקנים כשאתה מחוץ לעמדה עם יד כזו היא מסוכנת מדי. אתה מעדיף לראות פלופ בזול."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "המחיר שאתה מקבל (200 כדי לזכות ב-1,250) הוא טוב מדי מכדי לוותר על יד עם פוטנציאל כזה."
+        }
+      ],
+      "poolId": "mqu8uu",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "qurueb",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "qurueb",
+      "c": "J♠ 10♠",
+      "s": "הערימה שלך הצטמצמה ל-7,500. אתה בעמדת הדילר. שחקן שמרני מעלה ל-400 מהעמדה האמצעית. כולם פורשים אליך. היד שלך טובה, אבל הערימה שלך לא מאפשרת הרבה 'משחקים' אחרי הפלופ.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 400",
+          "ok": true,
+          "e": "קריאה מאפשרת לך לראות פלופ במיקום. אם תפגע בזוג או בסיכוי חזק לרצף/צבע, תוכל להחליט אם להמר את כל השאר."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,200",
+          "ok": false,
+          "e": "העלאה נגד שחקן שמרני כשיש לך ערימה קצרה עלולה להוביל למצב שבו הוא מעלה שוב ואתה נאלץ לפרוש יד עם פוטנציאל."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "נסיך-עשר באותו צבע היא יד חזקה מדי לוותר עליה בעמדת הדילר מול העלאה בודדת."
+        }
+      ],
+      "poolId": "qurueb",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "5178os",
+    "status": "fixed",
+    "issues": [
+      "הסבר קטוע בתשובה א'"
+    ],
+    "nearMissFlags": [],
+    "fixedScenario": {
+      "p": "5178os",
+      "c": "Q♠ Q♥",
+      "s": "יש לך 25,000 צ'יפים. אתה בבליינד הגדול. שחקן אגרסיבי מעלה מהכפתור ל-300 והבליינד הקטן קורא. הפלופ: 8♣ 7♥ 6♦. הקופה היא 900. הבליינד הקטן עושה צ'ק. עם ערימות עמוקות, הלוח הזה מסוכן מאוד.",
+      "o": [
+        {
+          "i": "A",
+          "t": "צ'ק",
+          "ok": true,
+          "e": "על לוח כזה מחובר (סיכוי לרצף), ועם ערימות עמוקות, עדיף לשחק בזהירות. צ'ק מאפשר לך לראות מה היריבים עושים ולא לנפח קופה כשאתה פגיע."
+        },
+        {
+          "i": "B",
+          "t": "הימור 800",
+          "ok": false,
+          "e": "הימור חזק כאן יקבל תשלום רק מידיים שפגעו בלוח טוב יותר ממך או שיש להן סיכוי חזק לנצח אותך בהמשך."
+        },
+        {
+          "i": "C",
+          "t": "אול-אין 24,700",
+          "ok": false,
+          "e": "זהו מהלך חסר כל היגיון שיגרום רק לידיים טובות ממך (כמו רצף או שלישייה) לשלם לך."
+        }
+      ],
+      "poolId": "5178os",
+      "categoryId": "stack_depth",
+      "category": "גודל הערימה"
+    }
+  },
+  {
+    "poolId": "it1gp2",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "c1fe79",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "xs8i5q",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "ml0nqq",
+    "status": "fixed",
+    "issues": [
+      "היד המקורית (J8 על J97) היא גאטשוט בלבד ולא סטרייט פתוח (OESD) כפי שנכתב בהסבר."
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "ml0nqq",
+      "c": "J♦ 9♦",
+      "s": "אתה ב-BTN עם J♦ 9♦. כולם פרשו אליך, העלית ל-300 וה-BB השווה. הפלופ הוא J♠ T♠ 8♥. היריב מהמר 500 לתוך קופה של 650.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 500",
+          "ok": true,
+          "e": "יש לך זוג עליון וסדרה פתוחה משני הצדדים (צריך 7 או Q). הלוח מאוד רטוב, והשוואה מאפשרת לך לשלוט בגובה הקופה ולראות מה יפתח בסיבוב הבא."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,500",
+          "ok": false,
+          "e": "העלאה על לוח כזה מסוכנת מאוד. אם ליריב יש סדרה מוכנה או שני זוגות, אתה בבעיה קשה, ואתה לא רוצה לנפח את הקופה כרגע."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "יש לך זוג עליון ופוטנציאל חזק מאוד לסדרה. לוותר בשלב כזה זו טעות גדולה מול הימור שיכול להיות רק ניסיון הגנה."
+        }
+      ],
+      "poolId": "ml0nqq",
+      "categoryId": "wet_board_top_pair",
+      "category": "זוג עליון על לוח מסוכן"
+    }
+  },
+  {
+    "poolId": "dv5xs6",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "gnziy",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "o0l1df",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "o3j9jx",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "l6idvd",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "5amf5y",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "xgw0b9",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "b82fap",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": null
+  },
+  {
+    "poolId": "wo2uij",
+    "status": "fixed",
+    "issues": [
+      "שימוש בשמות קלפים בעברית במקום בסימנים המוסכמים (J, K)."
+    ],
+    "nearMissFlags": [
+      "A"
+    ],
+    "fixedScenario": {
+      "p": "wo2uij",
+      "c": "J♦ 9♦",
+      "s": "אתה ב-BTN עם J♦ 9♦. הפלופ הוא K♦ 6♦ 2♣. הקופה היא 1,200 ושחקן אגרסיבי שדיבר לפניך עושה צ'ק.",
+      "o": [
+        {
+          "i": "A",
+          "t": "צ'ק",
+          "ok": false,
+          "e": "צ'ק כאן הוא בזבוז של הזדמנות. יש לך סיכוי מצוין לצבע בעמדה טובה מול שחקן אגרסיבי, עדיף להמר כדי לנסות לקחת את הקופה עכשיו."
+        },
+        {
+          "i": "B",
+          "t": "הימור 700",
+          "ok": true,
+          "e": "הימור כאן מנצל את העובדה שהיריב הראה חולשה (צ'ק). יש לך צבע פוטנציאלי חזק (נסיך גבוה) ואתה רוצה להפעיל לחץ או לבנות קופה."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר כשאף אחד לא הימר ויש לך סיכוי גבוה לצבע זה מהלך שגוי מיסודו במיקום שלך."
+        }
+      ],
+      "poolId": "wo2uij",
+      "categoryId": "flush_draw",
+      "category": "חסר קלף לצבע"
+    }
+  },
+  {
+    "poolId": "qo456n",
+    "status": "fixed",
+    "issues": [
+      "שימוש בשמות קלפים בעברית במקום בסימנים המוסכמים."
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "qo456n",
+      "c": "7♥ 6♥",
+      "s": "אתה ב-BB עם 7♥ 6♥. הפלופ מראה A♥ T♥ 2♣. שחקן שמרני מהמר 400 לתוך קופה של 800.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 400",
+          "ok": true,
+          "e": "המחיר זול מספיק (1 ל-3) כדי לנסות לפגוע בצבע. שחקן שמרני לא יבלף כאן לרוב, אבל יש לך מספיק סיכויים להשתפר ביחס למחיר."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-1,200",
+          "ok": false,
+          "e": "העלאה מול שחקן שמרני שמהמר על פלופ עם אס היא מסוכנת מאוד. הוא כנראה לא יתקפל ויש לך רק 7 גבוה כרגע."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "לוותר כשיש לך סיכוי לצבע במחיר של חצי קופה זה שמרני מדי. יש לך סיכוי טוב להשתפר."
+        }
+      ],
+      "poolId": "qo456n",
+      "categoryId": "flush_draw",
+      "category": "חסר קלף לצבע"
+    }
+  },
+  {
+    "poolId": "sd2yfu",
+    "status": "fixed",
+    "issues": [
+      "שימוש בשמות קלפים בעברית במקום בסימנים המוסכמים."
+    ],
+    "nearMissFlags": [
+      "B"
+    ],
+    "fixedScenario": {
+      "p": "sd2yfu",
+      "c": "K♠ Q♠",
+      "s": "אתה ב-MP עם K♠ Q♠. הפלופ הוא J♠ 4♠ 3♦. הקופה 2,000 ושחקן מהעמדה הראשונה מהמר 1,000.",
+      "o": [
+        {
+          "i": "A",
+          "t": "קריאה 1,000",
+          "ok": true,
+          "e": "יש לך שני קלפים גבוהים (K, Q) בנוסף לסיכוי לצבע גבוה מאוד. קריאה מאפשרת לך לראות את הטרן בזול יחסית ולשמור על האופציות פתוחות."
+        },
+        {
+          "i": "B",
+          "t": "העלאה ל-3,000",
+          "ok": false,
+          "e": "במשחק ביתי, העלאה גדולה עלולה להבריח ידיים חלשות שאתה רוצה שישלמו לך כשתשלים את הצבע, או לגרום ליריב חזק ללכת אול-אין כשעוד אין לך יד מוכנה."
+        },
+        {
+          "i": "C",
+          "t": "ויתור",
+          "ok": false,
+          "e": "עם מלך ומלכה וסיכוי לצבע כמעט הכי גבוה שאפשר, ויתור הוא טעות חמורה."
+        }
+      ],
+      "poolId": "sd2yfu",
+      "categoryId": "flush_draw",
+      "category": "חסר קלף לצבע"
+    }
+  },
+  {
+    "poolId": "42ma01",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "99zdxs",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "2jn7qn",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "vcojzi",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "5bnb52",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "34xq7z",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "nf2znt",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "qtgobp",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "oy34ga",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "iik2oe",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "7v5e1i",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "7s59ls",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "ol0ya8",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "f2i4tr",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "q1kp1p",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "mi0ks3",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "hwki51",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "c4cyd2",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "B"
+    ]
+  },
+  {
+    "poolId": "4yz1xl",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "el29n3",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "8lww36",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "2sb11t",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "92g4xm",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "jaaupi",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  },
+  {
+    "poolId": "sb9rfg",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "7swk4w",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "C"
+    ]
+  },
+  {
+    "poolId": "rwl4gf",
+    "status": "ok",
+    "issues": [],
+    "nearMissFlags": [
+      "A"
+    ]
+  }
+]

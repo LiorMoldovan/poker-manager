@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.5';
+export const APP_VERSION = '5.10.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.10.6',
+    date: '2026-03-11',
+    changes: [
+      '🔄 Fix mobile cache — no-cache headers now apply to all SPA routes, not just /index.html',
+    ]
+  },
   {
     version: '5.10.5',
     date: '2026-03-11',
