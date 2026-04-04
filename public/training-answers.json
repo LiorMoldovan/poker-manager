@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T17:47:18.896Z",
+  "lastUpdated": "2026-04-04T18:02:59.767Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3105,11 +3105,93 @@
               "date": "2026-04-04T09:48:36.173Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-04T18:02:59.024Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "vwq9od",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6mclid",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7v5e1i",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "j2lj3n",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "966x5p",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6jjhzf",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "3cxp5f",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mi0ks3",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d0qs5i",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "jfwfp7",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "jfwfp7"
+          ],
+          "flagReports": [
+            {
+              "poolId": "jfwfp7",
+              "playerName": "ליכטר",
+              "reason": "wrong_answer",
+              "comment": "כולם פרשו... אני עם אס 10 סוט.... חזק עם הa וגם סיכוי לצבע או רצף.... רק אני מול עוד מישהו אחד. אין סיבה לא לשים 500",
+              "date": "2026-04-04T18:02:43.303Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 12,
-      "totalCorrect": 7,
-      "accuracy": 58.333333333333336
+      "totalQuestions": 19,
+      "totalCorrect": 13,
+      "accuracy": 68.42105263157895
     },
     {
       "playerName": "סגל",
