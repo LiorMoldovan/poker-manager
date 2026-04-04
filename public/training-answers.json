@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T20:03:51.679Z",
+  "lastUpdated": "2026-04-04T21:30:44.428Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3022,11 +3022,89 @@
               "date": "2026-04-04T12:05:40.545Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-04T13:39:58.353Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "2e8usf",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "dv5xs6",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9gj57d",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gcqgf3",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8hx671",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T13:42:43.502Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "rifnekx7o",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "weiyo0",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "966x5p",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "el29n3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4ajnvb",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 27,
-      "totalCorrect": 19,
-      "accuracy": 70.37037037037037
+      "totalQuestions": 35,
+      "totalCorrect": 27,
+      "accuracy": 77.14285714285715
     },
     {
       "playerName": "ליכטר",
