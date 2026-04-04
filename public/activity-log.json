@@ -1723,5 +1723,25 @@
       "canvasHash": "20ear9"
     },
     "playerName": "אייל"
+  },
+  {
+    "deviceId": "a1755c3b-b7fc-4e44-92ca-525d0778d4ca",
+    "role": "member",
+    "timestamp": "2026-04-04T11:09:40.991Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "376x835",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-04T11:09:40.992Z",
+    "fingerprint": {
+      "gpu": "ANGLE (ARM, Mali-G615 MC2, OpenGL ES 3.2)",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "en-US",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "5tu7v0"
+    },
+    "playerName": "סגל"
   }
 ]
