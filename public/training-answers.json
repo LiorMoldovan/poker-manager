@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T09:38:21.825Z",
+  "lastUpdated": "2026-04-04T09:51:05.904Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2413,11 +2413,96 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T09:51:05.252Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "327l5c",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lxe9p9",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "yaczm1",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tr3g9w",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "iqhtut",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmv3lu",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "myddzc",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5q20og",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rpfdfa",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dfgxmu",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "tr3g9w"
+          ],
+          "flagReports": [
+            {
+              "poolId": "tr3g9w",
+              "playerName": "ליכטר",
+              "reason": "wrong_answer",
+              "comment": "הזוג 8 חלש מול 9. חלש מול נסיך וחלש מול אופציה לצבע נמוך.  אולן אין פה היחס לקופה לא שווה להיכנס",
+              "date": "2026-04-04T09:48:36.173Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 8,
-      "totalCorrect": 4,
-      "accuracy": 50
+      "totalQuestions": 12,
+      "totalCorrect": 7,
+      "accuracy": 58.333333333333336
     }
   ]
 }
