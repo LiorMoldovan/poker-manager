@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T11:50:25.176Z",
+  "lastUpdated": "2026-04-04T11:58:58.398Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2570,11 +2570,50 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T11:58:57.758Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "lyf4e3",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mkci82",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "hot7di",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r5c0yg",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ob0itd",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 14,
-      "totalCorrect": 10,
-      "accuracy": 71.42857142857143
+      "totalQuestions": 18,
+      "totalCorrect": 14,
+      "accuracy": 77.77777777777779
     },
     {
       "playerName": "ליכטר",
