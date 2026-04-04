@@ -1533,10 +1533,11 @@
     "screenSize": "412x924",
     "screensVisited": [
       "Statistics",
-      "Shared Training"
+      "Shared Training",
+      "Game Details"
     ],
-    "sessionDuration": 1,
-    "lastActive": "2026-04-04T07:45:44.939Z",
+    "sessionDuration": 3,
+    "lastActive": "2026-04-04T07:47:32.520Z",
     "fingerprint": {
       "gpu": "Mali-G715",
       "cores": 8,
