@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T08:54:08.036Z",
+  "lastUpdated": "2026-04-04T09:09:11.856Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2237,6 +2237,109 @@
       "totalQuestions": 8,
       "totalCorrect": 7,
       "accuracy": 87.5
+    },
+    {
+      "playerName": "חרדון",
+      "sessions": [
+        {
+          "date": "2026-04-04T09:09:11.350Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "2sb11t",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "l59pod",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "cgkdsp",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ssgtpi",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "w7yv5n",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ohhgos",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "i166cq",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4znomq",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "60qhd0",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "w7yv5n",
+            "4znomq",
+            "60qhd0"
+          ],
+          "flagReports": [
+            {
+              "poolId": "w7yv5n",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "יש יותר מתשובה אחת . זה בסדר לזרוק אבל יותר נכון לשלם בטח שאתה s.b",
+              "date": "2026-04-04T08:56:54.081Z"
+            },
+            {
+              "poolId": "4znomq",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "אם הפלופ נמוך אני טוב ואם פגעתי אני חזק ואז מה שעמדה אצמאית  אולי זה פיליפ או פאבל וגם אורן או ליכטר או אייל.... עושים וחוץ מזה אולי היה כבר 3 ששילמו 200? חסר מידע",
+              "date": "2026-04-04T09:04:02.400Z"
+            },
+            {
+              "poolId": "60qhd0",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "אני לא מסכים עם הניתוח. \nלאורך זמן בטח בקבוצה סגורה אני מעדיף לא ישלמו  ואם כבר כן אחד ואם פגשתי הקופה כבר גדולה ישלמו לי הכל וככה אני חוזר לפעמים מהפסדים גדולים.",
+              "date": "2026-04-04T09:08:30.596Z"
+            }
+          ]
+        }
+      ],
+      "totalQuestions": 10,
+      "totalCorrect": 6,
+      "accuracy": 60
     }
   ]
 }
