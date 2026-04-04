@@ -1774,9 +1774,11 @@
     "timestamp": "2026-04-04T11:38:22.667Z",
     "device": "Samsung / Android 10 / Chrome",
     "screenSize": "412x883",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-04T11:38:22.668Z",
+    "screensVisited": [
+      "Shared Training"
+    ],
+    "sessionDuration": 6,
+    "lastActive": "2026-04-04T11:43:57.969Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 740",
       "cores": 8,
