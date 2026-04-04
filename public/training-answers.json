@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T13:22:28.251Z",
+  "lastUpdated": "2026-04-04T13:37:55.957Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2718,11 +2718,126 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T12:03:39.106Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "dbqv0v",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "w30fvh",
+              "categoryId": "postflop",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "63ka80",
+              "categoryId": "overbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lr45zhn0e",
+              "categoryId": "thin_value",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ya57gx",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "dbqv0v",
+            "w30fvh",
+            "63ka80"
+          ],
+          "flagReports": [
+            {
+              "poolId": "dbqv0v",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "לא מסכים עם התשובה.   אני רוצה שהוא יזרוק שלא יפגע מעלי!",
+              "date": "2026-04-04T12:00:38.221Z"
+            },
+            {
+              "poolId": "w30fvh",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "לא בטוח ביד הזאת.   למה חייב לשלם.   לא מסכים!",
+              "date": "2026-04-04T12:01:41.144Z"
+            },
+            {
+              "poolId": "63ka80",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "לא אוהב אותו!",
+              "date": "2026-04-04T12:02:26.565Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-04T13:37:55.421Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "z7xyvs",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fb0be5",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "c4cyd2",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "me4wy1",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "xcu3ye",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "fb0be5"
+          ],
+          "flagReports": [
+            {
+              "poolId": "fb0be5",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "ממש לא מסכים.   כל אחד בשולחן היה משלם כמעט תלוי כמה יש לו",
+              "date": "2026-04-04T12:05:40.545Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 18,
-      "totalCorrect": 14,
-      "accuracy": 77.77777777777779
+      "totalQuestions": 27,
+      "totalCorrect": 19,
+      "accuracy": 70.37037037037037
     },
     {
       "playerName": "ליכטר",
