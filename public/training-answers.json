@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T07:34:14.466Z",
+  "lastUpdated": "2026-04-04T07:47:42.832Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1865,11 +1865,53 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T07:35:58.801Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "nrmvhu",
+              "categoryId": "position_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "f4jpyw",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9kagj8",
+              "categoryId": "slow_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vcprr6",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "jtcvr",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 72,
-      "totalCorrect": 57,
-      "accuracy": 79.16666666666666
+      "totalQuestions": 73,
+      "totalCorrect": 58,
+      "accuracy": 79.45205479452055
     },
     {
       "playerName": "מלמד",
