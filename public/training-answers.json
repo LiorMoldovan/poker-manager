@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T18:02:59.767Z",
+  "lastUpdated": "2026-04-04T19:00:22.315Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2166,11 +2166,51 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T19:00:21.792Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "rj9r30",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "byul4k",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ql97wd",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "jd1te1",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ky76nx",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 86,
-      "totalCorrect": 68,
-      "accuracy": 79.06976744186046
+      "totalQuestions": 89,
+      "totalCorrect": 70,
+      "accuracy": 78.65168539325843
     },
     {
       "playerName": "מלמד",
