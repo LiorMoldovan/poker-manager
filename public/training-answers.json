@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T09:09:11.856Z",
+  "lastUpdated": "2026-04-04T09:38:21.825Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2340,6 +2340,84 @@
       "totalQuestions": 10,
       "totalCorrect": 6,
       "accuracy": 60
+    },
+    {
+      "playerName": "ליכטר",
+      "sessions": [
+        {
+          "date": "2026-04-04T09:38:21.276Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "t7xtib",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "z03yfe",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8fdduu",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "k9wniv",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "x2zx80",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "nx9y10",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "sd2yfu",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "uyjqcx",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iw1p29",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "xxr9ki",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        }
+      ],
+      "totalQuestions": 8,
+      "totalCorrect": 4,
+      "accuracy": 50
     }
   ]
 }
