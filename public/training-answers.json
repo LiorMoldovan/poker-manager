@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T09:51:05.904Z",
+  "lastUpdated": "2026-04-04T10:01:41.432Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2335,11 +2335,50 @@
               "date": "2026-04-04T09:08:30.596Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-04T10:01:41.059Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "30oasv",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5hyot7",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "6j59m1",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hju02k",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "m9zm46",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 10,
-      "totalCorrect": 6,
-      "accuracy": 60
+      "totalQuestions": 14,
+      "totalCorrect": 10,
+      "accuracy": 71.42857142857143
     },
     {
       "playerName": "ליכטר",
