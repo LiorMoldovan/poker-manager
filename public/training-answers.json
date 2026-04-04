@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T11:58:58.398Z",
+  "lastUpdated": "2026-04-04T12:48:31.701Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -415,11 +415,50 @@
               "date": "2026-04-03T21:10:33.336Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-04T12:48:30.816Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "qxf1u3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lnsupa",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vdllfa",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "b4g80s",
+              "categoryId": "postflop",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "343leg",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 38,
-      "totalCorrect": 33,
-      "accuracy": 86.8421052631579
+      "totalQuestions": 42,
+      "totalCorrect": 36,
+      "accuracy": 85.71428571428571
     },
     {
       "playerName": "אייל",
