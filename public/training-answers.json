@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T19:00:22.315Z",
+  "lastUpdated": "2026-04-04T19:45:18.601Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3227,11 +3227,38 @@
               "date": "2026-04-04T18:02:43.303Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-04T18:04:47.366Z",
+          "questionsAnswered": 2,
+          "correctAnswers": 0,
+          "results": [
+            {
+              "poolId": "6j59m1",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "y24bpz",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lwixkv",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 19,
+      "totalQuestions": 21,
       "totalCorrect": 13,
-      "accuracy": 68.42105263157895
+      "accuracy": 61.904761904761905
     },
     {
       "playerName": "סגל",
