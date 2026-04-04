@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-03T21:11:23.254Z",
+  "lastUpdated": "2026-04-04T07:34:14.466Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1795,11 +1795,81 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-03T20:58:00.590Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "y3vi92",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5omion",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "drsh6p",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8hpqj7",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "63ka80",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "mx95wb",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lz4624",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7v5e1i",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9x51c2",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "sgqy9v",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 64,
-      "totalCorrect": 50,
-      "accuracy": 78.125
+      "totalQuestions": 72,
+      "totalCorrect": 57,
+      "accuracy": 79.16666666666666
     },
     {
       "playerName": "מלמד",
