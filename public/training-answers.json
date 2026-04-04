@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T14:13:13.892Z",
+  "lastUpdated": "2026-04-04T14:34:00.778Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -493,11 +493,41 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T14:15:44.247Z",
+          "questionsAnswered": 2,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "9b2g3i",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tgkrzr",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "tgkrzr"
+          ],
+          "flagReports": [
+            {
+              "poolId": "tgkrzr",
+              "playerName": "ליאור",
+              "reason": "wrong_for_home_game",
+              "date": "2026-04-04T14:15:26.937Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 46,
-      "totalCorrect": 39,
-      "accuracy": 84.78260869565217
+      "totalQuestions": 48,
+      "totalCorrect": 40,
+      "accuracy": 83.33333333333334
     },
     {
       "playerName": "אייל",
