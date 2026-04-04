@@ -1918,5 +1918,25 @@
       "canvasHash": "y7v3bq"
     },
     "playerName": "אורן"
+  },
+  {
+    "deviceId": "ef5fadfb-f927-43bc-a413-fe0aafc70950",
+    "role": "member",
+    "timestamp": "2026-04-04T19:45:16.067Z",
+    "device": "Samsung / Android 10 / Chrome",
+    "screenSize": "412x892",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-04T19:45:16.072Z",
+    "fingerprint": {
+      "gpu": "Adreno (TM) 730",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "cg8hn4"
+    },
+    "playerName": "ליכטר"
   }
 ]
