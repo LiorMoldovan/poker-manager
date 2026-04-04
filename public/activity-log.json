@@ -1752,9 +1752,11 @@
     "timestamp": "2026-04-04T11:21:54.704Z",
     "device": "iPhone / iOS 18 / Safari",
     "screenSize": "430x932",
-    "screensVisited": [],
+    "screensVisited": [
+      "New Game"
+    ],
     "sessionDuration": 0,
-    "lastActive": "2026-04-04T11:21:54.705Z",
+    "lastActive": "2026-04-04T11:21:58.185Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
