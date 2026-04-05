@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T17:02:14.942Z",
+  "lastUpdated": "2026-04-05T17:59:35.690Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1984,11 +1984,61 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T17:59:34.804Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "lb2v2a",
+              "categoryId": "pot_odds",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "gcqgf3",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "xzrzs8",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vs4gwo",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bofwjo",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "lb2v2a"
+          ],
+          "flagReports": [
+            {
+              "poolId": "lb2v2a",
+              "playerName": "אורן",
+              "reason": "unclear_question",
+              "date": "2026-04-05T17:57:59.763Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 100,
-      "totalCorrect": 78,
-      "accuracy": 78
+      "totalQuestions": 103,
+      "totalCorrect": 79,
+      "accuracy": 76.69902912621359
     },
     {
       "playerName": "מלמד",
