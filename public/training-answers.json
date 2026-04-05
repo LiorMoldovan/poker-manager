@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T15:36:54.683Z",
+  "lastUpdated": "2026-04-05T15:41:57.823Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3861,11 +3861,231 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T15:32:44.990Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "lz4624",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ohqm4c",
+              "categoryId": "second_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "q1kp1p",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ipitjm",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "uabvay",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6mz966",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q9fgt5",
+              "categoryId": "second_pair",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "lhz578",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5optvl",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "qrjqyo",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T15:36:32.769Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "tgkrzr",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math2_1775390941480_8a45d4",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "sv7206",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yxhhhs",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tf9wow",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r724dg",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8dqieq",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "eg4r5m",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "86bnbt",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8hx671",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T15:41:57.069Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "lb2v2a",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ob0itd",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570598_1uvfm3",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "4vbn9",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hnocjq",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "57jp87",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390941480_4r5g2i",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "t7a2tb",
+              "categoryId": "pot_odds",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ndtdjd",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "odds_math_1775387023360_4vh6hq",
+              "categoryId": "odds_math",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389570598_1uvfm3"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389570598_1uvfm3",
+              "playerName": "ליכטר",
+              "reason": "wrong_answer",
+              "comment": "בקופה יש 1200 אחרי שליאור שם 400. אם אני נכנס אני שם 400 כדי להרוויח 1600",
+              "date": "2026-04-05T15:39:29.034Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 28,
-      "totalCorrect": 20,
-      "accuracy": 71.42857142857143
+      "totalQuestions": 53,
+      "totalCorrect": 33,
+      "accuracy": 62.264150943396224
     },
     {
       "playerName": "סגל",
