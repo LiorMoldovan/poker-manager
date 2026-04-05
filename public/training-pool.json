@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-05T11:10:18.607Z",
+  "generatedAt": "2026-04-05T11:13:26.372Z",
   "totalScenarios": 590,
   "byCategory": {
     "זוג עליון על לוח מסוכן": 20,
@@ -57,7 +57,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:27:40.670Z"
+      "reviewedAt": "2026-04-05T10:27:40.670Z",
+      "id": "i95l3p3zbpxo"
     },
     {
       "poolId": "vvpw4h",
@@ -86,7 +87,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:27:40.673Z"
+      "reviewedAt": "2026-04-05T10:27:40.673Z",
+      "id": "f8v08h07eusr"
     },
     {
       "poolId": "gmxjsv",
@@ -115,7 +117,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:27:40.673Z"
+      "reviewedAt": "2026-04-05T10:27:40.673Z",
+      "id": "3s06fcuz5cyc"
     },
     {
       "poolId": "d4vw1m",
@@ -144,7 +147,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:27:40.673Z"
+      "reviewedAt": "2026-04-05T10:27:40.673Z",
+      "id": "25egs3tnwbk6"
     },
     {
       "poolId": "2e8usf",
@@ -173,7 +177,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:27:40.673Z"
+      "reviewedAt": "2026-04-05T10:27:40.673Z",
+      "id": "rj0am7svmfay"
     },
     {
       "poolId": "tr3g9w",
@@ -202,7 +207,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:28:00.517Z"
+      "reviewedAt": "2026-04-05T10:28:00.517Z",
+      "id": "36kvqqne7o09"
     },
     {
       "id": 2,
@@ -261,7 +267,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:28:00.517Z"
+      "reviewedAt": "2026-04-05T10:28:00.517Z",
+      "id": "5gr70awsjch4"
     },
     {
       "poolId": "z9c88h",
@@ -290,10 +297,11 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:28:00.517Z"
+      "reviewedAt": "2026-04-05T10:28:00.517Z",
+      "id": "nezw8nm6r8cd"
     },
     {
-      "id": 2,
+      "id": "kgd8d0xccg1x",
       "situation": "אתה בעמדת הבליינד הגדול עם A-J. שחקן אגרסיבי העלה ל-500 ושלושה שחקנים נוספים השוו. הפלופ הוא A-7-2, כולם עשו צ'ק עד לשחקן השלישי שהמר 1,000.",
       "yourCards": "A♥ J♣",
       "options": [
@@ -379,7 +387,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:28:19.502Z"
+      "reviewedAt": "2026-04-05T10:28:19.502Z",
+      "id": "k3itndqye1cd"
     },
     {
       "poolId": "7ay5va",
@@ -408,7 +417,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:28:19.502Z"
+      "reviewedAt": "2026-04-05T10:28:19.502Z",
+      "id": "cb50w8ndqkk7"
     },
     {
       "poolId": "naafbv",
@@ -437,7 +447,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:19.502Z"
+      "reviewedAt": "2026-04-05T10:28:19.502Z",
+      "id": "aafoei6b6xve"
     },
     {
       "poolId": "myddzc",
@@ -466,10 +477,11 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:19.502Z"
+      "reviewedAt": "2026-04-05T10:28:19.502Z",
+      "id": "pavtf98ylpz4"
     },
     {
-      "id": 3,
+      "id": "620ao5div6k0",
       "situation": "אתה בכפתור עם ערימה של 20,000. שחקן אגרסיבי מעמדה מוקדמת מעלה ל-400 ואתה משלם. הפלופ הוא 10, 5 ו-2. היריב מהמר 500.",
       "yourCards": "9♠ 9♣",
       "options": [
@@ -527,7 +539,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:36.515Z"
+      "reviewedAt": "2026-04-05T10:28:36.515Z",
+      "id": "mwaurr5eulob"
     },
     {
       "id": 5,
@@ -586,7 +599,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:36.515Z"
+      "reviewedAt": "2026-04-05T10:28:36.515Z",
+      "id": "nhx7a3vaxwof"
     },
     {
       "poolId": "q8zfcw",
@@ -616,7 +630,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:36.515Z"
+      "reviewedAt": "2026-04-05T10:28:36.515Z",
+      "id": "k3es76bt58ly"
     },
     {
       "poolId": "4b3qn2",
@@ -645,7 +660,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:55.796Z"
+      "reviewedAt": "2026-04-05T10:28:55.796Z",
+      "id": "1ph8so8b15ib"
     },
     {
       "poolId": "xdhd9s",
@@ -674,7 +690,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:55.796Z"
+      "reviewedAt": "2026-04-05T10:28:55.796Z",
+      "id": "a00upj61n2n3"
     },
     {
       "poolId": "2x5t53",
@@ -703,7 +720,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:55.796Z"
+      "reviewedAt": "2026-04-05T10:28:55.796Z",
+      "id": "9yd8ys8y3x1o"
     },
     {
       "poolId": "9x51c2",
@@ -731,7 +749,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:28:55.796Z"
+      "reviewedAt": "2026-04-05T10:28:55.796Z",
+      "id": "mh4evb16ka6s"
     },
     {
       "id": 12,
@@ -790,7 +809,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:29:17.527Z"
+      "reviewedAt": "2026-04-05T10:29:17.527Z",
+      "id": "y3tujto5knms"
     },
     {
       "poolId": "l59pod",
@@ -818,7 +838,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:29:17.527Z"
+      "reviewedAt": "2026-04-05T10:29:17.527Z",
+      "id": "vglkavd1lukb"
     },
     {
       "poolId": "9s6ia4",
@@ -846,7 +867,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:29:17.527Z"
+      "reviewedAt": "2026-04-05T10:29:17.527Z",
+      "id": "rcreyiqby21l"
     },
     {
       "poolId": "kktd5e",
@@ -874,7 +896,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:17.527Z"
+      "reviewedAt": "2026-04-05T10:29:17.527Z",
+      "id": "568z9fk44ilw"
     },
     {
       "poolId": "96znmn",
@@ -902,7 +925,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:17.527Z"
+      "reviewedAt": "2026-04-05T10:29:17.527Z",
+      "id": "8qd7rjrtypw9"
     },
     {
       "poolId": "w7bcro",
@@ -930,7 +954,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:34.432Z"
+      "reviewedAt": "2026-04-05T10:29:34.432Z",
+      "id": "kokvn8l63ccr"
     },
     {
       "id": 4,
@@ -988,7 +1013,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:34.433Z"
+      "reviewedAt": "2026-04-05T10:29:34.433Z",
+      "id": "4yvw7orsnycp"
     },
     {
       "poolId": "4znomq",
@@ -1016,7 +1042,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:34.433Z"
+      "reviewedAt": "2026-04-05T10:29:34.433Z",
+      "id": "wnzk1tl9j9c6"
     },
     {
       "id": 7,
@@ -1075,7 +1102,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:52.199Z"
+      "reviewedAt": "2026-04-05T10:29:52.199Z",
+      "id": "hayetauoslnw"
     },
     {
       "poolId": "8fdduu",
@@ -1104,7 +1132,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:52.199Z"
+      "reviewedAt": "2026-04-05T10:29:52.199Z",
+      "id": "bjltvp8j58rw"
     },
     {
       "poolId": "z03yfe",
@@ -1133,7 +1162,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:52.199Z"
+      "reviewedAt": "2026-04-05T10:29:52.199Z",
+      "id": "zm6lpmh6col4"
     },
     {
       "id": 11,
@@ -1192,7 +1222,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:29:52.199Z"
+      "reviewedAt": "2026-04-05T10:29:52.199Z",
+      "id": "mjd0ydknadcb"
     },
     {
       "poolId": "142ltl",
@@ -1221,7 +1252,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:30:13.043Z"
+      "reviewedAt": "2026-04-05T10:30:13.043Z",
+      "id": "zoq7qmdu3217"
     },
     {
       "poolId": "w7yv5n",
@@ -1250,7 +1282,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:30:13.044Z"
+      "reviewedAt": "2026-04-05T10:30:13.044Z",
+      "id": "rwimd85n9oy4"
     },
     {
       "poolId": "1yeqhi",
@@ -1279,7 +1312,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:30:13.044Z"
+      "reviewedAt": "2026-04-05T10:30:13.044Z",
+      "id": "9w1fzk34qler"
     },
     {
       "id": 1,
@@ -1338,7 +1372,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:13.044Z"
+      "reviewedAt": "2026-04-05T10:30:13.044Z",
+      "id": "8umwii7slbyj"
     },
     {
       "poolId": "wf44o2",
@@ -1366,7 +1401,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:32.897Z"
+      "reviewedAt": "2026-04-05T10:30:32.897Z",
+      "id": "zlbt7wk0jfkz"
     },
     {
       "poolId": "co1wob",
@@ -1395,7 +1431,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:32.898Z"
+      "reviewedAt": "2026-04-05T10:30:32.898Z",
+      "id": "75qc6rtqgoi3"
     },
     {
       "poolId": "i166cq",
@@ -1424,7 +1461,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:32.898Z"
+      "reviewedAt": "2026-04-05T10:30:32.898Z",
+      "id": "21j0qj6ddp4q"
     },
     {
       "poolId": "p3y535",
@@ -1453,10 +1491,11 @@
       ],
       "categoryId": "preflop_vs_raise",
       "category": "מישהו העלה לפניך",
-      "reviewedAt": "2026-04-05T10:30:32.898Z"
+      "reviewedAt": "2026-04-05T10:30:32.898Z",
+      "id": "9jn9cnsk2yds"
     },
     {
-      "id": 7,
+      "id": "bzkffqx9f06g",
       "situation": "שחקן שמרן מאוד מעלה ל-500 מעמדה ראשונה. אתה בעמדת הדילר עם ערימה של 18,000.",
       "yourCards": "A♠ Q♦",
       "options": [
@@ -1511,7 +1550,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:54.424Z"
+      "reviewedAt": "2026-04-05T10:30:54.424Z",
+      "id": "eq80pjw7n7rm"
     },
     {
       "poolId": "q378x2",
@@ -1540,7 +1580,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:54.424Z"
+      "reviewedAt": "2026-04-05T10:30:54.424Z",
+      "id": "zi4o486qqx21"
     },
     {
       "poolId": "nx9y10",
@@ -1568,7 +1609,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:54.424Z"
+      "reviewedAt": "2026-04-05T10:30:54.424Z",
+      "id": "f2yx3tktu6wf"
     },
     {
       "poolId": "7a97um",
@@ -1597,10 +1639,11 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:30:54.424Z"
+      "reviewedAt": "2026-04-05T10:30:54.424Z",
+      "id": "v4pe1irmq7gs"
     },
     {
-      "id": 12,
+      "id": "ua7dx6gu0id5",
       "situation": "שחקן שמרן מעלה ל-400. אתה בעמדת ה-Cutoff (אחד לפני הדילר) עם ערימה של 15,000.",
       "yourCards": "9♥ 8♥",
       "options": [
@@ -1656,7 +1699,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:31:18.014Z"
+      "reviewedAt": "2026-04-05T10:31:18.014Z",
+      "id": "dzc9agixi3g3"
     },
     {
       "poolId": "8q1emk",
@@ -1685,7 +1729,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:31:18.014Z"
+      "reviewedAt": "2026-04-05T10:31:18.014Z",
+      "id": "fmz510nhy8i8"
     },
     {
       "poolId": "lhz578",
@@ -1713,7 +1758,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:31:18.014Z"
+      "reviewedAt": "2026-04-05T10:31:18.014Z",
+      "id": "5325q7j8laer"
     },
     {
       "poolId": "wk1qk6",
@@ -1742,7 +1788,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:18.014Z"
+      "reviewedAt": "2026-04-05T10:31:18.014Z",
+      "id": "ay3hntfx8z7c"
     },
     {
       "poolId": "ou1jwe",
@@ -1771,7 +1818,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:18.014Z"
+      "reviewedAt": "2026-04-05T10:31:18.014Z",
+      "id": "ldxf0bi2iyks"
     },
     {
       "poolId": "ymg11d",
@@ -1799,7 +1847,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:39.272Z"
+      "reviewedAt": "2026-04-05T10:31:39.272Z",
+      "id": "206uc2e9cqe5"
     },
     {
       "poolId": "6mclid",
@@ -1828,7 +1877,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:39.273Z"
+      "reviewedAt": "2026-04-05T10:31:39.273Z",
+      "id": "b4gg6ikvrpx5"
     },
     {
       "poolId": "lyf4e3",
@@ -1857,7 +1907,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:39.273Z"
+      "reviewedAt": "2026-04-05T10:31:39.273Z",
+      "id": "itlyhscn3d0x"
     },
     {
       "poolId": "6q6oub",
@@ -1886,7 +1937,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:39.273Z"
+      "reviewedAt": "2026-04-05T10:31:39.273Z",
+      "id": "a7hjxri4b7vz"
     },
     {
       "poolId": "yrkowz",
@@ -1915,7 +1967,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:39.273Z"
+      "reviewedAt": "2026-04-05T10:31:39.273Z",
+      "id": "4q1szwo9f5lt"
     },
     {
       "id": 8,
@@ -1974,7 +2027,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:57.143Z"
+      "reviewedAt": "2026-04-05T10:31:57.143Z",
+      "id": "q2ggk522gir1"
     },
     {
       "poolId": "15l9j",
@@ -2003,7 +2057,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:57.143Z"
+      "reviewedAt": "2026-04-05T10:31:57.143Z",
+      "id": "8hqiahdbz4f9"
     },
     {
       "poolId": "dpyop4",
@@ -2032,7 +2087,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:57.143Z"
+      "reviewedAt": "2026-04-05T10:31:57.143Z",
+      "id": "468ps5ek8e16"
     },
     {
       "poolId": "91tdw1",
@@ -2061,7 +2117,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:31:57.143Z"
+      "reviewedAt": "2026-04-05T10:31:57.143Z",
+      "id": "7n0xfbsytyl7"
     },
     {
       "poolId": "e6dhq4",
@@ -2089,7 +2146,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:32:18.505Z"
+      "reviewedAt": "2026-04-05T10:32:18.505Z",
+      "id": "jppqwbp220q5"
     },
     {
       "poolId": "lpcko9",
@@ -2117,7 +2175,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:32:18.505Z"
+      "reviewedAt": "2026-04-05T10:32:18.505Z",
+      "id": "hnaa0ib7v92h"
     },
     {
       "poolId": "6fzlnm",
@@ -2145,7 +2204,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:32:18.505Z"
+      "reviewedAt": "2026-04-05T10:32:18.505Z",
+      "id": "762yk5ps5skv"
     },
     {
       "poolId": "cyrr6n",
@@ -2174,7 +2234,8 @@
       ],
       "categoryId": "slow_play",
       "category": "משחק איטי",
-      "reviewedAt": "2026-04-05T10:32:18.505Z"
+      "reviewedAt": "2026-04-05T10:32:18.505Z",
+      "id": "na9m0mbme9p6"
     },
     {
       "poolId": "xxr9ki",
@@ -2202,7 +2263,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:18.505Z"
+      "reviewedAt": "2026-04-05T10:32:18.505Z",
+      "id": "noujwxowux67"
     },
     {
       "poolId": "sxapi0",
@@ -2231,7 +2293,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:39.944Z"
+      "reviewedAt": "2026-04-05T10:32:39.944Z",
+      "id": "z07ge0qed4z1"
     },
     {
       "poolId": "cgkdsp",
@@ -2260,7 +2323,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:39.945Z"
+      "reviewedAt": "2026-04-05T10:32:39.945Z",
+      "id": "41umqlx31pjh"
     },
     {
       "poolId": "hmapjw",
@@ -2289,7 +2353,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:39.945Z"
+      "reviewedAt": "2026-04-05T10:32:39.945Z",
+      "id": "c64424j4puxk"
     },
     {
       "poolId": "3euxq6",
@@ -2318,7 +2383,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:39.945Z"
+      "reviewedAt": "2026-04-05T10:32:39.945Z",
+      "id": "usf724039n53"
     },
     {
       "poolId": "lszteu",
@@ -2347,7 +2413,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:39.945Z"
+      "reviewedAt": "2026-04-05T10:32:39.945Z",
+      "id": "je2neuharbgg"
     },
     {
       "poolId": "bis53d",
@@ -2376,7 +2443,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:58.821Z"
+      "reviewedAt": "2026-04-05T10:32:58.821Z",
+      "id": "w21y8twgsxvl"
     },
     {
       "poolId": "9kagj8",
@@ -2405,7 +2473,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:58.821Z"
+      "reviewedAt": "2026-04-05T10:32:58.821Z",
+      "id": "9wunwgs8pjnz"
     },
     {
       "poolId": "h05xnk",
@@ -2434,10 +2503,11 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:32:58.821Z"
+      "reviewedAt": "2026-04-05T10:32:58.821Z",
+      "id": "g7lecumy4zeg"
     },
     {
-      "id": 11,
+      "id": "f6uu03gahz36",
       "situation": "יש לך זוג נסיכים. הפלופ הוא נסיך-6-3 בצבעים שונים. הקופה 1,500. היריב הוא שחקן שמרני שלא מהמר בלי יד חזקה, והוא עושה צ'ק.",
       "yourCards": "J♠ J♦",
       "options": [
@@ -2467,7 +2537,7 @@
       "reviewedAt": "2026-04-05T10:32:58.821Z"
     },
     {
-      "id": 12,
+      "id": "lmur6iz52ty8",
       "situation": "יש לך זוג 2. הפלופ הוא 2-8-מלך. הקופה 2,000. שחקן אגרסיבי מהמר 1,200. אתה חושד שיש לו מלך.",
       "yourCards": "2♣ 2♦",
       "options": [
@@ -2523,7 +2593,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:33:18.694Z"
+      "reviewedAt": "2026-04-05T10:33:18.694Z",
+      "id": "h3f9rv3a41pd"
     },
     {
       "poolId": "v4uyiy",
@@ -2552,7 +2623,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:33:18.694Z"
+      "reviewedAt": "2026-04-05T10:33:18.694Z",
+      "id": "60x9qvbuf6nj"
     },
     {
       "poolId": "eg4r5m",
@@ -2581,7 +2653,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:33:18.694Z"
+      "reviewedAt": "2026-04-05T10:33:18.694Z",
+      "id": "mz10o1bsuxjz"
     },
     {
       "poolId": "kc64w9",
@@ -2610,7 +2683,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:18.694Z"
+      "reviewedAt": "2026-04-05T10:33:18.694Z",
+      "id": "z6tiuk7xzbgv"
     },
     {
       "poolId": "if3dan",
@@ -2639,7 +2713,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:18.694Z"
+      "reviewedAt": "2026-04-05T10:33:18.694Z",
+      "id": "se63w3aasybs"
     },
     {
       "poolId": "vdllfa",
@@ -2668,7 +2743,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:39.814Z"
+      "reviewedAt": "2026-04-05T10:33:39.814Z",
+      "id": "snsirg09r7oz"
     },
     {
       "poolId": "gmsrrc",
@@ -2697,7 +2773,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:39.814Z"
+      "reviewedAt": "2026-04-05T10:33:39.814Z",
+      "id": "wswixr2eu71o"
     },
     {
       "poolId": "kg5am3",
@@ -2726,7 +2803,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:39.814Z"
+      "reviewedAt": "2026-04-05T10:33:39.814Z",
+      "id": "i72kvvzb55ej"
     },
     {
       "poolId": "nbcfbk",
@@ -2755,7 +2833,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:39.814Z"
+      "reviewedAt": "2026-04-05T10:33:39.814Z",
+      "id": "pvajb74uajms"
     },
     {
       "poolId": "4jpifs",
@@ -2784,7 +2863,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:33:39.814Z"
+      "reviewedAt": "2026-04-05T10:33:39.814Z",
+      "id": "ogty004367ni"
     },
     {
       "poolId": "jd1te1",
@@ -2813,7 +2893,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:00.031Z"
+      "reviewedAt": "2026-04-05T10:34:00.031Z",
+      "id": "98fivhenk121"
     },
     {
       "poolId": "uyjqcx",
@@ -2842,7 +2923,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:00.031Z"
+      "reviewedAt": "2026-04-05T10:34:00.031Z",
+      "id": "ajjdhhmvzy4a"
     },
     {
       "poolId": "42l0n8",
@@ -2871,7 +2953,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:00.031Z"
+      "reviewedAt": "2026-04-05T10:34:00.031Z",
+      "id": "r97mk0x3urdt"
     },
     {
       "poolId": "ohhgos",
@@ -2900,7 +2983,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:00.031Z"
+      "reviewedAt": "2026-04-05T10:34:00.031Z",
+      "id": "4stya0k9xdlv"
     },
     {
       "poolId": "ahldpc",
@@ -2929,7 +3013,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:00.031Z"
+      "reviewedAt": "2026-04-05T10:34:00.031Z",
+      "id": "d8sjnlb5cy56"
     },
     {
       "poolId": "til50a",
@@ -2958,7 +3043,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:21.624Z"
+      "reviewedAt": "2026-04-05T10:34:21.624Z",
+      "id": "74f9nrv92h8m"
     },
     {
       "poolId": "jtcvr",
@@ -2987,7 +3073,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:21.624Z"
+      "reviewedAt": "2026-04-05T10:34:21.624Z",
+      "id": "1eishdyir9xa"
     },
     {
       "poolId": "r3x7l7",
@@ -3016,7 +3103,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:34:21.624Z"
+      "reviewedAt": "2026-04-05T10:34:21.624Z",
+      "id": "sigwf6l003ri"
     },
     {
       "poolId": "bk52a1",
@@ -3045,7 +3133,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:21.624Z"
+      "reviewedAt": "2026-04-05T10:34:21.624Z",
+      "id": "rd2bpc69suil"
     },
     {
       "poolId": "lrugv8",
@@ -3074,7 +3163,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:21.624Z"
+      "reviewedAt": "2026-04-05T10:34:21.624Z",
+      "id": "vejsiptmodjo"
     },
     {
       "poolId": "60qhd0",
@@ -3104,7 +3194,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:42.590Z"
+      "reviewedAt": "2026-04-05T10:34:42.590Z",
+      "id": "mvi3gtssy7sj"
     },
     {
       "poolId": "kf533m",
@@ -3133,7 +3224,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:42.590Z"
+      "reviewedAt": "2026-04-05T10:34:42.590Z",
+      "id": "5or3dyeste4s"
     },
     {
       "poolId": "r01pj6",
@@ -3162,7 +3254,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:42.590Z"
+      "reviewedAt": "2026-04-05T10:34:42.590Z",
+      "id": "xj9lwwyo78wh"
     },
     {
       "poolId": "4o7orp",
@@ -3191,7 +3284,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:42.590Z"
+      "reviewedAt": "2026-04-05T10:34:42.590Z",
+      "id": "bnsw5dbh6mp9"
     },
     {
       "poolId": "fi209o",
@@ -3220,7 +3314,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:34:42.590Z"
+      "reviewedAt": "2026-04-05T10:34:42.590Z",
+      "id": "ql5rgiilfn39"
     },
     {
       "poolId": "vhfy8b",
@@ -3248,7 +3343,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:03.604Z"
+      "reviewedAt": "2026-04-05T10:35:03.604Z",
+      "id": "das0yci0vh4w"
     },
     {
       "poolId": "66p24o",
@@ -3276,7 +3372,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:03.604Z"
+      "reviewedAt": "2026-04-05T10:35:03.604Z",
+      "id": "hxuw2gczu0tn"
     },
     {
       "poolId": "vn4vpp",
@@ -3304,7 +3401,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:03.604Z"
+      "reviewedAt": "2026-04-05T10:35:03.604Z",
+      "id": "4yl9cwjetasd"
     },
     {
       "poolId": "f2nh1w",
@@ -3332,7 +3430,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:03.604Z"
+      "reviewedAt": "2026-04-05T10:35:03.604Z",
+      "id": "s9lnwi1nh5qz"
     },
     {
       "poolId": "z9bldk",
@@ -3360,7 +3459,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:03.604Z"
+      "reviewedAt": "2026-04-05T10:35:03.604Z",
+      "id": "opviktyivest"
     },
     {
       "poolId": "m8mvl9",
@@ -3389,7 +3489,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:24.622Z"
+      "reviewedAt": "2026-04-05T10:35:24.622Z",
+      "id": "dad7vnw9hg16"
     },
     {
       "poolId": "x404yx",
@@ -3418,7 +3519,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:35:24.622Z"
+      "reviewedAt": "2026-04-05T10:35:24.622Z",
+      "id": "kz52r5kujhxa"
     },
     {
       "id": 15,
@@ -3477,7 +3579,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:24.622Z"
+      "reviewedAt": "2026-04-05T10:35:24.622Z",
+      "id": "50dqps2o83gi"
     },
     {
       "poolId": "8nulv0",
@@ -3506,7 +3609,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:24.622Z"
+      "reviewedAt": "2026-04-05T10:35:24.622Z",
+      "id": "4t3bggxcba5n"
     },
     {
       "poolId": "j2lj3n",
@@ -3535,7 +3639,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:48.174Z"
+      "reviewedAt": "2026-04-05T10:35:48.174Z",
+      "id": "qkxg4rd1dmc5"
     },
     {
       "poolId": "w5q5i8",
@@ -3564,7 +3669,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:48.174Z"
+      "reviewedAt": "2026-04-05T10:35:48.174Z",
+      "id": "dnh3jtbel907"
     },
     {
       "poolId": "aa9947",
@@ -3593,7 +3699,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:48.175Z"
+      "reviewedAt": "2026-04-05T10:35:48.175Z",
+      "id": "qbdfv27hwu43"
     },
     {
       "poolId": "dfgxmu",
@@ -3622,7 +3729,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:48.175Z"
+      "reviewedAt": "2026-04-05T10:35:48.175Z",
+      "id": "yqkf4a9cfge9"
     },
     {
       "poolId": "39l525",
@@ -3651,7 +3759,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:35:48.175Z"
+      "reviewedAt": "2026-04-05T10:35:48.175Z",
+      "id": "sxa753gjuo5p"
     },
     {
       "poolId": "mx95wb",
@@ -3680,7 +3789,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:08.349Z"
+      "reviewedAt": "2026-04-05T10:36:08.349Z",
+      "id": "rdm9o8ba4rr4"
     },
     {
       "poolId": "qpv756",
@@ -3709,7 +3819,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:08.349Z"
+      "reviewedAt": "2026-04-05T10:36:08.349Z",
+      "id": "2ad1s4tu6bcz"
     },
     {
       "poolId": "dfwrmp",
@@ -3738,7 +3849,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:08.349Z"
+      "reviewedAt": "2026-04-05T10:36:08.349Z",
+      "id": "4lydlpt54xn2"
     },
     {
       "poolId": "n01jlv",
@@ -3767,7 +3879,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:08.349Z"
+      "reviewedAt": "2026-04-05T10:36:08.349Z",
+      "id": "9quf3ffb53eq"
     },
     {
       "poolId": "d9hbp1",
@@ -3796,7 +3909,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:08.349Z"
+      "reviewedAt": "2026-04-05T10:36:08.349Z",
+      "id": "9n5t32e57a9e"
     },
     {
       "poolId": "411gbc",
@@ -3825,7 +3939,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:26.114Z"
+      "reviewedAt": "2026-04-05T10:36:26.114Z",
+      "id": "is8b1zrwepgq"
     },
     {
       "poolId": "xzrzs8",
@@ -3854,7 +3969,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:26.115Z"
+      "reviewedAt": "2026-04-05T10:36:26.115Z",
+      "id": "v8up9p26ngrg"
     },
     {
       "poolId": "ndtdjd",
@@ -3883,10 +3999,11 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:36:26.115Z"
+      "reviewedAt": "2026-04-05T10:36:26.115Z",
+      "id": "0r17m3uuf84j"
     },
     {
-      "id": 1,
+      "id": "xqdvlux8osni",
       "situation": "אתה בעמדה מוקדמת עם זוג 5-5 והעלית ל-400. שלושה שחקנים, כולל שחקן אגרסיבי בכפתור, השוו. הפלופ הוא 2♠ 5♥ 9♦. הקופה עומדת על 1,750 והשחקן בבליינד הגדול מהמר 1,200.",
       "yourCards": "5♠ 5♦",
       "options": [
@@ -3916,7 +4033,7 @@
       "reviewedAt": "2026-04-05T10:36:26.115Z"
     },
     {
-      "id": 2,
+      "id": "papd6qxdqyaq",
       "situation": "אתה בכפתור עם A♥ Q♥. ארבעה שחקנים השוו את הבליינד (לימפ). הפלופ הוא J♥ 10♥ 2♣. השחקן בבליינד הגדול מהמר 600 לתוך קופה של 550.",
       "yourCards": "A♥ Q♥",
       "options": [
@@ -3972,7 +4089,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:36:52.743Z"
+      "reviewedAt": "2026-04-05T10:36:52.743Z",
+      "id": "dtmy3hb7qpwt"
     },
     {
       "poolId": "8d0198",
@@ -4001,7 +4119,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:36:52.743Z"
+      "reviewedAt": "2026-04-05T10:36:52.743Z",
+      "id": "p3ylfjtt67kf"
     },
     {
       "poolId": "xdqixa",
@@ -4030,7 +4149,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:36:52.743Z"
+      "reviewedAt": "2026-04-05T10:36:52.743Z",
+      "id": "3hazv8bvrhnm"
     },
     {
       "poolId": "nnn7y",
@@ -4059,7 +4179,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:36:52.743Z"
+      "reviewedAt": "2026-04-05T10:36:52.743Z",
+      "id": "evkyme5y29d7"
     },
     {
       "poolId": "ujq0ce",
@@ -4088,7 +4209,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:36:52.743Z"
+      "reviewedAt": "2026-04-05T10:36:52.743Z",
+      "id": "ny1puf2985y5"
     },
     {
       "poolId": "pfg85t",
@@ -4117,7 +4239,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:13.352Z"
+      "reviewedAt": "2026-04-05T10:37:13.352Z",
+      "id": "gkod5ps5qp80"
     },
     {
       "id": 9,
@@ -4176,7 +4299,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:13.352Z"
+      "reviewedAt": "2026-04-05T10:37:13.352Z",
+      "id": "6fg0ae5jmqjm"
     },
     {
       "poolId": "ky76nx",
@@ -4205,7 +4329,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:13.353Z"
+      "reviewedAt": "2026-04-05T10:37:13.353Z",
+      "id": "hunhdfazu066"
     },
     {
       "poolId": "mx6ber",
@@ -4234,7 +4359,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:13.353Z"
+      "reviewedAt": "2026-04-05T10:37:13.353Z",
+      "id": "nxg1lmn0ficw"
     },
     {
       "poolId": "n749b5",
@@ -4262,7 +4388,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:31.029Z"
+      "reviewedAt": "2026-04-05T10:37:31.029Z",
+      "id": "x6hjninwv8y7"
     },
     {
       "poolId": "4ajnvb",
@@ -4291,7 +4418,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:31.030Z"
+      "reviewedAt": "2026-04-05T10:37:31.030Z",
+      "id": "iwd1ufuv1utw"
     },
     {
       "poolId": "wofxpe",
@@ -4320,7 +4448,8 @@
       ],
       "category": "הרבה שחקנים בקופה",
       "categoryId": "multiway_pots",
-      "reviewedAt": "2026-04-05T10:37:31.030Z"
+      "reviewedAt": "2026-04-05T10:37:31.030Z",
+      "id": "iq67gux2x59s"
     },
     {
       "poolId": "hotnmn",
@@ -4349,10 +4478,11 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:37:31.030Z"
+      "reviewedAt": "2026-04-05T10:37:31.030Z",
+      "id": "jda40kikwuy7"
     },
     {
-      "id": 2,
+      "id": "br228goik115",
       "situation": "העלית ל-400 מהכפתור עם ערימה של 10,000. שחקן שמרני מאוד מהבליינד הגדול מעלה ל-1,500. הקופה כעת 1,950.",
       "yourCards": "A♠ Q♦",
       "options": [
@@ -4407,7 +4537,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:37:49.003Z"
+      "reviewedAt": "2026-04-05T10:37:49.003Z",
+      "id": "qgi9l0a73hm4"
     },
     {
       "poolId": "5dr13q",
@@ -4436,10 +4567,11 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:37:49.004Z"
+      "reviewedAt": "2026-04-05T10:37:49.004Z",
+      "id": "2bv3brlwhzvy"
     },
     {
-      "id": 5,
+      "id": "opywfzm9t222",
       "situation": "קופה עם העלאה חוזרת לפני הפלופ (3,000 בקופה). בלוח יש Q♣ 8♠ 3♦. היריב, שחקן שמרני, מבצע הימור של 2,200. נשארו לך 7,000.",
       "yourCards": "J♠ J♦",
       "options": [
@@ -4495,10 +4627,11 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:37:49.004Z"
+      "reviewedAt": "2026-04-05T10:37:49.004Z",
+      "id": "tm29u2o4j1na"
     },
     {
-      "id": 7,
+      "id": "fev73wd4cfsh",
       "situation": "העלית ל-300, שחקן אגרסיבי העלה ל-1,000, קראת. הלוח הוא A♠ K♣ 3♦. הקופה 2,150. היריב מהמר 1,100.",
       "yourCards": "Q♠ Q♥",
       "options": [
@@ -4554,7 +4687,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:14.261Z"
+      "reviewedAt": "2026-04-05T10:38:14.261Z",
+      "id": "9z4mmzbi8dm3"
     },
     {
       "poolId": "6osp3y",
@@ -4583,7 +4717,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:14.261Z"
+      "reviewedAt": "2026-04-05T10:38:14.261Z",
+      "id": "6tqf99d7iha2"
     },
     {
       "poolId": "9gj57d",
@@ -4612,7 +4747,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:14.261Z"
+      "reviewedAt": "2026-04-05T10:38:14.261Z",
+      "id": "f1z0sbd8minn"
     },
     {
       "poolId": "2ke0kq",
@@ -4641,10 +4777,11 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:14.261Z"
+      "reviewedAt": "2026-04-05T10:38:14.261Z",
+      "id": "xbjk8k60ly7t"
     },
     {
-      "id": 12,
+      "id": "6ur0qdf4ku0w",
       "situation": "אתה בעמדת ה-MP עם ערימה של 15,000. שחקן מעלה ל-300, אתה מעלה ל-1,000 עם זוג 4. הוא קורא. הלוח הוא A♠ J♦ 4♣. הוא מבצע צ'ק. הקופה 2,150.",
       "yourCards": "4♠ 4♥",
       "options": [
@@ -4700,7 +4837,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:33.472Z"
+      "reviewedAt": "2026-04-05T10:38:33.472Z",
+      "id": "olui2qstdmys"
     },
     {
       "poolId": "bmocnx",
@@ -4729,10 +4867,11 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:38:33.472Z"
+      "reviewedAt": "2026-04-05T10:38:33.472Z",
+      "id": "0024g3j48i89"
     },
     {
-      "id": 15,
+      "id": "01a7x97d4trw",
       "situation": "קופה עם העלאה חוזרת (3,200 בקופה). הלוח הוא A♦ 10♦ 5♠. היריב מהמר 2,500. נשארו לך 15,000.",
       "yourCards": "K♦ Q♦",
       "options": [
@@ -4788,7 +4927,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:33.472Z"
+      "reviewedAt": "2026-04-05T10:38:33.472Z",
+      "id": "8dyk04fia2i6"
     },
     {
       "poolId": "x2zx80",
@@ -4817,7 +4957,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:33.472Z"
+      "reviewedAt": "2026-04-05T10:38:33.472Z",
+      "id": "ig0973q0qu0m"
     },
     {
       "poolId": "rpfdfa",
@@ -4846,7 +4987,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:53.730Z"
+      "reviewedAt": "2026-04-05T10:38:53.730Z",
+      "id": "fbc7kkly066k"
     },
     {
       "poolId": "tcw2g1",
@@ -4875,7 +5017,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:53.730Z"
+      "reviewedAt": "2026-04-05T10:38:53.730Z",
+      "id": "4pleczbrjx5d"
     },
     {
       "poolId": "so3eku",
@@ -4904,7 +5047,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:53.730Z"
+      "reviewedAt": "2026-04-05T10:38:53.730Z",
+      "id": "74fecnnljhgl"
     },
     {
       "poolId": "g9wa2q",
@@ -4933,7 +5077,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:53.730Z"
+      "reviewedAt": "2026-04-05T10:38:53.730Z",
+      "id": "46vb9dbedn36"
     },
     {
       "poolId": "ab7mf5",
@@ -4962,7 +5107,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:38:53.730Z"
+      "reviewedAt": "2026-04-05T10:38:53.730Z",
+      "id": "joe9oca09tia"
     },
     {
       "poolId": "7lrsc8",
@@ -4991,7 +5137,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:13.009Z"
+      "reviewedAt": "2026-04-05T10:39:13.009Z",
+      "id": "u9o782tltp5w"
     },
     {
       "poolId": "18kro1",
@@ -5020,7 +5167,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:13.009Z"
+      "reviewedAt": "2026-04-05T10:39:13.009Z",
+      "id": "s551gt523nlc"
     },
     {
       "poolId": "jdhqan",
@@ -5049,7 +5197,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:13.009Z"
+      "reviewedAt": "2026-04-05T10:39:13.009Z",
+      "id": "hfm24rhinh26"
     },
     {
       "poolId": "fhs73w",
@@ -5078,7 +5227,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:13.009Z"
+      "reviewedAt": "2026-04-05T10:39:13.009Z",
+      "id": "fuazytv64xil"
     },
     {
       "poolId": "w7gak1",
@@ -5107,7 +5257,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:13.009Z"
+      "reviewedAt": "2026-04-05T10:39:13.009Z",
+      "id": "35t37lerjp8m"
     },
     {
       "poolId": "vli78m",
@@ -5135,7 +5286,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:33.715Z"
+      "reviewedAt": "2026-04-05T10:39:33.715Z",
+      "id": "1hwzxa7ebbmu"
     },
     {
       "poolId": "8hpqj7",
@@ -5164,7 +5316,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:33.716Z"
+      "reviewedAt": "2026-04-05T10:39:33.716Z",
+      "id": "qn12f6dnzfze"
     },
     {
       "poolId": "d0qs5i",
@@ -5193,7 +5346,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:39:33.716Z"
+      "reviewedAt": "2026-04-05T10:39:33.716Z",
+      "id": "nv03lzf9v8bu"
     },
     {
       "poolId": "v7rjet",
@@ -5222,7 +5376,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:33.716Z"
+      "reviewedAt": "2026-04-05T10:39:33.716Z",
+      "id": "hb49u8wx6y97"
     },
     {
       "poolId": "8v94q5",
@@ -5251,7 +5406,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:33.716Z"
+      "reviewedAt": "2026-04-05T10:39:33.716Z",
+      "id": "yk29tyl8rlfh"
     },
     {
       "poolId": "yn8sae",
@@ -5280,7 +5436,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:53.184Z"
+      "reviewedAt": "2026-04-05T10:39:53.184Z",
+      "id": "vxg4qu2f0fsc"
     },
     {
       "poolId": "ysj3vn",
@@ -5309,7 +5466,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:53.184Z"
+      "reviewedAt": "2026-04-05T10:39:53.184Z",
+      "id": "5c0q1aiqwsi7"
     },
     {
       "poolId": "aokiio",
@@ -5338,7 +5496,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:53.184Z"
+      "reviewedAt": "2026-04-05T10:39:53.184Z",
+      "id": "xme4hqrk48zq"
     },
     {
       "poolId": "go7tqk",
@@ -5367,7 +5526,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:53.184Z"
+      "reviewedAt": "2026-04-05T10:39:53.184Z",
+      "id": "h1irb2jggj8b"
     },
     {
       "poolId": "4yfwbq",
@@ -5396,7 +5556,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:39:53.184Z"
+      "reviewedAt": "2026-04-05T10:39:53.184Z",
+      "id": "piumgdccv0dr"
     },
     {
       "poolId": "arxf6w",
@@ -5425,7 +5586,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:25.485Z"
+      "reviewedAt": "2026-04-05T10:40:25.485Z",
+      "id": "61r6y87j4nk4"
     },
     {
       "poolId": "1ou8ni",
@@ -5454,7 +5616,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:25.485Z"
+      "reviewedAt": "2026-04-05T10:40:25.485Z",
+      "id": "zupmglzdhh3c"
     },
     {
       "poolId": "85g9aa",
@@ -5483,7 +5646,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:25.486Z"
+      "reviewedAt": "2026-04-05T10:40:25.486Z",
+      "id": "rrhmfs4fd690"
     },
     {
       "poolId": "5optvl",
@@ -5512,7 +5676,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:25.486Z"
+      "reviewedAt": "2026-04-05T10:40:25.486Z",
+      "id": "m9o7fkh99gai"
     },
     {
       "poolId": "jiuxuw",
@@ -5541,7 +5706,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:25.486Z"
+      "reviewedAt": "2026-04-05T10:40:25.486Z",
+      "id": "xtwka4xi0qvy"
     },
     {
       "poolId": "gmv3lu",
@@ -5570,7 +5736,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:49.248Z"
+      "reviewedAt": "2026-04-05T10:40:49.248Z",
+      "id": "j3cdsrykjrnj"
     },
     {
       "poolId": "yaczm1",
@@ -5599,7 +5766,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:49.248Z"
+      "reviewedAt": "2026-04-05T10:40:49.248Z",
+      "id": "rqwshwkkuk1j"
     },
     {
       "poolId": "qlummr",
@@ -5628,7 +5796,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:40:49.248Z"
+      "reviewedAt": "2026-04-05T10:40:49.248Z",
+      "id": "1gd6k90myfdj"
     },
     {
       "poolId": "iwytf7",
@@ -5657,7 +5826,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:40:49.248Z"
+      "reviewedAt": "2026-04-05T10:40:49.248Z",
+      "id": "fbxkw2veesy3"
     },
     {
       "poolId": "3d2cej",
@@ -5686,7 +5856,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:40:49.249Z"
+      "reviewedAt": "2026-04-05T10:40:49.249Z",
+      "id": "jhjkkswvd8wz"
     },
     {
       "poolId": "afwryw",
@@ -5714,7 +5885,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:08.292Z"
+      "reviewedAt": "2026-04-05T10:41:08.292Z",
+      "id": "ff4il4z2903u"
     },
     {
       "poolId": "amsvb0",
@@ -5742,7 +5914,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:08.292Z"
+      "reviewedAt": "2026-04-05T10:41:08.292Z",
+      "id": "30exbewl001v"
     },
     {
       "poolId": "iqhtut",
@@ -5771,7 +5944,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:08.292Z"
+      "reviewedAt": "2026-04-05T10:41:08.292Z",
+      "id": "cqiehbqnqwqh"
     },
     {
       "poolId": "2bpm65",
@@ -5800,7 +5974,8 @@
       ],
       "categoryId": "stack_depth",
       "category": "גודל הערימה",
-      "reviewedAt": "2026-04-05T10:41:08.292Z"
+      "reviewedAt": "2026-04-05T10:41:08.292Z",
+      "id": "8tugrxqovkr8"
     },
     {
       "poolId": "yvu723",
@@ -5829,7 +6004,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:08.292Z"
+      "reviewedAt": "2026-04-05T10:41:08.292Z",
+      "id": "g6t0u8efacvw"
     },
     {
       "poolId": "lxe9p9",
@@ -5858,7 +6034,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:32.684Z"
+      "reviewedAt": "2026-04-05T10:41:32.684Z",
+      "id": "c2jg2ehgbwfs"
     },
     {
       "poolId": "mkci82",
@@ -5887,7 +6064,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:32.684Z"
+      "reviewedAt": "2026-04-05T10:41:32.684Z",
+      "id": "6kyilu9y95aa"
     },
     {
       "poolId": "42xgmu",
@@ -5916,7 +6094,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:32.684Z"
+      "reviewedAt": "2026-04-05T10:41:32.684Z",
+      "id": "pzrbsklmexkq"
     },
     {
       "poolId": "wv5m3g",
@@ -5945,7 +6124,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:32.684Z"
+      "reviewedAt": "2026-04-05T10:41:32.684Z",
+      "id": "6o6fqla4srjd"
     },
     {
       "poolId": "pveiqa",
@@ -5974,7 +6154,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:32.684Z"
+      "reviewedAt": "2026-04-05T10:41:32.684Z",
+      "id": "0950xpidxuvi"
     },
     {
       "poolId": "mqu8uu",
@@ -6002,7 +6183,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:51.990Z"
+      "reviewedAt": "2026-04-05T10:41:51.990Z",
+      "id": "r18m90454eaw"
     },
     {
       "poolId": "qurueb",
@@ -6031,7 +6213,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:51.990Z"
+      "reviewedAt": "2026-04-05T10:41:51.990Z",
+      "id": "5wy9vb9poknh"
     },
     {
       "poolId": "5178os",
@@ -6059,10 +6242,11 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:41:51.990Z"
+      "reviewedAt": "2026-04-05T10:41:51.990Z",
+      "id": "wuiee8fqqi7u"
     },
     {
-      "id": 1,
+      "id": "fytwoan6kvmz",
       "situation": "אתה יושב בעמדת הכפתור (אחרון לדבר). כולם פרשו עד אליך, ויש לך יד חזקה בינונית. הבליינדים הם שחקנים שמרנים מאוד שנוטים לוותר בקלות.",
       "yourCards": "K♣ J♦",
       "options": [
@@ -6117,7 +6301,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:41:51.990Z"
+      "reviewedAt": "2026-04-05T10:41:51.990Z",
+      "id": "qb2atobueo7e"
     },
     {
       "poolId": "a5j1q9",
@@ -6145,7 +6330,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:11.162Z"
+      "reviewedAt": "2026-04-05T10:42:11.162Z",
+      "id": "lkale0hi4fzy"
     },
     {
       "poolId": "hljw47",
@@ -6173,7 +6359,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:11.162Z"
+      "reviewedAt": "2026-04-05T10:42:11.162Z",
+      "id": "quu9avksefe4"
     },
     {
       "poolId": "qrjqyo",
@@ -6201,7 +6388,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:11.162Z"
+      "reviewedAt": "2026-04-05T10:42:11.162Z",
+      "id": "r39vele2hv82"
     },
     {
       "poolId": "19pvcx",
@@ -6229,10 +6417,11 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:11.162Z"
+      "reviewedAt": "2026-04-05T10:42:11.162Z",
+      "id": "8gajwa8qk73l"
     },
     {
-      "id": 7,
+      "id": "gyaampqc2e9z",
       "situation": "פלופ: 4♠ 9♦ J♣. אתה במיקום (אחרון לדבר) והיריב האגרסיבי שלך הימר 500 לתוך קופה של 700. יש לך זוג בינוני.",
       "yourCards": "9♥ 8♥",
       "options": [
@@ -6263,7 +6452,7 @@
       "reviewedAt": "2026-04-05T10:42:11.162Z"
     },
     {
-      "id": 8,
+      "id": "sfip8h01he9g",
       "situation": "אתה במיקום מול שחקן שמרני. בסיבוב 'התור' (Turn) יצא הלוח: 2♠ 5♦ 8♥ K♣. הקופה 1,200. היריב עושה צ'ק.",
       "yourCards": "7♠ 7♦",
       "options": [
@@ -6319,7 +6508,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:42:36.790Z",
-      "category": "חסר קלף לצבע"
+      "category": "חסר קלף לצבע",
+      "id": "48nrvvetiyx0"
     },
     {
       "id": 10,
@@ -6378,7 +6568,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:36.790Z"
+      "reviewedAt": "2026-04-05T10:42:36.790Z",
+      "id": "9wzy0ay04s1t"
     },
     {
       "poolId": "eoy8fx",
@@ -6407,7 +6598,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:36.790Z"
+      "reviewedAt": "2026-04-05T10:42:36.790Z",
+      "id": "2pt3gjwy7t4q"
     },
     {
       "poolId": "kr4f56",
@@ -6435,7 +6627,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:56.412Z"
+      "reviewedAt": "2026-04-05T10:42:56.412Z",
+      "id": "b6dbn1a9ytfy"
     },
     {
       "poolId": "86bnbt",
@@ -6463,10 +6656,11 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:42:56.412Z"
+      "reviewedAt": "2026-04-05T10:42:56.412Z",
+      "id": "2iypaojx9yl3"
     },
     {
-      "id": 15,
+      "id": "tqdpb4n4w4w6",
       "situation": "אתה בבליינד הגדול. שחקן שמרני מאוד מעלה מעמדה ראשונה (UTG) ל-400. כולם פורשים אליך.",
       "yourCards": "A♥ 8♣",
       "options": [
@@ -6521,7 +6715,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:42:56.412Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "f5922y65qqyt"
     },
     {
       "poolId": "9hgao7",
@@ -6549,7 +6744,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:42:56.412Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "1jelynutsa4u"
     },
     {
       "poolId": "drsh6p",
@@ -6578,7 +6774,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:16.288Z"
+      "reviewedAt": "2026-04-05T10:43:16.288Z",
+      "id": "zl9ux8yrf4vb"
     },
     {
       "poolId": "7czlfy",
@@ -6606,7 +6803,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:16.288Z"
+      "reviewedAt": "2026-04-05T10:43:16.288Z",
+      "id": "yil0ebgrovu4"
     },
     {
       "poolId": "a6bv2j",
@@ -6635,7 +6833,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:16.288Z"
+      "reviewedAt": "2026-04-05T10:43:16.288Z",
+      "id": "lmpuuhbtqh7q"
     },
     {
       "poolId": "mxjt3i",
@@ -6663,7 +6862,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:16.288Z"
+      "reviewedAt": "2026-04-05T10:43:16.288Z",
+      "id": "q81juxxm1ndp"
     },
     {
       "poolId": "27asay",
@@ -6692,7 +6892,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:16.288Z"
+      "reviewedAt": "2026-04-05T10:43:16.288Z",
+      "id": "rayrip59dtau"
     },
     {
       "poolId": "tgkrzr",
@@ -6720,7 +6921,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:34.500Z"
+      "reviewedAt": "2026-04-05T10:43:34.500Z",
+      "id": "j0bdpqmgx8dm"
     },
     {
       "poolId": "h6r7ea",
@@ -6748,10 +6950,11 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:34.500Z"
+      "reviewedAt": "2026-04-05T10:43:34.500Z",
+      "id": "hmb0lm7i4kws"
     },
     {
-      "id": 10,
+      "id": "mq2slr9gw8ch",
       "situation": "הקופה 2,000. הלוח הוא 8♥ 8♦ 3♣ 4♠ 9♥. יש לך שלישיית שמיניות. היריב הוא שחקן 'תחנה' (קורא לכל דבר).",
       "yourCards": "8♠ 7♠",
       "options": [
@@ -6781,7 +6984,7 @@
       "reviewedAt": "2026-04-05T10:43:34.501Z"
     },
     {
-      "id": 11,
+      "id": "iyxim0ghi3hu",
       "situation": "הקופה 6,000. הלוח מראה 2♦ 5♥ 9♠ J♣ A♦. יש לך זוג אסים עם קיקר (קלף נלווה) חלש. היריב הוא שחקן אגרסיבי שהימר חזק בסיבובים הקודמים.",
       "yourCards": "A♣ 3♣",
       "options": [
@@ -6836,7 +7039,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:34.501Z"
+      "reviewedAt": "2026-04-05T10:43:34.501Z",
+      "id": "7tvu9zqri040"
     },
     {
       "poolId": "hnocjq",
@@ -6864,7 +7068,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:50.845Z"
+      "reviewedAt": "2026-04-05T10:43:50.845Z",
+      "id": "ves8kxubqwli"
     },
     {
       "poolId": "2rx4x4",
@@ -6892,10 +7097,11 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:43:50.845Z"
+      "reviewedAt": "2026-04-05T10:43:50.845Z",
+      "id": "ln6vqm1i24q3"
     },
     {
-      "id": 15,
+      "id": "or7sqw1eci1s",
       "situation": "הקופה 2,000. הלוח הוא A♣ A♦ J♥ 3♠ 5♣. יש לך שלישיית אסים עם קיקר מלך. היריב שחקן שמרני שחושב שיש לך בלוף.",
       "yourCards": "A♠ K♦",
       "options": [
@@ -6924,7 +7130,7 @@
       "reviewedAt": "2026-04-05T10:43:50.845Z"
     },
     {
-      "id": 1,
+      "id": "47ev469uppdg",
       "situation": "אתה בפוזיציית הכפתור עם K♠ J♦. שחקן אגרסיבי מהעמדה האמצעית העלה ל-400 ואתה השווית. הפלופ הוא K♥ 9♦ 8♦. היריב מהמר 700 לתוך קופה של 950.",
       "yourCards": "K♠ J♦",
       "options": [
@@ -6954,7 +7160,7 @@
       "reviewedAt": "2026-04-05T10:43:50.845Z"
     },
     {
-      "id": 2,
+      "id": "mvw3ww5wkhmv",
       "situation": "אתה ב-BB עם A♣ 7♣. שחקן שמרני מאוד מהעמדה הראשונה העלה ל-500 ואתה השווית. הפלופ הוא A♥ T♠ 9♠. אתה עושה צ'ק והוא מהמר 1,000 לתוך קופה של 1,150.",
       "yourCards": "A♣ 7♣",
       "options": [
@@ -7010,7 +7216,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:10.966Z"
+      "reviewedAt": "2026-04-05T10:44:10.966Z",
+      "id": "21xrbp7hhp9c"
     },
     {
       "poolId": "c1fe79",
@@ -7039,7 +7246,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:10.966Z"
+      "reviewedAt": "2026-04-05T10:44:10.966Z",
+      "id": "662wovku094e"
     },
     {
       "poolId": "xs8i5q",
@@ -7068,7 +7276,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:10.966Z"
+      "reviewedAt": "2026-04-05T10:44:10.966Z",
+      "id": "pn4yhycztp64"
     },
     {
       "poolId": "ml0nqq",
@@ -7097,7 +7306,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:10.966Z"
+      "reviewedAt": "2026-04-05T10:44:10.966Z",
+      "id": "kk3aelwx7r3m"
     },
     {
       "poolId": "dv5xs6",
@@ -7126,7 +7336,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:10.967Z"
+      "reviewedAt": "2026-04-05T10:44:10.967Z",
+      "id": "ni55fla0hlj2"
     },
     {
       "poolId": "gnziy",
@@ -7155,7 +7366,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:29.969Z"
+      "reviewedAt": "2026-04-05T10:44:29.969Z",
+      "id": "qs93jy5eny3h"
     },
     {
       "poolId": "o0l1df",
@@ -7184,7 +7396,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:29.969Z"
+      "reviewedAt": "2026-04-05T10:44:29.969Z",
+      "id": "nbzbd2h9vxkv"
     },
     {
       "poolId": "o3j9jx",
@@ -7213,10 +7426,11 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:29.969Z"
+      "reviewedAt": "2026-04-05T10:44:29.969Z",
+      "id": "31xwdbdfuyj6"
     },
     {
-      "id": 12,
+      "id": "ax1jmid0tj6b",
       "situation": "אתה ב-BTN עם K♣ 4♣. השווית להעלאה של 300. הפלופ הוא K♦ T♦ 9♥. היריב מהמר 200 לתוך קופה של 750.",
       "yourCards": "K♣ 4♣",
       "options": [
@@ -7302,7 +7516,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:47.906Z"
+      "reviewedAt": "2026-04-05T10:44:47.906Z",
+      "id": "r32hre0xna8e"
     },
     {
       "poolId": "b82fap",
@@ -7331,7 +7546,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:44:47.906Z"
+      "reviewedAt": "2026-04-05T10:44:47.906Z",
+      "id": "3n5dloouwcl0"
     },
     {
       "poolId": "wo2uij",
@@ -7360,7 +7576,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:44:47.906Z"
+      "reviewedAt": "2026-04-05T10:44:47.906Z",
+      "id": "8o7gbai8oi37"
     },
     {
       "poolId": "qo456n",
@@ -7389,7 +7606,8 @@
       ],
       "categoryId": "flush_draw",
       "category": "חסר קלף לצבע",
-      "reviewedAt": "2026-04-05T10:44:47.906Z"
+      "reviewedAt": "2026-04-05T10:44:47.906Z",
+      "id": "2tji4rm71gim"
     },
     {
       "poolId": "sd2yfu",
@@ -7418,7 +7636,8 @@
       ],
       "categoryId": "flush_draw",
       "category": "חסר קלף לצבע",
-      "reviewedAt": "2026-04-05T10:44:47.906Z"
+      "reviewedAt": "2026-04-05T10:44:47.906Z",
+      "id": "veb4cspbrgfm"
     },
     {
       "poolId": "42ma01",
@@ -7447,7 +7666,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:08.787Z"
+      "reviewedAt": "2026-04-05T10:45:08.787Z",
+      "id": "9yn9baxq8qpb"
     },
     {
       "poolId": "99zdxs",
@@ -7476,7 +7696,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:08.787Z"
+      "reviewedAt": "2026-04-05T10:45:08.787Z",
+      "id": "xtgn3t5ak9je"
     },
     {
       "poolId": "2jn7qn",
@@ -7505,7 +7726,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:08.787Z"
+      "reviewedAt": "2026-04-05T10:45:08.787Z",
+      "id": "ny0y07yqy323"
     },
     {
       "poolId": "vcojzi",
@@ -7534,7 +7756,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:08.787Z"
+      "reviewedAt": "2026-04-05T10:45:08.787Z",
+      "id": "q8uuatwnif92"
     },
     {
       "poolId": "5bnb52",
@@ -7563,7 +7786,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:08.787Z"
+      "reviewedAt": "2026-04-05T10:45:08.787Z",
+      "id": "afm75152sk89"
     },
     {
       "poolId": "34xq7z",
@@ -7592,7 +7816,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:32.861Z"
+      "reviewedAt": "2026-04-05T10:45:32.861Z",
+      "id": "pzm3ux86ewep"
     },
     {
       "poolId": "nf2znt",
@@ -7621,7 +7846,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:32.861Z"
+      "reviewedAt": "2026-04-05T10:45:32.861Z",
+      "id": "ijayhdf6cdyq"
     },
     {
       "poolId": "qtgobp",
@@ -7650,7 +7876,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:32.861Z"
+      "reviewedAt": "2026-04-05T10:45:32.861Z",
+      "id": "w0iux5jelbvm"
     },
     {
       "poolId": "oy34ga",
@@ -7679,7 +7906,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:32.861Z"
+      "reviewedAt": "2026-04-05T10:45:32.861Z",
+      "id": "skd04ttfcesp"
     },
     {
       "poolId": "iik2oe",
@@ -7708,7 +7936,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:32.861Z"
+      "reviewedAt": "2026-04-05T10:45:32.861Z",
+      "id": "wv96oyyvr3xo"
     },
     {
       "poolId": "7v5e1i",
@@ -7737,7 +7966,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:55.608Z"
+      "reviewedAt": "2026-04-05T10:45:55.608Z",
+      "id": "ba1o0vcavc07"
     },
     {
       "poolId": "7s59ls",
@@ -7766,7 +7996,8 @@
       ],
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
-      "reviewedAt": "2026-04-05T10:45:55.608Z"
+      "reviewedAt": "2026-04-05T10:45:55.608Z",
+      "id": "8v987drst2eh"
     },
     {
       "poolId": "ol0ya8",
@@ -7795,7 +8026,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:45:55.608Z"
+      "reviewedAt": "2026-04-05T10:45:55.608Z",
+      "id": "k47qay9evdvx"
     },
     {
       "poolId": "f2i4tr",
@@ -7824,7 +8056,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:45:55.608Z"
+      "reviewedAt": "2026-04-05T10:45:55.608Z",
+      "id": "il96fnb1w5sd"
     },
     {
       "poolId": "q1kp1p",
@@ -7853,7 +8086,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:45:55.608Z"
+      "reviewedAt": "2026-04-05T10:45:55.608Z",
+      "id": "7xos4sf7achb"
     },
     {
       "poolId": "mi0ks3",
@@ -7882,10 +8116,11 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:12.279Z"
+      "reviewedAt": "2026-04-05T10:46:12.279Z",
+      "id": "kyodb7sdnuga"
     },
     {
-      "id": 5,
+      "id": "h7gfbyijx36r",
       "situation": "אתה בעמדת ה-Cutoff עם 25,000. שחקן שמרני מאוד מעלה מהעמדה הראשונה ל-500. כולם מתקפלים אליך.",
       "yourCards": "6♥ 6♣",
       "options": [
@@ -7971,10 +8206,11 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:12.279Z"
+      "reviewedAt": "2026-04-05T10:46:12.279Z",
+      "id": "q58pgzpfn9fr"
     },
     {
-      "id": 8,
+      "id": "e3mp41gp4rnx",
       "situation": "אתה בעמדה שלפני הקאטאוף עם 18,000. שחקן שמרני מעלה ל-500 מהעמדה האמצעית. אתה מחליט מה לעשות.",
       "yourCards": "4♦ 4♥",
       "options": [
@@ -8030,10 +8266,11 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:34.114Z"
+      "reviewedAt": "2026-04-05T10:46:34.114Z",
+      "id": "k5cc7nkiv4lh"
     },
     {
-      "id": 10,
+      "id": "3u5msypb1zh8",
       "situation": "אתה בעמדת הכפתור עם 22,000. שחקן אגרסיבי מעלה ל-500, ושני שחקנים נוספים קראו לפניך.",
       "yourCards": "2♥ 2♣",
       "options": [
@@ -8089,7 +8326,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:34.114Z"
+      "reviewedAt": "2026-04-05T10:46:34.114Z",
+      "id": "jeqrhwvp3y7e"
     },
     {
       "poolId": "jaaupi",
@@ -8118,7 +8356,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:34.114Z"
+      "reviewedAt": "2026-04-05T10:46:34.114Z",
+      "id": "63vaxr4ss6q1"
     },
     {
       "poolId": "sb9rfg",
@@ -8147,7 +8386,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:46:34.114Z"
+      "reviewedAt": "2026-04-05T10:46:34.114Z",
+      "id": "ivmdi1f1faej"
     },
     {
       "id": 14,
@@ -8180,7 +8420,7 @@
       "reviewedAt": "2026-04-05T10:46:51.319Z"
     },
     {
-      "id": 15,
+      "id": "f9u3tdmnydfy",
       "situation": "אתה בבליינד הקטן עם 8,500. שחקן מהעמדה המוקדמת מעלה ל-800. כולם מתקפלים אליך.",
       "yourCards": "2♠ 2♦",
       "options": [
@@ -8236,7 +8476,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "reviewedAt": "2026-04-05T10:46:51.319Z"
+      "reviewedAt": "2026-04-05T10:46:51.319Z",
+      "id": "bs3rona25by9"
     },
     {
       "poolId": "10um6s",
@@ -8265,7 +8506,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:46:51.319Z"
+      "reviewedAt": "2026-04-05T10:46:51.319Z",
+      "id": "4ev13fid1hat"
     },
     {
       "poolId": "y3vi92",
@@ -8294,7 +8536,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:46:51.319Z"
+      "reviewedAt": "2026-04-05T10:46:51.319Z",
+      "id": "9dzq4czun01e"
     },
     {
       "poolId": "o16xyo",
@@ -8323,7 +8566,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:10.680Z"
+      "reviewedAt": "2026-04-05T10:47:10.680Z",
+      "id": "4epe6kpcargr"
     },
     {
       "poolId": "z7xyvs",
@@ -8352,7 +8596,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:10.680Z"
+      "reviewedAt": "2026-04-05T10:47:10.680Z",
+      "id": "zuyws5njusft"
     },
     {
       "poolId": "olgmbu",
@@ -8381,7 +8626,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:10.681Z"
+      "reviewedAt": "2026-04-05T10:47:10.681Z",
+      "id": "o9yr7gr73awc"
     },
     {
       "poolId": "weiyo0",
@@ -8410,7 +8656,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:10.681Z"
+      "reviewedAt": "2026-04-05T10:47:10.681Z",
+      "id": "ojkcqz33a2f1"
     },
     {
       "poolId": "dggvq9",
@@ -8439,7 +8686,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:10.681Z"
+      "reviewedAt": "2026-04-05T10:47:10.681Z",
+      "id": "n80zaydz886y"
     },
     {
       "poolId": "tlpgst",
@@ -8467,7 +8715,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:27.469Z"
+      "reviewedAt": "2026-04-05T10:47:27.469Z",
+      "id": "nun1xw2h3quv"
     },
     {
       "poolId": "bqqono",
@@ -8496,7 +8745,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:27.469Z"
+      "reviewedAt": "2026-04-05T10:47:27.469Z",
+      "id": "pfob9w7s3ctn"
     },
     {
       "poolId": "23hfpa",
@@ -8524,7 +8774,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:27.469Z"
+      "reviewedAt": "2026-04-05T10:47:27.469Z",
+      "id": "17y7dkyh6tkq"
     },
     {
       "poolId": "4sx3pr",
@@ -8553,7 +8804,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:27.469Z"
+      "reviewedAt": "2026-04-05T10:47:27.469Z",
+      "id": "y5mf4scru3z1"
     },
     {
       "poolId": "1gfktd",
@@ -8582,7 +8834,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:27.469Z"
+      "reviewedAt": "2026-04-05T10:47:27.469Z",
+      "id": "r3k76m32o1ce"
     },
     {
       "poolId": "8houe5",
@@ -8610,7 +8863,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:43.385Z"
+      "reviewedAt": "2026-04-05T10:47:43.385Z",
+      "id": "uwh8hb3dglpm"
     },
     {
       "poolId": "5nngxr",
@@ -8639,7 +8893,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:43.385Z"
+      "reviewedAt": "2026-04-05T10:47:43.385Z",
+      "id": "5ch7nr6wz6xv"
     },
     {
       "poolId": "30oasv",
@@ -8667,7 +8922,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:43.385Z"
+      "reviewedAt": "2026-04-05T10:47:43.385Z",
+      "id": "s9mg3t5yohna"
     },
     {
       "poolId": "uqy13n",
@@ -8696,7 +8952,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:43.385Z"
+      "reviewedAt": "2026-04-05T10:47:43.385Z",
+      "id": "o0ug4p5tn147"
     },
     {
       "poolId": "5hyot7",
@@ -8724,7 +8981,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:47:43.385Z"
+      "reviewedAt": "2026-04-05T10:47:43.385Z",
+      "id": "kktdzrpqso5t"
     },
     {
       "poolId": "vtseia",
@@ -8752,7 +9010,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:48:01.414Z"
+      "reviewedAt": "2026-04-05T10:48:01.414Z",
+      "id": "ja1xhb97qd8r"
     },
     {
       "poolId": "dzwsgs",
@@ -8781,7 +9040,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:48:01.414Z"
+      "reviewedAt": "2026-04-05T10:48:01.414Z",
+      "id": "8oagp212ndqg"
     },
     {
       "poolId": "hju02k",
@@ -8810,7 +9070,8 @@
       ],
       "category": "חסר קלף לסדרה",
       "categoryId": "straight_draw",
-      "reviewedAt": "2026-04-05T10:48:01.414Z"
+      "reviewedAt": "2026-04-05T10:48:01.414Z",
+      "id": "r3s1lffbinj4"
     },
     {
       "poolId": "6j59m1",
@@ -8839,7 +9100,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:01.414Z"
+      "reviewedAt": "2026-04-05T10:48:01.414Z",
+      "id": "o7d3xv5tvzu9"
     },
     {
       "poolId": "azba1n",
@@ -8868,7 +9130,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:01.414Z"
+      "reviewedAt": "2026-04-05T10:48:01.414Z",
+      "id": "l0sverd5gz7v"
     },
     {
       "poolId": "ql97wd",
@@ -8897,7 +9160,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:16.838Z"
+      "reviewedAt": "2026-04-05T10:48:16.838Z",
+      "id": "hgm0ruk2pgi1"
     },
     {
       "poolId": "sjx4oq",
@@ -8925,7 +9189,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:16.838Z"
+      "reviewedAt": "2026-04-05T10:48:16.838Z",
+      "id": "avis79qd7ctg"
     },
     {
       "poolId": "ar5jf5",
@@ -8954,7 +9219,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:16.838Z"
+      "reviewedAt": "2026-04-05T10:48:16.838Z",
+      "id": "mdblqpxwnp27"
     },
     {
       "poolId": "k9wniv",
@@ -8983,7 +9249,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:16.838Z"
+      "reviewedAt": "2026-04-05T10:48:16.838Z",
+      "id": "hwaqugt7kijs"
     },
     {
       "poolId": "7pun00",
@@ -9012,7 +9279,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:16.838Z"
+      "reviewedAt": "2026-04-05T10:48:16.838Z",
+      "id": "f68lk1szsnck"
     },
     {
       "poolId": "z05nl7",
@@ -9040,7 +9308,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:41.019Z"
+      "reviewedAt": "2026-04-05T10:48:41.019Z",
+      "id": "eb64zrwv6xd0"
     },
     {
       "poolId": "i93m8c",
@@ -9069,7 +9338,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:41.019Z"
+      "reviewedAt": "2026-04-05T10:48:41.019Z",
+      "id": "gs5kjdeqa2sh"
     },
     {
       "poolId": "72jrkw",
@@ -9098,7 +9368,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:41.019Z"
+      "reviewedAt": "2026-04-05T10:48:41.019Z",
+      "id": "mb0t4xjodapu"
     },
     {
       "poolId": "x1jgyk",
@@ -9127,7 +9398,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:41.019Z"
+      "reviewedAt": "2026-04-05T10:48:41.019Z",
+      "id": "c6njidtlhh10"
     },
     {
       "poolId": "z73lcy",
@@ -9155,7 +9427,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:41.019Z"
+      "reviewedAt": "2026-04-05T10:48:41.019Z",
+      "id": "9mop1p5ap5zh"
     },
     {
       "poolId": "qe70j",
@@ -9184,7 +9457,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:58.318Z"
+      "reviewedAt": "2026-04-05T10:48:58.318Z",
+      "id": "2a8v029rbxk4"
     },
     {
       "poolId": "37p25z",
@@ -9213,7 +9487,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:58.318Z"
+      "reviewedAt": "2026-04-05T10:48:58.318Z",
+      "id": "0ul6d3q6oihz"
     },
     {
       "poolId": "ufp5ja",
@@ -9242,7 +9517,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:58.318Z"
+      "reviewedAt": "2026-04-05T10:48:58.318Z",
+      "id": "pgrb2p262oag"
     },
     {
       "poolId": "frrgx0",
@@ -9271,7 +9547,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:58.318Z"
+      "reviewedAt": "2026-04-05T10:48:58.318Z",
+      "id": "8w6iqjt9qlz3"
     },
     {
       "poolId": "6u0r50",
@@ -9300,7 +9577,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:48:58.318Z"
+      "reviewedAt": "2026-04-05T10:48:58.318Z",
+      "id": "1akdkq1j0v6m"
     },
     {
       "poolId": "10qs4",
@@ -9329,7 +9607,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:49:17.182Z"
+      "reviewedAt": "2026-04-05T10:49:17.182Z",
+      "id": "5tyb4h2xee6p"
     },
     {
       "poolId": "jcxj6g",
@@ -9358,7 +9637,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:49:17.182Z"
+      "reviewedAt": "2026-04-05T10:49:17.182Z",
+      "id": "naxkh3683sc1"
     },
     {
       "poolId": "lw5lfh",
@@ -9387,7 +9667,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "reviewedAt": "2026-04-05T10:49:17.182Z"
+      "reviewedAt": "2026-04-05T10:49:17.182Z",
+      "id": "p8ikt9y73nkp"
     },
     {
       "poolId": "shxtzb",
@@ -9416,7 +9697,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:49:17.182Z"
+      "reviewedAt": "2026-04-05T10:49:17.182Z",
+      "id": "svc7igbgyla8"
     },
     {
       "poolId": "kjmqyt",
@@ -9445,7 +9727,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:49:17.182Z"
+      "reviewedAt": "2026-04-05T10:49:17.182Z",
+      "id": "3i79wcdwpp68"
     },
     {
       "poolId": "tw13yp",
@@ -9474,7 +9757,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:49:33.293Z"
+      "reviewedAt": "2026-04-05T10:49:33.293Z",
+      "id": "ee63dnn6kyxr"
     },
     {
       "poolId": "hgk1oy",
@@ -9503,7 +9787,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:49:33.293Z"
+      "reviewedAt": "2026-04-05T10:49:33.293Z",
+      "id": "nbt58omyatlg"
     },
     {
       "poolId": "z6fbfv",
@@ -9532,7 +9817,8 @@
       ],
       "category": "זוגות בינוניים",
       "categoryId": "medium_pairs",
-      "reviewedAt": "2026-04-05T10:49:33.293Z"
+      "reviewedAt": "2026-04-05T10:49:33.293Z",
+      "id": "bc4q4e4ggjq0"
     },
     {
       "poolId": "liwscr",
@@ -9561,7 +9847,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:49:33.293Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "0mbsnvbc2luw"
     },
     {
       "poolId": "siqdz8",
@@ -9589,7 +9876,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:49:33.293Z"
+      "reviewedAt": "2026-04-05T10:49:33.293Z",
+      "id": "wn270ow12eua"
     },
     {
       "poolId": "2lgzzv",
@@ -9618,7 +9906,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:49:51.367Z"
+      "reviewedAt": "2026-04-05T10:49:51.367Z",
+      "id": "yx475wsnsx9t"
     },
     {
       "poolId": "vs4gwo",
@@ -9646,7 +9935,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:49:51.368Z"
+      "reviewedAt": "2026-04-05T10:49:51.368Z",
+      "id": "ygpg4kv6jzy4"
     },
     {
       "poolId": "7e7006",
@@ -9674,7 +9964,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:49:51.368Z"
+      "reviewedAt": "2026-04-05T10:49:51.368Z",
+      "id": "pauacxxemjle"
     },
     {
       "poolId": "m9zm46",
@@ -9703,7 +9994,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:49:51.368Z"
+      "reviewedAt": "2026-04-05T10:49:51.368Z",
+      "id": "iz10inre9qd8"
     },
     {
       "poolId": "7i3txe",
@@ -9732,7 +10024,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:49:51.368Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "6snnt9ben1v7"
     },
     {
       "poolId": "hh2mjt",
@@ -9761,7 +10054,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:12.869Z"
+      "reviewedAt": "2026-04-05T10:50:12.869Z",
+      "id": "2rd55s7ycyid"
     },
     {
       "poolId": "yn0r4i",
@@ -9790,7 +10084,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:12.869Z"
+      "reviewedAt": "2026-04-05T10:50:12.869Z",
+      "id": "7nxefc5wwf95"
     },
     {
       "poolId": "sgqy9v",
@@ -9819,7 +10114,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:12.869Z"
+      "reviewedAt": "2026-04-05T10:50:12.869Z",
+      "id": "a1ivkh42phhw"
     },
     {
       "poolId": "8lti7t",
@@ -9847,7 +10143,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:12.870Z"
+      "reviewedAt": "2026-04-05T10:50:12.870Z",
+      "id": "2w1v2q7f8hua"
     },
     {
       "poolId": "u9jeor",
@@ -9876,7 +10173,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:50:12.870Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "3pkmoqd3xlce"
     },
     {
       "poolId": "ipitjm",
@@ -9905,7 +10203,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:29.795Z"
+      "reviewedAt": "2026-04-05T10:50:29.795Z",
+      "id": "7wfyc6rqmeeh"
     },
     {
       "poolId": "9gwxjo",
@@ -9934,7 +10233,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:29.795Z"
+      "reviewedAt": "2026-04-05T10:50:29.795Z",
+      "id": "qhoguawmpxbp"
     },
     {
       "poolId": "xcu3ye",
@@ -9963,7 +10263,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:29.795Z"
+      "reviewedAt": "2026-04-05T10:50:29.795Z",
+      "id": "6bbjigqekp7j"
     },
     {
       "poolId": "dbqv0v",
@@ -9992,7 +10293,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:29.795Z"
+      "reviewedAt": "2026-04-05T10:50:29.795Z",
+      "id": "yzt5r773pqi6"
     },
     {
       "poolId": "ky797",
@@ -10021,7 +10323,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:29.795Z"
+      "reviewedAt": "2026-04-05T10:50:29.795Z",
+      "id": "pab884gimfaa"
     },
     {
       "poolId": "lgx3fm",
@@ -10049,7 +10352,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:50.048Z"
+      "reviewedAt": "2026-04-05T10:50:50.048Z",
+      "id": "5v8ad5bbrbxw"
     },
     {
       "poolId": "fb0be5",
@@ -10078,7 +10382,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T10:50:50.049Z"
+      "reviewedAt": "2026-04-05T10:50:50.049Z",
+      "id": "stxv7ucekjdw"
     },
     {
       "poolId": "ctu54x",
@@ -10107,7 +10412,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:50:50.049Z"
+      "reviewedAt": "2026-04-05T10:50:50.049Z",
+      "id": "3solnclv8mtj"
     },
     {
       "poolId": "kgpgvw",
@@ -10136,7 +10442,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:50:50.049Z"
+      "reviewedAt": "2026-04-05T10:50:50.049Z",
+      "id": "sj2nosbgpx2u"
     },
     {
       "poolId": "dge0s",
@@ -10165,7 +10472,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:50:50.049Z"
+      "reviewedAt": "2026-04-05T10:50:50.049Z",
+      "id": "a9xb6dcu3yko"
     },
     {
       "poolId": "qxf1u3",
@@ -10194,7 +10502,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:51:08.281Z"
+      "reviewedAt": "2026-04-05T10:51:08.281Z",
+      "id": "zt7gekgfb2nz"
     },
     {
       "poolId": "la7kih",
@@ -10223,7 +10532,8 @@
       ],
       "category": "חיפוש שלישייה",
       "categoryId": "set_mining",
-      "reviewedAt": "2026-04-05T10:51:08.281Z"
+      "reviewedAt": "2026-04-05T10:51:08.281Z",
+      "id": "o7rwiqfge0fs"
     },
     {
       "poolId": "iggo0p",
@@ -10252,7 +10562,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:08.281Z"
+      "reviewedAt": "2026-04-05T10:51:08.281Z",
+      "id": "pz26wbyf75f5"
     },
     {
       "poolId": "ohqm4c",
@@ -10281,7 +10592,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:08.281Z"
+      "reviewedAt": "2026-04-05T10:51:08.281Z",
+      "id": "4pbjfmwv4ny7"
     },
     {
       "poolId": "jmarv",
@@ -10310,7 +10622,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:08.281Z"
+      "reviewedAt": "2026-04-05T10:51:08.281Z",
+      "id": "85e2pb1t4jn3"
     },
     {
       "poolId": "vo72tc",
@@ -10339,7 +10652,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:28.048Z"
+      "reviewedAt": "2026-04-05T10:51:28.048Z",
+      "id": "qdxk2hwn3kl9"
     },
     {
       "poolId": "xy3l6i",
@@ -10368,7 +10682,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:28.048Z"
+      "reviewedAt": "2026-04-05T10:51:28.048Z",
+      "id": "zwplv6algakq"
     },
     {
       "poolId": "bmeo1",
@@ -10397,7 +10712,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:28.048Z"
+      "reviewedAt": "2026-04-05T10:51:28.048Z",
+      "id": "67zciy0wozjr"
     },
     {
       "poolId": "fcnqxl",
@@ -10426,7 +10742,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:28.048Z"
+      "reviewedAt": "2026-04-05T10:51:28.048Z",
+      "id": "sd8imwosgkdl"
     },
     {
       "poolId": "g4xsru",
@@ -10455,7 +10772,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:28.048Z"
+      "reviewedAt": "2026-04-05T10:51:28.048Z",
+      "id": "ngejb5mbreu4"
     },
     {
       "poolId": "jf8qv1",
@@ -10484,7 +10802,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:46.336Z"
+      "reviewedAt": "2026-04-05T10:51:46.336Z",
+      "id": "donc4ecxc8xn"
     },
     {
       "poolId": "glybmc",
@@ -10513,7 +10832,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:46.336Z"
+      "reviewedAt": "2026-04-05T10:51:46.336Z",
+      "id": "dpmjeyy8gml4"
     },
     {
       "poolId": "bcw412",
@@ -10542,7 +10862,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:46.336Z"
+      "reviewedAt": "2026-04-05T10:51:46.336Z",
+      "id": "co39ca5t9q9n"
     },
     {
       "poolId": "bu9a85",
@@ -10571,7 +10892,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:46.336Z"
+      "reviewedAt": "2026-04-05T10:51:46.336Z",
+      "id": "bh3ppf6216al"
     },
     {
       "poolId": "tfltyn",
@@ -10600,7 +10922,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:51:46.336Z"
+      "reviewedAt": "2026-04-05T10:51:46.336Z",
+      "id": "su29a5hgvfd7"
     },
     {
       "poolId": "6w5at9",
@@ -10629,7 +10952,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:04.621Z"
+      "reviewedAt": "2026-04-05T10:52:04.621Z",
+      "id": "ky1gb299neyb"
     },
     {
       "poolId": "h1iu50",
@@ -10658,7 +10982,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:04.622Z"
+      "reviewedAt": "2026-04-05T10:52:04.622Z",
+      "id": "trq8r3yha7v1"
     },
     {
       "poolId": "9gvn16",
@@ -10687,7 +11012,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:04.622Z"
+      "reviewedAt": "2026-04-05T10:52:04.622Z",
+      "id": "0b1p0opd73lv"
     },
     {
       "poolId": "q9fgt5",
@@ -10716,7 +11042,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:04.622Z"
+      "reviewedAt": "2026-04-05T10:52:04.622Z",
+      "id": "myboz70i7rcj"
     },
     {
       "poolId": "9tdp1l",
@@ -10745,7 +11072,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:04.622Z"
+      "reviewedAt": "2026-04-05T10:52:04.622Z",
+      "id": "lh3auyj70xh5"
     },
     {
       "poolId": "qxf28x",
@@ -10774,7 +11102,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:25.009Z"
+      "reviewedAt": "2026-04-05T10:52:25.009Z",
+      "id": "iyimvhx2niyo"
     },
     {
       "poolId": "3uqga6",
@@ -10803,7 +11132,8 @@
       ],
       "category": "זוג שני",
       "categoryId": "second_pair",
-      "reviewedAt": "2026-04-05T10:52:25.009Z"
+      "reviewedAt": "2026-04-05T10:52:25.009Z",
+      "id": "1mwfqah7i1kk"
     },
     {
       "poolId": "jmhvc",
@@ -10832,7 +11162,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:52:25.009Z"
+      "reviewedAt": "2026-04-05T10:52:25.009Z",
+      "id": "91703sh5m55i"
     },
     {
       "poolId": "s0p5jr",
@@ -10861,7 +11192,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:52:25.009Z"
+      "reviewedAt": "2026-04-05T10:52:25.009Z",
+      "id": "y1kqanmw9loa"
     },
     {
       "poolId": "2676t2",
@@ -10890,7 +11222,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:52:25.009Z"
+      "reviewedAt": "2026-04-05T10:52:25.009Z",
+      "id": "lidrrubrw5wd"
     },
     {
       "poolId": "q6dcpj",
@@ -10919,7 +11252,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:52:41.526Z"
+      "reviewedAt": "2026-04-05T10:52:41.526Z",
+      "id": "44fz263ter6n"
     },
     {
       "poolId": "za4ktk",
@@ -10948,7 +11282,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:52:41.526Z"
+      "reviewedAt": "2026-04-05T10:52:41.526Z",
+      "id": "3bbb2xnntdzo"
     },
     {
       "poolId": "8hx671",
@@ -10977,7 +11312,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:52:41.526Z"
+      "reviewedAt": "2026-04-05T10:52:41.526Z",
+      "id": "pf56dr5b3d3u"
     },
     {
       "poolId": "w3dfmr",
@@ -11006,7 +11342,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:52:41.527Z"
+      "reviewedAt": "2026-04-05T10:52:41.527Z",
+      "id": "5hi7sx899k7y"
     },
     {
       "poolId": "me4wy1",
@@ -11035,7 +11372,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:52:41.527Z"
+      "reviewedAt": "2026-04-05T10:52:41.527Z",
+      "id": "tavvwb7gnncf"
     },
     {
       "poolId": "737vaj",
@@ -11064,7 +11402,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T10:53:00.436Z"
+      "reviewedAt": "2026-04-05T10:53:00.436Z",
+      "id": "bseisocxtym5"
     },
     {
       "poolId": "apqym9",
@@ -11093,7 +11432,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:53:00.436Z"
+      "reviewedAt": "2026-04-05T10:53:00.436Z",
+      "id": "bs4nxfn8wug3"
     },
     {
       "poolId": "jrj4nu",
@@ -11122,7 +11462,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:00.436Z"
+      "reviewedAt": "2026-04-05T10:53:00.436Z",
+      "id": "9z80a6sfgah1"
     },
     {
       "poolId": "pkq2fq",
@@ -11151,7 +11492,8 @@
       ],
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
-      "reviewedAt": "2026-04-05T10:53:00.436Z"
+      "reviewedAt": "2026-04-05T10:53:00.436Z",
+      "id": "lmxkq14n2unr"
     },
     {
       "poolId": "p6ci6j",
@@ -11180,7 +11522,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:00.436Z"
+      "reviewedAt": "2026-04-05T10:53:00.436Z",
+      "id": "93vvftzhr9xo"
     },
     {
       "poolId": "ldafgx",
@@ -11209,7 +11552,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:21.215Z"
+      "reviewedAt": "2026-04-05T10:53:21.215Z",
+      "id": "5yhp28rzgkxx"
     },
     {
       "poolId": "ahckm3",
@@ -11238,7 +11582,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:21.215Z"
+      "reviewedAt": "2026-04-05T10:53:21.215Z",
+      "id": "2s3tl5pvp7q8"
     },
     {
       "poolId": "966x5p",
@@ -11267,7 +11612,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:21.215Z"
+      "reviewedAt": "2026-04-05T10:53:21.215Z",
+      "id": "9r4p8j9j2go3"
     },
     {
       "poolId": "4dl7c6",
@@ -11296,7 +11642,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:21.215Z"
+      "reviewedAt": "2026-04-05T10:53:21.215Z",
+      "id": "ot2olzyvrwb4"
     },
     {
       "poolId": "f73tuk",
@@ -11325,7 +11672,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:21.215Z"
+      "reviewedAt": "2026-04-05T10:53:21.215Z",
+      "id": "30evqy5ci90g"
     },
     {
       "poolId": "vepc06",
@@ -11354,7 +11702,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:40.712Z"
+      "reviewedAt": "2026-04-05T10:53:40.712Z",
+      "id": "4r6grcsjwdhi"
     },
     {
       "poolId": "j3gxjl",
@@ -11383,7 +11732,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:40.713Z"
+      "reviewedAt": "2026-04-05T10:53:40.713Z",
+      "id": "wdwngrh6y23u"
     },
     {
       "poolId": "swk9e6",
@@ -11412,7 +11762,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:40.713Z"
+      "reviewedAt": "2026-04-05T10:53:40.713Z",
+      "id": "lzdd9y69zs8i"
     },
     {
       "poolId": "fu7rz4",
@@ -11441,7 +11792,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:40.713Z"
+      "reviewedAt": "2026-04-05T10:53:40.713Z",
+      "id": "y36tbvx16gi6"
     },
     {
       "poolId": "i47yxu",
@@ -11470,7 +11822,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:40.713Z"
+      "reviewedAt": "2026-04-05T10:53:40.713Z",
+      "id": "41hx8b7p5okx"
     },
     {
       "poolId": "ja1icj",
@@ -11499,7 +11852,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:59.840Z"
+      "reviewedAt": "2026-04-05T10:53:59.840Z",
+      "id": "k3msat4hynxb"
     },
     {
       "poolId": "90e783",
@@ -11528,7 +11882,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:59.841Z"
+      "reviewedAt": "2026-04-05T10:53:59.841Z",
+      "id": "6unw0flkps7r"
     },
     {
       "poolId": "mjbw0a",
@@ -11557,7 +11912,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:59.841Z"
+      "reviewedAt": "2026-04-05T10:53:59.841Z",
+      "id": "dp4p03nfxc7u"
     },
     {
       "poolId": "fdrbrd",
@@ -11586,7 +11942,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:59.841Z"
+      "reviewedAt": "2026-04-05T10:53:59.841Z",
+      "id": "k8qxfn1x14mc"
     },
     {
       "poolId": "mn1yza",
@@ -11615,7 +11972,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:53:59.841Z"
+      "reviewedAt": "2026-04-05T10:53:59.841Z",
+      "id": "cuwe9juz8j5e"
     },
     {
       "poolId": "lnsupa",
@@ -11644,7 +12002,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:54:21.094Z"
+      "reviewedAt": "2026-04-05T10:54:21.094Z",
+      "id": "890tn14poja5"
     },
     {
       "poolId": "qu0cab",
@@ -11673,7 +12032,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T10:54:21.094Z"
+      "reviewedAt": "2026-04-05T10:54:21.094Z",
+      "id": "6sgqo4e3zsds"
     },
     {
       "poolId": "4mspyv",
@@ -11702,7 +12062,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:54:21.094Z"
+      "reviewedAt": "2026-04-05T10:54:21.094Z",
+      "id": "jz0d1po61n7f"
     },
     {
       "poolId": "r2dxa9",
@@ -11731,7 +12092,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:54:21.094Z"
+      "reviewedAt": "2026-04-05T10:54:21.094Z",
+      "id": "1hynsgudcy0v"
     },
     {
       "poolId": "6g1f0z",
@@ -11760,7 +12122,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:54:21.094Z"
+      "reviewedAt": "2026-04-05T10:54:21.094Z",
+      "id": "sfbe4se1gutf"
     },
     {
       "poolId": "wc50n8",
@@ -11789,7 +12152,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:54:39.500Z"
+      "reviewedAt": "2026-04-05T10:54:39.500Z",
+      "id": "6g4qmjcwhdzx"
     },
     {
       "poolId": "1ylsln",
@@ -11818,7 +12182,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "reviewedAt": "2026-04-05T10:54:39.500Z"
+      "reviewedAt": "2026-04-05T10:54:39.500Z",
+      "id": "kyj2gxceyz9u"
     },
     {
       "poolId": "lwixkv",
@@ -11847,7 +12212,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:54:39.500Z"
+      "reviewedAt": "2026-04-05T10:54:39.500Z",
+      "id": "ls8vcjnpyt5b"
     },
     {
       "poolId": "a0rwoh",
@@ -11876,7 +12242,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:54:39.500Z"
+      "reviewedAt": "2026-04-05T10:54:39.500Z",
+      "id": "axu5b4awz6a3"
     },
     {
       "poolId": "63ka80",
@@ -11905,7 +12272,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:54:39.500Z"
+      "reviewedAt": "2026-04-05T10:54:39.500Z",
+      "id": "da5i41b1a4a0"
     },
     {
       "poolId": "r4p7ir",
@@ -11934,7 +12302,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:55:02.038Z"
+      "reviewedAt": "2026-04-05T10:55:02.038Z",
+      "id": "tgiqjspcknuy"
     },
     {
       "poolId": "w1b5y1",
@@ -11963,7 +12332,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:55:02.038Z"
+      "reviewedAt": "2026-04-05T10:55:02.038Z",
+      "id": "im9kpb4jh8bx"
     },
     {
       "poolId": "iq2ekv",
@@ -11992,7 +12362,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:55:02.038Z"
+      "reviewedAt": "2026-04-05T10:55:02.038Z",
+      "id": "ka5t6mssictz"
     },
     {
       "poolId": "yvgrs8",
@@ -12021,7 +12392,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "reviewedAt": "2026-04-05T10:55:02.038Z"
+      "reviewedAt": "2026-04-05T10:55:02.038Z",
+      "id": "5xwsq2rdw9uq"
     },
     {
       "poolId": "elbjl5",
@@ -12050,7 +12422,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:02.038Z"
+      "reviewedAt": "2026-04-05T10:55:02.038Z",
+      "id": "sltc42viml3m"
     },
     {
       "poolId": "mdbcz5",
@@ -12079,7 +12452,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "value_betting",
-      "reviewedAt": "2026-04-05T10:55:21.247Z"
+      "reviewedAt": "2026-04-05T10:55:21.247Z",
+      "id": "rsnp864uuaz8"
     },
     {
       "poolId": "wx66m4",
@@ -12107,7 +12481,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "id": "vd57v33xn1ci"
     },
     {
       "poolId": "n293hy",
@@ -12135,7 +12510,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "id": "02ur9p5vzezr"
     },
     {
       "poolId": "4vbn9",
@@ -12163,7 +12539,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "id": "xf8xftu2en5w"
     },
     {
       "poolId": "itsj25",
@@ -12191,7 +12568,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "id": "eq8hn9bq7by7"
     },
     {
       "poolId": "3vazo1",
@@ -12219,7 +12597,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "id": "lz3wc3lllkj6"
     },
     {
       "poolId": "fxaxn3",
@@ -12248,7 +12627,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:56.724Z"
+      "reviewedAt": "2026-04-05T10:55:56.724Z",
+      "id": "y867hs11eo9j"
     },
     {
       "poolId": "9b2g3i",
@@ -12277,7 +12657,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:56.724Z"
+      "reviewedAt": "2026-04-05T10:55:56.724Z",
+      "id": "h65iy56gb1fo"
     },
     {
       "poolId": "1k7z3l",
@@ -12306,7 +12687,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:56.724Z"
+      "reviewedAt": "2026-04-05T10:55:56.724Z",
+      "id": "agj3vuvczb9i"
     },
     {
       "poolId": "8087kj",
@@ -12335,7 +12717,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:56.724Z"
+      "reviewedAt": "2026-04-05T10:55:56.724Z",
+      "id": "w6su4aiv1opu"
     },
     {
       "poolId": "bsi1lt",
@@ -12364,7 +12747,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:55:56.724Z"
+      "reviewedAt": "2026-04-05T10:55:56.724Z",
+      "id": "8025fma5oxpi"
     },
     {
       "poolId": "mhmh4r",
@@ -12394,7 +12778,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "reviewedAt": "2026-04-05T10:56:15.620Z"
+      "reviewedAt": "2026-04-05T10:56:15.620Z",
+      "id": "4hy5uc9aizmm"
     },
     {
       "poolId": "tpmzeg",
@@ -12424,7 +12809,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:15.620Z"
+      "reviewedAt": "2026-04-05T10:56:15.620Z",
+      "id": "s9utoyo8gwai"
     },
     {
       "poolId": "xgqnaf",
@@ -12453,7 +12839,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:15.620Z"
+      "reviewedAt": "2026-04-05T10:56:15.620Z",
+      "id": "4douu46o9hfk"
     },
     {
       "poolId": "diwey9",
@@ -12482,7 +12869,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:15.620Z"
+      "reviewedAt": "2026-04-05T10:56:15.620Z",
+      "id": "9hkib16hynu6"
     },
     {
       "poolId": "4x724m",
@@ -12511,7 +12899,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:15.620Z"
+      "reviewedAt": "2026-04-05T10:56:15.620Z",
+      "id": "47k09jv39oxx"
     },
     {
       "poolId": "57jp87",
@@ -12540,7 +12929,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:34.985Z"
+      "reviewedAt": "2026-04-05T10:56:34.985Z",
+      "id": "rjirlm3wermw"
     },
     {
       "poolId": "7wrcfp",
@@ -12569,7 +12959,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:34.985Z"
+      "reviewedAt": "2026-04-05T10:56:34.985Z",
+      "id": "s87r3vlhyr3x"
     },
     {
       "poolId": "8ice65",
@@ -12598,7 +12989,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:34.986Z"
+      "reviewedAt": "2026-04-05T10:56:34.986Z",
+      "id": "7ua8893n6k0p"
     },
     {
       "poolId": "t7a2tb",
@@ -12627,7 +13019,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:34.986Z"
+      "reviewedAt": "2026-04-05T10:56:34.986Z",
+      "id": "qx2en4jbd060"
     },
     {
       "poolId": "kdt8ml",
@@ -12656,7 +13049,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:34.986Z"
+      "reviewedAt": "2026-04-05T10:56:34.986Z",
+      "id": "xrr2pptqa5he"
     },
     {
       "poolId": "tnoarr",
@@ -12685,7 +13079,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:54.184Z"
+      "reviewedAt": "2026-04-05T10:56:54.184Z",
+      "id": "bmoizc95r05t"
     },
     {
       "poolId": "lb2v2a",
@@ -12714,7 +13109,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:54.184Z"
+      "reviewedAt": "2026-04-05T10:56:54.184Z",
+      "id": "2b4jerb4fzfd"
     },
     {
       "poolId": "trs1f2",
@@ -12743,7 +13139,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:54.184Z"
+      "reviewedAt": "2026-04-05T10:56:54.184Z",
+      "id": "zo1f1ejnb1iz"
     },
     {
       "poolId": "lsfcsk",
@@ -12772,7 +13169,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:54.184Z"
+      "reviewedAt": "2026-04-05T10:56:54.184Z",
+      "id": "jt8t7x267o7f"
     },
     {
       "poolId": "b4b4ow",
@@ -12801,7 +13199,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:56:54.184Z"
+      "reviewedAt": "2026-04-05T10:56:54.184Z",
+      "id": "t10lmd20aqba"
     },
     {
       "poolId": "d2s6im",
@@ -12830,7 +13229,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:14.024Z"
+      "reviewedAt": "2026-04-05T10:57:14.024Z",
+      "id": "q7muzcr7jco1"
     },
     {
       "poolId": "7k3c11",
@@ -12859,7 +13259,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:14.024Z"
+      "reviewedAt": "2026-04-05T10:57:14.024Z",
+      "id": "lgrn3zaehhif"
     },
     {
       "poolId": "hot7di",
@@ -12888,7 +13289,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:14.024Z"
+      "reviewedAt": "2026-04-05T10:57:14.024Z",
+      "id": "tb680ma1gsob"
     },
     {
       "poolId": "1l8yos",
@@ -12917,7 +13319,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:14.024Z"
+      "reviewedAt": "2026-04-05T10:57:14.024Z",
+      "id": "jhzfjnkxgnw9"
     },
     {
       "poolId": "yzdm95",
@@ -12946,7 +13349,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:14.024Z"
+      "reviewedAt": "2026-04-05T10:57:14.024Z",
+      "id": "zelkbmqif78o"
     },
     {
       "poolId": "nfwzrm",
@@ -12975,7 +13379,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "reviewedAt": "2026-04-05T10:57:35.949Z"
+      "reviewedAt": "2026-04-05T10:57:35.949Z",
+      "id": "18jwuk3fadqx"
     },
     {
       "poolId": "hk13qt",
@@ -13004,7 +13409,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:57:35.949Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "vjq21n9ljjfl"
     },
     {
       "poolId": "f4jpyw",
@@ -13033,7 +13439,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:57:35.949Z"
+      "reviewedAt": "2026-04-05T10:57:35.949Z",
+      "id": "dlgigopmcp8r"
     },
     {
       "poolId": "ewm7kj",
@@ -13062,7 +13469,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:57:35.949Z"
+      "reviewedAt": "2026-04-05T10:57:35.949Z",
+      "id": "2f4mzqu5tbvp"
     },
     {
       "poolId": "5haln2",
@@ -13091,7 +13499,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:57:35.949Z"
+      "reviewedAt": "2026-04-05T10:57:35.949Z",
+      "id": "nfptyshxi931"
     },
     {
       "poolId": "pggni3",
@@ -13120,7 +13529,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T10:57:56.845Z"
+      "reviewedAt": "2026-04-05T10:57:56.845Z",
+      "id": "monnu3fgpz2u"
     },
     {
       "poolId": "i31dwk",
@@ -13149,7 +13559,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:57:56.845Z"
+      "reviewedAt": "2026-04-05T10:57:56.845Z",
+      "id": "uf3vi1n37jss"
     },
     {
       "poolId": "n11a6m",
@@ -13178,7 +13589,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:57:56.845Z"
+      "reviewedAt": "2026-04-05T10:57:56.845Z",
+      "id": "tikzus10avlz"
     },
     {
       "poolId": "7ylwss",
@@ -13207,7 +13619,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:57:56.845Z"
+      "reviewedAt": "2026-04-05T10:57:56.845Z",
+      "id": "sdaix2cklbbz"
     },
     {
       "poolId": "gcqgf3",
@@ -13236,7 +13649,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:57:56.845Z"
+      "reviewedAt": "2026-04-05T10:57:56.845Z",
+      "id": "nduqk06gbmzt"
     },
     {
       "poolId": "ezezd2",
@@ -13265,7 +13679,8 @@
       ],
       "category": "קופות עם העלאה חוזרת",
       "categoryId": "three_bet_pots",
-      "reviewedAt": "2026-04-05T10:58:15.119Z"
+      "reviewedAt": "2026-04-05T10:58:15.119Z",
+      "id": "8wqil7bpxul6"
     },
     {
       "poolId": "v1iden",
@@ -13294,7 +13709,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:58:15.119Z"
+      "reviewedAt": "2026-04-05T10:58:15.119Z",
+      "id": "s19c9py2a4bx"
     },
     {
       "poolId": "onfdtq",
@@ -13322,7 +13738,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:58:15.119Z"
+      "reviewedAt": "2026-04-05T10:58:15.119Z",
+      "id": "ocohwjz6vm6i"
     },
     {
       "poolId": "3qklzq",
@@ -13351,7 +13768,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:58:15.119Z"
+      "reviewedAt": "2026-04-05T10:58:15.119Z",
+      "id": "0n4u2n6e7orj"
     },
     {
       "poolId": "yzh3et",
@@ -13380,7 +13798,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:58:15.119Z"
+      "reviewedAt": "2026-04-05T10:58:15.119Z",
+      "id": "wrt1bt52cnrz"
     },
     {
       "poolId": "449zge",
@@ -13409,7 +13828,8 @@
       ],
       "category": "לחיצה ובידוד",
       "categoryId": "squeeze_isolation",
-      "reviewedAt": "2026-04-05T10:58:35.048Z"
+      "reviewedAt": "2026-04-05T10:58:35.048Z",
+      "id": "1ioj2oih3mdk"
     },
     {
       "poolId": "5omion",
@@ -13438,7 +13858,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:58:35.048Z"
+      "reviewedAt": "2026-04-05T10:58:35.048Z",
+      "id": "4meq32igbqs5"
     },
     {
       "poolId": "jfwfp7",
@@ -13467,7 +13888,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:58:35.049Z"
+      "reviewedAt": "2026-04-05T10:58:35.049Z",
+      "id": "ibjoeu19nkkj"
     },
     {
       "poolId": "gy8u5",
@@ -13496,7 +13918,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:58:35.049Z"
+      "reviewedAt": "2026-04-05T10:58:35.049Z",
+      "id": "932k621urr19"
     },
     {
       "poolId": "dgs28h",
@@ -13525,7 +13948,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "reviewedAt": "2026-04-05T10:58:55.188Z"
+      "reviewedAt": "2026-04-05T10:58:55.188Z",
+      "id": "myx7rldjnpms"
     },
     {
       "poolId": "y24bpz",
@@ -13554,7 +13978,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:58:55.189Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "bgnq2dfkjp21"
     },
     {
       "poolId": "klqq64",
@@ -13583,7 +14008,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:58:55.189Z"
+      "reviewedAt": "2026-04-05T10:58:55.189Z",
+      "id": "62o5mozi0hrn"
     },
     {
       "poolId": "nvf3ez",
@@ -13612,7 +14038,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:58:55.189Z"
+      "reviewedAt": "2026-04-05T10:58:55.189Z",
+      "id": "e9sjops1k2m3"
     },
     {
       "poolId": "ixo6u5",
@@ -13641,7 +14068,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:58:55.189Z"
+      "reviewedAt": "2026-04-05T10:58:55.189Z",
+      "id": "ilsjjixq2xjk"
     },
     {
       "poolId": "rg23qt",
@@ -13670,7 +14098,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T10:59:16.969Z"
+      "reviewedAt": "2026-04-05T10:59:16.969Z",
+      "id": "dw1jikwand4i"
     },
     {
       "poolId": "lz4624",
@@ -13699,7 +14128,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:16.969Z"
+      "reviewedAt": "2026-04-05T10:59:16.969Z",
+      "id": "kewtpi71mi30"
     },
     {
       "poolId": "attcip",
@@ -13728,7 +14158,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:16.970Z"
+      "reviewedAt": "2026-04-05T10:59:16.970Z",
+      "id": "uv9ocu0bwq8j"
     },
     {
       "poolId": "y4dxpq",
@@ -13757,7 +14188,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:16.970Z"
+      "reviewedAt": "2026-04-05T10:59:16.970Z",
+      "id": "k8o9gycv17yz"
     },
     {
       "poolId": "c2uv1i",
@@ -13786,7 +14218,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:16.970Z"
+      "reviewedAt": "2026-04-05T10:59:16.970Z",
+      "id": "oybbc0okt6lf"
     },
     {
       "poolId": "6jjhzf",
@@ -13815,7 +14248,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:35.987Z"
+      "reviewedAt": "2026-04-05T10:59:35.987Z",
+      "id": "t9gqm6q0pxon"
     },
     {
       "poolId": "nrmvhu",
@@ -13844,7 +14278,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "reviewedAt": "2026-04-05T10:59:35.987Z"
+      "reviewedAt": "2026-04-05T10:59:35.987Z",
+      "id": "b5ne4t1mpgwj"
     },
     {
       "poolId": "whu1ol",
@@ -13873,7 +14308,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:59:35.987Z"
+      "reviewedAt": "2026-04-05T10:59:35.987Z",
+      "id": "o1uqpfzfctb8"
     },
     {
       "poolId": "m52viw",
@@ -13902,7 +14338,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:59:35.987Z"
+      "reviewedAt": "2026-04-05T10:59:35.987Z",
+      "id": "9yowganqxww7"
     },
     {
       "poolId": "vwq9od",
@@ -13931,7 +14368,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:59:35.987Z"
+      "reviewedAt": "2026-04-05T10:59:35.987Z",
+      "id": "808780g1tcv6"
     },
     {
       "poolId": "9ltr7",
@@ -13960,7 +14398,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:59:53.820Z"
+      "reviewedAt": "2026-04-05T10:59:53.820Z",
+      "id": "lleonbsokwus"
     },
     {
       "poolId": "6ews3h",
@@ -13989,7 +14428,8 @@
       ],
       "category": "פתיחה לפני הפלופ",
       "categoryId": "preflop_open",
-      "reviewedAt": "2026-04-05T10:59:53.820Z"
+      "reviewedAt": "2026-04-05T10:59:53.820Z",
+      "id": "xd8x9ugmgzz7"
     },
     {
       "poolId": "sv7206",
@@ -14018,7 +14458,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:59:53.820Z"
+      "reviewedAt": "2026-04-05T10:59:53.820Z",
+      "id": "eu9tcwlsl86f"
     },
     {
       "poolId": "tf9wow",
@@ -14047,7 +14488,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:59:53.820Z"
+      "reviewedAt": "2026-04-05T10:59:53.820Z",
+      "id": "fe68yr441d9q"
     },
     {
       "poolId": "3z56ug",
@@ -14076,7 +14518,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T10:59:53.820Z"
+      "reviewedAt": "2026-04-05T10:59:53.820Z",
+      "id": "nz0u9mc2st6l"
     },
     {
       "poolId": "gv5tmx",
@@ -14105,7 +14548,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T11:00:13.312Z"
+      "reviewedAt": "2026-04-05T11:00:13.312Z",
+      "id": "sbr2xs2aluwq"
     },
     {
       "poolId": "esebz4",
@@ -14134,7 +14578,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "reviewedAt": "2026-04-05T11:00:13.313Z"
+      "reviewedAt": "2026-04-05T11:00:13.313Z",
+      "id": "im5vd3qc0hky"
     },
     {
       "poolId": "r2fj5v",
@@ -14163,7 +14608,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:13.313Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "8fb03j361xjq"
     },
     {
       "poolId": "bofwjo",
@@ -14192,7 +14638,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:13.313Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "ndidrtk56ijl"
     },
     {
       "poolId": "kly41p",
@@ -14221,7 +14668,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:13.313Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "vsstgxqmk72s"
     },
     {
       "poolId": "17zwzh",
@@ -14250,7 +14698,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:32.596Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "9z3kc7gj3ye8"
     },
     {
       "poolId": "azkyqg",
@@ -14279,7 +14728,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:32.596Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "zz5khrfpte90"
     },
     {
       "poolId": "fqy6yw",
@@ -14308,7 +14758,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:32.596Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "wb0kklm9kpd8"
     },
     {
       "poolId": "l9lfo9",
@@ -14337,7 +14788,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:32.596Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "f7s4q86agcpw"
     },
     {
       "poolId": "s7vwaa",
@@ -14366,7 +14818,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:32.596Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "avyfstl2v4no"
     },
     {
       "poolId": "7vqadw",
@@ -14395,7 +14848,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:55.570Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "a1h2i3bb6752"
     },
     {
       "poolId": "80cvbb",
@@ -14424,7 +14878,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:55.571Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "7qi563ko34o5"
     },
     {
       "poolId": "3cxp5f",
@@ -14453,7 +14908,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:55.571Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "w23abiw62ofi"
     },
     {
       "poolId": "od1zw",
@@ -14482,7 +14938,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:55.571Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "jhba847hq2t8"
     },
     {
       "poolId": "w30fvh",
@@ -14511,7 +14968,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:00:55.571Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "4s5enfin4q06"
     },
     {
       "poolId": "hr4yad",
@@ -14540,7 +14998,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:01:15.045Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "qhd3pivfgfu6"
     },
     {
       "poolId": "afjyxr",
@@ -14569,7 +15028,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:01:15.046Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "vc8v08z4z7ro"
     },
     {
       "poolId": "o1nxsu",
@@ -14598,7 +15058,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:01:15.046Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "wtbfxd0fjhf4"
     },
     {
       "poolId": "vcprr6",
@@ -14627,7 +15088,8 @@
       ],
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T11:01:15.046Z",
-      "category": "המשך הימור"
+      "category": "המשך הימור",
+      "id": "l460y7sd6v1i"
     },
     {
       "poolId": "yd5wpteyz",
@@ -14656,7 +15118,8 @@
       ],
       "category": "המשך הימור",
       "categoryId": "cbet",
-      "reviewedAt": "2026-04-05T11:01:15.046Z"
+      "reviewedAt": "2026-04-05T11:01:15.046Z",
+      "id": "89n0sg034g9e"
     },
     {
       "poolId": "e3o31c8rd",
@@ -14685,7 +15148,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "reviewedAt": "2026-04-05T11:01:38.892Z"
+      "reviewedAt": "2026-04-05T11:01:38.892Z",
+      "id": "vqjjn2zqbs5b"
     },
     {
       "poolId": "lr45zhn0e",
@@ -14714,7 +15178,8 @@
       ],
       "category": "סחיטת ערך",
       "categoryId": "thin_value",
-      "reviewedAt": "2026-04-05T11:01:38.892Z"
+      "reviewedAt": "2026-04-05T11:01:38.892Z",
+      "id": "1i39erik4ow6"
     },
     {
       "poolId": "u2u9f6oy8",
@@ -14743,7 +15208,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:01:38.892Z"
+      "reviewedAt": "2026-04-05T11:01:38.892Z",
+      "id": "nem2s5u1d98o"
     },
     {
       "poolId": "1drqrnmu6",
@@ -14772,7 +15238,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:01:38.892Z"
+      "reviewedAt": "2026-04-05T11:01:38.892Z",
+      "id": "3srk3amjbaku"
     },
     {
       "poolId": "rifnekx7o",
@@ -14801,7 +15268,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:01:38.892Z"
+      "reviewedAt": "2026-04-05T11:01:38.892Z",
+      "id": "nhnsb6xbswgn"
     },
     {
       "poolId": "8q90ls5g6",
@@ -14830,7 +15298,8 @@
       ],
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
-      "reviewedAt": "2026-04-05T11:02:00.408Z"
+      "reviewedAt": "2026-04-05T11:02:00.408Z",
+      "id": "v851bteq8a6z"
     },
     {
       "poolId": "bsqvzw",
@@ -14859,7 +15328,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:00.408Z"
+      "reviewedAt": "2026-04-05T11:02:00.408Z",
+      "id": "1idgnzddzrv7"
     },
     {
       "poolId": "vh0088",
@@ -14888,7 +15358,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:00.408Z"
+      "reviewedAt": "2026-04-05T11:02:00.408Z",
+      "id": "j9cdz788ki3a"
     },
     {
       "poolId": "55sowg",
@@ -14917,7 +15388,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:00.408Z"
+      "reviewedAt": "2026-04-05T11:02:00.408Z",
+      "id": "6xeas69hf11x"
     },
     {
       "poolId": "hxpt4b",
@@ -14946,7 +15418,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:00.408Z"
+      "reviewedAt": "2026-04-05T11:02:00.408Z",
+      "id": "tpxxo7fhgzvz"
     },
     {
       "poolId": "uabvay",
@@ -14974,7 +15447,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:19.640Z"
+      "reviewedAt": "2026-04-05T11:02:19.640Z",
+      "id": "cpa9tdfjcvfu"
     },
     {
       "poolId": "q8dgz0",
@@ -15002,7 +15476,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:19.640Z"
+      "reviewedAt": "2026-04-05T11:02:19.640Z",
+      "id": "196ugnzk24vm"
     },
     {
       "poolId": "a1ja9y",
@@ -15030,10 +15505,11 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:19.641Z"
+      "reviewedAt": "2026-04-05T11:02:19.641Z",
+      "id": "sxsedbsrs35t"
     },
     {
-      "id": 8,
+      "id": "r374mshtw7z6",
       "situation": "יש לך A♣ 10♣. הפלופ הוא A♦ J♠ 4♥. אתה בפוזיציה מול שחקן שאוהב לקרוא (Calling Station). הוא עושה צ'ק. הקופה 1,000.",
       "yourCards": "A♣ 10♣",
       "options": [
@@ -15063,7 +15539,7 @@
       "reviewedAt": "2026-04-05T11:02:19.641Z"
     },
     {
-      "id": 9,
+      "id": "k71zoumtoy1j",
       "situation": "יש לך K♥ J♠. הפלופ מגיע J♦ 5♠ 2♣. הימרת 500 ושלושה שחקנים קראו. הטרן הוא A♥. כולם עושים צ'ק אליך.",
       "yourCards": "K♥ J♠",
       "options": [
@@ -15119,7 +15595,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:38.164Z"
+      "reviewedAt": "2026-04-05T11:02:38.164Z",
+      "id": "1pn2qps9klro"
     },
     {
       "poolId": "ya57gx",
@@ -15148,7 +15625,8 @@
       ],
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
-      "reviewedAt": "2026-04-05T11:02:38.165Z"
+      "reviewedAt": "2026-04-05T11:02:38.165Z",
+      "id": "d3149sybzr1i"
     },
     {
       "poolId": "odds_math_1775387023359_1qgkkr",
@@ -15176,7 +15654,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "wcodw9cvtjlz"
     },
     {
       "poolId": "odds_math_1775387023360_w2s9b0",
@@ -15204,7 +15683,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "d9ocwzuc3mgh"
     },
     {
       "poolId": "odds_math_1775387023360_fliphs",
@@ -15232,7 +15712,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "za2bfqmow6zd"
     },
     {
       "poolId": "odds_math_1775387023360_wu92ep",
@@ -15260,7 +15741,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "znd9pphmj02c"
     },
     {
       "poolId": "odds_math_1775387023360_3ngmhh",
@@ -15288,7 +15770,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "2c9c1p5x82wi"
     },
     {
       "poolId": "odds_math_1775387023360_4oymjf",
@@ -15316,7 +15799,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "mli1mq6ugugn"
     },
     {
       "poolId": "odds_math_1775387023360_xwp636",
@@ -15344,7 +15828,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "ql6tmtztqt6d"
     },
     {
       "poolId": "odds_math_1775387023360_xhhw5o",
@@ -15372,7 +15857,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "y88se7432krk"
     },
     {
       "poolId": "odds_math_1775387023360_jqb36x",
@@ -15400,7 +15886,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "49n3s5nk26yy"
     },
     {
       "poolId": "odds_math_1775387023360_gtmtot",
@@ -15428,7 +15915,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "r9mp1ffymtws"
     },
     {
       "poolId": "odds_math_1775387023360_ocv4t0",
@@ -15456,7 +15944,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "c40pzg9gdjv3"
     },
     {
       "poolId": "odds_math_1775387023360_pssrxr",
@@ -15484,7 +15973,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "uqkpapayvuxr"
     },
     {
       "poolId": "odds_math_1775387023360_mn6qxf",
@@ -15512,7 +16002,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "dszz5chy4cra"
     },
     {
       "poolId": "odds_math_1775387023360_ggt278",
@@ -15540,7 +16031,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "2rd9qj6xyim3"
     },
     {
       "poolId": "odds_math_1775387023360_4vh6hq",
@@ -15568,7 +16060,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "reviewedAt": "2026-04-05T11:03:43.360Z"
+      "reviewedAt": "2026-04-05T11:03:43.360Z",
+      "id": "lac8o42eq8ev"
     },
     {
       "poolId": "true_false_1775387057870_efwizu",
@@ -15596,7 +16089,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "shn8zvep9kax"
     },
     {
       "poolId": "true_false_1775387057870_dkr11s",
@@ -15624,7 +16118,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "qb0zxt58pe4r"
     },
     {
       "poolId": "true_false_1775387057870_eju3dq",
@@ -15652,7 +16147,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "c7ttz9ys9dbd"
     },
     {
       "poolId": "true_false_1775387057870_ajugw4",
@@ -15680,7 +16176,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "o5gngunjvze8"
     },
     {
       "poolId": "true_false_1775387057870_owenmk",
@@ -15708,7 +16205,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "0hwyg2jt2wbe"
     },
     {
       "poolId": "true_false_1775387057870_alwa61",
@@ -15736,7 +16234,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "5urabikia44e"
     },
     {
       "poolId": "true_false_1775387057870_u9x7lt",
@@ -15764,7 +16263,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "fsqm5z24snzq"
     },
     {
       "poolId": "true_false_1775387057870_333y4b",
@@ -15792,7 +16292,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "0m419s5pktkc"
     },
     {
       "poolId": "true_false_1775387057870_0idv0w",
@@ -15820,7 +16321,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "errgvyrdeunn"
     },
     {
       "poolId": "true_false_1775387057870_057bf9",
@@ -15848,7 +16350,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "k50lhmfoz4i0"
     },
     {
       "poolId": "true_false_1775387057870_f8kky6",
@@ -15876,7 +16379,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "7iqgldmd76eb"
     },
     {
       "poolId": "true_false_1775387057870_rbpqgl",
@@ -15904,7 +16408,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "2b40pcars0d2"
     },
     {
       "poolId": "true_false_1775387057870_khlzmw",
@@ -15932,7 +16437,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "45ba0hfpeiiu"
     },
     {
       "poolId": "true_false_1775387057870_pbaiuc",
@@ -15960,7 +16466,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "yjqpxbrq87fb"
     },
     {
       "poolId": "true_false_1775387057870_vnhekh",
@@ -15988,7 +16495,8 @@
       ],
       "category": "נכון או לא",
       "categoryId": "true_false",
-      "reviewedAt": "2026-04-05T11:04:17.870Z"
+      "reviewedAt": "2026-04-05T11:04:17.870Z",
+      "id": "82u4x1203z43"
     },
     {
       "id": "gen_1775387236973_63u6jn",
