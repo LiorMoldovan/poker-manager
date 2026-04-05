@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:15:23.564Z",
+  "lastUpdated": "2026-04-05T11:22:51.718Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -565,111 +565,11 @@
             }
           ],
           "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-05T11:15:22.640Z",
-          "questionsAnswered": 7,
-          "correctAnswers": 3,
-          "results": [
-            {
-              "poolId": "true_false_1775387057870_vnhekh",
-              "categoryId": "true_false",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "true_false_1775387057870_333y4b",
-              "categoryId": "true_false",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "true_false_1775387057870_eju3dq",
-              "categoryId": "true_false",
-              "correct": false,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "true_false_1775387057870_ajugw4",
-              "categoryId": "true_false",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "true_false_1775387057870_057bf9",
-              "categoryId": "true_false",
-              "correct": false,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "true_false_1775387057870_pbaiuc",
-              "categoryId": "true_false",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "true_false_1775387057870_f8kky6",
-              "categoryId": "true_false",
-              "correct": true,
-              "chosenId": "B"
-            }
-          ],
-          "flaggedPoolIds": [
-            "true_false_1775387057870_vnhekh",
-            "true_false_1775387057870_0idv0w",
-            "true_false_1775387057870_eju3dq",
-            "true_false_1775387057870_khlzmw",
-            "true_false_1775387057870_ajugw4",
-            "true_false_1775387057870_owenmk"
-          ],
-          "flagReports": [
-            {
-              "poolId": "true_false_1775387057870_vnhekh",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "שאלת טפשית תבטל אותה",
-              "date": "2026-04-05T11:09:43.029Z"
-            },
-            {
-              "poolId": "true_false_1775387057870_0idv0w",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "שאלה מפגרת",
-              "date": "2026-04-05T11:10:41.015Z"
-            },
-            {
-              "poolId": "true_false_1775387057870_eju3dq",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "delete",
-              "date": "2026-04-05T11:11:35.276Z"
-            },
-            {
-              "poolId": "true_false_1775387057870_khlzmw",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "delete",
-              "date": "2026-04-05T11:12:00.823Z"
-            },
-            {
-              "poolId": "true_false_1775387057870_ajugw4",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "delete",
-              "date": "2026-04-05T11:13:39.916Z"
-            },
-            {
-              "poolId": "true_false_1775387057870_owenmk",
-              "playerName": "ליאור",
-              "reason": "other",
-              "date": "2026-04-05T11:14:21.787Z"
-            }
-          ]
         }
       ],
-      "totalQuestions": 58,
-      "totalCorrect": 46,
-      "accuracy": 79.3103448275862
+      "totalQuestions": 51,
+      "totalCorrect": 43,
+      "accuracy": 84.31372549019608
     },
     {
       "playerName": "אייל",
