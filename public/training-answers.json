@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:40:05.411Z",
+  "lastUpdated": "2026-04-05T11:53:42.146Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -237,9 +237,7 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "2b374g"
-          ]
+          "flaggedPoolIds": []
         },
         {
           "date": "2026-04-03T16:45:15.305Z",
@@ -395,26 +393,8 @@
               "selectedOption": 1
             }
           ],
-          "flaggedPoolIds": [
-            "9tdp1l",
-            "dzwsgs"
-          ],
-          "flagReports": [
-            {
-              "poolId": "9tdp1l",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "השאלה חסרה מידע נוסף, כמה שחקנים, אופי המהמר, כמה יש בקופה , בקיצור חסר מידע",
-              "date": "2026-04-03T21:08:47.004Z"
-            },
-            {
-              "poolId": "dzwsgs",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "הייתי מוסיף עוד מידע",
-              "date": "2026-04-03T21:10:33.336Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T12:48:30.816Z",
@@ -506,17 +486,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "tgkrzr"
-          ],
-          "flagReports": [
-            {
-              "poolId": "tgkrzr",
-              "playerName": "ליאור",
-              "reason": "wrong_for_home_game",
-              "date": "2026-04-04T14:15:26.937Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-05T10:53:49.242Z",
@@ -1301,9 +1272,7 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "ru8emh"
-          ]
+          "flaggedPoolIds": []
         },
         {
           "date": "2026-04-03T19:58:58.962Z",
@@ -2448,34 +2417,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "w7yv5n",
-            "4znomq",
-            "60qhd0"
-          ],
-          "flagReports": [
-            {
-              "poolId": "w7yv5n",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "יש יותר מתשובה אחת . זה בסדר לזרוק אבל יותר נכון לשלם בטח שאתה s.b",
-              "date": "2026-04-04T08:56:54.081Z"
-            },
-            {
-              "poolId": "4znomq",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "אם הפלופ נמוך אני טוב ואם פגעתי אני חזק ואז מה שעמדה אצמאית  אולי זה פיליפ או פאבל וגם אורן או ליכטר או אייל.... עושים וחוץ מזה אולי היה כבר 3 ששילמו 200? חסר מידע",
-              "date": "2026-04-04T09:04:02.400Z"
-            },
-            {
-              "poolId": "60qhd0",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "אני לא מסכים עם הניתוח. \nלאורך זמן בטח בקבוצה סגורה אני מעדיף לא ישלמו  ואם כבר כן אחד ואם פגשתי הקופה כבר גדולה ישלמו לי הכל וככה אני חוזר לפעמים מהפסדים גדולים.",
-              "date": "2026-04-04T09:08:30.596Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T10:01:41.059Z",
@@ -2592,34 +2535,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "dbqv0v",
-            "w30fvh",
-            "63ka80"
-          ],
-          "flagReports": [
-            {
-              "poolId": "dbqv0v",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "לא מסכים עם התשובה.   אני רוצה שהוא יזרוק שלא יפגע מעלי!",
-              "date": "2026-04-04T12:00:38.221Z"
-            },
-            {
-              "poolId": "w30fvh",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "לא בטוח ביד הזאת.   למה חייב לשלם.   לא מסכים!",
-              "date": "2026-04-04T12:01:41.144Z"
-            },
-            {
-              "poolId": "63ka80",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "לא אוהב אותו!",
-              "date": "2026-04-04T12:02:26.565Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T13:37:55.421Z",
@@ -2657,18 +2574,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "fb0be5"
-          ],
-          "flagReports": [
-            {
-              "poolId": "fb0be5",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "ממש לא מסכים.   כל אחד בשולחן היה משלם כמעט תלוי כמה יש לו",
-              "date": "2026-04-04T12:05:40.545Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T13:39:58.353Z",
@@ -2786,18 +2693,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "yvgrs8"
-          ],
-          "flagReports": [
-            {
-              "poolId": "yvgrs8",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "חסר מידע בעיקר כמה ובפרט רוצה להמר קצת שישלמו לי ולא הרבה להבריח",
-              "date": "2026-04-05T07:20:53.632Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-05T07:27:28.880Z",
@@ -2836,18 +2733,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "bofwjo"
-          ],
-          "flagReports": [
-            {
-              "poolId": "bofwjo",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "בדיוק בגלל שהוא חלש ממני אני לא רוצה שהוא יפרוש אני רוצה לקחת לו עוד כסף בקלף הבא",
-              "date": "2026-04-05T07:24:38.911Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-05T07:32:34.642Z",
@@ -2926,18 +2813,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "vhfy8b"
-          ],
-          "flagReports": [
-            {
-              "poolId": "vhfy8b",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "לא ברור לי מה קורה כאן. אימרנו 400 לפני הפלופ ואז הוא אומר עוד 600 אחרי הפלופ. לי יש זוג גבוה מהפלופ אני מקפיץ והוא אגרסיבי ואולי יש עוד שחקנים אנילא אמרת",
-              "date": "2026-04-05T07:37:13.988Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-01T07:21:04.422Z",
@@ -3583,18 +3460,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "tr3g9w"
-          ],
-          "flagReports": [
-            {
-              "poolId": "tr3g9w",
-              "playerName": "ליכטר",
-              "reason": "wrong_answer",
-              "comment": "הזוג 8 חלש מול 9. חלש מול נסיך וחלש מול אופציה לצבע נמוך.  אולן אין פה היחס לקופה לא שווה להיכנס",
-              "date": "2026-04-04T09:48:36.173Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T18:02:59.024Z",
@@ -3665,18 +3532,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "jfwfp7"
-          ],
-          "flagReports": [
-            {
-              "poolId": "jfwfp7",
-              "playerName": "ליכטר",
-              "reason": "wrong_answer",
-              "comment": "כולם פרשו... אני עם אס 10 סוט.... חזק עם הa וגם סיכוי לצבע או רצף.... רק אני מול עוד מישהו אחד. אין סיבה לא לשים 500",
-              "date": "2026-04-04T18:02:43.303Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-04T18:04:47.366Z",
