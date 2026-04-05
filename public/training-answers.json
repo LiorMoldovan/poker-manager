@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T09:42:34.172Z",
+  "lastUpdated": "2026-04-05T10:57:55.639Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -523,11 +523,39 @@
               "date": "2026-04-04T14:15:26.937Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-05T10:53:49.242Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "yvu723",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T10:55:23.163Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "kr4f56",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 48,
-      "totalCorrect": 40,
-      "accuracy": 83.33333333333334
+      "totalQuestions": 50,
+      "totalCorrect": 42,
+      "accuracy": 84
     },
     {
       "playerName": "אייל",
@@ -677,508 +705,6 @@
       "totalQuestions": 15,
       "totalCorrect": 13,
       "accuracy": 86.66666666666667
-    },
-    {
-      "playerName": "ארז",
-      "sessions": [
-        {
-          "date": "2026-04-01T07:21:04.422Z",
-          "questionsAnswered": 8,
-          "correctAnswers": 6,
-          "results": [
-            {
-              "poolId": "z9bldk",
-              "categoryId": "cbet",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "kktd5e",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "fdxqju",
-              "categoryId": "wet_board_top_pair",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "r3x7l7",
-              "categoryId": "flush_draw",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "yxt76g",
-              "categoryId": "medium_pairs",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "w7ybtr",
-              "categoryId": "multiway_pots",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "9x51c2",
-              "categoryId": "medium_pairs",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "xxr9ki",
-              "categoryId": "slow_play",
-              "correct": false,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "5jx66w",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "yr2g88",
-              "categoryId": "multiway_pots",
-              "correct": true,
-              "chosenId": "A"
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-01T08:20:39.051Z",
-          "questionsAnswered": 4,
-          "correctAnswers": 4,
-          "results": [
-            {
-              "poolId": "v7rjet",
-              "categoryId": "blind_defense",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "n749b5",
-              "categoryId": "multiway_pots",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "4yfwbq",
-              "categoryId": "blind_defense",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "vli78m",
-              "categoryId": "squeeze_isolation",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "39l525",
-              "categoryId": "check_raise",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "iwytf7",
-              "categoryId": "stack_depth",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "5optvl",
-              "categoryId": "blind_defense",
-              "correct": false,
-              "chosenId": "C",
-              "nearMiss": true
-            },
-            {
-              "poolId": "lxe9p9",
-              "categoryId": "stack_depth",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "hljw47",
-              "categoryId": "position_play",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "4ajnvb",
-              "categoryId": "multiway_pots",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-01T08:25:16.255Z",
-          "questionsAnswered": 7,
-          "correctAnswers": 5,
-          "results": [
-            {
-              "poolId": "irwm8x",
-              "categoryId": "two_pair_plus",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "1yeqhi",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "so3eku",
-              "categoryId": "squeeze_isolation",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "fyw36m",
-              "categoryId": "multiway_pots",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "kf533m",
-              "categoryId": "cbet",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "vvpw4h",
-              "categoryId": "wet_board_top_pair",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "wf44o2",
-              "categoryId": "preflop_vs_raise",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "i166cq",
-              "categoryId": "preflop_vs_raise",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "rj9r30",
-              "categoryId": "medium_pairs",
-              "correct": false,
-              "chosenId": "C",
-              "nearMiss": true
-            },
-            {
-              "poolId": "z03yfe",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "B"
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-01T09:02:26.935Z",
-          "questionsAnswered": 6,
-          "correctAnswers": 6,
-          "results": [
-            {
-              "poolId": "go7tqk",
-              "categoryId": "blind_defense",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "vhfy8b",
-              "categoryId": "cbet",
-              "correct": false,
-              "chosenId": "C",
-              "nearMiss": true
-            },
-            {
-              "poolId": "6fzlnm",
-              "categoryId": "two_pair_plus",
-              "correct": true,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "5dr13q",
-              "categoryId": "three_bet_pots",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "d9hbp1",
-              "categoryId": "check_raise",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "9kagj8",
-              "categoryId": "slow_play",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "6mz966",
-              "categoryId": "three_bet_pots",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "xdqixa",
-              "categoryId": "multiway_pots",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "ndtdjd",
-              "categoryId": "check_raise",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "vt0dtz",
-              "categoryId": "squeeze_isolation",
-              "correct": true,
-              "chosenId": "B"
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-01T09:18:25.347Z",
-          "questionsAnswered": 9,
-          "correctAnswers": 7,
-          "results": [
-            {
-              "poolId": "qlummr",
-              "categoryId": "blind_defense",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "ys7ie6",
-              "categoryId": "medium_pairs",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "q8zfcw",
-              "categoryId": "medium_pairs",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "ob0itd",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "q378x2",
-              "categoryId": "preflop_vs_raise",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "7a97um",
-              "categoryId": "preflop_vs_raise",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "ssgtpi",
-              "categoryId": "preflop_open",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "cyrr6n",
-              "categoryId": "slow_play",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "7ay5va",
-              "categoryId": "multiway_pots",
-              "correct": false,
-              "chosenId": "B",
-              "nearMiss": true
-            },
-            {
-              "poolId": "yrkowz",
-              "categoryId": "two_pair_plus",
-              "correct": true,
-              "chosenId": "B"
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-02T15:48:07.130Z",
-          "questionsAnswered": 8,
-          "correctAnswers": 5,
-          "results": [
-            {
-              "poolId": "qrjqyo",
-              "categoryId": "position_play",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "pveiqa",
-              "categoryId": "stack_depth",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "ysj3vn",
-              "categoryId": "blind_defense",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "gmv3lu",
-              "categoryId": "blind_defense",
-              "correct": false,
-              "chosenId": "C",
-              "nearMiss": true
-            },
-            {
-              "poolId": "cgkdsp",
-              "categoryId": "slow_play",
-              "correct": false,
-              "chosenId": "A",
-              "nearMiss": true
-            },
-            {
-              "poolId": "142ltl",
-              "categoryId": "preflop_open",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "9s6ia4",
-              "categoryId": "medium_pairs",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "86bnbt",
-              "categoryId": "position_play",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "n2l64h",
-              "categoryId": "multiway_pots",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "27asay",
-              "categoryId": "overbet",
-              "correct": false,
-              "chosenId": "A"
-            }
-          ],
-          "flaggedPoolIds": []
-        },
-        {
-          "date": "2026-04-02T15:51:04.267Z",
-          "questionsAnswered": 10,
-          "correctAnswers": 9,
-          "results": [
-            {
-              "poolId": "f2nh1w",
-              "categoryId": "cbet",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "jdhqan",
-              "categoryId": "squeeze_isolation",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "92g4xm",
-              "categoryId": "set_mining",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "iik2oe",
-              "categoryId": "flush_draw",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "b82fap",
-              "categoryId": "wet_board_top_pair",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "5bnb52",
-              "categoryId": "flush_draw",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "hwki51",
-              "categoryId": "set_mining",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "el29n3",
-              "categoryId": "set_mining",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "2rx4x4",
-              "categoryId": "overbet",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "iw1p29",
-              "categoryId": "overbet",
-              "correct": true,
-              "chosenId": "B"
-            }
-          ],
-          "flaggedPoolIds": []
-        }
-      ],
-      "totalQuestions": 52,
-      "totalCorrect": 42,
-      "accuracy": 80.76923076923077
     },
     {
       "playerName": "אורן",
@@ -3404,11 +2930,505 @@
               "date": "2026-04-05T07:37:13.988Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-01T07:21:04.422Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "z9bldk",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "kktd5e",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fdxqju",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "r3x7l7",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yxt76g",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w7ybtr",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "9x51c2",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "xxr9ki",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5jx66w",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yr2g88",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T08:20:39.051Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "v7rjet",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "n749b5",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4yfwbq",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vli78m",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "39l525",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "iwytf7",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "5optvl",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "C",
+              "nearMiss": true
+            },
+            {
+              "poolId": "lxe9p9",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "hljw47",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4ajnvb",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T08:25:16.255Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "irwm8x",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1yeqhi",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "so3eku",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fyw36m",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "kf533m",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wf44o2",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "i166cq",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rj9r30",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "C",
+              "nearMiss": true
+            },
+            {
+              "poolId": "z03yfe",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T09:02:26.935Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "go7tqk",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vhfy8b",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "C",
+              "nearMiss": true
+            },
+            {
+              "poolId": "6fzlnm",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "5dr13q",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d9hbp1",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "9kagj8",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "6mz966",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xdqixa",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ndtdjd",
+              "categoryId": "check_raise",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "vt0dtz",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-01T09:18:25.347Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "qlummr",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ys7ie6",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "q8zfcw",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ob0itd",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q378x2",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7a97um",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ssgtpi",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "cyrr6n",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7ay5va",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B",
+              "nearMiss": true
+            },
+            {
+              "poolId": "yrkowz",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-02T15:48:07.130Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "qrjqyo",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "pveiqa",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ysj3vn",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmv3lu",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "chosenId": "C",
+              "nearMiss": true
+            },
+            {
+              "poolId": "cgkdsp",
+              "categoryId": "slow_play",
+              "correct": false,
+              "chosenId": "A",
+              "nearMiss": true
+            },
+            {
+              "poolId": "142ltl",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "9s6ia4",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "86bnbt",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "n2l64h",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "27asay",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-02T15:51:04.267Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "f2nh1w",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jdhqan",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "92g4xm",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iik2oe",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "b82fap",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5bnb52",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hwki51",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "el29n3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2rx4x4",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iw1p29",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 49,
-      "totalCorrect": 41,
-      "accuracy": 83.6734693877551
+      "totalQuestions": 101,
+      "totalCorrect": 83,
+      "accuracy": 82.17821782178217
     },
     {
       "playerName": "ליכטר",
