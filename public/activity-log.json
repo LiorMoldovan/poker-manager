@@ -2164,5 +2164,25 @@
       "canvasHash": "20ear9"
     },
     "playerName": "אייל"
+  },
+  {
+    "deviceId": "fe6fd17b-ae74-4cd0-a91d-4da0bf71615d",
+    "role": "member",
+    "timestamp": "2026-04-05T17:55:49.027Z",
+    "device": "iPhone / iOS 18 / Safari",
+    "screenSize": "430x932",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-05T17:55:49.029Z",
+    "fingerprint": {
+      "gpu": "Apple GPU",
+      "cores": 4,
+      "memory": 0,
+      "touchPoints": 5,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "y7v3bq"
+    },
+    "playerName": "אורן"
   }
 ]
