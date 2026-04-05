@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-04T21:30:44.428Z",
+  "lastUpdated": "2026-04-05T06:34:49.696Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2246,11 +2246,51 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T06:34:48.972Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "4dl7c6",
+              "categoryId": "thin_value",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wofxpe",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7wrcfp",
+              "categoryId": "pot_odds",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7pun00",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rl5im9",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 92,
-      "totalCorrect": 71,
-      "accuracy": 77.17391304347827
+      "totalQuestions": 95,
+      "totalCorrect": 74,
+      "accuracy": 77.89473684210526
     },
     {
       "playerName": "מלמד",
