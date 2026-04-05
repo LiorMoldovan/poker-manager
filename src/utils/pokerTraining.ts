@@ -156,13 +156,72 @@ export const SCENARIO_CATEGORIES: CategoryInfo[] = [
   // לפני הקלפים המשותפים
   { id: 'preflop_open', name: 'פתיחה לפני הפלופ', description: 'עם מה לפתוח מכל מיקום, כמה להעלות, ומתי לוותר על ידיים בינוניות', icon: '🚪' },
   { id: 'preflop_vs_raise', name: 'מישהו העלה לפניך', description: 'מישהו העלה ואולי עוד קראו - מה לעשות עם זוג נמוך, יד חזקה, או יד בינונית?', icon: '🤔' },
+  { id: 'odds_math', name: 'אחוזים וסיכויים', description: 'מה הסיכוי להשלים סדרה/צבע? חישוב אאוטים, סיכויי קופה', icon: '📊' },
+  { id: 'true_false', name: 'סיכויים וחישובים', description: 'אאוטים, סיכויי קופה, אחוזי ניצחון — תחשב נכון ותנצח', icon: '🔢' },
 ];
 
 // ════════════════════════════════════════════════════════════
-// TABLE DYNAMICS (from conversation analysis)
+// PLAYER STYLES & GAME CONTEXT (shared across all prompts)
 // ════════════════════════════════════════════════════════════
 
-const TABLE_DYNAMICS = `משחק ביתי: 7-8 שחקנים, בליינדס 50/100 קבועים, ערימות 8,000-25,000. העלאות לפני הפלופ 400-1000. לפעמים 2-3 רואים פלופ, לפעמים 5+. יש בלאפים אבל רוב השחקנים ישרים. אול-אין כמה פעמים בשעה.`;
+export const PLAYER_STYLES: Record<string, string> = {
+  'ליאור': 'סלקטיבי ופסיבי — נכנס רק עם טוב, משחק שקט',
+  'אייל': 'משחק הרבה ידיים, אגרסיבי — מהמר הרבה, אוהב הרפתקאות',
+  'חרדון': 'משחק הרבה ידיים, אגרסיבי — מהמר חזק',
+  'אורן': 'משחק הרבה ידיים, פסיבי — קורא הרבה, לא ממהר להעלות',
+  'ליכטר': 'משחק הרבה ידיים, אגרסיבי — מהמר ומעלה הרבה',
+  'סגל': 'סלקטיבי ופסיבי — נכנס רק עם טוב, משחק שקט',
+  'תומר': 'משחק הרבה ידיים, פסיבי — קורא הרבה, לא מעלה',
+  'פיליפ': 'משחק הרבה ידיים, אגרסיבי',
+  'פאבל': 'משחק הרבה ידיים, אגרסיבי — מהמר ומעלה הרבה',
+  'דן מאן': 'סלקטיבי ופסיבי',
+  'מלמד': 'סלקטיבי ואגרסיבי — כשנכנס, מהמר חזק',
+};
+
+const playerStylesPrompt = Object.entries(PLAYER_STYLES)
+  .map(([name, style]) => `- ${name}: ${style}`)
+  .join('\n');
+
+export const GAME_CONTEXT = `הקשר המשחק — חובה להבין:
+זהו משחק ביתי חברתי בין חבר'ה קבועים (~8 שחקנים), על סכומים קטנים.
+כניסה: 30 שקלים = 10,000 צ'יפים. כל הסכומים בשאלות הם בצ'יפים (לא שקלים).
+המרה: 500 צ'יפים = 1.5 ₪, 1,000 = 3 ₪, 2,000 = 6 ₪, 5,000 = 15 ₪.
+שחקנים קונים בקלות עד 6-8 ריבאיים (30 ₪ כל פעם) — להפסיד ערימה זה לא נורא.
+בליינדס: 50/100. ערימות: 8,000-25,000. העלאות לפני הפלופ: 400-2,000. אחרי הפלופ: 1,000-5,000. הימורים גדולים: 5,000+.
+3-5 שחקנים רואים כמעט כל פלופ. הרבה קופות מולטי-ווי.
+התנהגות קריאה: העלאה רגילה (400-1,000) מקבלת 3-5 קוראים. גם 2,000 מקבל 2-3. רק 3,000+ מדלל.
+בלופים: אפקטיביות נמוכה. בלופים קטנים/בינוניים כמעט תמיד נקראים. גדולים (5,000+) מפחידים רק ידיים חלשות באמת.
+
+כיול תשובות נכונות למשחק הזה:
+- קריאה עם ידיים בינוניות מול הימורים בינוניים = בדרך כלל נכון
+- ויתור מול הימור קטן (500-1,500) עם כל זוג או משיכה = כמעט תמיד שגוי
+- הימור ערך גדול עם יד חזקה = נכון — הם ישלמו לך
+- בלוף = כמעט אף פעם לא התשובה הנכונה — מישהו תמיד יקרא`;
+
+export const WRONG_ANSWER_REACTIONS: string[] = [
+  'טעות נפוצה! רוב השחקנים שלנו בוחרים את זה',
+  'קרוב! הכיוון טוב, אבל...',
+  'אוי, הלכת על הבלוף? אצלנו תמיד יקראו לך 😄',
+  'הממם... חרדון היה גאה בבחירה הזו',
+  'לא נורא, גם המקצוענים טועים',
+  'שים לב לגודל ההימור ביחס לקופה',
+  'אצלנו המשחק שונה — תמיד מישהו קורא',
+  'כמעט! בפוקר מקצועי זה היה מהלך טוב',
+  'טעות קלאסית של משחק ביתי — עכשיו תדע',
+];
+
+export const CORRECT_ANSWER_REACTIONS: string[] = [
+  'מדויק! 🎯',
+  'בול!',
+  'אלוף! 💪',
+  'בדיוק ככה!',
+  'תשובה מושלמת',
+  'אתה מכיר את המשחק שלנו!',
+  'מקצוען!',
+  'נכון מאוד — ככה מרוויחים אצלנו',
+];
+
+const TABLE_DYNAMICS = `משחק ביתי: 7-8 שחקנים, בליינדס 50/100 קבועים, ערימות 8,000-25,000. העלאות לפני הפלופ 400-2000. 3-5 רואים פלופ. בלופים עובדים פחות. אול-אין כמה פעמים בשעה.`;
 
 // ════════════════════════════════════════════════════════════
 // PLAYER STYLE INFERENCE
@@ -908,6 +967,48 @@ import {
   fetchTrainingPool,
   writeTrainingAnswersWithRetry,
 } from '../database/githubSync';
+import { LEGACY_NAME_CORRECTIONS } from '../App';
+
+/** Merge player entries whose names are in LEGACY_NAME_CORRECTIONS into the canonical entry. */
+export const normalizeTrainingPlayers = (data: TrainingAnswersFile): TrainingAnswersFile => {
+  const corrections = Object.entries(LEGACY_NAME_CORRECTIONS);
+  if (corrections.length === 0) return data;
+
+  const nameMap = new Map<string, TrainingPlayerData>();
+  for (const p of data.players) nameMap.set(p.playerName, p);
+
+  let changed = false;
+  for (const [oldName, newName] of corrections) {
+    const oldEntry = nameMap.get(oldName);
+    if (!oldEntry) continue;
+    changed = true;
+
+    const newEntry = nameMap.get(newName);
+    if (newEntry) {
+      const existingIds = new Set(newEntry.sessions.map(s => s.results.map(r => r.poolId)).flat());
+      for (const s of oldEntry.sessions) {
+        const unique = s.results.some(r => !existingIds.has(r.poolId));
+        if (unique) newEntry.sessions.push(s);
+      }
+      let scored = 0, corr = 0;
+      for (const s of newEntry.sessions) {
+        for (const r of s.results) {
+          if (!r.nearMiss) { scored++; if (r.correct) corr++; }
+        }
+      }
+      newEntry.totalQuestions = scored;
+      newEntry.totalCorrect = corr;
+      newEntry.accuracy = scored > 0 ? (corr / scored) * 100 : 0;
+    } else {
+      oldEntry.playerName = newName;
+      nameMap.set(newName, oldEntry);
+    }
+    nameMap.delete(oldName);
+  }
+
+  if (!changed) return data;
+  return { ...data, players: [...nameMap.values()] };
+};
 
 const POOL_CACHE_KEY = 'training_pool_cached';
 const POOL_GENERATED_AT_KEY = 'training_pool_generatedAt';
@@ -1070,6 +1171,14 @@ export const loadFromPool = async (
   let exhaustedCategory = false;
   let exhaustedAll = false;
 
+  // Filter out questions that mention the current player's name
+  const namesToExclude = [playerName];
+  Object.entries(LEGACY_NAME_CORRECTIONS).forEach(([old, corrected]) => {
+    if (corrected === playerName) namesToExclude.push(old);
+    if (old === playerName) namesToExclude.push(corrected);
+  });
+  available = available.filter(s => !namesToExclude.some(n => s.situation.includes(n)));
+
   if (categoryIds && categoryIds.length > 0) {
     const catSet = new Set(categoryIds);
     const catFiltered = available.filter(s => catSet.has(s.categoryId));
@@ -1083,14 +1192,31 @@ export const loadFromPool = async (
   if (available.length === 0) {
     progress.seenPoolIds = [];
     saveSharedProgress(playerName, progress);
-    available = pool.scenarios;
+    available = pool.scenarios.filter(s => !namesToExclude.some(n => s.situation.includes(n)));
     if (categoryIds && categoryIds.length > 0) {
       available = available.filter(s => new Set(categoryIds).has(s.categoryId));
     }
     exhaustedAll = true;
   }
 
-  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  // Weak-category weighting: boost questions from categories where the player struggles
+  const weakCatIds = Object.entries(progress.byCategory)
+    .filter(([, d]) => d.total >= 3 && (d.correct / d.total) < 0.5)
+    .map(([id]) => id);
+
+  let shuffled: PoolScenario[];
+  if (weakCatIds.length > 0 && available.length > 6) {
+    const weakPool = available.filter(s => weakCatIds.includes(s.categoryId));
+    const restPool = available.filter(s => !weakCatIds.includes(s.categoryId));
+    const targetWeak = Math.max(1, Math.floor(available.length * 0.3));
+    const weakPicked = [...weakPool].sort(() => Math.random() - 0.5).slice(0, targetWeak);
+    const weakIds = new Set(weakPicked.map(s => s.poolId));
+    const restPicked = [...restPool, ...weakPool.filter(s => !weakIds.has(s.poolId))].sort(() => Math.random() - 0.5);
+    shuffled = [...weakPicked, ...restPicked].sort(() => Math.random() - 0.5);
+  } else {
+    shuffled = [...available].sort(() => Math.random() - 0.5);
+  }
+
   const picked = count ? shuffled.slice(0, count) : shuffled;
 
   return { scenarios: picked, exhaustedCategory, exhaustedAll };
@@ -1304,6 +1430,17 @@ export const CATEGORY_TIPS: Record<string, string[]> = {
     'מול העלאה: "האם היד שלי מספיק חזקה להתמודד עם הטווח שלו?"',
     'עם זוג נמוך מול העלאה - קרא רק אם הערימות עמוקות מספיק',
   ],
+  odds_math: [
+    'סדרה פתוחה משני הצדדים = 8 אאוטים = ~32% עד הריבר, ~17% בקלף אחד',
+    'צבע דרו = 9 אאוטים = ~35% עד הריבר, ~19% בקלף אחד',
+    'כלל 4 ו-2: אאוטים x4 בפלופ (שני קלפים) או x2 בטרן (קלף אחד) = אחוז בקירוב',
+  ],
+  true_false: [
+    'כלל ה-4: בפלופ (2 קלפים נשארו) — אאוטים × 4 = אחוז הסיכוי',
+    'כלל ה-2: בטרן (קלף אחד נשאר) — אאוטים × 2 = אחוז הסיכוי',
+    'Pot Odds: הימור ÷ (קופה + הימור) = אחוז מינימלי שצריך',
+    'flush draw = 9 אאוטים, open-ended straight = 8, gutshot = 4',
+  ],
 };
 
 export const getTipsForPlayer = (progress: SharedTrainingProgress): { categoryId: string; categoryName: string; tips: string[] }[] => {
@@ -1333,33 +1470,50 @@ const buildPoolBatchPrompt = (
     ? `\n\nשאלות שכבר קיימות (תמנע מלחזור עליהן):\n${existingSummaries.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n`
     : '';
 
+  const isTrueFalse = category.id === 'true_false';
+  const isOddsMath = category.id === 'odds_math';
+
+  const trueFalseInstructions = isTrueFalse ? `
+פורמט נכון/לא נכון:
+- כל שאלה מציגה טענה על פוקר שמאתגרת שחקנים מנוסים — מתמטיקה מתקדמת, מלכודות אסטרטגיות, ותפיסות שגויות נפוצות גם בין שחקנים טובים
+- 3 אופציות בדיוק: A=נכון, B=לא נכון, C=תלוי ב... (עם הקשר ספציפי)
+- הרמה חייבת להיות גבוהה: אל תשאל שאלות בסיסיות על סדר ידיים, כללי משחק פשוטים, או דברים שכל שחקן רגיל יודע. השחקנים כאן מנוסים ומשחקים הרבה זמן יחד
+- דוגמאות לרמה הנכונה: חישובי אאוטים מדויקים, אסטרטגיית פוזיציה מתקדמת, pot odds מול implied odds, טעויות שכיחות של שחקנים טובים, מושגים כמו reverse implied odds או fold equity
+- דוגמה: situation: "טענה: עם 9 אאוטים בטרן, הסיכוי שלך להשתפר בריבר הוא בערך 35%", yourCards: "" (ריק), options: A=נכון, B=לא נכון (התשובה הנכונה — 19% בלבד), C=תלוי בגודל הקופה
+` : '';
+
+  const oddsMathInstructions = isOddsMath ? `
+שאלות אחוזים וסיכויים:
+- שאלות מתמטיות על פאוטים, סיכויי קופה, אחוזי שיפור
+- התשובות הן מספריות/עובדתיות — אין הבדל בין משחק ביתי למקצועי
+- דוגמה: "יש לך 4 קלפים לצבע אחרי הפלופ. כמה אאוטים יש לך ומה הסיכוי להשלים צבע עד הריבר?"
+- nearMiss לא רלוונטי בקטגוריה הזו
+` : '';
+
   return `בנה ${count} שאלות אימון פוקר למשחק ביתי חברתי. עברית פשוטה בלבד.
 
-נושא: **${category.name}** - ${category.description}
+נושא: **${category.name}** — ${category.description}
 
-⚠️ הקשר המשחק — חובה להבין לפני שכותבים שאלות:
-זהו משחק ביתי חברתי בין חבר'ה קבועים (~8 שחקנים), על סכומים קטנים (כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000). המאפיינים:
-- שחקנים קוראים הרבה יותר ממה שצריך — "פולד" לא פופולרי במשחק ביתי
-- בלופים עובדים פחות כי תמיד מישהו יקרא "לראות מה יש לך"
-- הרבה יותר פוטים מולטי-ווי (3-5 שחקנים בכל יד)
-- שחקנים פחות אגרסיביים לפני הפלופ — הרבה לימפים וקריאות
-- פסיכולוגיה של "לא רוצה להפסיד 30 שקלים" — שחקנים משחקים tight כשהם קרובים לאול-אין
-- ערך ההימורים נמוך יחסית לקופה — אי אפשר "ללחוץ" על שחקנים כמו בטורניר
+${GAME_CONTEXT}
 
-התשובות הנכונות חייבות להיות מותאמות למציאות הזו:
-- העדף ידיים חזקות על בלופים
-- אם "כולם קוראים" → בלוף הוא לא התשובה הנכונה
-- הימור ערך שמן עם יד חזקה עדיף על הימור קטן "לשלוף מידע"
-- ויתור עם יד בינונית מול העלאה גדולה — תקף גם כשהסכום קטן
-- אל תמליץ על מהלכים שדורשים שהיריב ישחק רציונלי/מקצועי
+שחקנים קבועים במשחק (השתמש בשמות שלהם ב-~70% מהשאלות כיריבים):
+${playerStylesPrompt}
 
+חוקי שימוש בשמות:
+- שלב את הסגנון שלהם בטבעיות: "חרדון, שמהמר על הכל, מהמר 2,000" או "אורן, שקורא כמעט תמיד, קורא"
+- היה יצירתי עם הקשר: "אייל כבר בריבאי השביעי ומשחק לוהט", "סגל לא שיחק יד כבר חצי שעה"
+- לפעמים שחקן פסיבי יכול להיות אגרסיבי — הסבר למה: "סגל, שבדרך כלל שקט, פתאום מהמר 4,000 — מוזר"
+- חלק מהשאלות יכולות לשאול "מה היה עושה [שם]?" — התשובה הנכונה מתאימה לסגנון המוכר שלו
+- ~30% מהשאלות בלי שמות (יריב גנרי) כדי לגוון
+${trueFalseInstructions}${oddsMathInstructions}
 כללים:
-- כל שאלה = נקודת החלטה אחת. תאר מה קרה **עד** הרגע שבו השחקן צריך להחליט. **אל תכתוב מה השחקן עושה/מחליט!**
-- בדיוק 3 אופציות, בדיוק אחת נכונה
+- כל שאלה = נקודת החלטה אחת. תאר מה קרה **עד** הרגע שבו צריך להחליט. **אל תכתוב מה השחקן עושה!**
+- בדיוק 3 אופציות (A, B, C), בדיוק אחת נכונה
 - אסור מונחים באנגלית (equity, EV, SPR, range, c-bet, semi-bluff, value bet וכו')
-- יריבים לפי סגנון בלבד ("שחקן שאוהב לקרוא", "שחקן שמרני", "שחקן לוהט שמהמר על הכל"), בלי שמות אמיתיים
-- בליינדס 50/100, ערימות 8,000-25,000, העלאות 400-1,000
-- כל הסכומים בשקלים (לא דולרים, לא נקודות)
+- כל הסכומים בצ'יפים (לא שקלים). אל תכתוב "שקלים" ליד סכומי הימור
+- **אל תחזור על הקלפים של השחקן בטקסט המצב** — הם מוצגים בנפרד בממשק
+- כל מצב חייב לציין: כמה יריבים ביד, גודל הקופה, באיזה שלב (פלופ/טרן/ריבר)
+- מצב: 2-3 משפטים תמציתיים שמציירים תמונה ברורה
 
 חוקים קריטיים:
 - אם מישהו המר → האופציות: קריאה [סכום ההימור], העלאה ל-[סכום], ויתור
@@ -1367,22 +1521,20 @@ const buildPoolBatchPrompt = (
 - "קריאה" = סכום שצריך לשלם, לא סכום הקופה!
 
 nearMiss — סימון חשוב:
-- לחלק מהתשובות השגויות, הוסף "nearMiss": true — אלה תשובות שהיו **נכונות בפוקר מקצועי/טורניר** אבל לא מתאימות למשחק ביתי
-- דוגמה: בלוף גדול שהיה עובד מול שחקנים רציונליים, אבל במשחק שלנו שחקנים קוראים → nearMiss
-- דוגמה: צ'ק-רייז מתוחכם שדורש שהיריב יבין מה אתה מייצג → nearMiss
-- תשובות שהן פשוט שגויות (קריאה עם יד מתה, ויתור עם אגוזים) → בלי nearMiss
+- לחלק מהתשובות השגויות, הוסף "nearMiss": true — תשובות שהיו **נכונות בפוקר מקצועי** אבל לא למשחק הביתי שלנו
+- דוגמה: בלוף שהיה עובד מול שחקנים רציונליים → nearMiss
+- תשובות פשוט שגויות (קריאה עם יד מתה, ויתור עם אגוזים) → בלי nearMiss
 - בממוצע ~30-40% מהתשובות השגויות צריכות להיות nearMiss
 
 איכות:
-- כל מצב צריך להיות מפורט: 2-4 משפטים שמצוירים תמונה ברורה
-- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב — לא עצות גנריות מספרי פוקר
-- ההסבר צריך לדבר בשפה של משחק ביתי: "הוא תמיד קורא אז בלוף לא ישרת אותך", "בסכום הזה עדיף לנסות לראות קלף"
-- כשתשובה היא nearMiss, ההסבר צריך לציין: "במשחק מקצועי זה היה מהלך טוב, אבל..." ולהסביר למה במשחק ביתי זה לא עובד
-- גם תשובות שגויות צריכות הסבר משכנע למה מישהו היה בוחר בהן
-- גוון: מיקומים שונים (UTG/MP/CO/BTN/BB), קלפים שונים, עומקי ערימה שונים, סגנונות יריבים שונים
+- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב — לא עצות גנריות
+- ההסבר בשפה של משחק ביתי: "חרדון תמיד קורא אז בלוף לא ישרת אותך", "ב-1,500 צ'יפים (4.5 שקל) שווה לראות קלף"
+- כשתשובה nearMiss, ההסבר מציין: "במשחק מקצועי זה מהלך טוב, אבל..." + למה במשחק ביתי זה לא עובד
+- גם תשובות שגויות צריכות הסבר משכנע
+- גוון: מיקומים שונים, קלפים שונים, עומקי ערימה שונים
 ${avoidContext}
 JSON בלבד, מערך של ${count}:
-[{"id":1,"situation":"תיאור מפורט 2-4 משפטים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"nearMiss":true,"explanation":"במשחק מקצועי קריאה הגיונית כי... אבל במשחק שלנו..."},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר מפורט למה זו התשובה הנכונה"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר מפורט למה לוותר פה זו טעות"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
+[{"id":1,"situation":"2-3 משפטים תמציתיים. אל תחזור על הקלפים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"nearMiss":true,"explanation":"הסבר ספציפי"},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר ספציפי"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר ספציפי"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
 };
 
 const hashScenario = (s: { situation: string; yourCards: string; options: { text: string }[] }): string => {
@@ -1400,7 +1552,7 @@ const validatePoolScenario = (s: unknown): s is PoolScenario => {
   if (!sc || typeof sc !== 'object') return false;
   if (typeof sc.situation !== 'string' || !sc.situation) return false;
   if (typeof sc.yourCards !== 'string' || !sc.yourCards) return false;
-  if (!Array.isArray(sc.options) || sc.options.length < 2) return false;
+  if (!Array.isArray(sc.options) || sc.options.length !== 3) return false;
   const opts = sc.options as { id?: string; text?: string; isCorrect?: boolean; explanation?: string }[];
   if (!opts.every(o => o.id && typeof o.text === 'string' && o.text)) return false;
   const correctCount = opts.filter(o => o.isCorrect).length;
@@ -1548,16 +1700,26 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   localStorage.removeItem(PENDING_UPLOAD_KEY);
 
   const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
+    data = normalizeTrainingPlayers(data);
+
     for (const { playerName, session } of pending) {
-      let player = data.players.find(p => p.playerName === playerName);
+      const correctedName = LEGACY_NAME_CORRECTIONS[playerName] || playerName;
+      let player = data.players.find(p => p.playerName === correctedName);
       if (!player) {
-        player = { playerName, sessions: [], totalQuestions: 0, totalCorrect: 0, accuracy: 0 };
+        player = { playerName: correctedName, sessions: [], totalQuestions: 0, totalCorrect: 0, accuracy: 0 };
         data.players.push(player);
       }
-      player.sessions.push(session);
-      player.totalQuestions += session.questionsAnswered;
-      player.totalCorrect += session.correctAnswers;
-      // Recalculate from all results to properly exclude nearMiss
+
+      // Deduplicate: skip session if its poolIds already exist in this player's data
+      const existingPoolIds = new Set(player.sessions.flatMap(s => s.results.map(r => r.poolId)));
+      const newResults = session.results.filter(r => !existingPoolIds.has(r.poolId));
+      if (newResults.length > 0) {
+        player.sessions.push({ ...session, results: newResults });
+      }
+    }
+
+    // Recalculate all player stats from actual session data
+    for (const player of data.players) {
       let scored = 0, corr = 0;
       for (const s of player.sessions) {
         for (const r of s.results) {
@@ -1568,6 +1730,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       player.totalCorrect = corr;
       player.accuracy = scored > 0 ? (corr / scored) * 100 : 0;
     }
+
     data.lastUpdated = new Date().toISOString();
     return data;
   }, keepalive);
@@ -1580,6 +1743,86 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       const existingPending = existing ? JSON.parse(existing) : [];
       localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify([...pending, ...existingPending]));
     } catch { /* ignore */ }
+  }
+};
+
+// ── Personal AI report (every 100 questions) ──
+
+export const generatePersonalReport = async (
+  playerName: string,
+  playerData: TrainingPlayerData,
+  allPlayers: TrainingPlayerData[],
+): Promise<string | null> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+
+  const catBreakdown: Record<string, { total: number; correct: number }> = {};
+  let totalQ = 0, totalC = 0;
+  for (const s of playerData.sessions) {
+    for (const r of s.results) {
+      if (r.nearMiss) continue;
+      totalQ++;
+      if (!catBreakdown[r.categoryId]) catBreakdown[r.categoryId] = { total: 0, correct: 0 };
+      catBreakdown[r.categoryId].total++;
+      if (r.correct) { totalC++; catBreakdown[r.categoryId].correct++; }
+    }
+  }
+
+  const catLines = Object.entries(catBreakdown)
+    .filter(([, d]) => d.total >= 2)
+    .sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total))
+    .map(([catId, d]) => {
+      const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
+      return `${cat?.name || catId}: ${d.correct}/${d.total} (${Math.round((d.correct / d.total) * 100)}%)`;
+    });
+
+  const groupAvg = allPlayers.length > 0
+    ? Math.round(allPlayers.reduce((sum, p) => sum + p.accuracy, 0) / allPlayers.length)
+    : 0;
+
+  const recentResults = playerData.sessions
+    .flatMap(s => s.results)
+    .filter(r => !r.nearMiss)
+    .slice(-50);
+  const recentCorrect = recentResults.filter(r => r.correct).length;
+  const recentAcc = recentResults.length > 0 ? Math.round((recentCorrect / recentResults.length) * 100) : 0;
+  const overallAcc = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+  const improving = recentAcc > overallAcc;
+
+  const prompt = `כתוב דוח אימון פוקר אישי עבור ${playerName}. עברית בלבד, 6-8 משפטים.
+
+נתונים:
+- סה"כ: ${totalQ} שאלות, ${overallAcc}% דיוק
+- 50 שאלות אחרונות: ${recentAcc}% דיוק ${improving ? '(מגמת שיפור!)' : ''}
+- ממוצע הקבוצה: ${groupAvg}%
+- פירוט לפי נושא:
+${catLines.join('\n')}
+
+הנחיות:
+- היה מעודד אבל כנה. השתמש בהומור קל
+- ציין את הנושאים החזקים ביותר ואת החלשים ביותר בשם
+- השווה לממוצע הקבוצה
+- תן 2-3 טיפים ספציפיים לשיפור
+- סיים עם מוטיבציה ל-100 השאלות הבאות
+- אל תשתמש בכותרות או בפורמט מיוחד — טקסט רציף בלבד`;
+
+  try {
+    const config = API_CONFIGS[0];
+    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
+    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
+      }),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch {
+    return null;
   }
 };
 

@@ -1560,41 +1560,45 @@ const GraphsScreen = () => {
             </div>
             
             {/* Battle stats */}
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-around',
-              padding: '0.5rem',
-              background: 'var(--surface)',
-              borderRadius: '8px',
-              fontSize: '0.75rem',
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: '#10B981', fontWeight: '700', fontSize: '1.1rem' }}>
-                  {headToHeadData.sharedGamesCount > 0 
-                    ? Math.round((headToHeadData.directBattles.player1Wins / headToHeadData.sharedGamesCount) * 100) 
-                    : 0}%
+            {(() => {
+              const total = headToHeadData.sharedGamesCount;
+              const p1Pct = total > 0 ? (headToHeadData.directBattles.player1Wins / total) * 100 : 0;
+              const p2Pct = total > 0 ? (headToHeadData.directBattles.player2Wins / total) * 100 : 0;
+              const tiesPct = total > 0 ? (headToHeadData.directBattles.ties / total) * 100 : 0;
+              const needDecimal = Math.round(p1Pct) === Math.round(p2Pct) && headToHeadData.directBattles.player1Wins !== headToHeadData.directBattles.player2Wins;
+              const fmt = (v: number) => needDecimal ? v.toFixed(1) : `${Math.round(v)}`;
+              return (
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-around',
+                  padding: '0.5rem',
+                  background: 'var(--surface)',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#10B981', fontWeight: '700', fontSize: '1.1rem' }}>
+                      {fmt(p1Pct)}%
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
+                      {headToHeadData.directBattles.ties} Ties
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
+                      ({Math.round(tiesPct)}%)
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#3B82F6', fontWeight: '700', fontSize: '1.1rem' }}>
+                      {fmt(p2Pct)}%
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+                  </div>
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
-                  {headToHeadData.directBattles.ties} Ties
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
-                  ({headToHeadData.sharedGamesCount > 0 
-                    ? Math.round((headToHeadData.directBattles.ties / headToHeadData.sharedGamesCount) * 100) 
-                    : 0}%)
-                </div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ color: '#3B82F6', fontWeight: '700', fontSize: '1.1rem' }}>
-                  {headToHeadData.sharedGamesCount > 0 
-                    ? Math.round((headToHeadData.directBattles.player2Wins / headToHeadData.sharedGamesCount) * 100) 
-                    : 0}%
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
           {/* 🔥 RECENT FORM */}

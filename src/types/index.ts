@@ -276,12 +276,20 @@ export interface TrainingSession {
   flagReports?: TrainingFlagReport[];
 }
 
+export interface TrainingPlayerReport {
+  milestone: number;
+  text: string;
+  date: string;
+}
+
 export interface TrainingPlayerData {
   playerName: string;
   sessions: TrainingSession[];
   totalQuestions: number;
   totalCorrect: number;
   accuracy: number;
+  reports?: TrainingPlayerReport[];
+  pendingReportMilestones?: number[];
 }
 
 export interface TrainingAnswersFile {

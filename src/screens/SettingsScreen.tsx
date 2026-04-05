@@ -36,7 +36,8 @@ import { ActivityLogEntry } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import { usePermissions } from '../App';
-import { getRoleDisplayName, getRoleEmoji } from '../permissions';
+import { getRoleDisplayName, getRoleEmoji, ROLE_PINS } from '../permissions';
+import { flushPendingUploads } from '../utils/pokerTraining';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 
 const SettingsScreen = () => {
@@ -96,6 +97,11 @@ const SettingsScreen = () => {
   const [isTestingModels, setIsTestingModels] = useState(false);
   const [showAiLog, setShowAiLog] = useState(false);
   const [aiTick, setAiTick] = useState(0);
+
+  // Identity switch
+  const [showSwitchPin, setShowSwitchPin] = useState(false);
+  const [switchPin, setSwitchPin] = useState('');
+  const [switchPinError, setSwitchPinError] = useState(false);
 
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
@@ -1835,20 +1841,91 @@ const SettingsScreen = () => {
                 {(() => { const n = localStorage.getItem('poker_player_identity'); return n || '—'; })()}
               </div>
             </div>
-            {role !== 'admin' && (
+            {role !== 'admin' && !showSwitchPin && (
               <button
                 className="btn btn-sm btn-outline"
-                onClick={() => {
-                  localStorage.removeItem('poker_player_identity');
-                  localStorage.removeItem('poker_player_identity_id');
-                  signOut();
-                }}
+                onClick={() => { setShowSwitchPin(true); setSwitchPin(''); setSwitchPinError(false); }}
                 style={{ fontSize: '0.75rem' }}
               >
                 🔄 החלף שם
               </button>
             )}
           </div>
+          {showSwitchPin && (
+            <div style={{ marginTop: '0.6rem', padding: '0.6rem', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', direction: 'rtl' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                נדרש קוד מנהל להחלפת שם
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={switchPin}
+                  onChange={e => { setSwitchPin(e.target.value.replace(/\D/g, '')); setSwitchPinError(false); }}
+                  onKeyDown={async e => {
+                    if (e.key === 'Enter' && switchPin.length === 4) {
+                      if (switchPin === ROLE_PINS.admin) {
+                        const oldName = localStorage.getItem('poker_player_identity') || 'unknown';
+                        try { await flushPendingUploads(true); } catch { /* best effort */ }
+                        console.log(`[identity-switch] ${oldName} cleared identity from settings`);
+                        localStorage.removeItem('poker_player_identity');
+                        localStorage.removeItem('poker_player_identity_id');
+                        setShowSwitchPin(false);
+                        signOut();
+                      } else {
+                        setSwitchPinError(true);
+                      }
+                    }
+                  }}
+                  placeholder="קוד מנהל"
+                  autoFocus
+                  style={{
+                    width: '80px', padding: '0.4rem 0.5rem', borderRadius: '8px', textAlign: 'center',
+                    border: switchPinError ? '2px solid var(--danger)' : '1px solid var(--border)',
+                    background: 'var(--surface)', color: 'var(--text)', fontSize: '1rem', letterSpacing: '0.3rem',
+                  }}
+                />
+                <button
+                  onClick={async () => {
+                    if (switchPin === ROLE_PINS.admin) {
+                      const oldName = localStorage.getItem('poker_player_identity') || 'unknown';
+                      try { await flushPendingUploads(true); } catch { /* best effort */ }
+                      console.log(`[identity-switch] ${oldName} cleared identity from settings`);
+                      localStorage.removeItem('poker_player_identity');
+                      localStorage.removeItem('poker_player_identity_id');
+                      setShowSwitchPin(false);
+                      signOut();
+                    } else {
+                      setSwitchPinError(true);
+                    }
+                  }}
+                  disabled={switchPin.length < 4}
+                  style={{
+                    padding: '0.4rem 0.7rem', borderRadius: '8px', border: 'none',
+                    background: switchPin.length === 4 ? 'var(--primary)' : 'var(--surface-light)',
+                    color: switchPin.length === 4 ? 'white' : 'var(--text-muted)',
+                    fontSize: '0.75rem', fontWeight: 600, cursor: switchPin.length === 4 ? 'pointer' : 'default',
+                  }}
+                >
+                  אישור
+                </button>
+                <button
+                  onClick={() => setShowSwitchPin(false)}
+                  style={{
+                    padding: '0.4rem 0.5rem', borderRadius: '8px',
+                    border: '1px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer',
+                  }}
+                >
+                  ביטול
+                </button>
+              </div>
+              {switchPinError && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.3rem' }}>PIN שגוי</div>
+              )}
+            </div>
+          )}
         </div>
         <div className="card">
           <div className="card-header">

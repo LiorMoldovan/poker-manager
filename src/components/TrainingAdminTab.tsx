@@ -20,9 +20,13 @@ import {
 import {
   SCENARIO_CATEGORIES,
   generatePoolBatch,
+  normalizeTrainingPlayers,
+  GAME_CONTEXT,
+  PLAYER_STYLES,
+  generatePersonalReport,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
-import { LEGACY_NAME_CORRECTIONS } from '../App';
+
 
 const RATE_LIMIT_DELAY = 7500;
 
@@ -37,7 +41,7 @@ const TrainingAdminTab = () => {
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ current: 0, total: 0, category: '' });
   const [genMessage, setGenMessage] = useState<string | null>(null);
-  const [genLog, setGenLog] = useState<{ cat: string; icon: string; status: string; count: number }[]>([]);
+  const [genLog, setGenLog] = useState<{ cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number }[]>([]);
 
   // Expanded player
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
@@ -47,6 +51,9 @@ const TrainingAdminTab = () => {
   const [dismissingFlagged, setDismissingFlagged] = useState<string | null>(null);
   const [fixingFlagged, setFixingFlagged] = useState<string | null>(null);
   const [fixPreview, setFixPreview] = useState<{ poolId: string; original: PoolScenario; fixed: PoolScenario } | null>(null);
+  const [fixFeedback, setFixFeedback] = useState('');
+  const [fixHistory, setFixHistory] = useState<string[]>([]);
+  const [regenerating, setRegenerating] = useState(false);
   const [savingFix, setSavingFix] = useState(false);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
 
@@ -63,11 +70,12 @@ const TrainingAdminTab = () => {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [p, a, i] = await Promise.all([
+      const [p, rawA, i] = await Promise.all([
         fetchTrainingPool(),
         fetchTrainingAnswers(),
         fetchTrainingInsights(),
       ]);
+      const a = rawA ? normalizeTrainingPlayers(rawA) : rawA;
       setPool(p);
       setAnswers(a);
       setInsights(i);
@@ -80,6 +88,44 @@ const TrainingAdminTab = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Auto-generate pending personal reports when admin opens the tab
+  useEffect(() => {
+    if (!answers || answers.players.length === 0) return;
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+
+    const pending = answers.players.filter(p =>
+      p.pendingReportMilestones && p.pendingReportMilestones.length > 0
+    );
+    if (pending.length === 0) return;
+
+    (async () => {
+      for (const player of pending) {
+        for (const milestone of player.pendingReportMilestones!) {
+          const existingReport = player.reports?.find(r => r.milestone === milestone);
+          if (existingReport) continue;
+
+          const reportText = await generatePersonalReport(player.playerName, player, answers.players);
+          if (reportText) {
+            await writeTrainingAnswersWithRetry((data) => {
+              const p = data.players.find(pl => pl.playerName === player.playerName);
+              if (p) {
+                if (!p.reports) p.reports = [];
+                p.reports.push({ milestone, text: reportText, date: new Date().toISOString() });
+                p.pendingReportMilestones = (p.pendingReportMilestones || []).filter(m => m !== milestone);
+              }
+              data.lastUpdated = new Date().toISOString();
+              return data;
+            });
+          }
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+      loadAll();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers?.players.length]);
 
   // ── Alerts ──
   const getAlerts = (): { text: string; color: string }[] => {
@@ -233,8 +279,7 @@ const TrainingAdminTab = () => {
       return;
     }
 
-    // Show skipped categories
-    const log: { cat: string; icon: string; status: string; count: number }[] = [];
+    const log: { cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number }[] = [];
     const workIds = new Set(workItems.map(w => w.cat.id));
     SCENARIO_CATEGORIES.filter(c => !workIds.has(c.id)).forEach(c => {
       log.push({ cat: c.name, icon: c.icon, status: 'skip', count: existingPerCat[c.id] || 0 });
@@ -252,6 +297,8 @@ const TrainingAdminTab = () => {
 
       let batchCount = 0;
       let catStatus = 'fail';
+      let catError: string | undefined;
+      const catStart = Date.now();
 
       try {
         const batch = await generatePoolBatch(cat, needed, allScenarios, apiKey);
@@ -260,22 +307,29 @@ const TrainingAdminTab = () => {
           batchCount = batch.length;
           totalGenerated += batch.length;
           catStatus = batch.length >= needed * 0.6 ? 'ok' : 'partial';
+          if (catStatus === 'partial') catError = `ביקשנו ${needed}, קיבלנו ${batch.length}`;
         } else {
           totalFailed++;
+          catError = 'AI החזיר 0 שאלות תקינות';
         }
       } catch (err) {
         console.error(`Smart gen failed for ${cat.id} (${phase}):`, err);
         totalFailed++;
-        catStatus = err instanceof Error && err.message === 'INVALID_API_KEY' ? 'key_error' : 'fail';
-        if (catStatus === 'key_error') {
-          log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: 0 });
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg === 'INVALID_API_KEY') {
+          catStatus = 'key_error';
+          catError = 'מפתח API לא תקין';
+          log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: 0, error: catError, elapsed: Date.now() - catStart });
           setGenLog([...log]);
           setGenMessage('מפתח API לא תקין — עצירה');
           break;
         }
+        catStatus = 'fail';
+        catError = errMsg.length > 80 ? errMsg.slice(0, 80) + '…' : errMsg;
       }
 
-      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount });
+      const catElapsed = Date.now() - catStart;
+      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount, error: catError, elapsed: catElapsed });
       setGenLog([...log]);
       savePoolDraft(allScenarios);
 
@@ -283,7 +337,8 @@ const TrainingAdminTab = () => {
       const avgPerCat = elapsed / (i + 1);
       const remaining = workItems.length - (i + 1);
       const etaMin = Math.ceil((remaining * avgPerCat) / 60000);
-      setGenMessage(`${totalGenerated} שאלות נוצרו${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''} · ~${etaMin} דק׳ נותרו`);
+      const etaText = remaining > 0 ? ` · ~${etaMin} דק׳ נותרו` : '';
+      setGenMessage(`${totalGenerated} שאלות נוצרו${totalFailed > 0 ? ` · ${totalFailed} נכשלו` : ''}${etaText}`);
 
       if (i < workItems.length - 1) {
         await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
@@ -299,10 +354,15 @@ const TrainingAdminTab = () => {
 
     if (result.success) {
       setPool(newPool);
+      const failedCats = log.filter(l => l.status === 'fail' || l.status === 'key_error');
+      const failDetail = failedCats.length > 0
+        ? ` · נכשלו: ${failedCats.map(f => `${f.icon} ${f.cat}${f.error ? ` (${f.error})` : ''}`).join(', ')}`
+        : '';
       setGenMessage(
         `סיום! ${totalGenerated} שאלות חדשות` +
         (totalFailed > 0 ? ` · ${totalFailed} נכשלו` : '') +
-        ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות`
+        ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות` +
+        failDetail
       );
     } else {
       setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
@@ -390,7 +450,16 @@ const TrainingAdminTab = () => {
       return `- ${r.playerName}: ${reasonLabel[r.reason] || r.reason}${r.comment ? ` — "${r.comment}"` : ''}`;
     }).join('\n');
 
+    const playerStylesList = Object.entries(PLAYER_STYLES)
+      .map(([name, style]) => `- ${name}: ${style}`)
+      .join('\n');
+
     const prompt = `אתה מומחה פוקר. שחקנים דיווחו על בעיה בשאלה הבאה. תקן אותה.
+
+${GAME_CONTEXT}
+
+שחקנים קבועים (ניתן להשתמש בשמות שלהם):
+${playerStylesList}
 
 שאלה נוכחית:
 ${JSON.stringify({
@@ -405,17 +474,16 @@ ${JSON.stringify({
 דיווחי שחקנים:
 ${reportSummary}
 
-הקשר: משחק ביתי חברתי (~8 שחקנים, כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000). שחקנים קוראים הרבה יותר מבמקצועי ובלופים עובדים פחות.
-
-תקן את השאלה כך:
-1. תשובה נכונה אחת בדיוק (isCorrect: true) — נכונה למשחק ביתי
-2. הסברים מפורטים בעברית, סכומים בשקלים
-3. nearMiss: true לתשובות שנכונות בפוקר מקצועי אך לא אופטימליות למשחק ביתי
-4. שמור על poolId, categoryId ו-category מקוריים
-5. שמור על option IDs מקוריים (A, B, C, D)
+תקן כך:
+1. בדיוק 3 אופציות (A, B, C) — בדיוק אחת נכונה למשחק ביתי
+2. מצב: 2-3 משפטים תמציתיים. אל תחזור על הקלפים בטקסט
+3. כל הסכומים בצ'יפים (לא שקלים)
+4. הסברים בעברית פשוטה, ספציפיים ללוח ולקלפים
+5. nearMiss: true לתשובות שנכונות בפוקר מקצועי אך לא למשחק ביתי
+6. שמור על poolId, categoryId ו-category מקוריים
 
 החזר JSON בלבד, אובייקט אחד:
-{"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},...],"category":"...","categoryId":"..."}
+{"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},{"id":"B","text":"...","isCorrect":true,"explanation":"..."},{"id":"C","text":"...","isCorrect":false,"explanation":"..."}],"category":"...","categoryId":"..."}
 
 JSON בלבד, בלי markdown:`;
 
@@ -435,11 +503,56 @@ JSON בלבד, בלי markdown:`;
       fixedScenario.category = scenario.category;
 
       setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
+      setFixFeedback('');
+      setFixHistory([]);
       setFlagMsg(null);
     } catch (err) {
       setFlagMsg(`❌ שגיאת AI: ${err instanceof Error ? err.message : 'Unknown'}`);
     } finally {
       setFixingFlagged(null);
+    }
+  };
+
+  const handleRegenerateFix = async () => {
+    if (!fixPreview || !fixFeedback.trim()) return;
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+    setRegenerating(true);
+
+    const historyContext = fixHistory.length > 0
+      ? `\nשיפורים קודמים שביקשתי:\n${fixHistory.map((h, i) => `${i + 1}. ${h}`).join('\n')}\n`
+      : '';
+
+    const prompt = `אתה מומחה פוקר. תקנת שאלה אבל צריך שיפור נוסף.
+
+${GAME_CONTEXT}
+
+שאלה מקורית:
+${JSON.stringify(fixPreview.original)}
+
+תיקון נוכחי:
+${JSON.stringify(fixPreview.fixed)}
+${historyContext}
+הערה חדשה מהמנהל: "${fixFeedback}"
+
+חוקים: בדיוק 3 אופציות (A, B, C), מצב תמציתי (2-3 משפטים), סכומים בצ'יפים, שמור poolId/categoryId/category.
+
+החזר JSON בלבד, אובייקט אחד מתוקן:`;
+
+    try {
+      const fixedText = await callGemini(apiKey, prompt);
+      const cleaned = fixedText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const fixedScenario = JSON.parse(cleaned) as PoolScenario;
+      fixedScenario.poolId = fixPreview.poolId;
+      fixedScenario.categoryId = fixPreview.original.categoryId;
+      fixedScenario.category = fixPreview.original.category;
+      setFixHistory(prev => [...prev, fixFeedback]);
+      setFixPreview({ ...fixPreview, fixed: fixedScenario });
+      setFixFeedback('');
+    } catch (err) {
+      setFlagMsg(`❌ שגיאת AI: ${err instanceof Error ? err.message : 'Unknown'}`);
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -510,17 +623,21 @@ JSON בלבד, בלי markdown:`;
       setReviewProgress({ current: b + 1, total: totalBatches });
       setReviewMsg(`סורק אצווה ${b + 1}/${totalBatches}...`);
 
-      const prompt = `אתה מומחה פוקר. בדוק ${batch.length} שאלות אימון למשחק ביתי חברתי (~8 שחקנים, כניסה 30 שקלים, בליינדס 50/100, ערימות 8,000-25,000).
+      const prompt = `אתה מומחה פוקר. בדוק ${batch.length} שאלות אימון.
+
+${GAME_CONTEXT}
 
 ⚠️ בדיקות קריטיות:
 1. **לוגיקה פוקרית**: התשובה הנכונה באמת נכונה? בדוק:
    - הקלפים ביד + על הלוח — האם יוצרים סטרייט/צבע/פול האוס שלא זוהה?
-   - סכומי הימור הגיוניים?
+   - סכומי הימור הגיוניים? (צ'יפים, לא שקלים)
    - "קריאה" = סכום ההימור, לא הקופה?
 2. **התאמה למשחק ביתי**: בלוף גדול = לא תשובה נכונה (שחקנים קוראים). צ'ק-רייז מתוחכם = לא מתאים.
 3. **nearMiss**: סמן תשובות שגויות שהיו נכונות בפוקר מקצועי
-4. **עברית**: אין מונחים באנגלית, סכומים בשקלים
-5. **שגיאות**: placeholder טקסט, קלפים כפולים
+4. **עברית**: אין מונחים באנגלית, סכומים בצ'יפים
+5. **שגיאות**: placeholder טקסט, קלפים כפולים, חזרה על הקלפים בטקסט
+6. **3 אופציות בדיוק**: אם יש 2 או 4 — תקן ל-3 (A, B, C)
+7. אם יריבים גנריים ואפשר להחליף בשמות אמיתיים מהמשחק — סמן כ-fixed
 
 שאלות:
 ${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, situation: s.situation, options: s.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })), categoryId: s.categoryId })))}
@@ -932,33 +1049,44 @@ ${dataBlock}
             {/* Live log */}
             {genLog.length > 0 && (
               <div style={{
-                maxHeight: '200px', overflowY: 'auto', fontSize: '0.7rem',
+                maxHeight: '250px', overflowY: 'auto', fontSize: '0.7rem',
                 display: 'flex', flexDirection: 'column', gap: '2px',
               }}>
                 {genLog.map((entry, idx) => (
                   <div key={idx} style={{
-                    display: 'flex', alignItems: 'center', gap: '0.3rem',
-                    padding: '0.15rem 0.3rem', borderRadius: '4px',
-                    background: entry.status === 'fail' ? 'rgba(239,68,68,0.08)' :
+                    padding: '0.2rem 0.3rem', borderRadius: '4px',
+                    background: entry.status === 'fail' || entry.status === 'key_error' ? 'rgba(239,68,68,0.08)' :
                                entry.status === 'partial' ? 'rgba(249,115,22,0.08)' :
                                entry.status === 'skip' ? 'rgba(107,114,128,0.08)' :
                                'rgba(34,197,94,0.08)',
                   }}>
-                    <span>{entry.icon}</span>
-                    <span style={{ flex: 1 }}>{entry.cat}</span>
-                    <span style={{
-                      fontWeight: 600,
-                      color: entry.status === 'fail' ? 'var(--danger)' :
-                             entry.status === 'partial' ? '#f97316' :
-                             entry.status === 'skip' ? 'var(--text-muted)' :
-                             'var(--success)',
-                    }}>
-                      {entry.status === 'ok' ? `✓ ${entry.count}` :
-                       entry.status === 'partial' ? `⚠ ${entry.count}` :
-                       entry.status === 'skip' ? `↷ ${entry.count}` :
-                       entry.status === 'key_error' ? '🔑 שגיאה' :
-                       '✗ נכשל'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span>{entry.icon}</span>
+                      <span style={{ flex: 1 }}>{entry.cat}</span>
+                      {entry.elapsed != null && entry.status !== 'skip' && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                          {Math.round(entry.elapsed / 1000)}s
+                        </span>
+                      )}
+                      <span style={{
+                        fontWeight: 600,
+                        color: entry.status === 'fail' || entry.status === 'key_error' ? 'var(--danger)' :
+                               entry.status === 'partial' ? '#f97316' :
+                               entry.status === 'skip' ? 'var(--text-muted)' :
+                               'var(--success)',
+                      }}>
+                        {entry.status === 'ok' ? `✓ ${entry.count}` :
+                         entry.status === 'partial' ? `⚠ ${entry.count}` :
+                         entry.status === 'skip' ? `↷ ${entry.count}` :
+                         entry.status === 'key_error' ? '🔑 שגיאה' :
+                         '✗ נכשל'}
+                      </span>
+                    </div>
+                    {entry.error && (
+                      <div style={{ fontSize: '0.6rem', color: entry.status === 'fail' || entry.status === 'key_error' ? '#ef4444' : '#f97316', paddingRight: '1.2rem', marginTop: '0.1rem' }}>
+                        {entry.error}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1082,41 +1210,55 @@ ${dataBlock}
           </div>
         )}
 
-        {/* Post-generation log summary */}
-        {!generating && genLog.length > 0 && (
-          <details style={{ marginTop: '0.4rem' }}>
-            <summary style={{ fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              פירוט ייצור ({genLog.filter(l => l.status === 'ok').length} הצליחו / {genLog.filter(l => l.status === 'fail').length} נכשלו)
-            </summary>
-            <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '0.3rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {genLog.map((entry, idx) => (
-                <div key={idx} style={{
-                  display: 'flex', alignItems: 'center', gap: '0.3rem',
-                  padding: '0.15rem 0.3rem', borderRadius: '4px', fontSize: '0.7rem',
-                  background: entry.status === 'fail' ? 'rgba(239,68,68,0.08)' :
-                             entry.status === 'partial' ? 'rgba(249,115,22,0.08)' :
-                             entry.status === 'skip' ? 'rgba(107,114,128,0.08)' :
-                             'rgba(34,197,94,0.08)',
-                }}>
-                  <span>{entry.icon}</span>
-                  <span style={{ flex: 1 }}>{entry.cat}</span>
-                  <span style={{
-                    fontWeight: 600,
-                    color: entry.status === 'fail' ? 'var(--danger)' :
-                           entry.status === 'partial' ? '#f97316' :
-                           entry.status === 'skip' ? 'var(--text-muted)' :
-                           'var(--success)',
+        {/* Post-generation log summary — auto-open when failures exist */}
+        {!generating && genLog.length > 0 && (() => {
+          const failCount = genLog.filter(l => l.status === 'fail' || l.status === 'key_error').length;
+          const okCount = genLog.filter(l => l.status === 'ok').length;
+          const partialCount = genLog.filter(l => l.status === 'partial').length;
+          return (
+            <details open={failCount > 0} style={{ marginTop: '0.4rem' }}>
+              <summary style={{ fontSize: '0.7rem', color: failCount > 0 ? '#ef4444' : 'var(--text-muted)', cursor: 'pointer', fontWeight: failCount > 0 ? 600 : 400 }}>
+                פירוט ייצור ({okCount} הצליחו{partialCount > 0 ? ` / ${partialCount} חלקי` : ''}{failCount > 0 ? ` / ${failCount} נכשלו` : ''})
+              </summary>
+              <div style={{ maxHeight: '250px', overflowY: 'auto', marginTop: '0.3rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {genLog.filter(l => l.status !== 'skip').map((entry, idx) => (
+                  <div key={idx} style={{
+                    padding: '0.2rem 0.3rem', borderRadius: '4px', fontSize: '0.7rem',
+                    background: entry.status === 'fail' || entry.status === 'key_error' ? 'rgba(239,68,68,0.08)' :
+                               entry.status === 'partial' ? 'rgba(249,115,22,0.08)' :
+                               'rgba(34,197,94,0.08)',
                   }}>
-                    {entry.status === 'ok' ? `✓ ${entry.count}` :
-                     entry.status === 'partial' ? `⚠ ${entry.count}` :
-                     entry.status === 'skip' ? `↷ ${entry.count}` :
-                     '✗ נכשל'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span>{entry.icon}</span>
+                      <span style={{ flex: 1 }}>{entry.cat}</span>
+                      {entry.elapsed != null && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                          {Math.round(entry.elapsed / 1000)}s
+                        </span>
+                      )}
+                      <span style={{
+                        fontWeight: 600,
+                        color: entry.status === 'fail' || entry.status === 'key_error' ? 'var(--danger)' :
+                               entry.status === 'partial' ? '#f97316' :
+                               'var(--success)',
+                      }}>
+                        {entry.status === 'ok' ? `✓ ${entry.count}` :
+                         entry.status === 'partial' ? `⚠ ${entry.count}` :
+                         entry.status === 'key_error' ? '🔑 שגיאה' :
+                         '✗ נכשל'}
+                      </span>
+                    </div>
+                    {entry.error && (
+                      <div style={{ fontSize: '0.6rem', color: entry.status === 'fail' || entry.status === 'key_error' ? '#ef4444' : '#f97316', paddingRight: '1.2rem', marginTop: '0.1rem' }}>
+                        {entry.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          );
+        })()}
 
         {/* Per-category breakdown (collapsed by default) */}
         {pool && (
@@ -1155,7 +1297,7 @@ ${dataBlock}
         ) : (
           <div>
             {sortedPlayers.map((player, i) => {
-              const displayName = LEGACY_NAME_CORRECTIONS[player.playerName] || player.playerName;
+              const displayName = player.playerName;
               const isExpanded = expandedPlayer === player.playerName;
               const exploit = getExploitLocal(player.playerName);
               const insight = insights?.insights?.[player.playerName];
@@ -1276,6 +1418,30 @@ ${dataBlock}
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                             {exploit.text}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Personal AI Reports */}
+                      {player.reports && player.reports.length > 0 && (
+                        <div style={{
+                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                          background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+                        }}>
+                          <div style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: 600, marginBottom: '0.3rem' }}>
+                            📋 דוחות אישיים ({player.reports.length})
+                          </div>
+                          {player.reports.slice().reverse().map((report, ri) => (
+                            <div key={ri} style={{
+                              fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.5,
+                              marginBottom: '0.3rem', padding: '0.3rem',
+                              background: 'var(--surface)', borderRadius: '6px',
+                            }}>
+                              <div style={{ fontSize: '0.6rem', color: '#3b82f6', marginBottom: '0.15rem' }}>
+                                {report.milestone} שאלות · {new Date(report.date).toLocaleDateString('he-IL')}
+                              </div>
+                              <div style={{ whiteSpace: 'pre-wrap' }}>{report.text}</div>
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -1526,16 +1692,54 @@ ${dataBlock}
               ))}
             </div>
 
+            {/* Iterative tuning */}
+            <div style={{
+              display: 'flex', gap: '0.3rem', marginBottom: '0.5rem',
+              alignItems: 'center',
+            }}>
+              <input
+                type="text"
+                value={fixFeedback}
+                onChange={e => setFixFeedback(e.target.value)}
+                placeholder="הערות לשיפור..."
+                disabled={regenerating || savingFix}
+                style={{
+                  flex: 1, padding: '0.4rem 0.6rem', borderRadius: '8px',
+                  border: '1px solid var(--border)', background: 'var(--background)',
+                  color: 'var(--text)', fontSize: '0.75rem', direction: 'rtl',
+                }}
+                onKeyDown={e => { if (e.key === 'Enter' && fixFeedback.trim()) handleRegenerateFix(); }}
+              />
+              <button
+                onClick={handleRegenerateFix}
+                disabled={!fixFeedback.trim() || regenerating || savingFix}
+                style={{
+                  padding: '0.4rem 0.8rem', borderRadius: '8px', border: 'none',
+                  background: fixFeedback.trim() ? '#a855f7' : 'var(--surface)',
+                  color: fixFeedback.trim() ? 'white' : 'var(--text-muted)',
+                  fontWeight: 600, fontSize: '0.7rem', cursor: regenerating ? 'wait' : 'pointer',
+                  whiteSpace: 'nowrap', opacity: regenerating ? 0.6 : 1,
+                }}
+              >
+                {regenerating ? '⏳' : '🔄 שלח שוב'}
+              </button>
+            </div>
+            {fixHistory.length > 0 && (
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                שיפורים קודמים: {fixHistory.length}
+              </div>
+            )}
+
             {/* Actions */}
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
               <button
                 onClick={confirmAIFix}
-                disabled={savingFix}
+                disabled={savingFix || regenerating}
                 style={{
                   padding: '0.5rem 1.5rem', borderRadius: '8px', border: 'none',
                   background: '#22c55e', color: 'white', fontWeight: 700,
                   fontSize: '0.85rem', cursor: savingFix ? 'wait' : 'pointer',
-                  opacity: savingFix ? 0.6 : 1,
+                  opacity: savingFix || regenerating ? 0.6 : 1,
                 }}
               >
                 {savingFix ? '⏳ שומר...' : '✓ אשר תיקון'}

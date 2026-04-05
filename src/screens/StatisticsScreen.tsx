@@ -823,24 +823,11 @@ const StatisticsScreen = () => {
   }, [selectedPlayers, availableStats]);
 
   // Update selected players when active filter or stats change
-  // On initial mount: default to permanent players only
-  // On subsequent active filter toggles: select ALL qualifying players
+  // All players who pass the threshold are selected by default
   useEffect(() => {
     if (availableStats.length > 0) {
-      if (isInitialActiveFilterRef.current) {
-        isInitialActiveFilterRef.current = false;
-        const permanentPlayerIds = new Set(
-          players.filter(p => p.type === 'permanent').map(p => p.id)
-        );
-        const permanentStatsIds = availableStats
-          .filter(s => permanentPlayerIds.has(s.playerId))
-          .map(s => s.playerId);
-        setSelectedPlayers(new Set(
-          permanentStatsIds.length > 0 ? permanentStatsIds : availableStats.map(p => p.playerId)
-        ));
-      } else {
-        setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
-      }
+      isInitialActiveFilterRef.current = false;
+      setSelectedPlayers(new Set(availableStats.map(p => p.playerId)));
     }
   }, [filterActiveOnly, stats.length, availableStats]);
 

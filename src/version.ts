@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.10.9';
+export const APP_VERSION = '5.11.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.0',
+    date: '2026-04-05',
+    changes: [
+      '🎯 Player styles and game context — training prompts now include real player behaviors and table dynamics',
+      '📝 Personal training reports — AI-generated analysis at milestone intervals with strengths and weaknesses',
+      '💬 Answer reactions — fun Hebrew responses for correct and wrong answers',
+      '🔄 Identity switch requires admin PIN for security',
+      '🗣️ Game night summary prompt rewritten for better accuracy and record emphasis',
+      '🃏 Inline card coloring in explanations, new odds/math training categories',
+    ]
+  },
   {
     version: '5.10.9',
     date: '2026-03-11',

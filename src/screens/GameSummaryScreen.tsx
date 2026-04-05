@@ -531,6 +531,52 @@ const GameSummaryScreen = () => {
         }
       }
 
+      // --- All-time Top 20 single night wins entry ---
+      const allTimeWins = previousGP
+        .filter(gp => gp.profit > 0)
+        .map(gp => gp.profit)
+        .sort((a, b) => b - a)
+        .slice(0, 20);
+      const top20Threshold = allTimeWins.length >= 20 ? allTimeWins[19] : 0;
+      for (const player of sortedPlayers) {
+        if (player.profit > 0 && player.profit > top20Threshold && allTimeWins.length >= 20) {
+          const rank = allTimeWins.filter(p => p > player.profit).length + 1;
+          bank.push({ emoji: '👑', label: 'נכנס ל-Top 20 כל הזמנים', detail: `${player.playerName} במקום #${rank} עם \u200E+${cleanNumber(player.profit)}`, priority: 1 });
+        }
+      }
+
+      // --- Personal top 10 single night entry ---
+      for (const player of sortedPlayers) {
+        if (player.profit <= 0) continue;
+        const personalHistory = previousGP
+          .filter(gp => gp.playerId === player.playerId && gp.profit > 0)
+          .map(gp => gp.profit)
+          .sort((a, b) => b - a);
+        if (personalHistory.length < 5) continue;
+        const personalTop = personalHistory.slice(0, 10);
+        const personalThreshold = personalTop.length >= 10 ? personalTop[9] : 0;
+        if (player.profit > personalThreshold && personalTop.length >= 10) {
+          const personalRank = personalTop.filter(p => p > player.profit).length + 1;
+          bank.push({ emoji: '⭐', label: 'שיא אישי Top 10', detail: `${player.playerName} — הנצחון #${personalRank} הגדול שלו (\u200E+${cleanNumber(player.profit)})`, priority: 2 });
+        }
+      }
+
+      // --- Personal worst loss top 10 entry ---
+      for (const player of sortedPlayers) {
+        if (player.profit >= 0) continue;
+        const personalLosses = previousGP
+          .filter(gp => gp.playerId === player.playerId && gp.profit < 0)
+          .map(gp => gp.profit)
+          .sort((a, b) => a - b);
+        if (personalLosses.length < 5) continue;
+        const worstTop = personalLosses.slice(0, 10);
+        const worstThreshold = worstTop.length >= 10 ? worstTop[9] : 0;
+        if (player.profit < worstThreshold && worstTop.length >= 10) {
+          const lossRank = worstTop.filter(p => p < player.profit).length + 1;
+          bank.push({ emoji: '💀', label: 'שיא אישי הפסד Top 10', detail: `${player.playerName} — ההפסד #${lossRank} הגדול שלו (\u200E${cleanNumber(player.profit)})`, priority: 2 });
+        }
+      }
+
       // --- Fillers ---
 
       bank.push({ emoji: '💵', label: 'קופה הערב', detail: `${cleanNumber(tonightsPot)} — ${totalRebuysTonight} קניות סה״כ`, priority: 8 });
@@ -688,8 +734,8 @@ const GameSummaryScreen = () => {
 
       // Extract from the already-computed highlight bank
       for (const h of bank) {
-        if (h.label.includes('שיא')) {
-          aiRecords.push(`${h.emoji} ${h.detail}`);
+        if (h.label.includes('שיא') || h.label.includes('Top 20') || h.label.includes('Top 10')) {
+          aiRecords.push(`${h.emoji} ${h.label}: ${h.detail}`);
         }
         if (h.label === 'רצף') {
           aiStreaks.push(h.detail);
@@ -1162,7 +1208,7 @@ const GameSummaryScreen = () => {
                     onClick={() => isClickable && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
                   >
                     <span style={iAmFrom ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.from)}</span>
-                    <span className="settlement-arrow">←</span>
+                    <span className="settlement-arrow">➜</span>
                     <span style={iAmTo ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.to)}</span>
                     <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
                       {isClickable && (
@@ -1231,7 +1277,7 @@ const GameSummaryScreen = () => {
               {skippedTransfers.map((s, index) => (
                 <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
                   <span>{renderPlayerWithFoodIcon(s.from)}</span>
-                  <span className="settlement-arrow">←</span>
+                  <span className="settlement-arrow">➜</span>
                   <span>{renderPlayerWithFoodIcon(s.to)}</span>
                   <span style={{ color: '#f59e0b', fontWeight: '700', marginLeft: 'auto' }}>{formatCurrency(s.amount)}</span>
                 </div>

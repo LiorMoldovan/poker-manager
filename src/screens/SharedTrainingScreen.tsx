@@ -6,16 +6,15 @@ import { TrainingPlayerData, SharedTrainingProgress } from '../types';
 import {
   SCENARIO_CATEGORIES,
   getSharedProgress,
+  saveSharedProgress,
   TRAINING_BADGES,
   getCategoryExpertBadges,
   flushPendingUploads,
   rebuildProgressFromRemote,
   CATEGORY_TIPS,
+  normalizeTrainingPlayers,
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers } from '../database/githubSync';
-
-const meRowStyle = { background: 'rgba(59,130,246,0.14)', borderRight: '3px solid #3b82f6' } as const;
-const meNameStyle = { color: '#60a5fa' } as const;
 
 
 const SharedTrainingScreen = () => {
@@ -26,6 +25,7 @@ const SharedTrainingScreen = () => {
   const [sessionCount, setSessionCount] = useState<number>(10);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [trainingMode, setTrainingMode] = useState<'mixed' | 'true_false' | 'specific'>('mixed');
   const [leaderboard, setLeaderboard] = useState<TrainingPlayerData[]>([]);
   const [remoteProgress, setRemoteProgress] = useState<SharedTrainingProgress | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,8 +34,7 @@ const SharedTrainingScreen = () => {
 
   const localProgress = getSharedProgress(name);
   const progress = useMemo(() => {
-    if (localProgress.totalQuestions > 0) return localProgress;
-    if (remoteProgress && remoteProgress.totalQuestions > 0) return remoteProgress;
+    if (remoteProgress && remoteProgress.totalQuestions >= localProgress.totalQuestions) return remoteProgress;
     return localProgress;
   }, [localProgress, remoteProgress]);
 
@@ -45,12 +44,18 @@ const SharedTrainingScreen = () => {
     setLoading(true);
     try {
       await flushPendingUploads();
-      const answersData = await fetchTrainingAnswers();
+      const raw = await fetchTrainingAnswers();
+      const answersData = raw ? normalizeTrainingPlayers(raw) : null;
       if (answersData) {
         setLeaderboard(answersData.players);
         const myRemoteData = answersData.players.find(p => p.playerName === name);
         if (myRemoteData && myRemoteData.totalQuestions > 0) {
-          setRemoteProgress(rebuildProgressFromRemote(myRemoteData));
+          const rebuilt = rebuildProgressFromRemote(myRemoteData);
+          setRemoteProgress(rebuilt);
+          const local = getSharedProgress(name);
+          if (rebuilt.totalQuestions > local.totalQuestions) {
+            saveSharedProgress(name, rebuilt);
+          }
         }
       }
     } catch {
@@ -67,7 +72,11 @@ const SharedTrainingScreen = () => {
   const handleStart = () => {
     const params = new URLSearchParams();
     if (sessionCount) params.set('count', String(sessionCount));
-    if (selectedCategories.length > 0) params.set('categories', selectedCategories.join(','));
+    if (trainingMode === 'true_false') {
+      params.set('categories', 'true_false');
+    } else if (trainingMode === 'specific' && selectedCategories.length > 0) {
+      params.set('categories', selectedCategories.join(','));
+    }
     navigate(`/shared-training/play?${params.toString()}`);
   };
 
@@ -128,7 +137,7 @@ const SharedTrainingScreen = () => {
   const hasCatSpread = bestCat && weakCats.length > 0;
 
   return (
-    <div className="fade-in" style={{ paddingBottom: '5rem' }}>
+    <div className="fade-in" style={{ paddingBottom: '5rem', direction: 'rtl' }}>
       <div className="page-header">
         <h1 className="page-title">אימון פוקר</h1>
         <p className="page-subtitle">שלום {name}</p>
@@ -163,53 +172,120 @@ const SharedTrainingScreen = () => {
           ))}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>נושא</div>
-          <button
-            onClick={() => setShowCategoryPicker(!showCategoryPicker)}
-            style={{
-              background: 'none', border: 'none', color: 'var(--primary)',
-              fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            {selectedCategories.length > 0 ? `${selectedCategories.length} נבחרו` : 'אקראי'} {showCategoryPicker ? '▲' : '▼'}
-          </button>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.4rem' }}>
+          סגנון שאלות
+        </div>
+        <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem' }}>
+          {([
+            ['mixed', '🎲 מעורב'],
+            ['true_false', '🔢 סיכויים וחישובים'],
+            ['specific', '📂 נושא ספציפי'],
+          ] as [typeof trainingMode, string][]).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => { setTrainingMode(mode); if (mode === 'specific') { setShowCategoryPicker(true); } else { setSelectedCategories([]); setShowCategoryPicker(false); } }}
+              className={`btn btn-sm ${trainingMode === mode ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem' }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {showCategoryPicker && (
-          <div style={{
-            maxHeight: '180px', overflowY: 'auto', marginBottom: '0.5rem',
-            display: 'flex', flexWrap: 'wrap', gap: '0.25rem',
-          }}>
-            {SCENARIO_CATEGORIES.map(cat => {
-              const isSelected = selectedCategories.includes(cat.id);
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => toggleCategory(cat.id)}
-                  className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
-                >
-                  {cat.icon} {cat.name}
-                </button>
-              );
-            })}
-            {selectedCategories.length > 0 && (
+        {trainingMode === 'specific' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                {selectedCategories.length > 0 ? `${selectedCategories.length} נבחרו` : 'בחר נושאים'}
+              </div>
               <button
-                onClick={() => setSelectedCategories([])}
-                className="btn btn-sm"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
               >
-                ✕ נקה
+                {showCategoryPicker ? '▲ סגור' : '▼ פתח'}
               </button>
+            </div>
+            {showCategoryPicker && (
+              <div style={{
+                maxHeight: '180px', overflowY: 'auto', marginBottom: '0.5rem',
+                display: 'flex', flexWrap: 'wrap', gap: '0.25rem',
+              }}>
+                {SCENARIO_CATEGORIES.map(cat => {
+                  const isSelected = selectedCategories.includes(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => toggleCategory(cat.id)}
+                      className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
+                    >
+                      {cat.icon} {cat.name}
+                    </button>
+                  );
+                })}
+                {selectedCategories.length > 0 && (
+                  <button
+                    onClick={() => setSelectedCategories([])}
+                    className="btn btn-sm"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}
+                  >
+                    ✕ נקה
+                  </button>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         <button className="btn btn-primary" onClick={handleStart} style={{ width: '100%', padding: '0.65rem', fontSize: '0.95rem' }}>
           🎯 התחל אימון
         </button>
+
+        {/* 100q report teaser */}
+        {progress.totalQuestions > 0 && (() => {
+          const progressToNext = progress.totalQuestions % 100;
+          const remaining = 100 - progressToNext;
+          const pct = Math.round((progressToNext / 100) * 100);
+          return (
+            <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(59,130,246,0.06)', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.12)' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600, marginBottom: '0.3rem' }}>
+                📊 עוד {remaining} שאלות ותקבל דוח AI אישי!
+              </div>
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                ניתוח נקודות חוזק וחולשה, טיפים מותאמים אישית ותובנות לשיפור המשחק
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
+                <span>{progressToNext}/100</span>
+                <span>{pct}%</span>
+              </div>
+              <div style={{ height: '5px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+              </div>
+            </div>
+          );
+        })()}
       </div>
+
+      {/* Personal AI report */}
+      {(() => {
+        const myData = leaderboard.find(p => p.playerName === name);
+        const reports = myData?.reports;
+        if (!reports || reports.length === 0) return null;
+        const latest = reports[reports.length - 1];
+        return (
+          <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', color: '#3b82f6' }}>
+              📋 הדוח האישי שלך ({latest.milestone} שאלות)
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {latest.text}
+            </div>
+            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+              {new Date(latest.date).toLocaleDateString('he-IL')}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Leaderboard — table style like Statistics */}
       <div ref={leaderboardRef} className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
@@ -223,7 +299,7 @@ const SharedTrainingScreen = () => {
           </div>
         ) : (
           <>
-            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', direction: 'ltr' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.3rem 0.15rem', width: '20px' }}>#</th>
@@ -242,11 +318,14 @@ const SharedTrainingScreen = () => {
                   const totalAnswered = player.totalQuestions + player.neutral;
                   const wrong = player.totalQuestions - player.totalCorrect;
                   return (
-                    <tr key={player.playerName} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}>
+                    <tr key={player.playerName} style={{
+                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                      ...(isMe ? { background: 'rgba(59,130,246,0.14)', borderRight: '3px solid #3b82f6' } : {}),
+                    }}>
                       <td style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>
                         {i + 1}
                       </td>
-                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'left', fontWeight: isMe ? 700 : 500, ...(isMe ? meNameStyle : {}) }}>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'left', fontWeight: isMe ? 700 : 500, ...(isMe ? { color: '#60a5fa' } : {}) }}>
                         {displayName}
                       </td>
                       <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: 'var(--text-muted)' }}>

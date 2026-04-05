@@ -10,6 +10,9 @@ import {
   FlagReason,
 } from '../types';
 import {
+  TrainingAnswersFile,
+} from '../types';
+import {
   SCENARIO_CATEGORIES,
   loadFromPool,
   getSharedProgress,
@@ -19,7 +22,12 @@ import {
   bufferSessionForUpload,
   flushPendingUploads,
   TRAINING_BADGES,
+  WRONG_ANSWER_REACTIONS,
+  CORRECT_ANSWER_REACTIONS,
+  generatePersonalReport,
 } from '../utils/pokerTraining';
+import { getGeminiApiKey } from '../utils/geminiAI';
+import { fetchTrainingAnswers, writeTrainingAnswersWithRetry } from '../database/githubSync';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -39,6 +47,26 @@ const ColoredCards = ({ text }: { text: string }) => {
         );
       })}
     </span>
+  );
+};
+
+const ColoredText = ({ text }: { text: string }) => {
+  const cardPattern = /(\u200E?(?:[AKQJ]|10|[2-9])[♠♥♦♣]\u200E?)/g;
+  const fixed = fixCardBidi(text);
+  const parts = fixed.split(cardPattern);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const hasRed = part.includes('♥') || part.includes('♦');
+        const hasSuit = hasRed || part.includes('♠') || part.includes('♣');
+        if (!hasSuit) return <span key={i}>{part}</span>;
+        return (
+          <span key={i} style={{ color: hasRed ? '#ef4444' : '#e2e8f0', fontWeight: 700, direction: 'ltr', unicodeBidi: 'isolate' as const }}>
+            {part}
+          </span>
+        );
+      })}
+    </>
   );
 };
 
@@ -66,6 +94,10 @@ const SharedQuickPlayScreen = () => {
   const [flagComment, setFlagComment] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [showStyleTip, setShowStyleTip] = useState(true);
+  const [skippedAfterReport, setSkippedAfterReport] = useState(false);
+  const [allPlayerAnswers, setAllPlayerAnswers] = useState<TrainingAnswersFile | null>(null);
+  const [reportMilestoneMsg, setReportMilestoneMsg] = useState<string | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<TrainingAnswerResult[]>([]);
   const flaggedRef = useRef<Set<string>>(new Set());
@@ -111,6 +143,7 @@ const SharedQuickPlayScreen = () => {
 
   useEffect(() => {
     loadScenarios();
+    fetchTrainingAnswers().then(data => { if (data) setAllPlayerAnswers(data); }).catch(() => {});
   }, [loadScenarios]);
 
   // Save partial session on unmount (user navigated away mid-session)
@@ -252,7 +285,55 @@ const SharedQuickPlayScreen = () => {
     bufferSessionForUpload(name, session);
     flushPendingUploads();
 
-    if (!resultsToUse) setShowSummary(true);
+    if (!resultsToUse) {
+      setShowSummary(true);
+
+      const currentTotal = progress.totalQuestions;
+      const prevTotal = currentTotal - scoredTotal;
+      const currentMilestone = Math.floor(currentTotal / 100);
+      const prevMilestone = Math.floor(prevTotal / 100);
+      if (currentMilestone > prevMilestone && currentMilestone > 0) {
+        const milestoneNum = currentMilestone * 100;
+        const hasApiKey = !!getGeminiApiKey();
+
+        if (hasApiKey) {
+          setGeneratingReport(true);
+          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! מייצר דוח אישי...`);
+          fetchTrainingAnswers().then(async (answersData) => {
+            if (!answersData) return;
+            const playerData = answersData.players.find(p => p.playerName === name);
+            if (!playerData) return;
+            const reportText = await generatePersonalReport(name, playerData, answersData.players);
+            if (reportText) {
+              await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
+                const p = data.players.find(pl => pl.playerName === name);
+                if (p) {
+                  if (!p.reports) p.reports = [];
+                  p.reports.push({ milestone: milestoneNum, text: reportText, date: new Date().toISOString() });
+                  p.pendingReportMilestones = (p.pendingReportMilestones || []).filter(m => m !== milestoneNum);
+                }
+                data.lastUpdated = new Date().toISOString();
+                return data;
+              });
+              setReportMilestoneMsg(reportText);
+            }
+          }).catch(() => {}).finally(() => setGeneratingReport(false));
+        } else {
+          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! הדוח האישי שלך ייוצר בקרוב`);
+          writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
+            const p = data.players.find(pl => pl.playerName === name);
+            if (p) {
+              if (!p.pendingReportMilestones) p.pendingReportMilestones = [];
+              if (!p.pendingReportMilestones.includes(milestoneNum)) {
+                p.pendingReportMilestones.push(milestoneNum);
+              }
+            }
+            data.lastUpdated = new Date().toISOString();
+            return data;
+          }).catch(() => {});
+        }
+      }
+    }
   };
 
   const handleFlag = () => {
@@ -289,6 +370,20 @@ const SharedQuickPlayScreen = () => {
     setShowFlagConfirm(false);
     setFlagReason(null);
     setFlagComment('');
+    setSkippedAfterReport(false);
+  };
+
+  const handleSkipAfterReport = () => {
+    setShowFlagConfirm(false);
+    setFlagReason(null);
+    setFlagComment('');
+    setSkippedAfterReport(false);
+    if (currentIdx >= scenarios.length - 1) {
+      concludeSession();
+    } else {
+      setCurrentIdx(prev => prev + 1);
+      setSelectedOption(null);
+    }
   };
 
   const handleShare = async () => {
@@ -468,6 +563,71 @@ const SharedQuickPlayScreen = () => {
               })}
             </div>
           )}
+
+          {/* Personal insight (rule-based) */}
+          {(() => {
+            const byCat = catBreakdown;
+            const entries = Object.entries(byCat).filter(([, d]) => d.total >= 2);
+            const best = entries.sort((a, b) => (b[1].correct / b[1].total) - (a[1].correct / a[1].total))[0];
+            const worst = entries.sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total))[0];
+            const bestCat = best ? SCENARIO_CATEGORIES.find(c => c.id === best[0]) : null;
+            const worstCat = worst ? SCENARIO_CATEGORIES.find(c => c.id === worst[0]) : null;
+            const bestPct = best ? Math.round((best[1].correct / best[1].total) * 100) : 0;
+            const worstPct = worst ? Math.round((worst[1].correct / worst[1].total) * 100) : 0;
+            if (!bestCat && !worstCat) return null;
+            return (
+              <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>💡 תובנות אישיות</div>
+                {bestCat && bestPct >= 60 && (
+                  <div style={{ color: '#22c55e' }}>
+                    {bestCat.icon} אתה חזק ב{bestCat.name} ({bestPct}%) — המשך ככה!
+                  </div>
+                )}
+                {worstCat && worstPct < 50 && worstCat.id !== bestCat?.id && (
+                  <div style={{ color: '#f59e0b' }}>
+                    {worstCat.icon} שים לב ל{worstCat.name} ({worstPct}%) — שווה לתרגל
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Group comparison */}
+          {allPlayerAnswers && allPlayerAnswers.players.length > 1 && (() => {
+            const others = allPlayerAnswers.players.filter(p => p.playerName !== name && p.totalQuestions >= 5);
+            if (others.length < 2) return null;
+            const groupAvg = Math.round(others.reduce((s, p) => s + p.accuracy, 0) / others.length);
+            const all = [...others, { playerName: name, accuracy, totalQuestions: scoredTotal, sessions: [], totalCorrect: correct }];
+            const sorted = all.sort((a, b) => b.accuracy - a.accuracy);
+            const rank = sorted.findIndex(p => p.playerName === name) + 1;
+            return (
+              <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', fontSize: '0.8rem', textAlign: 'center' }}>
+                <div style={{ marginBottom: '0.3rem' }}>
+                  הדיוק שלך: <strong>{accuracy.toFixed(0)}%</strong> | ממוצע הקבוצה: <strong>{groupAvg}%</strong>
+                </div>
+                <div style={{ color: 'var(--text-muted)' }}>
+                  מקום {rank} מתוך {sorted.length} שחקנים
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* AI Report milestone */}
+          {reportMilestoneMsg && (
+            <div className="card" style={{
+              padding: '0.75rem', marginTop: '0.5rem',
+              background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)',
+            }}>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#3b82f6', marginBottom: '0.3rem' }}>
+                {generatingReport ? '⏳ מייצר דוח אישי...' : '📋 הדוח האישי שלך'}
+              </div>
+              {!generatingReport && (
+                <div style={{ fontSize: '0.8rem', lineHeight: 1.6, color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>
+                  {reportMilestoneMsg}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions — outside the screenshot area */}
@@ -508,95 +668,193 @@ const SharedQuickPlayScreen = () => {
   const isFlagged = flaggedThisSession.has(scenario.poolId);
 
   return (
-    <div className="fade-in" style={{ padding: '0.75rem', paddingBottom: '2rem', direction: 'rtl' }}>
+    <div className="fade-in" style={{ padding: '0.5rem 0.75rem', paddingBottom: '1rem', direction: 'rtl' }}>
       {/* Exhaustion message */}
       {exhaustedMsg && currentIdx === 0 && (
         <div style={{
-          padding: '0.6rem 0.75rem', borderRadius: '10px', marginBottom: '0.5rem',
+          padding: '0.4rem 0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
           background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)',
-          fontSize: '0.8rem', color: '#f97316', textAlign: 'center',
+          fontSize: '0.7rem', color: '#f97316', textAlign: 'center',
         }}>
           {exhaustedMsg}
         </div>
       )}
 
-      {/* Top bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+      {/* Top bar + progress */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
         <button
           onClick={() => results.length > 0 ? concludeSession() : navigate('/shared-training')}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 600 }}
         >
           {results.length > 0 ? 'סיים ←' : 'חזרה ←'}
         </button>
-        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)' }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)' }}>
           🎯 {currentIdx + 1}/{scenarios.length}
+          {results.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}> · ✅{results.filter(r => r.correct).length}</span>}
         </div>
       </div>
 
       {/* Progress bar */}
-      <div style={{ height: '4px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden', marginBottom: '0.75rem' }}>
+      <div style={{ height: '3px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden', marginBottom: '0.4rem' }}>
         <div style={{ height: '100%', width: `${progressPct}%`, background: 'var(--primary)', transition: 'width 0.3s ease', borderRadius: '2px' }} />
       </div>
-
-      {/* Score dots (capped at 20 to prevent overflow in unlimited mode) */}
-      {results.length > 0 && scenarios.length <= 20 && (
-        <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-          {results.map((r, i) => (
-            <div key={i} style={{
-              width: '10px', height: '10px', borderRadius: '50%',
-              background: r.correct ? '#22c55e' : r.nearMiss ? '#f59e0b' : '#ef4444', opacity: 0.8,
-            }} />
-          ))}
-          {Array.from({ length: Math.max(0, scenarios.length - results.length) }).map((_, i) => (
-            <div key={`e-${i}`} style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--border)' }} />
-          ))}
-        </div>
-      )}
-      {results.length > 0 && scenarios.length > 20 && (
-        <div style={{ textAlign: 'center', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-          ✅ {results.filter(r => r.correct).length} / {results.filter(r => !r.nearMiss).length}
-        </div>
-      )}
 
       {/* Home-game style reminder — first question only, dismissible */}
       {showStyleTip && currentIdx === 0 && !selectedOption && (
         <div style={{
-          padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
+          padding: '0.3rem 0.6rem', borderRadius: '6px', marginBottom: '0.3rem',
           background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
-          display: 'flex', alignItems: 'flex-start', gap: '0.4rem', direction: 'rtl',
+          display: 'flex', alignItems: 'center', gap: '0.3rem', direction: 'rtl',
         }}>
-          <div style={{ flex: 1, fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', gap: '0.35rem' }}>
-            <span style={{ flexShrink: 0 }}>💡</span>
+          <div style={{ flex: 1, fontSize: '0.6rem', color: 'var(--text-muted)', display: 'flex', gap: '0.25rem' }}>
+            <span>💡</span>
             <span>התשובות מותאמות למשחק ביתי — שחקנים קוראים יותר, בלופים עובדים פחות</span>
           </div>
           <button onClick={() => setShowStyleTip(false)} style={{
             background: 'none', border: 'none', color: 'var(--text-muted)',
-            cursor: 'pointer', fontSize: '0.7rem', padding: '0', flexShrink: 0,
+            cursor: 'pointer', fontSize: '0.65rem', padding: '0', flexShrink: 0,
           }}>✕</button>
         </div>
       )}
 
       {/* Scenario */}
-      <div className="card" style={{ padding: '1rem 1.25rem', borderRight: '3px solid var(--primary)' }}>
-        <div style={{
-          display: 'inline-block', padding: '0.25rem 0.6rem', borderRadius: '8px',
-          background: 'rgba(99,102,241,0.12)', fontSize: '0.9rem', fontWeight: 700,
-          marginBottom: '0.75rem', letterSpacing: '2px',
-        }}>
-          🃏 <ColoredCards text={scenario.yourCards} />
+      <div className="card" style={{ padding: '0.6rem 0.8rem', borderRight: '3px solid var(--primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+          <div style={{
+            display: 'inline-block', padding: '0.2rem 0.5rem', borderRadius: '6px',
+            background: 'rgba(99,102,241,0.12)', fontSize: '0.85rem', fontWeight: 700,
+            letterSpacing: '2px',
+          }}>
+            🃏 <ColoredCards text={scenario.yourCards} />
+          </div>
+          {(() => {
+            const cat = SCENARIO_CATEGORIES.find(c => c.id === scenario.categoryId);
+            return cat ? <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{cat.icon} {cat.name}</span> : null;
+          })()}
         </div>
-        <p style={{ fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--text)', margin: 0 }}>
-          {fixCardBidi(scenario.situation)}
+        <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>
+          <ColoredText text={scenario.situation} />
         </p>
       </div>
 
+      {/* Report button — visible before answering */}
+      {!selectedOption && !showFlagConfirm && !isFlagged && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.4rem' }}>
+          <button
+            onClick={() => setShowFlagConfirm(true)}
+            style={{
+              background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: '6px', cursor: 'pointer',
+              fontSize: '0.7rem', color: '#ef4444', padding: '0.25rem 0.6rem',
+            }}
+          >
+            🚩 דווח על שאלה
+          </button>
+        </div>
+      )}
+
+      {/* Flag report panel (before answering) */}
+      {!selectedOption && showFlagConfirm && (
+        <div style={{
+          marginTop: '0.5rem', marginBottom: '0.5rem', padding: '0.75rem', borderRadius: '10px',
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+          direction: 'rtl',
+        }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>🚩 דיווח על שאלה</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.6rem', textAlign: 'center' }}>
+            מה הבעיה?
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.6rem' }}>
+            {([
+              ['wrong_answer', '❌ התשובה הנכונה שגויה'],
+              ['unclear_question', '❓ השאלה לא ברורה או חסרה מידע'],
+              ['wrong_for_home_game', '🏠 מתאים למקצועי אבל לא למשחק שלנו'],
+              ['other', '💬 אחר'],
+            ] as [FlagReason, string][]).map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setFlagReason(val)}
+                style={{
+                  padding: '0.5rem 0.6rem', borderRadius: '8px', cursor: 'pointer',
+                  fontSize: '0.75rem', textAlign: 'right',
+                  background: flagReason === val ? 'rgba(239,68,68,0.2)' : 'var(--surface)',
+                  border: flagReason === val ? '1px solid #ef4444' : '1px solid var(--border)',
+                  color: flagReason === val ? '#ef4444' : 'var(--text)',
+                  fontWeight: flagReason === val ? 600 : 400,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={flagComment}
+            onChange={e => setFlagComment(e.target.value)}
+            placeholder="פרט את הבעיה (אופציונלי)..."
+            rows={2}
+            style={{
+              width: '100%', padding: '0.5rem', borderRadius: '8px', fontSize: '0.75rem',
+              background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)',
+              resize: 'vertical', direction: 'rtl', fontFamily: 'inherit', boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.6rem' }}>
+            <button onClick={() => { handleFlag(); setSkippedAfterReport(true); }} disabled={!flagReason}
+              style={{
+                background: flagReason ? '#ef4444' : '#555', color: 'white', border: 'none',
+                padding: '0.45rem 1.2rem', borderRadius: '8px', cursor: flagReason ? 'pointer' : 'not-allowed',
+                fontSize: '0.8rem', fontWeight: 600, opacity: flagReason ? 1 : 0.5,
+              }}>
+              שלח דיווח
+            </button>
+            <button onClick={() => { setShowFlagConfirm(false); setFlagReason(null); setFlagComment(''); }}
+              style={{
+                background: 'var(--surface)', color: 'var(--text-muted)',
+                border: '1px solid var(--border)', padding: '0.45rem 1.2rem', borderRadius: '8px',
+                cursor: 'pointer', fontSize: '0.8rem',
+              }}>
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Skip / Answer after report */}
+      {!selectedOption && skippedAfterReport && isFlagged && (
+        <div style={{
+          marginTop: '0.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'center',
+        }}>
+          <button
+            onClick={handleSkipAfterReport}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid var(--border)',
+              background: 'var(--surface)', color: 'var(--text-muted)', fontSize: '0.8rem',
+              cursor: 'pointer', fontWeight: 600,
+            }}
+          >
+            דלג על השאלה
+          </button>
+          <button
+            onClick={() => setSkippedAfterReport(false)}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '8px', border: 'none',
+              background: 'var(--primary)', color: 'white', fontSize: '0.8rem',
+              cursor: 'pointer', fontWeight: 600,
+            }}
+          >
+            ענה בכל זאת
+          </button>
+        </div>
+      )}
+
       {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
         {scenario.options.map(option => {
           const isSelected = selectedOption === option.id;
           const isRevealed = !!selectedOption;
           const isCorrectOption = option.isCorrect;
           const isNearMissOption = !isCorrectOption && !!option.nearMiss;
+          const showExplanation = isRevealed && option.explanation;
 
           let borderColor = 'var(--border)';
           let bgColor = 'var(--surface)';
@@ -637,49 +895,44 @@ const SharedQuickPlayScreen = () => {
               onClick={() => handleSelect(option.id)}
               disabled={isRevealed}
               style={{
-                padding: '0.75rem 1rem', borderRadius: '12px',
-                border: `2px solid ${borderColor}`, background: bgColor,
+                padding: '0.4rem 0.65rem', borderRadius: '10px',
+                border: `1.5px solid ${borderColor}`, background: bgColor,
                 cursor: isRevealed ? 'default' : 'pointer',
                 textAlign: 'right', direction: 'rtl',
                 transition: 'all 0.2s ease',
-                opacity: isRevealed && !isCorrectOption && !isSelected ? 0.5 : 1,
+                opacity: isRevealed && !isCorrectOption && !isSelected ? 0.4 : 1,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{
-                    width: '26px', height: '26px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: '0.75rem',
-                    background: iconBg,
-                    color: iconColor,
-                  }}>
-                    {iconSymbol}
-                  </span>
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem', color: textColor }}>
-                    {option.text}
-                  </span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{
+                  width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: '0.65rem',
+                  background: iconBg, color: iconColor,
+                }}>
+                  {iconSymbol}
+                </span>
+                <span style={{ fontWeight: 600, fontSize: '0.8rem', color: textColor }}>
+                  {option.text}
+                </span>
               </div>
 
-              {/* Near-miss tag */}
               {isRevealed && isSelected && isNearMissOption && (
                 <div style={{
-                  marginTop: '0.4rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+                  marginTop: '0.25rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
                   background: 'rgba(245,158,11,0.1)', display: 'inline-block',
-                  fontSize: '0.7rem', fontWeight: 600, color: '#f59e0b',
+                  fontSize: '0.6rem', fontWeight: 600, color: '#f59e0b',
                 }}>
                   🏠 תשובה טובה לפוקר מקצועי, לא אופטימלית למשחק שלנו
                 </div>
               )}
 
-              {/* Show explanation for ALL options when revealed */}
-              {isRevealed && option.explanation && (
+              {showExplanation && (
                 <div style={{
-                  marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6,
-                  color: 'var(--text-muted)', paddingRight: '2rem',
+                  marginTop: '0.2rem', fontSize: '0.65rem', lineHeight: 1.4,
+                  color: 'var(--text-muted)', paddingRight: '1.6rem',
                 }}>
-                  {fixCardBidi(option.explanation)}
+                  <ColoredText text={option.explanation!} />
                 </div>
               )}
             </button>
@@ -687,17 +940,64 @@ const SharedQuickPlayScreen = () => {
         })}
       </div>
 
-      {/* Context note after wrong answer (skip for near-miss — already has its own tag) */}
+      {/* Reaction after answering */}
       {selectedOption && (() => {
         const chosen = scenario.options.find(o => o.id === selectedOption);
-        if (!chosen || chosen.isCorrect || chosen.nearMiss) return null;
+        if (!chosen) return null;
+        const isCorrectAnswer = chosen.isCorrect;
+        const isNearMissAnswer = !isCorrectAnswer && !!chosen.nearMiss;
+        const isWrongAnswer = !isCorrectAnswer && !isNearMissAnswer;
+
+        const reactionSeed = scenario.poolId.charCodeAt(0) + scenario.poolId.charCodeAt(scenario.poolId.length - 1);
+        const reaction = isCorrectAnswer
+          ? CORRECT_ANSWER_REACTIONS[reactionSeed % CORRECT_ANSWER_REACTIONS.length]
+          : isWrongAnswer
+            ? WRONG_ANSWER_REACTIONS[reactionSeed % WRONG_ANSWER_REACTIONS.length]
+            : null;
+
+        return reaction ? (
+          <div style={{
+            marginTop: '0.3rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
+            background: isCorrectAnswer ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.06)',
+            fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
+            color: isCorrectAnswer ? '#22c55e' : '#ef4444',
+          }}>
+            {reaction}
+          </div>
+        ) : null;
+      })()}
+
+      {/* Player comparison */}
+      {selectedOption && allPlayerAnswers && (() => {
+        const poolId = scenario.poolId;
+        const chosen = scenario.options.find(o => o.id === selectedOption);
+        if (!chosen) return null;
+        let totalAnswered = 0;
+        let correctCount = 0;
+        for (const p of allPlayerAnswers.players) {
+          if (p.playerName === name) continue;
+          for (const s of p.sessions) {
+            const r = s.results.find(res => res.poolId === poolId);
+            if (r) { totalAnswered++; if (r.correct) correctCount++; break; }
+          }
+        }
+        if (totalAnswered < 3) return null;
+        const userCorrect = chosen.isCorrect;
+        const wrongCount = totalAnswered - correctCount;
         return (
           <div style={{
-            marginTop: '0.5rem', padding: '0.4rem 0.6rem', borderRadius: '8px',
-            background: 'rgba(99,102,241,0.05)', fontSize: '0.65rem',
-            color: 'var(--text-muted)', direction: 'rtl', lineHeight: 1.5,
+            marginTop: '0.2rem', padding: '0.2rem 0.5rem', borderRadius: '6px',
+            background: 'rgba(99,102,241,0.06)', fontSize: '0.6rem',
+            color: 'var(--text-muted)', textAlign: 'center',
           }}>
-            🏠 התשובות מותאמות למשחק הביתי שלנו — שחקנים קוראים יותר ובלופים עובדים פחות מאשר בפוקר מקצועי
+            {userCorrect
+              ? (correctCount < totalAnswered / 2
+                ? `👏 רק ${correctCount} מתוך ${totalAnswered} שחקנים ענו נכון — כל הכבוד!`
+                : `👥 ${correctCount} מתוך ${totalAnswered} שחקנים ענו נכון`)
+              : (wrongCount > totalAnswered / 2
+                ? `👥 גם ${wrongCount} שחקנים אחרים טעו פה`
+                : `👥 ${correctCount} מתוך ${totalAnswered} שחקנים ענו נכון`)
+            }
           </div>
         );
       })()}
@@ -729,7 +1029,7 @@ const SharedQuickPlayScreen = () => {
                 fontSize: '0.75rem', color: '#ef4444',
               }}
             >
-              🚩 השאלה או התשובה לא נכונים? דווח כאן
+              🚩 דווח על שאלה
             </button>
           )}
           {isFlagged && (
@@ -745,17 +1045,14 @@ const SharedQuickPlayScreen = () => {
         </div>
       )}
 
-      {/* Flag report panel */}
-      {showFlagConfirm && (
+      {/* Post-answer flag report panel */}
+      {selectedOption && showFlagConfirm && (
         <div style={{
           marginTop: '0.5rem', padding: '0.75rem', borderRadius: '10px',
           background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
           direction: 'rtl',
         }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', textAlign: 'center' }}>🚩 דיווח על שאלה</div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.6rem', textAlign: 'center' }}>
-            מה הבעיה?
-          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.6rem' }}>
             {([
               ['wrong_answer', '❌ התשובה הנכונה שגויה'],
@@ -763,9 +1060,7 @@ const SharedQuickPlayScreen = () => {
               ['wrong_for_home_game', '🏠 מתאים למקצועי אבל לא למשחק שלנו'],
               ['other', '💬 אחר'],
             ] as [FlagReason, string][]).map(([val, label]) => (
-              <button
-                key={val}
-                onClick={() => setFlagReason(val)}
+              <button key={val} onClick={() => setFlagReason(val)}
                 style={{
                   padding: '0.5rem 0.6rem', borderRadius: '8px', cursor: 'pointer',
                   fontSize: '0.75rem', textAlign: 'right',
@@ -773,22 +1068,17 @@ const SharedQuickPlayScreen = () => {
                   border: flagReason === val ? '1px solid #ef4444' : '1px solid var(--border)',
                   color: flagReason === val ? '#ef4444' : 'var(--text)',
                   fontWeight: flagReason === val ? 600 : 400,
-                }}
-              >
+                }}>
                 {label}
               </button>
             ))}
           </div>
-          <textarea
-            value={flagComment}
-            onChange={e => setFlagComment(e.target.value)}
-            placeholder="פרט את הבעיה (אופציונלי)..."
-            rows={2}
+          <textarea value={flagComment} onChange={e => setFlagComment(e.target.value)}
+            placeholder="פרט את הבעיה (אופציונלי)..." rows={2}
             style={{
               width: '100%', padding: '0.5rem', borderRadius: '8px', fontSize: '0.75rem',
               background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)',
-              resize: 'vertical', direction: 'rtl', fontFamily: 'inherit',
-              boxSizing: 'border-box',
+              resize: 'vertical', direction: 'rtl', fontFamily: 'inherit', boxSizing: 'border-box',
             }}
           />
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.6rem' }}>
