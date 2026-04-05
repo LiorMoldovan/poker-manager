@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:57:56.008Z",
+  "lastUpdated": "2026-04-05T14:30:39.756Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -530,11 +530,102 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T14:30:39.250Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "1ou8ni",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387418604_seu1as",
+              "categoryId": "set_mining",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389680104_tbg2xi",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8ice65",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "327l5c",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "onfdtq",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ixo6u5",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "fu7rz4",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390862811_zahnqp",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389680104_tbg2xi",
+            "odds_math_1775387023360_fliphs",
+            "ixo6u5"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389680104_tbg2xi",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "האם זה נכון לשאול ככה בלי עוד נתונים?",
+              "date": "2026-04-05T13:53:58.659Z"
+            },
+            {
+              "poolId": "odds_math_1775387023360_fliphs",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "אין מספיק נתונים",
+              "date": "2026-04-05T13:57:18.481Z"
+            },
+            {
+              "poolId": "ixo6u5",
+              "playerName": "ליאור",
+              "reason": "wrong_answer",
+              "comment": "הימור כזה על גופה כל כך קטנה יבריח את כל הידיים החלשות ממני וישאיר את החזקות כמו שלישייה, לא מסכים עם התשובה שלך",
+              "date": "2026-04-05T14:01:24.289Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 50,
-      "totalCorrect": 43,
-      "accuracy": 86
+      "totalQuestions": 57,
+      "totalCorrect": 48,
+      "accuracy": 84.21052631578947
     },
     {
       "playerName": "אייל",
