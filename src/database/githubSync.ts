@@ -800,7 +800,19 @@ const fetchGitHubJson = async <T>(path: string, token?: string): Promise<T | nul
       throw new Error(`GitHub fetch failed: ${resp.status}`);
     }
     const fileInfo = await resp.json();
-    return JSON.parse(decodeGitHubContent(fileInfo)) as T;
+
+    // Files >1MB have no inline content — use the Blob API instead
+    if (fileInfo.content) {
+      return JSON.parse(decodeGitHubContent(fileInfo)) as T;
+    }
+    if (fileInfo.sha) {
+      const blobUrl = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/git/blobs/${fileInfo.sha}`;
+      const blobResp = await fetch(blobUrl, { headers });
+      if (!blobResp.ok) throw new Error(`Blob fetch failed: ${blobResp.status}`);
+      const blob = await blobResp.json();
+      return JSON.parse(decodeGitHubContent(blob)) as T;
+    }
+    throw new Error('No content or sha in GitHub response');
   } catch (error) {
     console.error(`Error fetching ${path}:`, error);
     return null;

@@ -481,6 +481,8 @@ ${reportSummary}
 4. הסברים בעברית פשוטה, ספציפיים ללוח ולקלפים
 5. nearMiss: true לתשובות שנכונות בפוקר מקצועי אך לא למשחק ביתי
 6. שמור על poolId, categoryId ו-category מקוריים
+7. מונחים: פלופ/טרן/ריבר (לא "נהר"), בליינד (לא "עיוור"), ביד (לא "בכיס"), כפתור (לא "מפיץ")
+8. מונחים באנגלית — חובה תרגום בסוגריים בפעם הראשונה: Pot Odds (יחס קופה), Implied Odds (סיכויי רווח עתידיים), EV (ערך צפוי), Equity (אחוז ניצחון) וכו'
 
 החזר JSON בלבד, אובייקט אחד:
 {"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},{"id":"B","text":"...","isCorrect":true,"explanation":"..."},{"id":"C","text":"...","isCorrect":false,"explanation":"..."}],"category":"...","categoryId":"..."}

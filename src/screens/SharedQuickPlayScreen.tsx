@@ -564,7 +564,7 @@ const SharedQuickPlayScreen = () => {
             </div>
           )}
 
-          {/* Personal insight (rule-based) */}
+          {/* Personal insight (rule-based) + AI report teaser */}
           {(() => {
             const byCat = catBreakdown;
             const entries = Object.entries(byCat).filter(([, d]) => d.total >= 2);
@@ -574,7 +574,9 @@ const SharedQuickPlayScreen = () => {
             const worstCat = worst ? SCENARIO_CATEGORIES.find(c => c.id === worst[0]) : null;
             const bestPct = best ? Math.round((best[1].correct / best[1].total) * 100) : 0;
             const worstPct = worst ? Math.round((worst[1].correct / worst[1].total) * 100) : 0;
-            if (!bestCat && !worstCat) return null;
+            const totalSoFar = progress.totalQuestions;
+            const nextMilestone = (Math.floor(totalSoFar / 100) + 1) * 100;
+            const remaining = nextMilestone - totalSoFar;
             return (
               <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6 }}>
                 <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>💡 תובנות אישיות</div>
@@ -588,6 +590,9 @@ const SharedQuickPlayScreen = () => {
                     {worstCat.icon} שים לב ל{worstCat.name} ({worstPct}%) — שווה לתרגל
                   </div>
                 )}
+                <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid var(--border)', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  📋 עוד <strong style={{ color: '#3b82f6' }}>{remaining}</strong> שאלות לדוח AI אישי (ב-{nextMilestone} שאלות)
+                </div>
               </div>
             );
           })()}

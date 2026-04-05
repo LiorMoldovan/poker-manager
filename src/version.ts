@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.0';
+export const APP_VERSION = '5.11.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.1',
+    date: '2026-04-05',
+    changes: [
+      '🔧 GitHub large file support — Blob API fallback for files >1MB without inline content',
+      '📋 AI report milestone teaser — shows remaining questions until next personal report',
+      '🃏 Hebrew poker terminology enforcement — correct terms in AI generation and fix prompts, pot odds clarity',
+    ]
+  },
   {
     version: '5.11.0',
     date: '2026-04-05',
