@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T14:43:35.527Z",
+  "lastUpdated": "2026-04-05T14:44:06.902Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -585,9 +585,9 @@
           "flagReports": []
         }
       ],
-      "totalQuestions": 73,
+      "totalQuestions": 55,
       "totalCorrect": 48,
-      "accuracy": 65.75342465753424
+      "accuracy": 87.27272727272727
     },
     {
       "playerName": "אייל",
