@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-05T11:13:26.372Z",
+  "generatedAt": "2026-04-05T11:16:48.535Z",
   "totalScenarios": 590,
   "byCategory": {
     "זוג עליון על לוח מסוכן": 20,
@@ -12482,7 +12482,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "id": "vd57v33xn1ci"
+      "id": "vd57v33xn1ci",
+      "reviewedAt": "2026-04-05T11:16:48.531Z"
     },
     {
       "poolId": "n293hy",
@@ -12511,7 +12512,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "id": "02ur9p5vzezr"
+      "id": "02ur9p5vzezr",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "poolId": "4vbn9",
@@ -12540,7 +12542,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "id": "xf8xftu2en5w"
+      "id": "xf8xftu2en5w",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "poolId": "itsj25",
@@ -12569,7 +12572,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "id": "eq8hn9bq7by7"
+      "id": "eq8hn9bq7by7",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "poolId": "3vazo1",
@@ -12598,7 +12602,8 @@
       ],
       "category": "לתפוס בלוף",
       "categoryId": "bluff_catching",
-      "id": "lz3wc3lllkj6"
+      "id": "lz3wc3lllkj6",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "poolId": "fxaxn3",
@@ -16523,7 +16528,10 @@
           "explanation": "זו יד חזקה מדי מכדי לוותר עליה בפוזיציה מוקדמת, במיוחד כשיש לך סיכוי מצוין להוביל את הפלופ.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387236973_63u6jn",
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387236973_oni1lf",
@@ -16550,7 +16558,10 @@
           "explanation": "הסיכוי לפגוע בסט (Set) מול שחקן אגרסיבי שמהמר הרבה שווה את ה-800 צ'יפים, בתקווה שהפוט יישאר בשליטה.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387236973_oni1lf",
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387236973_3wz2l9",
@@ -16577,7 +16588,10 @@
           "explanation": "זהו הימור מוגזם ולא הגיוני ליד שלא מבטיחה ניצחון מול סגנון משחק שמרן.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387236973_3wz2l9",
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387236973_n5xm73",
@@ -16604,7 +16618,10 @@
           "explanation": "קווינס הן יד חזקה מדי מכדי לקפל לפני הפלופ, גם מול שחקן אגרסיבי.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387236973_n5xm73",
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387236973_nyjv16",
@@ -16631,7 +16648,10 @@
           "explanation": "המחיר זול מדי והפוזיציה מעולה מכדי לוותר על יד שיש לה פוטנציאל גבוה בפורטקאסט.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387236973_nyjv16",
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387263630_krux37",
@@ -16658,7 +16678,10 @@
           "explanation": "הימור כזה במשחק שלכם יגרום לכולם להשוות, מה שישאיר אותך בפוזיציה גרועה עם יד חלשה כשהקופה גדלה ללא צורך.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387263630_krux37",
+      "categoryId": "multiway_pots",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387263630_ritii6",
@@ -16685,7 +16708,10 @@
           "explanation": "יש לך יד חזקה מדי מכדי לפרוש, ה-Equity שלך מול הטווח של ליכטר ושאר השחקנים גבוה מספיק כדי להצדיק השוואה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387263630_ritii6",
+      "categoryId": "multiway_pots",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387263630_vwfemn",
@@ -16712,7 +16738,10 @@
           "explanation": "היד שלך חזקה מכדי לוותר עליה בפלופ כזה, גם אם אייל אגרסיבי.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387263630_vwfemn",
+      "categoryId": "multiway_pots",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387263630_cpr307",
@@ -16739,7 +16768,10 @@
           "explanation": "לפרוש עם סטרייט זה טעות קריטית, גם אם הלוח נראה מאיים.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387263630_cpr307",
+      "categoryId": "multiway_pots",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387263630_99738k",
@@ -16766,7 +16798,10 @@
           "explanation": "פיליפ ימשיך להמר אם תיתן לו, אין צורך להפחיד את השולחן ולהבריח שחקנים אחרים שעלולים להשוות עם ידיים חלשות יותר.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387263630_99738k",
+      "categoryId": "multiway_pots",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387283098_8jdeq4",
@@ -16793,7 +16828,10 @@
           "explanation": "יש לך פוטנציאל גבוה להשלים סדרה, קיפול כאן יהיה טעות אסטרטגית.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387283098_8jdeq4",
+      "categoryId": "straight_draw",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387283098_bqhd6u",
@@ -16820,7 +16858,10 @@
           "explanation": "זהו הימור מסוכן מדי מול שחקן פסיבי שעלול להחזיק זוג גבוה או סט.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387283098_bqhd6u",
+      "categoryId": "straight_draw",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387283098_cjonhe",
@@ -16847,7 +16888,10 @@
           "explanation": "המחיר שהוצב גבוה מדי ביחס לסיכוי להשלים את הסדרה (Odds), עדיף לשמור על הצ'יפים.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387283098_cjonhe",
+      "categoryId": "straight_draw",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387283098_ufm0um",
@@ -16874,7 +16918,10 @@
           "explanation": "הימור מוגזם שלא משרת שום מטרה מול שחקן שמרן.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387283098_ufm0um",
+      "categoryId": "straight_draw",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387283098_yssij8",
@@ -16901,7 +16948,10 @@
           "explanation": "יש לך 8 אאוטים להשלמת סדרה, זה יהיה בזבוז לקפל בשלב זה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387283098_yssij8",
+      "categoryId": "straight_draw",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387344645_pdolh7",
@@ -16928,7 +16978,10 @@
           "explanation": "רייז גדול נגד שחקן אגרסיבי כמו פיליפ יגרום לך להפסיד יותר אם הוא מחזיק יד חזקה, עדיף לראות קלף בחינם.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387344645_pdolh7",
+      "categoryId": "odds_math",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387344645_rignac",
@@ -16955,7 +17008,10 @@
           "explanation": "זהו מהלך בלתי מחושב מול שחקן פסיבי שסביר להניח שיש לו כבר זוג גבוה או סט.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387344645_rignac",
+      "categoryId": "odds_math",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387344645_erm83r",
@@ -16982,7 +17038,10 @@
           "explanation": "מול שחקן אגרסיבי שמהמר לתוך קופה קטנה בטרן, הזוג שלך חלש מדי ואין לך מספיק אאוטים לשיפור.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387344645_erm83r",
+      "categoryId": "odds_math",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387344645_0nq4ez",
@@ -17009,7 +17068,10 @@
           "explanation": "למרות שהלוח מסוכן, הסיכויים שלך להשלים את הסטרייט גבוהים מספיק כדי לראות עוד קלף בעלות סבירה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387344645_0nq4ez",
+      "categoryId": "odds_math",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387344645_4ae3da",
@@ -17036,7 +17098,10 @@
           "explanation": "מול שחקן פסיבי ושמרן כמו דן מאן, הימור חזק על פלופ כזה מעיד בדרך כלל על שלישייה (6) או זוג מלכות ומעלה. הקריאה אינה משתלמת סטטיסטית.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387344645_4ae3da",
+      "categoryId": "odds_math",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387362406_t5bisc",
@@ -17063,7 +17128,10 @@
           "explanation": "השוואה מחוץ למיקום מול שחקן סלקטיבי תוביל אותך למצב קשה בפלופ כשהיד שלך לא פגעה חזק.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387362406_t5bisc",
+      "categoryId": "dominated_hands",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387362406_wx8yyi",
@@ -17090,7 +17158,10 @@
           "explanation": "היד שלך עדיין טובה מספיק כדי להשוות הימור אחד של שחקן אגרסיבי, קיפול כאן הוא מוקדם מדי.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387362406_wx8yyi",
+      "categoryId": "dominated_hands",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387362406_np9b55",
@@ -17117,7 +17188,10 @@
           "explanation": "על לוח כזה, עם הימור גדול מאורן, ה-A-10 שלך נמצא בבעיה רצינית מול סדרות וזוגות גבוהים יותר.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387362406_np9b55",
+      "categoryId": "dominated_hands",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387362406_vw91k1",
@@ -17144,7 +17218,10 @@
           "explanation": "זוג 8 הוא יד מצוינת לראות פלופ זול, קיפול לפני הפלופ הוא ויתור על פוטנציאל גדול.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387362406_vw91k1",
+      "categoryId": "dominated_hands",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387362406_uu3bd7",
@@ -17171,7 +17248,10 @@
           "explanation": "כששחקן פסיבי כמו דן מאן מהמר, הוא כמעט תמיד מציג יד חזקה יותר מה-J שלך עם קיקר K.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387362406_uu3bd7",
+      "categoryId": "dominated_hands",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387380131_dx71hd",
@@ -17198,7 +17278,10 @@
           "explanation": "ליאור הוא שחקן פסיבי וסלקטיבי, הוא לא יפרוש ליד טובה שלו רק בגלל רייז גדול.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387380131_dx71hd",
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387380131_b76ujq",
@@ -17225,7 +17308,10 @@
           "explanation": "במשחק שבו אנשים קוראים הכל, אול-אין נגד שחקן אגרסיבי יביא לקריאה רק אם הוא חזק ממך.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387380131_b76ujq",
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387380131_ajoz38",
@@ -17252,7 +17338,10 @@
           "explanation": "הימור קטן מאפשר לך 'מחיר כניסה' משתלם לראות אם תתחבר לפלופ.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387380131_ajoz38",
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387380131_gzltwd",
@@ -17279,7 +17368,10 @@
           "explanation": "נגד שחקן שמרן שמהמר גדול, עליך להניח שיש לו יד חזקה ולפרוש אם אין לך משהו משמעותי.",
           "isCorrect": true
         }
-      ]
+      ],
+      "poolId": "gen_1775387380131_gzltwd",
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387380131_c5tqnu",
@@ -17306,7 +17398,10 @@
           "explanation": "ההשקעה של 1,500 כדי לראות פלופ עם זוג נמוך היא משתלמת כשיש הרבה שחקנים בקופה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387380131_c5tqnu",
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387399620_g59fbh",
@@ -17333,7 +17428,10 @@
           "explanation": "העלאה גדולה מול שחקן כמו ליכטר תגרום לו לקפל רק אם הוא באמת חלש, אבל זה הימור מסוכן מדי בשלב זה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387399620_g59fbh",
+      "categoryId": "bluff_catching",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387399620_43uby8",
@@ -17360,7 +17458,10 @@
           "explanation": "זהו הימור התאבדות. פיליפ לא יקפל כאן בגלל גודל הקופה, ואתה מסתכן בלהפסיד את כל הצ'יפים שלך.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387399620_43uby8",
+      "categoryId": "bluff_catching",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387399620_la4k2a",
@@ -17387,7 +17488,10 @@
           "explanation": "זהו בלוף גרוע מול שחקן פסיבי ושמרן; הוא יקרא את ההעלאה שלך עם היד החזקה שלו וינצח בקלות.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387399620_la4k2a",
+      "categoryId": "bluff_catching",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387399620_zwosg8",
@@ -17414,7 +17518,10 @@
           "explanation": "למרות שזה לא רע, אתה נותן לאייל להמשיך להמר ולנסות להוציא אותך מהקופה בטרן, במקום להראות כוח עכשיו.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387399620_zwosg8",
+      "categoryId": "bluff_catching",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387418604_61r9cr",
@@ -17441,7 +17548,10 @@
           "explanation": "בלתי אפשרי לפרוש עם סט מול הימור קטן של שחקן פסיבי. אתה מוביל כרגע כמעט על כל יד.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387418604_61r9cr",
+      "categoryId": "set_mining",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387418604_38efaq",
@@ -17468,7 +17578,10 @@
           "explanation": "רייז של 4,000 צ'יפים לפי הכללים יבריח את אייל אם אין לו כלום, ויגרום לו לשחק בזהירות אם יש לו יד חזקה.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387418604_38efaq",
+      "categoryId": "set_mining",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387418604_seu1as",
@@ -17495,7 +17608,10 @@
           "explanation": "אין שום סיבה לפרוש עם סט (שלישיית 9) בפלופ כזה, גם מול שחקן אגרסיבי.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387418604_seu1as",
+      "categoryId": "set_mining",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     },
     {
       "id": "gen_1775387418604_7on3k3",
@@ -17522,7 +17638,10 @@
           "explanation": "הימור גדול מדי מול שחקן שמרן כמו דן מאן יגרום לו לקפל כל יד חוץ ממלכות או אס, מה שישאיר אותך בלי רווח.",
           "isCorrect": false
         }
-      ]
+      ],
+      "poolId": "gen_1775387418604_7on3k3",
+      "categoryId": "set_mining",
+      "reviewedAt": "2026-04-05T11:16:48.534Z"
     }
   ]
 }
