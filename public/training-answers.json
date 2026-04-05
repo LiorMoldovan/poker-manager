@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T16:54:53.023Z",
+  "lastUpdated": "2026-04-05T17:02:14.942Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4043,8 +4043,18 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [],
-          "flagReports": []
+          "flaggedPoolIds": [
+            "math_1775389570598_1uvfm3"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389570598_1uvfm3",
+              "reason": "wrong_answer",
+              "comment": "בקופה יש 1200 אחרי שליאור שם 400. אם אני נכנס אני שם 400 כדי להרוויח 1600",
+              "playerName": "ליכטר",
+              "date": "2026-04-05T17:02:14.937Z"
+            }
+          ]
         }
       ],
       "totalQuestions": 53,
