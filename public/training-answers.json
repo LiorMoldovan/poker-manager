@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T08:08:22.641Z",
+  "lastUpdated": "2026-04-05T09:42:34.172Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2286,11 +2286,84 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T09:42:32.198Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "8lww36",
+              "categoryId": "set_mining",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2jn7qn",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "c42re5",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "7i3txe",
+              "categoryId": "postflop",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "go7tqk",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "nbcfbk",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qec0yd",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "qxf1u3",
+              "categoryId": "set_mining",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "r724dg",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "142ltl",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 95,
-      "totalCorrect": 74,
-      "accuracy": 77.89473684210526
+      "totalQuestions": 100,
+      "totalCorrect": 78,
+      "accuracy": 78
     },
     {
       "playerName": "מלמד",
