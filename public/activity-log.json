@@ -2344,5 +2344,25 @@
       "canvasHash": "y7v3bq"
     },
     "playerName": "אורן"
+  },
+  {
+    "deviceId": "6807f885-dc5c-4668-9f80-6ffe8b99a6ce",
+    "role": "member",
+    "timestamp": "2026-04-05T23:21:28.629Z",
+    "device": "Samsung / Android 10 / Chrome",
+    "screenSize": "412x883",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-05T23:21:28.634Z",
+    "fingerprint": {
+      "gpu": "Adreno (TM) 740",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "cg8hn4"
+    },
+    "playerName": "דן מאן"
   }
 ]
