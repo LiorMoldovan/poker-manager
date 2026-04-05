@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:53:42.146Z",
+  "lastUpdated": "2026-04-05T11:54:12.934Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3309,11 +3309,112 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T08:13:59.025Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "w7bcro",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jcxj6g",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fdxqju",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "c1fe79",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fi209o",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "w7bcro"
+          ],
+          "flagReports": [
+            {
+              "poolId": "w7bcro",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "לא מסכים עם התשובה.  יש שלי יכולה להיות מול אס וקיקר נמוך אני רוצה לראות פלוף",
+              "date": "2026-04-05T08:10:41.886Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-05T11:54:12.408Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "od1zw",
+              "categoryId": "postflop",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ml0nqq",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kg5am3",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qo456n",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yn8sae",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "od1zw"
+          ],
+          "flagReports": [
+            {
+              "poolId": "od1zw",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "אם יש לי 1-5 אין וגם לו הוא ישווה הכל.. ואין סכנה לצבע אז אני רוצה שיפגע במשהו או שימשיך להלעות ואקפיץ לו רק בסוף",
+              "date": "2026-04-05T08:17:00.386Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 101,
-      "totalCorrect": 83,
-      "accuracy": 82.17821782178217
+      "totalQuestions": 108,
+      "totalCorrect": 87,
+      "accuracy": 80.55555555555556
     },
     {
       "playerName": "ליכטר",
