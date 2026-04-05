@@ -593,34 +593,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389680104_tbg2xi",
-            "odds_math_1775387023360_fliphs",
-            "ixo6u5"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389680104_tbg2xi",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "האם זה נכון לשאול ככה בלי עוד נתונים?",
-              "date": "2026-04-05T13:53:58.659Z"
-            },
-            {
-              "poolId": "odds_math_1775387023360_fliphs",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "אין מספיק נתונים",
-              "date": "2026-04-05T13:57:18.481Z"
-            },
-            {
-              "poolId": "ixo6u5",
-              "playerName": "ליאור",
-              "reason": "wrong_answer",
-              "comment": "הימור כזה על גופה כל כך קטנה יבריח את כל הידיים החלשות ממני וישאיר את החזקות כמו שלישייה, לא מסכים עם התשובה שלך",
-              "date": "2026-04-05T14:01:24.289Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 57,
