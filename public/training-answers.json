@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T06:34:49.696Z",
+  "lastUpdated": "2026-04-05T07:22:55.309Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3140,11 +3140,62 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T07:22:54.542Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "q8k1j5",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "vcprr6",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yvgrs8",
+              "categoryId": "overbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "yzdm95",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8087kj",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "yvgrs8"
+          ],
+          "flagReports": [
+            {
+              "poolId": "yvgrs8",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "חסר מידע בעיקר כמה ובפרט רוצה להמר קצת שישלמו לי ולא הרבה להבריח",
+              "date": "2026-04-05T07:20:53.632Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 35,
-      "totalCorrect": 27,
-      "accuracy": 77.14285714285715
+      "totalQuestions": 38,
+      "totalCorrect": 30,
+      "accuracy": 78.94736842105263
     },
     {
       "playerName": "ליכטר",
