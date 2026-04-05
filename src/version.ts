@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.1';
+export const APP_VERSION = '5.11.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.2',
+    date: '2026-04-05',
+    changes: [
+      '🔍 AI flag report analysis — analyze flagged questions with AI verdict (accept/reject/partial), refinement chat, and WhatsApp share',
+      '📊 Shared training analytics — analyzePlayerTraining and formatAnalysisForPrompt used by reports and admin insights',
+      '🏠 Home-game reasoning enforcement — prompts forbid isolation/fold-equity logic, require home-game explanations',
+      '📝 Richer personal reports — trend analysis, comparison to previous report, consistent weakness detection',
+    ]
+  },
   {
     version: '5.11.1',
     date: '2026-04-05',

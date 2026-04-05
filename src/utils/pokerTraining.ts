@@ -196,7 +196,16 @@ export const GAME_CONTEXT = `הקשר המשחק — חובה להבין:
 - קריאה עם ידיים בינוניות מול הימורים בינוניים = בדרך כלל נכון
 - ויתור מול הימור קטן (500-1,500) עם כל זוג או משיכה = כמעט תמיד שגוי
 - הימור ערך גדול עם יד חזקה = נכון — הם ישלמו לך
-- בלוף = כמעט אף פעם לא התשובה הנכונה — מישהו תמיד יקרא`;
+- בלוף = כמעט אף פעם לא התשובה הנכונה — מישהו תמיד יקרא
+- העלאה לפני הפלופ עם יד חזקה = נכון, אבל לא בשביל "לבודד" — בשביל לבנות קופה גדולה כי ממילא יקראו
+- "לבודד", "לדלל את השדה" = לא עובד במשחק שלנו! העלאה ל-1,500 עדיין מקבלת 3 קוראים
+- "היריב יפרוש" = כמעט אף פעם — אלא אם כן ההימור באמת ענק (5,000+) והיד שלו באמת חלשה
+
+טעויות נפוצות בהסברים — חובה להימנע:
+- אל תכתוב "העלאה תבודד" או "תדלל את השדה" — זה לא קורה במשחק שלנו
+- אל תניח שיריבים יפרשו מהעלאה רגילה — הם ישלמו
+- הסבר תמיד למה התשובה נכונה דווקא **במשחק הביתי שלנו** — לא בפוקר מקצועי
+- אם העלאה נכונה, ההסבר צריך להיות "בונים קופה גדולה עם יד חזקה" ולא "מבודדים יריב"`;
 
 export const WRONG_ANSWER_REACTIONS: string[] = [
   'טעות נפוצה! רוב השחקנים שלנו בוחרים את זה',
@@ -1515,6 +1524,8 @@ ${trueFalseInstructions}${oddsMathInstructions}
 - השתמש ב"כפתור" (לא "מפיץ") לתיאור עמדת ה-Button
 - **אל תחזור על הקלפים של השחקן בטקסט המצב** — הם מוצגים בנפרד בממשק
 - כל מצב חייב לציין: כמה יריבים ביד, גודל הקופה, באיזה שלב (פלופ/טרן/ריבר)
+- אם יש אול-אין, ציין בבירור אם זה לפני הפלופ או אחריו
+- כל שאלה חייבת להיות עצמאית — כל המידע הנדרש לתשובה חייב להופיע בשאלה עצמה
 - מצב: 2-3 משפטים תמציתיים שמציירים תמונה ברורה
 
 מונחי פוקר — חובה:
@@ -1544,6 +1555,13 @@ nearMiss — סימון חשוב:
 - כשתשובה nearMiss, ההסבר מציין: "במשחק מקצועי זה מהלך טוב, אבל..." + למה במשחק ביתי זה לא עובד
 - גם תשובות שגויות צריכות הסבר משכנע
 - גוון: מיקומים שונים, קלפים שונים, עומקי ערימה שונים
+- **הנמקת התשובה חייבת להתאים למשחק הביתי** — לא להשתמש בלוגיקה של GTO/מקצועי:
+  - ✓ נכון: "העלאה בונה קופה גדולה — הם ישלמו לך עם יד חזקה כזו"
+  - ✗ שגוי: "העלאה תדלל את השדה ותבודד יריב אחד"
+  - ✓ נכון: "בלוף לא יעבוד — חרדון ואורן ישלמו כמעט תמיד"
+  - ✗ שגוי: "בלוף כאן ינצל את ה-fold equity"
+  - ✓ נכון: "שווה לקרוא — ההימור קטן ביחס לקופה ויש משיכה"
+  - ✗ שגוי: "ויתור נכון כי הסיכוי לפרוש את היריב נמוך"
 ${avoidContext}
 JSON בלבד, מערך של ${count}:
 [{"id":1,"situation":"2-3 משפטים תמציתיים. אל תחזור על הקלפים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"nearMiss":true,"explanation":"הסבר ספציפי"},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר ספציפי"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר ספציפי"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
@@ -1758,6 +1776,142 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   }
 };
 
+// ── Training data analysis (shared by personal report + admin insights) ──
+
+interface CategoryAnalysis {
+  name: string;
+  id: string;
+  total: number;
+  correct: number;
+  accuracy: number;
+  recentTotal: number;
+  recentCorrect: number;
+  recentAccuracy: number;
+  trend: 'improving' | 'declining' | 'stable' | 'new';
+}
+
+interface PlayerAnalysis {
+  totalQ: number;
+  totalC: number;
+  overallAcc: number;
+  recentAcc: number;
+  improving: boolean;
+  categories: CategoryAnalysis[];
+  weakest: CategoryAnalysis[];
+  strongest: CategoryAnalysis[];
+  groupAvg: number;
+  ranking: number;
+  totalPlayers: number;
+  sessionAccuracies: { date: string; acc: number; count: number }[];
+  prevReportMilestone: number | null;
+  sinceLastReport: { total: number; correct: number; acc: number } | null;
+  consistentMistakeCats: string[];
+}
+
+export const analyzePlayerTraining = (
+  playerData: TrainingPlayerData,
+  allPlayers: TrainingPlayerData[],
+): PlayerAnalysis => {
+  const allResults = playerData.sessions.flatMap(s => s.results).filter(r => !r.nearMiss);
+  const totalQ = allResults.length;
+  const totalC = allResults.filter(r => r.correct).length;
+  const overallAcc = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
+
+  const midpoint = Math.floor(allResults.length / 2);
+
+  const categories: CategoryAnalysis[] = SCENARIO_CATEGORIES.map(cat => {
+    const catResults = allResults.filter(r => r.categoryId === cat.id);
+    const total = catResults.length;
+    const correct = catResults.filter(r => r.correct).length;
+    const accuracy = total > 0 ? Math.round((correct / total) * 100) : -1;
+
+    const catIndices = allResults.map((r, i) => r.categoryId === cat.id ? i : -1).filter(i => i >= 0);
+    const recentCatResults = catIndices.filter(i => i >= midpoint).map(i => allResults[i]);
+    const oldCatResults = catIndices.filter(i => i < midpoint).map(i => allResults[i]);
+    const recentTotal = recentCatResults.length;
+    const recentCorrect = recentCatResults.filter(r => r.correct).length;
+    const recentAccuracy = recentTotal > 0 ? Math.round((recentCorrect / recentTotal) * 100) : -1;
+
+    const oldAcc = oldCatResults.length > 0 ? Math.round((oldCatResults.filter(r => r.correct).length / oldCatResults.length) * 100) : -1;
+    let trend: CategoryAnalysis['trend'] = 'new';
+    if (oldAcc >= 0 && recentAccuracy >= 0) {
+      const diff = recentAccuracy - oldAcc;
+      trend = diff >= 15 ? 'improving' : diff <= -15 ? 'declining' : 'stable';
+    }
+
+    return { name: cat.name, id: cat.id, total, correct, accuracy, recentTotal, recentCorrect, recentAccuracy, trend };
+  }).filter(c => c.total > 0);
+
+  const weakest = categories.filter(c => c.total >= 3).sort((a, b) => a.accuracy - b.accuracy).slice(0, 4);
+  const strongest = categories.filter(c => c.total >= 3 && c.accuracy >= 60).sort((a, b) => b.accuracy - a.accuracy).slice(0, 4);
+
+  const recentResults = allResults.slice(-50);
+  const recentAcc = recentResults.length > 0 ? Math.round((recentResults.filter(r => r.correct).length / recentResults.length) * 100) : 0;
+  const improving = recentAcc > overallAcc + 3;
+
+  const groupAvg = allPlayers.length > 0
+    ? Math.round(allPlayers.filter(p => p.totalQuestions >= 10).reduce((sum, p) => sum + p.accuracy, 0) / Math.max(allPlayers.filter(p => p.totalQuestions >= 10).length, 1))
+    : 0;
+
+  const sorted = [...allPlayers].filter(p => p.totalQuestions >= 10).sort((a, b) => b.accuracy - a.accuracy);
+  const ranking = sorted.findIndex(p => p.playerName === playerData.playerName) + 1;
+
+  const sessionAccuracies = playerData.sessions.map(s => {
+    const scored = s.results.filter(r => !r.nearMiss);
+    return {
+      date: s.date,
+      acc: scored.length > 0 ? Math.round((scored.filter(r => r.correct).length / scored.length) * 100) : 0,
+      count: scored.length,
+    };
+  });
+
+  const prevReport = playerData.reports && playerData.reports.length > 0
+    ? playerData.reports[playerData.reports.length - 1].milestone : null;
+  let sinceLastReport: PlayerAnalysis['sinceLastReport'] = null;
+  if (prevReport && totalQ > prevReport) {
+    const sinceResults = allResults.slice(prevReport);
+    const sinceCorrect = sinceResults.filter(r => r.correct).length;
+    sinceLastReport = { total: sinceResults.length, correct: sinceCorrect, acc: sinceResults.length > 0 ? Math.round((sinceCorrect / sinceResults.length) * 100) : 0 };
+  }
+
+  const consistentMistakeCats = categories
+    .filter(c => c.total >= 5 && c.accuracy < 50 && (c.trend === 'stable' || c.trend === 'declining'))
+    .map(c => c.name);
+
+  return { totalQ, totalC, overallAcc, recentAcc, improving, categories, weakest, strongest, groupAvg, ranking, totalPlayers: sorted.length, sessionAccuracies, prevReportMilestone: prevReport, sinceLastReport, consistentMistakeCats };
+};
+
+export const formatAnalysisForPrompt = (a: PlayerAnalysis, playerName: string): string => {
+  const catLines = a.categories
+    .sort((x, y) => x.accuracy - y.accuracy)
+    .map(c => {
+      const trendEmoji = c.trend === 'improving' ? '📈' : c.trend === 'declining' ? '📉' : c.trend === 'stable' ? '➡️' : '🆕';
+      const trendNote = c.trend === 'improving' ? `(עולה! מחצית ראשונה ${100 - c.recentAccuracy + c.accuracy > 100 ? '' : ''}→ ${c.recentAccuracy}%)` :
+                        c.trend === 'declining' ? `(יורד! אחרונות: ${c.recentAccuracy}%)` : '';
+      return `${trendEmoji} ${c.name}: ${c.correct}/${c.total} (${c.accuracy}%) ${trendNote}`.trim();
+    });
+
+  const sessionTrend = a.sessionAccuracies.length >= 3
+    ? a.sessionAccuracies.slice(-5).map(s => `${s.acc}% (${s.count}ש)`).join(' → ')
+    : '';
+
+  const lines = [
+    `שחקן: ${playerName}`,
+    `סה"כ: ${a.totalQ} שאלות, ${a.overallAcc}% דיוק`,
+    `50 שאלות אחרונות: ${a.recentAcc}% ${a.improving ? '(מגמת שיפור!)' : a.recentAcc < a.overallAcc - 5 ? '(ירידה)' : ''}`,
+    `דירוג: מקום ${a.ranking} מתוך ${a.totalPlayers} שחקנים פעילים`,
+    `ממוצע קבוצתי: ${a.groupAvg}%`,
+    a.sinceLastReport ? `מאז הדוח הקודם (${a.prevReportMilestone} שאלות): ${a.sinceLastReport.total} שאלות חדשות, ${a.sinceLastReport.acc}% דיוק` : '',
+    sessionTrend ? `מגמת אימונים אחרונים: ${sessionTrend}` : '',
+    `\nפירוט לפי נושא (מהחלש לחזק):`,
+    ...catLines,
+    a.consistentMistakeCats.length > 0 ? `\nחולשות עקביות (לא משתפרות): ${a.consistentMistakeCats.join(', ')}` : '',
+    a.weakest.length > 0 ? `חלש ביותר: ${a.weakest.map(c => `${c.name} (${c.accuracy}%)`).join(', ')}` : '',
+    a.strongest.length > 0 ? `חזק ביותר: ${a.strongest.map(c => `${c.name} (${c.accuracy}%)`).join(', ')}` : '',
+  ];
+  return lines.filter(Boolean).join('\n');
+};
+
 // ── Personal AI report (every 100 questions) ──
 
 export const generatePersonalReport = async (
@@ -1768,55 +1922,22 @@ export const generatePersonalReport = async (
   const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
 
-  const catBreakdown: Record<string, { total: number; correct: number }> = {};
-  let totalQ = 0, totalC = 0;
-  for (const s of playerData.sessions) {
-    for (const r of s.results) {
-      if (r.nearMiss) continue;
-      totalQ++;
-      if (!catBreakdown[r.categoryId]) catBreakdown[r.categoryId] = { total: 0, correct: 0 };
-      catBreakdown[r.categoryId].total++;
-      if (r.correct) { totalC++; catBreakdown[r.categoryId].correct++; }
-    }
-  }
+  const a = analyzePlayerTraining(playerData, allPlayers);
+  const dataBlock = formatAnalysisForPrompt(a, playerName);
+  const milestone = Math.floor(a.totalQ / 100) * 100;
 
-  const catLines = Object.entries(catBreakdown)
-    .filter(([, d]) => d.total >= 2)
-    .sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total))
-    .map(([catId, d]) => {
-      const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
-      return `${cat?.name || catId}: ${d.correct}/${d.total} (${Math.round((d.correct / d.total) * 100)}%)`;
-    });
+  const prompt = `אתה מאמן פוקר אישי חם ומעודד. ${playerName} הגיע ל-${milestone} שאלות אימון — כתוב דוח אישי מרגש ומועיל. עברית בלבד, 8-12 משפטים.
 
-  const groupAvg = allPlayers.length > 0
-    ? Math.round(allPlayers.reduce((sum, p) => sum + p.accuracy, 0) / allPlayers.length)
-    : 0;
+${dataBlock}
 
-  const recentResults = playerData.sessions
-    .flatMap(s => s.results)
-    .filter(r => !r.nearMiss)
-    .slice(-50);
-  const recentCorrect = recentResults.filter(r => r.correct).length;
-  const recentAcc = recentResults.length > 0 ? Math.round((recentCorrect / recentResults.length) * 100) : 0;
-  const overallAcc = totalQ > 0 ? Math.round((totalC / totalQ) * 100) : 0;
-  const improving = recentAcc > overallAcc;
-
-  const prompt = `כתוב דוח אימון פוקר אישי עבור ${playerName}. עברית בלבד, 6-8 משפטים.
-
-נתונים:
-- סה"כ: ${totalQ} שאלות, ${overallAcc}% דיוק
-- 50 שאלות אחרונות: ${recentAcc}% דיוק ${improving ? '(מגמת שיפור!)' : ''}
-- ממוצע הקבוצה: ${groupAvg}%
-- פירוט לפי נושא:
-${catLines.join('\n')}
-
-הנחיות:
-- היה מעודד אבל כנה. השתמש בהומור קל
-- ציין את הנושאים החזקים ביותר ואת החלשים ביותר בשם
-- השווה לממוצע הקבוצה
-- תן 2-3 טיפים ספציפיים לשיפור
-- סיים עם מוטיבציה ל-100 השאלות הבאות
-- אל תשתמש בכותרות או בפורמט מיוחד — טקסט רציף בלבד`;
+הנחיות — זהו דוח ש${playerName} קורא בעצמו, אז דבר אליו ישירות (בגוף שני):
+1. פתח עם הישג — הגיע ל-${milestone} שאלות, ציין את המצב הנוכחי ביחס לקבוצה
+2. אם יש מגמת שיפור/ירידה — ציין אותה בפירוש עם הנתונים
+3. ציין בשם את 1-2 הנושאים החזקים ביותר ואת 1-2 החלשים ביותר
+4. אם יש חולשות עקביות — הדגש שהן דורשות תשומת לב מיוחדת
+5. תן 2-3 טיפים מעשיים וספציפיים לנושאים החלשים (מה לעשות, לא רק "תתאמן יותר")${a.sinceLastReport ? '\n6. השווה לדוח הקודם — האם יש שיפור? ב-' + a.sinceLastReport.total + ' השאלות מאז הדוח הקודם הדיוק היה ' + a.sinceLastReport.acc + '%' : ''}
+- סיים בנימה חיובית עם יעד ל-100 השאלות הבאות
+- טקסט רציף, בלי כותרות או פורמט מיוחד. הומור קל מותר`;
 
   try {
     const config = API_CONFIGS[0];

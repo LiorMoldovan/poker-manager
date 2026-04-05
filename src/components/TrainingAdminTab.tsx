@@ -24,8 +24,11 @@ import {
   GAME_CONTEXT,
   PLAYER_STYLES,
   generatePersonalReport,
+  analyzePlayerTraining,
+  formatAnalysisForPrompt,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
+import { shareToWhatsApp } from '../utils/sharing';
 
 
 const RATE_LIMIT_DELAY = 7500;
@@ -56,6 +59,12 @@ const TrainingAdminTab = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [savingFix, setSavingFix] = useState(false);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
+
+  // Report AI analysis
+  const [analyses, setAnalyses] = useState<Record<string, { verdict: string; explanation: string; rejectText: string; acceptText?: string }>>({});
+  const [analyzingReport, setAnalyzingReport] = useState<string | null>(null);
+  const [analysisFeedback, setAnalysisFeedback] = useState<Record<string, string>>({});
+  const [refiningAnalysis, setRefiningAnalysis] = useState<string | null>(null);
 
   // Pool review
   const [reviewing, setReviewing] = useState(false);
@@ -429,6 +438,108 @@ const TrainingAdminTab = () => {
     }
   };
 
+  // ── Analyze report with AI ──
+  const handleAnalyzeReport = async (poolId: string, scenario: PoolScenario, reports: TrainingFlagReport[]) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+
+    setAnalyzingReport(poolId);
+
+    const reportSummary = reports.map(r => {
+      const reasonLabel: Record<string, string> = {
+        wrong_answer: 'התשובה הנכונה שגויה',
+        unclear_question: 'השאלה לא ברורה',
+        wrong_for_home_game: 'מתאים למקצועי אבל לא למשחק ביתי',
+        other: 'אחר',
+      };
+      return `${r.playerName}: ${reasonLabel[r.reason] || r.reason}${r.comment ? ` — "${r.comment}"` : ''}`;
+    }).join('\n');
+
+    const prompt = `אתה מנהל משחק פוקר ביתי. שחקנים דיווחו על שאלה באימון.
+נתח את הדיווח: האם הוא מוצדק? האם השאלה והתשובה הנכונה באמת בעייתיות?
+
+${GAME_CONTEXT}
+
+השאלה:
+מצב: ${scenario.situation}
+קלפים: ${scenario.yourCards || 'לא צוינו'}
+${scenario.options.map(o => `${o.id}. ${o.text}${o.isCorrect ? ' ✓' : ''}${o.nearMiss ? ' (ניטרלי)' : ''} — ${o.explanation || ''}`).join('\n')}
+
+הדיווחים:
+${reportSummary}
+
+החזר JSON בלבד בפורמט:
+{"verdict":"accept|reject|partial","explanation":"ניתוח קצר של 2-3 משפטים — האם הדיווח מוצדק ולמה","rejectText":"הודעה קצרה וידידותית של משפט אחד שאפשר לשלוח למדווח בוואטסאפ אם דוחים את הדיווח, כולל הסבר למה התשובה נכונה","acceptText":"הודעה קצרה וידידותית למדווח שתודה לו על הדיווח ומסבירה שתיקנו/עדכנו את השאלה בזכותו"}
+- acceptText חובה כש-verdict הוא accept או partial
+- rejectText חובה כש-verdict הוא reject או partial
+JSON בלבד, בלי markdown:`;
+
+    try {
+      const text = await callGemini(apiKey, prompt);
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const result = JSON.parse(cleaned);
+      setAnalyses(prev => ({ ...prev, [poolId]: result }));
+    } catch (err) {
+      setAnalyses(prev => ({
+        ...prev,
+        [poolId]: { verdict: 'error', explanation: `שגיאה: ${err instanceof Error ? err.message : 'Unknown'}`, rejectText: '' }
+      }));
+    } finally {
+      setAnalyzingReport(null);
+    }
+  };
+
+  const handleRefineAnalysis = async (poolId: string, scenario: PoolScenario, reports: TrainingFlagReport[]) => {
+    const apiKey = getGeminiApiKey();
+    const feedback = analysisFeedback[poolId]?.trim();
+    if (!apiKey || !feedback || !analyses[poolId]) return;
+
+    setRefiningAnalysis(poolId);
+
+    const prev = analyses[poolId];
+    const reportSummary = reports.map(r => {
+      const rl: Record<string, string> = { wrong_answer: 'התשובה שגויה', unclear_question: 'לא ברור', wrong_for_home_game: 'לא למשחק ביתי', other: 'אחר' };
+      return `${r.playerName}: ${rl[r.reason] || r.reason}${r.comment ? ` — "${r.comment}"` : ''}`;
+    }).join('\n');
+
+    const prompt = `אתה מנהל משחק פוקר ביתי. ניתחת דיווח על שאלה ועכשיו המנהל נותן משוב.
+
+${GAME_CONTEXT}
+
+השאלה: ${scenario.situation}
+קלפים: ${scenario.yourCards || 'לא צוינו'}
+${scenario.options.map(o => `${o.id}. ${o.text}${o.isCorrect ? ' ✓' : ''} — ${o.explanation || ''}`).join('\n')}
+
+דיווחים: ${reportSummary}
+
+הניתוח הקודם שלך:
+verdict: ${prev.verdict}
+explanation: ${prev.explanation}
+rejectText: ${prev.rejectText}
+acceptText: ${prev.acceptText || ''}
+
+הערת המנהל: "${feedback}"
+
+עדכן את הניתוח בהתאם. החזר JSON בלבד:
+{"verdict":"accept|reject|partial","explanation":"ניתוח מעודכן 2-3 משפטים","rejectText":"הודעה ידידותית למדווח אם דוחים","acceptText":"הודעה ידידותית למדווח שתודה לו ומסבירה שתוקן"}
+JSON בלבד:`;
+
+    try {
+      const text = await callGemini(apiKey, prompt);
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const result = JSON.parse(cleaned);
+      setAnalyses(prev => ({ ...prev, [poolId]: result }));
+      setAnalysisFeedback(prev => ({ ...prev, [poolId]: '' }));
+    } catch (err) {
+      setAnalyses(prev => ({
+        ...prev,
+        [poolId]: { ...prev[poolId], explanation: prev[poolId].explanation + `\n\nשגיאה בעדכון: ${err instanceof Error ? err.message : 'Unknown'}` }
+      }));
+    } finally {
+      setRefiningAnalysis(null);
+    }
+  };
+
   // ── AI Fix flagged question (generates preview) ──
   const handleAIFix = async (poolId: string, reports: TrainingFlagReport[]) => {
     const apiKey = getGeminiApiKey();
@@ -483,6 +594,10 @@ ${reportSummary}
 6. שמור על poolId, categoryId ו-category מקוריים
 7. מונחים: פלופ/טרן/ריבר (לא "נהר"), בליינד (לא "עיוור"), ביד (לא "בכיס"), כפתור (לא "מפיץ")
 8. מונחים באנגלית — חובה תרגום בסוגריים בפעם הראשונה: Pot Odds (יחס קופה), Implied Odds (סיכויי רווח עתידיים), EV (ערך צפוי), Equity (אחוז ניצחון) וכו'
+9. **הנמקה חייבת להתאים למשחק ביתי** — אסור להשתמש בלוגיקה מקצועית:
+   - אסור: "העלאה תדלל/תבודד", "fold equity", "לבודד יריב"
+   - נכון: "העלאה בונה קופה גדולה כי הם ישלמו", "בלוף לא יעבוד — תמיד מישהו קורא"
+   - בגלל שהשחקנים שלנו קוראים הרבה: העלאה = בניית קופה, לא בידוד
 
 החזר JSON בלבד, אובייקט אחד:
 {"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},{"id":"B","text":"...","isCorrect":true,"explanation":"..."},{"id":"C","text":"...","isCorrect":false,"explanation":"..."}],"category":"...","categoryId":"..."}
@@ -538,6 +653,7 @@ ${historyContext}
 הערה חדשה מהמנהל: "${fixFeedback}"
 
 חוקים: בדיוק 3 אופציות (A, B, C), מצב תמציתי (2-3 משפטים), סכומים בצ'יפים, שמור poolId/categoryId/category.
+הנמקה חייבת להתאים למשחק ביתי — אסור: "תדלל/תבודד", "fold equity". נכון: "בונה קופה", "הם ישלמו".
 
 החזר JSON בלבד, אובייקט אחד מתוקן:`;
 
@@ -777,45 +893,62 @@ JSON בלבד, בלי markdown:`;
     setGeneratingInsight(player.playerName);
     setInsightMsg(null);
 
-    const catAccuracy = SCENARIO_CATEGORIES.map(cat => {
-      const results = player.sessions.flatMap(s => s.results.filter(r => r.categoryId === cat.id));
-      const total = results.length;
-      const correct = results.filter(r => r.correct).length;
-      return { name: cat.name, id: cat.id, total, correct, accuracy: total > 0 ? (correct / total) * 100 : -1 };
-    }).filter(c => c.total > 0);
+    const allPlayersData = answers?.players || [];
+    const a = analyzePlayerTraining(player, allPlayersData);
+    const dataBlock = formatAnalysisForPrompt(a, player.playerName);
 
-    const weakCats = catAccuracy.filter(c => c.accuracy < 50).sort((a, b) => a.accuracy - b.accuracy);
-    const strongCats = catAccuracy.filter(c => c.accuracy >= 70).sort((a, b) => b.accuracy - a.accuracy);
+    const playerStyle = PLAYER_STYLES[player.playerName] || 'לא ידוע';
 
-    const wrongPatterns = player.sessions.flatMap(s =>
-      s.results.filter(r => !r.correct).map(r => `${r.categoryId}: chose ${r.chosenId}`)
-    ).slice(-30);
-
-    const dataBlock = `שחקן: ${player.playerName}
-סה"כ שאלות: ${player.totalQuestions}, נכונות: ${player.totalCorrect} (${player.accuracy.toFixed(1)}%)
-אימונים: ${player.sessions.length}
-
-קטגוריות חלשות: ${weakCats.map(c => `${c.name} (${c.accuracy.toFixed(0)}%, ${c.total} שאלות)`).join(', ') || 'אין'}
-קטגוריות חזקות: ${strongCats.map(c => `${c.name} (${c.accuracy.toFixed(0)}%, ${c.total} שאלות)`).join(', ') || 'אין'}
-
-דוגמאות טעויות אחרונות: ${wrongPatterns.join('; ')}`;
+    const wrongByCat: Record<string, string[]> = {};
+    player.sessions.flatMap(s => s.results).filter(r => !r.correct && !r.nearMiss).slice(-40).forEach(r => {
+      const cat = SCENARIO_CATEGORIES.find(c => c.id === r.categoryId);
+      const catName = cat?.name || r.categoryId;
+      if (!wrongByCat[catName]) wrongByCat[catName] = [];
+      wrongByCat[catName].push(r.chosenId);
+    });
+    const mistakePatterns = Object.entries(wrongByCat)
+      .filter(([, ids]) => ids.length >= 2)
+      .map(([cat, ids]) => `${cat}: בחר ${ids.join(',')} (${ids.length} טעויות)`)
+      .join('\n');
 
     try {
-      // 1. Player-facing improvement tips
-      const improvementPrompt = `אתה מאמן פוקר. בהתבסס על הנתונים הבאים, כתוב 3-4 טיפים מעשיים לשיפור בעברית פשוטה. התייחס לנקודות החלשות הספציפיות. אל תחזור על הנתונים עצמם.
+      // 1. Player-facing improvement tips (stored on GitHub, visible to player)
+      const improvementPrompt = `אתה מאמן פוקר אישי. כתוב 4-5 טיפים מעשיים לשיפור עבור ${player.playerName} בעברית פשוטה.
 
 ${dataBlock}
 
-כתוב טיפים קצרים ומעשיים, כל אחד בשורה חדשה. עברית בלבד.`;
+הנחיות:
+- דבר אל ${player.playerName} ישירות (גוף שני)
+- כל טיפ צריך להיות ספציפי לנושא שהוא חלש בו — ציין את שם הנושא
+- תן עצה מעשית (מה לעשות/לחשוב בשולחן), לא רק "תתאמן יותר"
+- אם יש מגמת שיפור — ציין אותה לעידוד
+- אם יש חולשות עקביות — הדגש שהן דורשות תשומת לב מיוחדת, עם טיפ ממוקד
+- אל תחזור על הנתונים עצמם (השחקן רואה אותם בטבלה)
+- כל טיפ בשורה חדשה עם מספר (1. 2. 3. וכו')
+- עברית בלבד`;
 
       const improvResult = await callGemini(apiKey, improvementPrompt);
 
-      // 2. Admin-facing exploitation analysis
-      const exploitPrompt = `אתה יועץ פוקר אסטרטגי. בהתבסס על הנתונים הבאים, נתח איך לנצל את החולשות של השחקן הזה במשחק. תן עצות קונקרטיות ומעשיות שאפשר להשתמש בהן בזמן אמת בשולחן.
+      // 2. Admin-facing exploitation analysis (localStorage only, never synced)
+      const exploitPrompt = `אתה יועץ אסטרטגי לפוקר ביתי. תפקידך לנתח את החולשות של ${player.playerName} ולתת לי (המנהל) טקטיקות ניצול קונקרטיות שאני יכול להשתמש בהן בזמן אמת בשולחן.
 
 ${dataBlock}
 
-כתוב 3-5 טקטיקות ניצול ספציפיות. לדוגמה: "כשהוא על הריבר, הימור גדול יגרום לו לוותר ב-X% מהמקרים". עברית בלבד.`;
+סגנון משחק ידוע: ${playerStyle}
+
+דפוסי טעויות אחרונים:
+${mistakePatterns || 'אין מספיק נתונים'}
+
+הנחיות:
+1. נתח את החולשות לפי קטגוריה — איפה הוא טועה בעקביות ומה זה אומר על הסגנון שלו
+2. ${a.consistentMistakeCats.length > 0 ? `חולשות עקביות: ${a.consistentMistakeCats.join(', ')} — אלה לא משתפרות, תן טקטיקות ניצול ספציפיות` : 'אין חולשות עקביות בולטות — התמקד בטעויות האחרונות'}
+3. שלב את סגנון המשחק הידוע עם ממצאי האימון: אם הוא אגרסיבי ונכשל בבלוף — מה זה אומר?
+4. תן 4-6 טקטיקות ניצול ספציפיות ומעשיות, כל אחת עם:
+   - המצב בשולחן (מתי להפעיל)
+   - הפעולה המומלצת (מה לעשות)
+   - למה זה עובד נגדו (מבוסס על הנתונים)
+5. אם יש מגמת שיפור בקטגוריה מסוימת — ציין שהחלון להשתמש בחולשה הזו מצטמצם
+- עברית בלבד, ישיר ומעשי`;
 
       const exploitResult = await callGemini(apiKey, exploitPrompt);
 
@@ -1523,7 +1656,7 @@ ${dataBlock}
           {flagged.map(f => {
             const cat = SCENARIO_CATEGORIES.find(c => c.id === f.scenario?.categoryId);
             const correctOpt = f.scenario?.options?.find(o => o.isCorrect);
-            const isBusy = dismissingFlagged === f.poolId || fixingFlagged === f.poolId || removingFlagged;
+            const isBusy = dismissingFlagged === f.poolId || fixingFlagged === f.poolId || removingFlagged || analyzingReport === f.poolId;
             const reasonLabels: Record<string, string> = {
               wrong_answer: '❌ תשובה שגויה',
               unclear_question: '❓ שאלה לא ברורה',
@@ -1589,45 +1722,184 @@ ${dataBlock}
                   </div>
                 )}
 
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => handleDismissFlagged(f.poolId)}
-                    disabled={isBusy}
-                    style={{
-                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
-                      background: 'var(--surface)', color: 'var(--text-muted)',
-                      border: '1px solid var(--border)', cursor: isBusy ? 'wait' : 'pointer',
-                      fontWeight: 500, opacity: isBusy ? 0.5 : 1,
-                    }}
-                  >
-                    {dismissingFlagged === f.poolId ? '⏳' : '✓ דחה דיווח'}
-                  </button>
-                  <button
-                    onClick={() => handleAIFix(f.poolId, f.reports)}
-                    disabled={isBusy}
-                    style={{
-                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
-                      background: 'rgba(168,85,247,0.1)', color: '#a855f7',
-                      border: '1px solid rgba(168,85,247,0.2)', cursor: isBusy ? 'wait' : 'pointer',
-                      fontWeight: 600, opacity: isBusy ? 0.5 : 1,
-                    }}
-                  >
-                    {fixingFlagged === f.poolId ? '⏳ מתקן...' : '✨ תקן עם AI'}
-                  </button>
-                  <button
-                    onClick={() => handleRemoveFlagged([f.poolId])}
-                    disabled={isBusy}
-                    style={{
-                      fontSize: '0.65rem', padding: '0.25rem 0.5rem', borderRadius: '6px',
-                      background: '#ef4444', color: 'white',
-                      border: 'none', cursor: isBusy ? 'wait' : 'pointer', fontWeight: 600,
-                      opacity: isBusy ? 0.5 : 1,
-                    }}
-                  >
-                    {removingFlagged ? '⏳' : '🗑 הסר'}
-                  </button>
-                </div>
+                {/* AI Analysis */}
+                {analyses[f.poolId] && (
+                  <div style={{
+                    marginBottom: '0.4rem', padding: '0.4rem',
+                    borderRadius: '6px',
+                    background: analyses[f.poolId].verdict === 'accept' ? 'rgba(239,68,68,0.06)' :
+                      analyses[f.poolId].verdict === 'reject' ? 'rgba(34,197,94,0.06)' :
+                      analyses[f.poolId].verdict === 'partial' ? 'rgba(245,158,11,0.06)' : 'rgba(99,102,241,0.06)',
+                    border: `1px solid ${analyses[f.poolId].verdict === 'accept' ? 'rgba(239,68,68,0.15)' :
+                      analyses[f.poolId].verdict === 'reject' ? 'rgba(34,197,94,0.15)' :
+                      'rgba(245,158,11,0.15)'}`,
+                  }}>
+                    <div style={{ fontSize: '0.6rem', fontWeight: 600, marginBottom: '0.2rem', color:
+                      analyses[f.poolId].verdict === 'accept' ? '#ef4444' :
+                      analyses[f.poolId].verdict === 'reject' ? '#22c55e' :
+                      analyses[f.poolId].verdict === 'partial' ? '#f59e0b' : 'var(--text-muted)',
+                    }}>
+                      {analyses[f.poolId].verdict === 'accept' ? '⚠️ הדיווח מוצדק — צריך תיקון' :
+                       analyses[f.poolId].verdict === 'reject' ? '✅ השאלה תקינה — אפשר לדחות' :
+                       analyses[f.poolId].verdict === 'partial' ? '⚡ מוצדק חלקית' : '❌ שגיאה'}
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text)', lineHeight: 1.5 }}>
+                      {analyses[f.poolId].explanation}
+                    </div>
+                    {(() => {
+                      const a = analyses[f.poolId];
+                      const shareText = a.verdict === 'accept' ? a.acceptText :
+                        a.verdict === 'reject' ? a.rejectText :
+                        a.acceptText || a.rejectText;
+                      if (!shareText) return null;
+                      return (
+                        <div style={{
+                          marginTop: '0.3rem', paddingTop: '0.3rem',
+                          borderTop: '1px solid rgba(255,255,255,0.05)',
+                        }}>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 600, marginBottom: '0.15rem', color: 'var(--text-muted)' }}>
+                            {a.verdict === 'accept' ? '💬 הודעה למדווח (תודה + תוקן):' :
+                             a.verdict === 'reject' ? '💬 הודעה למדווח (הסבר):' :
+                             '💬 הודעה למדווח:'}
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text)', padding: '0.3rem',
+                            borderRadius: '4px', background: 'rgba(255,255,255,0.03)',
+                            lineHeight: 1.5, marginBottom: '0.3rem',
+                          }}>
+                            {shareText}
+                          </div>
+                          <button
+                            onClick={() => shareToWhatsApp(`🎯 לגבי הדיווח שלך על שאלת אימון:\n\n${shareText}\n\n— Poker Manager 🃏`)}
+                            style={{
+                              fontSize: '0.65rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
+                              background: '#25D366', color: 'white', border: 'none',
+                              cursor: 'pointer', fontWeight: 600, width: '100%',
+                            }}
+                          >
+                            📤 שלח בוואטסאפ
+                          </button>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Chat to refine analysis */}
+                    <div style={{ marginTop: '0.3rem', display: 'flex', gap: '0.25rem' }}>
+                      <input
+                        type="text"
+                        value={analysisFeedback[f.poolId] || ''}
+                        onChange={e => setAnalysisFeedback(prev => ({ ...prev, [f.poolId]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter' && analysisFeedback[f.poolId]?.trim()) handleRefineAnalysis(f.poolId, f.scenario, f.reports); }}
+                        placeholder="הערה לשיפור הניתוח..."
+                        style={{
+                          flex: 1, fontSize: '0.65rem', padding: '0.3rem 0.4rem',
+                          borderRadius: '6px', border: '1px solid var(--border)',
+                          background: 'var(--surface)', color: 'var(--text)',
+                          direction: 'rtl',
+                        }}
+                      />
+                      <button
+                        onClick={() => handleRefineAnalysis(f.poolId, f.scenario, f.reports)}
+                        disabled={!analysisFeedback[f.poolId]?.trim() || refiningAnalysis === f.poolId}
+                        style={{
+                          fontSize: '0.65rem', padding: '0.3rem 0.5rem', borderRadius: '6px',
+                          background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                          border: '1px solid rgba(99,102,241,0.2)',
+                          cursor: !analysisFeedback[f.poolId]?.trim() ? 'default' : 'pointer',
+                          fontWeight: 500, opacity: !analysisFeedback[f.poolId]?.trim() ? 0.4 : 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {refiningAnalysis === f.poolId ? '⏳' : '💬 שלח'}
+                      </button>
+                    </div>
+
+                    {/* Action buttons inside analysis card */}
+                    <div style={{ marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                      {(analyses[f.poolId].verdict === 'accept' || analyses[f.poolId].verdict === 'partial') && (
+                        <button
+                          onClick={() => handleAIFix(f.poolId, f.reports)}
+                          disabled={isBusy}
+                          style={{
+                            flex: 1, fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                            background: 'rgba(168,85,247,0.1)', color: '#a855f7',
+                            border: '1px solid rgba(168,85,247,0.2)', cursor: isBusy ? 'wait' : 'pointer',
+                            fontWeight: 600, opacity: isBusy ? 0.5 : 1,
+                          }}
+                        >
+                          {fixingFlagged === f.poolId ? '⏳ מתקן...' : '✨ תקן עם AI'}
+                        </button>
+                      )}
+                      {(analyses[f.poolId].verdict === 'reject' || analyses[f.poolId].verdict === 'partial') && (
+                        <button
+                          onClick={() => handleDismissFlagged(f.poolId)}
+                          disabled={isBusy}
+                          style={{
+                            flex: 1, fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                            background: 'var(--surface)', color: 'var(--text-muted)',
+                            border: '1px solid var(--border)', cursor: isBusy ? 'wait' : 'pointer',
+                            fontWeight: 500, opacity: isBusy ? 0.5 : 1,
+                          }}
+                        >
+                          {dismissingFlagged === f.poolId ? '⏳' : '✓ דחה דיווח'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleRemoveFlagged([f.poolId])}
+                        disabled={isBusy}
+                        style={{
+                          fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                          background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                          border: '1px solid rgba(239,68,68,0.15)', cursor: isBusy ? 'wait' : 'pointer',
+                          fontWeight: 500, opacity: isBusy ? 0.5 : 1,
+                        }}
+                      >
+                        {removingFlagged ? '⏳' : '🗑 הסר שאלה'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Action buttons — before analysis: analyze is primary, dismiss + remove as quick actions */}
+                {!analyses[f.poolId] && (
+                  <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => handleAnalyzeReport(f.poolId, f.scenario, f.reports)}
+                      disabled={isBusy || analyzingReport === f.poolId}
+                      style={{
+                        flex: 1, fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                        background: 'rgba(99,102,241,0.15)', color: '#6366f1',
+                        border: '1px solid rgba(99,102,241,0.3)', cursor: isBusy ? 'wait' : 'pointer',
+                        fontWeight: 600, opacity: isBusy ? 0.5 : 1,
+                      }}
+                    >
+                      {analyzingReport === f.poolId ? '⏳ מנתח...' : '🔍 נתח עם AI'}
+                    </button>
+                    <button
+                      onClick={() => handleDismissFlagged(f.poolId)}
+                      disabled={isBusy}
+                      style={{
+                        fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                        background: 'var(--surface)', color: 'var(--text-muted)',
+                        border: '1px solid var(--border)', cursor: isBusy ? 'wait' : 'pointer',
+                        fontWeight: 500, opacity: isBusy ? 0.5 : 1,
+                      }}
+                    >
+                      {dismissingFlagged === f.poolId ? '⏳' : '✓ דחה'}
+                    </button>
+                    <button
+                      onClick={() => handleRemoveFlagged([f.poolId])}
+                      disabled={isBusy}
+                      style={{
+                        fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                        background: 'rgba(239,68,68,0.08)', color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.15)', cursor: isBusy ? 'wait' : 'pointer',
+                        fontWeight: 500, opacity: isBusy ? 0.5 : 1,
+                      }}
+                    >
+                      {removingFlagged ? '⏳' : '🗑 הסר'}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
