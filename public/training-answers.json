@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T20:00:37.558Z",
+  "lastUpdated": "2026-04-05T20:31:33.730Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2141,11 +2141,50 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T20:31:32.942Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "math_1775389836495_k37wg6",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387362406_t5bisc",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "p3y535",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1xlet3",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "g4xsru",
+              "categoryId": "second_pair",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 117,
-      "totalCorrect": 88,
-      "accuracy": 75.21367521367522
+      "totalQuestions": 121,
+      "totalCorrect": 89,
+      "accuracy": 73.55371900826447
     },
     {
       "playerName": "מלמד",
