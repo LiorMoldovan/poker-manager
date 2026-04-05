@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:26:56.005Z",
+  "lastUpdated": "2026-04-05T11:33:09.456Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -45,7 +45,7 @@
         },
         {
           "date": "2026-04-01T11:44:49.339Z",
-          "questionsAnswered": 2,
+          "questionsAnswered": 3,
           "correctAnswers": 2,
           "results": [
             {
@@ -94,13 +94,19 @@
               "correct": false,
               "chosenId": "C",
               "nearMiss": true
+            },
+            {
+              "poolId": "txee86",
+              "correct": false,
+              "nearMiss": false,
+              "selectedOption": 1
             }
           ],
           "flaggedPoolIds": []
         },
         {
           "date": "2026-04-01T23:40:45.610Z",
-          "questionsAnswered": 5,
+          "questionsAnswered": 7,
           "correctAnswers": 5,
           "results": [
             {
@@ -153,6 +159,18 @@
               "categoryId": "preflop_vs_raise",
               "correct": true,
               "chosenId": "A"
+            },
+            {
+              "poolId": "xxr9ki",
+              "correct": false,
+              "nearMiss": false,
+              "selectedOption": 1
+            },
+            {
+              "poolId": "dpyop4",
+              "correct": false,
+              "nearMiss": false,
+              "selectedOption": 1
             }
           ],
           "flaggedPoolIds": []
@@ -343,7 +361,7 @@
         },
         {
           "date": "2026-04-03T21:11:22.730Z",
-          "questionsAnswered": 4,
+          "questionsAnswered": 5,
           "correctAnswers": 4,
           "results": [
             {
@@ -369,6 +387,12 @@
               "categoryId": "straight_draw",
               "correct": true,
               "chosenId": "A"
+            },
+            {
+              "poolId": "sgqy9v",
+              "correct": false,
+              "nearMiss": false,
+              "selectedOption": 1
             }
           ],
           "flaggedPoolIds": [
@@ -525,9 +549,9 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 44,
+      "totalQuestions": 48,
       "totalCorrect": 43,
-      "accuracy": 97.72727272727273
+      "accuracy": 89.58333333333334
     },
     {
       "playerName": "אייל",
