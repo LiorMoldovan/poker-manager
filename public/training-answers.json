@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T11:54:12.934Z",
+  "lastUpdated": "2026-04-05T11:57:56.008Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3347,18 +3347,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "w7bcro"
-          ],
-          "flagReports": [
-            {
-              "poolId": "w7bcro",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "לא מסכים עם התשובה.  יש שלי יכולה להיות מול אס וקיקר נמוך אני רוצה לראות פלוף",
-              "date": "2026-04-05T08:10:41.886Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-05T11:54:12.408Z",
@@ -3398,18 +3388,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "od1zw"
-          ],
-          "flagReports": [
-            {
-              "poolId": "od1zw",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "אם יש לי 1-5 אין וגם לו הוא ישווה הכל.. ואין סכנה לצבע אז אני רוצה שיפגע במשהו או שימשיך להלעות ואקפיץ לו רק בסוף",
-              "date": "2026-04-05T08:17:00.386Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 108,
