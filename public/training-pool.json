@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-05T13:14:40.114Z",
+  "generatedAt": "2026-04-05T13:40:57.826Z",
   "totalScenarios": 790,
   "byCategory": {
     "wet_board_top_pair": 20,
@@ -23096,7 +23096,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "gz9u8x"
+      "poolId": "gz9u8x",
+      "reviewedAt": "2026-04-05T13:31:31.295Z"
     },
     {
       "id": 2,
@@ -23125,7 +23126,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "mziwdh"
+      "poolId": "mziwdh",
+      "reviewedAt": "2026-04-05T13:31:31.298Z"
     },
     {
       "id": 3,
@@ -23154,7 +23156,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "3cywaw"
+      "poolId": "3cywaw",
+      "reviewedAt": "2026-04-05T13:31:31.298Z"
     },
     {
       "id": 4,
@@ -23183,7 +23186,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "wiops9"
+      "poolId": "wiops9",
+      "reviewedAt": "2026-04-05T13:31:31.298Z"
     },
     {
       "id": 5,
@@ -23212,7 +23216,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "7yxahi"
+      "poolId": "7yxahi",
+      "reviewedAt": "2026-04-05T13:31:31.298Z"
     },
     {
       "id": 6,
@@ -23241,7 +23246,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "sb6vq9"
+      "poolId": "sb6vq9",
+      "reviewedAt": "2026-04-05T13:31:31.299Z"
     },
     {
       "id": 7,
@@ -23270,7 +23276,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "xfvpei"
+      "poolId": "xfvpei",
+      "reviewedAt": "2026-04-05T13:31:31.299Z"
     },
     {
       "id": 8,
@@ -23287,7 +23294,8 @@
           "id": "B",
           "text": "העלאה ל-1,200",
           "isCorrect": false,
-          "explanation": "זוג 2 הוא חלש מאוד להעלאה. תומר יקרא לך, ואז תהיה בקופה גדולה עם היד הכי חלשה שיכולה להיות."
+          "explanation": "זוג 2 הוא חלש מאוד להעלאה. תומר יקרא לך, ואז תהיה בקופה גדולה עם היד הכי חלשה שיכולה להיות.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -23298,7 +23306,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "ywsy3"
+      "poolId": "ywsy3",
+      "reviewedAt": "2026-04-05T13:31:31.299Z"
     },
     {
       "id": 9,
@@ -23327,7 +23336,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "9y1o4v"
+      "poolId": "9y1o4v",
+      "reviewedAt": "2026-04-05T13:31:31.299Z"
     },
     {
       "id": 10,
@@ -23356,7 +23366,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "z3dni6"
+      "poolId": "z3dni6",
+      "reviewedAt": "2026-04-05T13:31:31.299Z"
     },
     {
       "id": 11,
@@ -23385,7 +23396,8 @@
       ],
       "category": "הגנה מהבליינד",
       "categoryId": "blind_defense",
-      "poolId": "8dqieq"
+      "poolId": "8dqieq",
+      "reviewedAt": "2026-04-05T13:32:26.833Z"
     },
     {
       "id": 1,
@@ -23413,11 +23425,12 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "xnivj8"
+      "poolId": "xnivj8",
+      "reviewedAt": "2026-04-05T13:32:26.833Z"
     },
     {
-      "id": 2,
-      "situation": "פלופ: 7♥ 8♣ K♦. אתה ראשון לפעול (SB) מול חרדון האגרסיבי. הקופה 1,200. אתה רוצה לשמור על הקופה קטנה.",
+      "poolId": "olquot",
+      "situation": "פלופ: 7♥ 8♣ K♦. אתה ראשון לפעול מהבליינד הקטן מול חרדון האגרסיבי. הקופה 1,200. אתה רוצה לשמור על הקופה קטנה.",
       "yourCards": "K♠ 10♦",
       "options": [
         {
@@ -23430,8 +23443,8 @@
           "id": "B",
           "text": "הימור 1,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "במשחק מקצועי זה נקרא 'הימור המשכיות', אבל מול חרדון זה רק יגרום לו להעלות עליך ולהעמיד אותך במצב קשה מחוץ למיקום."
+          "explanation": "במשחק מקצועי זה נקרא 'הימור המשכיות', אבל מול חרדון זה רק יגרום לו להעלות עליך ולהעמיד אותך במצב קשה מחוץ למיקום.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -23442,7 +23455,7 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "olquot"
+      "reviewedAt": "2026-04-05T13:32:26.833Z"
     },
     {
       "id": 3,
@@ -23471,7 +23484,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "ivn6eu"
+      "poolId": "ivn6eu",
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
       "id": 4,
@@ -23500,11 +23514,12 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "lxoqrw"
+      "poolId": "lxoqrw",
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
-      "id": 5,
-      "situation": "אתה בעמדה ראשונה (UTG). כולם מסתכלים עליך. הבליינדים 50/100. אתה רוצה לדלל את כמות השחקנים שיראו פלופ.",
+      "poolId": "wgq290",
+      "situation": "אתה בעמדה ראשונה. כולם מסתכלים עליך. הבליינדים 50/100. אתה רוצה לדלל את כמות השחקנים שיראו פלופ.",
       "yourCards": "A♥ K♣",
       "options": [
         {
@@ -23517,23 +23532,23 @@
           "id": "B",
           "text": "העלאה ל-1,200",
           "isCorrect": true,
-          "explanation": "העלאה חזקה מהתחלה היא הדרך היחידה לצמצם את השדה כשאתה ראשון לדבר, במיוחד עם יד חזקה כמו אק-מלך."
+          "explanation": "העלאה חזקה מהתחלה היא הדרך היחידה לצמצם את השדה כשאתה ראשון לדבר, במיוחד עם יד חזקה כמו אס-מלך."
         },
         {
           "id": "C",
           "text": "העלאה ל-400",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "במשחק רגיל זו העלאה סטנדרטית, אבל אצלנו 400 יביא לך לפחות 4 קוראים וזה בדיוק מה שרצית למנוע."
+          "explanation": "במשחק רגיל זו העלאה סטנדרטית, אבל אצלנו 400 יביא לך לפחות 4 קוראים וזה בדיוק מה שרצית למנוע.",
+          "nearMiss": true
         }
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "wgq290"
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
-      "id": 6,
-      "situation": "ריבר (סיבוב אחרון). לוח: 5♦ 5♣ 9♥ J♠ 2♦. הקופה 6,000. אתה ראשון לפעול (SB) מול מלמד האגרסיבי.",
+      "poolId": "z5btmd",
+      "situation": "ריבר (סיבוב אחרון). לוח: 5♦ 5♣ 9♥ J♠ 2♦. הקופה 6,000. אתה ראשון לפעול מהבליינד הקטן מול מלמד האגרסיבי.",
       "yourCards": "J♣ 10♣",
       "options": [
         {
@@ -23557,19 +23572,19 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "z5btmd"
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
-      "id": 7,
-      "situation": "פלופ: 4♣ 5♦ 6♥. הקופה 1,500. אייל האגרסיבי מהמר 1,000. אתה אחרון לדבר (BTN).",
+      "poolId": "ugx439",
+      "situation": "פלופ: 4♣ 5♦ 6♥. הקופה 1,500. אייל האגרסיבי מהמר 1,000. אתה אחרון לדבר מהכפתור.",
       "yourCards": "7♠ 8♠",
       "options": [
         {
           "id": "A",
           "text": "קריאה 1,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "במשחק מקצועי קוראים כדי להסתיר את עוצמת היד, אבל פה אתה רוצה לקחת לאייל את כל הצ'יפים לפני שיצא קלף מפחיד בלוח."
+          "explanation": "במשחק מקצועי קוראים כדי להסתיר את עוצמת היד, אבל פה אתה רוצה לקחת לאייל את כל הצ'יפים לפני שיצא קלף מפחיד בלוח.",
+          "nearMiss": true
         },
         {
           "id": "B",
@@ -23586,7 +23601,7 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "ugx439"
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
       "id": 8,
@@ -23615,10 +23630,11 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "fdmop5"
+      "poolId": "fdmop5",
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
-      "id": 9,
+      "poolId": "vxh3we",
       "situation": "סיבוב 'התור' (Turn). לוח: 10♦ Q♣ 3♠ K♥. הקופה 3,200. ליאור (פסיבי) עושה צ'ק. אתה אחרון לדבר.",
       "yourCards": "J♠ 9♠",
       "options": [
@@ -23638,12 +23654,12 @@
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "יש לך את היד הכי חזקה כרגע. אין שום סיגיון לוותר."
+          "explanation": "יש לך את היד הכי חזקה כרגע. אין שום היגיון לוותר."
         }
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "vxh3we"
+      "reviewedAt": "2026-04-05T13:32:26.845Z"
     },
     {
       "id": 10,
@@ -23672,7 +23688,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "53ansi"
+      "poolId": "53ansi",
+      "reviewedAt": "2026-04-05T13:40:57.824Z"
     },
     {
       "id": 11,
@@ -23700,7 +23717,8 @@
       ],
       "category": "ניצול מיקום",
       "categoryId": "position_play",
-      "poolId": "yxhhhs"
+      "poolId": "yxhhhs",
+      "reviewedAt": "2026-04-05T13:40:57.825Z"
     }
   ]
 }
