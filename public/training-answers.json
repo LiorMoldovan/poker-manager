@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T14:44:06.902Z",
+  "lastUpdated": "2026-04-05T15:28:56.757Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3695,11 +3695,82 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T19:49:45.953Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "c42re5",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "apqym9",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lsfcsk",
+              "categoryId": "pot_odds",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "esebz4",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "1drqrnmu6",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "9ltr7",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wo2uij",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "o1nxsu",
+              "categoryId": "postflop",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "dv5xs6",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gnziy",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 21,
-      "totalCorrect": 13,
-      "accuracy": 61.904761904761905
+      "totalQuestions": 28,
+      "totalCorrect": 20,
+      "accuracy": 71.42857142857143
     },
     {
       "playerName": "סגל",
