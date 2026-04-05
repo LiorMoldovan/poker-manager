@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-05T11:59:25.381Z",
-  "totalScenarios": 718,
+  "generatedAt": "2026-04-05T12:09:01.480Z",
+  "totalScenarios": 768,
   "byCategory": {
     "זוג עליון על לוח מסוכן": 20,
     "לתפוס בלוף": 20,
@@ -27,7 +27,7 @@
     "סחיטת ערך": 20,
     "האם כדאי לקרוא?": 20,
     "אחוזים וסיכויים": 20,
-    "נכון או לא": 150
+    "סיכויים וחישובים": 200
   },
   "scenarios": [
     {
@@ -17000,7 +17000,7 @@
     },
     {
       "id": "math_1775388907267_ear54b",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה בפלופ עם משיכה לצבע (9 אאוטים). הקופה היא 5,000 וליכטר מהמר 2,000.",
@@ -17031,7 +17031,7 @@
     },
     {
       "id": "math_1775388907278_zv9dgu",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך משיכה לסדרה פתוחה (8 אאוטים). הקופה 6,000 ואייל מהמר 3,000.",
       "yourCards": "J♦ 10♣",
@@ -17062,7 +17062,7 @@
     },
     {
       "id": "math_1775388907278_73qey0",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "יש לך גאטשוט (4 אאוטים). הקופה 10,000 ופאבל מהמר 1,000 בלבד.",
       "yourCards": "K♥ Q♥",
@@ -17093,7 +17093,7 @@
     },
     {
       "id": "math_1775388907278_gh6tfc",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "יש לך זוג בכיס (2 אאוטים לסט). הקופה 8,000 ופיליפ מהמר 2,000.",
       "yourCards": "5♥ 5♦",
@@ -17124,7 +17124,7 @@
     },
     {
       "id": "math_1775388907278_oeb6u2",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך משיכה לצבע (9 אאוטים). הקופה 4,000 וליאור מהמר 1,000.",
       "yourCards": "J♣ 10♣",
@@ -17155,7 +17155,7 @@
     },
     {
       "id": "math_1775388907278_l8qgwa",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "משיכה לסדרה פתוחה (8 אאוטים). הקופה 12,000 וחרדון מהמר 4,000.",
       "yourCards": "7♠ 6♦",
@@ -17186,7 +17186,7 @@
     },
     {
       "id": "math_1775388907278_7dx6be",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "אין לך כלום, אבל אתה צריך שני קלפים (runner-runner) לצבע (בערך 1 אאוט יעיל). הקופה 10,000 והימור של 500.",
       "yourCards": "Q♠ 2♠",
@@ -17217,7 +17217,7 @@
     },
     {
       "id": "math_1775388907278_yc8z4n",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "גאטשוט (4 אאוטים). הקופה 3,000 ודן מאן מהמר 1,000.",
       "yourCards": "K♦ J♠",
@@ -17248,7 +17248,7 @@
     },
     {
       "id": "math_1775388959175_co07vl",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך משיכה לצבע בטרן. הקופה 6,000 וליכטר מהמר 3,000.",
       "board": "K♦ 7♦ 2♠ J♣",
@@ -17279,7 +17279,7 @@
     },
     {
       "id": "math_1775388959175_8zdcle",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "פלופ. יש לך משיכה לסטרייט פתוח (4 אאוטים). הקופה 5,000 ואייל מהמר 2,500.",
       "board": "J♠ 9♥ 2♦",
@@ -17310,7 +17310,7 @@
     },
     {
       "id": "math_1775388959175_utbtaa",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך זוג ביד בתחילת היד. דן מאן מהמר 1,000 לתוך קופה של 2,000.",
       "board": "A♠ 8♣ 4♥",
@@ -17341,7 +17341,7 @@
     },
     {
       "id": "math_1775388959175_pw7zbs",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "משיכה לסטרייט פתוח (8 אאוטים) בטרן. הקופה 10,000 ופיליפ מהמר 5,000.",
       "board": "K♥ 10♠ 9♦ 2♣",
@@ -17372,7 +17372,7 @@
     },
     {
       "id": "math_1775388959175_575x8m",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך זוג מלכות. הקופה 8,000, אורן מהמר 2,000.",
       "board": "Q♥ 9♠ 4♣ 2♦",
@@ -17403,7 +17403,7 @@
     },
     {
       "id": "math_1775388959175_zmy0zr",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "יש לך משיכת צבע רנר-רנר (צריך שני קלפים). הקופה 12,000, חרדון מהמר 4,000.",
       "board": "J♥ 7♣ 3♦",
@@ -17434,7 +17434,7 @@
     },
     {
       "id": "math_1775388959175_h0axci",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "ליאור מהמר 3,000 לתוך קופה של 9,000. מה הסיכוי המינימלי שאתה צריך כדי לקרוא?",
       "board": "K♠ 10♥ 5♣ 2♦",
@@ -17465,7 +17465,7 @@
     },
     {
       "id": "math_1775388996224_j7is86",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "יש לך זוג בכיס בתחילת היד. אתה רוצה לדעת מה הסיכוי לפגוע בשלישייה (סט) כבר בפלופ. ליכטר ואייל נכנסו איתך ליד.",
       "yourCards": "4♣ 4♦",
@@ -17495,7 +17495,7 @@
     },
     {
       "id": "math_1775388996224_39mab2",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "intermediate",
       "situation": "הפלופ נפתח עם שני קלפי לב, ויש לך עוד שניים. הקופה היא 5,000 ופיליפ מהמר 1,500. כמה אאוטים יש לך ומה הסיכוי?",
       "yourCards": "A♥ K♥",
@@ -17526,7 +17526,7 @@
     },
     {
       "id": "math_1775388996224_ljquc1",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "יש לך 'גאטשוט' (משיכה לסדרה עם קלף אחד חסר באמצע). הקופה 6,000 ואורן מהמר 3,000. האם כדאי להשוות?",
       "yourCards": "J♦ 10♣",
@@ -17557,7 +17557,7 @@
     },
     {
       "id": "math_1775388996224_9g5r6j",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "ליאור משחק שמרני מאוד. נשאר רק קלף אחד לריבר. כדי לנצח אתה חייב שגם הטרן וגם הריבר יהיו ספייד (Runner-Runner).",
       "yourCards": "5♠ 6♠",
@@ -17588,7 +17588,7 @@
     },
     {
       "id": "math_1775388996224_r5w4u1",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "יש לך שלישייה אחרי הפלופ. פאבל מהמר חזק. מה הסיכוי לשפר את היד שלך לפול האוס או רביעייה בטרן?",
       "yourCards": "Q♠ Q♥",
@@ -17619,7 +17619,7 @@
     },
     {
       "id": "math_1775389456492_ymvt4n",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך פלאש דראו בטרן. הקופה 1,000 צ'יפים ואייל מהמר 500.",
@@ -17649,7 +17649,7 @@
     },
     {
       "id": "math_1775389456504_173m7t",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הפלאפ הגיע, יש לך משיכה לצבע. מה הסיכוי להשלים עד הריבר?",
@@ -17679,7 +17679,7 @@
     },
     {
       "id": "math_1775389456504_w2eouo",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "דן מאן מהמר 200 לתוך קופה של 1,200 בפלאפ. יש לך משיכה לצבע.",
@@ -17709,7 +17709,7 @@
     },
     {
       "id": "math_1775389456504_fg1khh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הלוח הוא 2♠ 5♠ Q♥. יש לך פלאש דראו. כמה אאוטים יש לך?",
@@ -17739,7 +17739,7 @@
     },
     {
       "id": "math_1775389456504_0wrm0b",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "ליאור מהמר 600 לתוך קופה של 600 בטרן. יש לך פלאש דראו.",
@@ -17769,7 +17769,7 @@
     },
     {
       "id": "math_1775389456504_dbpc8l",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הלוח הוא K♣ 4♣ 9♦. פאבל מהמר 300 לקופה של 900. יש לך פלאש דראו.",
@@ -17799,7 +17799,7 @@
     },
     {
       "id": "math_1775389456504_b7et3g",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הלוח הוא J♦ 8♦ 2♠. יש לך פלאש דראו. כמה אחוזים יש לך להשלים בטרן?",
@@ -17829,7 +17829,7 @@
     },
     {
       "id": "math_1775389456504_lx5sna",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "סגל מהמר 100 לתוך קופה של 2,000. יש לך פלאש דראו.",
@@ -17859,7 +17859,7 @@
     },
     {
       "id": "math_1775389456504_69glr9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "מלמד מהמר 400 לתוך קופה של 800 בטרן. יש לך פלאש דראו.",
@@ -17889,7 +17889,7 @@
     },
     {
       "id": "math_1775389456504_cv85p2",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "מה נחשב ל-'אאוט' (Out) במקרה של פלאש דראו?",
@@ -17919,7 +17919,7 @@
     },
     {
       "id": "math_1775389483228_kcf8l2",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "הקופה היא 1,200 צ'יפים. הטרן נפתח ואייל מהמר 600. נותר רק הריבר.",
@@ -17949,7 +17949,7 @@
     },
     {
       "id": "math_1775389483228_cl4p9n",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: K♠ 8♠ 2♦ 3♣. הקופה 2,000 צ'יפים, חרדון מהמר 1,000.",
@@ -17979,7 +17979,7 @@
     },
     {
       "id": "math_1775389483228_2bh8lc",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: A♣ 7♥ 2♥. הקופה 800, ליאור מהמר 500.",
@@ -18009,7 +18009,7 @@
     },
     {
       "id": "math_1775389483228_zrqq2m",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: 9♦ 5♦ 2♠ J♣. הקופה 1,000, דן מאן מהמר 2,000.",
@@ -18039,7 +18039,7 @@
     },
     {
       "id": "math_1775389483228_u3io95",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: Q♣ 7♣ 4♠ 3♦. הקופה 1,500, אורן מהמר 500.",
@@ -18069,7 +18069,7 @@
     },
     {
       "id": "math_1775389483228_fkir6n",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: K♥ 9♥ 4♠ 2♣. הקופה 2,000, מלמד מהמר 600.",
@@ -18099,7 +18099,7 @@
     },
     {
       "id": "math_1775389483228_7xt4vj",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: T♦ 6♦ 2♣. הקופה 500, סגל מהמר 200.",
@@ -18129,7 +18129,7 @@
     },
     {
       "id": "math_1775389483228_t47hwz",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: 8♠ 4♠ 3♦ K♥. הקופה 3,000, תומר מהמר 1,500.",
@@ -18159,7 +18159,7 @@
     },
     {
       "id": "math_1775389483228_niny99",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: 5♥ 6♥ T♠ 9♦. הקופה 1,200, פאבל מהמר 400.",
@@ -18189,7 +18189,7 @@
     },
     {
       "id": "math_1775389483228_ucmy37",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: K♦ 7♦ 3♣ 2♠. הקופה 2,000, פיליפ מהמר 1,000.",
@@ -18219,7 +18219,7 @@
     },
     {
       "id": "math_1775389510264_q6m4sz",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בטרן. הקופה היא 1,000 צ'יפים. אייל מהמר 500 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18250,7 +18250,7 @@
     },
     {
       "id": "math_1775389510264_8zyolz",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ. הקופה היא 500 צ'יפים. חרדון מהמר 500 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18281,7 +18281,7 @@
     },
     {
       "id": "math_1775389510264_9vb2bd",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בטרן. הקופה היא 2,000 צ'יפים. ליאור מהמר 200 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18312,7 +18312,7 @@
     },
     {
       "id": "math_1775389510264_yon1on",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ. הקופה היא 1,000 צ'יפים. דן מאן מהמר 1,000 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18343,7 +18343,7 @@
     },
     {
       "id": "math_1775389510264_ez6r46",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בטרן. הקופה היא 600 צ'יפים. אורן מהמר 300 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18374,7 +18374,7 @@
     },
     {
       "id": "math_1775389510264_3js2a6",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ. הקופה היא 200 צ'יפים. מלמד מהמר 100 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18405,7 +18405,7 @@
     },
     {
       "id": "math_1775389510264_r8vmim",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בטרן. הקופה היא 400 צ'יפים. סגל מהמר 100 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18436,7 +18436,7 @@
     },
     {
       "id": "math_1775389510264_femy9r",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ. הקופה היא 1,200 צ'יפים. תומר מהמר 400 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18467,7 +18467,7 @@
     },
     {
       "id": "math_1775389510264_xqv621",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בטרן. הקופה היא 500 צ'יפים. פאבל מהמר 250 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18498,7 +18498,7 @@
     },
     {
       "id": "math_1775389510264_u8n0rf",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ. הקופה היא 800 צ'יפים. פיליפ מהמר 200 צ'יפים. יש לך משיכה לסדרה פתוחה.",
@@ -18529,7 +18529,7 @@
     },
     {
       "id": "math_1775389545260_4lbnoe",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה בטרן. הקופה עומדת על 2,000 צ'יפים. אייל מהמר 500 צ'יפים. יש לך גאטשוט (4 אאוטים).",
@@ -18559,7 +18559,7 @@
     },
     {
       "id": "math_1775389545260_gsgm24",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: 9♠ 5♥ 2♦ 6♣. יש לך 8 אאוטים (Double Gutshot). הקופה 4,000, חרדון מהמר 1,000.",
@@ -18589,7 +18589,7 @@
     },
     {
       "id": "math_1775389545260_tgeobz",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "ליאור מהמר 2,000 לתוך קופה של 3,000. יש לך גאטשוט בטרן. האם כדאי להשוות?",
@@ -18619,7 +18619,7 @@
     },
     {
       "id": "math_1775389545260_kidrk3",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "הלוח: A♥ 8♣ 4♦ 2♠. דן מאן מהמר 200 לתוך קופה של 1,800. יש לך גאטשוט.",
@@ -18649,7 +18649,7 @@
     },
     {
       "id": "math_1775389545260_qjnnia",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אנחנו בנהר (River). אורן מהמר 3,000 לתוך קופה של 5,000. יש לך 8 אאוטים.",
@@ -18679,7 +18679,7 @@
     },
     {
       "id": "math_1775389545260_ihb8n4",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: J♥ 10♦ 4♣ 2♠. מלמד מהמר 1,000 לתוך קופה של 2,000. יש לך גאטשוט.",
@@ -18709,7 +18709,7 @@
     },
     {
       "id": "math_1775389545260_p0anp6",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: 8♥ 7♠ 5♦ 4♣. סגל מהמר 500 לתוך קופה של 2,000. יש לך 8 אאוטים.",
@@ -18739,7 +18739,7 @@
     },
     {
       "id": "math_1775389545260_p35q9v",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "תומר מהמר 4,000 לתוך קופה של 4,000. יש לך גאטשוט.",
@@ -18769,7 +18769,7 @@
     },
     {
       "id": "math_1775389545260_6h26i9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פאבל מהמר 1,000 לתוך קופה של 4,000. יש לך גאטשוט.",
@@ -18799,7 +18799,7 @@
     },
     {
       "id": "math_1775389545260_45mdt2",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: Q♥ 8♠ 3♦ 2♣. פיליפ מהמר 500 לתוך קופה של 1,500. יש לך גאטשוט.",
@@ -18829,7 +18829,7 @@
     },
     {
       "id": "math_1775389570597_x43g38",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה יש 500 צ'יפים. אייל מהמר 250 צ'יפים. כמה אחוזים מהקופה עליך להשקיע כדי להשוות?",
@@ -18859,7 +18859,7 @@
     },
     {
       "id": "math_1775389570597_pr448o",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך 20% סיכוי לנצח (Equity). הקופה היא 1000 צ'יפים וחרדון מהמר 200 צ'יפים. האם כדאי לקרוא?",
@@ -18889,7 +18889,7 @@
     },
     {
       "id": "math_1775389570598_1uvfm3",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 800 צ'יפים. ליאור מהמר 400 צ'יפים. מהו היחס שאתה מקבל?",
@@ -18919,7 +18919,7 @@
     },
     {
       "id": "math_1775389570598_b7yggu",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך 25% סיכוי לנצח. דן מאן מהמר 500 צ'יפים לתוך קופה של 500. האם להשוות?",
@@ -18949,7 +18949,7 @@
     },
     {
       "id": "math_1775389570598_h1sg8o",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 2000 צ'יפים. אורן מהמר 1000 צ'יפים. איזה אחוז מהקופה הסופית אתה משלם?",
@@ -18979,7 +18979,7 @@
     },
     {
       "id": "math_1775389570598_hzh8am",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 400 צ'יפים. מלמד מהמר 100 צ'יפים. מה אחוז הקופה שאתה צריך להשוות?",
@@ -19009,7 +19009,7 @@
     },
     {
       "id": "math_1775389570598_155xds",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך 15% סיכוי. סגל מהמר 200 לתוך קופה של 1000. האם להשוות?",
@@ -19039,7 +19039,7 @@
     },
     {
       "id": "math_1775389570598_1gggz5",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 1500 צ'יפים. תומר מהמר 500 צ'יפים. מהו היחס (Odds) שאתה מקבל?",
@@ -19069,7 +19069,7 @@
     },
     {
       "id": "math_1775389570598_37sh9r",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך 40% סיכוי. פאבל מהמר 600 לתוך קופה של 600. האם להשוות?",
@@ -19099,7 +19099,7 @@
     },
     {
       "id": "math_1775389570598_mqs1zb",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 100 צ'יפים. פיליפ מהמר 100 צ'יפים. מה אחוז הקופה שאתה משלם?",
@@ -19129,7 +19129,7 @@
     },
     {
       "id": "math_1775389570598_t6c4ln",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "יש לך 10% סיכוי. ליכטר מהמר 300 לתוך קופה של 3000. האם להשוות?",
@@ -19159,7 +19159,7 @@
     },
     {
       "id": "math_1775389570598_qj38uh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "בקופה 1200 צ'יפים. מישהו מהמר 400 צ'יפים. מהם ה-Pot Odds?",
@@ -19189,7 +19189,7 @@
     },
     {
       "id": "math_1775389602525_icxphx",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "בקופה 1,200 צ'יפים. ליכטר מהמר 800. יש לך פלאש דרו (9 אאוטים). נותרו 2,000 צ'יפים מאחור לשניכם.",
@@ -19219,7 +19219,7 @@
     },
     {
       "id": "math_1775389602525_nmx7j9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "לוח: 9♦ 8♣ 2♥. אורן מהמר 1,500 לקופה של 2,000. יש לך יד פגיעה שעלולה להפסיד גם אם תפגע בסט.",
@@ -19249,7 +19249,7 @@
     },
     {
       "id": "math_1775389602525_l0gcvp",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "פלופ: K♥ 7♠ 2♦. פאבל מהמר 500 לקופה של 1,000. אתה עם גאט-שוט ו-Overcard. עליך לתכנן את הטרן.",
@@ -19279,7 +19279,7 @@
     },
     {
       "id": "math_1775389602525_muug3o",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "לוח: A♠ K♣ 5♥ 2♠. דן מאן מהמר 4,000 לקופה של 2,000. יש לך דרו צבע (9 אאוטים).",
@@ -19309,7 +19309,7 @@
     },
     {
       "id": "math_1775389602525_fwo252",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "קופה 3,000, תומר מהמר 1,500. יש לך זוג נמוך על לוח 8-4-2-Q. עליך להחליט אם לשלם.",
@@ -19339,7 +19339,7 @@
     },
     {
       "id": "math_1775389602525_11a92e",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "לוח: J♦ 10♦ 3♣. יש לך 4,000 צ'יפים מאחור. מלמד מהמר 1,000 לקופה של 1,500.",
       "yourCards": "K♦ Q♦",
@@ -19369,7 +19369,7 @@
     },
     {
       "id": "math_1775389602525_1hzq7w",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "לוח: Q♣ 10♠ 5♦. סגל מהמר 2,000 לקופה של 2,000. יש לך יד עם פוטנציאל לסט.",
       "yourCards": "5♠ 4♠",
@@ -19399,7 +19399,7 @@
     },
     {
       "id": "math_1775389602525_vrl4sq",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "לוח: 7♥ 6♥ 2♣. פיליפ מהמר 1,000 לקופה של 2,000. יש לך גאט-שוט.",
       "yourCards": "9♠ 8♦",
@@ -19429,7 +19429,7 @@
     },
     {
       "id": "math_1775389602525_kebdv6",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "לוח: K♦ Q♣ J♥ 3♠. אייל מהמר 5,000 לקופה של 2,000. יש לך דרו לסטריט (4 אאוטים).",
       "yourCards": "10♠ 9♦",
@@ -19459,7 +19459,7 @@
     },
     {
       "id": "math_1775389602525_0b1q8l",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "difficulty": "advanced",
       "situation": "לוח: A♣ 9♦ 4♠. ליאור מהמר 500 לקופה של 1,000. יש לך זוג נמוך.",
       "yourCards": "4♦ 3♦",
@@ -19489,7 +19489,7 @@
     },
     {
       "id": "math_1775389628166_embd4d",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אייל מעלה ל-300 לפני הפלופ. אתה משווה בפוזיציה עם פלאש דראו בטרן.",
@@ -19520,7 +19520,7 @@
     },
     {
       "id": "math_1775389628167_j26qzv",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "חרדון מהמר 500 על הפלופ. יש לך OESD (סטריט פתוח משני הצדדים).",
@@ -19551,7 +19551,7 @@
     },
     {
       "id": "math_1775389628167_yqw16g",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה נגד ליאור על הפלופ. יש לך זוג גבוה ואתה מחפש להשתפר לסט.",
@@ -19583,7 +19583,7 @@
     },
     {
       "id": "math_1775389628167_hclsv6",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "דן מאן מהמר 400. יש לך גוטשוט (סטרייט חלקי).",
@@ -19614,7 +19614,7 @@
     },
     {
       "id": "math_1775389628167_qk3lzw",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אורן מהמר חזק. יש לך סט ואתה מחפש להשתפר לפול האוס או רביעייה בטרן.",
@@ -19645,7 +19645,7 @@
     },
     {
       "id": "math_1775389628167_3q9pfs",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "מלמד בודק. יש לך קומבו דראו (פלאש וסטרייט פתוח).",
@@ -19676,7 +19676,7 @@
     },
     {
       "id": "math_1775389628167_kujpqh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "סגל מהמר 200. יש לך שני זוגות ואתה מחפש פול האוס.",
@@ -19707,7 +19707,7 @@
     },
     {
       "id": "math_1775389628167_3egtbx",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "תומר מהמר 100. יש לך שני אובר-קלפים (Overcards) מעל הלוח.",
@@ -19738,7 +19738,7 @@
     },
     {
       "id": "math_1775389628167_8iz01q",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פאבל מעלה ל-500. יש לך 4 קלפים לצבע (פלאש דראו) בטרן.",
@@ -19769,7 +19769,7 @@
     },
     {
       "id": "math_1775389628167_nwux1w",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פיליפ מהמר 600. יש לך גוטשוט (סטרייט חלקי) על הפלופ.",
@@ -19800,7 +19800,7 @@
     },
     {
       "id": "math_1775389628167_y4seu1",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "ליכטר מהמר 300. יש לך סט ואתה מחפש להשתפר על הלוח.",
@@ -19831,7 +19831,7 @@
     },
     {
       "id": "math_1775389628167_d98zm4",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה בפוזיציה מול היריב. יש לך OESD (סטרייט פתוח).",
@@ -19862,7 +19862,7 @@
     },
     {
       "id": "math_1775389653327_0hygsa",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אייל מעלה ל-300 מהפוזיציה המוקדמת. אתה יושב עם זוג בכיס והקופה כרגע 450.",
@@ -19892,7 +19892,7 @@
     },
     {
       "id": "math_1775389653327_blhc99",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "חרדון מעלה ל-400 מוקדם. לשניכם ערימות ענק של 20,000 צ'יפים.",
@@ -19922,7 +19922,7 @@
     },
     {
       "id": "math_1775389653327_gxrcj9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "ליאור מעלה ל-250. יש עוד 3 שחקנים ששילמו (קול). הקופה היא 1,250.",
@@ -19952,7 +19952,7 @@
     },
     {
       "id": "math_1775389653327_yqq6lg",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה בפוזיציה מאוחרת, דן מאן מעלה ל-300. הערימה שלך היא 2,000 בלבד (Short Stack).",
@@ -19982,7 +19982,7 @@
     },
     {
       "id": "math_1775389653327_3vzqci",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "לוח: K♥ 8♣ 2♦. אורן מהמר 500 לתוך קופה של 800.",
@@ -20012,7 +20012,7 @@
     },
     {
       "id": "math_1775389653327_hgs6mf",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "סגל מעלה ל-200. שניכם עם 5,000 צ'יפים.",
@@ -20042,7 +20042,7 @@
     },
     {
       "id": "math_1775389653327_nwbvxh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "תומר מעלה ל-400. הקופה 500. לשניכם יש 2,000 צ'יפים מאחור.",
@@ -20072,7 +20072,7 @@
     },
     {
       "id": "math_1775389653327_w0gyn4",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פיליפ האגרסיבי מעלה ל-500. יש עוד 3 שחקנים ששילמו לפניך. הקופה 1,800.",
@@ -20102,7 +20102,7 @@
     },
     {
       "id": "math_1775389680104_qr0kux",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "הקופה עומדת על 8,000 צ'יפים. אייל מהמר 4,000, ואתה צריך להחליט אם להשוות. הלוח מראה 7♦ 2♦ 9♣.",
@@ -20132,7 +20132,7 @@
     },
     {
       "id": "math_1775389680104_trp3fv",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "ליאור מעלה ל-300 לפני הפלופ. הלוח הוא 6♠ 9♦ 2♣. יש לך 8♣ 7♠.",
@@ -20162,7 +20162,7 @@
     },
     {
       "id": "math_1775389680104_rt5oya",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "הקופה 20,000 צ'יפים. פאבל מהמר 10,000. יש לך סיכוי של 4% ל-Backdoor flush ו-1.5% ל-Backdoor straight.",
       "yourCards": "J♠ 10♠",
@@ -20192,7 +20192,7 @@
     },
     {
       "id": "math_1775389680104_tbg2xi",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "סגל מהמר חצי קופה. יש לך Backdoor flush draw. מתי ה-Backdoor מוסיף ערך לקריאה שלך?",
       "yourCards": "K♣ 3♣",
@@ -20222,7 +20222,7 @@
     },
     {
       "id": "math_1775389680104_u3ersy",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "פיליפ מהמר 5,000 לקופה של 10,000. יש לך 2 קלפים לסיום צבע (4%). האם הקריאה רווחית?",
       "yourCards": "Q♦ 4♦",
@@ -20252,7 +20252,7 @@
     },
     {
       "id": "math_1775389680104_ukijff",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "דן מאן מהמר 2,000 לקופה של 10,000. יש לך 1.5% סיכוי לסטרייט (Backdoor).",
       "yourCards": "J♦ 2♠",
@@ -20282,7 +20282,7 @@
     },
     {
       "id": "math_1775389680104_7zw2gm",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "אורן מהמר 5,000 לקופה של 20,000. יש לך גם Flush draw וגם Straight draw (Backdoor).",
       "yourCards": "A♣ 2♣",
@@ -20312,7 +20312,7 @@
     },
     {
       "id": "math_1775389680104_g3cx6i",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "situation": "מלמד שואל: מה הסיכוי המדויק להשלים Backdoor Flush עם 2 קלפים מותאמים ב-Turn וב-River?",
       "yourCards": "K♠ 9♠",
@@ -20342,7 +20342,7 @@
     },
     {
       "id": "math_1775389726798_mkmwfp",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אתה יושב בעמדת ה-Button. אייל האגרסיבי פותח מ-UTG ואתה משווה עם זוג. אתה מול זוג נמוך יותר שלו.",
@@ -20372,7 +20372,7 @@
     },
     {
       "id": "math_1775389726798_10ai0k",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "הקופה עומדת על 2,000 צ'יפים. ליכטר הלוז מהמר 500 צ'יפים. עליך להחליט אם להשוות.",
@@ -20402,7 +20402,7 @@
     },
     {
       "id": "math_1775389726798_mpw452",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "דן מאן השמרן נכנס אול-אין לפני הפלופ. אתה משווה עם זוג מול הקלפים הגבוהים שלו.",
@@ -20432,7 +20432,7 @@
     },
     {
       "id": "math_1775389726798_smoeuu",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "אורן האגרסיבי המחושב נכנס ראשון. אתה מחליט להיכנס אול-אין עם יד דומיננטית עליו.",
@@ -20462,7 +20462,7 @@
     },
     {
       "id": "math_1775389726798_zbt45h",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "סגל השמרן מהמר מה-Small Blind. אתה משווה עם יד חזקה מול הזוג שלו.",
@@ -20492,7 +20492,7 @@
     },
     {
       "id": "math_1775389726798_j7il5i",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פיליפ האגרסיבי מאוד מהמר 2,000 לתוך קופה של 4,000. כמה אקוויטי מינימלי צריך כדי להשוות?",
@@ -20522,7 +20522,7 @@
     },
     {
       "id": "math_1775389726798_r3ikh8",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "מלמד הסלקטיבי משווה אול-אין שלך. אתה עם זוג גבוה נגדו.",
@@ -20552,7 +20552,7 @@
     },
     {
       "id": "math_1775389726798_jz24f9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "תומר הפסיבי מהמר 100 לתוך קופה של 900. האם ההשוואה כדאית?",
@@ -20582,7 +20582,7 @@
     },
     {
       "id": "math_1775389726798_c86j1l",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "פאבל האגרסיבי המנוסה נכנס אול-אין. אתה משווה עם יד דומיננטית מול שלו.",
@@ -20612,7 +20612,7 @@
     },
     {
       "id": "math_1775389726798_g9qbih",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "intermediate",
       "situation": "ליאור הסלקטיבי משווה את האול-אין שלך לפני הפלופ.",
@@ -20642,7 +20642,7 @@
     },
     {
       "id": "math_1775389802185_2gho6u",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "הקופה עומדת על 4,000. אייל מהמר 2,000 לתוך הקופה. יש לך OESD (סטריט פתוח) יחד עם פלאש דרו.",
@@ -20673,7 +20673,7 @@
     },
     {
       "id": "math_1775389802185_uha59u",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "הקופה 2,000, דן מאן מהמר 1,000. יש לך פלאש דרו (9 אאוטים). אתה צריך להחליט אם להשוות בהתבסס על Implied Odds.",
@@ -20704,7 +20704,7 @@
     },
     {
       "id": "math_1775389802185_q0qcqh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "סגל מהמר חצי קופה (Pot size 2,000, Bet 1,000). מהו אחוז ההצלחה המינימלי שאתה צריך כדי להשוות ברווחיות (Break-even)?",
@@ -20735,7 +20735,7 @@
     },
     {
       "id": "math_1775389802185_vo5boq",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "לוח: Q♥ J♥ 5♦. יש לך פלאש דרו, אבל ליאור מהמר אגרסיבית. כמה אאוטים 'נקיים' יש לך אם ליאור מחזיק QJ?",
@@ -20766,7 +20766,7 @@
     },
     {
       "id": "math_1775389802185_tccvm4",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "הקופה 5,000. אתה מהמר 2,500. מהו ה-Fold Equity הנדרש כדי שהבלוף שלך יהיה רווחי (Break-even)?",
@@ -20797,7 +20797,7 @@
     },
     {
       "id": "math_1775389802185_v3q8xa",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "פיליפ מהמר 3,000 לתוך קופה של 6,000. יש לך פלאש דרו וגאת'שוט (סך הכל 12 אאוטים). מה הסיכוי שלך לפגוע עד הריבר?",
@@ -20828,7 +20828,7 @@
     },
     {
       "id": "math_1775389802185_wc0gnh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "אורן מהמר 4,000 לתוך קופה של 8,000. יש לך 20% סיכוי לנצח. האם ההשוואה רווחית?",
@@ -20859,7 +20859,7 @@
     },
     {
       "id": "math_1775389802185_n8ie2p",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "אתה מול מלמד ופאבל. הקופה 9,000. שניהם עשו צ'ק. הלוח: A♣ K♣ 4♦. יש לך פלאש דרו.",
@@ -20890,7 +20890,7 @@
     },
     {
       "id": "math_1775389802185_lgvo3x",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "ליכטר מהמר חזק. יש לך פלאש דרו נמוך (2, 3, 4, 5, 6 של לבבות). למה עליך להיזהר מ-Reverse Implied Odds?",
@@ -20921,7 +20921,7 @@
     },
     {
       "id": "math_1775389802185_k6rb29",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "תומר דוחף אול-אין ל-5,000. הקופה 5,000. יש לך 30% אקוויטי. האם להשוות?",
@@ -20952,7 +20952,7 @@
     },
     {
       "id": "math_1775389836495_hzrlc9",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "הקופה היא 4,500. פיליפ האגרסיבי מהמר 2,000 בריבר. מהו ה-Pot Odds שלך והאם ה-Call רווחי אם אתה מעריך שיש לו בלף ב-20% מהמקרים?",
@@ -20982,7 +20982,7 @@
     },
     {
       "id": "math_1775389836495_k37wg6",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "על הלוח A♠ K♠ 8♦ 2♣ 4♥. אייל מהמר 3,000 לתוך קופה של 5,000. כמה בלופים הוא חייב להכניס כדי להפוך את ה-Call שלך ל-Break-even?",
@@ -21012,7 +21012,7 @@
     },
     {
       "id": "math_1775389836495_s8kv7i",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "דן מאן השמרן מהמר 4,000 לקופה של 6,000 בריבר. אתה מניח שיש לו יד חזקה ב-90% מהמקרים. מה ה-EV של ה-Call?",
@@ -21042,7 +21042,7 @@
     },
     {
       "id": "math_1775389836495_beyoqg",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "לוח: Q♦ J♣ 9♠ 2♥ 5♦. פאבל מהמר 5,000 לתוך קופה של 5,000. אתה מקבל 2:1, האם כדאי לקרוא אם אתה מנצח ב-30% מהמקרים?",
@@ -21072,7 +21072,7 @@
     },
     {
       "id": "math_1775389836495_gysidy",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "אורן מהמר חצי קופה (5,000 לתוך 10,000). מהו ה-Minimum Defense Frequency שאתה חייב להגן בו?",
@@ -21102,7 +21102,7 @@
     },
     {
       "id": "math_1775389836495_co2xyh",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "ליכטר מהמר 2,500 לתוך קופה של 7,500. מהו אחוז הבלופים המינימלי שהוא צריך בטווח שלו כדי שה-Call שלך יהיה רווחי?",
@@ -21132,7 +21132,7 @@
     },
     {
       "id": "math_1775389836495_qmdit5",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "אתה בריבר עם קופה של 12,000. סגל מהמר 6,000. האם כדאי להשוות אם אתה מנצח ב-35% מהמקרים?",
@@ -21162,7 +21162,7 @@
     },
     {
       "id": "math_1775389836495_b722w5",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "לוח: A♣ A♦ 7♠ 6♥ 2♣. מלמד מהמר 4,000 לתוך 6,000. הוא מציג יחס של 1:2 (בלוף לערך). האם ה-Call שלך רווחי?",
@@ -21192,7 +21192,7 @@
     },
     {
       "id": "math_1775389836495_cthhar",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "תומר הפסיבי מהמר 1,000 לתוך 9,000. מהו ה-Pot Odds שלך?",
@@ -21222,7 +21222,7 @@
     },
     {
       "id": "math_1775389836495_xmqfk7",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "advanced",
       "situation": "חרדון מהמר 5,000 לתוך 5,000. אתה מנצח ב-25% מהמקרים. כמה צ'יפים תפסיד בממוצע בטווח הארוך אם תמיד תעשה Call?",
@@ -21252,7 +21252,7 @@
     },
     {
       "id": "math_1775389857109_hz8u20",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפוסט-פלופ. יש לך 8 אאוטים להשלמת סטרייט. עליך להחליט מה הסיכוי שלך לפגוע בסטרייט עד הריבר.",
@@ -21282,7 +21282,7 @@
     },
     {
       "id": "math_1775389857109_90f86j",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אייל מהמר חזק בטרן. יש לך פלאש דרו (9 אאוטים). מה הסיכוי שלך לפגוע בפלאש בריבר?",
@@ -21312,7 +21312,7 @@
     },
     {
       "id": "math_1775389857109_pvhda3",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הפלופ נפתח. יש לך זוג נמוך ואתה מחפש את הסט (2 אאוטים). מה הסיכוי לפגוע בסט עד הסוף?",
@@ -21342,7 +21342,7 @@
     },
     {
       "id": "math_1775389857109_0fwdmq",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "דן מאן מהמר. נותר קלף אחד (ריבר) ויש לך 6 אאוטים לזוג גבוה. מה הסיכוי שלך?",
@@ -21372,7 +21372,7 @@
     },
     {
       "id": "math_1775389857109_rsxayw",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ עם גאט-שוט (4 אאוטים). מה הסיכוי שלך להשלים את היד עד הריבר?",
@@ -21402,7 +21402,7 @@
     },
     {
       "id": "math_1775389857109_hgr70k",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "סגל מהמר בטרן. יש לך 12 אאוטים (פלאש וגאט-שוט). מה הסיכוי שלך לפגוע בריבר?",
@@ -21432,7 +21432,7 @@
     },
     {
       "id": "math_1775389857109_ifcvw7",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "הפלופ נפתח. יש לך 5 אאוטים לזוג גבוה. מה הסיכוי שלך לפגוע עד הריבר?",
@@ -21462,7 +21462,7 @@
     },
     {
       "id": "math_1775389857109_wyma4q",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "ליכטר מהמר בטרן. יש לך 7 אאוטים. מה הסיכוי שלך לפגוע בריבר?",
@@ -21492,7 +21492,7 @@
     },
     {
       "id": "math_1775389857109_m9zw6n",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "פיליפ מהמר בטרן. יש לך 3 אאוטים בלבד. מה הסיכוי שלך לפגוע בריבר?",
@@ -21522,7 +21522,7 @@
     },
     {
       "id": "math_1775389857109_svhqox",
-      "category": "נכון או לא",
+      "category": "סיכויים וחישובים",
       "categoryId": "true_false",
       "difficulty": "beginner",
       "situation": "אתה בפלופ עם 11 אאוטים. מה הסיכוי שלך לפגוע עד הריבר?",
@@ -21549,6 +21549,1506 @@
       ],
       "poolId": "math_1775389857109_svhqox",
       "reviewedAt": "2026-04-05T11:50:57.109Z"
+    },
+    {
+      "id": "math2_1775390836673_nsi666",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "אתה ב-UTG עם זוג נמוך. אייל האגרסיבי מעלה מ-MP, וליאור הסלקטיבי משווה. בהנחה שליאור משחק רק טווח של {TT+, AQs+, AKo}, כמה קומבינציות סה\"כ נשארו לליאור בטווח שלו?",
+      "yourCards": "4♠ 4♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "64 קומבינציות",
+          "explanation": "חישוב: TT-QQ (6*3=18), KK (3), AA (6), AKs (4), AQs (4), AKo (12). סה\"כ 47, החישוב כאן שגוי.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "47 קומבינציות",
+          "explanation": "TT-QQ (6*3=18), KK (3), AA (6) = 27 זוגות. AKs/AQs (4+4=8) ו-AKo (12). 27+8+12 = 47.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "52 קומבינציות",
+          "explanation": "חישוב שמתעלם מצירופי הקלפים האישיים שלך שחוסמים חלק מהטווח שלו.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836673_nsi666",
+      "reviewedAt": "2026-04-05T12:07:16.673Z"
+    },
+    {
+      "id": "math2_1775390836678_n8xdrr",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "הפלאופ מגיע K♦ 7♣ 2♠. פאבל האגרסיבי מהמר 1,500 צ'יפים. הוא מסוגל להמר ככה עם כל סט (KK, 77, 22) או בלופים של סוייטד קונקטורס (65s, 54s). כמה קומבינציות של סטים יש לו?",
+      "yourCards": "A♠ Q♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "6 קומבינציות",
+          "explanation": "יש קומבינציה אחת של KK (כי K בבור), 3 של 77, ו-3 של 22. סה\"כ 7 קומבינציות.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "7 קומבינציות",
+          "explanation": "K♦ על הלוח משאיר 3 קומבינציות ל-KK. 77 ו-22 הם זוגות בכיס, לכן 3 קומבינציות לכל אחד. 3+3+1 = 7.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "9 קומבינציות",
+          "explanation": "חישוב שגוי שמתעלם מחסימת קלפי הלוח (Card Removal Effect).",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_n8xdrr",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_7tspra",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "פיליפ האגרסיבי מאוד מעלה לפני הפלופ. בהנחה שהוא מעלה עם כל זוג בכיס (22-AA) וכל AK, מה הסיכוי שלו להחזיק בדיוק AA?",
+      "yourCards": "K♠ Q♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "6/86",
+          "explanation": "יש 78 קומבינציות של זוגות (13*6) ועוד 16 של AK (4+12) = 94. 6/94 בערך 6.3%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "6/94",
+          "explanation": "יש 13 זוגות * 6 קומבינציות = 78. AK מוסיף 16 קומבינציות (4+12). סה\"כ 94 קומבינציות אפשריות בטווח.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "3/94",
+          "explanation": "הנחה שגויה שרק חצי מצירופי ה-AA אפשריים.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_7tspra",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_zigfuc",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "מלמד הסלקטיבי נכנס לאול-אין של 10,000 צ'יפים. הטווח שלו הוא רק AKs או AA. מה ההסתברות שהוא מחזיק AA?",
+      "yourCards": "K♥ Q♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "60%",
+          "explanation": "יש 6 קומבינציות AA ו-4 קומבינציות AKs. סה\"כ 10. 6/10 = 60%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "40%",
+          "explanation": "היפוך שגוי של היחס בין הצירופים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "50%",
+          "explanation": "הנחה שגויה שכל הצירופים שווים בהסתברותם.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_zigfuc",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_3j0su3",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "על הלוח 10♠ 9♠ 2♦, תומר הפסיבי משווה להימור שלך. אם הטווח שלו כולל רק זוגות 22-99 (לא כולל סטים), כמה קומבינציות יש לו?",
+      "yourCards": "A♣ K♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "24",
+          "explanation": "זוגות: 22(3), 33-88(6*6=36), 99(3). סה\"כ 42.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "42",
+          "explanation": "22 (3 קומבינציות כי 2 על הלוח), 99 (3 קומבינציות כי 9 על הלוח), 33-88 (6 זוגות * 6 קומבינציות = 36). 3+3+36 = 42.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "48",
+          "explanation": "חישוב שמתעלם מהקלפים שכבר נמצאים על הלוח.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_3j0su3",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_cbvjkd",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "סגל השמרן מעלה חזק. הטווח שלו הוא {JJ+, AK}. כמה קומבינציות סה\"כ יש לו?",
+      "yourCards": "J♠ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "25",
+          "explanation": "JJ(3), QQ(6), KK(6), AA(6), AK(16). 3+6+6+6+16 = 37.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "37",
+          "explanation": "JJ (3 כי ה-J ביד שלך), QQ (6), KK (6), AA (6), AK (4+12=16). סה\"כ 37.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "34",
+          "explanation": "חישוב שגוי של מספר הצירופים לזוגות.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_cbvjkd",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_l0y3me",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "ליכטר הלוז נכנס לכל יד. אם הוא משווה להימור שלך, מה הסיכוי שיש לו יד suited כלשהי מתוך כל הקומבינציות האפשריות של יד פתיחה?",
+      "yourCards": "2♣ 7♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "23.5%",
+          "explanation": "יש 1326 קומבינציות. 4 סוייטד לכל זוג קלפים שונים (1224/4 = 306). 306/1326 = 23.5%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "25%",
+          "explanation": "הערכה גסה מדי שאינה מתחשבת בקלפים הנותרים בחבילה.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "20%",
+          "explanation": "חישוב שגוי שמתעלם מהתפלגות הסוייטד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_l0y3me",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_lmgwze",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "אורן האגרסיבי מחושב מעלה 300 צ'יפים. הוא עושה זאת רק עם {TT+, AJs+, AQo+}. כמה קומבינציות יש בטווח שלו?",
+      "yourCards": "J♦ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "56",
+          "explanation": "TT-AA(30), AJs(4), AQs(4), AKs(4), AQo(12), AKo(12). 30+4+4+4+12+12 = 66.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "66",
+          "explanation": "TT-AA (5*6=30), AJs/AQs/AKs (3*4=12), AQo/AKo (2*12=24). 30+12+24 = 66.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "72",
+          "explanation": "ספירה כפולה של קומבינציות ה-Suited.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_lmgwze",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_mr9i9z",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "יש 3 קלפי לבבות על הלוח. חרדון הלוז-אגרסיבי מהמר. אם הוא מהמר עם כל פלאש (כל 2 לבבות) או בלופים (A ללא לב), כמה קומבינציות של פלאש אפשריות לו?",
+      "yourCards": "K♥ Q♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "78",
+          "explanation": "נותרו 10 לבבות בחפיפה. 10 בחר 2 = 45. אופציה ב' היא הנכונה.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "45",
+          "explanation": "נשארו 10 לבבות בחפיפה. מספר הדרכים לבחור 2 הוא (10*9)/2 = 45.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "55",
+          "explanation": "חישוב שגוי של 11 בחר 2.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_mr9i9z",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390836678_mlm8t2",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "דן מאן השמרן משווה להימור שלך. הוא עושה זאת רק עם {JJ, QQ}. כמה קומבינציות יש לו?",
+      "yourCards": "J♣ J♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "7",
+          "explanation": "יש 1 קומבינציה ל-JJ ו-6 ל-QQ. סה\"כ 7.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "12",
+          "explanation": "חישוב שמתעלם מחסימת ה-JJ ביד שלך.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "6",
+          "explanation": "מתעלם מקומבינציות ה-JJ שנותרו.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390836678_mlm8t2",
+      "reviewedAt": "2026-04-05T12:07:16.678Z"
+    },
+    {
+      "id": "math2_1775390862811_h6lj49",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "הקופה עומדת על 4,500 צ'יפים בטרן. אייל האגרסיבי מהמר 2,000 צ'יפים, ואתה מחזיק ב-Flush Draw ללא זוג. יש לך 9 אאוטים (סיכוי של 19.5% להשלים בנהר).",
+      "yourCards": "J♦ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא +EV בערך 250 צ'יפים",
+          "explanation": "EV = (0.195 * 4500) - (0.805 * 2000) = 877.5 - 1610 = -732.5. החישוב אינו נכון.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא -EV בערך 732 צ'יפים",
+          "explanation": "EV = (0.195 * 4500) - (0.805 * 2000) = 877.5 - 1610 = -732.5. השקעה אינה מוצדקת מתמטית.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא +EV בערך 120 צ'יפים",
+          "explanation": "החישוב מראה הפסד תוחלתי ברור של 732 צ'יפים ולא רווח.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_h6lj49",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_y607ys",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "ליאור הסלקטיבי נכנס אול-אין בנהר על קופה של 8,000 צ'יפים. ההימור שלו הוא 5,000 צ'יפים. אתה מעריך שיש לך 30% סיכוי לנצח עם ה-Bluff Catcher שלך.",
+      "yourCards": "A♠ Q♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא -EV בערך 1,100 צ'יפים",
+          "explanation": "EV = (0.3 * 8000) - (0.7 * 5000) = 2400 - 3500 = -1100. זהו הפסד תוחלתי.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא +EV בערך 500 צ'יפים",
+          "explanation": "החישוב הוא (0.3 * 8000) - (0.7 * 5000) = -1100, לא חיובי.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 2,500 צ'יפים",
+          "explanation": "ההפסד המקסימלי הוא גובה ההימור (5000), התוחלת היא -1100 בלבד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_y607ys",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_yashmj",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "דן מאן השמרן מהמר 3,000 צ'יפים לתוך קופה של 6,000 צ'יפים בנהר. יש לך יד בינונית, ואתה מעריך ב-40% שאתה מוביל. כמה שווה הקריאה במונחי EV?",
+      "yourCards": "K♣ 10♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא +EV בערך 600 צ'יפים",
+          "explanation": "EV = (0.4 * 6000) - (0.6 * 3000) = 2400 - 1800 = +600. השוואה חיובית.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא -EV בערך 300 צ'יפים",
+          "explanation": "החישוב מראה רווח תוחלתי חיובי של 600 צ'יפים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא +EV בערך 1,200 צ'יפים",
+          "explanation": "החישוב הוא 2400 פחות 1800 ששווה 600 בלבד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_yashmj",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_6mvfsx",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "אורן האגרסיבי המחושב מהמר 4,000 צ'יפים לתוך קופה של 10,000 צ'יפים. אתה מחזיק ב-Straight Draw. סיכוייך להשלים הם 17%.",
+      "yourCards": "8♠ 7♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא +EV בערך 1,000 צ'יפים",
+          "explanation": "EV = (0.17 * 10000) - (0.83 * 4000) = 1700 - 3320 = -1620.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא -EV בערך 500 צ'יפים",
+          "explanation": "החישוב מראה הפסד תוחלתי של 1620 צ'יפים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 1,620 צ'יפים",
+          "explanation": "החישוב הוא 1700 - 3320 = -1620, מה שהופך את זה ל-Fold ברור.",
+          "isCorrect": true
+        }
+      ],
+      "poolId": "math2_1775390862811_6mvfsx",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_zahnqp",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "מלמד הסלקטיבי עושה אול-אין בנהר של 7,000 צ'יפים לתוך קופה של 7,000. יש לך זוג מלכות ואתה בטוח ב-55% שאתה מנצח את הבלוף שלו.",
+      "yourCards": "Q♦ Q♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא +EV בערך 750 צ'יפים",
+          "explanation": "EV = (0.55 * 7000) - (0.45 * 7000) = 3850 - 3150 = +700. התוצאה קרובה ל-750 אך החישוב המדויק הוא 700.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא +EV בערך 700 צ'יפים",
+          "explanation": "EV = (0.55 * 7000) - (0.45 * 7000) = 3850 - 3150 = 700. זהו הימור רווחי.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 700 צ'יפים",
+          "explanation": "החישוב מראה רווח חיובי של 700, לא הפסד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_zahnqp",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_7r2hwf",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "סגל השמרן מהמר 2,000 צ'יפים בטרן לתוך קופה של 5,000. יש לך זוג נמוך עם סיכוי של 8% להשתפר לסט בנהר.",
+      "yourCards": "5♥ 5♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא -EV בערך 1,440 צ'יפים",
+          "explanation": "EV = (0.08 * 5000) - (0.92 * 2000) = 400 - 1840 = -1440.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא +EV בערך 400 צ'יפים",
+          "explanation": "החישוב מראה הפסד תוחלתי של 1440 צ'יפים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 800 צ'יפים",
+          "explanation": "החישוב הוא 400 - 1840 = -1440.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_7r2hwf",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_kim04c",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "תומר הפסיבי מהמר 1,500 צ'יפים בנהר לתוך קופה של 4,500. אתה מנצח ב-30% מהמקרים.",
+      "yourCards": "J♠ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא +EV בערך 300 צ'יפים",
+          "explanation": "EV = (0.3 * 4500) - (0.7 * 1500) = 1350 - 1050 = +300. קריאה רווחית.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא -EV בערך 300 צ'יפים",
+          "explanation": "החישוב מראה רווח תוחלתי חיובי ולא הפסד.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא +EV בערך 1,000 צ'יפים",
+          "explanation": "התוצאה היא 300, החישוב 1350-1050 שווה 300.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_kim04c",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_8x0aqv",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "פאבל האגרסיבי המנוסה דוחף 6,000 צ'יפים לתוך קופה של 6,000 בנהר. יש לך זוג גבוה שאתה חושב שמוביל ב-45% מהזמן.",
+      "yourCards": "A♦ K♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא -EV בערך 600 צ'יפים",
+          "explanation": "EV = (0.45 * 6000) - (0.55 * 6000) = 2700 - 3300 = -600.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא +EV בערך 600 צ'יפים",
+          "explanation": "החישוב מראה הפסד תוחלתי של 600 צ'יפים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 1,200 צ'יפים",
+          "explanation": "ההפרש הוא 600- בלבד לפי הנוסחה.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_8x0aqv",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_mqh9em",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "פיליפ האגרסיבי מאוד מהמר 5,000 צ'יפים לתוך קופה של 5,000 בנהר. יש לך יד חלשה שאתה מאמין שתנצח רק ב-20% מהזמן.",
+      "yourCards": "9♥ 8♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא -EV בערך 2,000 צ'יפים",
+          "explanation": "EV = (0.2 * 5000) - (0.8 * 5000) = 1000 - 4000 = -3000.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא -EV בערך 3,000 צ'יפים",
+          "explanation": "EV = (0.2 * 5000) - (0.8 * 5000) = 1000 - 4000 = -3000. קריאה גרועה מאוד.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא +EV בערך 1,000 צ'יפים",
+          "explanation": "התוצאה היא הפסד של 3000 צ'יפים.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_mqh9em",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390862811_1nhh9n",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "ליכטר הלוז מהמר 2,500 צ'יפים לתוך קופה של 5,000. אתה עם Flush Draw שמשלים ב-20% מהמקרים בנהר.",
+      "yourCards": "7♣ 6♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "הקריאה היא -EV בערך 1,000 צ'יפים",
+          "explanation": "EV = (0.2 * 5000) - (0.8 * 2500) = 1000 - 2000 = -1000.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הקריאה היא +EV בערך 500 צ'יפים",
+          "explanation": "החישוב מראה הפסד של 1000 צ'יפים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הקריאה היא -EV בערך 500 צ'יפים",
+          "explanation": "החישוב הוא 1000 - 2000 = -1000.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390862811_1nhh9n",
+      "reviewedAt": "2026-04-05T12:07:42.811Z"
+    },
+    {
+      "id": "math2_1775390889928_k0jb21",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "אתה ב-Big Blind עם 100 צ'יפים כבר בקופה. פיליפ האגרסיבי פותח ל-300 מה-Button. הקופה כרגע היא 450 (100 שלך + 50 של ה-SB + 300 של פיליפ).",
+      "yourCards": "J♦ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "צריך 25% אקוויטי כדי להשוות.",
+          "explanation": "החישוב הוא 200/800 = 25%. הקופה הכוללת לאחר ההשוואה תהיה 800 (450 קיימים + 200 שלך), ואתה משלם 200. לא נכון.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "צריך 28.5% אקוויטי כדי להשוות.",
+          "explanation": "החישוב הוא 200/700 = 28.57%. אתה משלם 200 כדי לזכות בקופה של 500 (100+50+300+50 מה-SB), סך הכל 700 בקופה סופית.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "צריך 40% אקוויטי כדי להשוות.",
+          "explanation": "זהו חישוב שגוי של 200/500, שלא לוקח בחשבון את הכסף שאתה כבר השקעת בבליינד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_k0jb21",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_medwje",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "אייל האגרסיבי מהמר 600 לתוך קופה של 400 בטרן. יש לך יד בינונית, ואתה שוקל רייז כדי לנצל את ה-Fold Equity שלו.",
+      "yourCards": "8♠ 7♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "אתה צריך 60% סיכוי שהיריב יקפל כדי שהמהלך יהיה רווחי (breakeven).",
+          "explanation": "החישוב הוא Risk / (Risk + Reward) = 600 / (600+400) = 60%. אם הוא יקפל ב-60% מהמקרים, המהלך רווחי.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "אתה צריך 40% סיכוי שהיריב יקפל.",
+          "explanation": "זהו החישוב של ה-Reward חלקי הקופה הכוללת, לא נכון לחישוב Fold Equity.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "אתה צריך 75% סיכוי שהיריב יקפל.",
+          "explanation": "חישוב זה מניח קופה גדולה משמעותית ממה שיש בפועל.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_medwje",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_7f3hup",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "ליאור הסלקטיבי פותח מוקדם ל-350. אתה ב-BB והקופה היא 500. אתה צריך להשוות 250 כדי לראות פלופ.",
+      "yourCards": "K♣ 6♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ה-Pot Odds שלך הם 1:2.",
+          "explanation": "אתה משלם 250 כדי לזכות ב-500 (הקופה הקיימת), יחס של 1:2. כלומר 33.3% אקוויטי נדרש.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "ה-Pot Odds שלך הם 1:3.",
+          "explanation": "אתה משלם 250 כדי לזכות ב-750 (הקופה הכוללת לאחר ההשוואה), יחס של 1:3. כלומר 25% אקוויטי נדרש.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "ה-Pot Odds שלך הם 1:1.",
+          "explanation": "יחס זה יתקיים רק אם תצטרך להשוות 500 לתוך קופה של 500.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_7f3hup",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_lve8e8",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "מלמד השמרן בודק (Check) בנהר. הקופה היא 1200. אתה רוצה להמר סכום שיתן לו אודס של 1:4 כדי שיטעה ב-Call.",
+      "yourCards": "A♠ Q♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "הימור של 300 צ'יפים.",
+          "explanation": "אם תהמר 300, הוא יצטרך לשלם 300 כדי לזכות ב-1500, יחס של 1:5. לא נכון.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "הימור של 400 צ'יפים.",
+          "explanation": "אם תהמר 400, הוא יצטרך לשלם 400 כדי לזכות ב-1600 (1200+400), יחס של 1:4.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "הימור של 600 צ'יפים.",
+          "explanation": "אם תהמר 600, הוא יצטרך לשלם 600 כדי לזכות ב-1800, יחס של 1:3.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_lve8e8",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_6zytmq",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "סגל השמרן מהמר 500 לתוך קופה של 1000. יש לך Flush Draw (9 אאוטים) בטרן. האם ההשוואה רווחית מבחינת אקוויטי?",
+      "yourCards": "A♦ 5♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "לא רווחי, האקוויטי שלי (כ-20%) נמוך מה-Pot Odds (33%).",
+          "explanation": "ה-Pot Odds הם 500/1500 = 33%. עם 9 אאוטים בטרן, הסיכוי לפגוע בריבר הוא 9/46 כ-19.5%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "רווחי, האקוויטי שלי (40%) גבוה מה-Pot Odds (33%).",
+          "explanation": "החישוב של 40% אקוויטי עם 9 אאוטים שגוי לחלוטין.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "רווחי כי סגל שמרן.",
+          "explanation": "החלטות מתמטיות לא צריכות להסתמך רק על סגנון משחק ללא קשר לסיכויים.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_6zytmq",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_kkl7dt",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "דן מאן השמרן פותח ל-200. אתה ב-Button ורוצה לבצע 3-Bet ל-600. מה ה-Fold Equity שאתה צריך כדי שהמהלך יהיה מיידית רווחי?",
+      "yourCards": "7♣ 6♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "600 / (600 + 300) = 66%.",
+          "explanation": "חישוב ה-Fold Equity הוא גודל ההימור חלקי (הימור + קופה לפני ההימור). הקופה היא 200 (דן) + 100 (SB) = 300. 600/900 = 66.6%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "600 / 600 = 100%.",
+          "explanation": "אין מצב שבו אתה צריך 100% Fold Equity כדי שהמהלך יהיה רווחי.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "300 / 900 = 33%.",
+          "explanation": "חישוב שגוי של התשואה מול הסיכון.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_kkl7dt",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_yx3v0r",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "פאבל האגרסיבי מהמר 400 לתוך קופה של 600. יש לך Open-Ended Straight Draw. מה הסיכוי שלך לפגוע בריבר?",
+      "yourCards": "J♠ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "8.5%.",
+          "explanation": "זהו סיכוי נמוך מדי עבור 8 אאוטים.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "17.4%.",
+          "explanation": "8 אאוטים מתוך 46 קלפים שנותרו (8/46) שווים ל-17.39%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "32%.",
+          "explanation": "זהו סיכוי של פלופ עד ריבר, לא רק ריבר אחד.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_yx3v0r",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_gr81yz",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "תומר הפסיבי נכנס בלימפ (100). אתה ב-BB. מה האחוז שאתה צריך כדי להגן אם אתה עושה צ'ק?",
+      "yourCards": "Q♦ 4♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "0%.",
+          "explanation": "כאשר אתה ב-BB וכולם עושים לימפ, הקופה היא שלך בחינם (Free play).",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "25%.",
+          "explanation": "אין צורך ב-25% אקוויטי כי אין מחיר להשוואה.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "50%.",
+          "explanation": "אין סיבה מתמטית להגנה של 50% כאן.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_gr81yz",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_qw3hqd",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "ליכטר הלוז מהמר 200 לתוך קופה של 250. מה ה-Pot Odds שלך?",
+      "yourCards": "K♥ 10♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "1:1.25.",
+          "explanation": "אתה משלם 200 לתוך 450 (200+250). 200/450 = 44%. היחס הוא 200:250 = 1:1.25.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "1:2.",
+          "explanation": "חישוב שגוי של 200/400.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "1:3.",
+          "explanation": "חישוב שגוי של 200/600.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390889928_qw3hqd",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390889928_w5or9c",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "אורן האגרסיבי מחושב דוחף אול-אין ל-2000 לתוך קופה של 1000. מה האקוויטי המינימלי הנדרש לקול?",
+      "yourCards": "A♣ K♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "33.3%.",
+          "explanation": "אתה משלם 2000 לתוך קופה של 3000 (2000+1000). 2000/3000 = 66.6% אקוויטי נדרש. לא נכון.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "40%.",
+          "explanation": "חישוב שגוי של 2000/5000.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "66.6%.",
+          "explanation": "החישוב הוא 2000 / (2000 + 1000) = 66.6%. אתה צריך 66.6% כדי להשוות אול-אין כזה.",
+          "isCorrect": true
+        }
+      ],
+      "poolId": "math2_1775390889928_w5or9c",
+      "reviewedAt": "2026-04-05T12:08:09.928Z"
+    },
+    {
+      "id": "math2_1775390916781_04zhyj",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "אייל (אגרסיבי) פותח מה-CO. אתה ב-BTN משווה. הפלופ הוא 9♠ 8♦ 2♣.",
+      "yourCards": "A♣ K♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך מול טווח של 25% ידיים הוא 42%.",
+          "explanation": "טווח של 25% (זוגות, ברודווי, סואיט קונקטורס נמוכים) דומיננטי מול AK ללא פגיעה בלוח כזה. האקוויטי הריאלי קרוב יותר ל-34%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך מול טווח של 25% ידיים הוא 34.5%.",
+          "explanation": "לפי סימולטור אקוויטי (Equilab), כנגד טווח מייצג של 25% (22+, A2s+, K9s+, Q9s+, J9s+, T9s, ATo+, KTo+), ה-AK מחזיק ב-34.5% אקוויטי.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך מול טווח של 25% ידיים הוא 51%.",
+          "explanation": "זהו נתון מופרז שמתעלם מהעובדה שהיריב מחזיק בכל הסטים והזוגות הבינוניים שחוסמים את ה-AK.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_04zhyj",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_wy4oes",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "על הלוח J♣ 9♦ 4♠, אתה מחזיק overpair. חרדון (לוז-אגרסיבי) נכנס אול-אין עם 8♠ 7♠.",
+      "yourCards": "Q♥ Q♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "אתה פייבוריט עם 62% אקוויטי.",
+          "explanation": "נגד open-ended straight draw, ה-QQ צריכות להיזהר, אך הן עדיין מחזיקות ברוב הסיכויים (כ-62%).",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "אתה אנדרדוג עם 44% אקוויטי.",
+          "explanation": "הסיכויים של ה-QQ לא יורדים מתחת ל-50% מול קומבו דרו כזה.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "יש לך 75% אקוויטי.",
+          "explanation": "הערכה אופטימית מדי; ה-8-7 משתפר לסטרייט ב-8 אאוטים נקיים (כ-32% מהזמן).",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_wy4oes",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_grig3e",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "על לוח K♥ J♥ 4♦, ליאור (סלקטיבי) מחזיק ב-flush draw. אתה מחזיק top pair.",
+      "yourCards": "A♠ K♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך הוא 68%.",
+          "explanation": "נגד Flush Draw (למשל Q♥ T♥), ה-AK מוביל משמעותית לפני הטרן, בערך 68% מול 32%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך הוא 55%.",
+          "explanation": "הסיכוי של ה-Flush Draw נמוך מ-40% כשיש לך A high.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך הוא 82%.",
+          "explanation": "החישוב מתעלם מהאפשרות של ליאור לפגוע בסטרייט או בזוג נוסף.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_grig3e",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_0x6wft",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "על הלוח 8♠ 7♠ 6♦, סגל (שמרן) מחזיק סט. אתה מחזיק combo draw.",
+      "yourCards": "9♥ T♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך הוא 41%.",
+          "explanation": "למרות שהסט חזק, ה-combo draw של 9-10 (סטרייט פלוש דרו) הוא כמעט Coin Flip, כ-41-43%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך הוא 22%.",
+          "explanation": "זהו חישוב נמוך מדי עבור קומבו דרו כה עוצמתי.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך הוא 58%.",
+          "explanation": "הסט של סגל עדיין מחזיק ביתרון קל של כ-57% מול הדרו.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_0x6wft",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_w1psc1",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "דן מאן (שמרן) מהמר 2,000 צ'יפים לתוך קופה של 3,000. יש לך flush draw.",
+      "yourCards": "J♦ T♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "אתה צריך 25% אקוויטי כדי להשוות.",
+          "explanation": "אתה משלם 2,000 כדי לזכות בקופה של 5,000 (אחרי ההימור), כלומר 2,000/7,000 = 28.5%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "אתה צריך 28.5% אקוויטי כדי להשוות.",
+          "explanation": "החישוב של Pot Odds הוא (Call Amount) / (Total Pot After Call). 2,000 / (3,000+2,000+2,000) = 28.5%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "אתה צריך 33% אקוויטי כדי להשוות.",
+          "explanation": "חישוב זה מתאים להימור בגודל הקופה בדיוק.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_w1psc1",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_zrrmzk",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "על לוח A♥ 8♠ 2♣, מלמד (סלקטיבי) מהמר אול-אין. אתה מחזיק זוג אמצעי.",
+      "yourCards": "8♦ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "מול טווח של {AA, 88, 22, AK, AJ}, יש לך 8% אקוויטי.",
+          "explanation": "מול טווח חזק כזה שכולל סטים ו-AK, אתה דומיננטי לחלוטין וחסר אאוטים כמעט לגמרי.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "מול טווח של {AA, 88, 22, AK, AJ}, יש לך 25% אקוויטי.",
+          "explanation": "הסיכויים שלך נמוכים מ-10% כיוון שאתה זקוק ל-runner-runner כדי לנצח.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "מול טווח של {AA, 88, 22, AK, AJ}, יש לך 40% אקוויטי.",
+          "explanation": "אקוויטי גבוה מדי לזוג 8 מול טווח שכולל סטים ואסים גבוהים.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_zrrmzk",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_62by6n",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "אורן (אגרסיבי מחושב) מחזיק 5♣ 5♥. הפלופ הוא K♦ 9♥ 2♠. אתה ב-BTN.",
+      "yourCards": "J♠ T♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך הוא 38%.",
+          "explanation": "נגד זוג נמוך, שני הקלפים הגבוהים שלך (overcards) נותנים לך כ-38% אקוויטי.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך הוא 52%.",
+          "explanation": "אתה לא מוביל מול זוג 5 בפלופ כזה.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך הוא 20%.",
+          "explanation": "זהו חישוב נמוך מדי, מכיוון שיש לך 6 אאוטים חיים לזוג גבוה.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_62by6n",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_ldsype",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "תומר (פסיבי) משווה אול-אין בטרן כשעל הלוח T♣ 9♦ 4♠ 2♥. לשניכם יש דרו.",
+      "yourCards": "K♥ Q♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך הוא 18%.",
+          "explanation": "יש לך 6 אאוטים (ארבעה קינגים וארבעה קווינים, הפחתה של כפילויות) - כ-13-18% אקוויטי.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך הוא 35%.",
+          "explanation": "הסיכויים שלך נמוכים מדי בגלל שאתה צריך פגיעה נקייה בנהר.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך הוא 50%.",
+          "explanation": "אתה לא נמצא ב-Coin Flip כי הקלפים שלך לא פגעו בלוח עדיין.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_ldsype",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_au5rpg",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "פאבל (אגרסיבי מנוסה) מחזיק A♣ 7♣ על לוח 7♠ 6♦ 2♥. אתה מחזיק בבלופים.",
+      "yourCards": "Q♠ J♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "האקוויטי שלך הוא 25%.",
+          "explanation": "יש לך backdoor flush ו-overcards, מה שנותן לך אקוויטי סביב 25%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "האקוויטי שלך הוא 45%.",
+          "explanation": "הערכה גבוהה מדי; אתה נגד זוג ואייס קיקר.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "האקוויטי שלך הוא 10%.",
+          "explanation": "אתה מחזיק ביותר מ-10% אקוויטי בגלל ה-backdoor פלאש והאפשרויות לסטריטים.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_au5rpg",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390916781_9bryj6",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "advanced",
+      "situation": "פיליפ (אגרסיבי מאוד) ב-SB, אתה ב-BB. פלופ J♦ T♥ 3♣.",
+      "yourCards": "A♥ K♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "מול טווח רחב, יש לך 58% אקוויטי.",
+          "explanation": "מול טווח של 40% מהידיים, ה-AK בפלופ J-T-3 מחזיק יתרון של כ-58%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "מול טווח רחב, יש לך 35% אקוויטי.",
+          "explanation": "זהו חישוב נמוך מדי ל-AK מול טווח רחב בלוח ללא זוגות.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "מול טווח רחב, יש לך 75% אקוויטי.",
+          "explanation": "זהו חישוב אופטימי מדי שמתעלם מהפוטנציאל לסטרייט של היריב.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390916781_9bryj6",
+      "reviewedAt": "2026-04-05T12:08:36.781Z"
+    },
+    {
+      "id": "math2_1775390941480_pbivjp",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "הקופה עומדת על 4,000 צ'יפים בטרן. אייל האגרסיבי מהמר 2,000 צ'יפים ואתה עם Flush Draw שנותן לך 9 אאוטים.",
+      "yourCards": "A♠ K♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 18% להשלים את הפלאש בריבר",
+          "explanation": "כלל ה-2 אומר 9*2=18%, אך החישוב המדויק הוא 9/46, שהם 19.56%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 19.56% להשלים את הפלאש בריבר",
+          "explanation": "החישוב המדויק בטרן עם 46 קלפים שנותרו הוא 9/46 = 0.1956, כלומר 19.56%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 20% להשלים את הפלאש בריבר",
+          "explanation": "הערכה זו שגויה כי היא מתבססת על עיגול גס מדי ולא לוקחת בחשבון את 46 הקלפים שנותרו.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_pbivjp",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_jz0731",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "על הלוח 10♦ 9♠ 2♥ 5♣. תומר מהמר 1,500 לתוך קופה של 3,000. יש לך 4 אאוטים (גאטשוט).",
+      "yourCards": "J♦ 8♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 8.7% להשלים, ה-Pot Odds מחייבים פרישה",
+          "explanation": "הסיכוי המדויק הוא 4/46 = 8.69%. אתה צריך לשלם 1,500 כדי לזכות ב-4,500 (יחס של 1:3), שזה 25% נדרש, לכן פרישה היא נכונה.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 12% להשלים, כדאי להשוות",
+          "explanation": "4/46 אינו 12%, וגם 8.7% סיכוי להשלמה לא מצדיק השוואה ל-25% נדרשים.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 4.3% להשלים, ה-Pot Odds מספיקים",
+          "explanation": "החישוב 4/46 שווה ל-8.7%, והסיכוי אינו מספיק ביחס להשקעה הנדרשת.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_jz0731",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_8a45d4",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "ליאור הסלקטיבי מהמר 3,000 בטרן. יש לך 12 אאוטים (קו-דראו ופלאש דראו). הקופה כוללת כעת 7,000 צ'יפים.",
+      "yourCards": "Q♥ J♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 24% להשלים",
+          "explanation": "זהו שימוש בכלל ה-2 (12*2), אך המדויק הוא 12/46 = 26.08%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 26.1% להשלים",
+          "explanation": "החישוב המדויק הוא 12 לחלק ל-46 קלפים שנותרו בטרן, מה שנותן 0.2608 או 26.08%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 28% להשלים",
+          "explanation": "זהו חישוב שגוי שמתעלם מכך שנותרו 46 קלפים בלבד בטרן.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_8a45d4",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_tib1ol",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "פיליפ האגרסיבי מאוד דוחף אול-אין ל-5,000 בטרן. יש לך 8 אאוטים נקיים, הקופה הגיעה ל-9,000 צ'יפים.",
+      "yourCards": "K♦ 10♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "הסיכוי המדויק הוא 17.4%",
+          "explanation": "החישוב הוא 8/46 = 0.1739, כלומר 17.39%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "הסיכוי המדויק הוא 16%",
+          "explanation": "16% הוא תוצאה של כלל ה-2 בלבד, לא החישוב המדויק בטרן.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "הסיכוי המדויק הוא 20%",
+          "explanation": "חישוב זה רחוק מהמציאות המתמטית של 8/46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_tib1ol",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_ic9p7t",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "על הלוח 7♣ 6♣ 2♦ 3♠. פאבל המנוסה מהמר 2,000. יש לך 6 אאוטים להשלמת זוג גבוה או סטרייט דראו.",
+      "yourCards": "A♣ 5♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 12% להשלים",
+          "explanation": "זהו תוצר של כלל ה-2 (6*2), לא המדויק.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 13.04% להשלים",
+          "explanation": "החישוב המדויק הוא 6/46 = 0.1304, כלומר 13.04%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 15% להשלים",
+          "explanation": "החישוב אינו תואם את המתמטיקה של 6 חלקי 46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_ic9p7t",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_y1vxn1",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "מלמד הסלקטיבי מהמר 2,500 בטרן. יש לך 5 אאוטים לשיפור היד. הקופה עומדת על 5,000.",
+      "yourCards": "Q♠ J♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 10.87% להשלים",
+          "explanation": "החישוב המדויק הוא 5/46 = 0.10869, כלומר כ-10.87%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 10% להשלים",
+          "explanation": "זהו עיגול המבוסס על כלל ה-2, אך אינו החישוב המדויק.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 12% להשלים",
+          "explanation": "החישוב אינו תואם ל-5 חלקי 46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_y1vxn1",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_n6k69l",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "ליכטר הלוז מהמר 1,000 לתוך 3,000. יש לך 15 אאוטים (סט דראו + פלאש).",
+      "yourCards": "9♥ 8♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 30% להשלים",
+          "explanation": "זהו כלל ה-2 (15*2), אך לא המדויק.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 32.6% להשלים",
+          "explanation": "החישוב המדויק הוא 15/46 = 0.3260, כלומר 32.6%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 35% להשלים",
+          "explanation": "חישוב זה גבוה מדי ואינו תואם ל-15/46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_n6k69l",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_4r5g2i",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "סגל השמרן בודק בטרן. אתה עם 3 אאוטים בלבד. הקופה עומדת על 2,000.",
+      "yourCards": "A♦ 2♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 6.52% להשלים",
+          "explanation": "החישוב המדויק בטרן הוא 3/46 = 0.0652, כלומר 6.52%.",
+          "isCorrect": true
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 6% להשלים",
+          "explanation": "זהו עיגול לפי כלל ה-2, אך פחות מדויק מ-6.52%.",
+          "isCorrect": false
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 7.5% להשלים",
+          "explanation": "חישוב שגוי שאינו מבוסס על מספר הקלפים שנותרו.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_4r5g2i",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_dr03jd",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "אורן האגרסיבי מחושב מהמר 4,000 בטרן. יש לך 11 אאוטים. הקופה כעת 8,000.",
+      "yourCards": "10♠ 9♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 22% להשלים",
+          "explanation": "זהו שימוש בכלל ה-2, אך המדויק הוא 11/46 = 23.9%.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 23.91% להשלים",
+          "explanation": "החישוב המדויק הוא 11/46 = 0.2391, כלומר 23.91%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 25% להשלים",
+          "explanation": "חישוב גבוה מדי ולא תואם ל-11/46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_dr03jd",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
+    },
+    {
+      "id": "math2_1775390941480_w8pdrj",
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false",
+      "difficulty": "intermediate",
+      "situation": "דן מאן השמרן מהמר 2,000 בטרן. יש לך 7 אאוטים. הקופה היא 4,000.",
+      "yourCards": "K♣ Q♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "סיכוי של 14% להשלים",
+          "explanation": "זהו כלל ה-2 (7*2), אך לא החישוב המדויק.",
+          "isCorrect": false
+        },
+        {
+          "id": "B",
+          "text": "סיכוי של 15.22% להשלים",
+          "explanation": "החישוב המדויק הוא 7/46 = 0.15217, כלומר כ-15.22%.",
+          "isCorrect": true
+        },
+        {
+          "id": "C",
+          "text": "סיכוי של 16.5% להשלים",
+          "explanation": "חישוב שגוי שאינו תואם ל-7/46.",
+          "isCorrect": false
+        }
+      ],
+      "poolId": "math2_1775390941480_w8pdrj",
+      "reviewedAt": "2026-04-05T12:09:01.480Z"
     }
   ]
 }
