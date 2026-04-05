@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T14:30:39.756Z",
+  "lastUpdated": "2026-04-05T14:43:35.527Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -550,12 +550,6 @@
               "chosenId": "A"
             },
             {
-              "poolId": "math_1775389680104_tbg2xi",
-              "categoryId": "true_false",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
               "poolId": "8ice65",
               "categoryId": "pot_odds",
               "correct": true,
@@ -575,12 +569,6 @@
               "chosenId": "C"
             },
             {
-              "poolId": "ixo6u5",
-              "categoryId": "stack_depth",
-              "correct": false,
-              "chosenId": "C"
-            },
-            {
               "poolId": "fu7rz4",
               "categoryId": "thin_value",
               "correct": true,
@@ -597,9 +585,9 @@
           "flagReports": []
         }
       ],
-      "totalQuestions": 57,
+      "totalQuestions": 73,
       "totalCorrect": 48,
-      "accuracy": 84.21052631578947
+      "accuracy": 65.75342465753424
     },
     {
       "playerName": "אייל",
