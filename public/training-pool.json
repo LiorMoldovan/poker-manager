@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-05T14:28:11.264Z",
+  "generatedAt": "2026-04-05T14:39:12.736Z",
   "totalScenarios": 801,
   "byCategory": {
     "wet_board_top_pair": 20,
@@ -14038,22 +14038,22 @@
       "options": [
         {
           "id": "A",
-          "text": "הימור של 2,500",
+          "text": "הימור של 800",
           "isCorrect": true,
-          "explanation": "יש לך זוג מלכים חזק. במשחק שלנו הם ישלמו לך, אז תהמר חזק כדי לבנות קופה ולגבות ערך."
+          "explanation": "יש לך זוג מלכים עם קיקר חזק. במשחק שלנו השחקנים קוראים הרבה, אז הימור של כ-2/3 קופה בונה קופה ומגבה ערך בלי להבריח את הידיים החלשות."
         },
         {
           "id": "B",
           "text": "צ'ק",
           "isCorrect": false,
-          "explanation": "צ'ק הוא טעות, אתה נותן להם לראות קלף בחינם ולעקוף אותך.",
-          "nearMiss": true
+          "nearMiss": true,
+          "explanation": "צ'ק מאפשר ליריבים לראות קלף חינם. עם יד כזו חזקה על לוח יבש, עדיף להמר ולגבות ערך מידיים חלשות שיקראו."
         },
         {
           "id": "C",
-          "text": "הימור של 300",
+          "text": "הימור של 2,500",
           "isCorrect": false,
-          "explanation": "הימור קטן מדי לא עוזר לך לגבות ערך מהידיים שלהם. אם יש לך יד חזקה, תהמר סכום משמעותי."
+          "explanation": "הימור של 2,500 לקופה של ~1,200 הוא אובר-בט שיבריח את רוב הידיים החלשות. ישארו רק ידיים שמכות אותך (כמו שלישייה). עדיף הימור סביר שיקבל קריאות."
         }
       ],
       "category": "גודל הערימה",
@@ -20190,36 +20190,6 @@
         }
       ],
       "poolId": "math_1775389680104_rt5oya",
-      "difficulty": "advanced",
-      "reviewedAt": "2026-04-05T11:48:00.104Z"
-    },
-    {
-      "id": "math_1775389680104_tbg2xi",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "situation": "סגל מהמר חצי קופה. יש לך Backdoor (צריך 2 קלפים) flush draw. מתי ה-Backdoor מוסיף ערך לקריאה שלך?",
-      "yourCards": "K♣ 3♣",
-      "options": [
-        {
-          "id": "A",
-          "text": "רק כאשר ה-Backdoor draw הופך ל-Flush draw ב-Turn.",
-          "explanation": "הערך של Backdoor הוא היכולת להמשיך להמר או להגן אם ה-Turn משפר אותך לדראו חי (Flush draw).",
-          "isCorrect": true
-        },
-        {
-          "id": "B",
-          "text": "הוא תמיד מוסיף 10% לערך היד ב-Flop.",
-          "explanation": "הערך הוא דינמי ותלוי ב-Pot Odds (יחס קופה) ולא קבוע על 10%.",
-          "isCorrect": false
-        },
-        {
-          "id": "C",
-          "text": "הוא לעולם לא מוסיף ערך כי הוא נדיר מדי.",
-          "explanation": "Backdoor draws הם חלק מה-Equity (אחוז ניצחון) הכולל של היד (Combo draws), ולכן תמיד מוסיפים ערך מסוים.",
-          "isCorrect": false
-        }
-      ],
-      "poolId": "math_1775389680104_tbg2xi",
       "difficulty": "advanced",
       "reviewedAt": "2026-04-05T11:48:00.104Z"
     },
