@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T07:22:55.309Z",
+  "lastUpdated": "2026-04-05T08:08:22.641Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3191,11 +3191,151 @@
               "date": "2026-04-05T07:20:53.632Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-05T07:27:28.880Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "bofwjo",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w5q5i8",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "p3y535",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "96znmn",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r724dg",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "bofwjo"
+          ],
+          "flagReports": [
+            {
+              "poolId": "bofwjo",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "בדיוק בגלל שהוא חלש ממני אני לא רוצה שהוא יפרוש אני רוצה לקחת לו עוד כסף בקלף הבא",
+              "date": "2026-04-05T07:24:38.911Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-05T07:32:34.642Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "klqq64",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "mhmh4r",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "dzwsgs",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "i47yxu",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kjmqyt",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-05T08:08:22.614Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "vwq9od",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "la7kih",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "vhfy8b",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "18kro1",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "siqdz8",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "vhfy8b"
+          ],
+          "flagReports": [
+            {
+              "poolId": "vhfy8b",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "לא ברור לי מה קורה כאן. אימרנו 400 לפני הפלופ ואז הוא אומר עוד 600 אחרי הפלופ. לי יש זוג גבוה מהפלופ אני מקפיץ והוא אגרסיבי ואולי יש עוד שחקנים אנילא אמרת",
+              "date": "2026-04-05T07:37:13.988Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 38,
-      "totalCorrect": 30,
-      "accuracy": 78.94736842105263
+      "totalQuestions": 49,
+      "totalCorrect": 41,
+      "accuracy": 83.6734693877551
     },
     {
       "playerName": "ליכטר",
