@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T17:29:03.819Z",
+  "lastUpdated": "2026-04-06T17:39:25.437Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2768,8 +2768,7 @@
             }
           ],
           "flaggedPoolIds": [
-            "34xq7z",
-            "gen_1775387399620_43uby8"
+            "34xq7z"
           ],
           "flagReports": [
             {
@@ -2778,13 +2777,6 @@
               "reason": "unclear_question",
               "comment": "כמה אנשים ביד?",
               "date": "2026-04-06T17:05:54.331Z"
-            },
-            {
-              "poolId": "gen_1775387399620_43uby8",
-              "playerName": "מלמד",
-              "reason": "other",
-              "comment": "אם הוא מהמר קופה יש לו כנראה זוגיים בטרן",
-              "date": "2026-04-06T17:07:34.012Z"
             }
           ]
         }
