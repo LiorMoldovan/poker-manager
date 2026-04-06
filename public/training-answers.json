@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T17:43:28.155Z",
+  "lastUpdated": "2026-04-06T17:43:56.412Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2679,8 +2679,7 @@
             }
           ],
           "flaggedPoolIds": [
-            "8q90ls5g6",
-            "bofwjo"
+            "8q90ls5g6"
           ],
           "flagReports": [
             {
@@ -2689,13 +2688,6 @@
               "reason": "wrong_answer",
               "comment": "הוא קולינג סטיישן, אז הוא ישווה את הרירייז שלי, וככה הקופה תהיה יותר גדולה בסוף היד.",
               "date": "2026-04-06T17:00:28.624Z"
-            },
-            {
-              "poolId": "bofwjo",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "מה ה effective stack? אם זה 10k, מספיק לי להשוות, ועד סוף היד נגיע לאול אין",
-              "date": "2026-04-06T17:01:53.859Z"
             }
           ]
         },
