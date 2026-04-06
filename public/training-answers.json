@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T17:39:25.437Z",
+  "lastUpdated": "2026-04-06T17:43:28.155Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2767,18 +2767,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "34xq7z"
-          ],
-          "flagReports": [
-            {
-              "poolId": "34xq7z",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "כמה אנשים ביד?",
-              "date": "2026-04-06T17:05:54.331Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 39,
