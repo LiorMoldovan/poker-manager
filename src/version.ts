@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.3';
+export const APP_VERSION = '5.11.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.4',
+    date: '2026-04-06',
+    changes: [
+      '🎨 Training mode buttons — stacked layout with icon and question count on top, label below',
+    ]
+  },
   {
     version: '5.11.3',
     date: '2026-04-06',

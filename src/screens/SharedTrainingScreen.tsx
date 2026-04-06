@@ -179,17 +179,18 @@ const SharedTrainingScreen = () => {
         </div>
         <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem' }}>
           {([
-            ['mixed', '🎲 מעורב', poolCounts.total],
-            ['true_false', '🔢 סיכויים וחישובים', (poolCounts.byCategory['odds_math'] || 0) + (poolCounts.byCategory['true_false'] || 0)],
-            ['specific', '📂 נושא ספציפי', 0],
-          ] as [typeof trainingMode, string, number][]).map(([mode, label, count]) => (
+            { mode: 'mixed' as typeof trainingMode, icon: '🎲', text: 'מעורב', count: poolCounts.total },
+            { mode: 'true_false' as typeof trainingMode, icon: '🔢', text: 'סיכויים וחישובים', count: (poolCounts.byCategory['odds_math'] || 0) + (poolCounts.byCategory['true_false'] || 0) },
+            { mode: 'specific' as typeof trainingMode, icon: '📂', text: 'נושא ספציפי', count: 0 },
+          ]).map(({ mode, icon, text, count }) => (
             <button
               key={mode}
               onClick={() => { setTrainingMode(mode); if (mode === 'specific') { setShowCategoryPicker(true); } else { setSelectedCategories([]); setShowCategoryPicker(false); } }}
               className={`btn btn-sm ${trainingMode === mode ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem' }}
+              style={{ flex: 1, padding: '0.4rem 0.3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', lineHeight: 1.2 }}
             >
-              {label}{count > 0 ? ` (${count})` : ''}
+              <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{icon}{count > 0 ? ` (${count})` : ''}</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{text}</span>
             </button>
           ))}
         </div>
