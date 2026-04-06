@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T17:45:02.601Z",
+  "lastUpdated": "2026-04-06T20:31:46.104Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2751,11 +2751,91 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-06T20:31:45.405Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "5haln2",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389483228_t47hwz",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "r2dxa9",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "10qs4",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math2_1775390862811_mqh9em",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dgs28h",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "iw1p29",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389456492_ymvt4n",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389510264_yon1on",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "4znomq",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "dgs28h"
+          ],
+          "flagReports": [
+            {
+              "poolId": "dgs28h",
+              "playerName": "מלמד",
+              "reason": "other",
+              "comment": "אני חושב שאתה שחקן שמרן ואגרסיבי, לא פסיבי",
+              "date": "2026-04-06T20:29:01.726Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 39,
-      "totalCorrect": 31,
-      "accuracy": 79.48717948717949
+      "totalQuestions": 48,
+      "totalCorrect": 37,
+      "accuracy": 77.08333333333334
     },
     {
       "playerName": "דן מאן",
