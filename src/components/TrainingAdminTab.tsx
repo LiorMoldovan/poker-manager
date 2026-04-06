@@ -23,9 +23,10 @@ import {
   normalizeTrainingPlayers,
   GAME_CONTEXT,
   PLAYER_STYLES,
-  generatePersonalReport,
   analyzePlayerTraining,
   formatAnalysisForPrompt,
+  getPlayerGameSummary,
+  generatePlayerCoaching,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
@@ -74,7 +75,9 @@ const TrainingAdminTab = () => {
 
   // AI insight generation
   const [generatingInsight, setGeneratingInsight] = useState<string | null>(null);
+  const [generatingStep, setGeneratingStep] = useState<string | null>(null);
   const [insightMsg, setInsightMsg] = useState<string | null>(null);
+
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -98,43 +101,60 @@ const TrainingAdminTab = () => {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Auto-generate pending personal reports when admin opens the tab
+  // Auto-generate coaching for players who need it:
+  // 1. Players with pendingReportMilestones (crossed milestone during session)
+  // 2. Players with 100+ questions but no insights yet
+  const [autoGenRunning, setAutoGenRunning] = useState(false);
   useEffect(() => {
-    if (!answers || answers.players.length === 0) return;
+    if (!answers || answers.players.length === 0 || !insights) return;
+    if (autoGenRunning) return;
     const apiKey = getGeminiApiKey();
     if (!apiKey) return;
 
-    const pending = answers.players.filter(p =>
-      p.pendingReportMilestones && p.pendingReportMilestones.length > 0
-    );
-    if (pending.length === 0) return;
+    const needsCoaching = answers.players.filter(p => {
+      const allAnswered = p.sessions.reduce((sum, s) => sum + s.results.length, 0);
+      const hasPending = p.pendingReportMilestones && p.pendingReportMilestones.length > 0;
+      const hasInsight = !!insights.insights?.[p.playerName];
+      const eligible = allAnswered >= 100 && !hasInsight;
+      return hasPending || eligible;
+    });
+    if (needsCoaching.length === 0) return;
 
+    setAutoGenRunning(true);
     (async () => {
-      for (const player of pending) {
-        for (const milestone of player.pendingReportMilestones!) {
-          const existingReport = player.reports?.find(r => r.milestone === milestone);
-          if (existingReport) continue;
+      for (const player of needsCoaching) {
+        setInsightMsg(`⏳ מייצר תובנות אוטומטיות ל${player.playerName}...`);
+        const coachingText = await generatePlayerCoaching(player.playerName, player, answers.players);
+        if (coachingText) {
+          const currentInsights = insights || { lastUpdated: '', insights: {} };
+          currentInsights.insights[player.playerName] = {
+            generatedAt: new Date().toISOString(),
+            sessionsAtGeneration: player.sessions.length,
+            improvement: coachingText,
+          };
+          currentInsights.lastUpdated = new Date().toISOString();
+          await uploadTrainingInsights(currentInsights);
+          setInsights({ ...currentInsights });
 
-          const reportText = await generatePersonalReport(player.playerName, player, answers.players);
-          if (reportText) {
+          if (player.pendingReportMilestones && player.pendingReportMilestones.length > 0) {
             await writeTrainingAnswersWithRetry((data) => {
               const p = data.players.find(pl => pl.playerName === player.playerName);
               if (p) {
-                if (!p.reports) p.reports = [];
-                p.reports.push({ milestone, text: reportText, date: new Date().toISOString() });
-                p.pendingReportMilestones = (p.pendingReportMilestones || []).filter(m => m !== milestone);
+                p.pendingReportMilestones = [];
               }
               data.lastUpdated = new Date().toISOString();
               return data;
             });
           }
-          await new Promise(r => setTimeout(r, 3000));
+          setInsightMsg(`✅ תובנות נוצרו ל${player.playerName}`);
         }
+        await new Promise(r => setTimeout(r, 3000));
       }
+      setInsightMsg(null);
       loadAll();
-    })();
+    })().finally(() => setAutoGenRunning(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers?.players.length]);
+  }, [answers?.players.length, insights]);
 
   // ── Alerts ──
   const getAlerts = (): { text: string; color: string }[] => {
@@ -930,11 +950,13 @@ JSON בלבד, בלי markdown:`;
     if (!apiKey) return;
 
     setGeneratingInsight(player.playerName);
+    setGeneratingStep('מנתח נתונים...');
     setInsightMsg(null);
 
     const allPlayersData = answers?.players || [];
     const a = analyzePlayerTraining(player, allPlayersData);
     const dataBlock = formatAnalysisForPrompt(a, player.playerName);
+    const gameSummary = getPlayerGameSummary(player.playerName);
 
     const playerStyle = PLAYER_STYLES[player.playerName] || 'לא ידוע';
 
@@ -947,51 +969,59 @@ JSON בלבד, בלי markdown:`;
     });
     const mistakePatterns = Object.entries(wrongByCat)
       .filter(([, ids]) => ids.length >= 2)
-      .map(([cat, ids]) => `${cat}: בחר ${ids.join(',')} (${ids.length} טעויות)`)
-      .join('\n');
+      .map(([cat, ids]) => `${cat}: ${ids.length} טעויות`)
+      .join(', ');
 
     try {
-      // 1. Player-facing improvement tips (stored on GitHub, visible to player)
-      const improvementPrompt = `אתה מאמן פוקר אישי. כתוב 4-5 טיפים מעשיים לשיפור עבור ${player.playerName} בעברית פשוטה.
+      // 1. Player-facing holistic coaching (stored on GitHub, visible to player)
+      setGeneratingStep('1/3 — מייצר תובנות לשחקן...');
+      const coachingPrompt = `אתה מאמן פוקר אישי של ${player.playerName} במשחק ביתי חברתי. כתוב סקירה אישית ומעשית — הוא קורא את זה בעצמו.
+עברית בלבד.
 
+═══ נתוני אימון ═══
 ${dataBlock}
+${gameSummary ? `\n${gameSummary}` : ''}
+${playerStyle ? `\nסגנון משחק ידוע: ${playerStyle}` : ''}
 
-הנחיות:
-- דבר אל ${player.playerName} ישירות (גוף שני)
-- כל טיפ צריך להיות ספציפי לנושא שהוא חלש בו — ציין את שם הנושא
-- תן עצה מעשית (מה לעשות/לחשוב בשולחן), לא רק "תתאמן יותר"
-- אם יש מגמת שיפור — ציין אותה לעידוד
-- אם יש חולשות עקביות — הדגש שהן דורשות תשומת לב מיוחדת, עם טיפ ממוקד
-- אל תחזור על הנתונים עצמם (השחקן רואה אותם בטבלה)
-- כל טיפ בשורה חדשה עם מספר (1. 2. 3. וכו')
-- עברית בלבד`;
+═══ הנחיות ═══
+המטרה: טקסט אישי שמרגיש כמו מאמן שמכיר אותו, לא טיפים גנריים שמתאימים לכולם.
 
-      const improvResult = await callGemini(apiKey, improvementPrompt);
+מבנה:
+1. פתיחה אישית (2-3 משפטים): פנה ל${player.playerName} בשמו. ציין דירוג, מגמה, וה"סיפור" שלו.${gameSummary ? ` שלב תוצאות אמיתיות.` : ''}
+2. חוזקות (2-3 משפטים): הנושאים הטובים ביותר, למה זה עוזר בשולחן.${gameSummary ? ` קשר להצלחה אמיתית.` : ''}
+3. נקודות לשיפור (3-5 טיפים ממוספרים): שם נושא + עצה מעשית${gameSummary ? ` + קשר לתוצאות` : ''}.${a.consistentMistakeCats.length > 0 ? ` חולשות עקביות: ${a.consistentMistakeCats.join(', ')}` : ''}
+4. סיכום מעודד (1-2 משפטים).
+
+חוקים: אל תחזור על מספרים מהטבלה. כתוב כאילו מכיר אותו. הומור קל מותר. שלב נתונים טבעית. 12-18 שורות.`;
+
+      const improvResult = await callGemini(apiKey, coachingPrompt);
 
       // 2. Admin-facing exploitation analysis (localStorage only, never synced)
-      const exploitPrompt = `אתה יועץ אסטרטגי לפוקר ביתי. תפקידך לנתח את החולשות של ${player.playerName} ולתת לי (המנהל) טקטיקות ניצול קונקרטיות שאני יכול להשתמש בהן בזמן אמת בשולחן.
+      setGeneratingStep('2/3 — מייצר ניתוח ניצול...');
+      const exploitPrompt = `נתח את ${player.playerName} ותן טקטיקות ניצול לשולחן. תמציתי וישיר — רק מה שאני צריך לדעת כשאני יושב מולו.
 
+נתונים:
 ${dataBlock}
+${gameSummary ? `\n${gameSummary}` : ''}
+סגנון: ${playerStyle}
+טעויות חוזרות: ${mistakePatterns || 'אין דפוס ברור'}
 
-סגנון משחק ידוע: ${playerStyle}
+תן בפורמט הזה בדיוק:
 
-דפוסי טעויות אחרונים:
-${mistakePatterns || 'אין מספיק נתונים'}
+🎯 סיכום ב-2 משפטים: מה הסיפור שלו — איפה חלש ומה זה אומר בשולחן
 
-הנחיות:
-1. נתח את החולשות לפי קטגוריה — איפה הוא טועה בעקביות ומה זה אומר על הסגנון שלו
-2. ${a.consistentMistakeCats.length > 0 ? `חולשות עקביות: ${a.consistentMistakeCats.join(', ')} — אלה לא משתפרות, תן טקטיקות ניצול ספציפיות` : 'אין חולשות עקביות בולטות — התמקד בטעויות האחרונות'}
-3. שלב את סגנון המשחק הידוע עם ממצאי האימון: אם הוא אגרסיבי ונכשל בבלוף — מה זה אומר?
-4. תן 4-6 טקטיקות ניצול ספציפיות ומעשיות, כל אחת עם:
-   - המצב בשולחן (מתי להפעיל)
-   - הפעולה המומלצת (מה לעשות)
-   - למה זה עובד נגדו (מבוסס על הנתונים)
-5. אם יש מגמת שיפור בקטגוריה מסוימת — ציין שהחלון להשתמש בחולשה הזו מצטמצם
-- עברית בלבד, ישיר ומעשי`;
+⚡ 4-5 טקטיקות ניצול (כל אחת שורה אחת):
+מתי → מה לעשות → למה עובד
+
+${a.consistentMistakeCats.length > 0 ? `🔴 חולשות שלא משתפרות: ${a.consistentMistakeCats.join(', ')}` : ''}
+${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימון לתוצאות אמיתיות בשורה אחת` : ''}
+
+עברית, קצר, בלי הקדמות`;
 
       const exploitResult = await callGemini(apiKey, exploitPrompt);
 
-      // Save improvement to GitHub
+      // 3. Save to GitHub + localStorage
+      setGeneratingStep('3/3 — שומר...');
       const currentInsights = insights || { lastUpdated: '', insights: {} };
       currentInsights.insights[player.playerName] = {
         generatedAt: new Date().toISOString(),
@@ -1002,7 +1032,6 @@ ${mistakePatterns || 'אין מספיק נתונים'}
       await uploadTrainingInsights(currentInsights);
       setInsights({ ...currentInsights });
 
-      // Save exploitation to admin localStorage ONLY
       const exploitData: TrainingExploitationLocal = {
         generatedAt: new Date().toISOString(),
         sessionsAtGeneration: player.sessions.length,
@@ -1010,15 +1039,17 @@ ${mistakePatterns || 'אין מספיק נתונים'}
       };
       localStorage.setItem(`training_exploitation_${player.playerName}`, JSON.stringify(exploitData));
 
-      setInsightMsg(`תובנות נוצרו עבור ${player.playerName}`);
+      setInsightMsg(`✅ תובנות נוצרו עבור ${player.playerName}`);
     } catch (err) {
       setInsightMsg(`שגיאה: ${err instanceof Error ? err.message : 'unknown'}`);
     } finally {
       setGeneratingInsight(null);
+      setGeneratingStep(null);
     }
   };
 
-  const callGemini = async (apiKey: string, prompt: string): Promise<string> => {
+
+  const callGemini = async (apiKey: string, prompt: string, maxTokens = 2048): Promise<string> => {
     for (const config of API_CONFIGS) {
       const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
       const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
@@ -1029,7 +1060,7 @@ ${mistakePatterns || 'אין מספיק נתונים'}
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },
+            generationConfig: { temperature: 0.7, maxOutputTokens: maxTokens },
           }),
         });
         if (!resp.ok) continue;
@@ -1549,7 +1580,7 @@ ${mistakePatterns || 'אין מספיק נתונים'}
                       {/* Weak/Strong cats */}
                       {(() => {
                         const catData = SCENARIO_CATEGORIES.map(cat => {
-                          const results = player.sessions.flatMap(s => s.results.filter(r => r.categoryId === cat.id));
+                          const results = player.sessions.flatMap(s => s.results.filter(r => r.categoryId === cat.id && !r.nearMiss));
                           const total = results.length;
                           const correct = results.filter(r => r.correct).length;
                           return { ...cat, total, correct, accuracy: total > 0 ? (correct / total) * 100 : -1 };
@@ -1563,13 +1594,13 @@ ${mistakePatterns || 'אין מספיק נתונים'}
                             {weakest.length > 0 && (
                               <div style={{ marginBottom: '0.3rem' }}>
                                 <span style={{ color: '#ef4444', fontWeight: 600 }}>חלש: </span>
-                                {weakest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%)`).join(', ')}
+                                {weakest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%, ${c.total}ש)`).join(', ')}
                               </div>
                             )}
                             {strongest.length > 0 && (
                               <div>
                                 <span style={{ color: '#22c55e', fontWeight: 600 }}>חזק: </span>
-                                {strongest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%)`).join(', ')}
+                                {strongest.map(c => `${c.icon} ${c.name} (${c.accuracy.toFixed(0)}%, ${c.total}ש)`).join(', ')}
                               </div>
                             )}
                           </div>
@@ -1605,44 +1636,23 @@ ${mistakePatterns || 'אין מספיק נתונים'}
                         </div>
                       )}
 
-                      {/* Personal AI Reports */}
-                      {player.reports && player.reports.length > 0 && (
-                        <div style={{
-                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
-                          background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
-                        }}>
-                          <div style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: 600, marginBottom: '0.3rem' }}>
-                            📋 דוחות אישיים ({player.reports.length})
-                          </div>
-                          {player.reports.slice().reverse().map((report, ri) => (
-                            <div key={ri} style={{
-                              fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.5,
-                              marginBottom: '0.3rem', padding: '0.3rem',
-                              background: 'var(--surface)', borderRadius: '6px',
-                            }}>
-                              <div style={{ fontSize: '0.6rem', color: '#3b82f6', marginBottom: '0.15rem' }}>
-                                {report.milestone} שאלות · {new Date(report.date).toLocaleDateString('he-IL')}
-                              </div>
-                              <div style={{ whiteSpace: 'pre-wrap' }}>{report.text}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Generate insight button */}
+                      {/* Action button */}
                       <button
                         onClick={() => handleGenerateInsight(player)}
                         disabled={generatingInsight === player.playerName}
                         style={{
                           width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none',
                           background: generatingInsight === player.playerName ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                          color: 'white', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
+                          color: generatingInsight === player.playerName ? 'var(--text-muted)' : 'white',
+                          fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
                         }}
                       >
-                        {generatingInsight === player.playerName ? '⏳ מייצר...' : `✨ ${insight ? 'עדכן' : 'צור'} תובנות`}
-                        {sessionsSinceInsight > 0 && insight && (
-                          <span style={{ fontSize: '0.65rem', opacity: 0.8, marginRight: '0.3rem' }}>
-                            ({sessionsSinceInsight} אימונים חדשים)
+                        {generatingInsight === player.playerName
+                          ? `⏳ ${generatingStep || 'מייצר...'}`
+                          : `✨ ${insight ? 'עדכן' : 'צור'} תובנות אישיות`}
+                        {generatingInsight !== player.playerName && sessionsSinceInsight > 0 && insight && (
+                          <span style={{ fontSize: '0.6rem', opacity: 0.8, marginRight: '0.3rem' }}>
+                            ({sessionsSinceInsight} חדשים)
                           </span>
                         )}
                       </button>

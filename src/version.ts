@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.4';
+export const APP_VERSION = '5.11.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.5',
+    date: '2026-04-06',
+    changes: [
+      '🎯 Holistic player coaching — replaces per-milestone reports with rich AI coaching using training + real game data',
+      '📊 Real game stats in AI prompts — profit, win rate, streaks, and ranking integrated into coaching and insights',
+      '🤖 Auto-generate coaching for eligible players — triggers on admin tab open for 100+ question players',
+      '💬 Personal coach card on training hub — shareable coaching insight with stats header',
+      '📈 Improved insights — stronger/weakest categories with sample counts, 70% threshold, better tiebreaking',
+      '🔧 Milestone bundled with session upload — single atomic write instead of separate calls',
+    ]
+  },
   {
     version: '5.11.4',
     date: '2026-04-06',

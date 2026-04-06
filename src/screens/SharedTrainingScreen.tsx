@@ -15,7 +15,7 @@ import {
   normalizeTrainingPlayers,
   getPoolCounts,
 } from '../utils/pokerTraining';
-import { fetchTrainingAnswers } from '../database/githubSync';
+import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
 
 
 const SharedTrainingScreen = () => {
@@ -29,15 +29,20 @@ const SharedTrainingScreen = () => {
   const [trainingMode, setTrainingMode] = useState<'mixed' | 'true_false' | 'specific'>('mixed');
   const [leaderboard, setLeaderboard] = useState<TrainingPlayerData[]>([]);
   const [remoteProgress, setRemoteProgress] = useState<SharedTrainingProgress | null>(null);
+  const [playerInsight, setPlayerInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
+  const [sharingCard, setSharingCard] = useState<string | null>(null);
   const leaderboardRef = useRef<HTMLDivElement>(null);
+  const insightRef = useRef<HTMLDivElement>(null);
 
   const poolCounts = useMemo(() => getPoolCounts(), []);
   const localProgress = getSharedProgress(name);
   const progress = useMemo(() => {
-    if (remoteProgress && remoteProgress.totalQuestions >= localProgress.totalQuestions) return remoteProgress;
-    return localProgress;
+    if (!remoteProgress) return localProgress;
+    const remoteAll = remoteProgress.totalQuestions + (remoteProgress.totalNeutral || 0);
+    const localAll = localProgress.totalQuestions + (localProgress.totalNeutral || 0);
+    return remoteAll >= localAll ? remoteProgress : localProgress;
   }, [localProgress, remoteProgress]);
 
   const catExpert = getCategoryExpertBadges(progress);
@@ -46,19 +51,28 @@ const SharedTrainingScreen = () => {
     setLoading(true);
     try {
       await flushPendingUploads();
-      const raw = await fetchTrainingAnswers();
+      const [raw, insightsData] = await Promise.all([
+        fetchTrainingAnswers(),
+        fetchTrainingInsights(),
+      ]);
       const answersData = raw ? normalizeTrainingPlayers(raw) : null;
       if (answersData) {
         setLeaderboard(answersData.players);
         const myRemoteData = answersData.players.find(p => p.playerName === name);
-        if (myRemoteData && myRemoteData.totalQuestions > 0) {
+        if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
           const rebuilt = rebuildProgressFromRemote(myRemoteData);
           setRemoteProgress(rebuilt);
           const local = getSharedProgress(name);
-          if (rebuilt.totalQuestions > local.totalQuestions) {
+          const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
+          const localAll = local.totalQuestions + (local.totalNeutral || 0);
+          if (rebuiltAll > localAll) {
             saveSharedProgress(name, rebuilt);
           }
         }
+      }
+      // Load player-facing AI insights
+      if (insightsData?.insights?.[name]) {
+        setPlayerInsight(insightsData.insights[name].improvement);
       }
     } catch {
       // Silently fail
@@ -92,6 +106,16 @@ const SharedTrainingScreen = () => {
     finally { setIsSharing(false); }
   };
 
+  const handleShareCard = async (ref: React.RefObject<HTMLDivElement | null>, cardName: string) => {
+    if (!ref.current) return;
+    setSharingCard(cardName);
+    try {
+      const files = await captureAndSplit(ref.current, `poker-training-${cardName}`);
+      await shareFiles(files, `Poker Training ${cardName}`);
+    } catch { /* */ }
+    finally { setSharingCard(null); }
+  };
+
   const toggleCategory = (catId: string) => {
     setSelectedCategories(prev =>
       prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]
@@ -113,30 +137,48 @@ const SharedTrainingScreen = () => {
   const earnedCatBadges = catExpert.filter(b => b.earned);
   const unearnedCatBadges = catExpert.filter(b => !b.earned);
 
-  // Build insights data
+  // Build insights data — require 3+ scored answers for meaningful accuracy
   const hasProgress = progress.totalQuestions > 0;
-  const catEntries = Object.entries(progress.byCategory).filter(([, v]) => v.total >= 2);
-  const sortedByAcc = [...catEntries].sort((a, b) => (a[1].correct / a[1].total) - (b[1].correct / b[1].total));
+  const catEntries = Object.entries(progress.byCategory)
+    .filter(([catId, v]) => v.total >= 3 && SCENARIO_CATEGORIES.some(c => c.id === catId));
+
+  // Sort by accuracy ascending, tiebreak by more questions first (larger sample = more trustworthy)
+  const sortedByAcc = [...catEntries].sort((a, b) => {
+    const accA = a[1].correct / a[1].total, accB = b[1].correct / b[1].total;
+    return accA !== accB ? accA - accB : b[1].total - a[1].total;
+  });
+
+  // Best = highest accuracy, tiebreak by largest sample
   const bestCatEntry = catEntries.length > 0
-    ? [...catEntries].sort((a, b) => (b[1].correct / b[1].total) - (a[1].correct / a[1].total))[0]
+    ? [...catEntries].sort((a, b) => {
+        const accA = a[1].correct / a[1].total, accB = b[1].correct / b[1].total;
+        return accA !== accB ? accB - accA : b[1].total - a[1].total;
+      })[0]
     : null;
   const bestCat = bestCatEntry ? SCENARIO_CATEGORIES.find(c => c.id === bestCatEntry[0]) : null;
   const bestAcc = bestCatEntry ? Math.round((bestCatEntry[1].correct / bestCatEntry[1].total) * 100) : 0;
+  const bestTotal = bestCatEntry ? bestCatEntry[1].total : 0;
   const bestCatTip = bestCatEntry ? (CATEGORY_TIPS[bestCatEntry[0]] || [])[1] || (CATEGORY_TIPS[bestCatEntry[0]] || [])[0] || null : null;
 
-  // Up to 2 weak categories (below 50% accuracy) with their tips
+  // Worst = lowest accuracy, tiebreak by largest sample (most reliable weakness)
+  const worstCatEntry = sortedByAcc.find(([catId]) => catId !== bestCatEntry?.[0]);
+  const worstCat = worstCatEntry ? SCENARIO_CATEGORIES.find(c => c.id === worstCatEntry[0]) : null;
+  const worstAcc = worstCatEntry ? Math.round((worstCatEntry[1].correct / worstCatEntry[1].total) * 100) : 0;
+  const worstTotal = worstCatEntry ? worstCatEntry[1].total : 0;
+
+  // Weak categories with actionable tips (below 70%)
   const weakCats = sortedByAcc
-    .filter(([, v]) => (v.correct / v.total) < 0.5)
+    .filter(([, v]) => (v.correct / v.total) < 0.7)
     .slice(0, 2)
     .map(([catId, data]) => {
-      const cat = SCENARIO_CATEGORIES.find(c => c.id === catId);
+      const cat = SCENARIO_CATEGORIES.find(c => c.id === catId)!;
       const acc = Math.round((data.correct / data.total) * 100);
       const wrong = data.total - data.correct;
       const catTips = CATEGORY_TIPS[catId] || [];
       return { catId, cat, acc, wrong, total: data.total, tip: catTips[0] || null };
     });
 
-  const hasCatSpread = bestCat && weakCats.length > 0;
+  const hasInsights = catEntries.length >= 2;
 
   return (
     <div className="fade-in" style={{ paddingBottom: '5rem', direction: 'rtl' }}>
@@ -247,7 +289,9 @@ const SharedTrainingScreen = () => {
 
         {/* 100q report teaser */}
         {progress.totalQuestions > 0 && (() => {
-          const progressToNext = progress.totalQuestions % 100;
+          const allAnswered = progress.totalQuestions + (progress.totalNeutral || 0);
+          const nextMilestone = (Math.floor(allAnswered / 100) + 1) * 100;
+          const progressToNext = allAnswered % 100;
           const remaining = 100 - progressToNext;
           const pct = Math.round((progressToNext / 100) * 100);
           return (
@@ -256,10 +300,10 @@ const SharedTrainingScreen = () => {
                 📊 עוד {remaining} שאלות ותקבל דוח AI אישי!
               </div>
               <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                ניתוח נקודות חוזק וחולשה, טיפים מותאמים אישית ותובנות לשיפור המשחק
+                {allAnswered > 0 && <span>{allAnswered} שאלות עד עכשיו · </span>}הדוח הבא ב-{nextMilestone} שאלות
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
-                <span>{progressToNext}/100</span>
+                <span>{allAnswered}/{nextMilestone}</span>
                 <span>{pct}%</span>
               </div>
               <div style={{ height: '5px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -269,27 +313,6 @@ const SharedTrainingScreen = () => {
           );
         })()}
       </div>
-
-      {/* Personal AI report */}
-      {(() => {
-        const myData = leaderboard.find(p => p.playerName === name);
-        const reports = myData?.reports;
-        if (!reports || reports.length === 0) return null;
-        const latest = reports[reports.length - 1];
-        return (
-          <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', color: '#3b82f6' }}>
-              📋 הדוח האישי שלך ({latest.milestone} שאלות)
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-              {latest.text}
-            </div>
-            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-              {new Date(latest.date).toLocaleDateString('he-IL')}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Leaderboard — table style like Statistics */}
       <div ref={leaderboardRef} className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
@@ -384,8 +407,60 @@ const SharedTrainingScreen = () => {
         </div>
       )}
 
+      {/* Personal AI coaching — below leaderboard */}
+      {(() => {
+        if (!playerInsight) return null;
+        const myData = leaderboard.find(p => p.playerName === name);
+        const allAnswered = myData ? myData.sessions.reduce((sum, s) => sum + s.results.length, 0) : 0;
+        const scoredResults = myData ? myData.sessions.flatMap(s => s.results).filter(r => !r.nearMiss) : [];
+        const correctCount = scoredResults.filter(r => r.correct).length;
+        const wrongCount = scoredResults.filter(r => !r.correct).length;
+        const nearMissCount = myData ? myData.sessions.flatMap(s => s.results).filter(r => r.nearMiss).length : 0;
+        const accPct = scoredResults.length > 0 ? Math.round((correctCount / scoredResults.length) * 100) : 0;
+
+        return (
+          <>
+            <div ref={insightRef} className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#a855f7' }}>
+                  🎯 המאמן האישי שלך
+                </span>
+                <span style={{ display: 'flex', gap: '0.3rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                  <span>{allAnswered} שאלות</span>
+                  <span>·</span>
+                  <span style={{ color: '#22c55e' }}>✓{correctCount}</span>
+                  <span>·</span>
+                  <span style={{ color: '#f59e0b' }}>~{nearMissCount}</span>
+                  <span>·</span>
+                  <span style={{ color: '#ef4444' }}>✗{wrongCount}</span>
+                  <span>·</span>
+                  <span style={{ fontWeight: 600 }}>{accPct}%</span>
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {playerInsight}
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => handleShareCard(insightRef, 'insight')}
+                disabled={sharingCard === 'insight'}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                  fontSize: '0.75rem', padding: '0.4rem 0.8rem',
+                  background: 'var(--surface)', color: 'var(--text-muted)',
+                  border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer',
+                }}
+              >
+                {sharingCard === 'insight' ? '📸...' : '📤 שתף'}
+              </button>
+            </div>
+          </>
+        );
+      })()}
+
       {/* Player insights — below table */}
-      {hasProgress && !(hasCatSpread || weakCats.length > 0) && (
+      {hasProgress && !hasInsights && (
         <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
           <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', color: 'var(--primary)' }}>
             📋 תובנות אימון
@@ -395,14 +470,14 @@ const SharedTrainingScreen = () => {
           </div>
         </div>
       )}
-      {hasProgress && (hasCatSpread || weakCats.length > 0) && (
+      {hasProgress && hasInsights && (
         <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
           <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.5rem', color: 'var(--primary)' }}>
             📋 תובנות אימון
           </div>
 
           {/* Strength / Weakness compact headers */}
-          {hasCatSpread && (
+          {bestCat && worstCat && (
             <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
               <div style={{
                 flex: 1, padding: '0.35rem 0.5rem', borderRadius: '8px',
@@ -413,19 +488,28 @@ const SharedTrainingScreen = () => {
                   <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 700 }}>{bestAcc}%</span>
                 </div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600, marginTop: '0.1rem' }}>
-                  {bestCat!.icon} {bestCat!.name}
+                  {bestCat.icon} {bestCat.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                  {bestTotal} שאלות
                 </div>
               </div>
               <div style={{
                 flex: 1, padding: '0.35rem 0.5rem', borderRadius: '8px',
-                background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                background: worstAcc <= 50 ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
+                border: `1px solid ${worstAcc <= 50 ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)'}`,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.6rem', color: 'var(--danger)', fontWeight: 600 }}>לשפר</span>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 700 }}>{weakCats[0]?.acc ?? 0}%</span>
+                  <span style={{ fontSize: '0.6rem', color: worstAcc <= 50 ? 'var(--danger)' : '#f59e0b', fontWeight: 600 }}>
+                    {worstAcc <= 50 ? 'לשפר' : 'הכי חלש'}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: worstAcc <= 50 ? 'var(--danger)' : '#f59e0b', fontWeight: 700 }}>{worstAcc}%</span>
                 </div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600, marginTop: '0.1rem' }}>
-                  {weakCats[0]?.cat?.icon} {weakCats[0]?.cat?.name}
+                  {worstCat.icon} {worstCat.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                  {worstTotal} שאלות
                 </div>
               </div>
             </div>

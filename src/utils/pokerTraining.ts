@@ -1714,11 +1714,11 @@ const PENDING_UPLOAD_KEY = 'shared_training_pending_upload';
 const LAST_FLUSH_KEY = 'shared_training_last_flush';
 const FLUSH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes between GitHub pushes
 
-export const bufferSessionForUpload = (playerName: string, session: TrainingSession): void => {
+export const bufferSessionForUpload = (playerName: string, session: TrainingSession, pendingMilestone?: number): void => {
   try {
     const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
-    const pending: { playerName: string; session: TrainingSession }[] = raw ? JSON.parse(raw) : [];
-    pending.push({ playerName, session });
+    const pending: { playerName: string; session: TrainingSession; pendingMilestone?: number }[] = raw ? JSON.parse(raw) : [];
+    pending.push({ playerName, session, pendingMilestone });
     localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
   } catch { /* ignore */ }
 };
@@ -1727,7 +1727,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
   if (!raw) return;
 
-  let pending: { playerName: string; session: TrainingSession }[];
+  let pending: { playerName: string; session: TrainingSession; pendingMilestone?: number }[];
   try {
     pending = JSON.parse(raw);
   } catch { return; }
@@ -1745,7 +1745,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
     data = normalizeTrainingPlayers(data);
 
-    for (const { playerName, session } of pending) {
+    for (const { playerName, session, pendingMilestone } of pending) {
       const correctedName = LEGACY_NAME_CORRECTIONS[playerName] || playerName;
       let player = data.players.find(p => p.playerName === correctedName);
       if (!player) {
@@ -1758,6 +1758,14 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       const newResults = session.results.filter(r => !existingPoolIds.has(r.poolId));
       if (newResults.length > 0) {
         player.sessions.push({ ...session, results: newResults });
+      }
+
+      // Bundle pending milestone with the session upload (single atomic write)
+      if (pendingMilestone) {
+        if (!player.pendingReportMilestones) player.pendingReportMilestones = [];
+        if (!player.pendingReportMilestones.includes(pendingMilestone)) {
+          player.pendingReportMilestones.push(pendingMilestone);
+        }
       }
     }
 
@@ -1925,9 +1933,52 @@ export const formatAnalysisForPrompt = (a: PlayerAnalysis, playerName: string): 
   return lines.filter(Boolean).join('\n');
 };
 
-// ── Personal AI report (every 100 questions) ──
+// ── Real game data for AI prompts ──
 
-export const generatePersonalReport = async (
+export const getPlayerGameSummary = (playerName: string): string | null => {
+  try {
+    const allStats = getPlayerStats();
+    const players = getAllPlayers();
+    const player = players.find(p => p.name === playerName);
+    if (!player) return null;
+    const stats = allStats.find(s => s.playerId === player.id);
+    if (!stats || stats.gamesPlayed < 3) return null;
+
+    const recentGames = stats.lastGameResults.slice(0, 8);
+    const recentProfits = recentGames.map(g => {
+      const sign = g.profit >= 0 ? '+' : '';
+      return `${sign}${g.profit}`;
+    }).join(', ');
+
+    const streakText = stats.currentStreak > 0
+      ? `${stats.currentStreak} ניצחונות ברצף`
+      : stats.currentStreak < 0
+        ? `${Math.abs(stats.currentStreak)} הפסדים ברצף`
+        : 'ללא רצף';
+
+    const allStatsRanked = [...allStats].sort((a, b) => b.totalProfit - a.totalProfit);
+    const profitRank = allStatsRanked.findIndex(s => s.playerId === player.id) + 1;
+
+    const lines = [
+      `\n══ נתוני משחקים אמיתיים ══`,
+      `${stats.gamesPlayed} משחקים, רווח כולל: ${stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit}₪`,
+      `דירוג רווח: מקום ${profitRank} מ-${allStatsRanked.length}`,
+      `ניצחונות: ${stats.winCount}/${stats.gamesPlayed} (${Math.round(stats.winPercentage)}%)`,
+      `ריבאיים למשחק: ${stats.avgRebuysPerGame.toFixed(1)} (סה"כ ${stats.totalRebuys})`,
+      `ניצחון ממוצע: +${Math.round(stats.avgWin)}₪ | הפסד ממוצע: -${Math.round(stats.avgLoss)}₪`,
+      `שיא רווח: +${stats.biggestWin}₪ | שיא הפסד: ${stats.biggestLoss}₪`,
+      `רצף נוכחי: ${streakText}`,
+      recentGames.length > 0 ? `${recentGames.length} משחקים אחרונים (₪): ${recentProfits}` : '',
+    ];
+    return lines.filter(Boolean).join('\n');
+  } catch {
+    return null;
+  }
+};
+
+// ── Holistic player coaching (used by admin button + auto milestone) ──
+
+export const generatePlayerCoaching = async (
   playerName: string,
   playerData: TrainingPlayerData,
   allPlayers: TrainingPlayerData[],
@@ -1937,20 +1988,38 @@ export const generatePersonalReport = async (
 
   const a = analyzePlayerTraining(playerData, allPlayers);
   const dataBlock = formatAnalysisForPrompt(a, playerName);
-  const milestone = Math.floor(a.totalQ / 100) * 100;
+  const gameSummary = getPlayerGameSummary(playerName);
+  const playerStyle = PLAYER_STYLES[playerName] || '';
 
-  const prompt = `אתה מאמן פוקר אישי חם ומעודד. ${playerName} הגיע ל-${milestone} שאלות אימון — כתוב דוח אישי מרגש ומועיל. עברית בלבד, 8-12 משפטים.
+  const prompt = `אתה מאמן פוקר אישי של ${playerName} במשחק ביתי חברתי. כתוב סקירה אישית ומעשית — הוא קורא את זה בעצמו.
+עברית בלבד.
 
+═══ נתוני אימון ═══
 ${dataBlock}
+${gameSummary ? `\n${gameSummary}` : ''}
+${playerStyle ? `\nסגנון משחק ידוע: ${playerStyle}` : ''}
 
-הנחיות — זהו דוח ש${playerName} קורא בעצמו, אז דבר אליו ישירות (בגוף שני):
-1. פתח עם הישג — הגיע ל-${milestone} שאלות, ציין את המצב הנוכחי ביחס לקבוצה
-2. אם יש מגמת שיפור/ירידה — ציין אותה בפירוש עם הנתונים
-3. ציין בשם את 1-2 הנושאים החזקים ביותר ואת 1-2 החלשים ביותר
-4. אם יש חולשות עקביות — הדגש שהן דורשות תשומת לב מיוחדת
-5. תן 2-3 טיפים מעשיים וספציפיים לנושאים החלשים (מה לעשות, לא רק "תתאמן יותר")${a.sinceLastReport ? '\n6. השווה לדוח הקודם — האם יש שיפור? ב-' + a.sinceLastReport.total + ' השאלות מאז הדוח הקודם הדיוק היה ' + a.sinceLastReport.acc + '%' : ''}
-- סיים בנימה חיובית עם יעד ל-100 השאלות הבאות
-- טקסט רציף, בלי כותרות או פורמט מיוחד. הומור קל מותר`;
+═══ הנחיות ═══
+המטרה: טקסט אישי שמרגיש כמו מאמן שמכיר אותו, לא טיפים גנריים.
+
+מבנה:
+1. פתיחה אישית (2-3 משפטים): פנה ל${playerName} בשמו. ציין דירוג בקבוצה, מגמה, וה"סיפור" שלו.${gameSummary ? ` שלב תוצאות אמיתיות: אם מרוויח — ציין שזה בא לידי ביטוי. אם מפסיד — חבר לחולשות.` : ''}
+
+2. חוזקות (2-3 משפטים): הנושאים הטובים ביותר, למה זה עוזר בשולחן.${gameSummary ? ` אם החוזק מסביר הצלחה במשחקים — ציין.` : ''}
+
+3. נקודות לשיפור (3-5 טיפים ממוספרים): כל טיפ חייב לכלול:
+   - שם הנושא הספציפי
+   - עצה מעשית (מה לעשות בשולחן)${gameSummary ? `\n   - קשר לתוצאות אמיתיות אם רלוונטי` : ''}
+   ${a.consistentMistakeCats.length > 0 ? `חולשות עקביות: ${a.consistentMistakeCats.join(', ')} — הדגש שדורשות תשומת לב` : ''}
+
+4. סיכום (1-2 משפטים): יעד קדימה, נימה מעודדת.
+
+חוקים:
+- אל תחזור על מספרים שהוא רואה בטבלה
+- כתוב כאילו אתה מכיר אותו אישית
+- שלב הומור קל אם מתאים
+- אל תציג נתונים כרשימה — שלב טבעית
+- 12-18 שורות`;
 
   try {
     const config = API_CONFIGS[0];
@@ -1961,7 +2030,7 @@ ${dataBlock}
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
+        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
       }),
     });
     if (!resp.ok) return null;

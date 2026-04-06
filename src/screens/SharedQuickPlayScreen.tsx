@@ -24,10 +24,10 @@ import {
   TRAINING_BADGES,
   WRONG_ANSWER_REACTIONS,
   CORRECT_ANSWER_REACTIONS,
-  generatePersonalReport,
+  generatePlayerCoaching,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
-import { fetchTrainingAnswers, writeTrainingAnswersWithRetry } from '../database/githubSync';
+import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/githubSync';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -282,55 +282,48 @@ const SharedQuickPlayScreen = () => {
       flaggedPoolIds: Array.from(finalFlagged),
       flagReports: finalReports.length > 0 ? finalReports : undefined,
     };
-    bufferSessionForUpload(name, session);
+    // Determine milestone BEFORE uploading, so we can bundle the pending flag with the session upload
+    const currentTotal = progress.totalQuestions + (progress.totalNeutral || 0);
+    const sessionTotal = finalResults.length;
+    const prevTotal = currentTotal - sessionTotal;
+    const currentMilestone = Math.floor(currentTotal / 100);
+    const prevMilestone = Math.floor(prevTotal / 100);
+    const crossedMilestone = currentMilestone > prevMilestone && currentMilestone > 0
+      ? currentMilestone * 100
+      : null;
+
+    bufferSessionForUpload(name, session, crossedMilestone || undefined);
     flushPendingUploads();
 
     if (!resultsToUse) {
       setShowSummary(true);
 
-      const currentTotal = progress.totalQuestions;
-      const prevTotal = currentTotal - scoredTotal;
-      const currentMilestone = Math.floor(currentTotal / 100);
-      const prevMilestone = Math.floor(prevTotal / 100);
-      if (currentMilestone > prevMilestone && currentMilestone > 0) {
-        const milestoneNum = currentMilestone * 100;
+      if (crossedMilestone) {
+        const milestoneNum = crossedMilestone;
         const hasApiKey = !!getGeminiApiKey();
 
         if (hasApiKey) {
           setGeneratingReport(true);
-          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! מייצר דוח אישי...`);
+          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! מייצר תובנות אישיות...`);
           fetchTrainingAnswers().then(async (answersData) => {
             if (!answersData) return;
             const playerData = answersData.players.find(p => p.playerName === name);
             if (!playerData) return;
-            const reportText = await generatePersonalReport(name, playerData, answersData.players);
-            if (reportText) {
-              await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
-                const p = data.players.find(pl => pl.playerName === name);
-                if (p) {
-                  if (!p.reports) p.reports = [];
-                  p.reports.push({ milestone: milestoneNum, text: reportText, date: new Date().toISOString() });
-                  p.pendingReportMilestones = (p.pendingReportMilestones || []).filter(m => m !== milestoneNum);
-                }
-                data.lastUpdated = new Date().toISOString();
-                return data;
-              });
-              setReportMilestoneMsg(reportText);
+            const coachingText = await generatePlayerCoaching(name, playerData, answersData.players);
+            if (coachingText) {
+              const currentInsights = await fetchTrainingInsights() || { lastUpdated: '', insights: {} };
+              currentInsights.insights[name] = {
+                generatedAt: new Date().toISOString(),
+                sessionsAtGeneration: playerData.sessions.length,
+                improvement: coachingText,
+              };
+              currentInsights.lastUpdated = new Date().toISOString();
+              await uploadTrainingInsights(currentInsights);
+              setReportMilestoneMsg(coachingText);
             }
-          }).catch(() => {}).finally(() => setGeneratingReport(false));
+          }).catch((err) => console.warn('Milestone coaching generation failed:', err)).finally(() => setGeneratingReport(false));
         } else {
-          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! הדוח האישי שלך ייוצר בקרוב`);
-          writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
-            const p = data.players.find(pl => pl.playerName === name);
-            if (p) {
-              if (!p.pendingReportMilestones) p.pendingReportMilestones = [];
-              if (!p.pendingReportMilestones.includes(milestoneNum)) {
-                p.pendingReportMilestones.push(milestoneNum);
-              }
-            }
-            data.lastUpdated = new Date().toISOString();
-            return data;
-          }).catch(() => {});
+          setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! התובנות שלך ייוצרו בקרוב`);
         }
       }
     }
@@ -574,7 +567,7 @@ const SharedQuickPlayScreen = () => {
             const worstCat = worst ? SCENARIO_CATEGORIES.find(c => c.id === worst[0]) : null;
             const bestPct = best ? Math.round((best[1].correct / best[1].total) * 100) : 0;
             const worstPct = worst ? Math.round((worst[1].correct / worst[1].total) * 100) : 0;
-            const totalSoFar = progress.totalQuestions;
+            const totalSoFar = progress.totalQuestions + (progress.totalNeutral || 0);
             const nextMilestone = (Math.floor(totalSoFar / 100) + 1) * 100;
             const remaining = nextMilestone - totalSoFar;
             return (
