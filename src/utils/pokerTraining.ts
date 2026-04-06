@@ -1309,6 +1309,19 @@ export const TRAINING_BADGES: TrainingBadge[] = [
   },
 ];
 
+export const getPoolCounts = (): { total: number; byCategory: Record<string, number> } => {
+  try {
+    const raw = localStorage.getItem('training_pool_cached');
+    if (!raw) return { total: 0, byCategory: {} };
+    const pool = JSON.parse(raw);
+    const byCategory: Record<string, number> = {};
+    (pool.scenarios || []).forEach((s: { categoryId: string }) => {
+      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
+    });
+    return { total: pool.scenarios?.length || 0, byCategory };
+  } catch { return { total: 0, byCategory: {} }; }
+};
+
 export const getCategoryExpertBadges = (progress: SharedTrainingProgress): { id: string; name: string; icon: string; earned: boolean }[] => {
   return SCENARIO_CATEGORIES.map(cat => {
     const data = progress.byCategory[cat.id];

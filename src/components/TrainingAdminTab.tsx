@@ -231,7 +231,7 @@ const TrainingAdminTab = () => {
   const clearPoolDraft = () => localStorage.removeItem(POOL_DRAFT_KEY);
 
   // ── Smart generate: fill incomplete → expand depleted → upload ──
-  const handleSmartGenerate = async () => {
+  const handleSmartGenerate = async (forceExpand = false) => {
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
       setGenMessage('חסר מפתח Gemini API');
@@ -269,9 +269,15 @@ const TrainingAdminTab = () => {
       return [...seenByPlayer.values()].some(seen => catPool.filter(s => !seen.has(s.poolId)).length < 5);
     });
 
+    // Pass 3: force expand — add 10 questions to each category (when admin explicitly requests more)
+    const forceExpandCats = forceExpand && incompleteCats.length === 0 && depletedCats.length === 0
+      ? SCENARIO_CATEGORIES
+      : [];
+
     const workItems = [
       ...incompleteCats.map(cat => ({ cat, needed: 30 - (existingPerCat[cat.id] || 0), phase: 'fill' as const })),
       ...depletedCats.map(cat => ({ cat, needed: 15, phase: 'expand' as const })),
+      ...forceExpandCats.map(cat => ({ cat, needed: 10, phase: 'expand' as const })),
     ];
 
     if (workItems.length === 0) {
@@ -371,8 +377,11 @@ const TrainingAdminTab = () => {
         `סיום! ${totalGenerated} שאלות חדשות` +
         (totalFailed > 0 ? ` · ${totalFailed} נכשלו` : '') +
         ` · סה"כ ${allScenarios.length} שאלות · ${elapsedMin} דקות` +
-        failDetail
+        failDetail +
+        ` · מתחיל סריקת איכות...`
       );
+      // Auto-scan new questions after generation
+      setTimeout(() => handleReviewPool(), 2000);
     } else {
       setGenMessage(`שגיאה בהעלאה סופית: ${result.message} — הטיוטה שמורה מקומית, נסה שוב`);
     }
@@ -773,6 +782,7 @@ JSON בלבד, בלי markdown:`;
         const models = API_CONFIGS.map(c => c.model);
         let result: unknown[] | null = null;
 
+        let lastError = '';
         for (const model of models) {
           try {
             const resp = await fetch(
@@ -786,18 +796,41 @@ JSON בלבד, בלי markdown:`;
                 }),
               }
             );
-            if (!resp.ok) continue;
+            if (!resp.ok) {
+              const errBody = await resp.text().catch(() => '');
+              const errMsg = errBody.includes('RESOURCE_EXHAUSTED') ? 'חריגה ממכסת API' :
+                errBody.includes('INVALID_ARGUMENT') ? 'בקשה לא תקינה' :
+                `HTTP ${resp.status}`;
+              lastError = `${model}: ${errMsg}`;
+              setReviewLog(prev => [...prev, `⚠️ ${model}: ${errMsg} — מנסה מודל הבא...`]);
+              continue;
+            }
             const data = await resp.json();
-            let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-            result = JSON.parse(text);
+            const finishReason = data.candidates?.[0]?.finishReason;
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!text) {
+              lastError = `${model}: תשובה ריקה (${finishReason || 'no content'})`;
+              setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
+              continue;
+            }
+            const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            try {
+              result = JSON.parse(cleaned);
+            } catch (parseErr) {
+              lastError = `${model}: JSON לא תקין — ${cleaned.slice(0, 80)}...`;
+              setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
+              continue;
+            }
             break;
-          } catch { continue; }
+          } catch (fetchErr) {
+            lastError = `${model}: ${fetchErr instanceof Error ? fetchErr.message : 'network error'}`;
+            continue;
+          }
         }
 
         if (!result || !Array.isArray(result)) {
           errors++;
-          setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: שגיאת פענוח`]);
+          setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: כל המודלים נכשלו — ${lastError}`]);
           await new Promise(r => setTimeout(r, 5000));
           continue;
         }
@@ -848,10 +881,16 @@ JSON בלבד, בלי markdown:`;
             };
           }
         }
-        setReviewLog(prev => [...prev, `✓ אצווה ${b + 1}: ${result.filter((r: unknown) => (r as {status:string}).status === 'ok').length} ok, ${result.filter((r: unknown) => (r as {status:string}).status === 'fixed').length} fixed, ${result.filter((r: unknown) => (r as {status:string}).status === 'remove').length} remove`]);
+        const batchOk = result.filter((r: unknown) => (r as {status:string}).status === 'ok').length;
+        const batchFixed = result.filter((r: unknown) => (r as {status:string}).status === 'fixed').length;
+        const batchRemoved = result.filter((r: unknown) => (r as {status:string}).status === 'remove').length;
+        const batchMissing = batch.length - result.length;
+        let batchSummary = `✓ אצווה ${b + 1}: ${batchOk} תקינות, ${batchFixed} תוקנו, ${batchRemoved} הוסרו`;
+        if (batchMissing > 0) batchSummary += `, ${batchMissing} חסרות בתשובה`;
+        setReviewLog(prev => [...prev, batchSummary]);
       } catch (err) {
         errors++;
-        setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: ${err instanceof Error ? err.message : 'error'}`]);
+        setReviewLog(prev => [...prev, `❌ אצווה ${b + 1}: ${err instanceof Error ? err.message : 'שגיאה לא צפויה'}`]);
       }
 
       if (b < totalBatches - 1) await new Promise(r => setTimeout(r, 5000));
@@ -1108,7 +1147,7 @@ ${mistakePatterns || 'אין מספיק נתונים'}
               לחץ "המשך ייצור" כדי להשלים את הקטגוריות החסרות, או "שחזר והעלה" כדי להעלות מה שיש.
             </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button onClick={handleSmartGenerate} style={{
+              <button onClick={() => handleSmartGenerate()} style={{
                 flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
                 background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white',
                 fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer',
@@ -1262,16 +1301,26 @@ ${mistakePatterns || 'אין מספיק נתונים'}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {/* Smart generate button + status */}
             {poolStatus.status === 'healthy' ? (
-              <div style={{
-                padding: '0.5rem 0.75rem', borderRadius: '10px',
-                border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.06)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-              }}>
-                <span style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.8rem' }}>✅ {poolStatus.label}</span>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <div style={{
+                  flex: 1, padding: '0.5rem 0.75rem', borderRadius: '10px',
+                  border: '1px solid rgba(34,197,94,0.3)', background: 'rgba(34,197,94,0.06)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                }}>
+                  <span style={{ color: '#22c55e', fontWeight: 600, fontSize: '0.8rem' }}>✅ {poolStatus.label}</span>
+                </div>
+                <button onClick={() => handleSmartGenerate(true)} style={{
+                  padding: '0.5rem 0.75rem', borderRadius: '10px', border: 'none',
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  color: 'white', fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}>
+                  ➕ הוסף שאלות
+                </button>
               </div>
             ) : (
               <div>
-                <button onClick={handleSmartGenerate} style={{
+                <button onClick={() => handleSmartGenerate()} style={{
                   width: '100%', padding: '0.6rem', borderRadius: '10px', border: 'none',
                   background: poolStatus.status === 'empty'
                     ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
@@ -1752,6 +1801,16 @@ ${mistakePatterns || 'אין מספיק נתונים'}
                         a.verdict === 'reject' ? a.rejectText :
                         a.acceptText || a.rejectText;
                       if (!shareText) return null;
+                      const correctOpt2 = f.scenario?.options?.find(o => o.isCorrect);
+                      const reporterName = f.reports[0]?.playerName || '';
+                      const reporterComment = f.reports[0]?.comment || '';
+                      const questionContext = [
+                        f.scenario?.yourCards ? `🃏 קלפים: ${f.scenario.yourCards}` : '',
+                        f.scenario?.situation ? `📋 ${f.scenario.situation}` : '',
+                        correctOpt2 ? `✅ תשובה: ${correctOpt2.text}` : '',
+                      ].filter(Boolean).join('\n');
+                      const reportContext = reporterComment ? `\n💬 דיווחת: "${reporterComment}"` : '';
+                      const fullWhatsApp = `היי ${reporterName}! 🎯\n\nלגבי הדיווח שלך על שאלת אימון:\n\n${questionContext}${reportContext}\n\n${shareText}\n\n— Poker Manager 🃏`;
                       return (
                         <div style={{
                           marginTop: '0.3rem', paddingTop: '0.3rem',
@@ -1764,12 +1823,12 @@ ${mistakePatterns || 'אין מספיק נתונים'}
                           </div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--text)', padding: '0.3rem',
                             borderRadius: '4px', background: 'rgba(255,255,255,0.03)',
-                            lineHeight: 1.5, marginBottom: '0.3rem',
+                            lineHeight: 1.5, marginBottom: '0.3rem', whiteSpace: 'pre-line',
                           }}>
-                            {shareText}
+                            {fullWhatsApp}
                           </div>
                           <button
-                            onClick={() => shareToWhatsApp(`🎯 לגבי הדיווח שלך על שאלת אימון:\n\n${shareText}\n\n— Poker Manager 🃏`)}
+                            onClick={() => shareToWhatsApp(fullWhatsApp)}
                             style={{
                               fontSize: '0.65rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
                               background: '#25D366', color: 'white', border: 'none',

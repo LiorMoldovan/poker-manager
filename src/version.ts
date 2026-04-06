@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.2';
+export const APP_VERSION = '5.11.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.11.3',
+    date: '2026-04-06',
+    changes: [
+      '➕ Force expand pool — admin can add questions even when pool is healthy',
+      '🔍 Auto quality scan after generation completes',
+      '📊 Pool question counts shown on training mode buttons and category picker',
+      '💬 Richer WhatsApp flag responses — includes question context, reporter name, and original comment',
+      '🛡️ Robust AI review error handling — detailed per-model error logging, JSON parse recovery',
+    ]
+  },
   {
     version: '5.11.2',
     date: '2026-04-05',

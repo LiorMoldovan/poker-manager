@@ -13,6 +13,7 @@ import {
   rebuildProgressFromRemote,
   CATEGORY_TIPS,
   normalizeTrainingPlayers,
+  getPoolCounts,
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers } from '../database/githubSync';
 
@@ -32,6 +33,7 @@ const SharedTrainingScreen = () => {
   const [isSharing, setIsSharing] = useState(false);
   const leaderboardRef = useRef<HTMLDivElement>(null);
 
+  const poolCounts = useMemo(() => getPoolCounts(), []);
   const localProgress = getSharedProgress(name);
   const progress = useMemo(() => {
     if (remoteProgress && remoteProgress.totalQuestions >= localProgress.totalQuestions) return remoteProgress;
@@ -177,17 +179,17 @@ const SharedTrainingScreen = () => {
         </div>
         <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.6rem' }}>
           {([
-            ['mixed', '🎲 מעורב'],
-            ['true_false', '🔢 סיכויים וחישובים'],
-            ['specific', '📂 נושא ספציפי'],
-          ] as [typeof trainingMode, string][]).map(([mode, label]) => (
+            ['mixed', '🎲 מעורב', poolCounts.total],
+            ['true_false', '🔢 סיכויים וחישובים', (poolCounts.byCategory['odds_math'] || 0) + (poolCounts.byCategory['true_false'] || 0)],
+            ['specific', '📂 נושא ספציפי', 0],
+          ] as [typeof trainingMode, string, number][]).map(([mode, label, count]) => (
             <button
               key={mode}
               onClick={() => { setTrainingMode(mode); if (mode === 'specific') { setShowCategoryPicker(true); } else { setSelectedCategories([]); setShowCategoryPicker(false); } }}
               className={`btn btn-sm ${trainingMode === mode ? 'btn-primary' : 'btn-secondary'}`}
               style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem' }}
             >
-              {label}
+              {label}{count > 0 ? ` (${count})` : ''}
             </button>
           ))}
         </div>
@@ -212,6 +214,7 @@ const SharedTrainingScreen = () => {
               }}>
                 {SCENARIO_CATEGORIES.map(cat => {
                   const isSelected = selectedCategories.includes(cat.id);
+                  const catCount = poolCounts.byCategory[cat.id] || 0;
                   return (
                     <button
                       key={cat.id}
@@ -219,7 +222,7 @@ const SharedTrainingScreen = () => {
                       className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
                       style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
                     >
-                      {cat.icon} {cat.name}
+                      {cat.icon} {cat.name} ({catCount})
                     </button>
                   );
                 })}
