@@ -2431,9 +2431,13 @@
     "timestamp": "2026-04-06T07:51:22.099Z",
     "device": "iPhone / iOS 18 / Safari",
     "screenSize": "430x932",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-06T07:51:22.100Z",
+    "screensVisited": [
+      "New Game",
+      "Shared Training",
+      "Statistics"
+    ],
+    "sessionDuration": 16,
+    "lastActive": "2026-04-06T08:07:26.695Z",
     "fingerprint": {
       "gpu": "Apple GPU",
       "cores": 4,
