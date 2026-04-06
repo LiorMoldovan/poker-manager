@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T17:03:32.390Z",
+  "lastUpdated": "2026-04-06T17:22:11.372Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2698,11 +2698,100 @@
               "date": "2026-04-06T17:01:53.859Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-06T17:08:42.886Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "w3dfmr",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ixo6u5",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hotnmn",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "1lktke",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "34xq7z",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xzrzs8",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387399620_43uby8",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r3x7l7",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gnziy",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "v7rjet",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "34xq7z",
+            "gen_1775387399620_43uby8"
+          ],
+          "flagReports": [
+            {
+              "poolId": "34xq7z",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "כמה אנשים ביד?",
+              "date": "2026-04-06T17:05:54.331Z"
+            },
+            {
+              "poolId": "gen_1775387399620_43uby8",
+              "playerName": "מלמד",
+              "reason": "other",
+              "comment": "אם הוא מהמר קופה יש לו כנראה זוגיים בטרן",
+              "date": "2026-04-06T17:07:34.012Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 31,
-      "totalCorrect": 24,
-      "accuracy": 77.41935483870968
+      "totalQuestions": 39,
+      "totalCorrect": 31,
+      "accuracy": 79.48717948717949
     },
     {
       "playerName": "דן מאן",
