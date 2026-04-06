@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-05T21:27:21.643Z",
+  "lastUpdated": "2026-04-06T07:36:49.639Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2023,17 +2023,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "lb2v2a"
-          ],
-          "flagReports": [
-            {
-              "poolId": "lb2v2a",
-              "playerName": "אורן",
-              "reason": "unclear_question",
-              "date": "2026-04-05T17:57:59.763Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-05T19:42:26.432Z",
