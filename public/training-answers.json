@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T16:08:43.849Z",
+  "lastUpdated": "2026-04-06T17:03:32.390Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2607,11 +2607,102 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-06T17:03:31.841Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "y32qby",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "z9h8nz",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "tr3g9w",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mn1yza",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "drsh6p",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8q90ls5g6",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bofwjo",
+              "categoryId": "postflop",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "j2lj3n",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "p6ci6j",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "e3o31c8rd",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "8q90ls5g6",
+            "bofwjo"
+          ],
+          "flagReports": [
+            {
+              "poolId": "8q90ls5g6",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "הוא קולינג סטיישן, אז הוא ישווה את הרירייז שלי, וככה הקופה תהיה יותר גדולה בסוף היד.",
+              "date": "2026-04-06T17:00:28.624Z"
+            },
+            {
+              "poolId": "bofwjo",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "מה ה effective stack? אם זה 10k, מספיק לי להשוות, ועד סוף היד נגיע לאול אין",
+              "date": "2026-04-06T17:01:53.859Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 25,
-      "totalCorrect": 20,
-      "accuracy": 80
+      "totalQuestions": 31,
+      "totalCorrect": 24,
+      "accuracy": 77.41935483870968
     },
     {
       "playerName": "דן מאן",
