@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T20:31:46.104Z",
+  "lastUpdated": "2026-04-06T20:43:35.825Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2831,11 +2831,231 @@
               "date": "2026-04-06T20:29:01.726Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-06T20:36:32.851Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "gen_1775387263630_cpr307",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "sv7206",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389628167_qk3lzw",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387362406_t5bisc",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "55sowg",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "vhfy8b",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dbqv0v",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387236973_3wz2l9",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389602525_kebdv6",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "c1fe79",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389602525_kebdv6"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389602525_kebdv6",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "כבר יש לי סטרייט",
+              "date": "2026-04-06T20:36:07.566Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-06T20:40:01.569Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "math_1775389456504_dbpc8l",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "n749b5",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "liwscr",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ij54uv",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wx66m4",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rw8y6x",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fyw36m",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387263630_ritii6",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmxjsv",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ymg11d",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-06T20:43:35.496Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389510264_q6m4sz",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vcojzi",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390889928_w5or9c",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tcw2g1",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389802185_2gho6u",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "g9wa2q",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "yd5wpteyz",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qmajxm",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389545260_tgeobz",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1yeqhi",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 48,
-      "totalCorrect": 37,
-      "accuracy": 77.08333333333334
+      "totalQuestions": 73,
+      "totalCorrect": 56,
+      "accuracy": 76.71232876712328
     },
     {
       "playerName": "דן מאן",
