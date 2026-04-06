@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T14:27:43.701Z",
+  "lastUpdated": "2026-04-06T16:08:43.849Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4381,11 +4381,90 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-05T15:47:40.789Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389570598_qj38uh",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1ou8ni",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389628167_qk3lzw",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389857109_svhqox",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389602525_nmx7j9",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389456492_ymvt4n",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "57rzmc",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vepc06",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "19pvcx",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dbqv0v",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389602525_nmx7j9"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389602525_nmx7j9",
+              "playerName": "ליכטר",
+              "reason": "wrong_answer",
+              "comment": "יש לי זוג הכי גבוה בשולחן עם קיקר גבוה וסיכוי לסטרייט. אין סיכוי שאני פורש בכזה סכום",
+              "date": "2026-04-05T15:45:44.198Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 53,
-      "totalCorrect": 33,
-      "accuracy": 62.264150943396224
+      "totalQuestions": 63,
+      "totalCorrect": 40,
+      "accuracy": 63.49206349206349
     },
     {
       "playerName": "סגל",
