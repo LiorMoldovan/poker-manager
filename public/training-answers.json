@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T08:19:20.695Z",
+  "lastUpdated": "2026-04-06T08:34:07.097Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -652,11 +652,25 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-06T08:34:06.084Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 0,
+          "results": [
+            {
+              "poolId": "math_1775389456504_69glr9",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 65,
+      "totalQuestions": 66,
       "totalCorrect": 53,
-      "accuracy": 81.53846153846153
+      "accuracy": 80.3030303030303
     },
     {
       "playerName": "אייל",
