@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T07:31:13.338Z",
+  "lastUpdated": "2026-04-06T08:09:04.060Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1984,11 +1984,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-06T08:09:03.642Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "2rx4x4",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389483228_cl4p9n",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1lktke",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "odds_math_1775387023360_pssrxr",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jq2ao",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 100,
-      "totalCorrect": 78,
-      "accuracy": 78
+      "totalQuestions": 105,
+      "totalCorrect": 82,
+      "accuracy": 78.0952380952381
     },
     {
       "playerName": "מלמד",
