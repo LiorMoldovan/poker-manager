@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-06T14:11:03.801Z",
+  "lastUpdated": "2026-04-06T14:27:43.701Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3845,8 +3845,13 @@
       "totalQuestions": 107,
       "totalCorrect": 87,
       "accuracy": 81.30841121495327,
-      "pendingReportMilestones": [
-        100
+      "pendingReportMilestones": [],
+      "reports": [
+        {
+          "milestone": 100,
+          "text": "חרדון היקר, איזה ציון דרך מרגש – חצית את רף 100 השאלות עם 81% דיוק מרשימים שש",
+          "date": "2026-04-06T14:27:43.701Z"
+        }
       ]
     },
     {
