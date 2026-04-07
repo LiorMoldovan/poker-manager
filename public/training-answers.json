@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:42:39.279Z",
+  "lastUpdated": "2026-04-07T08:45:11.863Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4427,8 +4427,7 @@
             }
           ],
           "flaggedPoolIds": [
-            "math_1775388996224_9g5r6j",
-            "math_1775389483228_kcf8l2"
+            "math_1775388996224_9g5r6j"
           ],
           "flagReports": [
             {
@@ -4437,13 +4436,6 @@
               "reason": "unclear_question",
               "comment": "אם נשאר אחד איך אני חייב לפגוע פעמיים.",
               "date": "2026-04-07T05:39:22.576Z"
-            },
-            {
-              "poolId": "math_1775389483228_kcf8l2",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "נפתח אבל לא כתוב מה מפתח!",
-              "date": "2026-04-07T05:41:01.716Z"
             }
           ]
         }
