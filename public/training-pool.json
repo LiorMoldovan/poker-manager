@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-04-07T23:31:33.937Z",
-  "totalScenarios": 796,
+  "generatedAt": "2026-04-07T23:42:23.422Z",
+  "totalScenarios": 795,
   "byCategory": {
     "wet_board_top_pair": 20,
     "bluff_catching": 28,
@@ -28,7 +28,7 @@
     "value_betting": 3,
     "pot_odds": 20,
     "odds_math": 20,
-    "true_false": 193,
+    "true_false": 192,
     "math": 2
   },
   "scenarios": [
@@ -19540,38 +19540,6 @@
         }
       ],
       "poolId": "math_1775389628167_j26qzv",
-      "reviewedAt": "2026-04-05T11:47:08.167Z"
-    },
-    {
-      "id": "math_1775389628167_yqw16g",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "difficulty": "intermediate",
-      "situation": "אתה נגד ליאור על הפלופ. יש לך זוג גבוה ואתה מחפש להשתפר לסט.",
-      "yourCards": "A♠ Q♦",
-      "board": "Q♣ 5♥ 2♠",
-      "explanation_setup": "הערה: עם זוג בודד ביד, האאוטים לשיפור ל-3 מאותו סוג (סט) הם 2 קלפים.",
-      "options": [
-        {
-          "id": "A",
-          "text": "יש לי 2 אאוטים",
-          "explanation": "ישנם 2 קלפי Q שנותרו בחפיסה שיעניקו לך סט.",
-          "isCorrect": true
-        },
-        {
-          "id": "B",
-          "text": "יש לי 6 אאוטים",
-          "explanation": "6 אאוטים זה ל-overcards, לא לשיפור זוג לסט.",
-          "isCorrect": false
-        },
-        {
-          "id": "C",
-          "text": "יש לי 9 אאוטים",
-          "explanation": "9 אאוטים זה לפלאש דראו.",
-          "isCorrect": false
-        }
-      ],
-      "poolId": "math_1775389628167_yqw16g",
       "reviewedAt": "2026-04-05T11:47:08.167Z"
     },
     {
