@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T10:20:28.008Z",
+  "lastUpdated": "2026-04-07T11:35:01.130Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2370,11 +2370,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T11:35:00.650Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "tb0rl2",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r2dxa9",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389836495_xmqfk7",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ivn6eu",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "gen_1775387283098_yssij8",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 143,
-      "totalCorrect": 108,
-      "accuracy": 75.52447552447552
+      "totalQuestions": 148,
+      "totalCorrect": 113,
+      "accuracy": 76.35135135135135
     },
     {
       "playerName": "מלמד",
