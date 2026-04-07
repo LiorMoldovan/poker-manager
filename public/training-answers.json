@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T06:54:50.895Z",
+  "lastUpdated": "2026-04-07T07:04:44.643Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4366,11 +4366,101 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T07:04:44.016Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "math_1775388996224_9g5r6j",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387399620_la4k2a",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389857109_svhqox",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387418604_38efaq",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389510264_q6m4sz",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775388996224_r5w4u1",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775388907278_gh6tfc",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775388959175_pw7zbs",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389483228_t47hwz",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775388996224_9g5r6j",
+            "math_1775389483228_kcf8l2",
+            "gen_1775387399620_la4k2a"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775388996224_9g5r6j",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "אם נשאר אחד איך אני חייב לפגוע פעמיים.",
+              "date": "2026-04-07T05:39:22.576Z"
+            },
+            {
+              "poolId": "math_1775389483228_kcf8l2",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "נפתח אבל לא כתוב מה מפתח!",
+              "date": "2026-04-07T05:41:01.716Z"
+            },
+            {
+              "poolId": "gen_1775387399620_la4k2a",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "לא טוב לא נכון ולא ברור . \n7 אני ברצף אס אני טוב וגם צבע \nזה תלוי בקופה ומי השחקן.",
+              "date": "2026-04-07T05:43:07.251Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 107,
-      "totalCorrect": 87,
-      "accuracy": 81.30841121495327,
+      "totalQuestions": 115,
+      "totalCorrect": 90,
+      "accuracy": 78.26086956521739,
       "pendingReportMilestones": [],
       "reports": [
         {
