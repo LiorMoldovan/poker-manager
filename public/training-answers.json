@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T14:29:31.448Z",
+  "lastUpdated": "2026-04-07T15:08:33.990Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -815,11 +815,31 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-04T20:58:06.126Z",
+          "questionsAnswered": 2,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "6f1acb",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "i166cq",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 15,
-      "totalCorrect": 13,
-      "accuracy": 86.66666666666667
+      "totalQuestions": 17,
+      "totalCorrect": 14,
+      "accuracy": 82.35294117647058
     },
     {
       "playerName": "אורן",
