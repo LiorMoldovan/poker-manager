@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T09:55:07.647Z",
+  "lastUpdated": "2026-04-07T10:09:39.525Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3280,11 +3280,170 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T09:58:03.829Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "z6fbfv",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389570598_qj38uh",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387362406_uu3bd7",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ys7ie6",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1gfktd",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ufp5ja",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w7yv5n",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570598_37sh9r",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570598_1gggz5",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lrugv8",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T10:09:39.181Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "e6dhq4",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389857109_wyma4q",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mziwdh",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775388996224_j7is86",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570597_pr448o",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lgx3fm",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ya57gx",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6w5at9",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fxaxn3",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389570597_pr448o",
+            "math2_1775390836673_nsi666",
+            "lgx3fm"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389570597_pr448o",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "אני חושב שהסיכוי הנכון הוא 14%, כי אני צריך לשים 200 כדי לזכות ב 1400.",
+              "date": "2026-04-07T10:02:16.191Z"
+            },
+            {
+              "poolId": "math2_1775390836673_nsi666",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "יש 50 קומבינציות.",
+              "date": "2026-04-07T10:07:45.678Z"
+            },
+            {
+              "poolId": "lgx3fm",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "יש כבר 4 קלפים, אולי הגיע הריבר?",
+              "date": "2026-04-07T10:08:50.324Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 93,
-      "totalCorrect": 74,
-      "accuracy": 79.56989247311827,
+      "totalQuestions": 110,
+      "totalCorrect": 90,
+      "accuracy": 81.81818181818183,
       "pendingReportMilestones": []
     },
     {
