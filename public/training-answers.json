@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T15:46:56.835Z",
+  "lastUpdated": "2026-04-07T15:49:41.642Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3838,11 +3838,86 @@
               "date": "2026-04-07T10:20:06.277Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-07T15:49:40.874Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "gen_1775387283098_bqhd6u",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387418604_38efaq",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lpcko9",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iq2ekv",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gmsrrc",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389602525_icxphx",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "nbcfbk",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gcqgf3",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "y4dxpq",
+            "k9wniv"
+          ],
+          "flagReports": [
+            {
+              "poolId": "y4dxpq",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "מי ענה לרייז? מה זה סטרייט פתוח?",
+              "date": "2026-04-07T15:45:27.691Z"
+            },
+            {
+              "poolId": "k9wniv",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "לא הבנתי את השאלה.",
+              "date": "2026-04-07T15:48:13.244Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 129,
-      "totalCorrect": 105,
-      "accuracy": 81.3953488372093,
+      "totalQuestions": 137,
+      "totalCorrect": 113,
+      "accuracy": 82.48175182481752,
       "pendingReportMilestones": []
     },
     {
