@@ -2757,9 +2757,11 @@
     "timestamp": "2026-04-07T08:31:19.170Z",
     "device": "Windows PC / Windows 10/11 / Chrome",
     "screenSize": "1920x1080",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-07T08:31:19.171Z",
+    "screensVisited": [
+      "Shared Training"
+    ],
+    "sessionDuration": 30,
+    "lastActive": "2026-04-07T09:01:20.123Z",
     "fingerprint": {
       "gpu": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004680) Direct3D11 vs_5_0 ps_5_0, D3D11)",
       "cores": 20,
