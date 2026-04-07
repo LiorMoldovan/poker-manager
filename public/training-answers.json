@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T18:26:53.379Z",
+  "lastUpdated": "2026-04-07T18:46:16.993Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -905,16 +905,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "6mclid",
             "q378x2"
           ],
           "flagReports": [
-            {
-              "poolId": "6mclid",
-              "playerName": "אייל",
-              "reason": "wrong_answer",
-              "date": "2026-04-07T15:12:06.892Z"
-            },
             {
               "poolId": "q378x2",
               "playerName": "אייל",
