@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:45:11.863Z",
+  "lastUpdated": "2026-04-07T08:46:23.550Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4426,18 +4426,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775388996224_9g5r6j"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775388996224_9g5r6j",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "אם נשאר אחד איך אני חייב לפגוע פעמיים.",
-              "date": "2026-04-07T05:39:22.576Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 115,
