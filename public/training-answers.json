@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T15:27:41.385Z",
+  "lastUpdated": "2026-04-07T15:46:56.835Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6598,9 +6598,7 @@
       "totalQuestions": 89,
       "totalCorrect": 65,
       "accuracy": 73.03370786516854,
-      "pendingReportMilestones": [
-        100
-      ]
+      "pendingReportMilestones": []
     },
     {
       "playerName": "סגל",
