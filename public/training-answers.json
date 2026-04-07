@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:31:21.435Z",
+  "lastUpdated": "2026-04-07T08:42:39.279Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4428,8 +4428,7 @@
           ],
           "flaggedPoolIds": [
             "math_1775388996224_9g5r6j",
-            "math_1775389483228_kcf8l2",
-            "gen_1775387399620_la4k2a"
+            "math_1775389483228_kcf8l2"
           ],
           "flagReports": [
             {
@@ -4445,13 +4444,6 @@
               "reason": "unclear_question",
               "comment": "נפתח אבל לא כתוב מה מפתח!",
               "date": "2026-04-07T05:41:01.716Z"
-            },
-            {
-              "poolId": "gen_1775387399620_la4k2a",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "לא טוב לא נכון ולא ברור . \n7 אני ברצף אס אני טוב וגם צבע \nזה תלוי בקופה ומי השחקן.",
-              "date": "2026-04-07T05:43:07.251Z"
             }
           ]
         }
