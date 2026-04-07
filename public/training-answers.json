@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:55:30.887Z",
+  "lastUpdated": "2026-04-07T09:33:14.617Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5518,11 +5518,98 @@
               "date": "2026-04-07T08:21:06.798Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-07T09:33:13.864Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 10,
+          "results": [
+            {
+              "poolId": "q6dcpj",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "rl5im9",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389726798_g9qbih",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390889928_medwje",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "kdt8ml",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tw13yp",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "z9c88h",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389836495_cthhar",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387344645_erm83r",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "bqqono",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "gen_1775387344645_erm83r",
+            "bqqono"
+          ],
+          "flagReports": [
+            {
+              "poolId": "gen_1775387344645_erm83r",
+              "playerName": "ליכטר",
+              "reason": "unclear_question",
+              "comment": "נרשם שזה אחרי הטרן אבל רואים שיש 5 קלפים- אז למעשה זה רייז אחרי הריבר - שאין לי כבר אפשרויות ואני יודע שאני חלש מאוד - השאלה לא תקינה",
+              "date": "2026-04-07T09:31:23.370Z"
+            },
+            {
+              "poolId": "bqqono",
+              "playerName": "ליכטר",
+              "reason": "unclear_question",
+              "comment": "חסר מידע כדי לקבל החלטה נכונה יותר - האם משחקים רק אני מול יריב אחד או שיש עוד שחקנים  שיכולים לדבר?  מה גובה הקופה ? להיכנס ב-1,200 מול שחקן אחד - כנראה החלטה נבונה כאשר יש עוד 2 קלפים - אבל אם יש אנשים שמשחקים אחרי שאני מדבר ויכולים להקפיץ את הקופה - אני לא בטוח שאני נכנס",
+              "date": "2026-04-07T09:33:11.626Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 79,
-      "totalCorrect": 55,
-      "accuracy": 69.62025316455697,
+      "totalQuestions": 89,
+      "totalCorrect": 65,
+      "accuracy": 73.03370786516854,
       "pendingReportMilestones": [
         100
       ]
