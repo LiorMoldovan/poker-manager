@@ -2710,5 +2710,25 @@
       "canvasHash": "y7v3bq"
     },
     "playerName": "אורן"
+  },
+  {
+    "deviceId": "43baf9f3-c561-4e43-b3ab-b539555383b5",
+    "role": "member",
+    "timestamp": "2026-04-07T08:10:02.448Z",
+    "device": "Windows PC / Windows 10/11 / Chrome",
+    "screenSize": "1920x1080",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-07T08:10:02.448Z",
+    "fingerprint": {
+      "gpu": "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004680) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "cores": 20,
+      "memory": 8,
+      "touchPoints": 0,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "t85vsi"
+    },
+    "playerName": "ליכטר"
   }
 ]
