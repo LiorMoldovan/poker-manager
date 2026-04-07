@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T18:46:16.993Z",
+  "lastUpdated": "2026-04-07T23:34:03.632Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5499,7 +5499,6 @@
           "flaggedPoolIds": [
             "mxjt3i",
             "nx9y10",
-            "txee86",
             "8q1emk",
             "naafbv",
             "xdhd9s",
@@ -5521,13 +5520,6 @@
               "reason": "wrong_answer",
               "comment": "תומר כבר לא פאסיבי",
               "date": "2026-04-07T07:31:29.743Z"
-            },
-            {
-              "poolId": "txee86",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "שמרן שמרן כולם מבלפים נראה אותך בשלב הזה מקפל אס.\nגם מאוד תלוי במה היה היום. גם ממש לא ברור כמה בקופה",
-              "date": "2026-04-07T07:36:02.565Z"
             },
             {
               "poolId": "8q1emk",
