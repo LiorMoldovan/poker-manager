@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T11:35:01.130Z",
+  "lastUpdated": "2026-04-07T14:29:31.448Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5271,11 +5271,208 @@
               "date": "2026-04-07T08:05:31.746Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-07T14:29:00.208Z",
+          "questionsAnswered": 21,
+          "correctAnswers": 12,
+          "results": [
+            {
+              "poolId": "math2_1775390889928_k0jb21",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qgx1ya",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "l6idvd",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "99zdxs",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d0qs5i",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q1kp1p",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "wiops9",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vxh3we",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389836495_co2xyh",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389628167_yqw16g",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "15l9j",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ugx439",
+              "categoryId": "position_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390836678_mlm8t2",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390836678_lmgwze",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "sb9rfg",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "wm733d",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8vpr65",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389483228_zrqq2m",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4o7orp",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ldafgx",
+              "categoryId": "thin_value",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389628167_hclsv6",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kly41p",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "10qs4",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389680104_u3ersy",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8hpqj7",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389628167_yqw16g",
+            "math_1775389483228_zrqq2m",
+            "4o7orp",
+            "math_1775389628167_hclsv6"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389628167_yqw16g",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "לא הבנתי עד הסוף אולי אני הבעיה",
+              "date": "2026-04-07T09:56:50.558Z"
+            },
+            {
+              "poolId": "math_1775389483228_zrqq2m",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "נכון שלפי הסכום ודן צריך לפרוש    אבל גם ממש תלוי כמה יש לי ולו",
+              "date": "2026-04-07T14:20:50.593Z"
+            },
+            {
+              "poolId": "4o7orp",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "הימור גבוהה מידי אבל כן מהמר.",
+              "date": "2026-04-07T14:22:05.270Z"
+            },
+            {
+              "poolId": "math_1775389628167_hclsv6",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "פה למשל לא הבנתי אני אמרתי לעצמי אני יכול עוד צבע או סטרייט או נסיך נסיך ניך  או 10 10 10",
+              "date": "2026-04-07T14:27:49.288Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 148,
-      "totalCorrect": 117,
-      "accuracy": 79.05405405405406,
+      "totalQuestions": 169,
+      "totalCorrect": 129,
+      "accuracy": 76.33136094674556,
       "pendingReportMilestones": [],
       "reports": [
         {
