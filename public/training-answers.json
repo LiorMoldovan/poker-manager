@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:12:50.749Z",
+  "lastUpdated": "2026-04-07T08:17:45.500Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5064,11 +5064,80 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-07T08:17:44.293Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "7wrcfp",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "b4g80s",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389628167_3egtbx",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8hpqj7",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389628167_yqw16g",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1lp5ew",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389653327_3vzqci",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390941480_y1vxn1",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389836495_xmqfk7",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775388996224_39mab2",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 63,
-      "totalCorrect": 40,
-      "accuracy": 63.49206349206349
+      "totalQuestions": 72,
+      "totalCorrect": 48,
+      "accuracy": 66.66666666666666
     },
     {
       "playerName": "סגל",
