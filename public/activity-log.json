@@ -2845,10 +2845,11 @@
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x924",
     "screensVisited": [
-      "Shared Training"
+      "Shared Training",
+      "New Game"
     ],
-    "sessionDuration": 15,
-    "lastActive": "2026-04-07T10:10:12.880Z",
+    "sessionDuration": 351,
+    "lastActive": "2026-04-07T15:46:05.996Z",
     "fingerprint": {
       "gpu": "Mali-G715",
       "cores": 8,
