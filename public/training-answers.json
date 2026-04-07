@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:17:45.500Z",
+  "lastUpdated": "2026-04-07T08:31:21.435Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5133,11 +5133,96 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T08:24:12.010Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "hotnmn",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "vn4vpp",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "odds_math_1775387023360_mn6qxf",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387236973_n5xm73",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "pggni3",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wofxpe",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "cyrr6n",
+              "categoryId": "slow_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r5c0yg",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389456504_w2eouo",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fqy6yw",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "vn4vpp"
+          ],
+          "flagReports": [
+            {
+              "poolId": "vn4vpp",
+              "playerName": "ליכטר",
+              "reason": "wrong_answer",
+              "comment": "אורן פאסיבי - עשה צק לפני פלופ וגם צק בפלופ - הוא לא משדר חוזק. אני עם זוג A - אני מניח שאין לו משהו מעלי - אבל אני מאוד חושש גם מצבע, גם מסטרייט וגם כמובן מהסיכוי שיפלו לו זוגיים-  אז אני חושש מאוד - בשלב הזה - לדעתי נכון יותר לעשות הגדלה (2,000 זה מעל הפוט) כדי שירצה לברוח. אם הוא משווה - אני אהיה בדילמה בקלף הרביעי לפי מה שייפתח - בצ'ק אני נותן לו קלף חינם שיכול לשפר אותו וזה טעות",
+              "date": "2026-04-07T08:21:06.798Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 72,
-      "totalCorrect": 48,
-      "accuracy": 66.66666666666666
+      "totalQuestions": 79,
+      "totalCorrect": 55,
+      "accuracy": 69.62025316455697,
+      "pendingReportMilestones": [
+        100
+      ]
     },
     {
       "playerName": "סגל",
