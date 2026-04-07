@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T09:33:14.617Z",
+  "lastUpdated": "2026-04-07T09:55:07.647Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3130,11 +3130,161 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-07T04:42:18.753Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "gen_1775387344645_4ae3da",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7v5e1i",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fdxqju",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "bcw412",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hxpt4b",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389545260_p35q9v",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "gen_1775387236973_oni1lf",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389483228_7xt4vj",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "odds_math_1775387023360_w2s9b0",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8lww36",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "hxpt4b"
+          ],
+          "flagReports": [
+            {
+              "poolId": "hxpt4b",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "1. לא ברור לי אם יש עוד שחקנים אחרי? \n2. מה היה לפני הפלופ?\n3. כמה יש בקופה?",
+              "date": "2026-04-07T04:41:21.847Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-07T04:45:56.697Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "85g9aa",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vxh3we",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "nf2znt",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "afjyxr",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "naafbv",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "z05nl7",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mdbcz5",
+              "categoryId": "value_betting",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "olgmbu",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389628167_8iz01q",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q378x2",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 76,
-      "totalCorrect": 58,
-      "accuracy": 76.31578947368422,
+      "totalQuestions": 93,
+      "totalCorrect": 74,
+      "accuracy": 79.56989247311827,
       "pendingReportMilestones": []
     },
     {
