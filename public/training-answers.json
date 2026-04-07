@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T10:09:39.525Z",
+  "lastUpdated": "2026-04-07T10:20:28.008Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3439,11 +3439,178 @@
               "date": "2026-04-07T10:08:50.324Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-07T10:14:07.347Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "qgx1ya",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389653327_blhc99",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389545260_qjnnia",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389653327_3vzqci",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qxf28x",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "dfgxmu",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389726798_jz24f9",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389456504_0wrm0b",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389726798_mkmwfp",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "q1kp1p",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389456504_0wrm0b"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389456504_0wrm0b",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "היחס קופה בשביל להשוות הוא 33%, הסיכוי להשלים הוא 19%. אם אני פוגע בפלאש, לא יודע כמה אני עוד אצליח להוציא ממך.",
+              "date": "2026-04-07T10:13:31.191Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-07T10:20:27.979Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "po6rms",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "wk1qk6",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389726798_10ai0k",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "xy3l6i",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "h05xnk",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390916781_62by6n",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "327l5c",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389836495_k37wg6",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "sgqy9v",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1drqrnmu6",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389726798_10ai0k",
+            "math_1775389836495_k37wg6"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389726798_10ai0k",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "שאלה מאוד מבלבלת.",
+              "date": "2026-04-07T10:17:22.742Z"
+            },
+            {
+              "poolId": "math_1775389836495_k37wg6",
+              "playerName": "מלמד",
+              "reason": "wrong_answer",
+              "comment": "היחס קופה שלי הוא 3000/8000, שזה 37.5",
+              "date": "2026-04-07T10:20:06.277Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 110,
-      "totalCorrect": 90,
-      "accuracy": 81.81818181818183,
+      "totalQuestions": 129,
+      "totalCorrect": 105,
+      "accuracy": 81.3953488372093,
       "pendingReportMilestones": []
     },
     {
