@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-07T08:46:23.550Z",
+  "lastUpdated": "2026-04-07T08:48:33.824Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4428,12 +4428,343 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-07T08:48:33.024Z",
+          "questionsAnswered": 33,
+          "correctAnswers": 27,
+          "results": [
+            {
+              "poolId": "nf2znt",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "yzh3et",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vdllfa",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "mxjt3i",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "imlsmw",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "nx9y10",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8fdduu",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "1lktke",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "txee86",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "91tdw1",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8q1emk",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kryfym",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ymg11d",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "wk1qk6",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ou1jwe",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "naafbv",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jq2ao",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xdhd9s",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "gmxjsv",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d4vw1m",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lhz578",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2x5t53",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "1xlet3",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lpcko9",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4jiv53",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "10y5of",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "s8vrbz",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "bpa8x1",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5amf5y",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2bpm65",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "udbbo5",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "rl5im9",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "jg40nx",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tgkrzr",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "a5j1q9",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "qec0yd",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "qurueb",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "co1wob",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "3euxq6",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "h6r7ea",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "mxjt3i",
+            "nx9y10",
+            "txee86",
+            "8q1emk",
+            "naafbv",
+            "xdhd9s",
+            "gmxjsv",
+            "2bpm65",
+            "tgkrzr"
+          ],
+          "flagReports": [
+            {
+              "poolId": "mxjt3i",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "אני עם צבע רוצה כסף בקופה יש כאן טעות",
+              "date": "2026-04-07T07:30:01.566Z"
+            },
+            {
+              "poolId": "nx9y10",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "תומר כבר לא פאסיבי",
+              "date": "2026-04-07T07:31:29.743Z"
+            },
+            {
+              "poolId": "txee86",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "שמרן שמרן כולם מבלפים נראה אותך בשלב הזה מקפל אס.\nגם מאוד תלוי במה היה היום. גם ממש לא ברור כמה בקופה",
+              "date": "2026-04-07T07:36:02.565Z"
+            },
+            {
+              "poolId": "8q1emk",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "שעלה דומה עניתי הפוך וגם ציין שזה טעות.   תחליט! \nגם לא ברור מתי זה? בטח שלפני הפלופ אשלם ואקפיץ",
+              "date": "2026-04-07T07:38:26.773Z"
+            },
+            {
+              "poolId": "naafbv",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "אני ממש לא מסכים כי אני עם זוג רק המלך מעליי אני מסמן גם שיש לי מלך וגם אופציה להפחיד אנשים ולהתחזק בהמשך",
+              "date": "2026-04-07T07:49:22.322Z"
+            },
+            {
+              "poolId": "xdhd9s",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "נכון  שליכטר אגרסיבי אולי הכי אגרסיבי בשולחן ועדיין אני חזק כנראה שאשלם הכל",
+              "date": "2026-04-07T07:51:12.190Z"
+            },
+            {
+              "poolId": "gmxjsv",
+              "playerName": "חרדון",
+              "reason": "other",
+              "date": "2026-04-07T07:52:00.424Z"
+            },
+            {
+              "poolId": "2bpm65",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "לא נתת לי אופציה לאול אין",
+              "date": "2026-04-07T07:55:57.331Z"
+            },
+            {
+              "poolId": "tgkrzr",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "אם תשאל את פבל או פיליפ הם יגידו לך שהם רצים לחמש כולל יש להם אס",
+              "date": "2026-04-07T08:05:31.746Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 115,
-      "totalCorrect": 90,
-      "accuracy": 78.26086956521739,
-      "pendingReportMilestones": [],
+      "totalQuestions": 148,
+      "totalCorrect": 117,
+      "accuracy": 79.05405405405406,
+      "pendingReportMilestones": [
+        200
+      ],
       "reports": [
         {
           "milestone": 100,
