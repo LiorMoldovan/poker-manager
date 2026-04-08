@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-08T14:19:35.397Z",
+  "lastUpdated": "2026-04-08T18:36:17.755Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5994,11 +5994,90 @@
               "date": "2026-04-07T15:21:46.977Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-08T18:36:16.784Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "tnoarr",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "53ansi",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2jn7qn",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "odds_math_1775387023360_pssrxr",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "mqu8uu",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gy8u5",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fdmop5",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vepc06",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lsfcsk",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389726798_c86j1l",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389726798_c86j1l"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389726798_c86j1l",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "איך אפשר לדעת?",
+              "date": "2026-04-08T18:36:15.841Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 175,
-      "totalCorrect": 133,
-      "accuracy": 76,
+      "totalQuestions": 185,
+      "totalCorrect": 142,
+      "accuracy": 76.75675675675676,
       "pendingReportMilestones": [],
       "reports": [
         {
