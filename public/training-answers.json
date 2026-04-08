@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-08T18:36:17.755Z",
+  "lastUpdated": "2026-04-08T21:04:05.039Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -2784,11 +2784,93 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-08T14:26:34.135Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "siqdz8",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "y24bpz",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390889928_6zytmq",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "xfvpei",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389602525_kebdv6",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "2sb11t",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vvpw4h",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "8lkl8t",
+              "categoryId": "value_betting",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "azba1n",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "e6dhq4",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389602525_kebdv6"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389602525_kebdv6",
+              "playerName": "אורן",
+              "reason": "other",
+              "comment": "יש לי  כבר סטרייט",
+              "date": "2026-04-08T14:24:33.452Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 160,
-      "totalCorrect": 123,
-      "accuracy": 76.875
+      "totalQuestions": 167,
+      "totalCorrect": 126,
+      "accuracy": 75.44910179640718
     },
     {
       "playerName": "מלמד",
