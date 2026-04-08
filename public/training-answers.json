@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-08T13:41:07.179Z",
+  "lastUpdated": "2026-04-08T14:06:10.958Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1002,11 +1002,90 @@
               "date": "2026-04-07T15:21:58.588Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-08T14:06:10.217Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "math_1775389602525_vrl4sq",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389456504_173m7t",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389483228_2bh8lc",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389483228_fkir6n",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "ar5jf5",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "i31dwk",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "uehzgy",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "kdt8ml",
+              "categoryId": "pot_odds",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ab7mf5",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389545260_p35q9v",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389483228_fkir6n"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389483228_fkir6n",
+              "playerName": "אייל",
+              "reason": "wrong_answer",
+              "date": "2026-04-08T14:04:13.923Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 33,
-      "totalCorrect": 27,
-      "accuracy": 81.81818181818183
+      "totalQuestions": 42,
+      "totalCorrect": 35,
+      "accuracy": 83.33333333333334
     },
     {
       "playerName": "אורן",
