@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T11:20:05.752Z",
+  "lastUpdated": "2026-04-09T13:26:36.786Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -736,11 +736,49 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T13:26:30.049Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "math_1775389545260_qjnnia",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jq2ao",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570598_b7yggu",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ywsy3",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ivn6eu",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 74,
-      "totalCorrect": 60,
-      "accuracy": 81
+      "totalQuestions": 80,
+      "totalCorrect": 66,
+      "accuracy": 82.5
     },
     {
       "playerName": "אייל",
@@ -2897,7 +2935,7 @@
       ],
       "totalQuestions": 167,
       "totalCorrect": 126,
-      "accuracy": 75
+      "accuracy": 75.44910179640718
     },
     {
       "playerName": "מלמד",
@@ -4107,7 +4145,7 @@
       ],
       "totalQuestions": 137,
       "totalCorrect": 113,
-      "accuracy": 82,
+      "accuracy": 82.48175182481752,
       "pendingReportMilestones": []
     },
     {
@@ -5965,9 +6003,9 @@
           "flagReports": []
         }
       ],
-      "totalQuestions": 184,
-      "totalCorrect": 141,
-      "accuracy": 77,
+      "totalQuestions": 185,
+      "totalCorrect": 142,
+      "accuracy": 76.75675675675676,
       "pendingReportMilestones": [],
       "reports": [
         {
