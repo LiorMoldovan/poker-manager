@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-09T12:27:43.165Z",
+  "generatedAt": "2026-04-09T13:07:05.782Z",
   "totalScenarios": 796,
   "byCategory": {
     "wet_board_top_pair": 20,
@@ -19079,36 +19079,6 @@
       "poolId": "math_1775389545260_kidrk3",
       "reviewedAt": "2026-04-05T12:38:05.085Z",
       "boardCards": "A♥ 8♣ 4♦ 2♠"
-    },
-    {
-      "id": "math_1775389545260_qjnnia",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "difficulty": "intermediate",
-      "situation": "אנחנו בריבר (River). אורן מהמר 3,000 לתוך קופה של 5,000. יש לך 8 אאוטים.",
-      "yourCards": "K♣ Q♦",
-      "options": [
-        {
-          "id": "A",
-          "text": "צריך להשוות.",
-          "explanation": "בריבר הסיכוי לפגוע באאוטים הוא 0% (כי אין יותר קלפים). אסור להשוות.",
-          "isCorrect": false
-        },
-        {
-          "id": "B",
-          "text": "צריך לקפל.",
-          "explanation": "בריבר אין יותר 'דרואים'. אם לא פגעת עד עכשיו, היד שלך חסרת ערך.",
-          "isCorrect": true
-        },
-        {
-          "id": "C",
-          "text": "צריך להעלות כדי לייצג בלף.",
-          "explanation": "הימור של 3000 לתוך 5000 מראה כוח, העלאה ללא כלום בריבר היא הימור מסוכן מאוד.",
-          "isCorrect": false
-        }
-      ],
-      "poolId": "math_1775389545260_qjnnia",
-      "reviewedAt": "2026-04-05T11:45:45.260Z"
     },
     {
       "id": "math_1775389545260_ihb8n4",
