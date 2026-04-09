@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:00:43.989Z",
+  "lastUpdated": "2026-04-09T17:18:27.365Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -932,11 +932,71 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T17:18:26.422Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 2,
+          "results": [
+            {
+              "poolId": "math2_1775390916781_9bryj6",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ssgtpi",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "449zge",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "bk52a1",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "ssgtpi",
+            "o4q5wv",
+            "bk52a1"
+          ],
+          "flagReports": [
+            {
+              "poolId": "ssgtpi",
+              "playerName": "ליאור",
+              "reason": "wrong_answer",
+              "comment": "50 צ'יפים בשולחן שלנו זה כלום, תמיד יש סיכוי שהוא לא יעלה וגם אם יעלה התוספת זניחה אני חושב שתמיד כדאי להשוות עם יד כזאת ומקסימום לפרוש אם העלה הרבה",
+              "date": "2026-04-09T17:16:25.943Z"
+            },
+            {
+              "poolId": "o4q5wv",
+              "playerName": "ליאור",
+              "reason": "unclear_question",
+              "comment": "השאלה נראית חתוכה",
+              "date": "2026-04-09T17:17:11.373Z"
+            },
+            {
+              "poolId": "bk52a1",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "אני הייתי מעלה אבל בגלל שכתבת שמרן ההנחה שיפרוש עם זוג נמוך",
+              "date": "2026-04-09T17:18:24.916Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 101,
-      "totalCorrect": 83,
-      "accuracy": 82.17821782178217
+      "totalQuestions": 104,
+      "totalCorrect": 85,
+      "accuracy": 81.73076923076923
     },
     {
       "playerName": "אייל",
