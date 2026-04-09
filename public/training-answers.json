@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:24:16.546Z",
+  "lastUpdated": "2026-04-09T17:27:32.036Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3123,11 +3123,39 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-08T21:05:21.432Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 0,
+          "results": [
+            {
+              "poolId": "6mclid",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9b2g3i",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390889928_k0jb21",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 167,
+      "totalQuestions": 168,
       "totalCorrect": 126,
-      "accuracy": 75.44910179640718
+      "accuracy": 75
     },
     {
       "playerName": "מלמד",
