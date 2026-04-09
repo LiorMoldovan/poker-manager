@@ -3367,5 +3367,25 @@
       "canvasHash": "wtr4re"
     },
     "playerName": "חרדון"
+  },
+  {
+    "deviceId": "c846b892-cfe8-4dad-b728-f2c7fb6fc6e3",
+    "role": "member",
+    "timestamp": "2026-04-09T17:58:12.628Z",
+    "device": "Android Phone / Android 10 / Chrome",
+    "screenSize": "412x924",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-09T17:58:12.631Z",
+    "fingerprint": {
+      "gpu": "Mali-G715",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 5,
+      "language": "en-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "yp5jg6"
+    },
+    "playerName": "מלמד"
   }
 ]
