@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-08T21:04:05.039Z",
+  "lastUpdated": "2026-04-09T10:00:58.945Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -904,17 +904,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "q378x2"
-          ],
-          "flagReports": [
-            {
-              "poolId": "q378x2",
-              "playerName": "אייל",
-              "reason": "unclear_question",
-              "date": "2026-04-07T15:12:45.969Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T15:23:21.563Z",
@@ -984,24 +975,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "gen_1775387263630_cpr307",
-            "esebz4"
-          ],
-          "flagReports": [
-            {
-              "poolId": "gen_1775387263630_cpr307",
-              "playerName": "אייל",
-              "reason": "unclear_question",
-              "date": "2026-04-07T15:18:05.549Z"
-            },
-            {
-              "poolId": "esebz4",
-              "playerName": "אייל",
-              "reason": "wrong_answer",
-              "date": "2026-04-07T15:21:58.588Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-08T14:06:10.217Z",
@@ -1070,17 +1045,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389483228_fkir6n"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389483228_fkir6n",
-              "playerName": "אייל",
-              "reason": "wrong_answer",
-              "date": "2026-04-08T14:04:13.923Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 42,
@@ -2854,18 +2820,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389602525_kebdv6"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389602525_kebdv6",
-              "playerName": "אורן",
-              "reason": "other",
-              "comment": "יש לי  כבר סטרייט",
-              "date": "2026-04-08T14:24:33.452Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 167,
@@ -3354,18 +3310,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "dgs28h"
-          ],
-          "flagReports": [
-            {
-              "poolId": "dgs28h",
-              "playerName": "מלמד",
-              "reason": "other",
-              "comment": "אני חושב שאתה שחקן שמרן ואגרסיבי, לא פסיבי",
-              "date": "2026-04-06T20:29:01.726Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-06T20:36:32.851Z",
@@ -3434,18 +3380,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389602525_kebdv6"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389602525_kebdv6",
-              "playerName": "מלמד",
-              "reason": "wrong_answer",
-              "comment": "כבר יש לי סטרייט",
-              "date": "2026-04-06T20:36:07.566Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-06T20:40:01.569Z",
@@ -3694,18 +3630,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "hxpt4b"
-          ],
-          "flagReports": [
-            {
-              "poolId": "hxpt4b",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "1. לא ברור לי אם יש עוד שחקנים אחרי? \n2. מה היה לפני הפלופ?\n3. כמה יש בקופה?",
-              "date": "2026-04-07T04:41:21.847Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T04:45:56.697Z",
@@ -3907,34 +3833,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389570597_pr448o",
-            "math2_1775390836673_nsi666",
-            "lgx3fm"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389570597_pr448o",
-              "playerName": "מלמד",
-              "reason": "wrong_answer",
-              "comment": "אני חושב שהסיכוי הנכון הוא 14%, כי אני צריך לשים 200 כדי לזכות ב 1400.",
-              "date": "2026-04-07T10:02:16.191Z"
-            },
-            {
-              "poolId": "math2_1775390836673_nsi666",
-              "playerName": "מלמד",
-              "reason": "wrong_answer",
-              "comment": "יש 50 קומבינציות.",
-              "date": "2026-04-07T10:07:45.678Z"
-            },
-            {
-              "poolId": "lgx3fm",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "יש כבר 4 קלפים, אולי הגיע הריבר?",
-              "date": "2026-04-07T10:08:50.324Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T10:14:07.347Z",
@@ -4003,18 +3903,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389456504_0wrm0b"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389456504_0wrm0b",
-              "playerName": "מלמד",
-              "reason": "wrong_answer",
-              "comment": "היחס קופה בשביל להשוות הוא 33%, הסיכוי להשלים הוא 19%. אם אני פוגע בפלאש, לא יודע כמה אני עוד אצליח להוציא ממך.",
-              "date": "2026-04-07T10:13:31.191Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T10:20:27.979Z",
@@ -4082,26 +3972,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389726798_10ai0k",
-            "math_1775389836495_k37wg6"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389726798_10ai0k",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "שאלה מאוד מבלבלת.",
-              "date": "2026-04-07T10:17:22.742Z"
-            },
-            {
-              "poolId": "math_1775389836495_k37wg6",
-              "playerName": "מלמד",
-              "reason": "wrong_answer",
-              "comment": "היחס קופה שלי הוא 3000/8000, שזה 37.5",
-              "date": "2026-04-07T10:20:06.277Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T15:49:40.874Z",
@@ -4157,26 +4029,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "y4dxpq",
-            "k9wniv"
-          ],
-          "flagReports": [
-            {
-              "poolId": "y4dxpq",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "מי ענה לרייז? מה זה סטרייט פתוח?",
-              "date": "2026-04-07T15:45:27.691Z"
-            },
-            {
-              "poolId": "k9wniv",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "לא הבנתי את השאלה.",
-              "date": "2026-04-07T15:48:13.244Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 137,
@@ -5729,73 +5583,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "mxjt3i",
-            "nx9y10",
-            "8q1emk",
-            "naafbv",
-            "xdhd9s",
-            "gmxjsv",
-            "2bpm65",
-            "tgkrzr"
-          ],
-          "flagReports": [
-            {
-              "poolId": "mxjt3i",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "אני עם צבע רוצה כסף בקופה יש כאן טעות",
-              "date": "2026-04-07T07:30:01.566Z"
-            },
-            {
-              "poolId": "nx9y10",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "תומר כבר לא פאסיבי",
-              "date": "2026-04-07T07:31:29.743Z"
-            },
-            {
-              "poolId": "8q1emk",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "שעלה דומה עניתי הפוך וגם ציין שזה טעות.   תחליט! \nגם לא ברור מתי זה? בטח שלפני הפלופ אשלם ואקפיץ",
-              "date": "2026-04-07T07:38:26.773Z"
-            },
-            {
-              "poolId": "naafbv",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "אני ממש לא מסכים כי אני עם זוג רק המלך מעליי אני מסמן גם שיש לי מלך וגם אופציה להפחיד אנשים ולהתחזק בהמשך",
-              "date": "2026-04-07T07:49:22.322Z"
-            },
-            {
-              "poolId": "xdhd9s",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "נכון  שליכטר אגרסיבי אולי הכי אגרסיבי בשולחן ועדיין אני חזק כנראה שאשלם הכל",
-              "date": "2026-04-07T07:51:12.190Z"
-            },
-            {
-              "poolId": "gmxjsv",
-              "playerName": "חרדון",
-              "reason": "other",
-              "date": "2026-04-07T07:52:00.424Z"
-            },
-            {
-              "poolId": "2bpm65",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "לא נתת לי אופציה לאול אין",
-              "date": "2026-04-07T07:55:57.331Z"
-            },
-            {
-              "poolId": "tgkrzr",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "אם תשאל את פבל או פיליפ הם יגידו לך שהם רצים לחמש כולל יש להם אס",
-              "date": "2026-04-07T08:05:31.746Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T14:29:00.208Z",
@@ -5957,42 +5746,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389628167_yqw16g",
-            "math_1775389483228_zrqq2m",
-            "4o7orp",
-            "math_1775389628167_hclsv6"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389628167_yqw16g",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "לא הבנתי עד הסוף אולי אני הבעיה",
-              "date": "2026-04-07T09:56:50.558Z"
-            },
-            {
-              "poolId": "math_1775389483228_zrqq2m",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "נכון שלפי הסכום ודן צריך לפרוש    אבל גם ממש תלוי כמה יש לי ולו",
-              "date": "2026-04-07T14:20:50.593Z"
-            },
-            {
-              "poolId": "4o7orp",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "הימור גבוהה מידי אבל כן מהמר.",
-              "date": "2026-04-07T14:22:05.270Z"
-            },
-            {
-              "poolId": "math_1775389628167_hclsv6",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "פה למשל לא הבנתי אני אמרתי לעצמי אני יכול עוד צבע או סטרייט או נסיך נסיך ניך  או 10 10 10",
-              "date": "2026-04-07T14:27:49.288Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T15:27:40.873Z",
@@ -6064,18 +5819,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "ezezd2"
-          ],
-          "flagReports": [
-            {
-              "poolId": "ezezd2",
-              "playerName": "חרדון",
-              "reason": "other",
-              "comment": "נו באמת",
-              "date": "2026-04-07T15:21:46.977Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-08T18:36:16.784Z",
@@ -6143,18 +5888,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389726798_c86j1l"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389726798_c86j1l",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "איך אפשר לדעת?",
-              "date": "2026-04-08T18:36:15.841Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 185,
@@ -6904,18 +6639,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "vn4vpp"
-          ],
-          "flagReports": [
-            {
-              "poolId": "vn4vpp",
-              "playerName": "ליכטר",
-              "reason": "wrong_answer",
-              "comment": "אורן פאסיבי - עשה צק לפני פלופ וגם צק בפלופ - הוא לא משדר חוזק. אני עם זוג A - אני מניח שאין לו משהו מעלי - אבל אני מאוד חושש גם מצבע, גם מסטרייט וגם כמובן מהסיכוי שיפלו לו זוגיים-  אז אני חושש מאוד - בשלב הזה - לדעתי נכון יותר לעשות הגדלה (2,000 זה מעל הפוט) כדי שירצה לברוח. אם הוא משווה - אני אהיה בדילמה בקלף הרביעי לפי מה שייפתח - בצ'ק אני נותן לו קלף חינם שיכול לשפר אותו וזה טעות",
-              "date": "2026-04-07T08:21:06.798Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-07T09:33:13.864Z",
@@ -6983,26 +6708,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "gen_1775387344645_erm83r",
-            "bqqono"
-          ],
-          "flagReports": [
-            {
-              "poolId": "gen_1775387344645_erm83r",
-              "playerName": "ליכטר",
-              "reason": "unclear_question",
-              "comment": "נרשם שזה אחרי הטרן אבל רואים שיש 5 קלפים- אז למעשה זה רייז אחרי הריבר - שאין לי כבר אפשרויות ואני יודע שאני חלש מאוד - השאלה לא תקינה",
-              "date": "2026-04-07T09:31:23.370Z"
-            },
-            {
-              "poolId": "bqqono",
-              "playerName": "ליכטר",
-              "reason": "unclear_question",
-              "comment": "חסר מידע כדי לקבל החלטה נכונה יותר - האם משחקים רק אני מול יריב אחד או שיש עוד שחקנים  שיכולים לדבר?  מה גובה הקופה ? להיכנס ב-1,200 מול שחקן אחד - כנראה החלטה נבונה כאשר יש עוד 2 קלפים - אבל אם יש אנשים שמשחקים אחרי שאני מדבר ויכולים להקפיץ את הקופה - אני לא בטוח שאני נכנס",
-              "date": "2026-04-07T09:33:11.626Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 89,
