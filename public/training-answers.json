@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:22:49.715Z",
+  "lastUpdated": "2026-04-09T17:24:16.546Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -964,18 +964,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "ssgtpi"
-          ],
-          "flagReports": [
-            {
-              "poolId": "ssgtpi",
-              "playerName": "ליאור",
-              "reason": "wrong_answer",
-              "comment": "50 צ'יפים בשולחן שלנו זה כלום, תמיד יש סיכוי שהוא לא יעלה וגם אם יעלה התוספת זניחה אני חושב שתמיד כדאי להשוות עם יד כזאת ומקסימום לפרוש אם העלה הרבה",
-              "date": "2026-04-09T17:16:25.943Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 104,
