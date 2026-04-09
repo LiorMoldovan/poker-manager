@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-04-09T14:33:50.489Z",
-  "totalScenarios": 738,
+  "generatedAt": "2026-04-09T14:57:36.715Z",
+  "totalScenarios": 785,
   "byCategory": {
-    "wet_board_top_pair": 19,
+    "wet_board_top_pair": 30,
     "bluff_catching": 27,
     "multiway_pots": 22,
     "medium_pairs": 20,
@@ -18,10 +18,10 @@
     "blind_defense": 30,
     "stack_depth": 18,
     "position_play": 29,
-    "overbet": 19,
+    "overbet": 30,
     "set_mining": 22,
     "straight_draw": 23,
-    "missed_draw": 5,
+    "missed_draw": 30,
     "dominated_hands": 29,
     "second_pair": 20,
     "thin_value": 20,
@@ -22606,6 +22606,1416 @@
       "reviewedAt": "2026-04-06T07:40:52.125Z",
       "boardCards": "4♣ 5♦ 6♠ 7♥",
       "id": "pzvb0i5lhp"
+    },
+    {
+      "id": 1,
+      "situation": "4 שחקנים בקופה של 2,000. פאבל (אגרסיבי) מהמר 1,200. מה הפעולה?",
+      "yourCards": "A♥ K♣",
+      "boardCards": "K♥ 7♥ 6♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,200",
+          "isCorrect": true,
+          "explanation": "פאבל מהמר הרבה. יש לנו זוג הכי גבוה, אבל בגלל שיש 3 לבבות בלוח, העלאה רק תנפח את הקופה מול צבע אפשרי."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-4,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "במשחק שלנו, אם תעלה ל-4,000 ומישהו ישלם, אתה כנראה נגד צבע מוכן. עדיף לשלם ולראות מה קורה בטרן."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "מוקדם מדי לוותר על זוג הכי גבוה עם קיקר אלוף רק בגלל הימור אחד, בטח מול שחקן כמו פאבל."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "civ74r"
+    },
+    {
+      "id": 2,
+      "situation": "3 שחקנים בקופה של 3,500. אורן (פסיבי) מהמר 1,000. מה הפעולה?",
+      "yourCards": "Q♣ J♦",
+      "boardCards": "Q♥ 10♦ 9♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,000",
+          "isCorrect": true,
+          "explanation": "אורן פסיבי, אז הימור שלו מרמז על יד חזקה (אולי סטרייט/סדרה), אבל המחיר זול מדי בשביל לקפל זוג עליון."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה פה מסוכנת כי הלוח 'רטוב' מאוד. מי שישלם לך כנראה מחזיק יד שיותר טובה מזוג."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "ההימור קטן יחסית לקופה. במשחק ביתי לא מוותרים על זוג עליון כל כך מהר."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "f8z80v"
+    },
+    {
+      "id": 3,
+      "situation": "קופה של 1,800. ליכטר (אגרסיבי) מהמר 2,000. מה הפעולה?",
+      "yourCards": "K♠ 10♣",
+      "boardCards": "K♣ 9♣ 4♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "על לוח עם 3 תלתנים, כשאין לך אף תלתן ביד והיריב מהמר יותר מגודל הקופה, הזוג שלך כנראה שווה מעט מאוד."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "ליכטר אגרסיבי, אבל הימור כזה גדול על לוח של צבע בלי שיש לך מגן (תלתן) זה הימור מסוכן מדי."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-5,000",
+          "isCorrect": false,
+          "explanation": "בלוף לא יעבוד פה. במשחק שלנו מישהו תמיד יקרא לך עם כל תלתן קטן והפסדת ערימה."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "joj7hh"
+    },
+    {
+      "id": 4,
+      "situation": "5 שחקנים, קופה 2,500. הימרת 1,500 וחרדון מעלה ל-4,500. מה הפעולה?",
+      "yourCards": "A♦ Q♣",
+      "boardCards": "Q♦ J♦ 8♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 3,000",
+          "isCorrect": true,
+          "explanation": "חרדון שחקן משתולל. הוא יכול לעשות את זה עם זוג נמוך יותר או משיכה לסדרה. נשווה ונראה מה יוצא בטרן."
+        },
+        {
+          "id": "B",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "לקפל זוג הכי גבוה עם קיקר אסי מול שחקן אגרסיבי כמו חרדון זו טעות במשחק הביתי שלנו."
+        },
+        {
+          "id": "C",
+          "text": "אול-אין",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "מסוכן מדי. אם יש לו סדרה או שני זוגות, אתה בחוץ. עדיף לשלם ולשמור על אופציות פתוחות."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "bzo091"
+    },
+    {
+      "id": 5,
+      "situation": "קופה של 1,200. סגל (שמרן/פסיבי) מהמר 1,000. מה הפעולה?",
+      "yourCards": "K♥ Q♠",
+      "boardCards": "K♦ 7♣ 6♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,000",
+          "isCorrect": true,
+          "explanation": "סגל מהמר רק כשיש לו משהו, אבל זוג עליון שווה קריאה אחת כדי לראות אם הוא סתם מגן על היד שלו ממשיכה לצבע."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "explanation": "אין טעם להעלות מול סגל. אם הוא יקרא לך, כנראה שיש לו יד יותר חזקה מזוג עליון."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "למרות שסגל שמרן, לקפל זוג מלך בהימור הראשון זה קצת פחדני מדי למשחק חברתי."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "63xdo"
+    },
+    {
+      "id": 6,
+      "situation": "קופה 4,000 בטרן. פיליפ (אגרסיבי) מהמר 2,500. מה הפעולה?",
+      "yourCards": "A♣ J♦",
+      "boardCards": "J♠ 8♠ 2♥ 5♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 2,500",
+          "isCorrect": true,
+          "explanation": "פיליפ מהמר הרבה. למרות שהצבע הושלם בטרן (עלה עלה שלישי), זוג עליון עם אסי עדיין חזק מספיק לקריאה אחת."
+        },
+        {
+          "id": "B",
+          "text": "ויתור",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה מרגיש כמו צבע, אבל מול שחקן כמו פיליפ אי אפשר לוותר כל כך מהר על זוג עליון."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-7,000",
+          "isCorrect": false,
+          "explanation": "טעות גדולה. אם יש לו צבע, הוא ישמח לשלם לך. אם אין לו כלום, הוא יפרוש. אתה לא מרוויח כלום מהעלאה."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "goyd5v"
+    },
+    {
+      "id": 7,
+      "situation": "קופה 5,000. תומר (פסיבי) מהמר 1,500. יש לך סטרייט (סדרה) נמוך. מה הפעולה?",
+      "yourCards": "Q♥ 10♦",
+      "boardCards": "Q♠ J♣ 9♥ 8♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,500",
+          "isCorrect": true,
+          "explanation": "על הלוח יש 4 קלפים לסדרה. יש לנו סדרה, אבל כל מי שמחזיק 7 או 10 שותף איתנו או מנצח (אם יש לו 10-7). קריאה היא בטוחה."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-5,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "במשחק ביתי, כשמישהו מהמר לתוך לוח של סדרה, הוא בדרך כלל מחזיק קלף לסדרה. העלאה סתם תגרום לך להפסיד יותר מול סדרה גבוהה יותר."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "יש לך סדרה! גם אם היא לא הכי גבוהה, אי אפשר לקפל מול הימור קטן כזה."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "663frp"
+    },
+    {
+      "id": 8,
+      "situation": "3 שחקנים, קופה 3,000. ליאור (שמרן) מהמר 2,500. מה הפעולה?",
+      "yourCards": "A♠ K♥",
+      "boardCards": "K♦ 10♦ 4♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "ליאור שחקן סלקטיבי מאוד. הימור כזה גדול על לוח של 3 יהלומים אומר שכנראה כבר יש לו צבע מוכן."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 2,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה פה היא 'תרומה' לליאור. אין לנו אפילו יהלום אחד ביד כדי לקוות לשיפור בריבר."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-6,000",
+          "isCorrect": false,
+          "explanation": "התאבדות. ליאור לא יפרוש עם צבע, ואתה פשוט זורק צ'יפים לפח עם זוג אחד בלבד."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "yadjmp"
+    },
+    {
+      "id": 9,
+      "situation": "קופה 2,200. פאבל מהמר 1,100. הלוח עם זוג. מה הפעולה?",
+      "yourCards": "J♦ 10♣",
+      "boardCards": "J♥ 9♥ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,100",
+          "isCorrect": true,
+          "explanation": "לפאבל יכול להיות 9, אבל יכול להיות לו גם סתם זוג נמוך או משיכה לצבע. זוג עליון שווה קריאה כדי לראות לאן היד מתפתחת."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,500",
+          "isCorrect": false,
+          "explanation": "אם תעלה ופאבל יחזיר לך באול-אין, אתה בבעיה קשה. עדיף לשלם מעט ולשלוט בגודל הקופה."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "לוותר על זוג עליון רק כי יש זוג על הלוח זה פחדני מדי מול שחקן אגרסיבי כמו פאבל."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "2po111"
+    },
+    {
+      "id": 10,
+      "situation": "4 שחקנים, קופה 1,500. כולם עשו צ'ק אליך. מה הפעולה?",
+      "yourCards": "A♣ 8♦",
+      "boardCards": "8♥ 7♥ 6♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "הימור 1,000",
+          "isCorrect": true,
+          "explanation": "יש הרבה משיכות לסדרות וצבעים. אנחנו רוצים לקחת כסף ממי שיש לו יד חלשה יותר או משיכה, אבל לא להמר יותר מדי כדי לא להסתבך."
+        },
+        {
+          "id": "B",
+          "text": "צ'ק",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "צ'ק נותן להם לראות קלף בחינם ולנצח אותנו עם סדרה או צבע. חייבים לקחת ערך על הזוג שלנו."
+        },
+        {
+          "id": "C",
+          "text": "הימור 3,000",
+          "isCorrect": false,
+          "explanation": "הימור ענק על לוח כזה מסוכן יגרום רק לידיים שטובות ממך לשלם. אתה לא רוצה לנפח קופה כשכל קלף בטרן יכול להרוס לך."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "l8erka"
+    },
+    {
+      "id": 11,
+      "situation": "קופה 2,800. אייל (אגרסיבי) מהמר 1,500. מה הפעולה?",
+      "yourCards": "K♦ Q♣",
+      "boardCards": "K♠ J♦ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,500",
+          "isCorrect": true,
+          "explanation": "יש לנו זוג עליון ומשיכה לסדרה משני הצדדים. אייל יכול להמר עם פחות מזה. קריאה היא הפעולה הכי הגיונית."
+        },
+        {
+          "id": "B",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "עם זוג מלך וכל כך הרבה אופציות לשיפור, בחיים לא מתקפלים כאן, בטח לא מול אייל."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-4,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה פה רק תבודד אותך מול ידיים שכבר השלימו סדרה (כמו אס-מלכה). עדיף לראות טרן בזול."
+        }
+      ],
+      "category": "זוג עליון על לוח מסוכן",
+      "categoryId": "wet_board_top_pair",
+      "poolId": "6f8wdy"
+    },
+    {
+      "id": 1,
+      "situation": "קופה של 3,000. ליכטר מהמר 1,000 אחרי הריבר. מה הפעולה?",
+      "yourCards": "A♦ 5♦",
+      "boardCards": "K♦ 8♦ 2♣ 9♥ 4♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור (Fold)",
+          "isCorrect": true,
+          "explanation": "ליכטר שחקן אגרסיבי שמהמר הרבה, ואין לך כלום ביד. בלוף נגדו כמעט תמיד ייענה בקריאה."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר מקצועי זה בלוף קלאסי, אבל אצלנו ליכטר לא יזרוק אפילו זוג 8."
+        },
+        {
+          "id": "C",
+          "text": "קריאה 1,000",
+          "isCorrect": false,
+          "explanation": "אין לך אפילו זוג, לקרוא עם 'אייס גבוה' זה פשוט להפסיד צ'יפים."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "b4xgug"
+    },
+    {
+      "id": 2,
+      "situation": "אורן עושה צ'ק בקופה של 2,500. מה הפעולה?",
+      "yourCards": "J♥ 10♥",
+      "boardCards": "Q♣ 9♦ 2♠ 3♣ 5♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "אורן שחקן פסיבי שקורא המון. אם תהמר הוא פשוט ישלם לך עם כל זוג, אז עדיף לראות את הקלפים בחינם."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "הימור כאן מנסה לייצג מלכה, אבל אורן לא מאמין לבלופים ויקרא לך."
+        },
+        {
+          "id": "C",
+          "text": "הימור 5,000",
+          "isCorrect": false,
+          "explanation": "זה הימור ענק ויקר מדי בשביל לנסות להבריח מישהו במשחק חברתי."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "bj6y78"
+    },
+    {
+      "id": 3,
+      "situation": "4 שחקנים בקופה של 1,500. כולם עשו צ'ק בריבר. מה הפעולה?",
+      "yourCards": "Q♠ J♠",
+      "boardCards": "A♠ 7♠ 4♣ 2♥ 10♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "במולטי-ווי (קופה עם הרבה שחקנים), למישהו בטוח יש לפחות זוג 4 או 7 והוא לא יפרוש לבלוף."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "הימור קטן כזה נראה כמו ניסיון לגנוב, ואחד מהארבעה בטוח יקרא לך."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "אין צורך לוותר כשאפשר לעשות צ'ק ולראות אולי הקלפים שלך טובים בטעות."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "pvb15q"
+    },
+    {
+      "id": 4,
+      "situation": "קופה של 4,000. חרדון מהמר 3,000. מה הפעולה?",
+      "yourCards": "7♥ 6♥",
+      "boardCards": "5♦ 8♣ 2♠ K♥ J♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "חרדון מהמר חזק ובדרך כלל יש לו יד. אין טעם לנסות להשתולל מולו כשאין לך כלום."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 3,000",
+          "isCorrect": false,
+          "explanation": "זה הימור יקר מדי בשביל יד שאין בה כלום."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-8,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף ענק עשוי לעבוד על חרדון, אבל במשחק שלנו זה סיכון גדול מדי בשביל קופה קטנה."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "mj8jk8"
+    },
+    {
+      "id": 5,
+      "situation": "קופה של 3,500. פיליפ מהמר 500. מה הפעולה?",
+      "yourCards": "K♣ 10♣",
+      "boardCards": "J♣ 4♣ 2♦ 8♥ 5♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "גם אם ההימור קטן, אין לך כלום ביד. אל תשלם סתם 'כדי לראות' כשפספסת את הצבע."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה אולי זול, אבל אין לך סיכוי לנצח את היד הזאת בחשיפת הקלפים."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-2,000",
+          "isCorrect": false,
+          "explanation": "פיליפ אגרסיבי, הוא ישלם לך עם כל זוג 4 והבלוף שלך ייכשל."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "1kdqbh"
+    },
+    {
+      "id": 6,
+      "situation": "ליאור עושה צ'ק בקופה של 2,000. מה הפעולה?",
+      "yourCards": "9♣ 8♣",
+      "boardCards": "7♦ 10♥ 2♠ 4♣ Q♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "ליאור משחק רק ידיים טובות. אם הוא נכנס לקופה, כנראה יש לו לפחות זוג והוא לא יזרוק אותו."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,000",
+          "isCorrect": false,
+          "explanation": "הימור קטן לא יזיז לליאור אם יש לו משהו, וחבל על הצ'יפים."
+        },
+        {
+          "id": "C",
+          "text": "הימור 3,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "ניסיון לייצג מלכה מול שחקן סלקטיבי הוא הגיוני, אבל במשחק ביתי הם פשוט קוראים."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "szee1j"
+    },
+    {
+      "id": 7,
+      "situation": "קופה של 5,000. פאבל מהמר 2,000. מה הפעולה?",
+      "yourCards": "A♥ 3♥",
+      "boardCards": "K♥ 9♥ 4♣ 7♦ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "פאבל אגרסיבי ומהמר הרבה. אין לך כלום ביד ואין טעם לרדוף אחריו כשפספסת את הצבע."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 2,000",
+          "isCorrect": false,
+          "explanation": "קריאה עם 'אייס גבוה' מול פאבל זה מהלך אובדני, הוא תמיד מחזיק משהו כשהוא מהמר בריבר."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-6,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף גדול יכול להפחיד, אבל פאבל אוהב אקשן ויש סיכוי גבוה שהוא ישלם לך."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "83bc6"
+    },
+    {
+      "id": 8,
+      "situation": "3 שחקנים בקופה של 3,000. כולם עושים צ'ק. מה הפעולה?",
+      "yourCards": "6♠ 5♠",
+      "boardCards": "4♣ 7♦ J♥ 2♣ 9♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "במשחק שלנו, מישהו תמיד 'מתחבא' עם זוג נמוך. בלוף לתוך 3 אנשים כמעט לעולם לא עובד."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה נראה כמו 'הימור ערך' קלאסי, אבל אף אחד לא יפרוש פה לזוג 9 או נסיך."
+        },
+        {
+          "id": "C",
+          "text": "הימור 4,000",
+          "isCorrect": false,
+          "explanation": "הימור גדול מדי ביחס לקופה, סיכון מיותר כשאין לך כלום."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "e2bv3f"
+    },
+    {
+      "id": 9,
+      "situation": "קופה של 2,800. סגל מהמר 1,500. מה הפעולה?",
+      "yourCards": "Q♦ 10♦",
+      "boardCards": "J♦ 3♦ 8♣ 2♥ A♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "סגל שחקן שקט מאוד. אם הוא מהמר בריבר, יש לו לפחות את האייס. אין לך מה לחפש כאן."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,500",
+          "isCorrect": false,
+          "explanation": "אין לך יד, וסגל לא מבלף. חבל על הכסף."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-4,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "לנסות להבריח שחקן סלקטיבי כמו סגל זה הגיוני בתיאוריה, אבל הוא בטח מחזיק יד חזקה מדי בשביל לפרוש."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "ni8wiz"
+    },
+    {
+      "id": 10,
+      "situation": "קופה של 1,800. תומר עושה צ'ק. מה הפעולה?",
+      "yourCards": "8♥ 7♥",
+      "boardCards": "9♦ 6♣ 2♠ Q♥ 4♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "תומר קורא המון (Calling Station). הוא לא יזרוק שום זוג, אז אל תנסה לבלף אותו."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "הימור חצי קופה נראה טוב, אבל נגד תומר זה פשוט תרומה של צ'יפים."
+        },
+        {
+          "id": "C",
+          "text": "הימור 2,000",
+          "isCorrect": false,
+          "explanation": "הימור מעל גובה הקופה הוא מוגזם לגמרי כשיש סיכוי גבוה שיקראו לך."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "gjh41m"
+    },
+    {
+      "id": 11,
+      "situation": "קופה של 6,000. ליכטר מהמר 3,000. מה הפעולה?",
+      "yourCards": "J♣ 9♣",
+      "boardCards": "A♣ 5♣ 2♦ 10♥ 6♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "ליכטר מהמר חזק. פספסת את הצבע, ואין לך שום דרך לנצח את היד הזו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 3,000",
+          "isCorrect": false,
+          "explanation": "לקרוא 3,000 צ'יפים עם 'ג'ק גבוה' זו טעות קשה."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-9,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה בלוף הירואי, אבל ליכטר יקרא לך עם כל זוג אייס או אפילו 10."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "c4q4u0"
+    },
+    {
+      "id": 12,
+      "situation": "קופה של 2,200. שחקן מהמר 400. מה הפעולה?",
+      "yourCards": "5♣ 4♣",
+      "boardCards": "6♦ 7♥ K♠ 2♥ J♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "אל תתפתה למחיר הזול. אין לך כלום, ואפילו הימור של 400 אומר שליריב יש משהו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 400",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר אומרים לפעמים 'לשלם בשביל לראות', אבל עם יד כל כך חלשה זה בזבוז."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-1,500",
+          "isCorrect": false,
+          "explanation": "העלאה קטנה כזו רק תגרום לו לקרוא לך עם היד החלשה שלו."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "1d1wd"
+    },
+    {
+      "id": 13,
+      "situation": "5 שחקנים בקופה של 4,500. כולם עושים צ'ק. מה הפעולה?",
+      "yourCards": "A♠ 2♠",
+      "boardCards": "10♠ 8♠ 3♣ 4♥ 7♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "מול 4 יריבים, הסיכוי שכולם יפרשו לבלוף הוא אפסי. תראה את הקלפים בחינם."
+        },
+        {
+          "id": "B",
+          "text": "הימור 2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "ניסיון לגנוב קופה גדולה הוא הגיוני, אבל לא בפורום כזה רחב של שחקנים."
+        },
+        {
+          "id": "C",
+          "text": "הימור 5,000",
+          "isCorrect": false,
+          "explanation": "סיכון ענק. אם מישהו קורא לך (וזה יקרה), הפסדת חצי מהערימה על כלום."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "p0u9y7"
+    },
+    {
+      "id": 14,
+      "situation": "קופה של 3,200. אורן עושה צ'ק. מה הפעולה?",
+      "yourCards": "10♦ 9♦",
+      "boardCards": "J♥ 8♣ 3♠ 2♦ K♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "אורן אוהב לקרוא. הוא לא יפרוש עם זוג 8 או נסיך, אז חבל להמר נגדו בלי יד."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,600",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה נראה כמו הימור טוב לייצג את המלך, אבל אורן פשוט ישלם לך."
+        },
+        {
+          "id": "C",
+          "text": "הימור 4,000",
+          "isCorrect": false,
+          "explanation": "בלוף גדול מדי. אם אורן יחליט לקרוא, אתה בבעיה רצינית."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "5yv0y0"
+    },
+    {
+      "id": 15,
+      "situation": "קופה של 2,500. דן מאן מהמר 1,200. מה הפעולה?",
+      "yourCards": "K♥ Q♥",
+      "boardCards": "J♥ 5♥ 2♣ 9♠ 4♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "דן מאן שחקן סלקטיבי ופסיבי. אם הוא מהמר, יש לו יד חזקה. אל תנסה להתחכם."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,200",
+          "isCorrect": false,
+          "explanation": "אין לך אפילו זוג, לקרוא זה פשוט לזרוק צ'יפים לפח."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-3,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף מול שחקן סלקטיבי הוא מסוכן, כי כשהוא כבר נכנס לקופה, הוא לא עוזב."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "opqx5p"
+    },
+    {
+      "id": 16,
+      "situation": "קופה של 5,500. מלמד מהמר 4,000. מה הפעולה?",
+      "yourCards": "7♠ 6♠",
+      "boardCards": "8♣ 5♦ 2♥ 10♠ A♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "מלמד משחק חזק. הוא מהמר 4,000, כנראה יש לו את האייס. פספסת את הסטרייט - תמשיך הלאה."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 4,000",
+          "isCorrect": false,
+          "explanation": "זו קריאה יקרה מאוד בלי שום יד ביד."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-10,000 (All-in)",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר מקצועי זה מהלך חזק, אבל אצלנו מלמד בחיים לא יזרוק אייס."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "yi5dse"
+    },
+    {
+      "id": 17,
+      "situation": "קופה של 2,400. פאבל עושה צ'ק. מה הפעולה?",
+      "yourCards": "9♦ 7♦",
+      "boardCards": "Q♦ 8♦ 3♠ 5♥ 2♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "פאבל אגרסיבי, אולי הוא עושה 'צ'ק-רייז' (מלכודת). עדיף לראות את הקלפים בחינם."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,200",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "הימור חצי קופה עשוי להיראות כמו הימור המשך, אבל פאבל לא יפרוש."
+        },
+        {
+          "id": "C",
+          "text": "הימור 2,500",
+          "isCorrect": false,
+          "explanation": "הימור מעל גובה הקופה הוא סיכון גדול מדי כשיש לך רק 9 גבוה."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "2xupig"
+    },
+    {
+      "id": 18,
+      "situation": "קופה של 3,000. ליכטר מהמר 1,500. מה הפעולה?",
+      "yourCards": "4♥ 3♥",
+      "boardCards": "5♦ 6♠ J♣ 9♥ 10♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "ליכטר מהמר ואתה בלי יד בכלל. אין טעם לנסות להילחם על הקופה הזו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,500",
+          "isCorrect": false,
+          "explanation": "קריאה עם 4 גבוה היא טעות בכל מצב."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-4,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "אתה מייצג סטרייט, אבל ליכטר יקרא לך עם כל נסיך או עשר."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "o7hh4o"
+    },
+    {
+      "id": 19,
+      "situation": "3 שחקנים בקופה של 3,600. כולם עושים צ'ק. מה הפעולה?",
+      "yourCards": "J♠ 10♠",
+      "boardCards": "Q♠ 4♠ 2♦ 8♥ 3♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "מישהו בטוח מחזיק מלכה או זוג קטן ולא יפרוש. אל תבזבז צ'יפים על בלוף אבוד."
+        },
+        {
+          "id": "B",
+          "text": "הימור 2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר נגד שחקנים טובים זה הימור טוב, אצלנו זה פשוט יגרור קריאה."
+        },
+        {
+          "id": "C",
+          "text": "הימור 4,000",
+          "isCorrect": false,
+          "explanation": "הימור ענק שרק יסבך אותך אם מישהו יחליט לקרוא (והם אוהבים לקרוא)."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "y8puwr"
+    },
+    {
+      "id": 20,
+      "situation": "קופה של 2,800. פיליפ מהמר 1,000. מה הפעולה?",
+      "yourCards": "10♣ 9♣",
+      "boardCards": "Q♥ J♦ 4♠ 5♣ 2♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "פיליפ אגרסיבי. הוא מהמר, ואתה פספסת את הסטרייט. אין מה לעשות פה."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,000",
+          "isCorrect": false,
+          "explanation": "אין לך יד, קריאה כאן היא פשוט הפסד בטוח."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף שיכול לעבוד בתיאוריה, אבל פיליפ יקרא לך עם כל מלכה או נסיך."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "i9758r"
+    },
+    {
+      "id": 21,
+      "situation": "קופה של 2,000. סגל עושה צ'ק. מה הפעולה?",
+      "yourCards": "A♣ 4♣",
+      "boardCards": "K♣ 7♣ 2♦ J♠ 9♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "סגל שחקן שקט. אולי האייס שלך ינצח בצ'ק, אבל הימור בטוח יגרור קריאה אם יש לו משהו."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "ניסיון לגנוב את הקופה, אבל נגד שחקן פסיבי זה בדרך כלל לא עובד."
+        },
+        {
+          "id": "C",
+          "text": "הימור 2,500",
+          "isCorrect": false,
+          "explanation": "אין טעם להמר יותר מגובה הקופה כשאתה על בלוף מוחלט."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "acseyr"
+    },
+    {
+      "id": 22,
+      "situation": "קופה של 7,000. פאבל מהמר 5,000. מה הפעולה?",
+      "yourCards": "8♦ 7♦",
+      "boardCards": "9♠ 6♥ 2♣ K♦ J♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "פאבל מהמר ענק. פספסת את הסטרייט, חבל להפסיד עוד 5,000 צ'יפים על יד שאין בה כלום."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 5,000",
+          "isCorrect": false,
+          "explanation": "קריאה כזו היא התאבדות צ'יפים."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-12,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף ענק שעלול לעבוד, אבל פאבל אגרסיבי מדי בשביל לפרוש להימור כזה."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "y1v06m"
+    },
+    {
+      "id": 23,
+      "situation": "קופה של 3,000. ליאור מהמר 1,200. מה הפעולה?",
+      "yourCards": "Q♥ J♥",
+      "boardCards": "A♥ 9♥ 5♣ 3♦ 2♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "ליאור שחקן סלקטיבי. אם הוא מהמר בריבר כשיש אייס על הלוח, כנראה שיש לו אותו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,200",
+          "isCorrect": false,
+          "explanation": "לקרוא לליאור בלי יד זה רעיון רע, הוא בדרך כלל לא מבלף."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-4,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף נגד שחקן סלקטיבי הוא הגיוני, אבל ליאור לא יזרוק אייס בחיים."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "wfv4n7"
+    },
+    {
+      "id": 24,
+      "situation": "4 שחקנים בקופה של 2,000. כולם עושים צ'ק. מה הפעולה?",
+      "yourCards": "5♠ 4♠",
+      "boardCards": "6♥ 7♣ Q♦ 9♥ 2♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "צ'ק",
+          "isCorrect": true,
+          "explanation": "במצב של 4 שחקנים, תמיד יש מישהו שיקרא לך 'רק כדי לראות'. אל תבלף."
+        },
+        {
+          "id": "B",
+          "text": "הימור 1,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה נראה כמו ניסיון גניבה קטן, אבל מישהו עם זוג 7 או 9 יקרא לך בקלות."
+        },
+        {
+          "id": "C",
+          "text": "הימור 3,000",
+          "isCorrect": false,
+          "explanation": "סיכון גדול מדי בשביל קופה קטנה."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "vlx1e3"
+    },
+    {
+      "id": 25,
+      "situation": "קופה של 2,500. אורן מהמר 800. מה הפעולה?",
+      "yourCards": "K♦ 9♦",
+      "boardCards": "J♦ 6♦ 2♠ 4♥ 7♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "אורן פסיבי, הוא מהמר רק כשיש לו משהו. פספסת את הצבע, אז פשוט תזרוק."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 800",
+          "isCorrect": false,
+          "explanation": "אין לך יד, גם 800 זה יותר מדי לשלם על הפסד בטוח."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-2,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה עשויה להפחיד אותו, אבל אורן הוא 'תחנת קריאה' ולא יזרוק זוג נסיך."
+        }
+      ],
+      "category": "פספסת את הקלף",
+      "categoryId": "missed_draw",
+      "poolId": "9nz6tj"
+    },
+    {
+      "id": 1,
+      "situation": "הקופה 4,000 בריבר. אורן, שתמיד קורא לכל הימור, עשה צ'ק (Check). מה הפעולה?",
+      "yourCards": "A♥ A♦",
+      "boardCards": "A♣ 8♠ 8♥ 4♦ 2♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "הימור ענק של 6,500",
+          "isCorrect": true,
+          "explanation": "אורן הוא 'תחנה' ואם יש לו 8 או אפילו זוג נמוך הוא ישלם הכל. במשחק שלנו, מחלבים ערך מקסימלי מידיים חזקות."
+        },
+        {
+          "id": "B",
+          "text": "הימור רגיל של 2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה הימור בטוח, אבל אתה מפסיד המון כסף שאורן היה מוכן לשלם עם יד פחות טובה."
+        },
+        {
+          "id": "C",
+          "text": "צ'ק",
+          "isCorrect": false,
+          "explanation": "יש לך את היד הכי חזקה (Full House). אסור לפספס הימור כשיש שחקן פסיבי מולך."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "rfycer"
+    },
+    {
+      "id": 2,
+      "situation": "הקופה 5,000 בריבר. ליאור (שחקן שמרני מאוד) מהמר פתאום 8,000. מה הפעולה?",
+      "yourCards": "K♠ Q♠",
+      "boardCards": "K♥ J♦ 7♣ 2♠ 5♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור (Fold)",
+          "isCorrect": true,
+          "explanation": "כששחקן שמרני כמו ליאור מהמר יותר מהקופה, יש לו יד חזקה מאוד. הזוג קינג שלך לא מספיק כאן."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 8,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר מקצועי אולי קוראים, אבל במשחק שלנו ליאור לא מבלף בסכומים כאלה בחיים."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-20,000",
+          "isCorrect": false,
+          "explanation": "התאבדות. הוא יקרא לך רק עם ידיים שמנצחות אותך."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "xfss0i"
+    },
+    {
+      "id": 3,
+      "situation": "הקופה 3,000. אייל (אגרסיבי) מהמר 1,500. יש לך פלאש. מה הפעולה?",
+      "yourCards": "A♦ 5♦",
+      "boardCards": "10♦ 8♦ 2♦ 4♠ J♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-6,000",
+          "isCorrect": true,
+          "explanation": "אייל אוהב אקשן וישלם הימור ענק עם כל יד סבירה. זה הזמן לבנות קופה גדולה."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,500",
+          "isCorrect": false,
+          "explanation": "טעות. אתה נותן לו לראות את סוף היד בזול כשאתה מחזיק ביד הכי חזקה האפשרית."
+        },
+        {
+          "id": "C",
+          "text": "העלאה קטנה ל-3,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה בסדר, אבל נגד אייל אפשר לקחת הרבה יותר צ'יפים."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "s92y6w"
+    },
+    {
+      "id": 4,
+      "situation": "הקופה 6,000 בריבר. לא פגעת בכלום. ליכטר (אגרסיבי) בדק. מה הפעולה?",
+      "yourCards": "7♣ 6♣",
+      "boardCards": "K♠ J♦ 2♥ 9♣ 3♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור / צ'ק",
+          "isCorrect": true,
+          "explanation": "במשחק שלנו בלוף ענק של 8,000 לתוך 6,000 כמעט תמיד ייקרא על ידי שחקן כמו ליכטר עם כל זוג."
+        },
+        {
+          "id": "B",
+          "text": "הימור ענק של 9,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בתיאוריה זה יכול לעבוד, אבל החבר'ה אצלנו לא אוהבים להתקפל, במיוחד לא ליכטר."
+        },
+        {
+          "id": "C",
+          "text": "הימור קטן של 2,000",
+          "isCorrect": false,
+          "explanation": "הימור קטן ייקרא ב-100% מהמקרים. סתם לזרוק צ'יפים לפח."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "3iv0c6"
+    },
+    {
+      "id": 5,
+      "situation": "הקופה 4,000. חרדון (אגרסיבי) מהמר 6,000 בטרן (Turn). מה הפעולה?",
+      "yourCards": "9♠ 8♠",
+      "boardCards": "7♦ 6♣ 5♥ 2♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 6,000",
+          "isCorrect": true,
+          "explanation": "יש לך סטרייט. חרדון אגרסיבי ויכול להמר ככה גם עם זוג או בלוף. אל תבריח אותו עם העלאה, תן לו להמשיך להשתולל."
+        },
+        {
+          "id": "B",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "יש לך את היד הכי חזקה כרגע. לוותר על זה כי ההימור גדול זו טעות קשה."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-15,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה ענקית על הימור ענק תגרום גם לחרדון לחשוב פעמיים ולהתקפל עם ידיים נחותות."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "nphte8"
+    },
+    {
+      "id": 6,
+      "situation": "הקופה 2,000 בריבר. תומר (פסיבי) עשה צ'ק. מה הפעולה?",
+      "yourCards": "Q♥ J♣",
+      "boardCards": "10♠ 9♦ 8♥ 2♣ 5♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "הימור ענק של 4,000",
+          "isCorrect": true,
+          "explanation": "תומר קורא המון. אם יש לו זוג או סטרייט נמוך יותר, הוא לא יצליח להתקפל לסכום הזה."
+        },
+        {
+          "id": "B",
+          "text": "צ'ק",
+          "isCorrect": false,
+          "explanation": "אסור לעשות צ'ק עם סטרייט נגד שחקן שמשלם הרבה כמו תומר."
+        },
+        {
+          "id": "C",
+          "text": "הימור של 500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "זה קטן מדי. במשחק שלנו 500 זה כלום, אתה רוצה לקחת לו הרבה יותר."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "l7007f"
+    },
+    {
+      "id": 7,
+      "situation": "הקופה 8,000 בריבר. סגל (שמרני) מהמר פתאום 12,000. מה הפעולה?",
+      "yourCards": "A♣ J♦",
+      "boardCards": "A♠ J♥ 9♠ 10♠ Q♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "הלוח מאוד מסוכן (סטרייט ופלאש אפשריים). סגל שמרני ולא יהמר 12,000 בלי יד שמנצחת את הזוגיים שלך."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 12,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קשה לקפל זוגיים, אבל נגד סגל הספציפי בהימור כזה ענק, אתה כמעט תמיד מפסיד."
+        },
+        {
+          "id": "C",
+          "text": "העלאה לכל הקופה (All-in)",
+          "isCorrect": false,
+          "explanation": "טעות נוראית. הוא ישלם לך רק אם יש לו סטרייט או פלאש."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "xmlx8x"
+    },
+    {
+      "id": 8,
+      "situation": "הקופה 3,500 בטרן. פאבל (אגרסיבי) בדק. יש לך שלישייה. מה הפעולה?",
+      "yourCards": "4♦ 4♥",
+      "boardCards": "A♠ 9♣ 4♠ 2♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "הימור ענק של 5,000",
+          "isCorrect": true,
+          "explanation": "פאבל אגרסיבי ויחשוב שאתה מבלף על האס. הוא ישמח להשוות עם כל אס או משיכה לפלאש."
+        },
+        {
+          "id": "B",
+          "text": "צ'ק",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "לתת קלף חינם בלוח עם משיכה לפלאש זה מסוכן. תבנה את הקופה עכשיו."
+        },
+        {
+          "id": "C",
+          "text": "הימור קטן של 1,000",
+          "isCorrect": false,
+          "explanation": "פאבל ישלם 1,000 בלי לחשוב. אתה רוצה להעניש אותו על המשיכות שלו."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "pkrrls"
+    },
+    {
+      "id": 9,
+      "situation": "הקופה 4,000 בריבר. פיליפ (אגרסיבי) מהמר 7,000. מה הפעולה?",
+      "yourCards": "J♠ 10♠",
+      "boardCards": "J♥ 8♦ 5♣ 2♠ 3♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "פיליפ אגרסיבי, אבל הימור של כמעט פי 2 מהקופה בריבר בדרך כלל אומר שיש לו לפחות זוג אס או יותר."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 7,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה יקרה מאוד עם זוג בינוני. בטווח הארוך זה יפסיד לך המון כסף במשחק כזה."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-15,000",
+          "isCorrect": false,
+          "explanation": "להפוך זוג לבלוף מול שחקן אגרסיבי זה רעיון רע, הוא לא יתקפל בקלות."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "cawykv"
+    },
+    {
+      "id": 10,
+      "situation": "הקופה 5,000. מלמד (שנכנס רק עם ידיים חזקות) מהמר 3,000. יש לך סטרייט. מה הפעולה?",
+      "yourCards": "K♣ Q♦",
+      "boardCards": "J♠ 10♥ 9♣ 2♦ 5♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-10,000",
+          "isCorrect": true,
+          "explanation": "מלמד שחקן חזק, אם הוא הימר הוא כנראה מחזיק יד טובה (כמו זוג אסים). הוא יתקשה לקפל אותה גם להימור ענק."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 3,000",
+          "isCorrect": false,
+          "explanation": "אל תשאיר כסף על השולחן. יש לך את היד הכי טובה, תגדיל את הקופה."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-6,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה קטנה מדי. אם הוא כבר הימר 3,000, הוא בטוח ישלם גם 10,000 עם יד חזקה."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "7v9egf"
+    },
+    {
+      "id": 11,
+      "situation": "הקופה 3,000 בריבר. אורן (פסיבי) מהמר פתאום 5,000. מה הפעולה?",
+      "yourCards": "A♠ Q♦",
+      "boardCards": "A♥ 10♣ 7♦ 5♠ 2♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "אורן הפסיבי בחיים לא יבצע הימור ענק (Overbet) כבלוף. כנראה שיש לו זוגיים או שלישייה."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 5,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קשה לקפל אס עם קיקר קווין, אבל הפעולה של אורן צועקת 'יש לי יד מפלצת'."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-12,000",
+          "isCorrect": false,
+          "explanation": "טעות חמורה. אתה רק תגדיל את ההפסד שלך כשהוא ישווה עם יד טובה יותר."
+        }
+      ],
+      "category": "הימור ענק",
+      "categoryId": "overbet",
+      "poolId": "xoxwgh"
     }
   ]
 }
