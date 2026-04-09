@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-09T13:29:34.486Z",
+  "generatedAt": "2026-04-09T13:30:20.815Z",
   "totalScenarios": 796,
   "byCategory": {
     "wet_board_top_pair": 20,
@@ -20794,37 +20794,6 @@
       ],
       "poolId": "math_1775389726798_r3ikh8",
       "reviewedAt": "2026-04-05T11:48:46.798Z"
-    },
-    {
-      "id": "math_1775389726798_jz24f9",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "difficulty": "intermediate",
-      "situation": "תומר הפסיבי מהמר 100 לתוך קופה של 900. האם ההשוואה כדאית?",
-      "yourCards": "10♠ 9♠",
-      "options": [
-        {
-          "id": "A",
-          "text": "לפרוש, כי זה הימור קטן מדי.",
-          "explanation": "במשחק שלנו, הימור של 100 לתוך קופה של 900 הוא תמיד שווה לקרוא, לכן פרישה היא טעות.",
-          "isCorrect": false,
-          "nearMiss": true
-        },
-        {
-          "id": "B",
-          "text": "להשוות, כי נדרשים רק 10% אקוויטי.",
-          "explanation": "100 חלקי 1,000 שווה ל-10%. מכיוון שההימור קטן, זו קריאה קלה ומשתלמת.",
-          "isCorrect": true
-        },
-        {
-          "id": "C",
-          "text": "צריך 50% אקוויטי כדי להשוות.",
-          "explanation": "נדרש רק 10% אקוויטי כדי להשוות, לכן 50% הוא חישוב שגוי לחלוטין.",
-          "isCorrect": false
-        }
-      ],
-      "poolId": "math_1775389726798_jz24f9",
-      "reviewedAt": "2026-04-05T12:39:04.583Z"
     },
     {
       "id": "math_1775389726798_c86j1l",
