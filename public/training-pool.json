@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-06T07:40:52.125Z",
+  "generatedAt": "2026-04-09T11:20:50.778Z",
   "totalScenarios": 796,
   "byCategory": {
     "wet_board_top_pair": 20,
@@ -2034,7 +2034,7 @@
     },
     {
       "poolId": "irwm8x",
-      "situation": "(K,K,K) על לוח K, Q, 10, 9. שחקן שמרני כמו ליאור מהמר 1,200 לתוך קופה של 2,000. הלוח מסוכן לרצף, אך.",
+      "situation": "(K,K,K) על. שחקן שמרני כמו ליאור מהמר 1,200 לתוך קופה של 2,000. הלוח מסוכן לרצף, אך.",
       "yourCards": "K♠ K♥",
       "options": [
         {
@@ -2060,11 +2060,12 @@
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
       "reviewedAt": "2026-04-05T12:26:34.046Z",
-      "id": "q2ggk522gir1"
+      "id": "q2ggk522gir1",
+      "boardCards": "K♦ Q♥ 10♦ 9♣"
     },
     {
       "poolId": "15l9j",
-      "situation": "יש לך זוג נסיכים וזוג שמיניות (שני זוגות) על לוח J, 8, 2, 3 עם שלושה עלים. שחקן אגרסיבי כמו פיליפ מהמר 1,000 לתוך 1,500.",
+      "situation": "שחקן אגרסיבי כמו פיליפ מהמר 1,000 לתוך 1,500.",
       "yourCards": "J♥ 8♦",
       "options": [
         {
@@ -2090,11 +2091,12 @@
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
       "reviewedAt": "2026-04-05T12:26:34.046Z",
-      "id": "8hqiahdbz4f9"
+      "id": "8hqiahdbz4f9",
+      "boardCards": "J♠ 8♥ 2♦ 3♣"
     },
     {
       "poolId": "dpyop4",
-      "situation": "על לוח J, 7, 2, 6, 5. שחקן שמרני כמו סגל מהמר 2,000 לתוך 4,000 בריבר.",
+      "situation": "על. שחקן שמרני כמו סגל מהמר 2,000 לתוך 4,000 בריבר.",
       "yourCards": "J♠ J♦",
       "options": [
         {
@@ -2120,11 +2122,12 @@
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
       "reviewedAt": "2026-04-05T10:31:57.143Z",
-      "id": "468ps5ek8e16"
+      "id": "468ps5ek8e16",
+      "boardCards": "J♥ 7♥ 2♦ 6♣ 5♠"
     },
     {
       "poolId": "91tdw1",
-      "situation": "על לוח A, K, Q, J. שחקן אגרסיבי כמו ליכטר מהמר 1,000 לתוך 1,200. כל 10 נותן רצף.",
+      "situation": "על. שחקן אגרסיבי כמו ליכטר מהמר 1,000 לתוך 1,200. כל 10 נותן רצף.",
       "yourCards": "A♦ K♠",
       "options": [
         {
@@ -2150,7 +2153,8 @@
       "category": "יד חזקה על לוח מסוכן",
       "categoryId": "two_pair_plus",
       "reviewedAt": "2026-04-05T12:26:52.442Z",
-      "id": "7n0xfbsytyl7"
+      "id": "7n0xfbsytyl7",
+      "boardCards": "A♠ K♥ Q♦ J♣"
     },
     {
       "poolId": "e6dhq4",
@@ -2245,7 +2249,7 @@
     },
     {
       "poolId": "cyrr6n",
-      "situation": "ביד. הפלופ מראה 4-4-נסיך. יש לך רביעייה. הקופה עומדת על 1,200 ושחקן אגרסיבי מאוד מהמר לפניך 800. הערימה שלך היא 15,000.",
+      "situation": "ביד. הקופה עומדת על 1,200 ושחקן אגרסיבי מאוד מהמר לפניך 800. הערימה שלך היא 15,000.",
       "yourCards": "4♠ 4♦",
       "options": [
         {
@@ -2271,7 +2275,8 @@
       "categoryId": "slow_play",
       "category": "משחק איטי",
       "reviewedAt": "2026-04-05T10:32:18.505Z",
-      "id": "na9m0mbme9p6"
+      "id": "na9m0mbme9p6",
+      "boardCards": "4♥ 4♣ J♦"
     },
     {
       "poolId": "xxr9ki",
@@ -2489,7 +2494,7 @@
     },
     {
       "poolId": "9kagj8",
-      "situation": "הפלופ הוא מלך-4-4. הקופה 1,000. אייל ופיליפ (אגרסיביים) עושים צ'ק.",
+      "situation": "הקופה 1,000. אייל ופיליפ (אגרסיביים) עושים צ'ק.",
       "yourCards": "K♠ K♦",
       "options": [
         {
@@ -2515,7 +2520,8 @@
       "category": "משחק איטי",
       "categoryId": "slow_play",
       "reviewedAt": "2026-04-05T12:26:52.442Z",
-      "id": "9wunwgs8pjnz"
+      "id": "9wunwgs8pjnz",
+      "boardCards": "K♥ 4♥ 4♦"
     },
     {
       "poolId": "h05xnk",
@@ -3136,7 +3142,7 @@
     },
     {
       "poolId": "r3x7l7",
-      "situation": "אתה ב-UTG (ראשון לפעול) עם אס ו-3 לבבות. הפלופ 10, 7 ו-4 עם שני לבבות. הימרת 600 ופיליפ האגרסיבי קרא. הטרן הוא 2 לא לב.",
+      "situation": "אתה ב-UTG (ראשון לפעול) עם אס ו-3 לבבות. עם שני לבבות. הימרת 600 ופיליפ האגרסיבי קרא. הטרן הוא 2 לא לב.",
       "yourCards": "A♥ 3♥",
       "options": [
         {
@@ -3162,7 +3168,8 @@
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
       "reviewedAt": "2026-04-05T10:34:21.624Z",
-      "id": "sigwf6l003ri"
+      "id": "sigwf6l003ri",
+      "boardCards": "10♠ 7♥ 4♦"
     },
     {
       "poolId": "bk52a1",
@@ -3196,7 +3203,7 @@
     },
     {
       "poolId": "lrugv8",
-      "situation": "העלית ל-800 מעמדה מוקדמת, ליכטר (אגרסיבי) שילם. הפלופ 9, 10 ונסיך, כולם יהלומים.",
+      "situation": "העלית ל-800 מעמדה מוקדמת, ליכטר (אגרסיבי) שילם. , כולם יהלומים.",
       "yourCards": "A♠ K♣",
       "options": [
         {
@@ -3222,7 +3229,8 @@
       "category": "המשך הימור",
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T12:27:29.917Z",
-      "id": "vejsiptmodjo"
+      "id": "vejsiptmodjo",
+      "boardCards": "9♠ 10♥ J♦"
     },
     {
       "poolId": "60qhd0",
@@ -3351,7 +3359,7 @@
     },
     {
       "poolId": "fi209o",
-      "situation": "העלית ל-400 מהכפתור ופיליפ (הביג בליינד) שילם. הפלופ הוא 2, 2 ו-5. היריב עושה צ'ק.",
+      "situation": "העלית ל-400 מהכפתור ופיליפ (הביג בליינד) שילם. היריב עושה צ'ק.",
       "yourCards": "A♣ 10♦",
       "options": [
         {
@@ -3377,7 +3385,8 @@
       "category": "המשך הימור",
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:34:42.590Z",
-      "id": "ql5rgiilfn39"
+      "id": "ql5rgiilfn39",
+      "boardCards": "2♠ 2♥ 5♦"
     },
     {
       "id": "vhfy8b",
@@ -3504,7 +3513,7 @@
     },
     {
       "poolId": "z9bldk",
-      "situation": "העלית ל-800, אייל (אגרסיבי) שילם. הפלופ הוא 9, 3, 3. אייל עושה צ'ק.",
+      "situation": "העלית ל-800, אייל (אגרסיבי) שילם. אייל עושה צ'ק.",
       "yourCards": "A♠ Q♦",
       "options": [
         {
@@ -3529,7 +3538,8 @@
       "category": "המשך הימור",
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T10:35:03.604Z",
-      "id": "opviktyivest"
+      "id": "opviktyivest",
+      "boardCards": "9♠ 3♥ 3♦"
     },
     {
       "poolId": "m8mvl9",
@@ -3719,7 +3729,7 @@
     },
     {
       "poolId": "w5q5i8",
-      "situation": "הפלופ הוא 8, 2, ו-5. ביצעת צ'ק, וליאור השמרן הימר 500 לתוך קופה של 1,000.",
+      "situation": "ביצעת צ'ק, וליאור השמרן הימר 500 לתוך קופה של 1,000.",
       "yourCards": "8♣ 8♦",
       "options": [
         {
@@ -3745,11 +3755,12 @@
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
       "reviewedAt": "2026-04-05T10:35:48.174Z",
-      "id": "dnh3jtbel907"
+      "id": "dnh3jtbel907",
+      "boardCards": "8♠ 2♥ 5♦"
     },
     {
       "poolId": "aa9947",
-      "situation": "על לוח 7, 10, נסיך. ביצעת צ'ק, ופיליפ האגרסיבי הימר 1,000 לתוך קופה של 1,500.",
+      "situation": "על. ביצעת צ'ק, ופיליפ האגרסיבי הימר 1,000 לתוך קופה של 1,500.",
       "yourCards": "8♥ 9♥",
       "options": [
         {
@@ -3775,11 +3786,12 @@
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
       "reviewedAt": "2026-04-05T10:35:48.175Z",
-      "id": "qbdfv27hwu43"
+      "id": "qbdfv27hwu43",
+      "boardCards": "7♠ 10♥ J♦"
     },
     {
       "poolId": "dfgxmu",
-      "situation": "יש לך זוג אסים. הפלופ הוא 2, 7, ו-6. ביצעת צ'ק, ופאבל האגרסיבי מהמר 700 לתוך קופה של 1,200.",
+      "situation": "ביצעת צ'ק, ופאבל האגרסיבי מהמר 700 לתוך קופה של 1,200.",
       "yourCards": "A♠ A♦",
       "options": [
         {
@@ -3805,11 +3817,12 @@
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
       "reviewedAt": "2026-04-05T10:35:48.175Z",
-      "id": "yqkf4a9cfge9"
+      "id": "yqkf4a9cfge9",
+      "boardCards": "2♠ 7♥ 6♦"
     },
     {
       "poolId": "39l525",
-      "situation": "יש לך משיכה לרצף על לוח 9, 10, אס. ביצעת צ'ק, ואייל האגרסיבי הימר 500 לתוך קופה של 1,000.",
+      "situation": "יש לך משיכה לרצף על. ביצעת צ'ק, ואייל האגרסיבי הימר 500 לתוך קופה של 1,000.",
       "yourCards": "Q♣ J♣",
       "options": [
         {
@@ -3835,7 +3848,8 @@
       "category": "צ'ק ואז העלאה",
       "categoryId": "check_raise",
       "reviewedAt": "2026-04-05T10:35:48.175Z",
-      "id": "sxa753gjuo5p"
+      "id": "sxa753gjuo5p",
+      "boardCards": "9♠ 10♥ A♦"
     },
     {
       "poolId": "mx95wb",
@@ -7851,7 +7865,7 @@
     },
     {
       "poolId": "2jn7qn",
-      "situation": "אתה בכפתור עם אס ו-7 לבבות. הפלופ הוא 10 לב, 5 לב ו-4 תלתן. הקופה 900 ושני שחקנים לפניך עשו צ'ק.",
+      "situation": "אתה בכפתור עם אס ו-7 לבבות. הקופה 900 ושני שחקנים לפניך עשו צ'ק.",
       "yourCards": "A♥ 7♥",
       "options": [
         {
@@ -7877,7 +7891,8 @@
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
       "reviewedAt": "2026-04-05T12:30:45.925Z",
-      "id": "ny0y07yqy323"
+      "id": "ny0y07yqy323",
+      "boardCards": "7♠ 10♥ 5♥ 4♣"
     },
     {
       "poolId": "vcojzi",
@@ -7974,7 +7989,7 @@
     },
     {
       "poolId": "nf2znt",
-      "situation": "אתה ב-CO (לפני הכפתור) עם 9 ו-8 לבבות. הפלופ הוא מלכה לב, נסיך לב ו-2 תלתן. הקופה 1,800 והיריב מהמר 600.",
+      "situation": "אתה ב-CO (לפני הכפתור) עם 9 ו-8 לבבות. הקופה 1,800 והיריב מהמר 600.",
       "yourCards": "9♥ 8♥",
       "options": [
         {
@@ -8000,7 +8015,8 @@
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
       "reviewedAt": "2026-04-05T10:45:32.861Z",
-      "id": "ijayhdf6cdyq"
+      "id": "ijayhdf6cdyq",
+      "boardCards": "8♠ Q♥ J♥ 2♣"
     },
     {
       "poolId": "qtgobp",
@@ -8097,7 +8113,7 @@
     },
     {
       "poolId": "7v5e1i",
-      "situation": "אתה בכפתור (BTN (כפתור)) עם מלכה ו-7 לבבות. הפלופ הוא 10 לב, 6 לב ו-2 פיק. הקופה 1,500 ושחקן אגרסיבי כמו אייל עושה צ'ק.",
+      "situation": "אתה בכפתור (BTN (כפתור)) עם מלכה ו-7 לבבות. הקופה 1,500 ושחקן אגרסיבי כמו אייל עושה צ'ק.",
       "yourCards": "Q♥ 7♥",
       "options": [
         {
@@ -8123,7 +8139,8 @@
       "category": "חסר קלף לצבע",
       "categoryId": "flush_draw",
       "reviewedAt": "2026-04-05T10:45:55.608Z",
-      "id": "ba1o0vcavc07"
+      "id": "ba1o0vcavc07",
+      "boardCards": "7♠ 10♥ 6♥ 2♠"
     },
     {
       "poolId": "7s59ls",
@@ -10081,7 +10098,7 @@
     },
     {
       "poolId": "2lgzzv",
-      "situation": "יש לך Q-10. 3 שחקנים קראו לפניך, גם אתה קראת. בפלופ יצא Q-6-2. כולם עשו צ'ק עד אליך.",
+      "situation": "יש לך Q-10. 3 שחקנים קראו לפניך, גם אתה קראת. ב. כולם עשו צ'ק עד אליך.",
       "yourCards": "Q♠ 10♠",
       "options": [
         {
@@ -10107,7 +10124,8 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:49:51.367Z",
-      "id": "yx475wsnsx9t"
+      "id": "yx475wsnsx9t",
+      "boardCards": "Q♥ 6♥ 2♦"
     },
     {
       "poolId": "vs4gwo",
@@ -10141,7 +10159,7 @@
     },
     {
       "poolId": "7e7006",
-      "situation": "יש לך K-J. הלוח מראה K-10-4. שחקן שקורא הכל מהמר 500 לקופה של 1,000. שחקן אחר כבר קרא.",
+      "situation": "יש לך K-J. שחקן שקורא הכל מהמר 500 לקופה של 1,000. שחקן אחר כבר קרא.",
       "yourCards": "K♠ J♣",
       "options": [
         {
@@ -10166,11 +10184,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:49:51.368Z",
-      "id": "pauacxxemjle"
+      "id": "pauacxxemjle",
+      "boardCards": "K♥ 10♥ 4♦"
     },
     {
       "poolId": "m9zm46",
-      "situation": "יש לך Q-10. בלוח יצא Q-J-5. שחקן שמרן מעלה ל-1,000. אתה קורא. 2. השחקן מהמר 2,000.",
+      "situation": "יש לך Q-10. שחקן שמרן מעלה ל-1,000. אתה קורא. 2. השחקן מהמר 2,000.",
       "yourCards": "Q♥ 10♦",
       "options": [
         {
@@ -10195,11 +10214,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T12:31:54.495Z",
-      "id": "iz10inre9qd8"
+      "id": "iz10inre9qd8",
+      "boardCards": "Q♠ J♥ 5♦"
     },
     {
       "poolId": "7i3txe",
-      "situation": "יש לך A-10. בלוח יצא A-8-4. מולך 3 שחקנים. כולם עשו צ'ק. אתה מהמר 800. שחקן אחד מעלה ל-2,500.",
+      "situation": "יש לך A-10. מולך 3 שחקנים. כולם עשו צ'ק. אתה מהמר 800. שחקן אחד מעלה ל-2,500.",
       "yourCards": "A♣ 10♠",
       "options": [
         {
@@ -10225,11 +10245,12 @@
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T12:31:54.495Z",
       "category": "המשך הימור",
-      "id": "6snnt9ben1v7"
+      "id": "6snnt9ben1v7",
+      "boardCards": "A♠ 8♥ 4♦"
     },
     {
       "poolId": "hh2mjt",
-      "situation": "יש לך K-Q. בלוח יצא K-9-3. ליאור (שחקן סלקטיבי ופסיבי) מהמר 1,000 לתוך קופה של 2,000.",
+      "situation": "יש לך K-Q. ליאור (שחקן סלקטיבי ופסיבי) מהמר 1,000 לתוך קופה של 2,000.",
       "yourCards": "K♦ Q♣",
       "options": [
         {
@@ -10255,11 +10276,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T12:31:54.495Z",
-      "id": "2rd55s7ycyid"
+      "id": "2rd55s7ycyid",
+      "boardCards": "K♠ 9♥ 3♦"
     },
     {
       "poolId": "yn0r4i",
-      "situation": "יש לך A-J. בלוח יצא A-10-6. אייל (אגרסיבי) מהמר 500. אתה קורא. 2. אייל מהמר 1,500.",
+      "situation": "יש לך A-J. אייל (אגרסיבי) מהמר 500. אתה קורא. 2. אייל מהמר 1,500.",
       "yourCards": "A♥ J♦",
       "options": [
         {
@@ -10285,11 +10307,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:50:12.869Z",
-      "id": "7nxefc5wwf95"
+      "id": "7nxefc5wwf95",
+      "boardCards": "A♠ 10♥ 6♦"
     },
     {
       "poolId": "sgqy9v",
-      "situation": "יש לך Q-10. בלוח יצא Q-9-4. דן מאן (שמרן) מהמר 1,000. אתה קורא. 8. הוא מהמר 2,500.",
+      "situation": "יש לך Q-10. דן מאן (שמרן) מהמר 1,000. אתה קורא. 8. הוא מהמר 2,500.",
       "yourCards": "Q♣ 10♥",
       "options": [
         {
@@ -10314,11 +10337,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T12:31:54.495Z",
-      "id": "a1ivkh42phhw"
+      "id": "a1ivkh42phhw",
+      "boardCards": "Q♠ 9♥ 4♦"
     },
     {
       "poolId": "8lti7t",
-      "situation": "יש לך A-9. בלוח יצא A-K-J. אתה מהמר 500, וארבעה שחקנים קוראים. הריבר הוא 2.",
+      "situation": "יש לך A-9. אתה מהמר 500, וארבעה שחקנים קוראים. הריבר הוא 2.",
       "yourCards": "A♠ 9♥",
       "options": [
         {
@@ -10343,11 +10367,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:50:12.870Z",
-      "id": "2w1v2q7f8hua"
+      "id": "2w1v2q7f8hua",
+      "boardCards": "A♥ K♥ J♦"
     },
     {
       "poolId": "u9jeor",
-      "situation": "יש לך K-J. בלוח יצא J-9-4. פיליפ (אגרסיבי) מהמר 1,000. אתה קורא. J. פיליפ מהמר 2,000.",
+      "situation": "יש לך K-J. פיליפ (אגרסיבי) מהמר 1,000. אתה קורא. J. פיליפ מהמר 2,000.",
       "yourCards": "K♦ J♠",
       "options": [
         {
@@ -10373,11 +10398,12 @@
       "categoryId": "cbet",
       "reviewedAt": "2026-04-05T12:32:12.662Z",
       "category": "המשך הימור",
-      "id": "3pkmoqd3xlce"
+      "id": "3pkmoqd3xlce",
+      "boardCards": "J♥ 9♥ 4♦"
     },
     {
       "poolId": "ipitjm",
-      "situation": "יש לך Q-10. בלוח יצא Q-7-3. היריב מהמר 400. אתה קורא. 10. אתה עכשיו עם שני זוגות. היריב מהמר 1,500.",
+      "situation": "יש לך Q-10. היריב מהמר 400. אתה קורא. 10. אתה עכשיו עם שני זוגות. היריב מהמר 1,500.",
       "yourCards": "Q♠ 10♣",
       "options": [
         {
@@ -10403,11 +10429,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:50:29.795Z",
-      "id": "7wfyc6rqmeeh"
+      "id": "7wfyc6rqmeeh",
+      "boardCards": "Q♥ 7♥ 3♦"
     },
     {
       "poolId": "9gwxjo",
-      "situation": "יש לך A-J. בלוח יצא A-5-2. שלושה שחקנים עשו צ'ק. אתה מהמר 600, אייל קורא. 8.",
+      "situation": "יש לך A-J. שלושה שחקנים עשו צ'ק. אתה מהמר 600, אייל קורא. 8.",
       "yourCards": "A♦ J♥",
       "options": [
         {
@@ -10433,11 +10460,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T12:32:12.663Z",
-      "id": "qhoguawmpxbp"
+      "id": "qhoguawmpxbp",
+      "boardCards": "A♠ 5♥ 2♦"
     },
     {
       "poolId": "xcu3ye",
-      "situation": "יש לך Q-J. בלוח יצא Q-6-2. אתה מהמר 500, היריב מעלה ל-1,500.",
+      "situation": "יש לך Q-J. אתה מהמר 500, היריב מעלה ל-1,500.",
       "yourCards": "Q♥ J♠",
       "options": [
         {
@@ -10463,7 +10491,8 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T10:50:29.795Z",
-      "id": "6bbjigqekp7j"
+      "id": "6bbjigqekp7j",
+      "boardCards": "Q♠ 6♥ 2♦"
     },
     {
       "poolId": "dbqv0v",
@@ -10563,7 +10592,7 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "difficulty": "intermediate",
-      "situation": "הקופה עומדת על 2,500 צ'יפים. בלוח Q-J-2-2, אייל האגרסיבי מהמר 1,000 בפלופ ואתה משווה. 2, אייל מהמר 2,000 נוספים לתוך קופה של 4,500.",
+      "situation": "הקופה עומדת על 2,500 צ'יפים. , אייל האגרסיבי מהמר 1,000 בפלופ ואתה משווה. 2, אייל מהמר 2,000 נוספים לתוך קופה של 4,500.",
       "yourCards": "Q♣ 10♠",
       "options": [
         {
@@ -10587,7 +10616,8 @@
         }
       ],
       "poolId": "fb0be5",
-      "reviewedAt": "2026-04-05T12:32:12.663Z"
+      "reviewedAt": "2026-04-05T12:32:12.663Z",
+      "boardCards": "Q♠ J♥ 2♦ 2♣"
     },
     {
       "poolId": "ctu54x",
@@ -12322,7 +12352,7 @@
     },
     {
       "poolId": "r2dxa9",
-      "situation": "יש לך זוג מלכים על לוח K-8-2. הקופה היא 1,500 צ'יפים. שחקן שמרן מהמר 500. הוא לעולם לא עושה פולד.",
+      "situation": "הקופה היא 1,500 צ'יפים. שחקן שמרן מהמר 500. הוא לעולם לא עושה פולד.",
       "yourCards": "K♥ Q♥",
       "options": [
         {
@@ -12348,11 +12378,12 @@
       "category": "משחק איטי",
       "categoryId": "slow_play",
       "reviewedAt": "2026-04-05T10:54:21.094Z",
-      "id": "1hynsgudcy0v"
+      "id": "1hynsgudcy0v",
+      "boardCards": "K♠ 8♥ 2♦"
     },
     {
       "poolId": "6g1f0z",
-      "situation": "יש לך זוג אס על לוח A-7-2. הקופה היא 800 צ'יפים. אף אחד לא הימר, יש עוד 4 שחקנים איתך.",
+      "situation": "הקופה היא 800 צ'יפים. אף אחד לא הימר, יש עוד 4 שחקנים איתך.",
       "yourCards": "A♥ K♠",
       "options": [
         {
@@ -12378,7 +12409,8 @@
       "category": "משחק איטי",
       "categoryId": "slow_play",
       "reviewedAt": "2026-04-05T10:54:21.094Z",
-      "id": "sfbe4se1gutf"
+      "id": "sfbe4se1gutf",
+      "boardCards": "A♠ 7♥ 2♦"
     },
     {
       "poolId": "wc50n8",
@@ -13837,7 +13869,7 @@
     },
     {
       "poolId": "i31dwk",
-      "situation": "ואתה בעמדת ה-CO (לפני הכפתור). סגל (השחקן הסלקטיבי) מעלה ל-500, אתה מעלה ל-1,500 והוא קורא. הלוח נפתח , וסגל מבצע צ'ק.",
+      "situation": "ואתה בעמדת ה-CO (לפני הכפתור). סגל (השחקן הסלקטיבי) מעלה ל-500, אתה מעלה ל-1,500 והוא קורא.",
       "yourCards": "J♥ J♣",
       "options": [
         {
@@ -15364,7 +15396,7 @@
     },
     {
       "poolId": "yd5wpteyz",
-      "situation": "אתה בפוזיציית ה-Button. לפניך שחקן אחד השווה מה-Early Position. אתה מעלה ל-400 עם זוג 8-8. השחקן מה-Early Position משווה. הפלופ יוצא: K-7-2 (עם שני עלים). היריב שלך עושה צ'ק. היריב הוא 'קולר' שלא זורק זוגות נמוכים. מה הפעולה הכי נכונה?",
+      "situation": "אתה בפוזיציית ה-Button. לפניך שחקן אחד השווה מה-Early Position. אתה מעלה ל-400 עם זוג 8-8. השחקן מה-Early Position משווה. היריב שלך עושה צ'ק. היריב הוא 'קולר' שלא זורק זוגות נמוכים. מה הפעולה הכי נכונה?",
       "yourCards": "8♥ 8♣",
       "options": [
         {
@@ -15456,7 +15488,7 @@
     },
     {
       "poolId": "u2u9f6oy8",
-      "situation": "אתה בפוזיציה מאוחרת, 3 שחקנים נכנסו ללימפ. אתה מחזיק K-J ומעלה ל-500. שחקן שקט וסולידי מ-UTG (ראשון לפעול) משווה. הפלופ יוצא K-8-3. השחקן בודק, אתה מהמר 1,000, והוא מעלה ל-3,000. מה הפעולה הכי נכונה?",
+      "situation": "אתה בפוזיציה מאוחרת, 3 שחקנים נכנסו ללימפ. אתה מחזיק K-J ומעלה ל-500. שחקן שקט וסולידי מ-UTG (ראשון לפעול) משווה. השחקן בודק, אתה מהמר 1,000, והוא מעלה ל-3,000. מה הפעולה הכי נכונה?",
       "yourCards": "K♥ J♦",
       "options": [
         {
@@ -15482,11 +15514,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T11:01:38.892Z",
-      "id": "nem2s5u1d98o"
+      "id": "nem2s5u1d98o",
+      "boardCards": "K♠ 8♥ 3♦"
     },
     {
       "poolId": "1drqrnmu6",
-      "situation": "אתה ב-Button עם A-9. שחקן אגרסיבי פתח ל-500, אתה משווה. הפלופ מגיע A-7-2. היריב מהמר 1,000. מה נכון לעשות?",
+      "situation": "אתה ב-Button עם A-9. שחקן אגרסיבי פתח ל-500, אתה משווה. היריב מהמר 1,000. מה נכון לעשות?",
       "yourCards": "A♠ 9♦",
       "options": [
         {
@@ -15511,11 +15544,12 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T12:36:01.184Z",
-      "id": "3srk3amjbaku"
+      "id": "3srk3amjbaku",
+      "boardCards": "A♥ 7♥ 2♦"
     },
     {
       "poolId": "rifnekx7o",
-      "situation": "אתה מחזיק Q-10 סוטד. שחקן פתח ל-500, שחקן אחר השווה, ואתה משווה מה-Big Blind. הפלופ מגיע Q-6-2. הבליינד בודק, הפותח מהמר 1,000. מה הפעולה הכי נכונה?",
+      "situation": "אתה מחזיק Q-10 סוטד. שחקן פתח ל-500, שחקן אחר השווה, ואתה משווה מה-Big Blind. הבליינד בודק, הפותח מהמר 1,000. מה הפעולה הכי נכונה?",
       "yourCards": "Q♣ 10♣",
       "options": [
         {
@@ -15541,7 +15575,8 @@
       "category": "ידיים שנראות טוב אבל מסוכנות",
       "categoryId": "dominated_hands",
       "reviewedAt": "2026-04-05T11:01:38.892Z",
-      "id": "nhnsb6xbswgn"
+      "id": "nhnsb6xbswgn",
+      "boardCards": "Q♠ 6♥ 2♦"
     },
     {
       "poolId": "8q90ls5g6",
@@ -20554,7 +20589,7 @@
       "options": [
         {
           "id": "A",
-          "text": "יש לי 1% סיכוי להשלים סטרייט ב-Runner-runner.",
+          "text": "יש לי 10% סיכוי להשלים סטרייט ב-Runner-runner.",
           "explanation": "הסיכוי ל-Backdoor (צריך 2 קלפים) straight (שני קלפים בטווח הנכון) הוא בערך 1.5%. 4.5% הוא נתון שגוי.",
           "isCorrect": false
         },
