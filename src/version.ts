@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.11.5';
+export const APP_VERSION = '5.12.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,21 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.0',
+    date: '2026-04-09',
+    changes: [
+      '📅 Custom date range filter in Statistics — free-form start/end date picker alongside existing period filters',
+      '🎯 Forecast tone/highlight validation — blocks optimistic text for negative predictions and vice versa, with hedge detection',
+      '📎 Roster impact in AI forecast prompts — historical avg profit when playing with/without tonight\'s opponents',
+      '🃏 Board cards separated from situation text — new boardCards field prevents info leaks in training questions',
+      '🔧 runGeminiTextPrompt shared utility — coaching now uses callWithFallback with model rotation and MAX_TOKENS recovery',
+      '📊 Forecast accuracy: direction-correct predictions now get partial credit (~) instead of miss (✗)',
+      '🧹 Cleaned up pool generation prompt — shorter, structured format with strict field separation rules',
+      '⚡ Pool fetch timeout — 3.5s timeout prevents slow GitHub responses from blocking training start',
+      '🔇 Neutralized answer support — faulty questions can be marked without deleting player history',
+    ]
+  },
   {
     version: '5.11.5',
     date: '2026-04-06',

@@ -1310,7 +1310,7 @@ const GameSummaryScreen = () => {
               gap: '0.75rem'
             }}>
               <span><span style={{ color: '#22c55e' }}>✓</span> ≤30</span>
-              <span><span style={{ color: '#f59e0b' }}>~</span> 31-60</span>
+              <span><span style={{ color: '#f59e0b' }}>~</span> 31-60 / כיוון נכון</span>
               <span><span style={{ color: '#ef4444' }}>✗</span> &gt;60</span>
             </div>
             
@@ -1336,10 +1336,11 @@ const GameSummaryScreen = () => {
                     const actualProfit = actual?.profit || 0;
                     const gap = Math.abs(actualProfit - forecast.expectedProfit);
                     
-                    // Accuracy indicator based on gap
+                    const directionCorrect = (forecast.expectedProfit >= 0 && actualProfit >= 0) || (forecast.expectedProfit < 0 && actualProfit < 0);
                     const getAccuracyIndicator = () => {
                       if (gap <= 30) return { symbol: '✓', color: '#22c55e' };
                       if (gap <= 60) return { symbol: '~', color: '#f59e0b' };
+                      if (directionCorrect) return { symbol: '~', color: '#f59e0b' };
                       return { symbol: '✗', color: '#ef4444' };
                     };
                     const accuracy = getAccuracyIndicator();

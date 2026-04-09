@@ -7,7 +7,7 @@ import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
 import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry } from '../types';
 import { playerTraitsByName } from './playerTraits';
-import { getRebuyRecords, isPlayerFemale } from '../database/storage';
+import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
@@ -108,13 +108,32 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         continue;
       }
 
+      const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+      const text = parts
+        .map((p: { text?: string }) => (typeof p?.text === 'string' ? p.text : ''))
+        .join('')
+        .trim();
+
       if (finishReason === 'MAX_TOKENS') {
-        console.warn(`   ${label}: ${config.model} hit token limit, trying next`);
+        if (text.length >= 60) {
+          console.warn(`   ${label}: ${config.model} MAX_TOKENS — נשמר טקסט חלקי (${text.length} תווים)`);
+          lastUsedModel = config.model;
+          localStorage.setItem('gemini_working_config', JSON.stringify(config));
+          const usage = data?.usageMetadata ? {
+            promptTokens: data.usageMetadata.promptTokenCount || 0,
+            outputTokens: data.usageMetadata.candidatesTokenCount || 0,
+            thinkingTokens: data.usageMetadata.thoughtsTokenCount || 0,
+            totalTokens: data.usageMetadata.totalTokenCount || 0,
+          } : undefined;
+          const rlHeaders = readRateLimitHeaders(response);
+          recordSuccess(config.model, label, usage?.totalTokens, fallbackFrom, rlHeaders);
+          return { text, model: config.model, usage };
+        }
+        console.warn(`   ${label}: ${config.model} hit token limit with empty/short output, trying next`);
         lastError = 'Token limit exceeded';
         continue;
       }
 
-      const text = candidate?.content?.parts?.[0]?.text?.trim();
       if (!text) {
         console.warn(`   ${label}: ${config.model} returned empty response`);
         lastError = 'Empty response';
@@ -147,6 +166,28 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
   throw new Error(`ALL_MODELS_FAILED: ${lastError}`);
 };
+
+export interface RunGeminiTextOptions {
+  temperature?: number;
+  maxOutputTokens?: number;
+  label?: string;
+}
+
+/** Plain-text Gemini call with model fallback (used by training admin, coaching, etc.). */
+export async function runGeminiTextPrompt(
+  apiKey: string,
+  prompt: string,
+  options?: RunGeminiTextOptions,
+): Promise<string> {
+  const result = await callWithFallback({
+    prompt,
+    apiKey,
+    temperature: options?.temperature ?? 0.7,
+    maxOutputTokens: options?.maxOutputTokens ?? 8192,
+    label: options?.label ?? 'gemini_text',
+  });
+  return result.text;
+}
 
 // Store API key in localStorage
 const API_KEY_STORAGE = 'gemini_api_key';
@@ -327,6 +368,71 @@ export const buildLocationInsights = (
 
   if (insights.length === 0) return '';
   return `🏠 תובנות מיקום (אצל ${location}):\n${insights.join('\n')}`;
+};
+
+/**
+ * Same logic as Graphs → Impact: avg profit when another tonight's player was in the game vs not.
+ * Used only as prompt context (does not change locked numeric forecasts — keeps zero-sum stable).
+ */
+const buildTonightRosterImpactLines = (tonightNames: string[]): string => {
+  const allPlayers = getAllPlayers();
+  const idByName = new Map(allPlayers.map(p => [p.name, p.id]));
+  const tonightIds = [...new Set(tonightNames.map(n => idByName.get(n)).filter(Boolean) as string[])];
+  if (tonightIds.length < 2) return '';
+
+  const games = getAllGames().filter(g => g.status === 'completed');
+  const allGp = getAllGamePlayers();
+
+  const lines: string[] = [];
+  const minSide = 2;
+  const minAbsImpact = 12;
+
+  for (const pid of tonightIds) {
+    const pname = allPlayers.find(p => p.id === pid)?.name;
+    if (!pname) continue;
+
+    const rows: { other: string; impact: number; avgWith: number; avgWithout: number; wg: number; wog: number }[] = [];
+
+    for (const oid of tonightIds) {
+      if (oid === pid) continue;
+      const oname = allPlayers.find(p => p.id === oid)?.name;
+      if (!oname) continue;
+
+      let withSum = 0, withG = 0, withoutSum = 0, withoutG = 0;
+      for (const g of games) {
+        const gps = allGp.filter(gp => gp.gameId === g.id);
+        const self = gps.find(gp => gp.playerId === pid);
+        if (!self) continue;
+        const otherPlayed = gps.some(gp => gp.playerId === oid);
+        if (otherPlayed) {
+          withSum += self.profit;
+          withG++;
+        } else {
+          withoutSum += self.profit;
+          withoutG++;
+        }
+      }
+      if (withG < minSide || withoutG < minSide) continue;
+      const avgWith = withSum / withG;
+      const avgWithout = withoutSum / withoutG;
+      const impact = Math.round(avgWith - avgWithout);
+      if (Math.abs(impact) < minAbsImpact) continue;
+      rows.push({ other: oname, impact, avgWith: Math.round(avgWith), avgWithout: Math.round(avgWithout), wg: withG, wog: withoutG });
+    }
+
+    rows.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+    const top = rows.slice(0, 2);
+    if (top.length === 0) continue;
+
+    const parts = top.map(t => {
+      const sign = t.impact >= 0 ? '+' : '';
+      return `${sign}${t.impact}₪ מול ${t.other} (ממוצע ${t.avgWith >= 0 ? '+' : ''}${t.avgWith} ב-${t.wg} משחקים יחד לעומת ${t.avgWithout >= 0 ? '+' : ''}${t.avgWithout} ב-${t.wog} בלי)`;
+    });
+    lines.push(`• ${pname}: ${parts.join(' | ')}`);
+  }
+
+  if (lines.length === 0) return '';
+  return `\n📎 השפעת נוכחות מול משתתפי הערב (נתון היסטורי בלבד — לא מחליף את חיזוי הסכום הנעול):\n${lines.join('\n')}\nאפשר לשלב משפט קצר אם זה חזק; אסור לסתור את כיוון ועוצמת החיזוי הנעול.`;
 };
 
 /**
@@ -1298,6 +1404,8 @@ export const generateAIForecasts = async (
   ];
   const chosenStyle = teaserStyles[Math.floor(Math.random() * teaserStyles.length)];
 
+  const rosterImpactText = buildTonightRosterImpactLines(players.map(p => p.name));
+
   const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
 💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
 
@@ -1310,6 +1418,7 @@ ${storylinesText ? `\n📖 סיפורי הערב - יריבויות, נקמות,
 ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${milestonesText}` : ''}
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
 ${comboHistoryText ? `\n${comboHistoryText}` : ''}
+${rosterImpactText}
 ${surpriseText}
 
 📤 פלט JSON בפורמט הבא:
@@ -1353,6 +1462,8 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
 התאמת טון:
 • חיזוי חיובי → טון חיובי/בטוח (לא מוגזם לחיזוי קטן)
 • חיזוי שלילי → טון מאתגר/הומוריסטי (אסור אופטימי!)
+• חובה: highlight ו-sentence חייבים להרגיש באותו כיוון כמו החיזוי הנעול — אסור כותרת על "הצלחה" או "גלים" כשהחיזוי שלילי; אסור כותרת קודרת כשהחיזוי חיובי חזק
+• אם מזכירים ניצחון/הפסד במשחק האחרון — זה עובדה מהעבר; חייב מילת גישור (אבל/עדיין/הערב/החיזוי) כשהכיוון לערב שונה מהעבר
 
 🚫 איסורים (הפרה = פסילה!):
 • אסור להזכיר מספר החיזוי ב-sentence! המספר מוצג בכרטיס בנפרד
@@ -1591,14 +1702,18 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         }
         
         // ========== 3. FIX LAST GAME ERRORS ==========
-        // Check for contradictions about last game result
-        if (wonLastGame && correctedSentence.includes('הפסד') && correctedSentence.includes('אחרון')) {
+        // Contradictions about last game → drop AI sentence (fallback is direction-aware)
+        if (wonLastGame && correctedSentence.includes('הפסד') && /אחרון|אחרונה|קודם|שעבר/.test(correctedSentence)) {
           errorDetails.push('last_game: claimed loss but actually won');
-
+          correctedSentence = '';
         }
-        if (lostLastGame && correctedSentence.includes('נצחון') && correctedSentence.includes('אחרון')) {
+        if (
+          lostLastGame &&
+          /אחרון|אחרונה|קודם|שעבר/.test(correctedSentence) &&
+          /(נצחון|ניצחון|ניצח\b|נצח\b)/.test(correctedSentence)
+        ) {
           errorDetails.push('last_game: claimed win but actually lost');
-
+          correctedSentence = '';
         }
         
         // ========== 4. FIX GAME COUNT ERRORS ==========
@@ -1724,10 +1839,14 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         const allTimeAvg = Math.round(player.avgProfit);
         const winRate = player.gamesPlayed > 0 ? Math.round((player.winCount / player.gamesPlayed) * 100) : 0;
         
-        // Detect optimistic text for negative predictions
-        const optimisticWords = ['ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה', 'שולט', 'דומיננטי'];
-        const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה'];
+        // Detect optimistic / pessimistic tone vs locked prediction (Hebrew — expand beyond verbs)
+        const optimisticWords = [
+          'ינצח', 'יצליח', 'מסוכן', 'רכבת', 'מוביל', 'פורמה מטורפת', 'הולך לנצח', 'בדרך לפסגה', 'שולט', 'דומיננטי',
+          'הצלחה', 'גלים', 'רוכב', 'בפסגה', 'שורף', 'בוער', 'כובש', 'דומיננט', 'מלכות', 'מבריק', 'זינוק', 'עלייה חדה',
+        ];
+        const pessimisticWords = ['ספונסר', 'תורם', 'קשה', 'מאתגר', 'חלודה', 'נופל', 'סובל', 'בעיה', 'ייאוש', 'טובע'];
         const superlativeWords = ['מטורף', 'מדהים', 'היסטורי', 'חסר תקדים', 'מושלם', 'אגדי', 'פנומנלי'];
+        const hedgeWords = /אבל|עדיין|החיזוי|הערב|זהיר|לא פשוט|מאתגר|צריך|חייב להוכיח|אתגר/;
         
         // Only flag superlatives for truly tiny predictions (±20 or less)
         if (Math.abs(predictedProfit) <= 20) {
@@ -1749,15 +1868,35 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         
         const hasOptimistic = optimisticWords.some(w => correctedSentence.includes(w));
         const hasPessimistic = pessimisticWords.some(w => correctedSentence.includes(w));
+        const hasHedge = hedgeWords.test(correctedSentence);
         
-        // Flag and fix severe direction mismatches by replacing with fallback
-        if (predictedProfit <= -40 && hasOptimistic && !hasPessimistic) {
+        // Negative prediction: block celebratory tone (lower bar than before; hedge can salvage borderline cases)
+        if (predictedProfit <= -25 && hasOptimistic && !hasPessimistic && !(hasHedge && predictedProfit > -55)) {
           errorDetails.push(`tone_mismatch: optimistic text but predicted ${predictedProfit} — replacing`);
           correctedSentence = '';
         }
-        if (predictedProfit >= 40 && hasPessimistic && !hasOptimistic) {
+        if (predictedProfit >= 35 && hasPessimistic && !hasOptimistic) {
           errorDetails.push(`tone_mismatch: pessimistic text but predicted \u200E+${predictedProfit} — replacing`);
           correctedSentence = '';
+        }
+
+        // ========== 7b. HIGHLIGHT VS LOCKED PREDICTION ==========
+        const hl = correctedHighlight;
+        const successImageryInHighlight = [
+          'גלים', 'הצלחה', 'רוכב', 'בפסגה', 'שורף', 'בוער', 'דומיננט', 'מלכות', 'כובש', 'מוביל את הערב',
+          'מלך הערב', 'שולט בערב', 'נושא גביע', 'בשיא הכושר',
+        ];
+        const doomImageryInHighlight = ['ייאוש', 'אסון', 'טובע', 'טביעה', 'נכשל', 'חור שחור'];
+        if (predictedProfit < 0 && successImageryInHighlight.some(m => hl.includes(m))) {
+          errorDetails.push('highlight_sign: success imagery with negative prediction');
+          correctedHighlight = rankTonight <= 3
+            ? `מקום ${rankTonight} — ערב מאתגר לפי החיזוי`
+            : `מקום ${rankTonight} — צריך להתאושש`;
+        } else if (predictedProfit >= 40 && doomImageryInHighlight.some(m => hl.includes(m))) {
+          errorDetails.push('highlight_sign: doom imagery with strong positive prediction');
+          correctedHighlight = actualStreak >= 2
+            ? `מומנטום חיובי בחיזוי`
+            : `מקום ${rankTonight} — אופטימיות מדודה`;
         }
         
         // ========== FINAL CLEANUP ==========

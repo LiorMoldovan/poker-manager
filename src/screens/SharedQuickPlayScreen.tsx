@@ -717,19 +717,35 @@ const SharedQuickPlayScreen = () => {
 
       {/* Scenario */}
       <div className="card" style={{ padding: '0.6rem 0.8rem', borderRight: '3px solid var(--primary)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+        {/* Cards row: your hand + board */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
           <div style={{
-            display: 'inline-block', padding: '0.2rem 0.5rem', borderRadius: '6px',
-            background: 'rgba(99,102,241,0.12)', fontSize: '0.85rem', fontWeight: 700,
-            letterSpacing: '2px',
+            padding: '0.25rem 0.6rem', borderRadius: '8px',
+            background: 'rgba(99,102,241,0.12)', fontSize: '0.9rem', fontWeight: 700,
+            letterSpacing: '2px', display: 'flex', alignItems: 'center', gap: '0.3rem',
           }}>
-            🃏 <ColoredCards text={scenario.yourCards} />
+            <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 500 }}>יד</span>
+            <ColoredCards text={scenario.yourCards} />
           </div>
+          {scenario.boardCards && (
+            <>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>|</span>
+              <div style={{
+                padding: '0.25rem 0.6rem', borderRadius: '8px',
+                background: 'rgba(34,197,94,0.08)', fontSize: '0.9rem', fontWeight: 700,
+                letterSpacing: '2px', display: 'flex', alignItems: 'center', gap: '0.3rem',
+              }}>
+                <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 500 }}>בורד</span>
+                <ColoredCards text={scenario.boardCards} />
+              </div>
+            </>
+          )}
           {(() => {
             const cat = SCENARIO_CATEGORIES.find(c => c.id === scenario.categoryId);
-            return cat ? <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{cat.icon} {cat.name}</span> : null;
+            return cat ? <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginRight: 'auto' }}>{cat.icon} {cat.name}</span> : null;
           })()}
         </div>
+        {/* Situation text */}
         <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>
           <ColoredText text={scenario.situation} />
         </p>

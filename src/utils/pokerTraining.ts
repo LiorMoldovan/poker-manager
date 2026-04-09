@@ -1,4 +1,4 @@
-import { getGeminiApiKey, API_CONFIGS, getModelDisplayName } from './geminiAI';
+import { getGeminiApiKey, API_CONFIGS, getModelDisplayName, runGeminiTextPrompt } from './geminiAI';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { PlayerStats } from '../types';
 
@@ -1070,6 +1070,7 @@ export const rebuildProgressFromRemote = (playerData: TrainingPlayerData): Share
   for (const session of sortedSessions) {
     for (const r of session.results) {
       seenPoolIds.add(r.poolId);
+      if (r.neutralized) continue;
       if (r.nearMiss) {
         totalN++;
         continue;
@@ -1156,8 +1157,14 @@ export const loadFromPool = async (
     } catch { /* ignore */ }
   }
 
+  const fetchWithTimeout = (): Promise<TrainingPool | null> =>
+    Promise.race([
+      fetchTrainingPool(),
+      new Promise<null>(r => setTimeout(() => r(null), 3500)),
+    ]);
+
   if (!pool || !cachedGenAt) {
-    const remote = await fetchTrainingPool();
+    const remote = await fetchWithTimeout();
     if (!remote) {
       return { scenarios: [], exhaustedCategory: false, exhaustedAll: false };
     }
@@ -1165,12 +1172,14 @@ export const loadFromPool = async (
     localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(pool));
     localStorage.setItem(POOL_GENERATED_AT_KEY, pool.generatedAt);
   } else {
-    fetchTrainingPool().then(remote => {
+    try {
+      const remote = await fetchWithTimeout();
       if (remote && remote.generatedAt !== cachedGenAt) {
+        pool = remote;
         localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(remote));
         localStorage.setItem(POOL_GENERATED_AT_KEY, remote.generatedAt);
       }
-    }).catch(() => {});
+    } catch { /* use cache */ }
   }
 
   const progress = getSharedProgress(playerName);
@@ -1524,60 +1533,44 @@ ${GAME_CONTEXT}
 ${playerStylesPrompt}
 
 חוקי שימוש בשמות:
-- שלב את הסגנון שלהם בטבעיות: "חרדון, שמהמר על הכל, מהמר 2,000" או "אורן, שקורא כמעט תמיד, קורא"
-- היה יצירתי עם הקשר: "אייל כבר בריבאי השביעי ומשחק לוהט", "סגל לא שיחק יד כבר חצי שעה"
-- לפעמים שחקן פסיבי יכול להיות אגרסיבי — הסבר למה: "סגל, שבדרך כלל שקט, פתאום מהמר 4,000 — מוזר"
-- חלק מהשאלות יכולות לשאול "מה היה עושה [שם]?" — התשובה הנכונה מתאימה לסגנון המוכר שלו
+- שלב את הסגנון שלהם בטבעיות: "חרדון מהמר 2,000" או "אורן קורא"
+- לפעמים שחקן פסיבי יכול להיות אגרסיבי — הסבר למה: "סגל, שבדרך כלל שקט, פתאום מהמר 4,000"
 - ~30% מהשאלות בלי שמות (יריב גנרי) כדי לגוון
 ${trueFalseInstructions}${oddsMathInstructions}
-כללים:
-- כל שאלה = נקודת החלטה אחת. תאר מה קרה **עד** הרגע שבו צריך להחליט. **אל תכתוב מה השחקן עושה!**
-- בדיוק 3 אופציות (A, B, C), בדיוק אחת נכונה
-- כל הסכומים בצ'יפים (לא שקלים). אל תכתוב "שקלים" ליד סכומי הימור
-- השתמש ב"כפתור" (לא "מפיץ") לתיאור עמדת ה-Button
-- **אל תחזור על הקלפים של השחקן בטקסט המצב** — הם מוצגים בנפרד בממשק
-- כל מצב חייב לציין: כמה יריבים ביד, גודל הקופה, באיזה שלב (פלופ/טרן/ריבר)
-- אם יש אול-אין, ציין בבירור אם זה לפני הפלופ או אחריו
-- כל שאלה חייבת להיות עצמאית — כל המידע הנדרש לתשובה חייב להופיע בשאלה עצמה
-- מצב: 2-3 משפטים תמציתיים שמציירים תמונה ברורה
 
-מונחי פוקר — חובה:
-- השתמש רק בשמות המקובלים: **פלופ**, **טרן**, **ריבר** (לא "נהר"!), **בליינד** (לא "עיוור"), **ביד** (לא "בכיס")
-- מונחים באנגלית מותרים אבל **חייב להוסיף תרגום בסוגריים** בפעם הראשונה שהם מופיעים:
-  - Pot Odds (יחס קופה), Implied Odds (סיכויי רווח עתידיים), EV (ערך צפוי), +EV (ערך צפוי חיובי), -EV (ערך צפוי שלילי)
-  - Equity (אחוז ניצחון), Fold Equity (סיכוי שהיריב יפרוש), c-bet (הימור המשך), Overbet (הימור מעל הקופה)
-  - OESD (סטרייט פתוח משני הצדדים), Backdoor (צריך 2 קלפים), Semi-bluff (בלוף עם פוטנציאל)
-  - UTG (ראשון לפעול), CO (לפני הכפתור), BB (בליינד גדול), SB (בליינד קטן)
-  - Limping (כניסה בלי העלאה), Squeeze (העלאה חוזרת גדולה), Check-raise (צ'ק ואז העלאה)
-- **מעולם** אל תשתמש במונחים: נהר, מפיץ, עיוור, כיס, סיבוב
+═══ פורמט שאלה — קריטי ═══
+כל שאלה מורכבת מ-4 שדות נפרדים:
+1. **yourCards** — הקלפים שלך בלבד: "K♠ J♣"
+2. **boardCards** — קלפי הלוח (פלופ/טרן/ריבר): "10♦ 8♣ 2♣" או "10♦ 8♣ 2♣ 5♥" (ריק לפני הפלופ)
+3. **situation** — טקסט קצר שמתאר רק את הפעולה: מי המר, כמה, גודל קופה, כמה שחקנים, מיקום
+   ❌ אסור: לחזור על הקלפים שלך או על הלוח ב-situation — הם מוצגים ויזואלית בנפרד
+   ❌ אסור: "יש לך פלאש דרו" — השחקן צריך לזהות את זה בעצמו מהקלפים!
+   ✓ נכון: "3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?"
+4. **options** — 3 אופציות, אחת נכונה
 
-חוקים קריטיים:
-- אם מישהו המר → האופציות: קריאה [סכום ההימור], העלאה ל-[סכום], ויתור
-- אם אף אחד לא המר → האופציות: צ'ק, הימור [סכום], (אול-אין/ויתור)
-- "קריאה" = סכום שצריך לשלם, לא סכום הקופה!
+חוקים:
+- situation חייב להיות 1-2 משפטים קצרים בלבד. כל מה שצריך: מי ביד, כמה בקופה, מי המר כמה
+- אם מישהו המר → אופציות: קריאה [סכום], העלאה ל-[סכום], ויתור
+- אם אף אחד לא המר → אופציות: צ'ק, הימור [סכום], (אול-אין/ויתור)
+- "קריאה" = סכום שצריך לשלם, לא סכום הקופה
+- כל הסכומים בצ'יפים (לא שקלים)
+- כל שאלה חייבת להיות עצמאית — כל המידע הנדרש חייב להופיע
 
-nearMiss — סימון חשוב:
-- לחלק מהתשובות השגויות, הוסף "nearMiss": true — תשובות שהיו **נכונות בפוקר מקצועי** אבל לא למשחק הביתי שלנו
-- דוגמה: בלוף שהיה עובד מול שחקנים רציונליים → nearMiss
-- תשובות פשוט שגויות (קריאה עם יד מתה, ויתור עם אגוזים) → בלי nearMiss
-- בממוצע ~30-40% מהתשובות השגויות צריכות להיות nearMiss
+מונחי פוקר:
+- פלופ, טרן, ריבר (לא "נהר"), בליינד (לא "עיוור"), ביד (לא "בכיס"), כפתור (לא "מפיץ")
+- מונחים באנגלית עם תרגום בסוגריים בפעם הראשונה: Pot Odds (יחס קופה), EV (ערך צפוי), c-bet (הימור המשך) וכו'
 
-איכות:
-- הסברים חייבים להתייחס לקלפים הספציפיים, לגודל הקופה ולסגנון היריב — לא עצות גנריות
-- ההסבר בשפה של משחק ביתי: "חרדון תמיד קורא אז בלוף לא ישרת אותך", "ב-1,500 צ'יפים (4.5 שקל) שווה לראות קלף"
-- כשתשובה nearMiss, ההסבר מציין: "במשחק מקצועי זה מהלך טוב, אבל..." + למה במשחק ביתי זה לא עובד
-- גם תשובות שגויות צריכות הסבר משכנע
-- גוון: מיקומים שונים, קלפים שונים, עומקי ערימה שונים
-- **הנמקת התשובה חייבת להתאים למשחק הביתי** — לא להשתמש בלוגיקה של GTO/מקצועי:
-  - ✓ נכון: "העלאה בונה קופה גדולה — הם ישלמו לך עם יד חזקה כזו"
-  - ✗ שגוי: "העלאה תדלל את השדה ותבודד יריב אחד"
-  - ✓ נכון: "בלוף לא יעבוד — חרדון ואורן ישלמו כמעט תמיד"
-  - ✗ שגוי: "בלוף כאן ינצל את ה-fold equity"
-  - ✓ נכון: "שווה לקרוא — ההימור קטן ביחס לקופה ויש משיכה"
-  - ✗ שגוי: "ויתור נכון כי הסיכוי לפרוש את היריב נמוך"
+nearMiss:
+- "nearMiss": true לתשובות שהיו נכונות בפוקר מקצועי אבל לא למשחק ביתי
+- ~30-40% מהתשובות השגויות צריכות להיות nearMiss
+
+הסברים:
+- קצרים (1-2 משפטים), ספציפיים לקלפים ולמצב
+- בשפה של משחק ביתי, לא GTO: "בלוף לא יעבוד — תמיד מישהו קורא", "העלאה בונה קופה — הם ישלמו"
+- ❌ אסור: "תדלל/תבודד", "fold equity", לוגיקה מקצועית
 ${avoidContext}
 JSON בלבד, מערך של ${count}:
-[{"id":1,"situation":"2-3 משפטים תמציתיים. אל תחזור על הקלפים","yourCards":"8♠ 8♦","options":[{"id":"A","text":"קריאה 800","isCorrect":false,"nearMiss":true,"explanation":"הסבר ספציפי"},{"id":"B","text":"העלאה ל-3,000","isCorrect":true,"explanation":"הסבר ספציפי"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר ספציפי"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
+[{"id":1,"situation":"3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"קריאה 800","isCorrect":true,"explanation":"הסבר קצר"},{"id":"B","text":"העלאה ל-2,500","isCorrect":false,"nearMiss":true,"explanation":"הסבר קצר"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר קצר"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
 };
 
 const hashScenario = (s: { situation: string; yourCards: string; options: { text: string }[] }): string => {
@@ -2014,28 +2007,22 @@ ${playerStyle ? `\nסגנון משחק ידוע: ${playerStyle}` : ''}
 
 4. סיכום (1-2 משפטים): יעד קדימה, נימה מעודדת.
 
+חשוב: סיים את כל הסעיפים במלואם — אל תקטע באמצע משפט. אם יש מגבלת אורך, העדף להשלים את רשימת נקודות השיפור לפני הסיכום.
+
 חוקים:
 - אל תחזור על מספרים שהוא רואה בטבלה
 - כתוב כאילו אתה מכיר אותו אישית
 - שלב הומור קל אם מתאים
 - אל תציג נתונים כרשימה — שלב טבעית
-- 12-18 שורות`;
+- בערך 12-18 שורות`;
 
   try {
-    const config = API_CONFIGS[0];
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
-      }),
+    const text = await runGeminiTextPrompt(apiKey, prompt, {
+      temperature: 0.8,
+      maxOutputTokens: 8192,
+      label: 'training_coaching',
     });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+    return text || null;
   } catch {
     return null;
   }

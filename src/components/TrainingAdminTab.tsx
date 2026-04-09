@@ -26,13 +26,62 @@ import {
   analyzePlayerTraining,
   formatAnalysisForPrompt,
   getPlayerGameSummary,
-  generatePlayerCoaching,
 } from '../utils/pokerTraining';
-import { getGeminiApiKey, API_CONFIGS } from '../utils/geminiAI';
+import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
 
 
 const RATE_LIMIT_DELAY = 7500;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const safeParseJSON = (raw: string): any => {
+  let text = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+  // Extract JSON object/array from surrounding text
+  const objStart = text.indexOf('{');
+  const arrStart = text.indexOf('[');
+  if (objStart >= 0 && (arrStart < 0 || objStart < arrStart)) {
+    text = text.slice(objStart);
+  } else if (arrStart >= 0) {
+    text = text.slice(arrStart);
+  }
+  // Try parsing as-is first
+  try { return JSON.parse(text); } catch { /* continue */ }
+  // Fix common AI issues: truncated strings, trailing commas
+  let fixed = text
+    .replace(/,\s*([}\]])/g, '$1')     // trailing commas
+    .replace(/([^\\])"\s*$/gm, '$1"')  // line-end quote cleanup
+    .replace(/\n/g, '\\n');            // unescaped newlines in strings
+  try { return JSON.parse(fixed); } catch { /* continue */ }
+  // Last resort: try to close unclosed braces/brackets
+  fixed = text.replace(/,\s*([}\]])/g, '$1');
+  let opens = 0, closes = 0;
+  for (const ch of fixed) { if (ch === '{') opens++; if (ch === '}') closes++; }
+  while (closes < opens) { fixed += '}'; closes++; }
+  // Fix unterminated string: if odd number of unescaped quotes, add one
+  const unescapedQuotes = (fixed.match(/(?<!\\)"/g) || []).length;
+  if (unescapedQuotes % 2 !== 0) fixed = fixed.replace(/([^"]*$)/, '"$1');
+  try { return JSON.parse(fixed); } catch { /* continue */ }
+  throw new Error(`JSON parse failed: ${text.slice(0, 120)}...`);
+};
+
+type FixDetailLevel = 'info' | 'success' | 'error';
+
+/** Hebrew validation after AI fix — avoids silent "invalid result" with no detail */
+const validateAIFixedScenario = (s: PoolScenario): string | null => {
+  if (!s.options || !Array.isArray(s.options)) return 'חסר מערך אופציות בתשובת ה-AI';
+  if (s.options.length !== 3) return `נדרשות בדיוק 3 אופציות — התקבלו ${s.options.length}`;
+  const correctN = s.options.filter(o => o.isCorrect).length;
+  if (correctN !== 1) return `נדרשת בדיוק אופציה אחת עם isCorrect: true — נמצאו ${correctN}`;
+  const ids = s.options.map(o => String(o.id ?? '').trim().toUpperCase());
+  const need = ['A', 'B', 'C'];
+  const idSet = new Set(ids);
+  if (idSet.size !== 3 || !need.every(x => idSet.has(x))) {
+    return `מזהי אופציות חייבים להיות A, B, C (קיבלת: ${s.options.map(o => o.id).join(', ')})`;
+  }
+  if (!String(s.situation ?? '').trim()) return 'שדה situation ריק או חסר';
+  if (!String(s.yourCards ?? '').trim()) return 'שדה yourCards ריק או חסר';
+  return null;
+};
 
 const TrainingAdminTab = () => {
   const [pool, setPool] = useState<TrainingPool | null>(null);
@@ -60,6 +109,14 @@ const TrainingAdminTab = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [savingFix, setSavingFix] = useState(false);
   const [flagMsg, setFlagMsg] = useState<string | null>(null);
+  const [showFixStepDetails, setShowFixStepDetails] = useState(false);
+  const [fixDetailLog, setFixDetailLog] = useState<Array<{ text: string; level: FixDetailLevel }>>([]);
+
+  const pushFixLog = useCallback((text: string, level: FixDetailLevel) => {
+    setFixDetailLog(prev => [...prev, { text, level }]);
+  }, []);
+
+  const clearFixLog = useCallback(() => setFixDetailLog([]), []);
 
   // Report AI analysis
   const [analyses, setAnalyses] = useState<Record<string, { verdict: string; explanation: string; rejectText: string; acceptText?: string }>>({});
@@ -101,60 +158,19 @@ const TrainingAdminTab = () => {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // Auto-generate coaching for players who need it:
-  // 1. Players with pendingReportMilestones (crossed milestone during session)
-  // 2. Players with 100+ questions but no insights yet
-  const [autoGenRunning, setAutoGenRunning] = useState(false);
-  useEffect(() => {
-    if (!answers || answers.players.length === 0 || !insights) return;
-    if (autoGenRunning) return;
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
+  const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
 
-    const needsCoaching = answers.players.filter(p => {
+  const playersNeedingInsights = useMemo((): TrainingPlayerData[] => {
+    if (!answers || answers.players.length === 0) return [];
+    const map = insights?.insights ?? {};
+    return answers.players.filter(p => {
       const allAnswered = p.sessions.reduce((sum, s) => sum + s.results.length, 0);
       const hasPending = p.pendingReportMilestones && p.pendingReportMilestones.length > 0;
-      const hasInsight = !!insights.insights?.[p.playerName];
+      const hasInsight = !!map[p.playerName];
       const eligible = allAnswered >= 100 && !hasInsight;
       return hasPending || eligible;
     });
-    if (needsCoaching.length === 0) return;
-
-    setAutoGenRunning(true);
-    (async () => {
-      for (const player of needsCoaching) {
-        setInsightMsg(`⏳ מייצר תובנות אוטומטיות ל${player.playerName}...`);
-        const coachingText = await generatePlayerCoaching(player.playerName, player, answers.players);
-        if (coachingText) {
-          const currentInsights = insights || { lastUpdated: '', insights: {} };
-          currentInsights.insights[player.playerName] = {
-            generatedAt: new Date().toISOString(),
-            sessionsAtGeneration: player.sessions.length,
-            improvement: coachingText,
-          };
-          currentInsights.lastUpdated = new Date().toISOString();
-          await uploadTrainingInsights(currentInsights);
-          setInsights({ ...currentInsights });
-
-          if (player.pendingReportMilestones && player.pendingReportMilestones.length > 0) {
-            await writeTrainingAnswersWithRetry((data) => {
-              const p = data.players.find(pl => pl.playerName === player.playerName);
-              if (p) {
-                p.pendingReportMilestones = [];
-              }
-              data.lastUpdated = new Date().toISOString();
-              return data;
-            });
-          }
-          setInsightMsg(`✅ תובנות נוצרו ל${player.playerName}`);
-        }
-        await new Promise(r => setTimeout(r, 3000));
-      }
-      setInsightMsg(null);
-      loadAll();
-    })().finally(() => setAutoGenRunning(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers?.players.length, insights]);
+  }, [answers, insights?.insights]);
 
   // ── Alerts ──
   const getAlerts = (): { text: string; color: string }[] => {
@@ -407,21 +423,75 @@ const TrainingAdminTab = () => {
     }
   };
 
-  // ── Remove flagged ──
+  // ── Remove flagged + neutralize scores ──
   const handleRemoveFlagged = async (poolIds: string[]) => {
     if (removingFlagged) return;
     setRemovingFlagged(true);
-    setFlagMsg(`מסיר ${poolIds.length} שאלות...`);
+    setFlagMsg(`מסיר ${poolIds.length} שאלות ומתקן ציונים...`);
     try {
       const result = await removeFromTrainingPool(poolIds);
       if (result.success) {
-        // Use localStorage cache (already updated by removeFromTrainingPool)
-        // instead of re-fetching from GitHub which may return stale data
         const cached = localStorage.getItem('training_pool_cached');
         if (cached) {
           try { setPool(JSON.parse(cached) as TrainingPool); } catch { /* fall through */ }
         }
-        setFlagMsg(`✅ הוסרו ${poolIds.length} שאלות`);
+
+        const removeSet = new Set(poolIds);
+        const neutralized = await writeTrainingAnswersWithRetry((data) => {
+          const clone = JSON.parse(JSON.stringify(data)) as TrainingAnswersFile;
+          let affected = 0;
+          clone.players.forEach(player => {
+            let changed = false;
+            player.sessions.forEach(session => {
+              session.results.forEach(r => {
+                if (removeSet.has(r.poolId) && !r.neutralized) {
+                  r.neutralized = true;
+                  changed = true;
+                  affected++;
+                }
+              });
+              if (session.flaggedPoolIds) {
+                session.flaggedPoolIds = session.flaggedPoolIds.filter(id => !removeSet.has(id));
+              }
+              if (session.flagReports) {
+                session.flagReports = session.flagReports.filter(r => !removeSet.has(r.poolId));
+              }
+            });
+            if (changed) {
+              const nonNeutral = player.sessions.flatMap(s => s.results).filter(r => !r.neutralized && !r.nearMiss);
+              player.totalQuestions = nonNeutral.length;
+              player.totalCorrect = nonNeutral.filter(r => r.correct).length;
+              player.accuracy = player.totalQuestions > 0
+                ? Math.round((player.totalCorrect / player.totalQuestions) * 100)
+                : 0;
+            }
+          });
+          clone.lastUpdated = new Date().toISOString();
+          return clone;
+        });
+
+        if (answers) {
+          const updatedAnswers = JSON.parse(JSON.stringify(answers)) as TrainingAnswersFile;
+          const removeSetLocal = new Set(poolIds);
+          updatedAnswers.players.forEach(player => {
+            player.sessions.forEach(session => {
+              session.results.forEach(r => {
+                if (removeSetLocal.has(r.poolId)) r.neutralized = true;
+              });
+              if (session.flaggedPoolIds) session.flaggedPoolIds = session.flaggedPoolIds.filter(id => !removeSetLocal.has(id));
+              if (session.flagReports) session.flagReports = session.flagReports.filter(r => !removeSetLocal.has(r.poolId));
+            });
+            const nonNeutral = player.sessions.flatMap(s => s.results).filter(r => !r.neutralized && !r.nearMiss);
+            player.totalQuestions = nonNeutral.length;
+            player.totalCorrect = nonNeutral.filter(r => r.correct).length;
+            player.accuracy = player.totalQuestions > 0 ? Math.round((player.totalCorrect / player.totalQuestions) * 100) : 0;
+          });
+          setAnswers(updatedAnswers);
+        }
+
+        setFlagMsg(neutralized
+          ? `✅ הוסרו ${poolIds.length} שאלות + ציונים תוקנו`
+          : `✅ הוסרו ${poolIds.length} שאלות (תיקון ציונים נכשל)`);
       } else {
         setFlagMsg(`❌ שגיאה: ${result.message}`);
       }
@@ -491,7 +561,7 @@ ${GAME_CONTEXT}
 
 השאלה:
 מצב: ${scenario.situation}
-קלפים: ${scenario.yourCards || 'לא צוינו'}
+קלפים: ${scenario.yourCards || 'לא צוינו'}${scenario.boardCards ? `\nלוח: ${scenario.boardCards}` : ''}
 ${scenario.options.map(o => `${o.id}. ${o.text}${o.isCorrect ? ' ✓' : ''}${o.nearMiss ? ' (ניטרלי)' : ''} — ${o.explanation || ''}`).join('\n')}
 
 הדיווחים:
@@ -505,8 +575,7 @@ JSON בלבד, בלי markdown:`;
 
     try {
       const text = await callGemini(apiKey, prompt);
-      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const result = JSON.parse(cleaned);
+      const result = safeParseJSON(text);
       setAnalyses(prev => ({ ...prev, [poolId]: result }));
     } catch (err) {
       setAnalyses(prev => ({
@@ -555,8 +624,7 @@ JSON בלבד:`;
 
     try {
       const text = await callGemini(apiKey, prompt);
-      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const result = JSON.parse(cleaned);
+      const result = safeParseJSON(text);
       setAnalyses(prev => ({ ...prev, [poolId]: result }));
       setAnalysisFeedback(prev => ({ ...prev, [poolId]: '' }));
     } catch (err) {
@@ -577,8 +645,10 @@ JSON בלבד:`;
     const scenario = pool.scenarios.find(s => s.poolId === poolId);
     if (!scenario) return;
 
+    clearFixLog();
     setFixingFlagged(poolId);
     setFlagMsg(`AI מייצר תיקון...`);
+    pushFixLog(`שלב 1/4: טעינת שאלה ${poolId} מהמאגר`, 'info');
 
     const reportSummary = reports.map(r => {
       const reasonLabel: Record<string, string> = {
@@ -606,6 +676,7 @@ ${JSON.stringify({
   poolId: scenario.poolId,
   situation: scenario.situation,
   yourCards: scenario.yourCards,
+  boardCards: scenario.boardCards || '',
   options: scenario.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })),
   category: scenario.category,
   categoryId: scenario.categoryId,
@@ -616,44 +687,68 @@ ${reportSummary}
 
 תקן כך:
 1. בדיוק 3 אופציות (A, B, C) — בדיוק אחת נכונה למשחק ביתי
-2. מצב: 2-3 משפטים תמציתיים. אל תחזור על הקלפים בטקסט
-3. כל הסכומים בצ'יפים (לא שקלים)
-4. הסברים בעברית פשוטה, ספציפיים ללוח ולקלפים
-5. nearMiss: true לתשובות שנכונות בפוקר מקצועי אך לא למשחק ביתי
-6. שמור על poolId, categoryId ו-category מקוריים
-7. מונחים: פלופ/טרן/ריבר (לא "נהר"), בליינד (לא "עיוור"), ביד (לא "בכיס"), כפתור (לא "מפיץ")
-8. מונחים באנגלית — חובה תרגום בסוגריים בפעם הראשונה: Pot Odds (יחס קופה), Implied Odds (סיכויי רווח עתידיים), EV (ערך צפוי), Equity (אחוז ניצחון) וכו'
-9. **הנמקה חייבת להתאים למשחק ביתי** — אסור להשתמש בלוגיקה מקצועית:
-   - אסור: "העלאה תדלל/תבודד", "fold equity", "לבודד יריב"
-   - נכון: "העלאה בונה קופה גדולה כי הם ישלמו", "בלוף לא יעבוד — תמיד מישהו קורא"
-   - בגלל שהשחקנים שלנו קוראים הרבה: העלאה = בניית קופה, לא בידוד
+2. situation: 1-2 משפטים קצרים — רק הפעולה (מי המר כמה, גודל קופה, כמה שחקנים)
+3. ❌ אסור לחזור על הקלפים או הלוח ב-situation — הם מוצגים בנפרד
+4. ❌ אסור לכתוב "יש לך פלאש דרו/סט/סטרייט" — השחקן צריך לזהות בעצמו
+5. boardCards: קלפי הלוח בנפרד (פלופ/טרן/ריבר), ריק לפני הפלופ
+6. הסברים קצרים (1-2 משפטים) בעברית פשוטה, ספציפיים ללוח
+7. nearMiss: true לתשובות נכונות בפוקר מקצועי אך לא למשחק ביתי
+8. שמור על poolId, categoryId ו-category מקוריים
+9. הנמקה למשחק ביתי — אסור: "תדלל/תבודד", "fold equity"
 
 החזר JSON בלבד, אובייקט אחד:
-{"poolId":"...","situation":"...","yourCards":"...","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"...","nearMiss":true},{"id":"B","text":"...","isCorrect":true,"explanation":"..."},{"id":"C","text":"...","isCorrect":false,"explanation":"..."}],"category":"...","categoryId":"..."}
+{"poolId":"...","situation":"קצר — רק הפעולה","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"קצר"},{"id":"B","text":"...","isCorrect":true,"explanation":"קצר"},{"id":"C","text":"...","isCorrect":false,"explanation":"קצר"}],"category":"...","categoryId":"..."}
 
 JSON בלבד, בלי markdown:`;
 
     try {
-      const fixedText = await callGemini(apiKey, prompt);
-      const cleaned = fixedText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const fixedScenario = JSON.parse(cleaned) as PoolScenario;
+      pushFixLog('שלב 2/4: שליחת בקשה ל-Gemini (מודל עם נפילה אוטומטית)', 'info');
+      const fixedText = await callGemini(apiKey, prompt, 8192);
+      pushFixLog(`שלב 3/4: התקבלה תשובה (${fixedText.length.toLocaleString('he-IL')} תווים) — מנתחים JSON`, 'info');
 
-      if (!fixedScenario.poolId || !fixedScenario.options || fixedScenario.options.length === 0) {
-        setFlagMsg('❌ AI החזיר תוצאה לא תקינה');
-        setFixingFlagged(null);
+      let fixedScenario: PoolScenario;
+      try {
+        fixedScenario = safeParseJSON(fixedText) as PoolScenario;
+      } catch (parseErr) {
+        const hint = fixedText.length > 400
+          ? `${fixedText.slice(0, 200)} … ${fixedText.slice(-120)}`
+          : fixedText;
+        pushFixLog(`כשל בפענוח JSON: ${parseErr instanceof Error ? parseErr.message : 'לא ידוע'}`, 'error');
+        pushFixLog(`תחילת/סוף תשובה גולמית:\n${hint}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg('❌ לא הצלחנו לפענח את תשובת ה-AI — פתח "פירוט שלבים" לפרטים');
         return;
       }
 
       fixedScenario.poolId = poolId;
       fixedScenario.categoryId = scenario.categoryId;
       fixedScenario.category = scenario.category;
+      fixedScenario.options = (fixedScenario.options || []).map(o => ({
+        ...o,
+        id: String(o.id ?? '').trim().toUpperCase(),
+      }));
 
+      const validationError = validateAIFixedScenario(fixedScenario);
+      if (validationError) {
+        pushFixLog(`שלב 4/4: אימות מבנה נכשל — ${validationError}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg(`❌ תשובת AI לא עומדת בדרישות: ${validationError}`);
+        return;
+      }
+
+      pushFixLog('שלב 4/4: אימות מבנה עבר — תצוגה מקדימה מוכנה', 'success');
       setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
       setFixFeedback('');
       setFixHistory([]);
       setFlagMsg(null);
     } catch (err) {
-      setFlagMsg(`❌ שגיאת AI: ${err instanceof Error ? err.message : 'Unknown'}`);
+      const msg = err instanceof Error ? err.message : 'Unknown';
+      pushFixLog(`שגיאה בשלב קריאת AI: ${msg}`, 'error');
+      if (msg.includes('ALL_MODELS_FAILED') || msg.includes('אין חיבור')) {
+        pushFixLog('רמז: בדוק מפתח API, מכסת בקשות (429), או חיבור אינטרנט', 'info');
+      }
+      setShowFixStepDetails(true);
+      setFlagMsg(`❌ שגיאת AI: ${msg}`);
     } finally {
       setFixingFlagged(null);
     }
@@ -686,17 +781,49 @@ ${historyContext}
 
 החזר JSON בלבד, אובייקט אחד מתוקן:`;
 
+    pushFixLog('תיקון חוזר: שליחה ל-Gemini', 'info');
     try {
-      const fixedText = await callGemini(apiKey, prompt);
-      const cleaned = fixedText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const fixedScenario = JSON.parse(cleaned) as PoolScenario;
+      const fixedText = await callGemini(apiKey, prompt, 8192);
+      pushFixLog(`תיקון חוזר: התקבלו ${fixedText.length.toLocaleString('he-IL')} תווים`, 'info');
+
+      let fixedScenario: PoolScenario;
+      try {
+        fixedScenario = safeParseJSON(fixedText) as PoolScenario;
+      } catch (parseErr) {
+        const hint = fixedText.length > 400
+          ? `${fixedText.slice(0, 200)} … ${fixedText.slice(-120)}`
+          : fixedText;
+        pushFixLog(`תיקון חוזר — כשל JSON: ${parseErr instanceof Error ? parseErr.message : ''}`, 'error');
+        pushFixLog(hint, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg('❌ תיקון חוזר נכשל בפענוח — ראה פירוט שלבים');
+        return;
+      }
+
       fixedScenario.poolId = fixPreview.poolId;
       fixedScenario.categoryId = fixPreview.original.categoryId;
       fixedScenario.category = fixPreview.original.category;
+      fixedScenario.options = (fixedScenario.options || []).map(o => ({
+        ...o,
+        id: String(o.id ?? '').trim().toUpperCase(),
+      }));
+
+      const validationError = validateAIFixedScenario(fixedScenario);
+      if (validationError) {
+        pushFixLog(`תיקון חוזר — אימות: ${validationError}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg(`❌ תיקון חוזר לא תקין: ${validationError}`);
+        return;
+      }
+
+      pushFixLog('תיקון חוזר הושלם בהצלחה', 'success');
       setFixHistory(prev => [...prev, fixFeedback]);
       setFixPreview({ ...fixPreview, fixed: fixedScenario });
       setFixFeedback('');
+      setFlagMsg(null);
     } catch (err) {
+      pushFixLog(`תיקון חוזר — ${err instanceof Error ? err.message : 'Unknown'}`, 'error');
+      setShowFixStepDetails(true);
       setFlagMsg(`❌ שגיאת AI: ${err instanceof Error ? err.message : 'Unknown'}`);
     } finally {
       setRegenerating(false);
@@ -706,29 +833,54 @@ ${historyContext}
   // ── Confirm AI fix (save to pool + clear flags) ──
   const confirmAIFix = async () => {
     if (!fixPreview || !pool) return;
+    const { poolId, fixed } = fixPreview;
+    const again = validateAIFixedScenario(fixed);
+    if (again) {
+      pushFixLog(`שמירה בוטלה — אימות לפני שמירה נכשל: ${again}`, 'error');
+      setShowFixStepDetails(true);
+      setFlagMsg(`❌ לא ניתן לשמור: ${again}`);
+      return;
+    }
+
     setSavingFix(true);
     setFlagMsg('שומר תיקון...');
+    pushFixLog(`שמירה 1/3: בניית מאגר מקומי — ${poolId}`, 'info');
 
-    const { poolId, fixed } = fixPreview;
     try {
       const updatedScenarios = pool.scenarios.map(s => s.poolId === poolId ? fixed : s);
       const newPool = buildPoolObject(updatedScenarios);
+      pushFixLog('שמירה 2/3: העלאת מאגר ל-GitHub...', 'info');
       const result = await uploadTrainingPool(newPool);
 
-      if (result.success) {
-        setPool(newPool);
-        const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
-        if (ok && answers) {
-          setAnswers(clearFlagsLocally(answers, poolId));
-        }
-        setFlagMsg('✅ השאלה תוקנה — הדיווחים נמחקו');
-      } else {
+      if (!result.success) {
+        pushFixLog(`העלאת המאגר נכשלה: ${result.message}`, 'error');
+        setShowFixStepDetails(true);
         setFlagMsg(`❌ שגיאה בהעלאה: ${result.message}`);
+        return;
       }
-    } catch (err) {
-      setFlagMsg(`❌ שגיאה: ${err instanceof Error ? err.message : 'Unknown'}`);
-    } finally {
+
+      setPool(newPool);
+      pushFixLog('שמירה 3/3: מנקה דיווחים בקובץ התשובות...', 'info');
+      const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
+      if (!ok) {
+        pushFixLog('המאגר הועלה, אך עדכון קובץ התשובות נכשל — נסה רענון ואז "רענן" בלשונית', 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg('⚠️ המאגר עודכן ב-GitHub; ניקוי דיווחים בקובץ התשובות נכשל — רענן נתונים');
+        setFixPreview(null);
+        return;
+      }
+      if (answers) {
+        setAnswers(clearFlagsLocally(answers, poolId));
+      }
+      pushFixLog('✅ כל השלבים הושלמו — השאלה במאגר והדיווחים אוחדו', 'success');
+      setFlagMsg('✅ השאלה תוקנה — הדיווחים נמחקו');
       setFixPreview(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown';
+      pushFixLog(`שמירה נכשלה: ${msg}`, 'error');
+      setShowFixStepDetails(true);
+      setFlagMsg(`❌ שגיאה: ${msg}`);
+    } finally {
       setSavingFix(false);
     }
   };
@@ -779,21 +931,20 @@ ${GAME_CONTEXT}
    - הקלפים ביד + על הלוח — האם יוצרים סטרייט/צבע/פול האוס שלא זוהה?
    - סכומי הימור הגיוניים? (צ'יפים, לא שקלים)
    - "קריאה" = סכום ההימור, לא הקופה?
-2. **התאמה למשחק ביתי**: בלוף גדול = לא תשובה נכונה (שחקנים קוראים). צ'ק-רייז מתוחכם = לא מתאים.
+2. **התאמה למשחק ביתי**: בלוף גדול = לא תשובה נכונה (שחקנים קוראים)
 3. **nearMiss**: סמן תשובות שגויות שהיו נכונות בפוקר מקצועי
-4. **עברית**: אין מונחים באנגלית, סכומים בצ'יפים
-5. **שגיאות**: placeholder טקסט, קלפים כפולים, חזרה על הקלפים בטקסט
-6. **3 אופציות בדיוק**: אם יש 2 או 4 — תקן ל-3 (A, B, C)
-7. אם יריבים גנריים ואפשר להחליף בשמות אמיתיים מהמשחק — סמן כ-fixed
+4. **שגיאות**: placeholder טקסט, קלפים כפולים
+5. **פורמט**: situation חייב להיות קצר (1-2 משפטים — רק הפעולה). אם הקלפים או הלוח מוזכרים ב-situation — העבר אותם ל-boardCards וקצר את situation. אם boardCards ריק אבל יש קלפי לוח ב-situation — חלץ אותם ל-boardCards.
+6. אם situation אומר "יש לך פלאש דרו/סט/סטרייט" — הסר את זה (השחקן צריך לזהות בעצמו)
 
 שאלות:
-${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, situation: s.situation, options: s.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })), categoryId: s.categoryId })))}
+${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, boardCards: s.boardCards || '', situation: s.situation, options: s.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })), categoryId: s.categoryId })))}
 
 החזר JSON בלבד, מערך:
 [{"poolId":"xxx","status":"ok"|"fixed"|"remove","issues":["בעיה"],"fixedScenario":{...כל השדות המתוקנים אם fixed},"nearMissFlags":["B"]}]
 
 - "ok": תקין (עדיין הוסף nearMissFlags אם רלוונטי)
-- "fixed": מחזיר fixedScenario מתוקן עם כל השדות (situation, yourCards, options עם id/text/isCorrect/explanation/nearMiss, category, categoryId, poolId)
+- "fixed": מחזיר fixedScenario מתוקן עם כל השדות (situation, yourCards, boardCards, options עם id/text/isCorrect/explanation/nearMiss, category, categoryId, poolId)
 - "remove": גרוע מדי
 
 JSON בלבד, בלי markdown:`;
@@ -833,11 +984,11 @@ JSON בלבד, בלי markdown:`;
               setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
               continue;
             }
-            const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
             try {
-              result = JSON.parse(cleaned);
+              result = safeParseJSON(text);
             } catch (parseErr) {
-              lastError = `${model}: JSON לא תקין — ${cleaned.slice(0, 80)}...`;
+              const snippet = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim().slice(0, 80);
+              lastError = `${model}: JSON לא תקין — ${snippet}...`;
               setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
               continue;
             }
@@ -945,19 +1096,17 @@ JSON בלבד, בלי markdown:`;
   };
 
   // ── Generate AI insights ──
-  const handleGenerateInsight = async (player: TrainingPlayerData) => {
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
-
-    setGeneratingInsight(player.playerName);
-    setGeneratingStep('מנתח נתונים...');
-    setInsightMsg(null);
-
-    const allPlayersData = answers?.players || [];
+  const runPlayerInsightPipeline = async (
+    player: TrainingPlayerData,
+    allPlayersData: TrainingPlayerData[],
+    insightsBase: TrainingInsightsFile,
+    apiKey: string,
+    setStep: (s: string | null) => void,
+  ): Promise<TrainingInsightsFile> => {
+    setStep('מנתח נתונים...');
     const a = analyzePlayerTraining(player, allPlayersData);
     const dataBlock = formatAnalysisForPrompt(a, player.playerName);
     const gameSummary = getPlayerGameSummary(player.playerName);
-
     const playerStyle = PLAYER_STYLES[player.playerName] || 'לא ידוע';
 
     const wrongByCat: Record<string, string[]> = {};
@@ -972,10 +1121,8 @@ JSON בלבד, בלי markdown:`;
       .map(([cat, ids]) => `${cat}: ${ids.length} טעויות`)
       .join(', ');
 
-    try {
-      // 1. Player-facing holistic coaching (stored on GitHub, visible to player)
-      setGeneratingStep('1/3 — מייצר תובנות לשחקן...');
-      const coachingPrompt = `אתה מאמן פוקר אישי של ${player.playerName} במשחק ביתי חברתי. כתוב סקירה אישית ומעשית — הוא קורא את זה בעצמו.
+    setStep('1/3 — מייצר תובנות לשחקן...');
+    const coachingPrompt = `אתה מאמן פוקר אישי של ${player.playerName} במשחק ביתי חברתי. כתוב סקירה אישית ומעשית — הוא קורא את זה בעצמו.
 עברית בלבד.
 
 ═══ נתוני אימון ═══
@@ -992,13 +1139,18 @@ ${playerStyle ? `\nסגנון משחק ידוע: ${playerStyle}` : ''}
 3. נקודות לשיפור (3-5 טיפים ממוספרים): שם נושא + עצה מעשית${gameSummary ? ` + קשר לתוצאות` : ''}.${a.consistentMistakeCats.length > 0 ? ` חולשות עקביות: ${a.consistentMistakeCats.join(', ')}` : ''}
 4. סיכום מעודד (1-2 משפטים).
 
-חוקים: אל תחזור על מספרים מהטבלה. כתוב כאילו מכיר אותו. הומור קל מותר. שלב נתונים טבעית. 12-18 שורות.`;
+חשוב: סיים את כל הסעיפים במלואם — אל תקטע באמצע משפט. אם נשאר מקום, העדף להשלים את סעיף הנקודות לשיפור לפני הסיכום.
 
-      const improvResult = await callGemini(apiKey, coachingPrompt);
+חוקים: אל תחזור על מספרים מהטבלה. כתוב כאילו מכיר אותו. הומור קל מותר. שלב נתונים טבעית. בערך 12-18 שורות.`;
 
-      // 2. Admin-facing exploitation analysis (localStorage only, never synced)
-      setGeneratingStep('2/3 — מייצר ניתוח ניצול...');
-      const exploitPrompt = `נתח את ${player.playerName} ותן טקטיקות ניצול לשולחן. תמציתי וישיר — רק מה שאני צריך לדעת כשאני יושב מולו.
+    const improvResult = await runGeminiTextPrompt(apiKey, coachingPrompt, {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+      label: 'training_coaching',
+    });
+
+    setStep('2/3 — מייצר ניתוח ניצול...');
+    const exploitPrompt = `נתח את ${player.playerName} ותן טקטיקות ניצול לשולחן. תמציתי וישיר — רק מה שאני צריך לדעת כשאני יושב מולו.
 
 נתונים:
 ${dataBlock}
@@ -1018,27 +1170,50 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
 
 עברית, קצר, בלי הקדמות`;
 
-      const exploitResult = await callGemini(apiKey, exploitPrompt);
+    const exploitResult = await runGeminiTextPrompt(apiKey, exploitPrompt, {
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+      label: 'training_exploit',
+    });
 
-      // 3. Save to GitHub + localStorage
-      setGeneratingStep('3/3 — שומר...');
-      const currentInsights = insights || { lastUpdated: '', insights: {} };
-      currentInsights.insights[player.playerName] = {
-        generatedAt: new Date().toISOString(),
-        sessionsAtGeneration: player.sessions.length,
-        improvement: improvResult,
-      };
-      currentInsights.lastUpdated = new Date().toISOString();
-      await uploadTrainingInsights(currentInsights);
-      setInsights({ ...currentInsights });
+    setStep('3/3 — שומר...');
+    const currentInsights: TrainingInsightsFile = {
+      lastUpdated: new Date().toISOString(),
+      insights: { ...insightsBase.insights },
+    };
+    currentInsights.insights[player.playerName] = {
+      generatedAt: new Date().toISOString(),
+      sessionsAtGeneration: player.sessions.length,
+      improvement: improvResult,
+    };
+    await uploadTrainingInsights(currentInsights);
 
-      const exploitData: TrainingExploitationLocal = {
-        generatedAt: new Date().toISOString(),
-        sessionsAtGeneration: player.sessions.length,
-        text: exploitResult,
-      };
-      localStorage.setItem(`training_exploitation_${player.playerName}`, JSON.stringify(exploitData));
+    const exploitData: TrainingExploitationLocal = {
+      generatedAt: new Date().toISOString(),
+      sessionsAtGeneration: player.sessions.length,
+      text: exploitResult,
+    };
+    localStorage.setItem(`training_exploitation_${player.playerName}`, JSON.stringify(exploitData));
 
+    return currentInsights;
+  };
+
+  const handleGenerateInsight = async (player: TrainingPlayerData) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) return;
+
+    setGeneratingInsight(player.playerName);
+    setInsightMsg(null);
+    const base = insights ?? { lastUpdated: '', insights: {} };
+    try {
+      const merged = await runPlayerInsightPipeline(
+        player,
+        answers?.players || [],
+        { lastUpdated: base.lastUpdated, insights: { ...base.insights } },
+        apiKey,
+        (s) => setGeneratingStep(s),
+      );
+      setInsights(merged);
       setInsightMsg(`✅ תובנות נוצרו עבור ${player.playerName}`);
     } catch (err) {
       setInsightMsg(`שגיאה: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -1048,29 +1223,57 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
     }
   };
 
+  const handleBatchGenerateInsights = async () => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey || !answers || playersNeedingInsights.length === 0) return;
 
-  const callGemini = async (apiKey: string, prompt: string, maxTokens = 2048): Promise<string> => {
-    for (const config of API_CONFIGS) {
-      const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-      const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
+    setBatchInsightsRunning(true);
+    setInsightMsg(null);
+    const base = insights ?? { lastUpdated: '', insights: {} };
+    let working: TrainingInsightsFile = {
+      lastUpdated: base.lastUpdated,
+      insights: { ...base.insights },
+    };
+    const list = playersNeedingInsights;
 
-      try {
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: maxTokens },
-          }),
-        });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
-      } catch { continue; }
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const player = list[i];
+        setInsightMsg(`⏳ מייצר תובנות (${i + 1}/${list.length}): ${player.playerName}...`);
+        working = await runPlayerInsightPipeline(
+          player,
+          answers.players,
+          working,
+          apiKey,
+          (s) => setGeneratingStep(s),
+        );
+        setInsights({ ...working });
+
+        if (player.pendingReportMilestones && player.pendingReportMilestones.length > 0) {
+          await writeTrainingAnswersWithRetry((data) => {
+            const pl = data.players.find(pp => pp.playerName === player.playerName);
+            if (pl) pl.pendingReportMilestones = [];
+            data.lastUpdated = new Date().toISOString();
+            return data;
+          });
+        }
+
+        if (i < list.length - 1) {
+          await new Promise(r => setTimeout(r, 2500));
+        }
+      }
+      setInsightMsg(`✅ נוצרו תובנות ל-${list.length} שחקנים`);
+      await loadAll();
+    } catch (err) {
+      setInsightMsg(`שגיאה: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setBatchInsightsRunning(false);
+      setGeneratingStep(null);
     }
-    throw new Error('All models failed');
   };
+
+  const callGemini = async (apiKey: string, prompt: string, maxTokens = 4096): Promise<string> =>
+    runGeminiTextPrompt(apiKey, prompt, { temperature: 0.7, maxOutputTokens: maxTokens, label: 'training_admin' });
 
   // ── Flagged questions ──
   const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario; flagCount: number; reports: TrainingFlagReport[] }[] => {
@@ -1503,7 +1706,30 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
 
       {/* Player Summary Table */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
-        <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '0.5rem', marginTop: 0 }}>👥 שחקנים</h3>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem',
+        }}>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>👥 שחקנים</h3>
+          {playersNeedingInsights.length > 0 && (
+            <button
+              type="button"
+              onClick={handleBatchGenerateInsights}
+              disabled={batchInsightsRunning || generatingInsight !== null || !getGeminiApiKey()}
+              style={{
+                fontSize: '0.7rem', padding: '0.35rem 0.65rem', borderRadius: '8px', border: 'none',
+                background: batchInsightsRunning || generatingInsight !== null ? 'var(--surface-light)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                color: batchInsightsRunning || generatingInsight !== null ? 'var(--text-muted)' : 'white',
+                fontWeight: 600, cursor: batchInsightsRunning || generatingInsight !== null ? 'wait' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {batchInsightsRunning
+                ? `⏳ ${generatingStep || 'מייצר...'}`
+                : `✨ צור תובנות ל-${playersNeedingInsights.length} שחקנים`}
+            </button>
+          )}
+        </div>
 
         {sortedPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '0.75rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
@@ -1638,13 +1864,14 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
 
                       {/* Action button */}
                       <button
+                        type="button"
                         onClick={() => handleGenerateInsight(player)}
-                        disabled={generatingInsight === player.playerName}
+                        disabled={generatingInsight === player.playerName || batchInsightsRunning}
                         style={{
                           width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none',
-                          background: generatingInsight === player.playerName ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                          color: generatingInsight === player.playerName ? 'var(--text-muted)' : 'white',
-                          fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer',
+                          background: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                          color: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--text-muted)' : 'white',
+                          fontWeight: 600, fontSize: '0.75rem', cursor: generatingInsight === player.playerName || batchInsightsRunning ? 'wait' : 'pointer',
                         }}
                       >
                         {generatingInsight === player.playerName
@@ -1701,12 +1928,69 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
             </button>
           </div>
 
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.45rem',
+          }}>
+            <label style={{
+              fontSize: '0.65rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+              cursor: 'pointer', userSelect: 'none',
+            }}>
+              <input
+                type="checkbox"
+                checked={showFixStepDetails}
+                onChange={e => setShowFixStepDetails(e.target.checked)}
+                style={{ accentColor: '#6366f1' }}
+              />
+              הצג פירוט שלבים (תיקון AI)
+            </label>
+            {fixDetailLog.length > 0 && (
+              <button
+                type="button"
+                onClick={() => clearFixLog()}
+                disabled={fixingFlagged !== null || regenerating || savingFix}
+                style={{
+                  fontSize: '0.6rem', padding: '0.2rem 0.45rem', borderRadius: '6px',
+                  border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-muted)',
+                  cursor: fixingFlagged || regenerating || savingFix ? 'wait' : 'pointer',
+                }}
+              >
+                נקה יומן
+              </button>
+            )}
+          </div>
+
+          {(showFixStepDetails || fixDetailLog.some(l => l.level === 'error')) && fixDetailLog.length > 0 && (
+            <div style={{
+              marginBottom: '0.5rem', padding: '0.5rem 0.55rem', borderRadius: '8px',
+              background: 'rgba(15,23,42,0.5)', border: '1px solid var(--border)',
+              maxHeight: '220px', overflowY: 'auto', direction: 'rtl', textAlign: 'right',
+            }}>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                יומן שלבי תיקון
+              </div>
+              {fixDetailLog.map((line, i) => (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: '0.62rem', lineHeight: 1.45, marginBottom: '0.25rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    color: line.level === 'error' ? '#f87171' : line.level === 'success' ? '#4ade80' : 'var(--text-muted)',
+                  }}
+                >
+                  <span style={{ opacity: 0.85 }}>{line.level === 'error' ? '✗' : line.level === 'success' ? '✓' : '·'}</span>
+                  {' '}
+                  {line.text}
+                </div>
+              ))}
+            </div>
+          )}
+
           {flagMsg && (
             <div style={{
               padding: '0.4rem 0.6rem', borderRadius: '6px', marginBottom: '0.5rem',
               fontSize: '0.75rem', fontWeight: 500, textAlign: 'center',
-              background: flagMsg.includes('✅') ? 'rgba(34,197,94,0.08)' : flagMsg.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)',
-              color: flagMsg.includes('✅') ? 'var(--success)' : flagMsg.includes('❌') ? 'var(--danger)' : 'var(--text-muted)',
+              background: flagMsg.includes('✅') ? 'rgba(34,197,94,0.08)' : flagMsg.includes('❌') ? 'rgba(239,68,68,0.08)' : flagMsg.includes('⚠️') ? 'rgba(245,158,11,0.08)' : 'rgba(99,102,241,0.08)',
+              color: flagMsg.includes('✅') ? 'var(--success)' : flagMsg.includes('❌') ? 'var(--danger)' : flagMsg.includes('⚠️') ? '#f59e0b' : 'var(--text-muted)',
             }}>
               {flagMsg}
             </div>
@@ -2071,6 +2355,32 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
               <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
                 שיפורים קודמים: {fixHistory.length}
               </div>
+            )}
+
+            {fixDetailLog.length > 0 && (
+              <details
+                open={savingFix || fixDetailLog.some(l => l.level === 'error')}
+                style={{ marginBottom: '0.6rem', borderRadius: '8px', border: '1px solid var(--border)', padding: '0.35rem 0.5rem' }}
+              >
+                <summary style={{ fontSize: '0.65rem', cursor: 'pointer', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  פירוט שלבים ({fixDetailLog.length})
+                </summary>
+                <div style={{
+                  marginTop: '0.35rem', maxHeight: '140px', overflowY: 'auto', direction: 'rtl', textAlign: 'right',
+                }}>
+                  {fixDetailLog.map((line, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        fontSize: '0.58rem', lineHeight: 1.4, marginBottom: '0.2rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        color: line.level === 'error' ? '#f87171' : line.level === 'success' ? '#4ade80' : 'var(--text-muted)',
+                      }}
+                    >
+                      {line.level === 'error' ? '✗' : line.level === 'success' ? '✓' : '·'} {line.text}
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
 
             {/* Actions */}

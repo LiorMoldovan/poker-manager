@@ -354,13 +354,14 @@ const QuickTrainingScreen = () => {
       }}>
         {/* Cards */}
         <div style={{
-          display: 'inline-block',
+          display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
           padding: '0.25rem 0.6rem', borderRadius: '8px',
           background: 'rgba(99, 102, 241, 0.12)',
           fontSize: '0.9rem', fontWeight: '700',
           marginBottom: '0.75rem', letterSpacing: '2px',
         }}>
-          🃏 <ColoredCards text={scenario.yourCards} />
+          <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', fontWeight: 500 }}>יד</span>
+          <ColoredCards text={scenario.yourCards} />
         </div>
 
         {/* Situation text */}

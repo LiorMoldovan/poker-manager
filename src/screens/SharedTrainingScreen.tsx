@@ -17,6 +17,12 @@ import {
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
 
+type LeaderboardRow = TrainingPlayerData & { neutral: number };
+
+const isSharedTrainingMe = (p: TrainingPlayerData, myName: string): boolean => {
+  const displayName = LEGACY_NAME_CORRECTIONS[p.playerName] || p.playerName;
+  return p.playerName === myName || displayName === myName;
+};
 
 const SharedTrainingScreen = () => {
   const navigate = useNavigate();
@@ -122,15 +128,53 @@ const SharedTrainingScreen = () => {
     );
   };
 
-  const leaderboardWithNeutral = leaderboard.map(p => {
-    let neutral = 0;
-    p.sessions.forEach(s => s.results.forEach(r => { if (r.nearMiss) neutral++; }));
-    return { ...p, neutral };
-  });
+  /** Cloud snapshot + neutral count per row */
+  const leaderboardWithNeutral = useMemo((): LeaderboardRow[] => {
+    return leaderboard.map(p => {
+      let neutral = 0;
+      p.sessions.forEach(s => s.results.forEach(r => { if (r.nearMiss) neutral++; }));
+      return { ...p, neutral };
+    });
+  }, [leaderboard]);
 
-  const sortedLeaderboard = [...leaderboardWithNeutral]
-    .filter(p => p.totalQuestions >= 5)
-    .sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
+  /**
+   * Same source as progress bar: for the logged-in player, show merged local+remote totals
+   * (progress picks max(local, remote)); the raw leaderboard was cloud-only → mismatch.
+   */
+  const leaderboardMerged = useMemo((): LeaderboardRow[] => {
+    const merged = leaderboardWithNeutral.map(p => {
+      if (!isSharedTrainingMe(p, name)) return p;
+      const neutral = progress.totalNeutral || 0;
+      const scored = progress.totalQuestions;
+      const correct = progress.totalCorrect;
+      return {
+        ...p,
+        totalQuestions: scored,
+        totalCorrect: correct,
+        neutral,
+        accuracy: scored > 0 ? (correct / scored) * 100 : p.accuracy,
+      };
+    });
+    if (!merged.some(p => isSharedTrainingMe(p, name)) && progress.totalQuestions >= 5) {
+      const scored = progress.totalQuestions;
+      const correct = progress.totalCorrect;
+      merged.push({
+        playerName: name,
+        sessions: [],
+        totalQuestions: scored,
+        totalCorrect: correct,
+        accuracy: scored > 0 ? (correct / scored) * 100 : 0,
+        neutral: progress.totalNeutral || 0,
+      });
+    }
+    return merged;
+  }, [leaderboardWithNeutral, name, progress.totalQuestions, progress.totalCorrect, progress.totalNeutral]);
+
+  const sortedLeaderboard = useMemo(() => {
+    return [...leaderboardMerged]
+      .filter(p => p.totalQuestions >= 5)
+      .sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
+  }, [leaderboardMerged]);
 
   const earnedBadges = TRAINING_BADGES.filter(b => progress.earnedBadgeIds.includes(b.id));
   const unearnedBadges = TRAINING_BADGES.filter(b => !progress.earnedBadgeIds.includes(b.id));
@@ -341,7 +385,7 @@ const SharedTrainingScreen = () => {
               <tbody>
                 {sortedLeaderboard.map((player, i) => {
                   const displayName = LEGACY_NAME_CORRECTIONS[player.playerName] || player.playerName;
-                  const isMe = player.playerName === name || displayName === name;
+                  const isMe = isSharedTrainingMe(player, name);
                   const totalAnswered = player.totalQuestions + player.neutral;
                   const wrong = player.totalQuestions - player.totalCorrect;
                   return (
@@ -410,13 +454,15 @@ const SharedTrainingScreen = () => {
       {/* Personal AI coaching — below leaderboard */}
       {(() => {
         if (!playerInsight) return null;
-        const myData = leaderboard.find(p => p.playerName === name);
-        const allAnswered = myData ? myData.sessions.reduce((sum, s) => sum + s.results.length, 0) : 0;
-        const scoredResults = myData ? myData.sessions.flatMap(s => s.results).filter(r => !r.nearMiss) : [];
-        const correctCount = scoredResults.filter(r => r.correct).length;
-        const wrongCount = scoredResults.filter(r => !r.correct).length;
-        const nearMissCount = myData ? myData.sessions.flatMap(s => s.results).filter(r => r.nearMiss).length : 0;
-        const accPct = scoredResults.length > 0 ? Math.round((correctCount / scoredResults.length) * 100) : 0;
+        const myData = leaderboardMerged.find(p => isSharedTrainingMe(p, name));
+        if (!myData) return null;
+        const allAnswered = myData.totalQuestions + (myData.neutral || 0);
+        const correctCount = myData.totalCorrect;
+        const wrongCount = myData.totalQuestions - myData.totalCorrect;
+        const nearMissCount = myData.neutral || 0;
+        const accPct = myData.totalQuestions > 0
+          ? Math.round((myData.totalCorrect / myData.totalQuestions) * 100)
+          : 0;
 
         return (
           <>

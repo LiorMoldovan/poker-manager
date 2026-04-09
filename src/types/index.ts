@@ -230,6 +230,7 @@ export interface PoolScenario {
   poolId: string;
   situation: string;
   yourCards: string;
+  boardCards?: string;
   options: {
     id: string;
     text: string;
@@ -254,6 +255,7 @@ export interface TrainingAnswerResult {
   categoryId: string;
   correct: boolean;
   nearMiss?: boolean; // chose a GTO-valid answer that's suboptimal for home game
+  neutralized?: boolean; // question was later found faulty — doesn't count for/against score
   chosenId: string;
 }
 

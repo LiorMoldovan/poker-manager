@@ -12,7 +12,7 @@ import { syncToCloud } from '../database/githubSync';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
 
-type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 type ViewMode = 'table' | 'records' | 'players';
 type PlayerSubTab = 'stats' | 'stories';
 type RecordsSubTab = 'global' | 'playerRecords';
@@ -58,6 +58,8 @@ const StatisticsScreen = () => {
   });
   const [selectedYear, setSelectedYear] = useState<number>(savedSelectedYear || new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(savedSelectedMonth || new Date().getMonth() + 1); // 1-12
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
   const [filterActiveOnly, setFilterActiveOnly] = useState(true); // Default: show only active players (> 33% of avg games)
   const [showPlayerFilter, setShowPlayerFilter] = useState(false); // Collapsed by default
   const [showTimePeriod, setShowTimePeriod] = useState(false); // Collapsed by default
@@ -101,11 +103,20 @@ const StatisticsScreen = () => {
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
   // Get formatted timeframe string for display
+  const formatCustomRange = () => {
+    if (!customStartDate && !customEndDate) return 'בחר תאריכים';
+    const fmt = (d: string) => new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
+    if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
+    if (customStartDate) return `מ-${fmt(customStartDate)}`;
+    return `עד ${fmt(customEndDate)}`;
+  };
+
   const getTimeframeLabel = () => {
     if (timePeriod === 'all') return 'All Time';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'custom') return formatCustomRange();
     if (timePeriod === 'month') {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
@@ -118,6 +129,7 @@ const StatisticsScreen = () => {
     if (timePeriod === 'year') return `שנת ${selectedYear}`;
     if (timePeriod === 'h1') return formatHebrewHalf(1, selectedYear);
     if (timePeriod === 'h2') return formatHebrewHalf(2, selectedYear);
+    if (timePeriod === 'custom') return formatCustomRange();
     if (timePeriod === 'month') return `${HEBREW_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
     return '';
   };
@@ -127,6 +139,7 @@ const StatisticsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1-${selectedYear}`;
     if (timePeriod === 'h2') return `H2-${selectedYear}`;
+    if (timePeriod === 'custom') return `custom-${customStartDate || 'x'}-${customEndDate || 'x'}`;
     if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
     return 'all';
   };
@@ -319,28 +332,36 @@ const StatisticsScreen = () => {
     const year = selectedYear;
     
     switch (timePeriod) {
-      case 'h1': // First half of selected year (Jan-Jun)
+      case 'h1':
         return {
           start: new Date(year, 0, 1),
           end: new Date(year, 5, 30, 23, 59, 59)
         };
-      case 'h2': // Second half of selected year (Jul-Dec)
+      case 'h2':
         return {
           start: new Date(year, 6, 1),
           end: new Date(year, 11, 31, 23, 59, 59)
         };
-      case 'year': // Full selected year
+      case 'year':
         return {
           start: new Date(year, 0, 1),
           end: new Date(year, 11, 31, 23, 59, 59)
         };
-      case 'month': // Specific month
-        const monthIndex = selectedMonth - 1; // Convert 1-12 to 0-11
-        const lastDay = new Date(year, monthIndex + 1, 0).getDate(); // Get last day of month
+      case 'month': {
+        const monthIndex = selectedMonth - 1;
+        const lastDay = new Date(year, monthIndex + 1, 0).getDate();
         return {
           start: new Date(year, monthIndex, 1),
           end: new Date(year, monthIndex, lastDay, 23, 59, 59)
         };
+      }
+      case 'custom': {
+        if (!customStartDate && !customEndDate) return undefined;
+        const result: { start?: Date; end?: Date } = {};
+        if (customStartDate) result.start = new Date(customStartDate + 'T00:00:00');
+        if (customEndDate) result.end = new Date(customEndDate + 'T23:59:59');
+        return result;
+      }
       case 'all':
       default:
         return undefined;
@@ -400,7 +421,7 @@ const StatisticsScreen = () => {
     return allResults
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 20);
-  }, [stats, players, selectedTypes, selectedPlayers, timePeriod, selectedYear, selectedMonth]);
+  }, [stats, players, selectedTypes, selectedPlayers, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Get top 20 single night wins ALL TIME (no date filter, for Global Records)
   const top20WinsAllTime = useMemo(() => {
@@ -641,7 +662,7 @@ const StatisticsScreen = () => {
   // Reload data when filters change
   useEffect(() => {
     loadStats();
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);
@@ -712,7 +733,7 @@ const StatisticsScreen = () => {
       return true;
     });
     return games.length;
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Minimum games threshold = 33% of total games in period
   const activeThreshold = useMemo(() => Math.ceil(totalGamesInPeriod * 0.33), [totalGamesInPeriod]);
@@ -777,7 +798,7 @@ const StatisticsScreen = () => {
     });
     
     return rankMap;
-  }, [timePeriod, selectedYear, selectedMonth, stats, selectedTypes, filterActiveOnly, getPlayerType]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, stats, selectedTypes, filterActiveOnly, getPlayerType]);
 
   // Memoize filtered stats - filter by active threshold if enabled
   const statsWithMinGames = useMemo(() => 
@@ -847,7 +868,7 @@ const StatisticsScreen = () => {
     }
     setChronicleError(null);
     chronicleGenRef.current = false;
-  }, [viewMode, playerSubTab, timePeriod, selectedYear, selectedMonth]);
+  }, [viewMode, playerSubTab, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Filtered stats based on selection
   const filteredStats = useMemo(() => 
@@ -925,7 +946,7 @@ const StatisticsScreen = () => {
     return Array.from(playerMap.values())
       .filter(p => p.gamesPlayed > 0 && filteredStats.some(s => s.playerName === p.playerName))
       .sort((a, b) => (b.totalBuyins / b.gamesPlayed) - (a.totalBuyins / a.gamesPlayed));
-  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth]);
+  }, [stats, players, filteredStats, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const rebuyDataCoverage = useMemo(() => {
     const dateFilter = getDateFilter();
@@ -947,7 +968,7 @@ const StatisticsScreen = () => {
       }
     }
     return { totalGames, gamesWithoutRebuys };
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const getMedal = (index: number, value: number) => {
     if (value <= 0) return '';
@@ -1297,7 +1318,7 @@ const StatisticsScreen = () => {
                 }}
               >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+                  📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
                 </span>
                 <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
               </button>
@@ -1389,9 +1410,26 @@ const StatisticsScreen = () => {
                 >
                   חודש
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('custom'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'custom' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'custom' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'custom' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  חופשי
+                </button>
               </div>
-              {/* Year Selector - only show when not "all" */}
-              {timePeriod !== 'all' && (
+              {/* Year Selector - show when not "all" and not "custom" */}
+              {timePeriod !== 'all' && timePeriod !== 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
                   <select
@@ -1454,6 +1492,59 @@ const StatisticsScreen = () => {
                   </span>
               </div>
             )}
+              {/* Custom date range pickers */}
+              {timePeriod === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>מ:</span>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="custom-date-input"
+                    style={{
+                      padding: '0.3rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(99,102,241,0.4)',
+                      background: '#1e1e3a',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>עד:</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    min={customStartDate || undefined}
+                    className="custom-date-input"
+                    style={{
+                      padding: '0.3rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(99,102,241,0.4)',
+                      background: '#1e1e3a',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                  {(customStartDate || customEndDate) && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCustomStartDate(''); setCustomEndDate(''); }}
+                      style={{
+                        padding: '0.2rem 0.4rem', fontSize: '0.65rem', borderRadius: '4px',
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--text-muted)', cursor: 'pointer',
+                      }}
+                    >
+                      ✕ נקה
+                    </button>
+                  )}
+                </div>
+              )}
               </>
               )}
             </div>
@@ -2251,11 +2342,7 @@ const StatisticsScreen = () => {
                   paddingBottom: '0.3rem',
                   borderBottom: '1px solid var(--border)'
                 }}>
-                  📊 {timePeriod === 'all' ? 'כל הזמנים' : 
-                      timePeriod === 'year' ? `שנת ${selectedYear}` :
-                      timePeriod === 'h1' ? `H1 ${selectedYear} (ינו׳-יוני׳)` :
-                      timePeriod === 'h2' ? `H2 ${selectedYear} (יולי׳-דצמ׳)` :
-                      `${['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'][selectedMonth - 1]} ${selectedYear}`}
+                  📊 {getHebrewTimeframeLabel()}
                   {' • '}{totalGamesInPeriod} משחקים
                   {filterActiveOnly && ' • שחקנים פעילים'}
                 </div>
@@ -2815,7 +2902,7 @@ const StatisticsScreen = () => {
           {/* Player Chronicle Section */}
           {(() => {
             // ===== DATA SETUP =====
-            const isRebuyDataValid = timePeriod !== 'all' && selectedYear >= 2026;
+            const isRebuyDataValid = timePeriod !== 'all' && (timePeriod === 'custom' ? (!customStartDate || new Date(customStartDate).getFullYear() >= 2026) : selectedYear >= 2026);
             const allTimeStatsRaw = getPlayerStats();
             const activePlayerIds = new Set(players.filter(p => selectedTypes.has(p.type)).map(p => p.id));
             const allTimeStats = allTimeStatsRaw.filter(s => activePlayerIds.has(s.playerId));
@@ -2927,6 +3014,7 @@ const StatisticsScreen = () => {
               const isLowData = totalPeriodGames <= 3 || maxGamesPlayed <= 2;
               const isHistorical = (() => {
                 if (timePeriod === 'all') return false;
+                if (timePeriod === 'custom') return customEndDate ? new Date(customEndDate) < new Date() : false;
                 if (timePeriod === 'year') return selectedYear < currentYear;
                 if (timePeriod === 'h1') return selectedYear < currentYear || (selectedYear === currentYear && currentMonth >= 6);
                 if (timePeriod === 'h2') return selectedYear < currentYear;
