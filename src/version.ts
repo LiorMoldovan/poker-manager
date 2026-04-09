@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.0';
+export const APP_VERSION = '5.12.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.1',
+    date: '2026-04-09',
+    changes: [
+      '📅 Custom date range filter in Graphs — same free-form date picker now available on graphs screen',
+      '🧠 Smarter insight staleness — auto-detects stale coaching (3+ sessions since last), legacy name alias resolution',
+      '✨ Batch insights button always visible — shows "up to date" when all fresh, count when updates needed',
+      '🏷️ Needs-insight badge on player rows — visual indicator for players requiring coaching update',
+    ]
+  },
   {
     version: '5.12.0',
     date: '2026-04-09',

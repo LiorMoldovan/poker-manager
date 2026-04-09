@@ -29,9 +29,45 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
-
+import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 const RATE_LIMIT_DELAY = 7500;
+
+/** Insights JSON keys may not match `playerName` after renames; merge legacy aliases. */
+const trainingInsightAliasNames = (canonicalName: string): string[] => {
+  const keys = [canonicalName];
+  for (const [oldName, newName] of Object.entries(LEGACY_NAME_CORRECTIONS)) {
+    if (newName === canonicalName && !keys.includes(oldName)) keys.push(oldName);
+    if (oldName === canonicalName && !keys.includes(newName)) keys.push(newName);
+  }
+  return keys;
+};
+
+const MIN_MEANINGFUL_INSIGHT_CHARS = 40;
+
+interface TrainingInsightEntry {
+  generatedAt: string;
+  sessionsAtGeneration: number;
+  improvement: string;
+}
+
+const getTrainingInsightForPlayer = (
+  insightsFile: TrainingInsightsFile | null | undefined,
+  playerName: string,
+): TrainingInsightEntry | undefined => {
+  if (!insightsFile?.insights) return undefined;
+  for (const key of trainingInsightAliasNames(playerName)) {
+    const e = insightsFile.insights[key];
+    if (e?.improvement && e.improvement.trim().length >= MIN_MEANINGFUL_INSIGHT_CHARS) return e;
+  }
+  return undefined;
+};
+
+/** אימונים מאז יצירת התובנות — מעל זה מציגים המלצה לעדכון */
+const INSIGHT_STALE_AFTER_SESSIONS = 3;
+
+const countTrainingAnswers = (p: TrainingPlayerData): number =>
+  p.sessions.reduce((sum, s) => sum + s.results.length, 0);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const safeParseJSON = (raw: string): any => {
@@ -147,7 +183,7 @@ const TrainingAdminTab = () => {
       const a = rawA ? normalizeTrainingPlayers(rawA) : rawA;
       setPool(p);
       setAnswers(a);
-      setInsights(i);
+      setInsights(i && i.insights ? i : { lastUpdated: i?.lastUpdated ?? '', insights: i?.insights ?? {} });
       setLastRefresh(new Date().toLocaleTimeString('he-IL'));
     } catch (err) {
       console.error('Failed to load training data:', err);
@@ -161,16 +197,30 @@ const TrainingAdminTab = () => {
   const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
 
   const playersNeedingInsights = useMemo((): TrainingPlayerData[] => {
-    if (!answers || answers.players.length === 0) return [];
-    const map = insights?.insights ?? {};
+    if (!answers?.players?.length) return [];
     return answers.players.filter(p => {
-      const allAnswered = p.sessions.reduce((sum, s) => sum + s.results.length, 0);
-      const hasPending = p.pendingReportMilestones && p.pendingReportMilestones.length > 0;
-      const hasInsight = !!map[p.playerName];
-      const eligible = allAnswered >= 100 && !hasInsight;
-      return hasPending || eligible;
+      const totalQ = countTrainingAnswers(p);
+      const hasPending = !!(p.pendingReportMilestones && p.pendingReportMilestones.length > 0);
+      if (hasPending) return true;
+      if (totalQ < 100) return false;
+      const insight = getTrainingInsightForPlayer(insights, p.playerName);
+      if (!insight) return true;
+      const gen = typeof insight.sessionsAtGeneration === 'number'
+        ? insight.sessionsAtGeneration
+        : p.sessions.length;
+      const sessionsSince = Math.max(0, p.sessions.length - gen);
+      return sessionsSince > INSIGHT_STALE_AFTER_SESSIONS;
     });
-  }, [answers, insights?.insights]);
+  }, [answers, insights]);
+
+  const players = answers?.players || [];
+  /** אותו מיון כמו טבלת השחקנים: דיוק ואז מספר שאלות (countTrainingAnswers) */
+  const sortedPlayers = useMemo(() => {
+    return [...players].sort((a, b) => {
+      if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+      return countTrainingAnswers(b) - countTrainingAnswers(a);
+    });
+  }, [players]);
 
   // ── Alerts ──
   const getAlerts = (): { text: string; color: string }[] => {
@@ -1314,8 +1364,6 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
 
   const alerts = getAlerts();
   const flagged = getFlaggedQuestions();
-  const players = answers?.players || [];
-  const sortedPlayers = [...players].sort((a, b) => b.accuracy - a.accuracy || b.totalQuestions - a.totalQuestions);
 
   if (loading) {
     return (
@@ -1711,24 +1759,55 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
           flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem',
         }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>👥 שחקנים</h3>
-          {playersNeedingInsights.length > 0 && (
-            <button
-              type="button"
-              onClick={handleBatchGenerateInsights}
-              disabled={batchInsightsRunning || generatingInsight !== null || !getGeminiApiKey()}
-              style={{
-                fontSize: '0.7rem', padding: '0.35rem 0.65rem', borderRadius: '8px', border: 'none',
-                background: batchInsightsRunning || generatingInsight !== null ? 'var(--surface-light)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                color: batchInsightsRunning || generatingInsight !== null ? 'var(--text-muted)' : 'white',
-                fontWeight: 600, cursor: batchInsightsRunning || generatingInsight !== null ? 'wait' : 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {batchInsightsRunning
-                ? `⏳ ${generatingStep || 'מייצר...'}`
-                : `✨ צור תובנות ל-${playersNeedingInsights.length} שחקנים`}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleBatchGenerateInsights}
+            title={
+              !getGeminiApiKey()
+                ? 'נדרש מפתח Gemini בהגדרות'
+                : playersNeedingInsights.length === 0
+                  ? 'אין צורך בעדכון — כל התובנות תקפות'
+                  : `יצירה/עדכון תובנות ל-${playersNeedingInsights.length} שחקנים`
+            }
+            disabled={
+              playersNeedingInsights.length === 0
+              || batchInsightsRunning
+              || generatingInsight !== null
+              || !getGeminiApiKey()
+            }
+            style={{
+              fontSize: '0.7rem',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background:
+                batchInsightsRunning || generatingInsight !== null
+                  ? 'var(--surface-light)'
+                  : playersNeedingInsights.length === 0 || !getGeminiApiKey()
+                    ? 'var(--surface-hover)'
+                    : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color:
+                batchInsightsRunning || generatingInsight !== null
+                  ? 'var(--text-muted)'
+                  : playersNeedingInsights.length === 0 || !getGeminiApiKey()
+                    ? 'var(--text-muted)'
+                    : 'white',
+              fontWeight: 600,
+              cursor:
+                batchInsightsRunning || generatingInsight !== null
+                  ? 'wait'
+                  : playersNeedingInsights.length === 0 || !getGeminiApiKey()
+                    ? 'default'
+                    : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {batchInsightsRunning
+              ? `⏳ ${generatingStep || 'מייצר...'}`
+              : playersNeedingInsights.length === 0
+                ? '✓ תובנות מעודכנות'
+                : `✨ עדכן תובנות (${playersNeedingInsights.length})`}
+          </button>
         </div>
 
         {sortedPlayers.length === 0 ? (
@@ -1741,8 +1820,12 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
               const displayName = player.playerName;
               const isExpanded = expandedPlayer === player.playerName;
               const exploit = getExploitLocal(player.playerName);
-              const insight = insights?.insights?.[player.playerName];
-              const sessionsSinceInsight = insight ? player.sessions.length - insight.sessionsAtGeneration : -1;
+              const insight = getTrainingInsightForPlayer(insights, player.playerName);
+              const needsInsightRow = playersNeedingInsights.some(p => p.playerName === player.playerName);
+              const insightGen = insight
+                ? (typeof insight.sessionsAtGeneration === 'number' ? insight.sessionsAtGeneration : player.sessions.length)
+                : 0;
+              const sessionsSinceInsight = insight ? Math.max(0, player.sessions.length - insightGen) : -1;
               const staleness = !insight ? '#64748b' : sessionsSinceInsight <= 2 ? '#22c55e' : sessionsSinceInsight <= 5 ? '#eab308' : '#ef4444';
               const stalenessLabel = !insight ? 'אין תובנות' : sessionsSinceInsight <= 2 ? 'תובנות עדכניות' : sessionsSinceInsight <= 5 ? `${sessionsSinceInsight} אימונים מאז תובנות` : `${sessionsSinceInsight} אימונים מאז תובנות — לעדכן`;
               const allResultsCount = player.sessions.reduce((sum, s) => sum + s.results.length, 0);
@@ -1767,6 +1850,14 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: staleness }} title={stalenessLabel} />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                      {needsInsightRow && (
+                        <span style={{
+                          fontSize: '0.58rem', fontWeight: 700, padding: '0.12rem 0.35rem', borderRadius: '4px',
+                          background: 'rgba(99,102,241,0.2)', color: '#a5b4fc', whiteSpace: 'nowrap',
+                        }} title="צריך תובנות AI — פתח שורה או השתמש בכפתור למעלה">
+                          תובנות
+                        </span>
+                      )}
                       <span style={{ color: 'var(--text-muted)' }}>{allResultsCount}Q</span>
                       <span style={{
                         fontWeight: 700,

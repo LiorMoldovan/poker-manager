@@ -19,7 +19,7 @@ import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
-type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month';
+type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 
 // Color palette for players - stable mapping by player ID
 const PLAYER_COLORS = [
@@ -72,7 +72,17 @@ const GraphsScreen = () => {
   });
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1-12
-  
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  const formatCustomRange = useCallback(() => {
+    if (!customStartDate && !customEndDate) return 'בחר תאריכים';
+    const fmt = (d: string) => new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
+    if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
+    if (customStartDate) return `מ-${fmt(customStartDate)}`;
+    return `עד ${fmt(customEndDate)}`;
+  }, [customStartDate, customEndDate]);
+
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
   const [player2Id, setPlayer2Id] = useState<string>('');
@@ -155,20 +165,22 @@ const GraphsScreen = () => {
     if (timePeriod === 'h1') return `H1-${selectedYear}`;
     if (timePeriod === 'h2') return `H2-${selectedYear}`;
     if (timePeriod === 'month') return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    if (timePeriod === 'custom') return `custom-${customStartDate || 'x'}-${customEndDate || 'x'}`;
     return 'all';
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const getInsightsPeriodLabel = useCallback(() => {
     if (timePeriod === 'all') return 'כל הזמנים';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `חציון ראשון ${selectedYear}`;
     if (timePeriod === 'h2') return `חציון שני ${selectedYear}`;
+    if (timePeriod === 'custom') return formatCustomRange();
     if (timePeriod === 'month') {
       const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
       return `${months[selectedMonth - 1]} ${selectedYear}`;
     }
     return '';
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, formatCustomRange]);
 
   const getDateFilter = useCallback((): { start?: Date; end?: Date } | undefined => {
     const year = selectedYear;
@@ -181,10 +193,17 @@ const GraphsScreen = () => {
         const lastDay = new Date(year, monthIdx + 1, 0).getDate();
         return { start: new Date(year, monthIdx, 1), end: new Date(year, monthIdx, lastDay, 23, 59, 59) };
       }
+      case 'custom': {
+        if (!customStartDate && !customEndDate) return undefined;
+        const result: { start?: Date; end?: Date } = {};
+        if (customStartDate) result.start = new Date(customStartDate + 'T00:00:00');
+        if (customEndDate) result.end = new Date(customEndDate + 'T23:59:59');
+        return result;
+      }
       case 'all':
       default: return undefined;
     }
-  }, [timePeriod, selectedYear, selectedMonth]);
+  }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Load cached insights when period changes
   useEffect(() => {
@@ -218,7 +237,7 @@ const GraphsScreen = () => {
     return allGames.filter(game => {
       const gameDate = new Date(game.date);
       const year = selectedYear;
-      
+
       switch (timePeriod) {
         case 'h1':
           return gameDate >= new Date(year, 0, 1) && gameDate <= new Date(year, 5, 30, 23, 59, 59);
@@ -226,16 +245,23 @@ const GraphsScreen = () => {
           return gameDate >= new Date(year, 6, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
         case 'year':
           return gameDate >= new Date(year, 0, 1) && gameDate <= new Date(year, 11, 31, 23, 59, 59);
-        case 'month':
+        case 'month': {
           const monthIndex = selectedMonth - 1;
           const lastDay = new Date(year, monthIndex + 1, 0).getDate();
           return gameDate >= new Date(year, monthIndex, 1) && gameDate <= new Date(year, monthIndex, lastDay, 23, 59, 59);
+        }
+        case 'custom': {
+          if (!customStartDate && !customEndDate) return true;
+          if (customStartDate && gameDate < new Date(customStartDate + 'T00:00:00')) return false;
+          if (customEndDate && gameDate > new Date(customEndDate + 'T23:59:59')) return false;
+          return true;
+        }
         case 'all':
         default:
           return true;
       }
     });
-  }, [allGames, timePeriod, selectedYear, selectedMonth]);
+  }, [allGames, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // Auto-generate insights for admin only when cache is empty for this period
   useEffect(() => {
@@ -288,7 +314,7 @@ const GraphsScreen = () => {
         setInsightsLoading(false);
       }
     })();
-  }, [role, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear]);
+  }, [role, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const handleGenerateInsights = useCallback(async () => {
     if (insightsLoading) return;
@@ -337,7 +363,7 @@ const GraphsScreen = () => {
     } finally {
       setInsightsLoading(false);
     }
-  }, [insightsLoading, players, filteredGames, getDateFilter, getInsightsPeriodLabel, getInsightsKey, timePeriod, selectedYear]);
+  }, [insightsLoading, players, filteredGames, getDateFilter, getInsightsPeriodLabel, getInsightsKey, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   const getPlayerName = useCallback((playerId: string): string => {
     const player = players.find(p => p.id === playerId);
@@ -670,6 +696,13 @@ const GraphsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
+    if (timePeriod === 'custom') {
+      if (!customStartDate && !customEndDate) return 'Custom';
+      const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
+      if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
+      if (customStartDate) return `From ${fmt(customStartDate)}`;
+      return `Until ${fmt(customEndDate)}`;
+    }
     if (timePeriod === 'month') {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
@@ -783,7 +816,7 @@ const GraphsScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+              📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
           </button>
@@ -875,9 +908,26 @@ const GraphsScreen = () => {
                 >
                   חודש
                 </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setTimePeriod('custom'); }}
+                  style={{
+                    flex: 1,
+                    minWidth: '50px',
+                    padding: '0.4rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '6px',
+                    border: timePeriod === 'custom' ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: timePeriod === 'custom' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: timePeriod === 'custom' ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  חופשי
+                </button>
               </div>
-              {/* Year Selector - only show when not "all" */}
-              {timePeriod !== 'all' && (
+              {/* Year Selector - only when not "all" and not custom range */}
+              {timePeriod !== 'all' && timePeriod !== 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
                   <select
@@ -938,6 +988,58 @@ const GraphsScreen = () => {
                     {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
                     {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
                   </span>
+                </div>
+              )}
+              {timePeriod === 'custom' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>מ:</span>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="custom-date-input"
+                    style={{
+                      padding: '0.3rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(99,102,241,0.4)',
+                      background: '#1e1e3a',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>עד:</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    min={customStartDate || undefined}
+                    className="custom-date-input"
+                    style={{
+                      padding: '0.3rem 0.5rem',
+                      fontSize: '0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid rgba(99,102,241,0.4)',
+                      background: '#1e1e3a',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      colorScheme: 'dark',
+                    }}
+                  />
+                  {(customStartDate || customEndDate) && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCustomStartDate(''); setCustomEndDate(''); }}
+                      style={{
+                        padding: '0.2rem 0.4rem', fontSize: '0.65rem', borderRadius: '4px',
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--text-muted)', cursor: 'pointer',
+                      }}
+                    >
+                      ✕ נקה
+                    </button>
+                  )}
                 </div>
               )}
             </>
