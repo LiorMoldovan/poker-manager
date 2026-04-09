@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T11:06:20.848Z",
+  "lastUpdated": "2026-04-09T11:20:05.752Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -578,7 +578,8 @@
               "poolId": "math2_1775390862811_zahnqp",
               "categoryId": "true_false",
               "correct": true,
-              "chosenId": "B"
+              "chosenId": "B",
+              "neutralized": true
             }
           ],
           "flaggedPoolIds": [],
@@ -737,9 +738,9 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 75,
-      "totalCorrect": 61,
-      "accuracy": 81.33333333333333
+      "totalQuestions": 74,
+      "totalCorrect": 60,
+      "accuracy": 81
     },
     {
       "playerName": "אייל",
@@ -1687,7 +1688,8 @@
               "categoryId": "dominated_hands",
               "correct": false,
               "nearMiss": true,
-              "chosenId": "B"
+              "chosenId": "B",
+              "neutralized": true
             },
             {
               "poolId": "l6idvd",
@@ -2895,7 +2897,7 @@
       ],
       "totalQuestions": 167,
       "totalCorrect": 126,
-      "accuracy": 75.44910179640718
+      "accuracy": 75
     },
     {
       "playerName": "מלמד",
@@ -3178,7 +3180,8 @@
               "categoryId": "bluff_catching",
               "correct": false,
               "nearMiss": true,
-              "chosenId": "A"
+              "chosenId": "A",
+              "neutralized": true
             },
             {
               "poolId": "z9h8nz",
@@ -4104,7 +4107,7 @@
       ],
       "totalQuestions": 137,
       "totalCorrect": 113,
-      "accuracy": 82.48175182481752,
+      "accuracy": 82,
       "pendingReportMilestones": []
     },
     {
@@ -4627,7 +4630,8 @@
               "poolId": "q8k1j5",
               "categoryId": "bluff_catching",
               "correct": true,
-              "chosenId": "C"
+              "chosenId": "C",
+              "neutralized": true
             },
             {
               "poolId": "vcprr6",
@@ -5961,9 +5965,9 @@
           "flagReports": []
         }
       ],
-      "totalQuestions": 185,
-      "totalCorrect": 142,
-      "accuracy": 76.75675675675676,
+      "totalQuestions": 184,
+      "totalCorrect": 141,
+      "accuracy": 77,
       "pendingReportMilestones": [],
       "reports": [
         {
