@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
-import { Player, PlayerType, PlayerStats, GameForecast, Game } from '../types';
+import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
@@ -14,6 +14,105 @@ import { withAITiming } from '../utils/aiTiming';
 import { syncToCloud } from '../database/githubSync';
 
 import { PeriodMarkers } from '../types';
+
+/** קצת מתחת ל-2 — פחות פיקסלים להעלאה לווטסאפ, עדיין חד מספיק לטלפון */
+const FORECAST_SHARE_CAPTURE_SCALE = 1.7;
+
+const FORECAST_SEQUENTIAL_SHARE_TIP_KEY = 'pm-forecast-sequential-share-tip';
+
+function sleepForecastShare(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function canvasToForecastShareFile(canvas: HTMLCanvasElement, baseName: string): Promise<File> {
+  const webpBlob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((b) => resolve(b), 'image/webp', 0.88);
+  });
+  if (webpBlob && webpBlob.size > 0) {
+    return new File([webpBlob], `${baseName}.webp`, { type: 'image/webp' });
+  }
+  const pngBlob = await new Promise<Blob>((resolve) => {
+    canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
+  });
+  return new File([pngBlob], `${baseName}.png`, { type: 'image/png' });
+}
+
+/**
+ * שיתוף מרובה קבצים לווטסאפ: ניסיון מרובד → אם לא נתמך/נכשל, תמונה אחר תמונה (יציב יותר במכשירים מסוימים) → הורדה.
+ */
+async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
+  const caption =
+    files.length > 1
+      ? `🔮 תחזית פוקר — ${files.length} תמונות לפי הסדר`
+      : '🔮 תחזית פוקר';
+
+  const downloadAllAndOpenWa = () => {
+    for (const file of files) {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    const todayShort = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(`🔮 תחזית פוקר - ${todayShort}\n\n(${files.length} קבצים הורדו — צרף לפי הסדר 1→${files.length})`)}`,
+      '_blank',
+    );
+  };
+
+  const shareSequential = async () => {
+    if (
+      files.length > 1
+      && typeof sessionStorage !== 'undefined'
+      && !sessionStorage.getItem(FORECAST_SEQUENTIAL_SHARE_TIP_KEY)
+    ) {
+      sessionStorage.setItem(FORECAST_SEQUENTIAL_SHARE_TIP_KEY, '1');
+      window.alert(
+        `נשלחות ${files.length} תמונות ברצף.\nבחר ווטסאפ ובאותה קבוצה בכל פעם. עדיף להשלים את כל החלקים לפני שממשיכים בשיחה — כך הכול מגיע בסדר.`,
+      );
+    }
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [f] })) {
+        downloadAllAndOpenWa();
+        return;
+      }
+      const text = files.length > 1 ? `${caption} — חלק ${i + 1}/${files.length}` : caption;
+      await navigator.share({ files: [f], title: 'תחזית פוקר', text });
+      if (i < files.length - 1) await sleepForecastShare(520);
+    }
+  };
+
+  if (!navigator.share) {
+    downloadAllAndOpenWa();
+    return;
+  }
+
+  const canMulti =
+    files.length === 1 || (typeof navigator.canShare === 'function' && navigator.canShare({ files }));
+
+  const tryMulti = async () => {
+    await navigator.share({ files, title: 'תחזית פוקר', text: caption });
+  };
+
+  try {
+    if (canMulti) {
+      try {
+        await tryMulti();
+        return;
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') throw e;
+        if (files.length <= 1) throw e;
+      }
+    }
+    await shareSequential();
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return;
+    downloadAllAndOpenWa();
+  }
+}
 
 const DEFAULT_LOCATIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
 
@@ -948,45 +1047,66 @@ const NewGameScreen = () => {
     }).sort((a, b) => b.expected - a.expected);
   };
 
-  // Share forecast as screenshot to WhatsApp (splits into multiple images if many players)
-  const shareForecast = async () => {
+  // Share forecast as screenshot to WhatsApp (splits into multiple images if many players).
+  // Pass `fromPublished` so חברים (ללא מודל פתוח) יכולים לשתף את התחזית שפורסמה מהענן.
+  const shareForecast = async (fromPublished?: PendingForecast | null) => {
     if (isSharing) return;
-    
-    const forecasts = aiForecasts || cachedForecasts;
-    if (!forecasts || forecasts.length === 0) return;
-    
-    setIsSharing(true);
-    
-    try {
-      const PLAYERS_PER_PAGE = 4;
-      const files: File[] = [];
-      const isAI = !!aiForecasts;
-      const today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
-      
-      // Sort forecasts by expected profit (highest first) to match on-screen display
-      const sortedForecasts = [...forecasts].sort((a: any, b: any) => {
+
+    let sortedForecasts: any[];
+    let isAI: boolean;
+    let preGameTeaserText: string | undefined;
+    let modelLabel: string;
+    let comboSnapshot: ComboHistory | null;
+    let today: string;
+
+    if (fromPublished) {
+      if (!fromPublished.forecasts.length) return;
+      sortedForecasts = [...fromPublished.forecasts].sort((a, b) => b.expectedProfit - a.expectedProfit);
+      isAI = !!fromPublished.aiModel;
+      preGameTeaserText = fromPublished.preGameTeaser;
+      modelLabel = fromPublished.aiModel || '';
+      comboSnapshot = getComboHistory(fromPublished.playerIds);
+      today = new Date(fromPublished.createdAt).toLocaleDateString('he-IL', {
+        weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+      });
+    } else {
+      const forecasts = aiForecasts || cachedForecasts;
+      if (!forecasts || forecasts.length === 0) return;
+      sortedForecasts = [...forecasts].sort((a: any, b: any) => {
         const aProfit = a.expectedProfit ?? a.expected ?? 0;
         const bProfit = b.expectedProfit ?? b.expected ?? 0;
         return bProfit - aProfit;
       });
+      isAI = !!aiForecasts;
+      preGameTeaserText = aiForecasts?.[0]?.preGameTeaser;
+      modelLabel = aiModelName;
+      comboSnapshot = comboHistory;
+      today = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
+    }
 
-      const hasTeaser = isAI && aiForecasts?.[0]?.preGameTeaser;
+    setIsSharing(true);
+
+    try {
+      const PLAYERS_PER_PAGE = 4;
+      const files: File[] = [];
+
+      const hasTeaser = isAI && !!preGameTeaserText;
 
       // Build combo history HTML for screenshot
       const buildComboScreenshotHtml = (): string => {
-        if (!comboHistory) return '';
-        if (comboHistory.isFirstTime) {
+        if (!comboSnapshot) return '';
+        if (comboSnapshot.isFirstTime) {
           return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); text-align: right; direction: rtl; font-size: 0.85rem; color: #e2e8f0;">
-            <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboHistory.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
+            <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboSnapshot.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
           </div>`;
         }
         const headerHtml = `<div style="margin-bottom: 0.75rem;">
             <div style="font-size: 0.88rem; color: #e2e8f0;"><span style="font-size: 1rem;">🔄</span> <strong style="color: #fbbf24;">הרכב חוזר!</strong></div>
-            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboHistory.totalGamesWithCombo + 1} שאותם ${comboHistory.playerCount} שחקנים נפגשים</div>
+            <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 0.2rem;">פעם ${comboSnapshot.totalGamesWithCombo + 1} שאותם ${comboSnapshot.playerCount} שחקנים נפגשים</div>
           </div>`;
 
-        if (comboHistory.totalGamesWithCombo === 1) {
-          const game = comboHistory.previousGames[0];
+        if (comboSnapshot.totalGamesWithCombo === 1) {
+          const game = comboSnapshot.previousGames[0];
           const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
           const daysAgo = Math.round((Date.now() - new Date(game.date).getTime()) / (1000 * 60 * 60 * 24));
           const timeAgoStr = daysAgo <= 1 ? 'אתמול' : daysAgo <= 7 ? `לפני ${daysAgo} ימים` : daysAgo <= 30 ? `לפני ${Math.round(daysAgo / 7)} שבועות` : daysAgo <= 60 ? 'לפני חודש' : `לפני ${Math.round(daysAgo / 30)} חודשים`;
@@ -1020,25 +1140,25 @@ const NewGameScreen = () => {
           </div>`;
         }
 
-        const top = comboHistory.playerStats[0];
-        const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
-        const alwaysWon = comboHistory.playerStats.filter(p => p.alwaysWon);
-        const alwaysLost = comboHistory.playerStats.filter(p => p.alwaysLost);
+        const top = comboSnapshot.playerStats[0];
+        const bottom = comboSnapshot.playerStats[comboSnapshot.playerStats.length - 1];
+        const alwaysWon = comboSnapshot.playerStats.filter(p => p.alwaysWon);
+        const alwaysLost = comboSnapshot.playerStats.filter(p => p.alwaysLost);
 
         let patternsHtml = '';
-        if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        if (alwaysWon.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #4ade80;">⭐ תמיד ברווח: ${alwaysWon.map(p => `${p.playerName} (${p.wins}/${comboSnapshot.totalGamesWithCombo})`).join(', ')}</div>`;
         if (alwaysLost.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #f87171;">⚠️ תמיד בהפסד: ${alwaysLost.map(p => p.playerName).join(', ')}</div>`;
-        if (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הפעם?</div>`;
-        if (comboHistory.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}</div>`;
+        if (comboSnapshot.uniqueWinners.length === comboSnapshot.totalGamesWithCombo) patternsHtml += `<div style="font-size: 0.78rem; color: #a78bfa;">🎲 מנצח שונה בכל משחק — מי הפעם?</div>`;
+        if (comboSnapshot.repeatWinners.length > 0) patternsHtml += `<div style="font-size: 0.78rem; color: #fbbf24;">🏆 ניצחו יותר מפעם: ${comboSnapshot.repeatWinners.map(w => `${w.name} (${w.count}/${comboSnapshot.totalGamesWithCombo})`).join(', ')}</div>`;
 
-        const avgRebuys = Math.round(comboHistory.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / comboHistory.totalGamesWithCombo);
-        const biggestWin = comboHistory.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
+        const avgRebuys = Math.round(comboSnapshot.playerStats.reduce((s, p) => s + p.totalRebuys, 0) / comboSnapshot.totalGamesWithCombo);
+        const biggestWin = comboSnapshot.playerStats.reduce((best, p) => p.bestResult > best.profit ? { name: p.playerName, profit: p.bestResult } : best, { name: '', profit: 0 });
         let insightsHtml = '';
         if (avgRebuys > 0) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">📊 ממוצע ${avgRebuys} קניות למשחק בהרכב הזה</div>`;
         if (biggestWin.profit > 0) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">🏆 רווח שיא: ${biggestWin.name} \u200E+${Math.round(biggestWin.profit)}</div>`;
-        if (comboHistory.spanDays > 30) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">📅 ההרכב הזה משחק יחד כבר ${Math.round(comboHistory.spanDays / 30)} חודשים</div>`;
+        if (comboSnapshot.spanDays > 30) insightsHtml += `<div style="font-size: 0.76rem; color: #94a3b8;">📅 ההרכב הזה משחק יחד כבר ${Math.round(comboSnapshot.spanDays / 30)} חודשים</div>`;
 
-        const gamesHtml = comboHistory.previousGames.slice(-3).map(game => {
+        const gamesHtml = comboSnapshot.previousGames.slice(-3).map(game => {
           const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
           return `<div style="padding: 0.35rem 0.5rem; border-radius: 6px; background: rgba(255,255,255,0.03); font-size: 0.76rem; color: #94a3b8;">
             <div style="color: #64748b; font-size: 0.7rem; margin-bottom: 0.15rem;">${dateStr}</div>
@@ -1049,7 +1169,7 @@ const NewGameScreen = () => {
         return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
           ${headerHtml}
           <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.04); font-size: 0.8rem; color: #e2e8f0;">
-            <div>👑 <span style="color: #fbbf24; font-weight: 600;">מוביל ההרכב:</span> ${top.playerName} <span style="color: ${top.totalProfit >= 0 ? '#4ade80' : '#f87171'};">(${top.totalProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.totalProfit)})</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${top.avgProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.avgProfit)} • ${top.wins}/${comboHistory.totalGamesWithCombo} נצחונות</span></div>
+            <div>👑 <span style="color: #fbbf24; font-weight: 600;">מוביל ההרכב:</span> ${top.playerName} <span style="color: ${top.totalProfit >= 0 ? '#4ade80' : '#f87171'};">(${top.totalProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.totalProfit)})</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${top.avgProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.avgProfit)} • ${top.wins}/${comboSnapshot.totalGamesWithCombo} נצחונות</span></div>
             <div>📉 <span style="font-weight: 600;">תחתית ההרכב:</span> ${bottom.playerName} <span style="color: #f87171;">(${bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(bottom.totalProfit)})</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${bottom.avgProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(bottom.avgProfit)}</span></div>
           </div>
           ${patternsHtml ? `<div style="display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.75rem;">${patternsHtml}</div>` : ''}
@@ -1069,7 +1189,7 @@ const NewGameScreen = () => {
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">🤖</div>
             <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">טיזר המשחק</h3>
             <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
-            ${aiModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${aiModelName}</div>` : ''}
+            ${modelLabel ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${modelLabel}</div>` : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
           <div style="padding: 1rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10)); border: 1px solid rgba(139, 92, 246, 0.35); text-align: right; direction: rtl;">
@@ -1077,16 +1197,21 @@ const NewGameScreen = () => {
               <span style="font-size: 1.2rem;">🎙️</span>
               <span style="font-size: 0.85rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">טיזר המשחק</span>
             </div>
-            <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.8; font-weight: 400;">${aiForecasts![0].preGameTeaser}</div>
+            <div style="font-size: 0.9rem; color: #e2e8f0; line-height: 1.8; font-weight: 400;">${preGameTeaserText}</div>
           </div>
           ${comboHtml}
           <div style="text-align: center; margin-top: 1.25rem; font-size: 0.75rem; color: #64748b; opacity: 0.7;">Poker Manager 🎲</div>
         `;
         document.body.appendChild(teaserContainer);
-        const teaserCanvas = await html2canvas(teaserContainer, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true });
+        const teaserCanvas = await html2canvas(teaserContainer, {
+          backgroundColor: '#1a1a2e',
+          scale: FORECAST_SHARE_CAPTURE_SCALE,
+          logging: false,
+          useCORS: true,
+        });
         document.body.removeChild(teaserContainer);
-        const teaserBlob = await new Promise<Blob>((resolve) => { teaserCanvas.toBlob((b) => resolve(b!), 'image/png', 1.0); });
-        files.push(new File([teaserBlob], `poker-teaser-${new Date().toISOString().split('T')[0]}.png`, { type: 'image/png' }));
+        const teaserBase = `pfc-teaser-${new Date().toISOString().split('T')[0]}`;
+        files.push(await canvasToForecastShareFile(teaserCanvas, teaserBase));
       }
       
       // Split sorted forecasts into chunks (players only, no teaser)
@@ -1112,7 +1237,7 @@ const NewGameScreen = () => {
               ${isAI ? 'תחזית AI' : 'תחזית המשחק'}${pageNum}
             </h3>
             ${isAI ? '<div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>' : ''}
-            ${isAI && aiModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${aiModelName}</div>` : ''}
+            ${isAI && modelLabel ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${modelLabel}</div>` : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
           <div style="margin-bottom: 1rem;">
@@ -1160,40 +1285,18 @@ const NewGameScreen = () => {
         // Capture screenshot
         const canvas = await html2canvas(container, {
           backgroundColor: '#1a1a2e',
-          scale: 2,
+          scale: FORECAST_SHARE_CAPTURE_SCALE,
           useCORS: true,
           logging: false,
         });
-        
+
         document.body.removeChild(container);
-        
-        const blob = await new Promise<Blob>((resolve) => {
-          canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-        });
-        
-        const fileName = totalPages > 1 
-          ? `poker-forecast-${pageNumber}.png` 
-          : 'poker-forecast.png';
-        files.push(new File([blob], fileName, { type: 'image/png' }));
+
+        const pageBase = totalPages > 1 ? `pfc-page-${String(pageNumber).padStart(2, '0')}` : 'pfc-forecast';
+        files.push(await canvasToForecastShareFile(canvas, pageBase));
       }
-      
-      // Share all files
-      if (navigator.share && navigator.canShare({ files })) {
-        await navigator.share({ files, title: 'תחזית פוקר' });
-      } else {
-        // Fallback: download all + WhatsApp
-        for (const file of files) {
-          const url = URL.createObjectURL(file);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = file.name;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-        
-        const todayShort = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'short' });
-        window.open(`https://wa.me/?text=${encodeURIComponent(`🔮 תחזית פוקר - ${todayShort}\n\n(${files.length} תמונות הורדו - צרף אותן)`)}`, '_blank');
-      }
+
+      await shareImageFilesForWhatsApp(files);
     } catch (error) {
       console.error('Error sharing forecast:', error);
     } finally {
@@ -2050,6 +2153,31 @@ const NewGameScreen = () => {
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
               {new Date(publishedForecast.createdAt).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </div>
+            {publishedForecast.published && (
+              <div
+                onClick={e => e.stopPropagation()}
+                style={{ marginTop: '0.55rem', display: 'flex', justifyContent: 'center' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => void shareForecast(publishedForecast)}
+                  disabled={isSharing}
+                  style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(34, 197, 94, 0.35)',
+                    background: 'rgba(34, 197, 94, 0.12)',
+                    color: '#4ade80',
+                    cursor: isSharing ? 'wait' : 'pointer',
+                    opacity: isSharing ? 0.8 : 1,
+                  }}
+                >
+                  {isSharing ? '⏳ מכין לשיתוף...' : '📤 שתף תחזית לקבוצה'}
+                </button>
+              </div>
+            )}
             {!publishedExpanded && (
               <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginTop: '0.4rem' }}>
                 לחץ לצפייה בתחזית ▾
@@ -2827,7 +2955,7 @@ const NewGameScreen = () => {
                   </button>
                   <button 
                     className="btn btn-primary" 
-                    onClick={shareForecast}
+                    onClick={() => void shareForecast()}
                     disabled={isSharing}
                 >
                   {isSharing ? '📸...' : '📤 שתף'}

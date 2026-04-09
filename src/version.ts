@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.1';
+export const APP_VERSION = '5.12.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.2',
+    date: '2026-04-09',
+    changes: [
+      '📤 Friends can share published forecasts — share button on published forecast card, works without admin/API key',
+      '🖼️ WebP forecast images — smaller files for faster WhatsApp sharing, PNG fallback',
+      '📱 Sequential WhatsApp sharing — multi-image forecasts sent one-by-one for better device compatibility',
+      '⚡ Optimized capture scale (1.7x) — smaller upload size while staying sharp on mobile',
+    ]
+  },
   {
     version: '5.12.1',
     date: '2026-04-09',
