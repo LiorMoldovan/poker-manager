@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T13:37:40.176Z",
+  "lastUpdated": "2026-04-09T13:48:00.890Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -847,11 +847,37 @@
               "date": "2026-04-09T13:32:48.971Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-09T13:41:48.037Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "math_1775389628167_d98zm4",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "w1b5y1",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "h1iu50",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 88,
-      "totalCorrect": 73,
-      "accuracy": 82.95454545454545
+      "totalQuestions": 91,
+      "totalCorrect": 76,
+      "accuracy": 83.51648351648352
     },
     {
       "playerName": "אייל",
