@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:18:27.365Z",
+  "lastUpdated": "2026-04-09T17:20:41.678Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -966,8 +966,7 @@
           ],
           "flaggedPoolIds": [
             "ssgtpi",
-            "o4q5wv",
-            "bk52a1"
+            "o4q5wv"
           ],
           "flagReports": [
             {
@@ -983,13 +982,6 @@
               "reason": "unclear_question",
               "comment": "השאלה נראית חתוכה",
               "date": "2026-04-09T17:17:11.373Z"
-            },
-            {
-              "poolId": "bk52a1",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "אני הייתי מעלה אבל בגלל שכתבת שמרן ההנחה שיפרוש עם זוג נמוך",
-              "date": "2026-04-09T17:18:24.916Z"
             }
           ]
         }
