@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T13:26:36.786Z",
+  "lastUpdated": "2026-04-09T13:37:40.176Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -774,11 +774,84 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T13:36:34.257Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389680104_ukijff",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389456504_cv85p2",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "w7bcro",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "kktd5e",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qxf28x",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bpa8x1",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "39l525",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389802185_k6rb29",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "37p25z",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389802185_tccvm4"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389802185_tccvm4",
+              "playerName": "ליאור",
+              "reason": "unclear_question",
+              "date": "2026-04-09T13:32:48.971Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 80,
-      "totalCorrect": 66,
-      "accuracy": 82.5
+      "totalQuestions": 88,
+      "totalCorrect": 73,
+      "accuracy": 82.95454545454545
     },
     {
       "playerName": "אייל",
