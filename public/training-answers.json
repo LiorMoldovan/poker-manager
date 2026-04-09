@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:27:32.036Z",
+  "lastUpdated": "2026-04-09T17:57:45.225Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4400,11 +4400,60 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T17:57:44.591Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "l7007f",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8vpr65",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389802185_v3q8xa",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jd1te1",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "wo2uij",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389802185_v3q8xa"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389802185_v3q8xa",
+              "playerName": "מלמד",
+              "reason": "unclear_question",
+              "comment": "לא ברור באיזה שלב ביד אנחנו",
+              "date": "2026-04-09T17:57:24.131Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 141,
-      "totalCorrect": 117,
-      "accuracy": 82.97872340425532,
+      "totalQuestions": 146,
+      "totalCorrect": 120,
+      "accuracy": 82.1917808219178,
       "pendingReportMilestones": []
     },
     {
