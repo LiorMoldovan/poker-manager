@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T13:58:41.478Z",
+  "lastUpdated": "2026-04-09T14:33:54.853Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -836,17 +836,8 @@
               "chosenId": "C"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389802185_tccvm4"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389802185_tccvm4",
-              "playerName": "ליאור",
-              "reason": "unclear_question",
-              "date": "2026-04-09T13:32:48.971Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-09T13:41:48.037Z",
