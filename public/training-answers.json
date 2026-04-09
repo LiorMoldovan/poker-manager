@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T13:48:00.890Z",
+  "lastUpdated": "2026-04-09T13:58:41.478Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -873,11 +873,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T13:57:42.764Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389653327_hgs6mf",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390862811_1nhh9n",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389510264_u8n0rf",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570597_pr448o",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390941480_w8pdrj",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390862811_h6lj49",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389726798_10ai0k",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math2_1775390836678_3j0su3",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389456504_fg1khh",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389857109_pvhda3",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 91,
-      "totalCorrect": 76,
-      "accuracy": 83.51648351648352
+      "totalQuestions": 101,
+      "totalCorrect": 83,
+      "accuracy": 82.17821782178217
     },
     {
       "playerName": "אייל",
