@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T10:00:58.945Z",
+  "lastUpdated": "2026-04-09T11:06:20.848Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -666,11 +666,80 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T11:06:19.357Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "gen_1775387283098_8jdeq4",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jiuxuw",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vwq9od",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390862811_6mvfsx",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tpmzeg",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7swk4w",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389545260_4lbnoe",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "jaaupi",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "i93m8c",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "d9hbp1",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 66,
-      "totalCorrect": 53,
-      "accuracy": 80.3030303030303
+      "totalQuestions": 75,
+      "totalCorrect": 61,
+      "accuracy": 81.33333333333333
     },
     {
       "playerName": "אייל",
