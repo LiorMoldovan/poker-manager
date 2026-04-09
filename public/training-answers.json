@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T14:33:54.853Z",
+  "lastUpdated": "2026-04-09T17:00:43.989Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4299,11 +4299,50 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-09T17:00:42.945Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "math_1775389483228_2bh8lc",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389653327_yqq6lg",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389570598_h1sg8o",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7swk4w",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "63ka80",
+              "categoryId": "overbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 137,
-      "totalCorrect": 113,
-      "accuracy": 82.48175182481752,
+      "totalQuestions": 141,
+      "totalCorrect": 117,
+      "accuracy": 82.97872340425532,
       "pendingReportMilestones": []
     },
     {
