@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T05:20:59.766Z",
+  "lastUpdated": "2026-04-10T09:36:38.152Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4437,18 +4437,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389802185_v3q8xa"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389802185_v3q8xa",
-              "playerName": "מלמד",
-              "reason": "unclear_question",
-              "comment": "לא ברור באיזה שלב ביד אנחנו",
-              "date": "2026-04-09T17:57:24.131Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 146,
