@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T10:42:11.212Z",
+  "lastUpdated": "2026-04-10T11:17:24.672Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6675,11 +6675,81 @@
               "date": "2026-04-10T10:13:43.261Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-10T10:37:42.780Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "lo0oes",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q24l5e",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "uqy13n",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lgx3fm",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6w5at9",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mx6ber",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "afwryw",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "amsvb0",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "byul4k",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "9hgao7",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 228,
-      "totalCorrect": 174,
-      "accuracy": 76.31578947368422,
+      "totalQuestions": 236,
+      "totalCorrect": 182,
+      "accuracy": 77.11864406779661,
       "pendingReportMilestones": [
         300
       ],
