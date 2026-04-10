@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T11:36:11.616Z",
+  "lastUpdated": "2026-04-10T12:25:24.789Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6735,11 +6735,306 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-10T12:15:14.254Z",
+          "questionsAnswered": 31,
+          "correctAnswers": 19,
+          "results": [
+            {
+              "poolId": "d2s6im",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389836495_gysidy",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5oyavs",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "3iv0c6",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "m8jesg",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389726798_mkmwfp",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "5bvayd",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "myddzc",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "yaczm1",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "343leg",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ujq0ce",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389602525_muug3o",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390941480_w8pdrj",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gjh41m",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390836678_zigfuc",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "6mwmo1",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "411gbc",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vn4vpp",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390941480_n6k69l",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xnivj8",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tf9wow",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2xupig",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389602525_l0gcvp",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "7i3txe",
+              "categoryId": "cbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389628167_qk3lzw",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "c4q4u0",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390862811_yashmj",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "1ylsln",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "v1iden",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ryfaic",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ij54uv",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "s92y6w",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389570598_mqs1zb",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iggo0p",
+              "categoryId": "second_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389628167_qk3lzw"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389628167_qk3lzw",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "מה?",
+              "date": "2026-04-10T12:07:03.746Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-10T12:25:24.516Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "math_1775389545260_ihb8n4",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lrugv8",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "h7u0zs",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "goyd5v",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8houe5",
+              "categoryId": "straight_draw",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "bmocnx",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7lrqxi",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "m8mvl9",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "uehzgy",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "9ltr7",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 236,
-      "totalCorrect": 182,
-      "accuracy": 77.11864406779661,
+      "totalQuestions": 276,
+      "totalCorrect": 209,
+      "accuracy": 75.72463768115942,
       "pendingReportMilestones": [
         300
       ],
