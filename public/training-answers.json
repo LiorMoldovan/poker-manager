@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-09T17:57:45.225Z",
+  "lastUpdated": "2026-04-10T00:09:38.321Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6309,11 +6309,50 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-10T00:09:37.557Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "gen_1775387283098_bqhd6u",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389857109_ifcvw7",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "n11a6m",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389570598_h1sg8o",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775388907278_oeb6u2",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 185,
-      "totalCorrect": 142,
-      "accuracy": 76.75675675675676,
+      "totalQuestions": 189,
+      "totalCorrect": 146,
+      "accuracy": 77.24867724867724,
       "pendingReportMilestones": [],
       "reports": [
         {
