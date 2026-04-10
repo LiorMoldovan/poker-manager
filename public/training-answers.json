@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T09:52:07.172Z",
+  "lastUpdated": "2026-04-10T10:09:17.072Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6562,11 +6562,94 @@
               "date": "2026-04-10T09:51:02.808Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-10T10:09:16.686Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "5nngxr",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389857109_m9zw6n",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390941480_pbivjp",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390889928_7f3hup",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389653327_w0gyn4",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389628167_3egtbx",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389602525_11a92e",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "10um6s",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389602525_nmx7j9",
+            "math2_1775390916781_au5rpg",
+            "math_1775389628167_3egtbx"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389602525_nmx7j9",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "יש לי זוג עליון לא בינינוני",
+              "date": "2026-04-10T10:04:47.046Z"
+            },
+            {
+              "poolId": "math2_1775390916781_au5rpg",
+              "playerName": "חרדון",
+              "reason": "unclear_question",
+              "comment": "לא מבין את השאלה",
+              "date": "2026-04-10T10:07:32.973Z"
+            },
+            {
+              "poolId": "math_1775389628167_3egtbx",
+              "playerName": "חרדון",
+              "reason": "wrong_answer",
+              "comment": "לא נכון יש לי גם צבע.",
+              "date": "2026-04-10T10:08:27.531Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 212,
-      "totalCorrect": 162,
-      "accuracy": 76.41509433962264,
+      "totalQuestions": 220,
+      "totalCorrect": 168,
+      "accuracy": 76.36363636363637,
       "pendingReportMilestones": [],
       "reports": [
         {
