@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T13:53:29.644Z",
+  "lastUpdated": "2026-04-10T13:54:38.531Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6949,18 +6949,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389628167_qk3lzw"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389628167_qk3lzw",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "מה?",
-              "date": "2026-04-10T12:07:03.746Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-10T12:25:24.516Z",
