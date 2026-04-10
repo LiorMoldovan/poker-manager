@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-10T10:03:41.160Z",
+  "generatedAt": "2026-04-10T10:29:00.095Z",
   "totalScenarios": 832,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -24048,34 +24048,32 @@
       "reviewedAt": "2026-04-10T09:56:38.642Z"
     },
     {
-      "id": 1,
-      "situation": "יש 2,500 בקופה. אייל, שמהמר הרבה, פותח בהימור של 1,500. מה הפעולה?",
+      "poolId": "ktd9bm",
+      "situation": "בקופה 2,500. אייל מהמר 1,500. מה הפעולה?",
       "yourCards": "8♠ 8♦",
-      "boardCards": "8♥ 3♣ 2♦",
       "options": [
         {
           "id": "A",
           "text": "קריאה 1,500",
-          "isCorrect": true,
-          "explanation": "מול שחקן אגרסיבי כמו אייל על לוח יבש, עדיף לתת לו להמשיך להמר ולבלף בטרן ובריבר."
+          "isCorrect": false,
+          "explanation": "במשחק שלנו, העלאה היא הדרך הנכונה לבנות קופה גדולה עם יד חזקה, כי יקראו לך בכל מקרה."
         },
         {
           "id": "B",
           "text": "העלאה ל-4,500",
-          "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה עשויה להבריח אותו. במשחק שלנו, אם הוא אגרסיבי, ניתן לו 'לתלות את עצמו'."
+          "isCorrect": true,
+          "explanation": "יש לך סט חזק. במשחק שלנו יקראו לך עם כל זוג או משיכה, אז בנה קופה גדולה עכשיו."
         },
         {
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "יש לך את היד הכי חזקה כרגע, אין שום סיבה לקפל."
+          "explanation": "יש לך יד חזקה מאוד, אין סיבה לקפל."
         }
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "ktd9bm"
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 2,
@@ -24105,7 +24103,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "6qby02"
+      "poolId": "6qby02",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 3,
@@ -24134,26 +24133,25 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "9sikuq"
+      "poolId": "9sikuq",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
-      "id": 4,
-      "situation": "בקופה 4,000. פאבל מהמר 3,000. אתה יודע שהוא אוהב להמר חזק. מה הפעולה?",
+      "poolId": "x9tmks",
+      "situation": "בקופה 4,000. פאבל מהמר 3,000. מה הפעולה?",
       "yourCards": "5♥ 5♣",
-      "boardCards": "5♠ 5♦ K♥ 2♣",
       "options": [
         {
           "id": "A",
           "text": "העלאה ל-10,000",
-          "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "יש לך רביעייה! זה הזמן למשחק איטי מושלם. תן לו להמשיך להמר לתוך המלכודת."
+          "isCorrect": true,
+          "explanation": "יש לך רביעייה. במשחק שלנו, אם תעלה, יש סיכוי טוב שישלמו לך מתוך סקרנות או עם זוג מלכים."
         },
         {
           "id": "B",
           "text": "קריאה 3,000",
-          "isCorrect": true,
-          "explanation": "עם רביעייה על לוח כזה, אין ליריב כמעט כלום שיכול לקרוא העלאה. תן לו לבלף."
+          "isCorrect": false,
+          "explanation": "אל תיתן לו קלף חינם בחינם, תבנה קופה גדולה עם היד הכי חזקה שלך."
         },
         {
           "id": "C",
@@ -24164,7 +24162,7 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "x9tmks"
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 5,
@@ -24194,7 +24192,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "wc20nd"
+      "poolId": "wc20nd",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 6,
@@ -24224,26 +24223,25 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "k5kr78"
+      "poolId": "k5kr78",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
-      "id": 7,
-      "situation": "קופה של 5,000. ליכטר מהמר 2,500. מה הפעולה?",
+      "poolId": "2l15zb",
+      "situation": "בקופה 5,000. ליכטר מהמר 2,500. מה הפעולה?",
       "yourCards": "A♠ 2♠",
-      "boardCards": "J♠ 8♠ 3♠ 4♦",
       "options": [
         {
           "id": "A",
           "text": "קריאה 2,500",
-          "isCorrect": true,
-          "explanation": "יש לך את הצבע הכי חזק. ליכטר אגרסיבי, תן לו להמשיך להמר בריבר לפני שאתה מעלה."
+          "isCorrect": false,
+          "explanation": "אל תחכה לריבר, בנה קופה גדולה עכשיו כי יקראו לך עם כל משיכה לצבע."
         },
         {
           "id": "B",
-          "text": "העלאה ל-8,000",
-          "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה גדולה עשויה להפחיד אותו אם אין לו צבע בעצמו. משחק איטי כאן עדיף."
+          "text": "העלאה ל-7,500",
+          "isCorrect": true,
+          "explanation": "יש לך צבע חזק. במשחק שלנו יקראו לך עם כל זוג או משיכה, אז בנה קופה גדולה עכשיו."
         },
         {
           "id": "C",
@@ -24254,7 +24252,7 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "2l15zb"
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 8,
@@ -24283,37 +24281,36 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "n2jvp0"
+      "poolId": "n2jvp0",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
-      "id": 9,
-      "situation": "קופה של 1,200. סגל עושה צ'ק. מה הפעולה?",
+      "poolId": "62qqt0",
+      "situation": "בקופה 1,200. סגל עושה צ'ק. מה הפעולה?",
       "yourCards": "7♥ 7♠",
-      "boardCards": "7♣ 2♦ 2♥",
       "options": [
         {
           "id": "A",
           "text": "צ'ק",
-          "isCorrect": true,
-          "explanation": "הלוח 'נעול'. אין ליריב איך להשתפר ואין לו עם מה לקרוא. צ'ק ייתן לו הזדמנות לתפוס משהו בטרן."
+          "isCorrect": false,
+          "explanation": "אל תעשה צ'ק, תהמר כדי לבנות קופה. במשחק שלנו יקראו לך עם כל זוג נמוך."
         },
         {
           "id": "B",
           "text": "הימור 1,000",
-          "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "הימור כאן יגרום לכולם להתקפל כי אין שום דבר על הלוח שיכול להחזיק אותם ביד."
+          "isCorrect": true,
+          "explanation": "בנה קופה גדולה. במשחק שלנו יקראו לך עם כל זוג, גם אם הלוח נראה 'נעול'."
         },
         {
           "id": "C",
           "text": "אול-אין 10,000",
           "isCorrect": false,
-          "explanation": "פעולה חסרת היגיון שתבריח את כולם מיד."
+          "explanation": "הימור מוגזם שלא לצורך, הימור רגיל יספיק כדי לקבל קריאה."
         }
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "62qqt0"
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 10,
@@ -24342,7 +24339,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "d63mn8"
+      "poolId": "d63mn8",
+      "reviewedAt": "2026-04-10T10:19:26.198Z"
     },
     {
       "id": 11,
@@ -24372,7 +24370,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "b9p1ii"
+      "poolId": "b9p1ii",
+      "reviewedAt": "2026-04-10T10:19:34.279Z"
     },
     {
       "id": 12,
@@ -24402,7 +24401,8 @@
       ],
       "category": "משחק איטי",
       "categoryId": "slow_play",
-      "poolId": "86m0ro"
+      "poolId": "86m0ro",
+      "reviewedAt": "2026-04-10T10:19:34.279Z"
     },
     {
       "id": 1,
@@ -24432,7 +24432,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "67y932"
+      "poolId": "67y932",
+      "reviewedAt": "2026-04-10T10:19:34.279Z"
     },
     {
       "id": 2,
@@ -24462,7 +24463,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "3bi6ke"
+      "poolId": "3bi6ke",
+      "reviewedAt": "2026-04-10T10:19:34.279Z"
     },
     {
       "id": 3,
@@ -24492,26 +24494,26 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "td06aq"
+      "poolId": "td06aq",
+      "reviewedAt": "2026-04-10T10:19:34.280Z"
     },
     {
-      "id": 4,
-      "situation": "פיליפ מהמר 500 לקופה של 1,200. מה הפעולה?",
+      "poolId": "ryfaic",
+      "situation": "פיליפ מהמר 500 לקופה של 1,200.",
       "yourCards": "K♦ Q♦",
-      "boardCards": "8♣ 4♠ 2♥",
       "options": [
         {
           "id": "A",
           "text": "קריאה 500",
           "isCorrect": true,
-          "explanation": "למרות שאין לך כלום, פיליפ מהמר על הכל. המלך או המלכה שלך יכולים להיות היד הכי טובה אם יצאו."
+          "explanation": "המחיר זול מאוד. פיליפ מהמר עם הרבה ידיים חלשות, והמלך או המלכה שלך עשויים להיות היד הטובה ביותר אם יצאו."
         },
         {
           "id": "B",
           "text": "ויתור",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "במשחק מקצועי אפשר לקפל, אבל אצלנו המחיר זול ופיליפ מהמר עם הרבה ידיים חלשות."
+          "explanation": "במשחק שלנו המחיר זול מדי בשביל לוותר, במיוחד כשפיליפ מהמר על כלום.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -24522,7 +24524,7 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "ryfaic"
+      "reviewedAt": "2026-04-10T10:19:34.280Z"
     },
     {
       "id": 5,
@@ -24552,7 +24554,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "ys8h6r"
+      "poolId": "ys8h6r",
+      "reviewedAt": "2026-04-10T10:19:34.280Z"
     },
     {
       "id": 6,
@@ -24582,7 +24585,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "mnttvk"
+      "poolId": "mnttvk",
+      "reviewedAt": "2026-04-10T10:19:34.280Z"
     },
     {
       "id": 7,
@@ -24612,7 +24616,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "cvuf28"
+      "poolId": "cvuf28",
+      "reviewedAt": "2026-04-10T10:19:34.281Z"
     },
     {
       "id": 8,
@@ -24642,7 +24647,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "h7u0zs"
+      "poolId": "h7u0zs",
+      "reviewedAt": "2026-04-10T10:19:34.281Z"
     },
     {
       "id": 9,
@@ -24672,7 +24678,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "5oyavs"
+      "poolId": "5oyavs",
+      "reviewedAt": "2026-04-10T10:19:42.703Z"
     },
     {
       "id": 10,
@@ -24702,37 +24709,37 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "twlt1p"
+      "poolId": "twlt1p",
+      "reviewedAt": "2026-04-10T10:19:42.703Z"
     },
     {
-      "id": 11,
+      "poolId": "1l2t71",
       "situation": "שחקן מהמר 600 לקופה של 1,800. מה הפעולה?",
       "yourCards": "5♠ 4♠",
-      "boardCards": "7♦ 6♥ A♣",
       "options": [
         {
           "id": "A",
           "text": "קריאה 600",
           "isCorrect": true,
-          "explanation": "יש לך סטרייט פתוח. היחס בקופה הוא 1 ל-3, וזה בדיוק המחיר הנכון לקרוא ולקוות ל-8 או 3."
+          "explanation": "יש לך סטרייט דרו פתוח. המחיר זול מאוד ביחס לקופה, וזה בדיוק המצב שבו אנחנו קוראים כדי לנסות לפגוע בסטרייט."
         },
         {
           "id": "B",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "זהו מצב קלאסי שבו המתמטיקה אומרת שחובה לקרוא."
+          "explanation": "ויתור כאן הוא טעות, המחיר זול מדי והסיכויים שלך להשלים את היד מצדיקים קריאה.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "העלאה ל-2,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "בלוף כזה לא יעבוד מול רוב החבר'ה שלנו, הם יקראו לך עם כל אס."
+          "explanation": "בלוף לא יעבוד במשחק שלנו, השחקנים יקראו עם כל אס או זוג, עדיף לראות את הטרן בזול."
         }
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "1l2t71"
+      "reviewedAt": "2026-04-10T10:19:42.703Z"
     },
     {
       "id": 12,
@@ -24762,7 +24769,8 @@
       ],
       "category": "האם כדאי לקרוא?",
       "categoryId": "pot_odds",
-      "poolId": "tgilwg"
+      "poolId": "tgilwg",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 1,
@@ -24792,7 +24800,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "bgwwrt"
+      "poolId": "bgwwrt",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 2,
@@ -24822,7 +24831,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "n7ke0d"
+      "poolId": "n7ke0d",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 3,
@@ -24852,7 +24862,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "a6k510"
+      "poolId": "a6k510",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 4,
@@ -24882,7 +24893,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "7lrqxi"
+      "poolId": "7lrqxi",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 5,
@@ -24912,7 +24924,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "clgpwj"
+      "poolId": "clgpwj",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 6,
@@ -24942,7 +24955,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "5bvayd"
+      "poolId": "5bvayd",
+      "reviewedAt": "2026-04-10T10:19:42.704Z"
     },
     {
       "id": 7,
@@ -24972,7 +24986,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "ouoe2n"
+      "poolId": "ouoe2n",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 8,
@@ -25002,7 +25017,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "vqwsbs"
+      "poolId": "vqwsbs",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 9,
@@ -25032,7 +25048,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "4ddc4t"
+      "poolId": "4ddc4t",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 10,
@@ -25062,7 +25079,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "lo0oes"
+      "poolId": "lo0oes",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 11,
@@ -25092,7 +25110,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "uml85j"
+      "poolId": "uml85j",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 12,
@@ -25122,7 +25141,8 @@
       ],
       "category": "גודל הערימה",
       "categoryId": "stack_depth",
-      "poolId": "m8jesg"
+      "poolId": "m8jesg",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 1,
@@ -25152,7 +25172,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "3xvmbo"
+      "poolId": "3xvmbo",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 2,
@@ -25182,7 +25203,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "njd0lo"
+      "poolId": "njd0lo",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 3,
@@ -25211,7 +25233,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "pahvb9"
+      "poolId": "pahvb9",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
       "id": 4,
@@ -25229,7 +25252,8 @@
           "id": "B",
           "text": "בערך 35%",
           "isCorrect": false,
-          "explanation": "זה הסיכוי לפגוע עד הריבר (שני קלפים), השאלה הייתה רק על הטרן."
+          "explanation": "זה הסיכוי לפגוע עד הריבר (שני קלפים), השאלה הייתה רק על הטרן.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -25240,66 +25264,66 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "hw8v49"
+      "poolId": "hw8v49",
+      "reviewedAt": "2026-04-10T10:20:43.484Z"
     },
     {
-      "id": 5,
+      "poolId": "prk8o6",
+      "situation": "הקופה 4,000. תומר מהמר 500. מה הפעולה?",
       "yourCards": "4♠ 4♦",
-      "boardCards": "A♣ J♥ 8♠",
-      "situation": "הקופה 4,000. תומר מהמר 500. האם נכון להמשיך עם זוג 4?",
       "options": [
         {
           "id": "A",
           "text": "קריאה 500",
           "isCorrect": true,
-          "explanation": "ההימור של תומר כל כך קטן (1 ל-9 ביחס לקופה) ששווה לנסות לפגוע ב-4 בטרן, למרות שהיד כרגע חלשה."
+          "explanation": "במשחק שלנו, הימור של 500 לתוך קופה של 4,000 הוא מחיר זול מדי כדי לוותר. אנחנו קוראים כדי לראות אם נשתפר בטרן."
         },
         {
           "id": "B",
           "text": "ויתור",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "בפוקר 'נכון' מקפלים פה, אבל אצלנו במחיר כזה קטן חייבים לראות קלף."
+          "explanation": "ויתור מול הימור קטן כזה הוא טעות קלאסית במשחק שלנו, שבו כולם קוראים עם כל זוג.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "העלאה ל-2,000",
           "isCorrect": false,
-          "explanation": "בלוף לא יעבוד על תומר, הוא יקרא לך עם כל זוג."
+          "explanation": "העלאה לא תגרום לתומר לפרוש, והיא סתם מנפחת קופה עם יד חלשה."
         }
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "prk8o6"
+      "reviewedAt": "2026-04-10T10:29:00.091Z"
     },
     {
-      "id": 6,
+      "poolId": "rne5w2",
+      "situation": "קופה של 3,000. ליאור מהמר 1,500. מה הסיכוי שלך לנצח אם תפגע ב-A או K?",
       "yourCards": "A♠ K♠",
-      "boardCards": "10♠ 5♣ 2♥",
-      "situation": "קופה של 3,000. ליאור (השקט) מהמר 1,500. מה הסיכוי שלך לנצח אם תפגע ב-A או K?",
       "options": [
         {
           "id": "A",
-          "text": "סיכוי גבוה מאוד",
+          "text": "סיכוי טוב להוביל",
           "isCorrect": true,
-          "explanation": "אם תפגע באחד מ-6 האאוטים שלך (3 אסים ו-3 מלכים), יהיה לך זוג גבוה עם הקיקר הכי חזק."
+          "explanation": "יש לך 6 אאוטים (3 אסים ו-3 מלכים) שיתנו לך זוג גבוה. במשחק שלנו, זוג גבוה עם קיקר חזק הוא לרוב היד המנצחת."
         },
         {
           "id": "B",
           "text": "סיכוי נמוך",
           "isCorrect": false,
-          "explanation": "זוג אסים או מלכים נחשב ליד חזקה מאוד ברוב המקרים."
+          "explanation": "בפוקר מקצועי אולי תחשוש מסטים, אבל אצלנו זוג גבוה הוא יד חזקה מאוד.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "0% סיכוי",
           "isCorrect": false,
-          "explanation": "יש לך סיכוי מצוין לשפר את היד."
+          "explanation": "יש לך סיכוי מצוין לשפר את היד שלך לזוג גבוה."
         }
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "rne5w2"
+      "reviewedAt": "2026-04-10T10:29:00.094Z"
     },
     {
       "id": 7,
@@ -25329,7 +25353,8 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "92thzd"
+      "poolId": "92thzd",
+      "reviewedAt": "2026-04-10T10:29:00.094Z"
     },
     {
       "id": 8,
@@ -25358,37 +25383,37 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "2faxj9"
+      "poolId": "2faxj9",
+      "reviewedAt": "2026-04-10T10:29:00.094Z"
     },
     {
-      "id": 9,
+      "poolId": "fhc5tg",
+      "situation": "קופה של 4,000. סגל מהמר 1,000. מה הפעולה?",
       "yourCards": "7♣ 6♣",
-      "boardCards": "5♣ 4♦ 2♥",
-      "situation": "קופה של 4,000. סגל מהמר 1,000. יש לך גאט-שוט (צריך 3 לרצף) ושני 'אובר קארדס'.",
       "options": [
         {
           "id": "A",
           "text": "קריאה 1,000",
           "isCorrect": true,
-          "explanation": "הקופה נותנת לך יחס של 1 ל-5. יש לך 4 אאוטים לרצף ועוד 6 אאוטים לזוג גבוה, מה שמצדיק קריאה להימור קטן."
+          "explanation": "הימור של 1,000 לתוך 4,000 הוא מחיר מצוין. יש לנו הרבה אאוטים לשיפור, ובמשחק שלנו תמיד כדאי לראות את הקלף הבא במחיר כזה."
         },
         {
           "id": "B",
           "text": "ויתור",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "במשחק שמרני אולי מתקפלים, אבל אצלנו מקבלים פה מחיר טוב לראות קלף."
+          "explanation": "לוותר על משיכה במחיר של 1,000 צ'יפים זה בזבוז, במשחק שלנו תמיד נשלם כדי לראות טרן.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "העלאה ל-3,000",
           "isCorrect": false,
-          "explanation": "סגל שמרן, אם הוא הימר הוא כנראה לא יפרוש להעלאה קטנה."
+          "explanation": "סגל לא יפרוש, והעלאה רק תגרום לנו להפסיד יותר אם לא נפגע."
         }
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "fhc5tg"
+      "reviewedAt": "2026-04-10T10:29:00.095Z"
     },
     {
       "id": 10,
@@ -25417,37 +25442,37 @@
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "ia0vvi"
+      "poolId": "ia0vvi",
+      "reviewedAt": "2026-04-10T10:29:00.095Z"
     },
     {
-      "id": 11,
+      "poolId": "ivxsd7",
+      "situation": "קופה של 5,000. מלמד מהמר 4,000. מה הפעולה?",
       "yourCards": "K♣ Q♣",
-      "boardCards": "10♦ 9♥ 2♣",
-      "situation": "קופה של 5,000. מלמד מהמר 4,000. יש לך גאט-שוט (צריך נסיך) ושני קלפים גבוהים.",
       "options": [
         {
           "id": "A",
           "text": "ויתור",
           "isCorrect": true,
-          "explanation": "מלמד שחקן אגרסיבי-סלקטיבי. הימור של 4,000 לתוך 5,000 הוא יקר מדי בשביל לרדוף אחרי 4 אאוטים בלבד."
+          "explanation": "הימור של 4,000 הוא גדול מדי עבור גאט-שוט בלבד. עדיף לשמור את הצ'יפים ליד הבאה."
         },
         {
           "id": "B",
           "text": "קריאה 4,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "היחס בקופה (Pot Odds) לא מספיק טוב כאן. אתה משלם כמעט חצי קופה על סיכוי קטן."
+          "explanation": "במשחק שלנו, קריאה של 4,000 עם משיכה בלבד היא יקרה מדי, גם אם אנחנו אוהבים לראות קלפים.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "העלאה ל-10,000",
           "isCorrect": false,
-          "explanation": "מלמד לא יזרוק יד חזקה, וזה סתם הימור התאבדות."
+          "explanation": "בלוף גדול לא יעבוד על מלמד, הוא יקרא לך."
         }
       ],
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
-      "poolId": "ivxsd7"
+      "reviewedAt": "2026-04-10T10:29:00.095Z"
     }
   ]
 }
