@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T00:09:38.321Z",
+  "lastUpdated": "2026-04-10T05:20:59.766Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6348,11 +6348,90 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-10T00:11:07.592Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "gen_1775387263630_ritii6",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "rfycer",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "3z56ug",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387236973_oni1lf",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "17zwzh",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-10T00:12:37.074Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "math_1775389545260_45mdt2",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "pvb15q",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "z3dni6",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390889928_gr81yz",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387418604_61r9cr",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 189,
-      "totalCorrect": 146,
-      "accuracy": 77.24867724867724,
+      "totalQuestions": 196,
+      "totalCorrect": 150,
+      "accuracy": 76.53061224489795,
       "pendingReportMilestones": [],
       "reports": [
         {
