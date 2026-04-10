@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T10:39:05.589Z",
+  "lastUpdated": "2026-04-10T10:40:24.956Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6610,17 +6610,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "math2_1775390916781_au5rpg",
             "math_1775389628167_3egtbx"
           ],
           "flagReports": [
-            {
-              "poolId": "math2_1775390916781_au5rpg",
-              "playerName": "חרדון",
-              "reason": "unclear_question",
-              "comment": "לא מבין את השאלה",
-              "date": "2026-04-10T10:07:32.973Z"
-            },
             {
               "poolId": "math_1775389628167_3egtbx",
               "playerName": "חרדון",
