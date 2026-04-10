@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-10T09:36:34.468Z",
+  "generatedAt": "2026-04-10T09:56:38.643Z",
   "totalScenarios": 785,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -1008,7 +1008,8 @@
         }
       ],
       "category": "פתיחה לפני הפלופ",
-      "categoryId": "preflop_open"
+      "categoryId": "preflop_open",
+      "reviewedAt": "2026-04-10T09:51:06.620Z"
     },
     {
       "poolId": "4jiv53",
@@ -3169,7 +3170,8 @@
         }
       ],
       "category": "המשך הימור",
-      "categoryId": "cbet"
+      "categoryId": "cbet",
+      "reviewedAt": "2026-04-10T09:51:06.620Z"
     },
     {
       "poolId": "lrugv8",
@@ -19523,7 +19525,8 @@
         }
       ],
       "category": "סיכויים וחישובים",
-      "categoryId": "true_false"
+      "categoryId": "true_false",
+      "reviewedAt": "2026-04-10T09:51:06.620Z"
     },
     {
       "id": "math_1775389802185_wc0gnh",
@@ -22503,7 +22506,8 @@
         }
       ],
       "category": "לתפוס בלוף",
-      "categoryId": "bluff_catching"
+      "categoryId": "bluff_catching",
+      "reviewedAt": "2026-04-10T09:51:06.620Z"
     },
     {
       "poolId": "dgo6op",
@@ -22626,7 +22630,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "civ74r"
+      "poolId": "civ74r",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 2,
@@ -22656,7 +22661,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "f8z80v"
+      "poolId": "f8z80v",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 3,
@@ -22686,7 +22692,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "joj7hh"
+      "poolId": "joj7hh",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 4,
@@ -22716,7 +22723,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "bzo091"
+      "poolId": "bzo091",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 5,
@@ -22746,7 +22754,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "63xdo"
+      "poolId": "63xdo",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 6,
@@ -22776,7 +22785,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "goyd5v"
+      "poolId": "goyd5v",
+      "reviewedAt": "2026-04-10T09:51:06.621Z"
     },
     {
       "id": 7,
@@ -22806,7 +22816,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "663frp"
+      "poolId": "663frp",
+      "reviewedAt": "2026-04-10T09:51:50.452Z"
     },
     {
       "id": 8,
@@ -22836,7 +22847,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "yadjmp"
+      "poolId": "yadjmp",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 9,
@@ -22866,7 +22878,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "2po111"
+      "poolId": "2po111",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 10,
@@ -22896,7 +22909,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "l8erka"
+      "poolId": "l8erka",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 11,
@@ -22926,7 +22940,8 @@
       ],
       "category": "זוג עליון על לוח מסוכן",
       "categoryId": "wet_board_top_pair",
-      "poolId": "6f8wdy"
+      "poolId": "6f8wdy",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 1,
@@ -22956,7 +22971,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "b4xgug"
+      "poolId": "b4xgug",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 2,
@@ -22986,7 +23002,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "bj6y78"
+      "poolId": "bj6y78",
+      "reviewedAt": "2026-04-10T09:51:50.457Z"
     },
     {
       "id": 3,
@@ -23016,7 +23033,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "pvb15q"
+      "poolId": "pvb15q",
+      "reviewedAt": "2026-04-10T09:51:50.458Z"
     },
     {
       "id": 4,
@@ -23046,7 +23064,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "mj8jk8"
+      "poolId": "mj8jk8",
+      "reviewedAt": "2026-04-10T09:51:50.458Z"
     },
     {
       "id": 5,
@@ -23076,7 +23095,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "1kdqbh"
+      "poolId": "1kdqbh",
+      "reviewedAt": "2026-04-10T09:51:50.458Z"
     },
     {
       "id": 6,
@@ -23106,7 +23126,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "szee1j"
+      "poolId": "szee1j",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 7,
@@ -23136,7 +23157,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "83bc6"
+      "poolId": "83bc6",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 8,
@@ -23166,7 +23188,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "e2bv3f"
+      "poolId": "e2bv3f",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 9,
@@ -23196,7 +23219,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "ni8wiz"
+      "poolId": "ni8wiz",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 10,
@@ -23226,7 +23250,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "gjh41m"
+      "poolId": "gjh41m",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 11,
@@ -23256,7 +23281,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "c4q4u0"
+      "poolId": "c4q4u0",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 12,
@@ -23286,7 +23312,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "1d1wd"
+      "poolId": "1d1wd",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 13,
@@ -23316,7 +23343,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "p0u9y7"
+      "poolId": "p0u9y7",
+      "reviewedAt": "2026-04-10T09:52:49.829Z"
     },
     {
       "id": 14,
@@ -23346,7 +23374,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "5yv0y0"
+      "poolId": "5yv0y0",
+      "reviewedAt": "2026-04-10T09:52:49.830Z"
     },
     {
       "id": 15,
@@ -23376,7 +23405,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "opqx5p"
+      "poolId": "opqx5p",
+      "reviewedAt": "2026-04-10T09:52:49.830Z"
     },
     {
       "id": 16,
@@ -23406,7 +23436,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "yi5dse"
+      "poolId": "yi5dse",
+      "reviewedAt": "2026-04-10T09:55:10.687Z"
     },
     {
       "id": 17,
@@ -23436,7 +23467,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "2xupig"
+      "poolId": "2xupig",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 18,
@@ -23466,7 +23498,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "o7hh4o"
+      "poolId": "o7hh4o",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 19,
@@ -23496,7 +23529,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "y8puwr"
+      "poolId": "y8puwr",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 20,
@@ -23526,7 +23560,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "i9758r"
+      "poolId": "i9758r",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 21,
@@ -23556,7 +23591,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "acseyr"
+      "poolId": "acseyr",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 22,
@@ -23586,7 +23622,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "y1v06m"
+      "poolId": "y1v06m",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 23,
@@ -23616,7 +23653,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "wfv4n7"
+      "poolId": "wfv4n7",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 24,
@@ -23646,7 +23684,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "vlx1e3"
+      "poolId": "vlx1e3",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 25,
@@ -23676,7 +23715,8 @@
       ],
       "category": "פספסת את הקלף",
       "categoryId": "missed_draw",
-      "poolId": "9nz6tj"
+      "poolId": "9nz6tj",
+      "reviewedAt": "2026-04-10T09:55:10.688Z"
     },
     {
       "id": 1,
@@ -23706,7 +23746,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "rfycer"
+      "poolId": "rfycer",
+      "reviewedAt": "2026-04-10T09:56:17.899Z"
     },
     {
       "id": 2,
@@ -23736,13 +23777,13 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "xfss0i"
+      "poolId": "xfss0i",
+      "reviewedAt": "2026-04-10T09:56:17.899Z"
     },
     {
-      "id": 3,
-      "situation": "הקופה 3,000. אייל (אגרסיבי) מהמר 1,500. יש לך פלאש. מה הפעולה?",
+      "poolId": "s92y6w",
+      "situation": "הקופה 3,000. אייל (אגרסיבי) מהמר 1,500. מה הפעולה?",
       "yourCards": "A♦ 5♦",
-      "boardCards": "10♦ 8♦ 2♦ 4♠ J♣",
       "options": [
         {
           "id": "A",
@@ -23754,25 +23795,24 @@
           "id": "B",
           "text": "קריאה 1,500",
           "isCorrect": false,
-          "explanation": "טעות. אתה נותן לו לראות את סוף היד בזול כשאתה מחזיק ביד הכי חזקה האפשרית."
+          "explanation": "טעות. אתה נותן לו לראות את סוף היד בזול כשאתה מחזיק ביד חזקה מאוד."
         },
         {
           "id": "C",
           "text": "העלאה קטנה ל-3,500",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "זה בסדר, אבל נגד אייל אפשר לקחת הרבה יותר צ'יפים."
+          "explanation": "זה בסדר, אבל נגד אייל אפשר לקחת הרבה יותר צ'יפים.",
+          "nearMiss": true
         }
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "s92y6w"
+      "reviewedAt": "2026-04-10T09:56:17.899Z"
     },
     {
-      "id": 4,
-      "situation": "הקופה 6,000 בריבר. לא פגעת בכלום. ליכטר (אגרסיבי) בדק. מה הפעולה?",
+      "poolId": "3iv0c6",
+      "situation": "הקופה 6,000 בריבר. ליכטר (אגרסיבי) בדק. מה הפעולה?",
       "yourCards": "7♣ 6♣",
-      "boardCards": "K♠ J♦ 2♥ 9♣ 3♠",
       "options": [
         {
           "id": "A",
@@ -23784,8 +23824,8 @@
           "id": "B",
           "text": "הימור ענק של 9,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "בתיאוריה זה יכול לעבוד, אבל החבר'ה אצלנו לא אוהבים להתקפל, במיוחד לא ליכטר."
+          "explanation": "בתיאוריה זה יכול לעבוד, אבל החבר'ה אצלנו לא אוהבים להתקפל, במיוחד לא ליכטר.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -23796,37 +23836,36 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "3iv0c6"
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
-      "id": 5,
+      "poolId": "nphte8",
       "situation": "הקופה 4,000. חרדון (אגרסיבי) מהמר 6,000 בטרן (Turn). מה הפעולה?",
       "yourCards": "9♠ 8♠",
-      "boardCards": "7♦ 6♣ 5♥ 2♠",
       "options": [
         {
           "id": "A",
           "text": "קריאה 6,000",
           "isCorrect": true,
-          "explanation": "יש לך סטרייט. חרדון אגרסיבי ויכול להמר ככה גם עם זוג או בלוף. אל תבריח אותו עם העלאה, תן לו להמשיך להשתולל."
+          "explanation": "יש לך יד חזקה מאוד. חרדון אגרסיבי ויכול להמר ככה גם עם זוג או בלוף. אל תבריח אותו עם העלאה, תן לו להמשיך להשתולל."
         },
         {
           "id": "B",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "יש לך את היד הכי חזקה כרגע. לוותר על זה כי ההימור גדול זו טעות קשה."
+          "explanation": "יש לך יד מצוינת כרגע. לוותר על זה כי ההימור גדול זו טעות קשה."
         },
         {
           "id": "C",
           "text": "העלאה ל-15,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה ענקית על הימור ענק תגרום גם לחרדון לחשוב פעמיים ולהתקפל עם ידיים נחותות."
+          "explanation": "העלאה ענקית על הימור ענק תגרום גם לחרדון לחשוב פעמיים ולהתקפל עם ידיים נחותות.",
+          "nearMiss": true
         }
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "nphte8"
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
       "id": 6,
@@ -23856,7 +23895,8 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "l7007f"
+      "poolId": "l7007f",
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
       "id": 7,
@@ -23886,13 +23926,13 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "xmlx8x"
+      "poolId": "xmlx8x",
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
-      "id": 8,
-      "situation": "הקופה 3,500 בטרן. פאבל (אגרסיבי) בדק. יש לך שלישייה. מה הפעולה?",
+      "poolId": "pkrrls",
+      "situation": "הקופה 3,500 בטרן. פאבל (אגרסיבי) בדק. מה הפעולה?",
       "yourCards": "4♦ 4♥",
-      "boardCards": "A♠ 9♣ 4♠ 2♥",
       "options": [
         {
           "id": "A",
@@ -23904,8 +23944,8 @@
           "id": "B",
           "text": "צ'ק",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "לתת קלף חינם בלוח עם משיכה לפלאש זה מסוכן. תבנה את הקופה עכשיו."
+          "explanation": "לתת קלף חינם בלוח עם משיכה לפלאש זה מסוכן. תבנה את הקופה עכשיו.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -23916,7 +23956,7 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "pkrrls"
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
       "id": 9,
@@ -23946,13 +23986,13 @@
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "cawykv"
+      "poolId": "cawykv",
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
-      "id": 10,
-      "situation": "הקופה 5,000. מלמד (שנכנס רק עם ידיים חזקות) מהמר 3,000. יש לך סטרייט. מה הפעולה?",
+      "poolId": "7v9egf",
+      "situation": "הקופה 5,000. מלמד (שנכנס רק עם ידיים חזקות) מהמר 3,000. מה הפעולה?",
       "yourCards": "K♣ Q♦",
-      "boardCards": "J♠ 10♥ 9♣ 2♦ 5♠",
       "options": [
         {
           "id": "A",
@@ -23970,43 +24010,42 @@
           "id": "C",
           "text": "העלאה ל-6,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה קטנה מדי. אם הוא כבר הימר 3,000, הוא בטוח ישלם גם 10,000 עם יד חזקה."
+          "explanation": "העלאה קטנה מדי. אם הוא כבר הימר 3,000, הוא בטוח ישלם גם 10,000 עם יד חזקה.",
+          "nearMiss": true
         }
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "7v9egf"
+      "reviewedAt": "2026-04-10T09:56:17.910Z"
     },
     {
-      "id": 11,
+      "poolId": "xoxwgh",
       "situation": "הקופה 3,000 בריבר. אורן (פסיבי) מהמר פתאום 5,000. מה הפעולה?",
       "yourCards": "A♠ Q♦",
-      "boardCards": "A♥ 10♣ 7♦ 5♠ 2♥",
       "options": [
         {
           "id": "A",
           "text": "ויתור",
           "isCorrect": true,
-          "explanation": "אורן הפסיבי בחיים לא יבצע הימור ענק (Overbet) כבלוף. כנראה שיש לו זוגיים או שלישייה."
+          "explanation": "במשחק הביתי שלנו, שחקן פסיבי שמהמר פתאום הימור ענק (Overbet) ביחס לקופה כמעט תמיד מחזיק יד חזקה מאוד כמו זוגיים או שלישייה. הוא לא יבחר בקו כזה כבלוף."
         },
         {
           "id": "B",
           "text": "קריאה 5,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "קשה לקפל אס עם קיקר קווין, אבל הפעולה של אורן צועקת 'יש לי יד מפלצת'."
+          "explanation": "בפוקר מקצועי אולי קשה לקפל טופ-פייר עם קיקר חזק, אבל אצלנו הפעולה הזו של אורן היא סימן מובהק לכך שהוא עקף אותך. קריאה כאן היא בזבוז צ'יפים.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "העלאה ל-12,000",
           "isCorrect": false,
-          "explanation": "טעות חמורה. אתה רק תגדיל את ההפסד שלך כשהוא ישווה עם יד טובה יותר."
+          "explanation": "טעות חמורה. במשחק שלנו יריב שמהמר ככה לא יתקפל להעלאה, ואתה רק תגדיל את ההפסד שלך כשהוא ישלם לך עם יד טובה יותר."
         }
       ],
       "category": "הימור ענק",
       "categoryId": "overbet",
-      "poolId": "xoxwgh"
+      "reviewedAt": "2026-04-10T09:56:38.642Z"
     }
   ]
 }
