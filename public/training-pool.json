@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-10T10:43:37.030Z",
+  "generatedAt": "2026-04-10T13:54:35.682Z",
   "totalScenarios": 832,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -18424,35 +18424,32 @@
       "reviewedAt": "2026-04-05T11:47:08.167Z"
     },
     {
-      "id": "math_1775389628167_qk3lzw",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "difficulty": "intermediate",
-      "situation": "הקופה 3,000. אורן מהמר חזק. כמה אאוטים יש לך לשיפור ליד חזקה יותר?",
+      "poolId": "math_1775389628167_qk3lzw",
+      "situation": "הקופה 3,000. אורן מהמר 2,000 אחרי הפלופ. כמה אאוטים יש לך כדי להפוך ליד חזקה יותר מהזוג שיש לך כרגע?",
       "yourCards": "9♠ 9♦",
-      "board": "9♥ 4♣ 2♠",
+      "boardCards": "J♥ 7♣ 4♦ 2♠",
       "options": [
         {
           "id": "A",
-          "text": "יש לי 7 אאוטים",
-          "explanation": "יש 3 קלפי 4, 3 קלפי 2 וקלף 9 אחד שנותרו (סה\"כ 7).",
-          "isCorrect": true
+          "text": "יש לי 2 אאוטים",
+          "isCorrect": true,
+          "explanation": "התשע היחיד שנשאר בחבילה נותן לך סט, מה שנותן לך יד חזקה בטוחה מול הטווח המגוון של אורן."
         },
         {
           "id": "B",
-          "text": "יש לי 4 אאוטים",
-          "explanation": "4 אאוטים זה גוטשוט.",
-          "isCorrect": false
+          "text": "יש לי 7 אאוטים",
+          "isCorrect": false,
+          "explanation": "חישוב שגוי, אין לך דרך להגיע לצבע או סטרייט עם היד הזו."
         },
         {
           "id": "C",
-          "text": "יש לי 10 אאוטים",
-          "explanation": "10 אאוטים זה המקסימום לסט, אבל כאן יש רק 7.",
-          "isCorrect": false
+          "text": "יש לי 4 אאוטים",
+          "isCorrect": false,
+          "explanation": "זה לא גוטשוט, חסרים לך יותר מדי קלפים כדי להשלים רצף."
         }
       ],
-      "poolId": "math_1775389628167_qk3lzw",
-      "reviewedAt": "2026-04-05T11:47:08.167Z"
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false"
     },
     {
       "id": "math_1775389628167_3q9pfs",
