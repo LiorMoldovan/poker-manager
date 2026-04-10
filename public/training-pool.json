@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-10T10:40:22.327Z",
+  "generatedAt": "2026-04-10T10:41:08.365Z",
   "totalScenarios": 832,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -18519,35 +18519,32 @@
       "reviewedAt": "2026-04-05T11:47:08.167Z"
     },
     {
-      "id": "math_1775389628167_3egtbx",
-      "category": "סיכויים וחישובים",
-      "categoryId": "true_false",
-      "difficulty": "intermediate",
-      "situation": "תומר מהמר 100. יש לך שני אובר-קלפים (Overcards) מעל הלוח.",
+      "poolId": "math_1775389628167_3egtbx",
+      "situation": "תומר מהמר 500 לתוך קופה של 1,500. יש 3 שחקנים במשחק.",
       "yourCards": "K♠ Q♠",
-      "board": "J♥ 5♣ 2♦",
+      "boardCards": "J♥ 9♠ 2♠",
       "options": [
         {
           "id": "A",
-          "text": "יש לי 3 אאוטים",
-          "explanation": "יש לך שני אובר-קלפים, ולכל אחד מהם יש 3 קלפים שנותרו בחפיסה שיכולים לתת לך זוג גבוה.",
-          "isCorrect": false
+          "text": "יש לי 6 אאוטים בלבד",
+          "isCorrect": false,
+          "explanation": "יש לך גם משיכת צבע חזקה שמוסיפה אאוטים משמעותיים מעבר לזוג גבוה."
         },
         {
           "id": "B",
-          "text": "יש לי 6 אאוטים",
-          "explanation": "ישנם 3 מלכים ו-3 מלכות שנותרו בחפיסה, מה שנותן לך סך הכל 6 אאוטים לשיפור היד.",
-          "isCorrect": true
+          "text": "יש לי 15 אאוטים",
+          "isCorrect": true,
+          "explanation": "יש לך 9 אאוטים לצבע ועוד 6 אאוטים לזוג גבוה (מלכים ומלכות), מה שנותן סיכוי מצוין לקחת את הקופה מול תומר."
         },
         {
           "id": "C",
           "text": "יש לי 9 אאוטים",
-          "explanation": "9 אאוטים הם בדרך כלל עבור משיכת צבע (פלאש דראו), לא עבור שני אובר-קלפים.",
-          "isCorrect": false
+          "isCorrect": false,
+          "explanation": "זהו מספר האאוטים למשיכת צבע בלבד, אך כאן יש לך גם אובר-קלפים שמוסיפים אאוטים."
         }
       ],
-      "poolId": "math_1775389628167_3egtbx",
-      "reviewedAt": "2026-04-05T12:50:26.206Z"
+      "category": "סיכויים וחישובים",
+      "categoryId": "true_false"
     },
     {
       "id": "math_1775389628167_8iz01q",
