@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T10:35:01.032Z",
+  "lastUpdated": "2026-04-10T10:39:05.589Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6610,18 +6610,10 @@
             }
           ],
           "flaggedPoolIds": [
-            "math_1775389602525_nmx7j9",
             "math2_1775390916781_au5rpg",
             "math_1775389628167_3egtbx"
           ],
           "flagReports": [
-            {
-              "poolId": "math_1775389602525_nmx7j9",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "יש לי זוג עליון לא בינינוני",
-              "date": "2026-04-10T10:04:47.046Z"
-            },
             {
               "poolId": "math2_1775390916781_au5rpg",
               "playerName": "חרדון",
