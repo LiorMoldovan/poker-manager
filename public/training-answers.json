@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T12:25:24.789Z",
+  "lastUpdated": "2026-04-10T12:38:42.947Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -7030,11 +7030,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-10T12:38:42.393Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 10,
+          "results": [
+            {
+              "poolId": "bqqono",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "prk8o6",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mziwdh",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7e7006",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "l7007f",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fhs73w",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "3cxp5f",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7yxahi",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ab7mf5",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lwixkv",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 276,
-      "totalCorrect": 209,
-      "accuracy": 75.72463768115942,
+      "totalQuestions": 286,
+      "totalCorrect": 219,
+      "accuracy": 76.57342657342657,
       "pendingReportMilestones": [
         300
       ],
