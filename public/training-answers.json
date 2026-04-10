@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T10:09:17.072Z",
+  "lastUpdated": "2026-04-10T10:33:39.884Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -6543,17 +6543,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "math_1775389802185_n8ie2p",
             "math2_1775390862811_y607ys"
           ],
           "flagReports": [
-            {
-              "poolId": "math_1775389802185_n8ie2p",
-              "playerName": "חרדון",
-              "reason": "wrong_answer",
-              "comment": "אני הכי חזק ולא הפוך",
-              "date": "2026-04-10T09:46:09.952Z"
-            },
             {
               "poolId": "math2_1775390862811_y607ys",
               "playerName": "חרדון",
