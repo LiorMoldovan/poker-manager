@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T06:57:25.488Z",
+  "lastUpdated": "2026-04-11T14:05:14.708Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5036,11 +5036,81 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-11T04:47:59.416Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "byul4k",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389570598_1uvfm3",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "5q20og",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "63ka80",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "v7rjet",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hwki51",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8v94q5",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "yn8sae",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "po6rms",
+              "categoryId": "position_play",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "5optvl",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 40,
-      "totalCorrect": 31,
-      "accuracy": 77.5
+      "totalQuestions": 48,
+      "totalCorrect": 38,
+      "accuracy": 79.16666666666666
     },
     {
       "playerName": "חרדון",
