@@ -3675,5 +3675,25 @@
       "canvasHash": "cg8hn4"
     },
     "playerName": "דן מאן"
+  },
+  {
+    "deviceId": "fe6fd17b-ae74-4cd0-a91d-4da0bf71615d",
+    "role": "member",
+    "timestamp": "2026-04-11T06:39:37.889Z",
+    "device": "iPhone / iOS 18 / Safari",
+    "screenSize": "430x932",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-11T06:39:37.892Z",
+    "fingerprint": {
+      "gpu": "Apple GPU",
+      "cores": 4,
+      "memory": 0,
+      "touchPoints": 5,
+      "language": "he-IL",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "y7v3bq"
+    },
+    "playerName": "אורן"
   }
 ]
