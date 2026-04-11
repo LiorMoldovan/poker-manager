@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T04:41:48.502Z",
+  "lastUpdated": "2026-04-11T06:39:42.201Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3151,11 +3151,213 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T17:31:04.557Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "3iv0c6",
+              "categoryId": "overbet",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389857109_hz8u20",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "i9758r",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "fdrbrd",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387418604_61r9cr",
+              "categoryId": "set_mining",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389857109_hgr70k",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "60qhd0",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "afjyxr",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dgo6op",
+              "categoryId": "bluff_catching",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "gen_1775387263630_vwfemn",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "gen_1775387418604_61r9cr"
+          ],
+          "flagReports": [
+            {
+              "poolId": "gen_1775387418604_61r9cr",
+              "playerName": "אורן",
+              "reason": "other",
+              "comment": "יש לי שלישיה ולא זוג נמוך",
+              "date": "2026-04-09T17:29:45.924Z"
+            }
+          ]
+        },
+        {
+          "date": "2026-04-09T17:35:03.834Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 5,
+          "results": [
+            {
+              "poolId": "dfgxmu",
+              "categoryId": "check_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "azkyqg",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389680104_rt5oya",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389602525_11a92e",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775388996224_9g5r6j",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "odds_math_1775387023360_xhhw5o",
+              "categoryId": "odds_math",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "frrgx0",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "dpyop4",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "wc50n8",
+              "categoryId": "slow_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "dggvq9",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-09T17:37:27.564Z",
+          "questionsAnswered": 5,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "math_1775389483228_zrqq2m",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389802185_2gho6u",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "yadjmp",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389836495_beyoqg",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "fdmop5",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math_1775389836495_beyoqg"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math_1775389836495_beyoqg",
+              "playerName": "אורן",
+              "reason": "unclear_question",
+              "comment": "בבורד אני מנצח בלי קשר לאחוזים",
+              "date": "2026-04-09T17:37:06.260Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 168,
-      "totalCorrect": 126,
-      "accuracy": 75
+      "totalQuestions": 187,
+      "totalCorrect": 139,
+      "accuracy": 74.33155080213903
     },
     {
       "playerName": "מלמד",
