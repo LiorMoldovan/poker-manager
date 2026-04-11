@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-04-11T17:21:48.019Z",
-  "totalScenarios": 832,
+  "generatedAt": "2026-04-11T17:22:48.403Z",
+  "totalScenarios": 847,
   "byCategory": {
     "wet_board_top_pair": 30,
     "bluff_catching": 27,
     "multiway_pots": 22,
     "medium_pairs": 20,
     "preflop_open": 24,
-    "preflop_vs_raise": 21,
+    "preflop_vs_raise": 36,
     "two_pair_plus": 22,
     "slow_play": 30,
     "flush_draw": 30,
@@ -25455,6 +25455,455 @@
       "category": "אחוזים וסיכויים",
       "categoryId": "odds_math",
       "reviewedAt": "2026-04-10T10:29:00.095Z"
+    },
+    {
+      "id": 16,
+      "situation": "פאבל מעלה ל-800 לפני הפלופ. שלושה שחקנים כבר קראו. אתה בעמדת הדילר.",
+      "yourCards": "5♠ 5♦",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 800",
+          "isCorrect": true,
+          "explanation": "במשחק שלנו הקופה כבר גדולה ויש הרבה קוראים. שווה לראות פלופ בזול ולקוות לפגוע בשלישייה (Set)."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-2,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בפוקר מקצועי אולי תרצה לבודד, אבל אצלנו כולם יקראו גם את ה-2,500 ותישאר עם זוג נמוך מול 4 אנשים."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "הקופה מאוד מפתה ויש לך מספיק צ'יפים כדי לנסות לפגוע בסט."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "mut5ji"
+    },
+    {
+      "id": 17,
+      "situation": "אייל מהמר 1,500 לתוך קופה של 3,000. אתה אחריו.",
+      "yourCards": "A♠ K♦",
+      "boardCards": "A♥ 8♣ 4♦",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-4,000",
+          "isCorrect": true,
+          "explanation": "יש לך יד חזקה מאוד ואייל שחקן הרפתקן. הוא ישלם לך עם ידיים חלשות יותר כמו אס פחות טוב או זוג נמוך."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה היא בסדר, אבל אתה מפסיד ערך (Value) כי אייל ימשיך לשלם לך עם ידיים פחות טובות."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "יש לך את היד הכי חזקה כרגע, אין סיבה לקפל."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "s320n"
+    },
+    {
+      "id": 18,
+      "situation": "סגל (שחקן שמרן) מעלה ל-1,200 לפני הפלופ. כולם פרשו אליך.",
+      "yourCards": "10♠ 10♣",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,200",
+          "isCorrect": true,
+          "explanation": "סגל משחק רק ידיים חזקות. העלאה נוספת רק תגרום לו להעלות שוב עם ידיים שטובות ממך. עדיף לראות פלופ."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "מול שחקן שמרן כמו סגל, העלאה גדולה תשאיר אותך רק מול ידיים כמו נסיכים, מלכות או אסים."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "זוג 10 היא עדיין יד חזקה מדי בשביל לקפל לפני שראית פלופ."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "ktoto"
+    },
+    {
+      "id": 19,
+      "situation": "ליכטר מהמר 1,000 לתוך קופה של 2,500. יש עוד שני שחקנים אחריך.",
+      "yourCards": "6♥ 7♥",
+      "boardCards": "5♣ 8♦ K♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,000",
+          "isCorrect": true,
+          "explanation": "יש לך 'משיכה לרצף' (Straight Draw). המחיר זול יחסית לקופה ובמשחק שלנו תקבל תשלום יפה אם תפגע."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בלוף כזה לא יעבוד אצלנו. ליכטר או השחקנים אחריך יקראו לך עם כל זוג, וחבל לבזבז צ'יפים."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "ההימור קטן ויש לך סיכוי טוב להפוך ליד מנצחת בטרן."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "v9fll"
+    },
+    {
+      "id": 20,
+      "situation": "מלמד (שחקן אגרסיבי ושמרן) מעלה ל-1,500 מהעמדה הראשונה.",
+      "yourCards": "K♥ Q♦",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "כשמלמד מעלה סכום כזה מעמדה מוקדמת, יש לו יד חזקה מאוד. קינג-מלכה 'אופסויט' היא יד חלשה מדי למצב הזה."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,500",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "במשחק חופשי אולי תקרא, אבל מול העלאה גדולה של שחקן סלקטיבי אתה בדרך כלל בפיגור רציני."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-4,000",
+          "isCorrect": false,
+          "explanation": "זה מהלך מסוכן מאוד. מלמד לא יתקפל וסביר להניח שיש לו יד הרבה יותר טובה משלך."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "s192td"
+    },
+    {
+      "id": 21,
+      "situation": "קופה של 4,000. אורן קורא להימור של 2,000. אתה אחריו.",
+      "yourCards": "A♣ J♠",
+      "boardCards": "J♥ 9♦ 5♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-5,500",
+          "isCorrect": true,
+          "explanation": "יש לך זוג גבוה עם קיקר טוב. אורן קורא עם המון ידיים חלשות יותר, אז כדאי לבנות קופה גדולה עכשיו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "אפשר לקרוא, אבל אתה מפספס הזדמנות לקחת עוד צ'יפים מאורן שאוהב לקרוא עם כל דבר."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "אין סיבה לוותר עם יד כל כך חזקה מול שחקן פסיבי."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "ekd1go"
+    },
+    {
+      "id": 22,
+      "situation": "ארבעה שחקנים נכנסו בבליינד (Limp). אתה בסמול בליינד.",
+      "yourCards": "2♠ 2♣",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 50",
+          "isCorrect": true,
+          "explanation": "השלמה זולה מאוד לראות פלופ. אם תפגע בשלישייה, תזכה בקופה ענקית מכל הלימפרים."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-1,000",
+          "isCorrect": false,
+          "explanation": "אין טעם לנסות 'לנקות' את הקופה. כולם יקראו לך ותשחק עם זוג 2 מחוץ לעמדה מול 4 אנשים."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "זה כמעט בחינם לראות פלופ, שווה את הסיכוי הקטן לפגוע בסט."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "hyl81s"
+    },
+    {
+      "id": 23,
+      "situation": "חרדון מהמר 3,000 לתוך קופה של 3,500. אתה אחריו.",
+      "yourCards": "K♠ Q♣",
+      "boardCards": "K♥ 10♦ 2♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 3,000",
+          "isCorrect": true,
+          "explanation": "חרדון אגרסיבי ומהמר חזק. יש לך זוג גבוה, אבל ההימור שלו ענק. קרא וראה מה קורה בטרן."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-8,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה כאן עלולה לגרום לחרדון לדחוף הכל (All-in). אם הוא חזק אתה בבעיה, ואם הוא מבלף הוא פשוט יתקפל."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "יש לך זוג מלכים, אי אפשר לקפל רק כי ההימור גדול, במיוחד מול שחקן כמו חרדון."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "5ulx7q"
+    },
+    {
+      "id": 24,
+      "situation": "ליכטר מעלה ל-800. שני שחקנים קראו לפניך.",
+      "yourCards": "A♦ Q♦",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-2,800",
+          "isCorrect": true,
+          "explanation": "יש לך יד מצוינת והרבה קוראים. זה הזמן לבנות קופה גדולה (Value) כי הם כנראה ישלמו לך עם ידיים חלשות יותר."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 800",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה היא בסדר, אבל אתה מפספס את ההזדמנות להגדיל את הקופה כשיש לך יתרון ברור על הידיים שלהם."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "אס-מלכה סוטד היא אחת הידיים החזקות במשחק, אין סיבה לקפל."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "r31g0m"
+    },
+    {
+      "id": 25,
+      "situation": "קופה של 2,000. פאבל מהמר 500 בלבד.",
+      "yourCards": "9♦ 10♦",
+      "boardCards": "2♦ 7♦ K♠",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 500",
+          "isCorrect": true,
+          "explanation": "המחיר זול מאוד כדי לנסות להשלים פלאש (Flush). יחס הקופה (Pot Odds) מצוין."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-2,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "אין טעם להעלות כבלוף כי פאבל אוהב לקרוא. עדיף לראות קלף הבא בזול."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "זה הימור קטן מדי בשביל לוותר על פלאש דרו."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "7flu4d"
+    },
+    {
+      "id": 26,
+      "situation": "אייל מעלה ל-700 מעמדה אמצעית. אתה בעמדת ה-Cutoff.",
+      "yourCards": "J♠ J♦",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-2,200",
+          "isCorrect": true,
+          "explanation": "אייל משחק המון ידיים. הנסיכים שלך כנראה טובים יותר, ואתה רוצה לבנות קופה גדולה כבר עכשיו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 700",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה היא פסיבית מדי. במשחק שלנו, כדאי לקחת ערך מידיים חלשות יותר שכבר נמצאות בקופה."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "נסיכים הם יד חזקה מאוד, בטח מול שחקן אגרסיבי כמו אייל."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "qvkxrl"
+    },
+    {
+      "id": 27,
+      "situation": "תומר מהמר 1,000 לתוך קופה של 3,000. יש לך זוג.",
+      "yourCards": "8♠ 9♠",
+      "boardCards": "4♥ 8♦ Q♣",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 1,000",
+          "isCorrect": true,
+          "explanation": "תומר שחקן פסיבי, אם הוא מהמר אולי יש לו מלכה, אבל המחיר זול מספיק כדי לראות אם היד שלך משתפרת."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה לא תעזור כאן. אם יש לו מלכה הוא לא יתקפל, ואם אין לו הוא בטח יברח."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "זוג אמצעי ב-1,000 צ'יפים זה שווה קריאה כדי לראות מה יקרה בטרן."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "7hq8d2"
+    },
+    {
+      "id": 28,
+      "situation": "ליאור (שחקן שמרן) מעלה ל-400. כולם קוראים.",
+      "yourCards": "A♠ K♥",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "העלאה ל-1,800",
+          "isCorrect": true,
+          "explanation": "למרות שליאור שמרן, יש לך יד חזקה מאוד והרבה קוראים בקופה. אתה רוצה לבנות קופה גדולה (Value)."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 400",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "קריאה פה היא בזבוז של יד חזקה. במשחק שלנו כולם ישלמו לך גם אם תעלה ל-1,800."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "אי אפשר לקפל אס-קינג מול העלאה קטנה כזו."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "y70tio"
+    },
+    {
+      "id": 29,
+      "situation": "פיליפ מהמר 4,000 לתוך קופה של 5,000. הלוח נראה מסוכן.",
+      "yourCards": "A♠ A♦",
+      "boardCards": "5♥ 6♥ 7♥",
+      "options": [
+        {
+          "id": "A",
+          "text": "קריאה 4,000",
+          "isCorrect": true,
+          "explanation": "יש לך אסים ואת האס לב אדום (Nut Flush Draw). פיליפ יכול להמר עם פחות מזה, אז שווה לקרוא ולראות את הטרן."
+        },
+        {
+          "id": "B",
+          "text": "העלאה ל-10,000",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "העלאה פה מסוכנת מאוד. אם כבר יש לו צבע או רצף, אתה רק מפסיד יותר צ'יפים."
+        },
+        {
+          "id": "C",
+          "text": "ויתור",
+          "isCorrect": false,
+          "explanation": "יש לך אסים וסיכוי לצבע הכי גבוה. מוקדם מדי לקפל."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "m2a3s5"
+    },
+    {
+      "id": 30,
+      "situation": "דן מאן (שמרן) מעלה ל-1,200. אתה בביג בליינד.",
+      "yourCards": "7♣ 8♣",
+      "boardCards": "",
+      "options": [
+        {
+          "id": "A",
+          "text": "ויתור",
+          "isCorrect": true,
+          "explanation": "מול שחקן שמרן כמו דן מאן, העלאה ל-1,200 אומרת שיש לו יד חזקה מאוד. לא שווה לשלם ביוקר עם יד כזו."
+        },
+        {
+          "id": "B",
+          "text": "קריאה 1,200",
+          "isCorrect": false,
+          "nearMiss": true,
+          "explanation": "בדרך כלל ידיים כאלה טובות לקופה מרובת שחקנים, אבל 1,200 זה מחיר גבוה מדי מול שחקן שלא מעלה הרבה."
+        },
+        {
+          "id": "C",
+          "text": "העלאה ל-3,000",
+          "isCorrect": false,
+          "explanation": "ניסיון לבלף את דן מאן כשהוא מעלה חזק זה רעיון רע מאוד."
+        }
+      ],
+      "category": "מישהו העלה לפניך",
+      "categoryId": "preflop_vs_raise",
+      "poolId": "1prf15"
     }
   ]
 }
