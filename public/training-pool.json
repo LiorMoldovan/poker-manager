@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-11T17:22:48.403Z",
+  "generatedAt": "2026-04-11T17:24:11.701Z",
   "totalScenarios": 847,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -7,7 +7,7 @@
     "multiway_pots": 22,
     "medium_pairs": 20,
     "preflop_open": 24,
-    "preflop_vs_raise": 36,
+    "preflop_vs_raise": 34,
     "two_pair_plus": 22,
     "slow_play": 30,
     "flush_draw": 30,
@@ -28,7 +28,8 @@
     "value_betting": 3,
     "pot_odds": 30,
     "odds_math": 30,
-    "true_false": 176
+    "true_false": 176,
+    "postflop_vs_bet": 2
   },
   "scenarios": [
     {
@@ -25484,7 +25485,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "mut5ji"
+      "poolId": "mut5ji",
+      "reviewedAt": "2026-04-11T17:23:30.016Z"
     },
     {
       "id": 17,
@@ -25514,7 +25516,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "s320n"
+      "poolId": "s320n",
+      "reviewedAt": "2026-04-11T17:23:30.017Z"
     },
     {
       "id": 18,
@@ -25544,7 +25547,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "ktoto"
+      "poolId": "ktoto",
+      "reviewedAt": "2026-04-11T17:23:30.017Z"
     },
     {
       "id": 19,
@@ -25574,7 +25578,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "v9fll"
+      "poolId": "v9fll",
+      "reviewedAt": "2026-04-11T17:23:30.017Z"
     },
     {
       "id": 20,
@@ -25604,7 +25609,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "s192td"
+      "poolId": "s192td",
+      "reviewedAt": "2026-04-11T17:23:30.018Z"
     },
     {
       "id": 21,
@@ -25634,7 +25640,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "ekd1go"
+      "poolId": "ekd1go",
+      "reviewedAt": "2026-04-11T17:23:30.018Z"
     },
     {
       "id": 22,
@@ -25652,7 +25659,8 @@
           "id": "B",
           "text": "העלאה ל-1,000",
           "isCorrect": false,
-          "explanation": "אין טעם לנסות 'לנקות' את הקופה. כולם יקראו לך ותשחק עם זוג 2 מחוץ לעמדה מול 4 אנשים."
+          "explanation": "אין טעם לנסות 'לנקות' את הקופה. כולם יקראו לך ותשחק עם זוג 2 מחוץ לעמדה מול 4 אנשים.",
+          "nearMiss": true
         },
         {
           "id": "C",
@@ -25663,7 +25671,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "hyl81s"
+      "poolId": "hyl81s",
+      "reviewedAt": "2026-04-11T17:23:30.018Z"
     },
     {
       "id": 23,
@@ -25693,7 +25702,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "5ulx7q"
+      "poolId": "5ulx7q",
+      "reviewedAt": "2026-04-11T17:23:30.018Z"
     },
     {
       "id": 24,
@@ -25723,37 +25733,37 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "r31g0m"
+      "poolId": "r31g0m",
+      "reviewedAt": "2026-04-11T17:23:30.019Z"
     },
     {
-      "id": 25,
-      "situation": "קופה של 2,000. פאבל מהמר 500 בלבד.",
+      "poolId": "7flu4d",
+      "situation": "קופה של 2,000. פאבל מהמר 500.",
       "yourCards": "9♦ 10♦",
-      "boardCards": "2♦ 7♦ K♠",
       "options": [
         {
           "id": "A",
           "text": "קריאה 500",
           "isCorrect": true,
-          "explanation": "המחיר זול מאוד כדי לנסות להשלים פלאש (Flush). יחס הקופה (Pot Odds) מצוין."
+          "explanation": "המחיר זול מאוד. יש לך סיכוי טוב להשלים צבע, ובמשחק שלנו תקבל תשלום יפה אם תפגע."
         },
         {
           "id": "B",
           "text": "העלאה ל-2,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "אין טעם להעלות כבלוף כי פאבל אוהב לקרוא. עדיף לראות קלף הבא בזול."
+          "explanation": "העלאה כאן לא תגרום לו לפרוש, ואין טעם להפוך יד עם פוטנציאל לבלוף. עדיף לראות קלף הבא בזול.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "זה הימור קטן מדי בשביל לוותר על פלאש דרו."
+          "explanation": "ההימור קטן מדי בשביל לוותר על משיכה לצבע."
         }
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "7flu4d"
+      "reviewedAt": "2026-04-11T17:23:30.019Z"
     },
     {
       "id": 26,
@@ -25783,13 +25793,13 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "qvkxrl"
+      "poolId": "qvkxrl",
+      "reviewedAt": "2026-04-11T17:24:11.700Z"
     },
     {
-      "id": 27,
-      "situation": "תומר מהמר 1,000 לתוך קופה של 3,000. יש לך זוג.",
+      "poolId": "7hq8d2",
+      "situation": "תומר מהמר 1,000 לתוך קופה של 3,000.",
       "yourCards": "8♠ 9♠",
-      "boardCards": "4♥ 8♦ Q♣",
       "options": [
         {
           "id": "A",
@@ -25801,19 +25811,19 @@
           "id": "B",
           "text": "העלאה ל-3,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה לא תעזור כאן. אם יש לו מלכה הוא לא יתקפל, ואם אין לו הוא בטח יברח."
+          "explanation": "העלאה לא תעזור כאן. אם יש לו מלכה הוא לא יתקפל, ואם אין לו הוא בטח יברח. אין טעם לנפח קופה עם זוג אמצעי.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "זוג אמצעי ב-1,000 צ'יפים זה שווה קריאה כדי לראות מה יקרה בטרן."
+          "explanation": "זוג אמצעי ב-1,000 צ'יפים זה שווה קריאה כדי לראות מה יקרה בטרן, המחיר מצוין."
         }
       ],
       "category": "מישהו העלה לפניך",
-      "categoryId": "preflop_vs_raise",
-      "poolId": "7hq8d2"
+      "categoryId": "postflop_vs_bet",
+      "reviewedAt": "2026-04-11T17:24:11.700Z"
     },
     {
       "id": 28,
@@ -25843,37 +25853,37 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "y70tio"
+      "poolId": "y70tio",
+      "reviewedAt": "2026-04-11T17:24:11.700Z"
     },
     {
-      "id": 29,
-      "situation": "פיליפ מהמר 4,000 לתוך קופה של 5,000. הלוח נראה מסוכן.",
-      "yourCards": "A♠ A♦",
-      "boardCards": "5♥ 6♥ 7♥",
+      "poolId": "m2a3s5",
+      "situation": "פיליפ מהמר 4,000 לתוך קופה של 5,000.",
+      "yourCards": "A♥ A♦",
       "options": [
         {
           "id": "A",
           "text": "קריאה 4,000",
           "isCorrect": true,
-          "explanation": "יש לך אסים ואת האס לב אדום (Nut Flush Draw). פיליפ יכול להמר עם פחות מזה, אז שווה לקרוא ולראות את הטרן."
+          "explanation": "יש לך אסים ואת האס לב (Nut Flush Draw). פיליפ יכול להמר עם פחות מזה, אז שווה לקרוא ולראות את הטרן."
         },
         {
           "id": "B",
           "text": "העלאה ל-10,000",
           "isCorrect": false,
-          "nearMiss": true,
-          "explanation": "העלאה פה מסוכנת מאוד. אם כבר יש לו צבע או רצף, אתה רק מפסיד יותר צ'יפים."
+          "explanation": "העלאה פה מסוכנת מאוד. אם כבר יש לו צבע או רצף, הוא לא יתקפל ואתה רק מפסיד יותר צ'יפים.",
+          "nearMiss": true
         },
         {
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "יש לך אסים וסיכוי לצבע הכי גבוה. מוקדם מדי לקפל."
+          "explanation": "יש לך אסים וסיכוי לצבע הכי גבוה (Nut Flush Draw). מוקדם מדי לקפל מול הימור אחד."
         }
       ],
       "category": "מישהו העלה לפניך",
-      "categoryId": "preflop_vs_raise",
-      "poolId": "m2a3s5"
+      "categoryId": "postflop_vs_bet",
+      "reviewedAt": "2026-04-11T17:24:11.700Z"
     },
     {
       "id": 30,
@@ -25903,7 +25913,8 @@
       ],
       "category": "מישהו העלה לפניך",
       "categoryId": "preflop_vs_raise",
-      "poolId": "1prf15"
+      "poolId": "1prf15",
+      "reviewedAt": "2026-04-11T17:24:11.701Z"
     }
   ]
 }
