@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T14:05:14.708Z",
+  "lastUpdated": "2026-04-11T17:05:57.577Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -966,11 +966,100 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-11T17:05:56.780Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "nrmvhu",
+              "categoryId": "position_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389545260_gsgm24",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "klqq64",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6osp3y",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "10um6s",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qgx1ya",
+              "categoryId": "slow_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387362406_wx8yyi",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "n749b5",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lz4624",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "uqy13n",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "gen_1775387362406_wx8yyi",
+            "n749b5"
+          ],
+          "flagReports": [
+            {
+              "poolId": "gen_1775387362406_wx8yyi",
+              "playerName": "ליאור",
+              "reason": "unclear_question",
+              "comment": "אני מחזיק זוג גבוה",
+              "date": "2026-04-11T17:03:53.014Z"
+            },
+            {
+              "poolId": "n749b5",
+              "playerName": "ליאור",
+              "reason": "wrong_answer",
+              "comment": "יש ביד 4 שחקנים וכרגע אני הכי טוב, לדעתי עדיף להעיף כמה כי כל קלף גבוה מ6 יסבך אותי",
+              "date": "2026-04-11T17:05:33.957Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 104,
-      "totalCorrect": 85,
-      "accuracy": 81.73076923076923
+      "totalQuestions": 112,
+      "totalCorrect": 91,
+      "accuracy": 81.25
     },
     {
       "playerName": "אייל",
