@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T17:12:29.238Z",
+  "lastUpdated": "2026-04-11T17:15:49.909Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3291,18 +3291,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "gen_1775387418604_61r9cr"
-          ],
-          "flagReports": [
-            {
-              "poolId": "gen_1775387418604_61r9cr",
-              "playerName": "אורן",
-              "reason": "other",
-              "comment": "יש לי שלישיה ולא זוג נמוך",
-              "date": "2026-04-09T17:29:45.924Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-09T17:35:03.834Z",
