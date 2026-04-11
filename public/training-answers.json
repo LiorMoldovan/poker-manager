@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T17:08:21.229Z",
+  "lastUpdated": "2026-04-11T17:12:29.238Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1035,18 +1035,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "n749b5"
-          ],
-          "flagReports": [
-            {
-              "poolId": "n749b5",
-              "playerName": "ליאור",
-              "reason": "wrong_answer",
-              "comment": "יש ביד 4 שחקנים וכרגע אני הכי טוב, לדעתי עדיף להעיף כמה כי כל קלף גבוה מ6 יסבך אותי",
-              "date": "2026-04-11T17:05:33.957Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 112,
