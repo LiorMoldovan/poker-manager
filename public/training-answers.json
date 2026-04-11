@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T06:39:42.201Z",
+  "lastUpdated": "2026-04-11T06:57:25.488Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3353,11 +3353,50 @@
               "date": "2026-04-09T17:37:06.260Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-11T06:41:41.764Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "pkrrls",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math2_1775390836678_mr9i9z",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389483228_2bh8lc",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7ay5va",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ij54uv",
+              "categoryId": "three_bet_pots",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 187,
-      "totalCorrect": 139,
-      "accuracy": 74.33155080213903
+      "totalQuestions": 191,
+      "totalCorrect": 142,
+      "accuracy": 74.3455497382199
     },
     {
       "playerName": "מלמד",
