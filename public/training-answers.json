@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T17:15:49.909Z",
+  "lastUpdated": "2026-04-11T17:17:17.920Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3402,18 +3402,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "math_1775389836495_beyoqg"
-          ],
-          "flagReports": [
-            {
-              "poolId": "math_1775389836495_beyoqg",
-              "playerName": "אורן",
-              "reason": "unclear_question",
-              "comment": "בבורד אני מנצח בלי קשר לאחוזים",
-              "date": "2026-04-09T17:37:06.260Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-11T06:41:41.764Z",
