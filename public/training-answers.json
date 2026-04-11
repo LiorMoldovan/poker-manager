@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T17:17:17.920Z",
+  "lastUpdated": "2026-04-11T20:11:07.681Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3443,11 +3443,55 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-11T20:11:06.921Z",
+          "questionsAnswered": 3,
+          "correctAnswers": 3,
+          "results": [
+            {
+              "poolId": "6w5at9",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "8v94q5",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "a6k510",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389602525_vrl4sq",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "apqym9"
+          ],
+          "flagReports": [
+            {
+              "poolId": "apqym9",
+              "playerName": "אורן",
+              "reason": "unclear_question",
+              "comment": "הנוסח לא מובן",
+              "date": "2026-04-11T20:09:51.697Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 191,
-      "totalCorrect": 142,
-      "accuracy": 74.3455497382199
+      "totalQuestions": 194,
+      "totalCorrect": 145,
+      "accuracy": 74.74226804123711
     },
     {
       "playerName": "מלמד",
