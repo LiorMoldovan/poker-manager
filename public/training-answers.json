@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-10T13:54:38.531Z",
+  "lastUpdated": "2026-04-11T04:30:45.231Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -4644,11 +4644,93 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-11T04:30:44.585Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "gen_1775387236973_oni1lf",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "fi209o",
+              "categoryId": "cbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "y3vi92",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jg40nx",
+              "categoryId": "medium_pairs",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7ay5va",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "rl5im9",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qumibl",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2ke0kq",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "6q6oub",
+              "categoryId": "two_pair_plus",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "a5j1q9",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "jg40nx"
+          ],
+          "flagReports": [
+            {
+              "poolId": "jg40nx",
+              "playerName": "דן מאן",
+              "reason": "wrong_for_home_game",
+              "comment": "זה ניראה שלשחקן האגרסיבי  יש 3, 5. ביד עם רץף על הבורד ולכן העלה.",
+              "date": "2026-04-11T04:29:04.710Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 24,
-      "totalCorrect": 20,
-      "accuracy": 83.33333333333334
+      "totalQuestions": 31,
+      "totalCorrect": 26,
+      "accuracy": 83.87096774193549
     },
     {
       "playerName": "חרדון",
