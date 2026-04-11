@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T17:05:57.577Z",
+  "lastUpdated": "2026-04-11T17:08:21.229Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1036,17 +1036,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "gen_1775387362406_wx8yyi",
             "n749b5"
           ],
           "flagReports": [
-            {
-              "poolId": "gen_1775387362406_wx8yyi",
-              "playerName": "ליאור",
-              "reason": "unclear_question",
-              "comment": "אני מחזיק זוג גבוה",
-              "date": "2026-04-11T17:03:53.014Z"
-            },
             {
               "poolId": "n749b5",
               "playerName": "ליאור",
