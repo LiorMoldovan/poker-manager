@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T10:29:05.442Z",
+  "lastUpdated": "2026-04-12T10:31:35.218Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -5068,18 +5068,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "jg40nx"
-          ],
-          "flagReports": [
-            {
-              "poolId": "jg40nx",
-              "playerName": "דן מאן",
-              "reason": "wrong_for_home_game",
-              "comment": "זה ניראה שלשחקן האגרסיבי  יש 3, 5. ביד עם רץף על הבורד ולכן העלה.",
-              "date": "2026-04-11T04:29:04.710Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         },
         {
           "date": "2026-04-11T04:41:47.695Z",
