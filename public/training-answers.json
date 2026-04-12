@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T15:23:57.382Z",
+  "lastUpdated": "2026-04-12T15:34:08.457Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7753,10 +7753,92 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-12T15:33:52.126Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "dggvq9",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bk52a1",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ahckm3",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775388996224_j7is86",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ysj3vn",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "klqq64",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "rl5im9",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "e3o31c8rd",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "tfltyn",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "math2_1775390916781_zrrmzk",
+            "e3o31c8rd"
+          ],
+          "flagReports": [
+            {
+              "poolId": "math2_1775390916781_zrrmzk",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "השאלה מתחילה מוזר, לא ברור כמה יש בקופה, מה האולאין שלו",
+              "date": "2026-04-12T15:28:25.233Z"
+            },
+            {
+              "poolId": "e3o31c8rd",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "השאלה לא תואמת את הפורמט שלנו ולדעתי התשובה לא נכונה, אם אתה מגדיר קול סטיישן אני רוצה להעלות והוא ישלם",
+              "date": "2026-04-12T15:33:23.610Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 4,
-      "totalCorrect": 4,
+      "totalQuestions": 12,
+      "totalCorrect": 12,
       "accuracy": 100
     }
   ]
