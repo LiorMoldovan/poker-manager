@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:20:13.390Z",
+  "lastUpdated": "2026-04-12T20:26:05.123Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7928,18 +7928,10 @@
             }
           ],
           "flaggedPoolIds": [
-            "6ews3h",
             "mxjt3i",
             "27asay"
           ],
           "flagReports": [
-            {
-              "poolId": "6ews3h",
-              "playerName": "ליאור",
-              "reason": "wrong_answer",
-              "comment": "הקופה קטנה לא גדולה עם אס 3 סוט אני מעדיף להגדיל קצת את הקופה, אולי פחות מ1300 אבל לדעתי רק לקרוא כאן זאת טעות",
-              "date": "2026-04-12T20:15:08.109Z"
-            },
             {
               "poolId": "mxjt3i",
               "playerName": "ליאור",
