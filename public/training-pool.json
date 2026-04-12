@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-12T10:29:01.855Z",
+  "generatedAt": "2026-04-12T12:53:00.929Z",
   "totalScenarios": 847,
   "byCategory": {
     "wet_board_top_pair": 30,
@@ -8,7 +8,7 @@
     "medium_pairs": 20,
     "preflop_open": 24,
     "preflop_vs_raise": 34,
-    "two_pair_plus": 22,
+    "two_pair_plus": 21,
     "slow_play": 30,
     "flush_draw": 30,
     "cbet": 44,
@@ -24,6 +24,7 @@
     "missed_draw": 30,
     "dominated_hands": 29,
     "second_pair": 20,
+    "top_pair": 1,
     "thin_value": 20,
     "value_betting": 3,
     "pot_odds": 30,
@@ -10876,32 +10877,31 @@
     },
     {
       "poolId": "apqym9",
-      "situation": "קופה של 950. העלית ל-400 לפני הפלופ ואייל (הביג בליינד) שילם. כעת הוא עושה צ'ק.",
+      "situation": "קופה של 950. העלית ל-400 לפני הפלופ ואייל שילם. כעת הוא עושה צ'ק.",
       "yourCards": "A♥ 5♥",
-      "boardCards": "A♠ 10♦ 4♦",
       "options": [
         {
           "id": "A",
           "text": "צ'ק",
           "isCorrect": false,
-          "explanation": "יש לך זוג גבוה, אבל הלוח מסוכן עם יהלומים. צ'ק נותן לאייל קלף חינם להשלים משיכה או לעקוף אותך בטרן.",
-          "nearMiss": true
+          "explanation": "במשחק שלנו, צ'ק הוא טעות כי אתה מפספס הזדמנות לבנות קופה מול שחקן שישלם לך עם כל זוג חלש או קלף גבוה."
         },
         {
           "id": "B",
           "text": "הימור 700",
           "isCorrect": true,
-          "explanation": "הימור ערך קלאסי למשחק שלנו. אייל שחקן שאוהב לשלם, והוא ימשיך כאן עם כל זוג או משיכה ליהלום, אז כדאי לבנות את הקופה."
+          "explanation": "הימור ערך קלאסי למשחק שלנו. אייל ימשיך כאן עם מגוון רחב של ידיים חלשות, לכן עליך לבנות קופה גדולה כבר עכשיו."
         },
         {
           "id": "C",
           "text": "ויתור",
           "isCorrect": false,
-          "explanation": "אין שום סיבה לוותר עם היד הכי טובה כרגע כשהיריב רק עשה צ'ק."
+          "explanation": "אין שום סיבה לוותר עם זוג גבוה כשהיריב הראה חולשה בצ'ק."
         }
       ],
       "category": "יד חזקה על לוח מסוכן",
-      "categoryId": "two_pair_plus"
+      "categoryId": "top_pair",
+      "reviewedAt": "2026-04-12T12:53:00.929Z"
     },
     {
       "poolId": "jrj4nu",
