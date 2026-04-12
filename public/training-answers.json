@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T14:37:04.224Z",
+  "lastUpdated": "2026-04-12T15:23:57.382Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7711,6 +7711,53 @@
       "totalQuestions": 7,
       "totalCorrect": 6,
       "accuracy": 85.71428571428571
+    },
+    {
+      "playerName": "ליאור",
+      "sessions": [
+        {
+          "date": "2026-04-12T15:23:56.526Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "7yxahi",
+              "categoryId": "blind_defense",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "wc20nd",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r31g0m",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "2po111",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "ivn6eu",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "C"
+            }
+          ],
+          "flaggedPoolIds": []
+        }
+      ],
+      "totalQuestions": 4,
+      "totalCorrect": 4,
+      "accuracy": 100
     }
   ]
 }
