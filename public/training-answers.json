@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:27:58.555Z",
+  "lastUpdated": "2026-04-12T20:29:48.287Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7927,18 +7927,8 @@
               "chosenId": "B"
             }
           ],
-          "flaggedPoolIds": [
-            "27asay"
-          ],
-          "flagReports": [
-            {
-              "poolId": "27asay",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "השאלה מתחילה בצורה קצת חתוכה",
-              "date": "2026-04-12T20:20:11.311Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 18,
