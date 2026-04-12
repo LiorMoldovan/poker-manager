@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T08:48:26.240Z",
+  "lastUpdated": "2026-04-12T09:02:06.618Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1046,6 +1046,20 @@
             {
               "poolId": "sxapi0",
               "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-12T08:50:43.388Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "1l8yos",
+              "categoryId": "pot_odds",
               "correct": true,
               "chosenId": "A"
             }
@@ -7661,9 +7675,9 @@
           "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 286,
-      "totalCorrect": 219,
-      "accuracy": 76.57342657342657,
+      "totalQuestions": 285,
+      "totalCorrect": 218,
+      "accuracy": 76.49122807017544,
       "pendingReportMilestones": [],
       "reports": [
         {
