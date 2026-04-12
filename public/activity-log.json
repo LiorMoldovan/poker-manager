@@ -3884,9 +3884,12 @@
     "timestamp": "2026-04-12T14:14:44.085Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x924",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-12T14:14:44.085Z",
+    "screensVisited": [
+      "History",
+      "Game Details"
+    ],
+    "sessionDuration": 130,
+    "lastActive": "2026-04-12T16:24:20.879Z",
     "fingerprint": {
       "gpu": "Mali-G715",
       "cores": 8,
