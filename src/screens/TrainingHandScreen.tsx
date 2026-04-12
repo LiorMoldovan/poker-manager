@@ -857,8 +857,8 @@ const TrainingHandScreen = () => {
           </span>
         </div>
         <p style={{
-          fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text)',
-          direction: 'rtl',
+          fontSize: '1.05rem', fontWeight: 700, lineHeight: 1.35, color: 'var(--text)',
+          direction: 'rtl', margin: 0,
         }}>
           {currentStreet.context}
         </p>
@@ -866,7 +866,7 @@ const TrainingHandScreen = () => {
 
       {/* Options */}
       {!showHandComplete && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem', marginTop: '0.5rem' }}>
           {currentStreet.options.map(option => {
             const isSelected = selectedOption === option.id;
             const ratingCfg = RATING_CONFIG[option.rating] || RATING_CONFIG.ok;
@@ -878,7 +878,7 @@ const TrainingHandScreen = () => {
                 onClick={() => handleOptionSelect(option)}
                 disabled={showFeedback}
                 style={{
-                  padding: '0.75rem 1rem',
+                  padding: '0.88rem 1.1rem',
                   borderRadius: '12px',
                   border: isSelected && showFeedback
                     ? `2px solid ${ratingCfg.color}`
@@ -901,18 +901,18 @@ const TrainingHandScreen = () => {
                   display: 'flex', alignItems: 'center', gap: '0.5rem',
                   justifyContent: 'space-between',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
                     <span style={{
-                      width: '24px', height: '24px', borderRadius: '50%',
+                      width: '30px', height: '30px', borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontWeight: '700', fontSize: '0.75rem',
+                      fontWeight: '700', fontSize: '0.82rem',
                       background: showThisRating ? ratingCfg.bg : 'var(--surface-light)',
                       color: showThisRating ? ratingCfg.color : 'var(--text)',
                     }}>
                       {showThisRating ? ratingCfg.emoji : option.id}
                     </span>
                     <span style={{
-                      fontWeight: '700', fontSize: '0.9rem',
+                      fontWeight: '700', fontSize: '1.05rem', lineHeight: 1.35,
                       color: isSelected && showFeedback ? ratingCfg.color : 'var(--text)',
                     }}>
                       {option.action}
@@ -920,7 +920,7 @@ const TrainingHandScreen = () => {
                   </div>
                   {showThisRating && (
                     <span style={{
-                      fontSize: '0.65rem', fontWeight: '700',
+                      fontSize: '0.72rem', fontWeight: '700',
                       color: ratingCfg.color,
                       padding: '0.15rem 0.4rem', borderRadius: '6px',
                       background: ratingCfg.bg,
@@ -933,7 +933,7 @@ const TrainingHandScreen = () => {
                 {/* Explanation - show for all options after answering */}
                 {showFeedback && option.explanation && (
                   <div style={{
-                    marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.5,
+                    marginTop: '0.5rem', fontSize: '0.92rem', lineHeight: 1.5,
                     color: isSelected ? 'var(--text)' : 'var(--text-muted)',
                     paddingRight: '2rem',
                     direction: 'rtl',

@@ -364,9 +364,9 @@ const QuickTrainingScreen = () => {
           <ColoredCards text={scenario.yourCards} />
         </div>
 
-        {/* Situation text */}
+        {/* Situation text — same typography as answer rows */}
         <p style={{
-          fontSize: '0.95rem', lineHeight: 1.7,
+          fontSize: '1.08rem', fontWeight: 600, lineHeight: 1.35,
           color: 'var(--text)', direction: 'rtl',
           margin: 0,
         }}>
@@ -374,9 +374,9 @@ const QuickTrainingScreen = () => {
         </p>
       </div>
 
-      {/* Options */}
+      {/* Options — גופן גדול יותר לנוחות קריאה במובייל */}
       <div style={{
-        display: 'flex', flexDirection: 'column', gap: '0.5rem',
+        display: 'flex', flexDirection: 'column', gap: '0.6rem',
         marginTop: '0.75rem',
       }}>
         {scenario.options.map(option => {
@@ -409,7 +409,7 @@ const QuickTrainingScreen = () => {
               onClick={() => handleSelect(option.id)}
               disabled={isRevealed}
               style={{
-                padding: '0.75rem 1rem',
+                padding: '0.9rem 1.1rem',
                 borderRadius: '12px',
                 border: `2px solid ${borderColor}`,
                 background: bgColor,
@@ -423,11 +423,11 @@ const QuickTrainingScreen = () => {
                 display: 'flex', alignItems: 'center', gap: '0.5rem',
                 justifyContent: 'space-between',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
                   <span style={{
-                    width: '26px', height: '26px', borderRadius: '50%',
+                    width: '32px', height: '32px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: '700', fontSize: '0.75rem',
+                    fontWeight: '700', fontSize: '0.82rem',
                     background: isRevealed
                       ? (isCorrectOption ? 'rgba(34,197,94,0.2)' : isSelected ? 'rgba(239,68,68,0.2)' : 'var(--surface-light)')
                       : 'var(--surface-light)',
@@ -438,7 +438,7 @@ const QuickTrainingScreen = () => {
                     {isRevealed ? (isCorrectOption ? '✓' : isSelected ? '✗' : option.id) : option.id}
                   </span>
                   <span style={{
-                    fontWeight: '600', fontSize: '0.9rem',
+                    fontWeight: '600', fontSize: '1.08rem', lineHeight: 1.35,
                     color: textColor,
                   }}>
                     {option.text}
@@ -449,7 +449,7 @@ const QuickTrainingScreen = () => {
               {/* Explanation */}
               {isRevealed && (isSelected || isCorrectOption) && (
                 <div style={{
-                  marginTop: '0.5rem', fontSize: '0.8rem', lineHeight: 1.6,
+                  marginTop: '0.5rem', fontSize: '0.92rem', lineHeight: 1.55,
                   color: 'var(--text-muted)', paddingRight: '2rem',
                 }}>
                   {fixCardBidi(option.explanation || '')}
@@ -467,7 +467,7 @@ const QuickTrainingScreen = () => {
           borderRadius: '10px',
           background: 'rgba(34, 197, 94, 0.08)',
           border: '1px solid rgba(34, 197, 94, 0.2)',
-          fontSize: '0.8rem', color: 'var(--text-muted)',
+          fontSize: '0.92rem', color: 'var(--text-muted)',
           direction: 'rtl', lineHeight: 1.5,
         }}>
           <span style={{ color: '#22c55e', fontWeight: '700' }}>התשובה הנכונה: </span>

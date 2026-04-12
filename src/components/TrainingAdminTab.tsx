@@ -22,16 +22,38 @@ import {
   generatePoolBatch,
   normalizeTrainingPlayers,
   GAME_CONTEXT,
+  TRAINING_SCENARIO_FIX_FORMAT_RULES,
   PLAYER_STYLES,
   analyzePlayerTraining,
   formatAnalysisForPrompt,
   getPlayerGameSummary,
+  TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 const RATE_LIMIT_DELAY = 7500;
+
+/** קלפים בצבעי חליפה (כמו במסכי אימון) — לתצוגה בניהול */
+const TrainingColoredCards = ({ text }: { text: string }) => {
+  const parts = text.split(/(\S+)/g);
+  return (
+    <span style={{ direction: 'ltr', unicodeBidi: 'isolate' as const }}>
+      {parts.map((part, i) => {
+        const hasRed = part.includes('\u2665') || part.includes('\u2666');
+        const hasSuit = hasRed || part.includes('\u2660') || part.includes('\u2663');
+        if (!hasSuit) return <span key={i}>{part}</span>;
+        return (
+          <span key={i} style={{ color: hasRed ? '#ef4444' : '#e2e8f0', fontWeight: 700 }}>
+            {part}
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
 
 /** Insights JSON keys may not match `playerName` after renames; merge legacy aliases. */
 const trainingInsightAliasNames = (canonicalName: string): string[] => {
@@ -116,7 +138,49 @@ const validateAIFixedScenario = (s: PoolScenario): string | null => {
   }
   if (!String(s.situation ?? '').trim()) return 'שדה situation ריק או חסר';
   if (!String(s.yourCards ?? '').trim()) return 'שדה yourCards ריק או חסר';
+  if (typeof s.boardCards !== 'string') return 'שדה boardCards חייב להיות מחרוזת (ריק "" לפני פלופ)';
+  for (const o of s.options) {
+    const id = String(o.id ?? '').trim().toUpperCase();
+    if (!String(o.text ?? '').trim()) return `טקסט ריק באופציה ${id}`;
+    if (!String(o.explanation ?? '').trim() || String(o.explanation).trim() === '—') {
+      return `הסבר חסר או ריק באופציה ${id} — נדרש 1–2 משפטים`;
+    }
+    if (o.isCorrect && o.nearMiss) return 'אסור nearMiss על התשובה הנכונה';
+  }
   return null;
+};
+
+/** סידור A/B/C, ניקוי nearMiss מהנכונה, השלמת category — אחרי parse לפני אימות */
+const normalizeAIFixedScenario = (raw: PoolScenario, poolId: string, original: PoolScenario): PoolScenario => {
+  const order = ['A', 'B', 'C'] as const;
+  const byId = new Map(
+    (raw.options || []).map(o => [String(o.id ?? '').trim().toUpperCase(), o]),
+  );
+  const options = order.map(id => {
+    const o = byId.get(id);
+    if (!o) {
+      return { id, text: '', isCorrect: false, explanation: '' };
+    }
+    const isCorrect = !!o.isCorrect;
+    const base: PoolScenario['options'][number] = {
+      id,
+      text: String(o.text ?? '').trim(),
+      isCorrect,
+      explanation: String(o.explanation ?? '').trim(),
+    };
+    if (isCorrect) return base;
+    if (o.nearMiss) return { ...base, nearMiss: true };
+    return base;
+  });
+  return {
+    poolId,
+    situation: String(raw.situation ?? '').trim(),
+    yourCards: String(raw.yourCards ?? '').trim(),
+    boardCards: raw.boardCards != null ? String(raw.boardCards).trim() : '',
+    options,
+    category: String(raw.category ?? original.category).trim() || original.category,
+    categoryId: String(raw.categoryId ?? original.categoryId).trim() || original.categoryId,
+  };
 };
 
 const TrainingAdminTab = () => {
@@ -195,6 +259,47 @@ const TrainingAdminTab = () => {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
+  const [cloudCleanMsg, setCloudCleanMsg] = useState<string | null>(null);
+  const [cloudCleaning, setCloudCleaning] = useState(false);
+
+  const handleStripExcludedPlayersFromCloud = useCallback(async () => {
+    const targets = [...TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES];
+    if (targets.length === 0) return;
+    setCloudCleaning(true);
+    setCloudCleanMsg(null);
+    try {
+      const okAnswers = await writeTrainingAnswersWithRetry((data) => {
+        const filtered = data.players.filter(p => !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(p.playerName));
+        return normalizeTrainingPlayers({
+          ...data,
+          lastUpdated: new Date().toISOString(),
+          players: filtered,
+        });
+      });
+      const insightsRaw = await fetchTrainingInsights();
+      let okInsights = true;
+      if (insightsRaw?.insights) {
+        const insights: TrainingInsightsFile = {
+          ...insightsRaw,
+          lastUpdated: new Date().toISOString(),
+          insights: { ...insightsRaw.insights },
+        };
+        for (const t of targets) delete insights.insights[t];
+        const up = await uploadTrainingInsights(insights);
+        okInsights = up.success;
+      }
+      if (okAnswers && okInsights) {
+        setCloudCleanMsg(`✅ הוסר מ-GitHub: ${targets.join(' · ')}`);
+        await loadAll();
+      } else {
+        setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק טוקן GitHub בהגדרות');
+      }
+    } catch {
+      setCloudCleanMsg('⚠️ שגיאה — נסה שוב');
+    } finally {
+      setCloudCleaning(false);
+    }
+  }, [loadAll]);
 
   const playersNeedingInsights = useMemo((): TrainingPlayerData[] => {
     if (!answers?.players?.length) return [];
@@ -624,7 +729,7 @@ ${reportSummary}
 JSON בלבד, בלי markdown:`;
 
     try {
-      const text = await callGemini(apiKey, prompt);
+      const text = await callGemini(apiKey, prompt, 4096, { jsonMode: true });
       const result = safeParseJSON(text);
       setAnalyses(prev => ({ ...prev, [poolId]: result }));
     } catch (err) {
@@ -673,7 +778,7 @@ acceptText: ${prev.acceptText || ''}
 JSON בלבד:`;
 
     try {
-      const text = await callGemini(apiKey, prompt);
+      const text = await callGemini(apiKey, prompt, 4096, { jsonMode: true });
       const result = safeParseJSON(text);
       setAnalyses(prev => ({ ...prev, [poolId]: result }));
       setAnalysisFeedback(prev => ({ ...prev, [poolId]: '' }));
@@ -714,14 +819,16 @@ JSON בלבד:`;
       .map(([name, style]) => `- ${name}: ${style}`)
       .join('\n');
 
-    const prompt = `אתה מומחה פוקר. שחקנים דיווחו על בעיה בשאלה הבאה. תקן אותה.
+    const prompt = `אתה עורך שאלות אימון פוקר (מאגר האפליקציה). שחקנים דיווחו על בעיה — תקן את השאלה כך שהפלט הראשון יעמוד במלואו בפורמט המאגר ובקונבנציות של משחק הבית.
 
 ${GAME_CONTEXT}
 
-שחקנים קבועים (ניתן להשתמש בשמות שלהם):
+${TRAINING_SCENARIO_FIX_FORMAT_RULES}
+
+שחקנים קבועים (ניתן לדייק שמות בסיטואציה):
 ${playerStylesList}
 
-שאלה נוכחית:
+שאלה נוכחית (JSON):
 ${JSON.stringify({
   poolId: scenario.poolId,
   situation: scenario.situation,
@@ -735,30 +842,24 @@ ${JSON.stringify({
 דיווחי שחקנים:
 ${reportSummary}
 
-תקן כך:
-1. בדיוק 3 אופציות (A, B, C) — בדיוק אחת נכונה למשחק ביתי
-2. situation: 1-2 משפטים קצרים — רק הפעולה (מי המר כמה, גודל קופה, כמה שחקנים)
-3. ❌ אסור לחזור על הקלפים או הלוח ב-situation — הם מוצגים בנפרד
-4. ❌ אסור לכתוב "יש לך פלאש דרו/סט/סטרייט" — השחקן צריך לזהות בעצמו
-5. boardCards: קלפי הלוח בנפרד (פלופ/טרן/ריבר), ריק לפני הפלופ
-6. הסברים קצרים (1-2 משפטים) בעברית פשוטה, ספציפיים ללוח
-7. nearMiss: true לתשובות נכונות בפוקר מקצועי אך לא למשחק ביתי
-8. שמור על poolId, categoryId ו-category מקוריים
-9. הנמקה למשחק ביתי — אסור: "תדלל/תבודד", "fold equity"
+משימה:
+- תקן את הבעיה לפי הדיווחים ובהתאם להקשר של משחק ביתי למעלה.
+- הפלט חייב לעמוד בכל סעיפי "פורמט פלט" בשלמות — כולל yourCards ו-boardCards נפרדים מ-situation, שלוש אופציות עם הסברים לא ריקים, nearMiss רק על תשובות שגויות.
 
-החזר JSON בלבד, אובייקט אחד:
-{"poolId":"...","situation":"קצר — רק הפעולה","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"...","isCorrect":false,"explanation":"קצר"},{"id":"B","text":"...","isCorrect":true,"explanation":"קצר"},{"id":"C","text":"...","isCorrect":false,"explanation":"קצר"}],"category":"...","categoryId":"..."}
+החזר אובייקט JSON יחיד בלבד (בלי markdown, בלי טקסט לפני/אחרי). שמור poolId="${scenario.poolId}", categoryId ו-category כמו במקור.
 
-JSON בלבד, בלי markdown:`;
+דוגמת מבנה תקין (ערכים לדוגמה בלבד — אל תעתיק אותם; רק המבנה):
+{"poolId":"${scenario.poolId}","situation":"3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"קריאה 800","isCorrect":true,"explanation":"מחיר נכון מול ההימור — אצלנו ישלמו הרבה פעמים."},{"id":"B","text":"העלאה ל-2,500","isCorrect":false,"nearMiss":true,"explanation":"בטורניר היה הגיוני — כאן עדיין יגיעו קוראים."},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"מול סכום כזה ויתור כמעט תמיד שגוי."}],"category":"${scenario.category.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}","categoryId":"${scenario.categoryId}"}`;
 
     try {
-      pushFixLog('שלב 2/4: שליחת בקשה ל-Gemini (מודל עם נפילה אוטומטית)', 'info');
-      const fixedText = await callGemini(apiKey, prompt, 8192);
+      pushFixLog('שלב 2/4: שליחת בקשה ל-Gemini (JSON mode + מודל עם נפילה אוטומטית)', 'info');
+      const fixedText = await callGemini(apiKey, prompt, 8192, { jsonMode: true });
       pushFixLog(`שלב 3/4: התקבלה תשובה (${fixedText.length.toLocaleString('he-IL')} תווים) — מנתחים JSON`, 'info');
 
       let fixedScenario: PoolScenario;
       try {
-        fixedScenario = safeParseJSON(fixedText) as PoolScenario;
+        const parsed = safeParseJSON(fixedText) as PoolScenario;
+        fixedScenario = normalizeAIFixedScenario(parsed, poolId, scenario);
       } catch (parseErr) {
         const hint = fixedText.length > 400
           ? `${fixedText.slice(0, 200)} … ${fixedText.slice(-120)}`
@@ -769,14 +870,6 @@ JSON בלבד, בלי markdown:`;
         setFlagMsg('❌ לא הצלחנו לפענח את תשובת ה-AI — פתח "פירוט שלבים" לפרטים');
         return;
       }
-
-      fixedScenario.poolId = poolId;
-      fixedScenario.categoryId = scenario.categoryId;
-      fixedScenario.category = scenario.category;
-      fixedScenario.options = (fixedScenario.options || []).map(o => ({
-        ...o,
-        id: String(o.id ?? '').trim().toUpperCase(),
-      }));
 
       const validationError = validateAIFixedScenario(fixedScenario);
       if (validationError) {
@@ -814,9 +907,11 @@ JSON בלבד, בלי markdown:`;
       ? `\nשיפורים קודמים שביקשתי:\n${fixHistory.map((h, i) => `${i + 1}. ${h}`).join('\n')}\n`
       : '';
 
-    const prompt = `אתה מומחה פוקר. תקנת שאלה אבל צריך שיפור נוסף.
+    const prompt = `אתה עורך שאלות אימון פוקר. כבר הוצג תיקון — המנהל מבקש שיפור נוסף. החזר גרסה אחת שעומדת במלואה בפורמט המאגר.
 
 ${GAME_CONTEXT}
+
+${TRAINING_SCENARIO_FIX_FORMAT_RULES}
 
 שאלה מקורית:
 ${JSON.stringify(fixPreview.original)}
@@ -826,19 +921,20 @@ ${JSON.stringify(fixPreview.fixed)}
 ${historyContext}
 הערה חדשה מהמנהל: "${fixFeedback}"
 
-חוקים: בדיוק 3 אופציות (A, B, C), מצב תמציתי (2-3 משפטים), סכומים בצ'יפים, שמור poolId/categoryId/category.
-הנמקה חייבת להתאים למשחק ביתי — אסור: "תדלל/תבודד", "fold equity". נכון: "בונה קופה", "הם ישלמו".
+החזר אובייקט JSON יחיד בלבד (בלי markdown). שמור poolId="${fixPreview.poolId}", categoryId ו-category כמו במקור.
 
-החזר JSON בלבד, אובייקט אחד מתוקן:`;
+דוגמת מבנה תקין (ערכים לדוגמה בלבד):
+{"poolId":"${fixPreview.poolId}","situation":"...","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"...","isCorrect":true,"explanation":"..."},{"id":"B","text":"...","isCorrect":false,"nearMiss":true,"explanation":"..."},{"id":"C","text":"...","isCorrect":false,"explanation":"..."}],"category":"${fixPreview.original.category.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}","categoryId":"${fixPreview.original.categoryId}"}`;
 
-    pushFixLog('תיקון חוזר: שליחה ל-Gemini', 'info');
+    pushFixLog('תיקון חוזר: שליחה ל-Gemini (JSON mode)', 'info');
     try {
-      const fixedText = await callGemini(apiKey, prompt, 8192);
+      const fixedText = await callGemini(apiKey, prompt, 8192, { jsonMode: true });
       pushFixLog(`תיקון חוזר: התקבלו ${fixedText.length.toLocaleString('he-IL')} תווים`, 'info');
 
       let fixedScenario: PoolScenario;
       try {
-        fixedScenario = safeParseJSON(fixedText) as PoolScenario;
+        const parsed = safeParseJSON(fixedText) as PoolScenario;
+        fixedScenario = normalizeAIFixedScenario(parsed, fixPreview.poolId, fixPreview.original);
       } catch (parseErr) {
         const hint = fixedText.length > 400
           ? `${fixedText.slice(0, 200)} … ${fixedText.slice(-120)}`
@@ -849,14 +945,6 @@ ${historyContext}
         setFlagMsg('❌ תיקון חוזר נכשל בפענוח — ראה פירוט שלבים');
         return;
       }
-
-      fixedScenario.poolId = fixPreview.poolId;
-      fixedScenario.categoryId = fixPreview.original.categoryId;
-      fixedScenario.category = fixPreview.original.category;
-      fixedScenario.options = (fixedScenario.options || []).map(o => ({
-        ...o,
-        id: String(o.id ?? '').trim().toUpperCase(),
-      }));
 
       const validationError = validateAIFixedScenario(fixedScenario);
       if (validationError) {
@@ -1322,8 +1410,18 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
     }
   };
 
-  const callGemini = async (apiKey: string, prompt: string, maxTokens = 4096): Promise<string> =>
-    runGeminiTextPrompt(apiKey, prompt, { temperature: 0.7, maxOutputTokens: maxTokens, label: 'training_admin' });
+  const callGemini = async (
+    apiKey: string,
+    prompt: string,
+    maxTokens = 4096,
+    opts?: { jsonMode?: boolean },
+  ): Promise<string> =>
+    runGeminiTextPrompt(apiKey, prompt, {
+      temperature: opts?.jsonMode ? 0.35 : 0.7,
+      maxOutputTokens: maxTokens,
+      label: 'training_admin',
+      ...(opts?.jsonMode ? { responseMimeType: 'application/json' as const, topP: 0.9 } : {}),
+    });
 
   // ── Flagged questions ──
   const getFlaggedQuestions = (): { poolId: string; scenario: PoolScenario; flagCount: number; reports: TrainingFlagReport[] }[] => {
@@ -1752,6 +1850,30 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
         )}
       </div>
 
+      {TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.size > 0 && (
+        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.5rem', direction: 'rtl' }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.25rem' }}>🧹 טבלת מובילים — עדכון ענן</div>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.45rem', lineHeight: 1.45 }}>
+            משחקנים ברשימת ההסרה מוסתרים באפליקציה; כפתור זה מוחק אותם גם מקובץ תשובות האימון וממפתחות התובנות ב-GitHub (נדרש טוקן אדמין).
+          </div>
+          <button
+            type="button"
+            disabled={cloudCleaning}
+            onClick={handleStripExcludedPlayersFromCloud}
+            style={{
+              padding: '0.45rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
+              background: cloudCleaning ? 'var(--surface-light)' : 'rgba(239,68,68,0.08)',
+              color: '#ef4444', fontWeight: 600, fontSize: '0.75rem', cursor: cloudCleaning ? 'wait' : 'pointer',
+            }}
+          >
+            {cloudCleaning ? '⏳ מעלה ל-GitHub...' : `הסר מהענן: ${[...TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES].join(' · ')}`}
+          </button>
+          {cloudCleanMsg && (
+            <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{cloudCleanMsg}</div>
+          )}
+        </div>
+      )}
+
       {/* Player Summary Table */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.5rem' }}>
         <div style={{
@@ -2114,7 +2236,24 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                 </div>
                 {f.scenario?.yourCards && (
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
-                    קלפים: {f.scenario.yourCards}
+                    <span style={{ fontWeight: 600, color: '#94a3b8' }}>קלפים:&nbsp;</span>
+                    <TrainingColoredCards text={f.scenario.yourCards} />
+                  </div>
+                )}
+                {f.scenario?.boardCards?.trim() && (
+                  <div style={{
+                    fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.25rem',
+                    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem',
+                  }}>
+                    <span style={{ fontWeight: 600, color: '#94a3b8' }}>לוח (פלופ / טרן / ריבר):</span>
+                    <span style={{
+                      display: 'inline-flex', flexWrap: 'wrap', gap: '0.2rem', alignItems: 'center',
+                      padding: '0.2rem 0.45rem', borderRadius: '6px',
+                      background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(148, 163, 184, 0.28)',
+                      fontSize: '0.78rem', lineHeight: 1.35,
+                    }}>
+                      <TrainingColoredCards text={f.scenario.boardCards.trim()} />
+                    </span>
                   </div>
                 )}
                 {correctOpt && (

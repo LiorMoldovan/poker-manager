@@ -4,7 +4,7 @@
  * 
  * Sync behavior:
  * - Admin uploads full data after game end, deletion, or player changes
- * - Users get full replacement on app open (if cloud version is newer)
+ * - Users pull from cloud when remote is newer; completed games merge by id (local-only completed are kept)
  * - Players are synced: types, names, additions from cloud are authoritative
  * - Version tracking prevents unnecessary syncs
  */
@@ -85,17 +85,19 @@ const saveLastSyncedVersion = (version: string): void => {
   localStorage.setItem(LAST_SYNCED_VERSION_KEY, version);
 };
 
-// Fetch current data from GitHub (no auth needed for public repo)
 export const fetchFromGitHub = async (): Promise<SyncData | null> => {
   try {
-    // Use GitHub API to avoid CDN caching issues
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_FILE_PATH}?ref=${GITHUB_BRANCH}`;
     
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3+json',
+    };
+    const token = getEffectiveToken(true);
+    if (token) {
+      headers['Authorization'] = `token ${token}`;
+    }
+
+    const response = await fetch(url, { headers });
     
     if (!response.ok) {
       if (response.status === 404) {
@@ -202,13 +204,13 @@ export interface FullBackupData {
   uploadedAt?: string;
 }
 
-// Fetch full backup from GitHub (no auth needed for public repo)
 export const fetchBackupFromGitHub = async (): Promise<FullBackupData | null> => {
   try {
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_BACKUP_PATH}?ref=${GITHUB_BRANCH}`;
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/vnd.github.v3+json' },
-    });
+    const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
+    const token = getEffectiveToken(true);
+    if (token) headers['Authorization'] = `token ${token}`;
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       if (response.status === 404) return null;
@@ -343,32 +345,52 @@ export const getLocalSyncData = (): SyncData => {
   };
 };
 
-// Full replacement of games and players from cloud (cloud is authoritative)
+const gamePlayerRowKey = (gp: GamePlayer): string => `${gp.gameId}|${gp.id}`;
+
+/** Merge remote completed games with local-only completed + in-progress games (live / chip_entry). */
 const replaceGamesWithRemote = (
   remoteData: SyncData
-): { gamesChanged: number; deletedGames: number; newPlayers: number; playersChanged: number } => {
+): { gamesChanged: number; deletedGames: number; newPlayers: number; playersChanged: number; reattachedLocalCompleted: number } => {
   const localGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
+  const localGamePlayers: GamePlayer[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
   const localPlayers: Player[] = JSON.parse(localStorage.getItem('poker_players') || '[]');
-  
-  // Calculate changes for reporting
+
   const remoteGameIds = new Set(remoteData.games.map(g => g.id));
   const localGameIds = new Set(localGames.map(g => g.id));
-  
+
+  const localOnlyCompleted = localGames.filter(g => g.status === 'completed' && !remoteGameIds.has(g.id));
+  const localIncomplete = localGames.filter(g => g.status === 'live' || g.status === 'chip_entry');
+  const localOnlyGameIds = new Set(localOnlyCompleted.map(g => g.id));
+  const extraGamePlayers = localGamePlayers.filter(gp => localOnlyGameIds.has(gp.gameId));
+
+  const seenGpKeys = new Set<string>();
+  const allGamePlayersForPlayerSync: GamePlayer[] = [];
+  for (const gp of remoteData.gamePlayers) {
+    const k = gamePlayerRowKey(gp);
+    if (!seenGpKeys.has(k)) {
+      seenGpKeys.add(k);
+      allGamePlayersForPlayerSync.push(gp);
+    }
+  }
+  for (const gp of extraGamePlayers) {
+    const k = gamePlayerRowKey(gp);
+    if (!seenGpKeys.has(k)) {
+      seenGpKeys.add(k);
+      allGamePlayersForPlayerSync.push(gp);
+    }
+  }
+
   const newGamesCount = remoteData.games.filter(g => !localGameIds.has(g.id)).length;
-  const deletedGames = localGames.filter(g => !remoteGameIds.has(g.id)).length;
-  const gamesChanged = newGamesCount + deletedGames;
-  
-  // Build a map of local players by name for quick lookup
+  const deletedGames = 0;
+
   const localPlayerByName = new Map(localPlayers.map(p => [p.name.toLowerCase(), p]));
-  
-  // Sync players: remote player list is authoritative for types, IDs, and membership.
-  // gamePlayers reference playerId, so local players must have matching IDs.
+
   let newPlayers = 0;
   let playersChanged = 0;
   const syncedPlayerNames = new Set<string>();
-  
-  // First pass: sync players referenced in gamePlayers (ensures ID alignment)
-  for (const gp of remoteData.gamePlayers) {
+
+  // First pass: sync players referenced in gamePlayers (remote + local-only completed)
+  for (const gp of allGamePlayersForPlayerSync) {
     const playerNameLower = gp.playerName.toLowerCase();
     
     if (syncedPlayerNames.has(playerNameLower)) {
@@ -439,9 +461,8 @@ const replaceGamesWithRemote = (
     }
   }
   
-  // Preserve locally-generated AI fields that may not exist in remote data
   const localGameMap = new Map(localGames.map(g => [g.id, g]));
-  const mergedGames = remoteData.games.map(remoteGame => {
+  const mergedCompleted: Game[] = remoteData.games.map(remoteGame => {
     const localGame = localGameMap.get(remoteGame.id);
     if (localGame) {
       if (!remoteGame.aiSummary && localGame.aiSummary) {
@@ -454,10 +475,31 @@ const replaceGamesWithRemote = (
     return remoteGame;
   });
 
-  // Save all data
+  for (const g of localOnlyCompleted) {
+    mergedCompleted.push({ ...g });
+  }
+
+  mergedCompleted.sort((a, b) => {
+    const tb = new Date(b.date || b.createdAt).getTime();
+    const ta = new Date(a.date || a.createdAt).getTime();
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+
+  const mergedGames = [...mergedCompleted, ...localIncomplete];
+
+  const mergedGpKeys = new Set(remoteData.gamePlayers.map(gamePlayerRowKey));
+  const mergedGamePlayers: GamePlayer[] = [...remoteData.gamePlayers];
+  for (const gp of extraGamePlayers) {
+    const k = gamePlayerRowKey(gp);
+    if (!mergedGpKeys.has(k)) {
+      mergedGpKeys.add(k);
+      mergedGamePlayers.push(gp);
+    }
+  }
+
   localStorage.setItem('poker_players', JSON.stringify(localPlayers));
   localStorage.setItem('poker_games', JSON.stringify(mergedGames));
-  localStorage.setItem('poker_game_players', JSON.stringify(remoteData.gamePlayers));
+  localStorage.setItem('poker_game_players', JSON.stringify(mergedGamePlayers));
   
   // Sync chronicle profiles from cloud (cloud is authoritative)
   if (remoteData.chronicleProfiles) {
@@ -475,8 +517,16 @@ const replaceGamesWithRemote = (
   } else {
     localStorage.removeItem('poker_pending_forecast');
   }
-  
-  return { gamesChanged, deletedGames, newPlayers, playersChanged };
+
+  const gamesChanged = newGamesCount + localOnlyCompleted.length;
+
+  return {
+    gamesChanged,
+    deletedGames,
+    newPlayers,
+    playersChanged,
+    reattachedLocalCompleted: localOnlyCompleted.length,
+  };
 };
 
 // Sync from cloud - full replacement, but only if version is different
@@ -515,17 +565,41 @@ export const syncFromCloud = async (): Promise<{
       return { success: true, message: `${localCompletedCount - remoteCompletedCount} new games pushed to cloud`, synced: true, gamesChanged: 0 };
     }
 
-    if (lastSyncedVersion === remoteData.lastUpdated && remoteCompletedCount <= localCompletedCount) {
+    const localCompletedIds = new Set(localSyncData.games.map(g => g.id));
+    const localHasEveryRemoteGame = remoteData.games.every(g => localCompletedIds.has(g.id));
+
+    if (
+      lastSyncedVersion === remoteData.lastUpdated
+      && remoteCompletedCount <= localCompletedCount
+      && localHasEveryRemoteGame
+    ) {
       console.log('Already synced to latest version');
       return { success: true, message: 'Already up to date', synced: false };
     }
+
+    if (!localHasEveryRemoteGame) {
+      console.log('Sync: same version or count but local is missing remote game ids — merging');
+    }
     
     console.log('New version available - syncing...');
-    
-    const { gamesChanged, deletedGames, newPlayers, playersChanged } = replaceGamesWithRemote(remoteData);
-    console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers, 'playersChanged:', playersChanged);
-    
-    saveLastSyncedVersion(remoteData.lastUpdated);
+
+    const mergeResult = replaceGamesWithRemote(remoteData);
+    const { gamesChanged, deletedGames, newPlayers, playersChanged, reattachedLocalCompleted } = mergeResult;
+    console.log('Sync result - gamesChanged:', gamesChanged, 'deleted:', deletedGames, 'newPlayers:', newPlayers, 'playersChanged:', playersChanged, 'reattachedLocal:', reattachedLocalCompleted);
+
+    if (reattachedLocalCompleted > 0) {
+      const token = getEffectiveToken(true);
+      if (token) {
+        const uploadResult = await uploadToGitHub(token, getLocalSyncData());
+        if (!uploadResult.success) {
+          saveLastSyncedVersion(remoteData.lastUpdated);
+        }
+      } else {
+        saveLastSyncedVersion(remoteData.lastUpdated);
+      }
+    } else {
+      saveLastSyncedVersion(remoteData.lastUpdated);
+    }
     
     const totalPlayerChanges = newPlayers + playersChanged;
     let message = '';
@@ -548,7 +622,12 @@ export const syncFromCloud = async (): Promise<{
       }
       message = parts.join(', ');
     }
-    
+
+    if (reattachedLocalCompleted > 0) {
+      const note = `שוחזרו ${reattachedLocalCompleted} משחק(ים) שהיו רק במכשיר (לא בקובץ הענן)`;
+      message = message ? `${message} — ${note}` : note;
+    }
+
     return {
       success: true,
       message,
@@ -657,10 +736,10 @@ export const uploadTrainingToGitHub = async (): Promise<{ success: boolean; mess
 export const fetchTrainingFromGitHub = async (): Promise<Record<string, unknown> | null> => {
   try {
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_TRAINING_PATH}?ref=${GITHUB_BRANCH}`;
-
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/vnd.github.v3+json' },
-    });
+    const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
+    const tkn = getEffectiveToken(true);
+    if (tkn) headers['Authorization'] = `token ${tkn}`;
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       if (response.status === 404) return null;
@@ -792,7 +871,8 @@ const fetchGitHubJson = async <T>(path: string, token?: string): Promise<T | nul
   try {
     const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`;
     const headers: Record<string, string> = { 'Accept': 'application/vnd.github.v3+json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const effectiveToken = token || getEffectiveToken(true);
+    if (effectiveToken) headers['Authorization'] = `token ${effectiveToken}`;
 
     const resp = await fetch(url, { headers });
     if (!resp.ok) {

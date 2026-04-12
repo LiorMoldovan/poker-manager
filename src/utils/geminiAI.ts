@@ -171,6 +171,10 @@ export interface RunGeminiTextOptions {
   temperature?: number;
   maxOutputTokens?: number;
   label?: string;
+  /** כשמוגדר (למשל application/json) — מכוון את המודל לפלט מובנה; עובר ל-callWithFallback */
+  responseMimeType?: string;
+  topP?: number;
+  topK?: number;
 }
 
 /** Plain-text Gemini call with model fallback (used by training admin, coaching, etc.). */
@@ -184,6 +188,9 @@ export async function runGeminiTextPrompt(
     apiKey,
     temperature: options?.temperature ?? 0.7,
     maxOutputTokens: options?.maxOutputTokens ?? 8192,
+    topP: options?.topP,
+    topK: options?.topK,
+    responseMimeType: options?.responseMimeType,
     label: options?.label ?? 'gemini_text',
   });
   return result.text;

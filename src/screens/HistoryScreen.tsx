@@ -1,13 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { GameWithDetails } from '../types';
 import { getAllGames, getGamePlayers, getSettings, deleteGame, getAllPlayers } from '../database/storage';
 import { syncToCloud } from '../database/githubSync';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 
+const gameSortTimeMs = (g: { date: string; createdAt: string }): number => {
+  const primary = new Date(g.date || g.createdAt).getTime();
+  if (Number.isFinite(primary)) return primary;
+  const fallback = new Date(g.createdAt).getTime();
+  return Number.isFinite(fallback) ? fallback : 0;
+};
+
 const HistoryScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { role, hasPermission, playerName: identityName } = usePermissions();
   const [games, setGames] = useState<GameWithDetails[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -23,32 +31,43 @@ const HistoryScreen = () => {
   const canDeleteGames = hasPermission('game:delete');
   const canSyncToCloud = role === 'admin' || role === 'memberSync';
 
-  useEffect(() => {
-    loadGames();
-  }, []);
-
-  const loadGames = () => {
+  const loadGames = useCallback(() => {
     const allGames = getAllGames();
     const settings = getSettings();
-    
+
     const gamesWithDetails: GameWithDetails[] = allGames
       .filter(g => g.status === 'completed')
       .map(game => {
         const players = getGamePlayers(game.id);
-        // Sort players by profit (highest to lowest)
         const sortedPlayers = [...players].sort((a, b) => b.profit - a.profit);
         const totalBuyins = players.reduce((sum, p) => sum + p.rebuys, 0);
         const totalPot = totalBuyins * settings.rebuyValue;
         return { ...game, players: sortedPlayers, totalPot, totalBuyins };
       })
-      .sort((a, b) => (new Date(b.date || b.createdAt).getTime() || 0) - (new Date(a.date || a.createdAt).getTime() || 0));
-    
+      .sort((a, b) => gameSortTimeMs(b) - gameSortTimeMs(a));
+
     setGames(gamesWithDetails);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname === '/history') {
+      loadGames();
+    }
+  }, [location.pathname, loadGames]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && location.pathname === '/history') {
+        loadGames();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [location.pathname, loadGames]);
 
   const handleDelete = async (gameId: string) => {
     deleteGame(gameId);
-    setGames(games.filter(g => g.id !== gameId));
+    loadGames();
     setDeleteConfirm(null);
     
     // If admin or memberSync, sync deletion to cloud
@@ -350,9 +369,9 @@ const HistoryScreen = () => {
                         }}
                         style={{
                           padding: '0.25rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600',
-                          border: activeYear === y ? '1px solid var(--primary)' : '1px solid var(--border)',
-                          background: activeYear === y ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                          color: activeYear === y ? 'var(--primary)' : 'var(--text)',
+                          border: filterYear === y ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: filterYear === y ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                          color: filterYear === y ? 'var(--primary)' : 'var(--text)',
                           cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
                         }}
                       >
@@ -365,7 +384,14 @@ const HistoryScreen = () => {
                     {availableMonths.map(m => (
                       <button
                         key={m}
-                        onClick={() => setFilterMonth(filterMonth === m ? null : m)}
+                        onClick={() => {
+                          if (filterMonth === m) {
+                            setFilterMonth(null);
+                          } else {
+                            setFilterMonth(m);
+                            if (filterYear === null && years[0] != null) setFilterYear(years[0]);
+                          }
+                        }}
                         style={{
                           padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.7rem',
                           border: filterMonth === m ? '1px solid var(--primary)' : '1px solid var(--border)',
@@ -403,7 +429,11 @@ const HistoryScreen = () => {
       ) : filteredGames.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🔍</div>
-          <div style={{ fontSize: '0.85rem' }}>לא נמצאו משחקים עבור "{searchQuery}"</div>
+          <div style={{ fontSize: '0.85rem' }}>
+            {searchQuery.trim()
+              ? `לא נמצאו משחקים עבור "${searchQuery}"`
+              : 'אין משחקים שמתאימים לסינון — לחץ "נקה הכל" או בטל סינון תאריך/שחקן'}
+          </div>
         </div>
       ) : (
         filteredGames.map(game => {

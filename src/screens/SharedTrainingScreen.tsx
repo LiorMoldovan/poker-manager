@@ -14,6 +14,10 @@ import {
   CATEGORY_TIPS,
   normalizeTrainingPlayers,
   getPoolCounts,
+  getTrainingSessionCounts,
+  TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES,
+  excludePlayersFromTrainingLeaderboard,
+  resetSharedTrainingProgress,
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
 
@@ -63,22 +67,30 @@ const SharedTrainingScreen = () => {
       ]);
       const answersData = raw ? normalizeTrainingPlayers(raw) : null;
       if (answersData) {
-        setLeaderboard(answersData.players);
-        const myRemoteData = answersData.players.find(p => p.playerName === name);
-        if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
-          const rebuilt = rebuildProgressFromRemote(myRemoteData);
-          setRemoteProgress(rebuilt);
-          const local = getSharedProgress(name);
-          const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
-          const localAll = local.totalQuestions + (local.totalNeutral || 0);
-          if (rebuiltAll > localAll) {
-            saveSharedProgress(name, rebuilt);
+        setLeaderboard(excludePlayersFromTrainingLeaderboard(answersData.players));
+        if (TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(name)) {
+          resetSharedTrainingProgress(name);
+          setRemoteProgress(null);
+        } else {
+          const myRemoteData = answersData.players.find(p => p.playerName === name);
+          if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
+            const rebuilt = rebuildProgressFromRemote(myRemoteData);
+            setRemoteProgress(rebuilt);
+            const local = getSharedProgress(name);
+            const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
+            const localAll = local.totalQuestions + (local.totalNeutral || 0);
+            if (rebuiltAll > localAll) {
+              saveSharedProgress(name, rebuilt);
+            }
+          } else {
+            setRemoteProgress(null);
           }
         }
       }
-      // Load player-facing AI insights
-      if (insightsData?.insights?.[name]) {
+      if (insightsData?.insights?.[name] && !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(name)) {
         setPlayerInsight(insightsData.insights[name].improvement);
+      } else {
+        setPlayerInsight(null);
       }
     } catch {
       // Silently fail
@@ -128,12 +140,16 @@ const SharedTrainingScreen = () => {
     );
   };
 
-  /** Cloud snapshot + neutral count per row */
   const leaderboardWithNeutral = useMemo((): LeaderboardRow[] => {
     return leaderboard.map(p => {
-      let neutral = 0;
-      p.sessions.forEach(s => s.results.forEach(r => { if (r.nearMiss) neutral++; }));
-      return { ...p, neutral };
+      const d = getTrainingSessionCounts(p);
+      return {
+        ...p,
+        totalQuestions: d.scored,
+        totalCorrect: d.correct,
+        accuracy: d.accuracy,
+        neutral: d.neutral,
+      };
     });
   }, [leaderboard]);
 
@@ -155,18 +171,7 @@ const SharedTrainingScreen = () => {
         accuracy: scored > 0 ? (correct / scored) * 100 : p.accuracy,
       };
     });
-    if (!merged.some(p => isSharedTrainingMe(p, name)) && progress.totalQuestions >= 5) {
-      const scored = progress.totalQuestions;
-      const correct = progress.totalCorrect;
-      merged.push({
-        playerName: name,
-        sessions: [],
-        totalQuestions: scored,
-        totalCorrect: correct,
-        accuracy: scored > 0 ? (correct / scored) * 100 : 0,
-        neutral: progress.totalNeutral || 0,
-      });
-    }
+    // טבלה = רק שחקנים שמופיעים בקובץ הענן (לא שורה סינתטית מ-localStorage)
     return merged;
   }, [leaderboardWithNeutral, name, progress.totalQuestions, progress.totalCorrect, progress.totalNeutral]);
 

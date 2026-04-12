@@ -21,6 +21,8 @@ import {
   checkNewBadges,
   bufferSessionForUpload,
   flushPendingUploads,
+  normalizeTrainingPlayers,
+  excludePlayersFromTrainingLeaderboard,
   TRAINING_BADGES,
   WRONG_ANSWER_REACTIONS,
   CORRECT_ANSWER_REACTIONS,
@@ -143,7 +145,11 @@ const SharedQuickPlayScreen = () => {
 
   useEffect(() => {
     loadScenarios();
-    fetchTrainingAnswers().then(data => { if (data) setAllPlayerAnswers(data); }).catch(() => {});
+    fetchTrainingAnswers().then(raw => {
+      if (!raw) return;
+      const n = normalizeTrainingPlayers(raw);
+      setAllPlayerAnswers({ ...n, players: excludePlayersFromTrainingLeaderboard(n.players) });
+    }).catch(() => {});
   }, [loadScenarios]);
 
   // Save partial session on unmount (user navigated away mid-session)
@@ -305,11 +311,13 @@ const SharedQuickPlayScreen = () => {
         if (hasApiKey) {
           setGeneratingReport(true);
           setReportMilestoneMsg(`🎯 ${milestoneNum} שאלות! מייצר תובנות אישיות...`);
-          fetchTrainingAnswers().then(async (answersData) => {
-            if (!answersData) return;
+          fetchTrainingAnswers().then(async (raw) => {
+            if (!raw) return;
+            const answersData = normalizeTrainingPlayers(raw);
             const playerData = answersData.players.find(p => p.playerName === name);
             if (!playerData) return;
-            const coachingText = await generatePlayerCoaching(name, playerData, answersData.players);
+            const peers = excludePlayersFromTrainingLeaderboard(answersData.players);
+            const coachingText = await generatePlayerCoaching(name, playerData, peers);
             if (coachingText) {
               const currentInsights = await fetchTrainingInsights() || { lastUpdated: '', insights: {} };
               currentInsights.insights[name] = {
@@ -745,8 +753,8 @@ const SharedQuickPlayScreen = () => {
             return cat ? <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginRight: 'auto' }}>{cat.icon} {cat.name}</span> : null;
           })()}
         </div>
-        {/* Situation text */}
-        <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text)', margin: 0 }}>
+        {/* Situation text — same typography as answer rows */}
+        <p style={{ fontSize: '1.02rem', fontWeight: 600, lineHeight: 1.35, color: 'var(--text)', margin: 0 }}>
           <ColoredText text={scenario.situation} />
         </p>
       </div>
@@ -861,8 +869,8 @@ const SharedQuickPlayScreen = () => {
         </div>
       )}
 
-      {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
+      {/* Options — גופן גדול יותר */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
         {scenario.options.map(option => {
           const isSelected = selectedOption === option.id;
           const isRevealed = !!selectedOption;
@@ -909,7 +917,7 @@ const SharedQuickPlayScreen = () => {
               onClick={() => handleSelect(option.id)}
               disabled={isRevealed}
               style={{
-                padding: '0.4rem 0.65rem', borderRadius: '10px',
+                padding: '0.65rem 0.9rem', borderRadius: '10px',
                 border: `1.5px solid ${borderColor}`, background: bgColor,
                 cursor: isRevealed ? 'default' : 'pointer',
                 textAlign: 'right', direction: 'rtl',
@@ -917,16 +925,16 @@ const SharedQuickPlayScreen = () => {
                 opacity: isRevealed && !isCorrectOption && !isSelected ? 0.4 : 1,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                 <span style={{
-                  width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                  width: '30px', height: '30px', borderRadius: '50%', flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: '0.65rem',
+                  fontWeight: 700, fontSize: '0.78rem',
                   background: iconBg, color: iconColor,
                 }}>
                   {iconSymbol}
                 </span>
-                <span style={{ fontWeight: 600, fontSize: '0.8rem', color: textColor }}>
+                <span style={{ fontWeight: 600, fontSize: '1.02rem', lineHeight: 1.35, color: textColor }}>
                   {option.text}
                 </span>
               </div>
@@ -935,7 +943,7 @@ const SharedQuickPlayScreen = () => {
                 <div style={{
                   marginTop: '0.25rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
                   background: 'rgba(245,158,11,0.1)', display: 'inline-block',
-                  fontSize: '0.6rem', fontWeight: 600, color: '#f59e0b',
+                  fontSize: '0.68rem', fontWeight: 600, color: '#f59e0b',
                 }}>
                   🏠 תשובה טובה לפוקר מקצועי, לא אופטימלית למשחק שלנו
                 </div>
@@ -943,7 +951,7 @@ const SharedQuickPlayScreen = () => {
 
               {showExplanation && (
                 <div style={{
-                  marginTop: '0.2rem', fontSize: '0.65rem', lineHeight: 1.4,
+                  marginTop: '0.25rem', fontSize: '0.78rem', lineHeight: 1.45,
                   color: 'var(--text-muted)', paddingRight: '1.6rem',
                 }}>
                   <ColoredText text={option.explanation!} />

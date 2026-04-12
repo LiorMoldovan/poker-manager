@@ -207,6 +207,36 @@ export const GAME_CONTEXT = `הקשר המשחק — חובה להבין:
 - הסבר תמיד למה התשובה נכונה דווקא **במשחק הביתי שלנו** — לא בפוקר מקצועי
 - אם העלאה נכונה, ההסבר צריך להיות "בונים קופה גדולה עם יד חזקה" ולא "מבודדים יריב"`;
 
+/**
+ * חוקי פורמט לשאלת מאגר — זהים ל-buildPoolBatchPrompt.
+ * משמשים בפרומפט תיקון AI כדי שהתיקון הראשון יעמוד בסטנדרט בלי סבב "תקן את הפורמט".
+ */
+export const TRAINING_SCENARIO_FIX_FORMAT_RULES = `═══ פורמט פלט — חובה מדויק (מאגר האימון) ═══
+החזר אובייקט JSON יחיד. מפתחות בלבד: poolId, situation, yourCards, boardCards, options (מערך של 3), category, categoryId.
+אסור שדות נוספים ברמה העליונה. אסור עטיפה במערך.
+
+options — בדיוק 3 אובייקטים:
+- לכל אובייקט: "id" (מחרוזת "A", "B" או "C" באנגלית גדולה בלבד), "text", "isCorrect" (בוליאני), "explanation" (מחרוזת לא ריקה).
+- "nearMiss": אופציונלי — רק לתשובות עם isCorrect:false. אסור nearMiss:true או כל nearMiss על התשובה הנכונה.
+- בדיוק אחת מהשלוש עם isCorrect:true; השאר false.
+
+situation:
+- 1–2 משפטים בעברית, רק פעולה: מי המר כמה, גודל קופה, כמה שחקנים.
+- אסור לחזור על קלפי היד או קלפי הלוח (הם ב-yourCards וב-boardCards).
+- אסור לתאר את היד ("יש לך פלאש דרו", "זוגות על הלוח") — השחקן רואה קלפים בנפרד.
+
+yourCards: רק קלפי השחקן, פורמט כמו "A♥ K♠" (רווח בין קלפים).
+
+boardCards: קלפי פלופ/טרן/ריבר באותו פורמט, או מחרוזת ריקה "" לפני פלופ.
+
+סכומים: רק צ'יפים (לא שקלים). "קריאה" = סכום להשוואה, לא גודל כל הקופה.
+
+הסברים: 1–2 משפטים, ספציפיים למצב; טון משחק ביתי — לא GTO.
+
+עברית: פלופ, טרן, ריבר, בליינד, ביד; לא "נהר"/"עיוור".
+
+אסור במינוח: "fold equity", "תדלל", "תבודד", "תדלול"`;
+
 export const WRONG_ANSWER_REACTIONS: string[] = [
   'טעות נפוצה! רוב השחקנים שלנו בוחרים את זה',
   'קרוב! הכיוון טוב, אבל...',
@@ -1002,6 +1032,7 @@ export const normalizeTrainingPlayers = (data: TrainingAnswersFile): TrainingAns
       let scored = 0, corr = 0;
       for (const s of newEntry.sessions) {
         for (const r of s.results) {
+          if (r.neutralized) continue;
           if (!r.nearMiss) { scored++; if (r.correct) corr++; }
         }
       }
@@ -1018,6 +1049,19 @@ export const normalizeTrainingPlayers = (data: TrainingAnswersFile): TrainingAns
   if (!changed) return data;
   return { ...data, players: [...nameMap.values()] };
 };
+
+/** מוסתרים מטבלת המובילים באימון משותף; ניתן למחוק מהענן מלשונית ניהול אימון */
+export const TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES = new Set<string>(['ליאור']);
+
+export function excludePlayersFromTrainingLeaderboard(players: TrainingPlayerData[]): TrainingPlayerData[] {
+  return players.filter(p => !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(p.playerName));
+}
+
+export function resetSharedTrainingProgress(playerName: string): void {
+  try {
+    localStorage.removeItem(`shared_training_progress_${playerName}`);
+  } catch { /* ignore */ }
+}
 
 const POOL_CACHE_KEY = 'training_pool_cached';
 const POOL_GENERATED_AT_KEY = 'training_pool_generatedAt';
@@ -1053,6 +1097,40 @@ export const getSharedProgress = (playerName: string): SharedTrainingProgress =>
 export const saveSharedProgress = (playerName: string, progress: SharedTrainingProgress): void => {
   localStorage.setItem(getProgressKey(playerName), JSON.stringify(progress));
 };
+
+/** Counts from session results — same rules as rebuildProgressFromRemote (neutralized excluded). */
+export function getTrainingSessionCounts(player: TrainingPlayerData): {
+  scored: number;
+  correct: number;
+  neutral: number;
+  wrong: number;
+  totalAnswered: number;
+  accuracy: number;
+} {
+  let correct = 0;
+  let neutral = 0;
+  let wrong = 0;
+  for (const s of player.sessions) {
+    for (const r of s.results) {
+      if (r.neutralized) continue;
+      if (r.nearMiss) {
+        neutral++;
+        continue;
+      }
+      if (r.correct) correct++;
+      else wrong++;
+    }
+  }
+  const scored = correct + wrong;
+  return {
+    scored,
+    correct,
+    neutral,
+    wrong,
+    totalAnswered: scored + neutral,
+    accuracy: scored > 0 ? (correct / scored) * 100 : 0,
+  };
+}
 
 export const rebuildProgressFromRemote = (playerData: TrainingPlayerData): SharedTrainingProgress => {
   const progress: SharedTrainingProgress = { ...DEFAULT_SHARED_PROGRESS };
@@ -1767,6 +1845,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       let scored = 0, corr = 0;
       for (const s of player.sessions) {
         for (const r of s.results) {
+          if (r.neutralized) continue;
           if (!r.nearMiss) { scored++; if (r.correct) corr++; }
         }
       }

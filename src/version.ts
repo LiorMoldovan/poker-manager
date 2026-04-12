@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.2';
+export const APP_VERSION = '5.12.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.3',
+    date: '2026-04-12',
+    changes: [
+      '🔄 Cloud sync merge — local-only completed games preserved during sync instead of being deleted, auto-pushed back to cloud',
+      '🔑 Authenticated GitHub reads — all fetch calls now use embedded token to avoid rate limits',
+      '📋 Training fix format rules — shared TRAINING_SCENARIO_FIX_FORMAT_RULES constant for consistent AI fix output',
+      '🎯 Training leaderboard exclusion — admin can hide specific players from the shared leaderboard',
+      '📊 getTrainingSessionCounts utility — centralized scoring with neutralized answer support',
+      '🗂️ History screen improvements — stable game sort, useCallback optimization, route-aware reload',
+      '⚙️ runGeminiTextPrompt extended — responseMimeType, topP, topK parameters for structured output',
+    ]
+  },
   {
     version: '5.12.2',
     date: '2026-04-09',
