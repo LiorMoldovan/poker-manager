@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:02:52.388Z",
+  "lastUpdated": "2026-04-12T20:05:07.238Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7854,18 +7854,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "e3o31c8rd"
-          ],
-          "flagReports": [
-            {
-              "poolId": "e3o31c8rd",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "השאלה לא תואמת את הפורמט שלנו ולדעתי התשובה לא נכונה, אם אתה מגדיר קול סטיישן אני רוצה להעלות והוא ישלם",
-              "date": "2026-04-12T15:33:23.610Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 12,
