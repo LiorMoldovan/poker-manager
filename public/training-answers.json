@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T14:36:04.816Z",
+  "lastUpdated": "2026-04-12T14:36:34.993Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7711,84 +7711,6 @@
       "totalQuestions": 7,
       "totalCorrect": 6,
       "accuracy": 85.71428571428571
-    },
-    {
-      "playerName": "ליאור",
-      "sessions": [
-        {
-          "date": "2026-04-12T14:36:03.279Z",
-          "questionsAnswered": 8,
-          "correctAnswers": 6,
-          "results": [
-            {
-              "poolId": "qumibl",
-              "categoryId": "cbet",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "xzrzs8",
-              "categoryId": "check_raise",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "math_1775389510264_yon1on",
-              "categoryId": "true_false",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "imlsmw",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "96znmn",
-              "categoryId": "preflop_open",
-              "correct": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "tpmzeg",
-              "categoryId": "pot_odds",
-              "correct": true,
-              "chosenId": "A"
-            },
-            {
-              "poolId": "pfg85t",
-              "categoryId": "multiway_pots",
-              "correct": false,
-              "nearMiss": true,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "1ou8ni",
-              "categoryId": "blind_defense",
-              "correct": false,
-              "chosenId": "B"
-            },
-            {
-              "poolId": "8fdduu",
-              "categoryId": "preflop_open",
-              "correct": false,
-              "nearMiss": true,
-              "chosenId": "C"
-            },
-            {
-              "poolId": "xs8i5q",
-              "categoryId": "wet_board_top_pair",
-              "correct": false,
-              "chosenId": "A"
-            }
-          ],
-          "flaggedPoolIds": []
-        }
-      ],
-      "totalQuestions": 8,
-      "totalCorrect": 6,
-      "accuracy": 75
     }
   ]
 }
