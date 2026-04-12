@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T12:38:08.332Z",
+  "lastUpdated": "2026-04-12T13:39:53.898Z",
   "players": [
     {
       "playerName": "אייל",
@@ -6597,11 +6597,81 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-12T11:33:01.559Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389545260_4lbnoe",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "3uqga6",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4jpifs",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "66p24o",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387236973_3wz2l9",
+              "categoryId": "preflop_open",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "odds_math_1775387023360_xhhw5o",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "frrgx0",
+              "categoryId": "missed_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "p6ci6j",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "6g1f0z",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ql97wd",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 286,
-      "totalCorrect": 219,
-      "accuracy": 76.57342657342657,
+      "totalQuestions": 294,
+      "totalCorrect": 226,
+      "accuracy": 76.87074829931973,
       "pendingReportMilestones": [],
       "reports": [
         {
