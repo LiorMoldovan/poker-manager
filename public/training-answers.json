@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T15:34:08.457Z",
+  "lastUpdated": "2026-04-12T17:40:11.216Z",
   "players": [
     {
       "playerName": "אייל",
@@ -2435,11 +2435,50 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-12T17:40:10.643Z",
+          "questionsAnswered": 4,
+          "correctAnswers": 4,
+          "results": [
+            {
+              "poolId": "bzo091",
+              "categoryId": "wet_board_top_pair",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "67y932",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389483228_niny99",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "ryfaic",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "v9fll",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 194,
-      "totalCorrect": 145,
-      "accuracy": 74.74226804123711
+      "totalQuestions": 198,
+      "totalCorrect": 149,
+      "accuracy": 75.25252525252525
     },
     {
       "playerName": "מלמד",
