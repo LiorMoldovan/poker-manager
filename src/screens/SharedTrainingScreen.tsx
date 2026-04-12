@@ -47,9 +47,7 @@ const SharedTrainingScreen = () => {
   const localProgress = getSharedProgress(name);
   const progress = useMemo(() => {
     if (!remoteProgress) return localProgress;
-    const remoteAll = remoteProgress.totalQuestions + (remoteProgress.totalNeutral || 0);
-    const localAll = localProgress.totalQuestions + (localProgress.totalNeutral || 0);
-    return remoteAll >= localAll ? remoteProgress : localProgress;
+    return remoteProgress;
   }, [localProgress, remoteProgress]);
 
   const catExpert = getCategoryExpertBadges(progress);
@@ -69,12 +67,7 @@ const SharedTrainingScreen = () => {
         if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
           const rebuilt = rebuildProgressFromRemote(myRemoteData);
           setRemoteProgress(rebuilt);
-          const local = getSharedProgress(name);
-          const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
-          const localAll = local.totalQuestions + (local.totalNeutral || 0);
-          if (rebuiltAll > localAll) {
-            saveSharedProgress(name, rebuilt);
-          }
+          saveSharedProgress(name, rebuilt);
         } else {
           setRemoteProgress(null);
         }
