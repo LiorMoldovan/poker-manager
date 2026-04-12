@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:29:48.287Z",
+  "lastUpdated": "2026-04-12T20:41:45.230Z",
   "players": [
     {
       "playerName": "אייל",
@@ -2474,11 +2474,82 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-12T20:41:44.746Z",
+          "questionsAnswered": 7,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "hotnmn",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "gen_1775387344645_pdolh7",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math_1775389857109_ifcvw7",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "7k3c11",
+              "categoryId": "pot_odds",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "nx9y10",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "o273ck",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "bu9a85",
+              "categoryId": "second_pair",
+              "correct": false,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "math_1775389653327_nwbvxh",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qu0cab",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "kcab1r",
+              "categoryId": "slow_play",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 198,
-      "totalCorrect": 149,
-      "accuracy": 75.25252525252525
+      "totalQuestions": 205,
+      "totalCorrect": 155,
+      "accuracy": 75.60975609756098
     },
     {
       "playerName": "מלמד",
