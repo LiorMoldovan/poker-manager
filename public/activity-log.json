@@ -3862,9 +3862,11 @@
     "timestamp": "2026-04-12T13:39:39.844Z",
     "device": "Android Phone / Android 10 / Chrome",
     "screenSize": "412x892",
-    "screensVisited": [],
-    "sessionDuration": 0,
-    "lastActive": "2026-04-12T13:39:39.849Z",
+    "screensVisited": [
+      "Shared Training"
+    ],
+    "sessionDuration": 26,
+    "lastActive": "2026-04-12T14:05:21.372Z",
     "fingerprint": {
       "gpu": "Adreno (TM) 750",
       "cores": 8,
