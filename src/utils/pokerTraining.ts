@@ -1050,13 +1050,6 @@ export const normalizeTrainingPlayers = (data: TrainingAnswersFile): TrainingAns
   return { ...data, players: [...nameMap.values()] };
 };
 
-/** מוסתרים מטבלת המובילים באימון משותף; ניתן למחוק מהענן מלשונית ניהול אימון */
-export const TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES = new Set<string>(['ליאור']);
-
-export function excludePlayersFromTrainingLeaderboard(players: TrainingPlayerData[]): TrainingPlayerData[] {
-  return players.filter(p => !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(p.playerName));
-}
-
 export function resetSharedTrainingProgress(playerName: string): void {
   try {
     localStorage.removeItem(`shared_training_progress_${playerName}`);

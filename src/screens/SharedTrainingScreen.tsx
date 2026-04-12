@@ -15,9 +15,6 @@ import {
   normalizeTrainingPlayers,
   getPoolCounts,
   getTrainingSessionCounts,
-  TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES,
-  excludePlayersFromTrainingLeaderboard,
-  resetSharedTrainingProgress,
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
 
@@ -67,27 +64,22 @@ const SharedTrainingScreen = () => {
       ]);
       const answersData = raw ? normalizeTrainingPlayers(raw) : null;
       if (answersData) {
-        setLeaderboard(excludePlayersFromTrainingLeaderboard(answersData.players));
-        if (TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(name)) {
-          resetSharedTrainingProgress(name);
-          setRemoteProgress(null);
-        } else {
-          const myRemoteData = answersData.players.find(p => p.playerName === name);
-          if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
-            const rebuilt = rebuildProgressFromRemote(myRemoteData);
-            setRemoteProgress(rebuilt);
-            const local = getSharedProgress(name);
-            const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
-            const localAll = local.totalQuestions + (local.totalNeutral || 0);
-            if (rebuiltAll > localAll) {
-              saveSharedProgress(name, rebuilt);
-            }
-          } else {
-            setRemoteProgress(null);
+        setLeaderboard(answersData.players);
+        const myRemoteData = answersData.players.find(p => p.playerName === name);
+        if (myRemoteData && (myRemoteData.totalQuestions > 0 || myRemoteData.sessions.length > 0)) {
+          const rebuilt = rebuildProgressFromRemote(myRemoteData);
+          setRemoteProgress(rebuilt);
+          const local = getSharedProgress(name);
+          const rebuiltAll = rebuilt.totalQuestions + (rebuilt.totalNeutral || 0);
+          const localAll = local.totalQuestions + (local.totalNeutral || 0);
+          if (rebuiltAll > localAll) {
+            saveSharedProgress(name, rebuilt);
           }
+        } else {
+          setRemoteProgress(null);
         }
       }
-      if (insightsData?.insights?.[name] && !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(name)) {
+      if (insightsData?.insights?.[name]) {
         setPlayerInsight(insightsData.insights[name].improvement);
       } else {
         setPlayerInsight(null);

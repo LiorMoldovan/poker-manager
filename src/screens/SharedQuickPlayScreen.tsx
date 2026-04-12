@@ -22,7 +22,6 @@ import {
   bufferSessionForUpload,
   flushPendingUploads,
   normalizeTrainingPlayers,
-  excludePlayersFromTrainingLeaderboard,
   TRAINING_BADGES,
   WRONG_ANSWER_REACTIONS,
   CORRECT_ANSWER_REACTIONS,
@@ -148,7 +147,7 @@ const SharedQuickPlayScreen = () => {
     fetchTrainingAnswers().then(raw => {
       if (!raw) return;
       const n = normalizeTrainingPlayers(raw);
-      setAllPlayerAnswers({ ...n, players: excludePlayersFromTrainingLeaderboard(n.players) });
+      setAllPlayerAnswers(n);
     }).catch(() => {});
   }, [loadScenarios]);
 
@@ -316,7 +315,7 @@ const SharedQuickPlayScreen = () => {
             const answersData = normalizeTrainingPlayers(raw);
             const playerData = answersData.players.find(p => p.playerName === name);
             if (!playerData) return;
-            const peers = excludePlayersFromTrainingLeaderboard(answersData.players);
+            const peers = answersData.players;
             const coachingText = await generatePlayerCoaching(name, playerData, peers);
             if (coachingText) {
               const currentInsights = await fetchTrainingInsights() || { lastUpdated: '', insights: {} };

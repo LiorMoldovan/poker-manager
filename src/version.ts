@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.3';
+export const APP_VERSION = '5.12.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.4',
+    date: '2026-04-12',
+    changes: [
+      '🧹 Per-player cloud data management — admin can delete all data or select specific sessions per player from GitHub',
+      '📊 Insight generation stats — admin sees date, sessions, questions, accuracy at insight generation time',
+      '🗑️ Removed hardcoded leaderboard exclusion — replaced with admin-controlled per-player deletion tool',
+    ]
+  },
   {
     version: '5.12.3',
     date: '2026-04-12',

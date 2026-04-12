@@ -27,7 +27,6 @@ import {
   analyzePlayerTraining,
   formatAnalysisForPrompt,
   getPlayerGameSummary,
-  TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
@@ -259,37 +258,64 @@ const TrainingAdminTab = () => {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
+  const [cloudCleaningPlayer, setCloudCleaningPlayer] = useState<string | null>(null);
   const [cloudCleanMsg, setCloudCleanMsg] = useState<string | null>(null);
-  const [cloudCleaning, setCloudCleaning] = useState(false);
+  const [sessionCleanMode, setSessionCleanMode] = useState<string | null>(null);
+  const [selectedSessions, setSelectedSessions] = useState<Set<number>>(new Set());
 
-  const handleStripExcludedPlayersFromCloud = useCallback(async () => {
-    const targets = [...TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES];
-    if (targets.length === 0) return;
-    setCloudCleaning(true);
+  const handleCleanPlayerFromCloud = useCallback(async (playerName: string, sessionIndices?: Set<number>) => {
+    const isPartial = sessionIndices && sessionIndices.size > 0;
+    const label = isPartial
+      ? `למחוק ${sessionIndices.size} אימונים של ${playerName} מהענן?`
+      : `למחוק את כל נתוני האימון של ${playerName} מהענן?`;
+    if (!confirm(label)) return;
+    setCloudCleaningPlayer(playerName);
     setCloudCleanMsg(null);
     try {
       const okAnswers = await writeTrainingAnswersWithRetry((data) => {
-        const filtered = data.players.filter(p => !TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.has(p.playerName));
-        return normalizeTrainingPlayers({
-          ...data,
-          lastUpdated: new Date().toISOString(),
-          players: filtered,
-        });
+        let players: typeof data.players;
+        if (isPartial) {
+          players = data.players.map(p => {
+            if (p.playerName !== playerName) return p;
+            const remaining = p.sessions.filter((_, idx) => !sessionIndices.has(idx));
+            if (remaining.length === 0) return null;
+            let scored = 0, corr = 0;
+            for (const s of remaining) {
+              for (const r of s.results) {
+                if (r.neutralized) continue;
+                if (!r.nearMiss) { scored++; if (r.correct) corr++; }
+              }
+            }
+            return { ...p, sessions: remaining, totalQuestions: scored, totalCorrect: corr, accuracy: scored > 0 ? (corr / scored) * 100 : 0 };
+          }).filter((p): p is TrainingPlayerData => p !== null);
+        } else {
+          players = data.players.filter(p => p.playerName !== playerName);
+        }
+        return normalizeTrainingPlayers({ ...data, lastUpdated: new Date().toISOString(), players });
       });
-      const insightsRaw = await fetchTrainingInsights();
+
+      const removeInsights = !isPartial;
       let okInsights = true;
-      if (insightsRaw?.insights) {
-        const insights: TrainingInsightsFile = {
-          ...insightsRaw,
-          lastUpdated: new Date().toISOString(),
-          insights: { ...insightsRaw.insights },
-        };
-        for (const t of targets) delete insights.insights[t];
-        const up = await uploadTrainingInsights(insights);
-        okInsights = up.success;
+      if (removeInsights) {
+        const insightsRaw = await fetchTrainingInsights();
+        if (insightsRaw?.insights) {
+          const insights: TrainingInsightsFile = {
+            ...insightsRaw,
+            lastUpdated: new Date().toISOString(),
+            insights: { ...insightsRaw.insights },
+          };
+          delete insights.insights[playerName];
+          const up = await uploadTrainingInsights(insights);
+          okInsights = up.success;
+        }
       }
       if (okAnswers && okInsights) {
-        setCloudCleanMsg(`✅ הוסר מ-GitHub: ${targets.join(' · ')}`);
+        const msg = isPartial
+          ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו מ-GitHub`
+          : `✅ ${playerName} הוסר מ-GitHub`;
+        setCloudCleanMsg(msg);
+        setSessionCleanMode(null);
+        setSelectedSessions(new Set());
         await loadAll();
       } else {
         setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק טוקן GitHub בהגדרות');
@@ -297,7 +323,7 @@ const TrainingAdminTab = () => {
     } catch {
       setCloudCleanMsg('⚠️ שגיאה — נסה שוב');
     } finally {
-      setCloudCleaning(false);
+      setCloudCleaningPlayer(null);
     }
   }, [loadAll]);
 
@@ -1850,27 +1876,9 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
         )}
       </div>
 
-      {TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES.size > 0 && (
-        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '0.5rem', direction: 'rtl' }}>
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.25rem' }}>🧹 טבלת מובילים — עדכון ענן</div>
-          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.45rem', lineHeight: 1.45 }}>
-            משחקנים ברשימת ההסרה מוסתרים באפליקציה; כפתור זה מוחק אותם גם מקובץ תשובות האימון וממפתחות התובנות ב-GitHub (נדרש טוקן אדמין).
-          </div>
-          <button
-            type="button"
-            disabled={cloudCleaning}
-            onClick={handleStripExcludedPlayersFromCloud}
-            style={{
-              padding: '0.45rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)',
-              background: cloudCleaning ? 'var(--surface-light)' : 'rgba(239,68,68,0.08)',
-              color: '#ef4444', fontWeight: 600, fontSize: '0.75rem', cursor: cloudCleaning ? 'wait' : 'pointer',
-            }}
-          >
-            {cloudCleaning ? '⏳ מעלה ל-GitHub...' : `הסר מהענן: ${[...TRAINING_LEADERBOARD_EXCLUDED_PLAYER_NAMES].join(' · ')}`}
-          </button>
-          {cloudCleanMsg && (
-            <div style={{ marginTop: '0.4rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{cloudCleanMsg}</div>
-          )}
+      {cloudCleanMsg && (
+        <div className="card" style={{ padding: '0.5rem 1rem', marginBottom: '0.5rem', direction: 'rtl' }}>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{cloudCleanMsg}</div>
         </div>
       )}
 
@@ -2047,55 +2055,257 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                       })()}
 
                       {/* AI Insights */}
-                      {insight && (
-                        <div style={{
-                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
-                          background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)',
-                        }}>
-                          <div style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 600, marginBottom: '0.2rem' }}>
-                            מה השחקן רואה:
+                      {insight && (() => {
+                        const genSessions = typeof insight.sessionsAtGeneration === 'number' ? insight.sessionsAtGeneration : player.sessions.length;
+                        const sessionsAtGen = player.sessions.slice(0, genSessions);
+                        let qAtGen = 0, cAtGen = 0, nearMissAtGen = 0;
+                        for (const s of sessionsAtGen) {
+                          for (const r of s.results) {
+                            if (r.neutralized) continue;
+                            if (r.nearMiss) { nearMissAtGen++; } else { qAtGen++; if (r.correct) cAtGen++; }
+                          }
+                        }
+                        const wrongAtGen = qAtGen - cAtGen;
+                        const allAtGen = qAtGen + nearMissAtGen;
+                        const accAtGen = qAtGen > 0 ? Math.round((cAtGen / qAtGen) * 100) : 0;
+                        const genDate = new Date(insight.generatedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
+                        return (
+                          <div style={{
+                            padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                            background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: '#a855f7', fontWeight: 600 }}>
+                                מה השחקן רואה:
+                              </span>
+                              <span style={{ display: 'flex', gap: '0.25rem', fontSize: '0.58rem', color: 'var(--text-muted)' }}>
+                                <span>{genDate}</span>
+                                <span>·</span>
+                                <span>{genSessions} אימונים</span>
+                                <span>·</span>
+                                <span>{allAtGen} שאלות</span>
+                                <span>·</span>
+                                <span style={{ color: '#22c55e' }}>✓{cAtGen}</span>
+                                <span>·</span>
+                                <span style={{ color: '#f59e0b' }}>~{nearMissAtGen}</span>
+                                <span>·</span>
+                                <span style={{ color: '#ef4444' }}>✗{wrongAtGen}</span>
+                                <span>·</span>
+                                <span style={{ fontWeight: 600 }}>{accAtGen}%</span>
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                              {insight.improvement}
+                            </div>
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                            {insight.improvement}
+                        );
+                      })()}
+
+                      {exploit && (() => {
+                        const exGenSessions = typeof exploit.sessionsAtGeneration === 'number' ? exploit.sessionsAtGeneration : player.sessions.length;
+                        const exSessionsAtGen = player.sessions.slice(0, exGenSessions);
+                        let exQ = 0, exC = 0, exNearMiss = 0;
+                        for (const s of exSessionsAtGen) {
+                          for (const r of s.results) {
+                            if (r.neutralized) continue;
+                            if (r.nearMiss) { exNearMiss++; } else { exQ++; if (r.correct) exC++; }
+                          }
+                        }
+                        const exWrong = exQ - exC;
+                        const exAll = exQ + exNearMiss;
+                        const exAcc = exQ > 0 ? Math.round((exC / exQ) * 100) : 0;
+                        const exDate = new Date(exploit.generatedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
+                        return (
+                          <div style={{
+                            padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
+                            background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 600 }}>
+                                🔒 לעיניך בלבד:
+                              </span>
+                              <span style={{ display: 'flex', gap: '0.25rem', fontSize: '0.58rem', color: 'var(--text-muted)' }}>
+                                <span>{exDate}</span>
+                                <span>·</span>
+                                <span>{exGenSessions} אימונים</span>
+                                <span>·</span>
+                                <span>{exAll} שאלות</span>
+                                <span>·</span>
+                                <span style={{ color: '#22c55e' }}>✓{exC}</span>
+                                <span>·</span>
+                                <span style={{ color: '#f59e0b' }}>~{exNearMiss}</span>
+                                <span>·</span>
+                                <span style={{ color: '#ef4444' }}>✗{exWrong}</span>
+                                <span>·</span>
+                                <span style={{ fontWeight: 600 }}>{exAcc}%</span>
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                              {exploit.text}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateInsight(player)}
+                          disabled={generatingInsight === player.playerName || batchInsightsRunning}
+                          style={{
+                            flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                            background: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
+                            color: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--text-muted)' : 'white',
+                            fontWeight: 600, fontSize: '0.75rem', cursor: generatingInsight === player.playerName || batchInsightsRunning ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {generatingInsight === player.playerName
+                            ? `⏳ ${generatingStep || 'מייצר...'}`
+                            : `✨ ${insight ? 'עדכן' : 'צור'} תובנות אישיות`}
+                          {generatingInsight !== player.playerName && sessionsSinceInsight > 0 && insight && (
+                            <span style={{ fontSize: '0.6rem', opacity: 0.8, marginRight: '0.3rem' }}>
+                              ({sessionsSinceInsight} חדשים)
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (sessionCleanMode === player.playerName) {
+                              setSessionCleanMode(null);
+                              setSelectedSessions(new Set());
+                            } else {
+                              setSessionCleanMode(player.playerName);
+                              setSelectedSessions(new Set());
+                            }
+                          }}
+                          disabled={cloudCleaningPlayer === player.playerName}
+                          style={{
+                            padding: '0.5rem 0.6rem', borderRadius: '8px',
+                            border: `1px solid rgba(239,68,68,${sessionCleanMode === player.playerName ? '0.5' : '0.3'})`,
+                            background: cloudCleaningPlayer === player.playerName
+                              ? 'var(--surface-light)'
+                              : sessionCleanMode === player.playerName
+                                ? 'rgba(239,68,68,0.15)'
+                                : 'rgba(239,68,68,0.08)',
+                            color: cloudCleaningPlayer === player.playerName ? 'var(--text-muted)' : '#ef4444',
+                            fontWeight: 600, fontSize: '0.7rem',
+                            cursor: cloudCleaningPlayer === player.playerName ? 'wait' : 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title="מוחק נתוני אימון מהענן — אם השחקן יתאמן שוב הוא יחזור לטבלה"
+                        >
+                          {cloudCleaningPlayer === player.playerName ? '⏳' : '🧹'}
+                        </button>
+                      </div>
+
+                      {/* Session clean mode */}
+                      {sessionCleanMode === player.playerName && (
+                        <div style={{
+                          marginTop: '0.5rem', padding: '0.6rem', borderRadius: '8px',
+                          background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.15)',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#ef4444' }}>
+                              🧹 בחר אימונים למחיקה
+                            </span>
+                            <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (selectedSessions.size === player.sessions.length) {
+                                    setSelectedSessions(new Set());
+                                  } else {
+                                    setSelectedSessions(new Set(player.sessions.map((_, idx) => idx)));
+                                  }
+                                }}
+                                style={{
+                                  fontSize: '0.6rem', padding: '0.2rem 0.4rem', borderRadius: '4px',
+                                  border: '1px solid rgba(239,68,68,0.2)', background: 'transparent',
+                                  color: '#ef4444', cursor: 'pointer',
+                                }}
+                              >
+                                {selectedSessions.size === player.sessions.length ? 'בטל הכל' : 'בחר הכל'}
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            {player.sessions.map((session, sIdx) => {
+                              const isSelected = selectedSessions.has(sIdx);
+                              const correct = session.results.filter(r => r.correct && !r.neutralized && !r.nearMiss).length;
+                              const scored = session.results.filter(r => !r.neutralized && !r.nearMiss).length;
+                              const acc = scored > 0 ? Math.round((correct / scored) * 100) : 0;
+                              const dateStr = new Date(session.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+                              return (
+                                <div
+                                  key={sIdx}
+                                  onClick={() => {
+                                    const next = new Set(selectedSessions);
+                                    if (next.has(sIdx)) next.delete(sIdx); else next.add(sIdx);
+                                    setSelectedSessions(next);
+                                  }}
+                                  style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '0.3rem 0.4rem', borderRadius: '6px', cursor: 'pointer',
+                                    background: isSelected ? 'rgba(239,68,68,0.1)' : 'var(--surface)',
+                                    border: isSelected ? '1px solid rgba(239,68,68,0.3)' : '1px solid transparent',
+                                    direction: 'rtl',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem' }}>
+                                    <span style={{ opacity: isSelected ? 1 : 0.3 }}>{isSelected ? '☑' : '☐'}</span>
+                                    <span style={{ color: 'var(--text-muted)' }}>{dateStr}</span>
+                                    <span>{session.results.length} שאלות</span>
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.68rem', fontWeight: 600,
+                                    color: acc >= 60 ? '#22c55e' : acc >= 40 ? '#eab308' : '#ef4444',
+                                  }}>
+                                    {acc}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.4rem' }}>
+                            <button
+                              type="button"
+                              disabled={selectedSessions.size === 0 || cloudCleaningPlayer === player.playerName}
+                              onClick={() => handleCleanPlayerFromCloud(
+                                player.playerName,
+                                selectedSessions.size === player.sessions.length ? undefined : selectedSessions,
+                              )}
+                              style={{
+                                flex: 1, padding: '0.4rem', borderRadius: '6px', border: 'none',
+                                background: selectedSessions.size === 0 ? 'var(--surface-hover)' : '#ef4444',
+                                color: selectedSessions.size === 0 ? 'var(--text-muted)' : 'white',
+                                fontWeight: 600, fontSize: '0.7rem',
+                                cursor: selectedSessions.size === 0 ? 'default' : 'pointer',
+                              }}
+                            >
+                              {cloudCleaningPlayer === player.playerName
+                                ? '⏳ מוחק...'
+                                : selectedSessions.size === player.sessions.length
+                                  ? `🗑 מחק הכל (${selectedSessions.size})`
+                                  : selectedSessions.size > 0
+                                    ? `🗑 מחק ${selectedSessions.size} אימונים`
+                                    : 'בחר אימונים'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSessionCleanMode(null); setSelectedSessions(new Set()); }}
+                              style={{
+                                padding: '0.4rem 0.6rem', borderRadius: '6px',
+                                border: '1px solid var(--border)', background: 'transparent',
+                                color: 'var(--text-muted)', fontSize: '0.7rem', cursor: 'pointer',
+                              }}
+                            >
+                              ביטול
+                            </button>
                           </div>
                         </div>
                       )}
-
-                      {exploit && (
-                        <div style={{
-                          padding: '0.6rem', borderRadius: '8px', marginBottom: '0.4rem',
-                          background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
-                        }}>
-                          <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.2rem' }}>
-                            🔒 לעיניך בלבד:
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                            {exploit.text}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action button */}
-                      <button
-                        type="button"
-                        onClick={() => handleGenerateInsight(player)}
-                        disabled={generatingInsight === player.playerName || batchInsightsRunning}
-                        style={{
-                          width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none',
-                          background: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--surface-light)' : 'linear-gradient(135deg, #a855f7, #7c3aed)',
-                          color: generatingInsight === player.playerName || batchInsightsRunning ? 'var(--text-muted)' : 'white',
-                          fontWeight: 600, fontSize: '0.75rem', cursor: generatingInsight === player.playerName || batchInsightsRunning ? 'wait' : 'pointer',
-                        }}
-                      >
-                        {generatingInsight === player.playerName
-                          ? `⏳ ${generatingStep || 'מייצר...'}`
-                          : `✨ ${insight ? 'עדכן' : 'צור'} תובנות אישיות`}
-                        {generatingInsight !== player.playerName && sessionsSinceInsight > 0 && insight && (
-                          <span style={{ fontSize: '0.6rem', opacity: 0.8, marginRight: '0.3rem' }}>
-                            ({sessionsSinceInsight} חדשים)
-                          </span>
-                        )}
-                      </button>
                     </div>
                   )}
                 </div>
