@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:26:05.123Z",
+  "lastUpdated": "2026-04-12T20:27:58.555Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7928,17 +7928,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "mxjt3i",
             "27asay"
           ],
           "flagReports": [
-            {
-              "poolId": "mxjt3i",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "קצת מוזר לוותר כשלא כתוב שמישהו הימר, צריך שיהיה ברור יותר",
-              "date": "2026-04-12T20:17:55.803Z"
-            },
             {
               "poolId": "27asay",
               "playerName": "ליאור",
