@@ -15,6 +15,8 @@ import {
   normalizeTrainingPlayers,
   getPoolCounts,
   getTrainingSessionCounts,
+  resetSharedTrainingProgress,
+  clearPendingUploadsForPlayer,
 } from '../utils/pokerTraining';
 import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
 
@@ -55,7 +57,6 @@ const SharedTrainingScreen = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      await flushPendingUploads();
       const [raw, insightsData] = await Promise.all([
         fetchTrainingAnswers(),
         fetchTrainingInsights(),
@@ -68,9 +69,14 @@ const SharedTrainingScreen = () => {
           const rebuilt = rebuildProgressFromRemote(myRemoteData);
           setRemoteProgress(rebuilt);
           saveSharedProgress(name, rebuilt);
+          await flushPendingUploads();
         } else {
           setRemoteProgress(null);
+          resetSharedTrainingProgress(name);
+          clearPendingUploadsForPlayer(name);
         }
+      } else {
+        await flushPendingUploads();
       }
       if (insightsData?.insights?.[name]) {
         setPlayerInsight(insightsData.insights[name].improvement);

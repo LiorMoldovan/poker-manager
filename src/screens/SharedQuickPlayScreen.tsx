@@ -22,6 +22,7 @@ import {
   bufferSessionForUpload,
   flushPendingUploads,
   normalizeTrainingPlayers,
+  rebuildProgressFromRemote,
   TRAINING_BADGES,
   WRONG_ANSWER_REACTIONS,
   CORRECT_ANSWER_REACTIONS,
@@ -148,8 +149,12 @@ const SharedQuickPlayScreen = () => {
       if (!raw) return;
       const n = normalizeTrainingPlayers(raw);
       setAllPlayerAnswers(n);
+      const myData = n.players.find(p => p.playerName === name);
+      if (myData && myData.sessions.length > 0) {
+        saveSharedProgress(name, rebuildProgressFromRemote(myData));
+      }
     }).catch(() => {});
-  }, [loadScenarios]);
+  }, [loadScenarios, name]);
 
   // Save partial session on unmount (user navigated away mid-session)
   useEffect(() => {

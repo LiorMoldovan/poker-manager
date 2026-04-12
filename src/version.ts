@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.5';
+export const APP_VERSION = '5.12.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.12.6',
+    date: '2026-04-12',
+    changes: [
+      '🔄 Fix stale training data — fetch remote before flushing pending uploads, preventing deleted/stale data resurrection',
+      '🧹 Admin deletion clears pending upload buffer for deleted player',
+      '⏱️ Stale buffer safety — pending uploads older than 30min won\'t recreate removed players',
+      '📊 Play screen rebuilds progress from remote on load, fixing nearMiss accuracy mismatch (53% → 74%)',
+    ]
+  },
   {
     version: '5.12.5',
     date: '2026-04-12',

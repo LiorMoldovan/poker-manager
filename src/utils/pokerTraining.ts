@@ -1056,6 +1056,21 @@ export function resetSharedTrainingProgress(playerName: string): void {
   } catch { /* ignore */ }
 }
 
+export function clearPendingUploadsForPlayer(playerName: string): void {
+  try {
+    const key = 'shared_training_pending_upload';
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const pending: { playerName: string }[] = JSON.parse(raw);
+    const filtered = pending.filter(p => p.playerName !== playerName);
+    if (filtered.length === 0) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(filtered));
+    }
+  } catch { /* ignore */ }
+}
+
 const POOL_CACHE_KEY = 'training_pool_cached';
 const POOL_GENERATED_AT_KEY = 'training_pool_generatedAt';
 
@@ -1781,8 +1796,8 @@ const FLUSH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes between GitHub pushes
 export const bufferSessionForUpload = (playerName: string, session: TrainingSession, pendingMilestone?: number): void => {
   try {
     const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
-    const pending: { playerName: string; session: TrainingSession; pendingMilestone?: number }[] = raw ? JSON.parse(raw) : [];
-    pending.push({ playerName, session, pendingMilestone });
+    const pending: { playerName: string; session: TrainingSession; pendingMilestone?: number; bufferedAt?: number }[] = raw ? JSON.parse(raw) : [];
+    pending.push({ playerName, session, pendingMilestone, bufferedAt: Date.now() });
     localStorage.setItem(PENDING_UPLOAD_KEY, JSON.stringify(pending));
   } catch { /* ignore */ }
 };
@@ -1791,7 +1806,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   const raw = localStorage.getItem(PENDING_UPLOAD_KEY);
   if (!raw) return;
 
-  let pending: { playerName: string; session: TrainingSession; pendingMilestone?: number }[];
+  let pending: { playerName: string; session: TrainingSession; pendingMilestone?: number; bufferedAt?: number }[];
   try {
     pending = JSON.parse(raw);
   } catch { return; }
@@ -1809,10 +1824,14 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
     data = normalizeTrainingPlayers(data);
 
-    for (const { playerName, session, pendingMilestone } of pending) {
+    for (const { playerName, session, pendingMilestone, bufferedAt } of pending) {
       const correctedName = LEGACY_NAME_CORRECTIONS[playerName] || playerName;
       let player = data.players.find(p => p.playerName === correctedName);
       if (!player) {
+        const ageMs = bufferedAt ? Date.now() - bufferedAt : Infinity;
+        if (ageMs > 30 * 60 * 1000) {
+          continue;
+        }
         player = { playerName: correctedName, sessions: [], totalQuestions: 0, totalCorrect: 0, accuracy: 0 };
         data.players.push(player);
       }

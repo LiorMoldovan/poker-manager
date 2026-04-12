@@ -27,6 +27,8 @@ import {
   analyzePlayerTraining,
   formatAnalysisForPrompt,
   getPlayerGameSummary,
+  resetSharedTrainingProgress,
+  clearPendingUploadsForPlayer,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { shareToWhatsApp } from '../utils/sharing';
@@ -310,12 +312,17 @@ const TrainingAdminTab = () => {
         }
       }
       if (okAnswers && okInsights) {
+        if (!isPartial) {
+          resetSharedTrainingProgress(playerName);
+          clearPendingUploadsForPlayer(playerName);
+        }
         const msg = isPartial
           ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו מ-GitHub`
           : `✅ ${playerName} הוסר מ-GitHub`;
         setCloudCleanMsg(msg);
         setSessionCleanMode(null);
         setSelectedSessions(new Set());
+        await new Promise(r => setTimeout(r, 1500));
         await loadAll();
       } else {
         setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק טוקן GitHub בהגדרות');
