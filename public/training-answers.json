@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T10:31:35.218Z",
+  "lastUpdated": "2026-04-12T11:29:14.932Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -7653,11 +7653,25 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-10T15:29:44.389Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "yd5wpteyz",
+              "categoryId": "cbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 285,
-      "totalCorrect": 218,
-      "accuracy": 76.49122807017544,
+      "totalQuestions": 286,
+      "totalCorrect": 219,
+      "accuracy": 76.57342657342657,
       "pendingReportMilestones": [],
       "reports": [
         {
