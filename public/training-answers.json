@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T09:02:06.618Z",
+  "lastUpdated": "2026-04-12T10:29:05.442Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -3503,18 +3503,8 @@
               "chosenId": "A"
             }
           ],
-          "flaggedPoolIds": [
-            "apqym9"
-          ],
-          "flagReports": [
-            {
-              "poolId": "apqym9",
-              "playerName": "אורן",
-              "reason": "unclear_question",
-              "comment": "הנוסח לא מובן",
-              "date": "2026-04-11T20:09:51.697Z"
-            }
-          ]
+          "flaggedPoolIds": [],
+          "flagReports": []
         }
       ],
       "totalQuestions": 194,
