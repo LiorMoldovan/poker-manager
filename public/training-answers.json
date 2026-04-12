@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-11T20:11:07.681Z",
+  "lastUpdated": "2026-04-12T08:48:26.240Z",
   "players": [
     {
       "playerName": "ליאור",
@@ -1037,11 +1037,25 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-09T14:08:00.022Z",
+          "questionsAnswered": 1,
+          "correctAnswers": 1,
+          "results": [
+            {
+              "poolId": "sxapi0",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 112,
-      "totalCorrect": 91,
-      "accuracy": 81.25
+      "totalQuestions": 113,
+      "totalCorrect": 92,
+      "accuracy": 81.41592920353983
     },
     {
       "playerName": "אייל",
