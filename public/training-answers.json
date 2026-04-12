@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T17:40:11.216Z",
+  "lastUpdated": "2026-04-12T20:02:52.388Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7855,17 +7855,9 @@
             }
           ],
           "flaggedPoolIds": [
-            "math2_1775390916781_zrrmzk",
             "e3o31c8rd"
           ],
           "flagReports": [
-            {
-              "poolId": "math2_1775390916781_zrrmzk",
-              "playerName": "ליאור",
-              "reason": "other",
-              "comment": "השאלה מתחילה מוזר, לא ברור כמה יש בקופה, מה האולאין שלו",
-              "date": "2026-04-12T15:28:25.233Z"
-            },
             {
               "poolId": "e3o31c8rd",
               "playerName": "ליאור",
