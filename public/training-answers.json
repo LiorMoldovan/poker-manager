@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-12T20:05:07.238Z",
+  "lastUpdated": "2026-04-12T20:20:13.390Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7856,10 +7856,109 @@
           ],
           "flaggedPoolIds": [],
           "flagReports": []
+        },
+        {
+          "date": "2026-04-12T20:20:12.847Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "so3eku",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "iynh6i",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "6ews3h",
+              "categoryId": "preflop_open",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qxf1u3",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "lnsupa",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "naafbv",
+              "categoryId": "medium_pairs",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mxjt3i",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "2lgzzv",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "w7ybtr",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "27asay",
+              "categoryId": "overbet",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "6ews3h",
+            "mxjt3i",
+            "27asay"
+          ],
+          "flagReports": [
+            {
+              "poolId": "6ews3h",
+              "playerName": "ליאור",
+              "reason": "wrong_answer",
+              "comment": "הקופה קטנה לא גדולה עם אס 3 סוט אני מעדיף להגדיל קצת את הקופה, אולי פחות מ1300 אבל לדעתי רק לקרוא כאן זאת טעות",
+              "date": "2026-04-12T20:15:08.109Z"
+            },
+            {
+              "poolId": "mxjt3i",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "קצת מוזר לוותר כשלא כתוב שמישהו הימר, צריך שיהיה ברור יותר",
+              "date": "2026-04-12T20:17:55.803Z"
+            },
+            {
+              "poolId": "27asay",
+              "playerName": "ליאור",
+              "reason": "other",
+              "comment": "השאלה מתחילה בצורה קצת חתוכה",
+              "date": "2026-04-12T20:20:11.311Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 12,
-      "totalCorrect": 12,
+      "totalQuestions": 18,
+      "totalCorrect": 18,
       "accuracy": 100
     }
   ]
