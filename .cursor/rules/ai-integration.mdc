@@ -1,14 +1,39 @@
 ---
-description: Gemini AI integration — forecasts, summaries, chronicles, prompt rules, prediction algorithm
-globs: src/utils/geminiAI.ts
+description: Gemini AI integration — forecasts, summaries, chronicles, prompt rules, prediction algorithm, API proxy
+globs: "{src/utils/geminiAI.ts,src/utils/tts.ts,src/utils/apiProxy.ts,api/**}"
 alwaysApply: false
 ---
 
-# AI Integration (Gemini)
+# AI Integration (Gemini + ElevenLabs)
 
 ## Overview
 
-All AI lives in `src/utils/geminiAI.ts`. Uses Google Gemini API (`gemini-2.0-flash`). API key stored per-device in localStorage (`gemini_api_key`), managed by admin only. Non-admin users see cached AI content synced from cloud.
+All AI text generation lives in `src/utils/geminiAI.ts`. TTS (text-to-speech) lives in `src/utils/tts.ts`. Training AI in `src/utils/pokerTraining.ts`.
+
+**Legacy** (`USE_SUPABASE = false`): API key in localStorage (`gemini_api_key`, `elevenlabs_api_key`), direct client-side calls to Google/ElevenLabs.
+**Supabase** (`USE_SUPABASE = true`): API keys in Vercel env vars (`GEMINI_API_KEY`, `ELEVENLABS_API_KEY`). All calls routed through Vercel Edge Functions via `src/utils/apiProxy.ts`. `getGeminiApiKey()` and `getElevenLabsApiKey()` return `'server-managed'`.
+
+## API Proxy Architecture
+
+All external API calls are centralized through `src/utils/apiProxy.ts`:
+- `proxyGeminiGenerate(version, model, apiKey, payload)` → `/api/gemini` or direct Google URL
+- `proxyGeminiGenerateWithSignal(...)` → same with AbortSignal support (for TTS timeouts)
+- `proxyGeminiModels(apiKey, version)` → `/api/gemini-models` or direct Google URL
+- `proxyElevenLabsTTS(apiKey, voiceId, payload, format, signal)` → `/api/elevenlabs-tts` or direct ElevenLabs
+- `proxyElevenLabsUsage(apiKey)` → `/api/elevenlabs-usage` or direct ElevenLabs
+
+**NEVER add direct `generativelanguage.googleapis.com` or `api.elevenlabs.io` URLs in `src/` files.** Always use the proxy functions.
+
+## Vercel Edge Functions (`api/` directory)
+
+| Route | Method | Env Var | Proxies To |
+|-------|--------|---------|-----------|
+| `/api/gemini` | POST | `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../generateContent` |
+| `/api/gemini-models` | GET | `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
+| `/api/elevenlabs-tts` | POST | `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/text-to-speech` |
+| `/api/elevenlabs-usage` | GET | `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
+
+Non-admin users see cached AI content synced from cloud.
 
 ## AI Features
 

@@ -6,8 +6,13 @@ import { syncFromCloud, restoreTrainingFromGitHub } from './database/githubSync'
 import { PermissionRole } from './types';
 import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
+import { USE_SUPABASE } from './database/config';
+import { useSupabaseAuth } from './hooks/useSupabaseAuth';
+import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
+import AuthScreen from './screens/AuthScreen';
+import GroupSetupScreen from './screens/GroupSetupScreen';
 import NewGameScreen from './screens/NewGameScreen';
 import LiveGameScreen from './screens/LiveGameScreen';
 import ChipEntryScreen from './screens/ChipEntryScreen';
@@ -307,7 +312,159 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
   );
 }
 
-function App() {
+function SupabaseApp() {
+  const location = useLocation();
+  const auth = useSupabaseAuth();
+  const [dataReady, setDataReady] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const groupId = auth.membership?.groupId ?? null;
+  const role = auth.membership?.role ?? null;
+  const playerName = auth.membership?.playerName ?? null;
+
+  // Initialize Supabase cache once we have a group
+  useEffect(() => {
+    if (!groupId || isCacheReady()) { if (groupId && isCacheReady()) setDataReady(true); return; }
+    setDataError(null);
+    initSupabaseCache(groupId)
+      .then(() => {
+        setDataReady(true);
+        subscribeToRealtime();
+      })
+      .catch(err => {
+        console.error('Failed to load data from Supabase:', err);
+        setDataError('שגיאה בטעינת נתונים מהענן');
+      });
+    return () => unsubscribeFromRealtime();
+  }, [groupId]);
+
+  const permissionValue: PermissionContextType = {
+    role,
+    playerName,
+    hasPermission: (permission) => hasPermission(role, permission),
+    signOut: () => { auth.signOut(); },
+  };
+
+  if (auth.loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--background)',
+      }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (!auth.user) {
+    return <AuthScreen onSignIn={auth.signIn} onSignUp={auth.signUp} />;
+  }
+
+  if (!auth.membership) {
+    return (
+      <GroupSetupScreen
+        userEmail={auth.user.email ?? ''}
+        onCreateGroup={auth.createGroup}
+        onJoinGroup={auth.joinGroup}
+        onSignOut={auth.signOut}
+      />
+    );
+  }
+
+  // Wait for Supabase data to load
+  if (!dataReady) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--background)', direction: 'rtl',
+      }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
+          {dataError ? (
+            <>
+              <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{dataError}</p>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: '0.6rem 1.5rem', borderRadius: '8px', border: 'none',
+                  background: 'var(--primary)', color: 'white', cursor: 'pointer',
+                  fontFamily: 'Outfit, sans-serif',
+                }}
+              >
+                נסה שוב
+              </button>
+            </>
+          ) : (
+            'טוען נתונים...'
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play', '/shared-training/play'].some(path =>
+    location.pathname.startsWith(path)
+  );
+
+  if (role === 'viewer') {
+    return (
+      <ErrorBoundary>
+        <PermissionContext.Provider value={permissionValue}>
+          <div className="app-container">
+            <main className="main-content">
+              <Routes>
+                <Route path="/statistics" element={<StatisticsScreen />} />
+                <Route path="/history" element={<HistoryScreen />} />
+                <Route path="/game/:gameId" element={<GameSummaryScreen />} />
+                <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
+                <Route path="/graphs" element={<GraphsScreen />} />
+                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/shared-training" element={<SharedTrainingScreen />} />
+                <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
+                <Route path="*" element={<Navigate to="/statistics" replace />} />
+              </Routes>
+            </main>
+            <Navigation />
+          </div>
+        </PermissionContext.Provider>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <PermissionContext.Provider value={permissionValue}>
+        <div className="app-container">
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<NewGameScreen />} />
+              <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
+              <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
+              <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
+              <Route path="/history" element={<HistoryScreen />} />
+              <Route path="/game/:gameId" element={<GameSummaryScreen />} />
+              <Route path="/statistics" element={<StatisticsScreen />} />
+              <Route path="/settings" element={<SettingsScreen />} />
+              <Route path="/graphs" element={<GraphsScreen />} />
+              {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
+              {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
+              {role === 'admin' && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
+              <Route path="/shared-training" element={<SharedTrainingScreen />} />
+              <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+          {!hideNav && <Navigation />}
+        </div>
+      </PermissionContext.Provider>
+    </ErrorBoundary>
+  );
+}
+
+function LegacyApp() {
   const location = useLocation();
   const [role, setRole] = useState<PermissionRole | null>(null);
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -710,6 +867,10 @@ function App() {
       </PermissionContext.Provider>
     </ErrorBoundary>
   );
+}
+
+function App() {
+  return USE_SUPABASE ? <SupabaseApp /> : <LegacyApp />;
 }
 
 export default App;

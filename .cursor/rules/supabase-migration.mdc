@@ -1,0 +1,86 @@
+---
+description: Supabase migration standards — validation checklist, column mapping, audit requirements
+globs: "{src/database/**,src/utils/activityLogger.ts,src/hooks/useSupabaseAuth.ts,supabase/**}"
+alwaysApply: false
+---
+
+# Supabase Migration Standards
+
+## Migration Status
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| 1. Schema + RLS | DONE | 20 tables, RLS policies, indexes in `supabase/schema.sql` |
+| 2. Auth + Groups | DONE | Supabase Auth, group management, SQL functions in `supabase/002-auth-support.sql` |
+| 3. Core Data Layer | DONE | `supabaseCache.ts`, `migrateToSupabase.ts`, `storage.ts` dual branches |
+| 4. Training + Activity | DONE | `githubSync.ts` (7 functions), `activityLogger.ts` (6 functions) dual branches |
+| 5. Server-side AI | DONE | 4 Vercel Edge Functions + `apiProxy.ts` centralized proxy, 13 call sites migrated |
+| 6. Realtime | DONE | 11-table subscription, debounced cache refresh, `useRealtimeRefresh` hook on 6 screens, sync guards |
+| 7. Cleanup | PENDING | Remove legacy GitHub sync, localStorage keys, embedded token |
+| 8. Deploy | PENDING | Full test, merge to main, version bump to 6.0.0 |
+
+## Mandatory Validation After Every Change
+
+Every modification to Supabase-related code MUST pass these checks:
+
+### 1. Column Audit
+For every Supabase `.insert()`, `.upsert()`, `.update()`:
+- Cross-reference EVERY column name against `supabase/schema.sql`
+- Verify column types match (string→TEXT, number→INTEGER/NUMERIC, object→JSONB, array→JSONB)
+- Verify NOT NULL columns have fallback values
+- Verify FK columns reference valid IDs (UUIDs, not localStorage timestamp IDs)
+
+### 2. Read Mapping Audit
+For every Supabase `.select()`:
+- Verify snake_case→camelCase mapping matches the TypeScript interface
+- Verify JSONB fields are properly typed/cast
+- Verify null fallbacks for optional columns
+
+### 3. Delete Sync Audit
+When items can be removed from the app:
+- Verify corresponding DELETE logic exists in `pushToSupabase` or the relevant function
+- Never leave orphaned rows in Supabase
+
+### 4. TypeScript Verification
+```
+npx tsc --noEmit    # Must pass with ZERO errors
+```
+
+### 5. Lint Check
+Use ReadLints on all modified files — must have zero new errors.
+
+### 6. Unique Constraint Audit
+For every `.upsert()`:
+- Verify `onConflict` column(s) match the actual UNIQUE constraint in schema.sql
+- Example: `training_insights` has `UNIQUE(group_id, player_name)` → `onConflict: 'group_id,player_name'`
+
+## Key Architecture Decisions
+
+### Feature Flag Pattern
+```typescript
+if (USE_SUPABASE) {
+  // Supabase path — direct DB operations
+  const gid = getGroupId();
+  if (!gid) return fallback;
+  // ... supabase operations
+  return result;
+}
+// Legacy path — unchanged
+```
+
+### Cache-as-localStorage Pattern
+`supabaseCache.ts` presents a synchronous localStorage-like interface to all existing code. Writes are debounced and pushed to Supabase asynchronously. This avoids refactoring all 76+ storage functions.
+
+### ID Strategy
+- Legacy: timestamp-based string IDs (e.g., `"1709234567890"`)
+- Supabase: UUID v4 (e.g., `"a1b2c3d4-e5f6-..."`)
+- `storage.ts` generates UUIDs when `USE_SUPABASE = true`
+- Migration script (`migrateToSupabase.ts`) maps old IDs → new UUIDs via `IdMap`
+
+### Multi-Tenancy
+Every table has `group_id` column. RLS policies enforce `group_id` matches the user's group. `getGroupId()` from `supabaseCache.ts` provides the current group.
+
+## Supabase Project Details
+- **Region**: Europe (Frankfurt)
+- **Project URL**: `https://ursjltxklmxmapfvkttj.supabase.co`
+- **Client**: Initialized in `src/database/supabaseClient.ts`

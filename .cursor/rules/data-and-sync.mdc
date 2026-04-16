@@ -1,12 +1,45 @@
 ---
-description: Data layer — LocalStorage keys, GitHub cloud sync, token system, data integrity rules
-globs: "{src/database/**,src/types/index.ts}"
+description: Data layer — dual storage (localStorage + Supabase), cloud sync, token system, data integrity rules, migration architecture
+globs: "{src/database/**,src/types/index.ts,src/utils/activityLogger.ts,supabase/**}"
 alwaysApply: false
 ---
 
 # Data Layer & Cloud Sync
 
-## LocalStorage Keys
+## Feature Flag
+
+`USE_SUPABASE` in `src/database/config.ts` controls the active data backend. When `false`: localStorage + GitHub API. When `true`: Supabase PostgreSQL via `supabaseCache.ts`.
+
+## Supabase Architecture (Migration)
+
+### Schema
+- **20 tables** in `supabase/schema.sql`: groups, group_members, players, player_traits, games, game_players, game_forecasts, shared_expenses, paid_settlements, period_markers, chip_values, settings, pending_forecasts, chronicle_profiles, graph_insights, tts_pools, activity_log, training_pool, training_answers, training_insights
+- **Auth functions** in `supabase/002-auth-support.sql`: create_group, join_group_by_invite, link_member_to_player
+- All tables have **Row Level Security (RLS)** policies enforcing group-level isolation via `auth.uid()` + `group_id`
+- UUIDs for all primary keys; foreign keys enforce referential integrity
+
+### Cache Layer (`supabaseCache.ts`)
+- In-memory cache mirroring localStorage format for backward compatibility
+- `initSupabaseCache(groupId)` loads all data from Supabase on startup
+- Reads are synchronous from cache; writes debounce async pushes to Supabase
+- **Denormalization on read**: Supabase normalized tables → flat localStorage objects (e.g., game + shared_expenses + period_markers → single Game object)
+- **Normalization on write**: Flat objects → separate Supabase table inserts/upserts
+- **Delete sync**: When items are removed from cache (shared_expenses, game_players), corresponding Supabase rows are explicitly deleted
+
+### Migration Script (`migrateToSupabase.ts`)
+- One-time migration from localStorage to Supabase
+- Generates new UUIDs, maintains IdMap for cross-references
+- Handles orphaned player references (creates placeholders or nulls FK)
+- `checkGroupHasData()` prevents double-migration
+- `cleanGroupData()` for retry wipes
+
+### Dual-Branch Functions
+Files with `USE_SUPABASE` branches:
+- `src/database/storage.ts` — all ~76 data access functions
+- `src/database/githubSync.ts` — 7 training functions (fetchTrainingPool, uploadTrainingPool, fetchTrainingAnswers, writeTrainingAnswersWithRetry, fetchTrainingInsights, uploadTrainingInsights, removeFromTrainingPool)
+- `src/utils/activityLogger.ts` — 6 activity functions (logActivity, updateSessionActivity, fetchActivityLog, deleteActivityEntry, deleteDeviceEntries, clearActivityLog)
+
+## LocalStorage Keys (Legacy Mode)
 
 | Key | Content | Type |
 |-----|---------|------|
@@ -27,7 +60,7 @@ alwaysApply: false
 | `github_token` | Admin's personal GitHub token | `string` |
 | `poker_last_synced_version` | Last synced timestamp for conflict detection | `string` |
 
-## Cloud Sync Architecture
+## Cloud Sync Architecture (Legacy)
 
 ### GitHub as Backend
 - **Repo**: `LiorMoldovan/poker-manager` (GitHub Pages)
@@ -43,15 +76,13 @@ alwaysApply: false
 - **Non-admin**: Obfuscated embedded token from `embeddedToken.ts` (read-only sync + activity writes)
 - `getEffectiveToken(useMemberSyncToken)` decides which token to use
 
-### Sync Flow
-- `syncToCloud()` — pushes local data to GitHub (admin or memberSync)
-- `syncFromCloud()` — pulls remote data; uses `replaceGamesWithRemote` when remote is newer (compares `lastUpdated` timestamps)
-- Non-admin users pull on app open
-
 ## Data Integrity Rules
 
 1. **Zero-sum**: Game profits across all players must sum to exactly zero
-2. **Timestamp-based sync**: Always use fresh `lastUpdated` when pushing to force remote devices to sync
-3. **Forecast linkage**: `linkForecastToGame()` copies pending forecast (including `preGameTeaser`) into game record
-4. **Backup on game end**: `createGameEndBackup()` auto-creates backup after each completed game
-5. **Storage limits**: ~5-10MB per origin; `canWriteToStorage()` checks before large writes
+2. **UUID mapping**: Supabase uses UUIDs; localStorage uses timestamp IDs. Migration script maps between them
+3. **Foreign keys**: Supabase enforces referential integrity; orphaned references get placeholder records or nulled FKs
+4. **Delete sync**: Removing items from cache must delete corresponding Supabase rows (shared_expenses, game_players)
+5. **Timestamp fallbacks**: Old localStorage data may lack `createdAt`/`date` — always provide `|| new Date().toISOString()` fallbacks for NOT NULL columns
+6. **Duplicate prevention**: `checkGroupHasData()` before migration; unique constraints on upserts
+7. **Forecast linkage**: `linkForecastToGame()` copies pending forecast (including `preGameTeaser`) into game record
+8. **Backup on game end**: `createGameEndBackup()` auto-creates backup after each completed game

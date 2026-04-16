@@ -11,8 +11,8 @@ alwaysApply: true
 
 - **Stack**: React 19 + TypeScript 5 (strict) + Vite 6
 - **Styling**: Inline React styles + CSS variables (dark theme in `src/styles/index.css`)
-- **Data**: LocalStorage (no backend/database)
-- **Cloud**: GitHub Pages repo as storage via GitHub API
+- **Data**: LocalStorage (legacy) / **Supabase PostgreSQL** (migration in progress, controlled by `USE_SUPABASE` in `src/database/config.ts`)
+- **Cloud**: GitHub Pages repo via GitHub API (legacy) / **Supabase** direct DB (migration)
 - **Deployment**: Vercel (auto-deploys from `main` branch)
 - **Dev server**: `npm run dev` → **http://localhost:3000** (NEVER use port 3001)
 - **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
@@ -47,10 +47,16 @@ src/
 │   ├── TrainingScreen.tsx     # Poker training hub with category selection
 │   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
 │   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
+├── hooks/
+│   └── useSupabaseAuth.ts     # Supabase auth hook: session, group membership, login/signup
 ├── database/
-│   ├── storage.ts             # All LocalStorage CRUD: players, games, gamePlayers, settings, forecasts, backups, chronicles
-│   ├── githubSync.ts          # GitHub API: sync data, backups, training data, activity log
-│   └── embeddedToken.ts       # Obfuscated GitHub token for non-admin users (read sync + activity writes)
+│   ├── storage.ts             # Dual data layer: localStorage (legacy) OR supabaseCache (migration)
+│   ├── config.ts              # USE_SUPABASE feature flag
+│   ├── supabaseClient.ts      # Supabase client initialization (anon key)
+│   ├── supabaseCache.ts       # In-memory cache syncing to Supabase (denormalize/normalize mappers)
+│   ├── migrateToSupabase.ts   # One-time migration: localStorage → Supabase (UUID mapping, FK handling)
+│   ├── githubSync.ts          # Dual: GitHub API (legacy) OR Supabase (training pool/answers/insights)
+│   └── embeddedToken.ts       # Obfuscated GitHub token for non-admin users (legacy)
 └── utils/
     ├── geminiAI.ts            # ALL Gemini AI: forecasts, summaries, chronicles, graph insights, comparison
     ├── calculations.ts        # Currency formatting, Hebrew dates, formatHebrewHalf, utility math
@@ -77,7 +83,8 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
 
 ## Auth & Permissions
 
-PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
+**Legacy** (`USE_SUPABASE = false`): PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
+**Supabase** (`USE_SUPABASE = true`): Supabase Auth (email/password). Group-based multi-tenancy. Hook: `useSupabaseAuth.ts`. Auth screens: `AuthScreen.tsx`, `GroupSetupScreen.tsx`.
 
 | Role | PIN | Can Do |
 |------|-----|--------|

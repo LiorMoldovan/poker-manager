@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import {
   LineChart,
@@ -127,7 +128,10 @@ const GraphsScreen = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadData(), []));
 
   const loadData = () => {
     const allPlayersData = getAllPlayers();

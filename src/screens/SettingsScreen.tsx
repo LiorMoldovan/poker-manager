@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair } from '../types';
 import { cleanNumber } from '../utils/calculations';
@@ -30,6 +31,8 @@ import {
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, setElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
+import { proxyGeminiGenerate, proxyElevenLabsTTS } from '../utils/apiProxy';
+import { USE_SUPABASE } from '../database/config';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog, deleteDeviceEntries } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
@@ -177,6 +180,9 @@ const SettingsScreen = () => {
       return a.name.localeCompare(b.name, 'he');
     });
   };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadData(), []));
 
   const loadData = () => {
     setSettings(getSettings());
@@ -978,8 +984,8 @@ const SettingsScreen = () => {
             </div>
           )}
 
-          {/* Storage Usage Info */}
-          {storageUsage && (
+          {/* Storage Usage Info - only relevant in localStorage mode */}
+          {!USE_SUPABASE && storageUsage && (
             <div style={{ 
               background: storageUsage.status === 'critical' 
                 ? 'rgba(239, 68, 68, 0.1)' 
@@ -1144,8 +1150,50 @@ const SettingsScreen = () => {
             </div>
           </div>
 
-          {/* GitHub Cloud Sync - Admin Only */}
-          {role === 'admin' && (
+          {/* Cloud Sync & API Keys - Admin Only */}
+          {role === 'admin' && USE_SUPABASE && (
+            <div style={{ 
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem' }}>☁️</span>
+                <p style={{ fontSize: '0.8rem', fontWeight: '600', color: '#3B82F6', margin: 0 }}>
+                  Supabase Cloud
+                </p>
+                <span style={{ 
+                  fontSize: '0.65rem', 
+                  background: 'rgba(16, 185, 129, 0.2)', 
+                  color: '#10B981', 
+                  padding: '0.15rem 0.5rem', 
+                  borderRadius: '10px',
+                  fontWeight: '600'
+                }}>
+                  Connected
+                </span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                נתונים מסונכרנים בזמן אמת דרך Supabase Realtime. כל שינוי מופיע אוטומטית אצל כל המשתמשים.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div style={{ flex: 1, background: 'rgba(168, 85, 247, 0.1)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#A855F7', fontWeight: '600' }}>🔑 Gemini AI</span>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>Server-managed</p>
+                </div>
+                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '600' }}>🎙️ ElevenLabs</span>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>Server-managed</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Legacy GitHub Cloud Sync - Admin Only */}
+          {role === 'admin' && !USE_SUPABASE && (
             <div style={{ 
               background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
               borderRadius: '8px',
@@ -1353,11 +1401,7 @@ const SettingsScreen = () => {
                   <button className="btn btn-sm" onClick={async () => {
                     setIsTestingEl(true);
                     try {
-                      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
-                        body: JSON.stringify({ text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' }),
-                      });
+                      const res = await proxyElevenLabsTTS(elKey, 'CwhRBWXzGAHq8TQ4Fs17', { text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' });
                       if (res.ok) {
                         const blob = await res.blob();
                         if (blob.size > 100) {
@@ -1435,20 +1479,13 @@ const SettingsScreen = () => {
                     const ttsTests: ModelTestResult[] = [];
                     for (const model of ttsModels) {
                       try {
-                        const res = await fetch(
-                          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-                          {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              contents: [{ parts: [{ text: 'קרא את הטקסט הבא בעברית:\n\nשלום, זוהי בדיקת מערכת הקול. הכל תקין.' }] }],
-                              generationConfig: {
-                                responseModalities: ['AUDIO'],
-                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                              },
-                            }),
-                          }
-                        );
+                        const res = await proxyGeminiGenerate('v1beta', model, geminiKey, {
+                          contents: [{ parts: [{ text: 'קרא את הטקסט הבא בעברית:\n\nשלום, זוהי בדיקת מערכת הקול. הכל תקין.' }] }],
+                          generationConfig: {
+                            responseModalities: ['AUDIO'],
+                            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                          },
+                        });
                         const shortName = 'Flash TTS';
                         const remStr = res.headers.get('x-ratelimit-remaining');
                         const limStr = res.headers.get('x-ratelimit-limit');
@@ -1470,11 +1507,7 @@ const SettingsScreen = () => {
                     if (elKey) {
                       try {
                         const [ttsRes, elUsage] = await Promise.all([
-                          fetch('https://api.elevenlabs.io/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17?output_format=mp3_22050_32', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'xi-api-key': elKey },
-                            body: JSON.stringify({ text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' }),
-                          }),
+                          proxyElevenLabsTTS(elKey, 'CwhRBWXzGAHq8TQ4Fs17', { text: 'בדיקה', model_id: 'eleven_v3', language_code: 'he' }),
                           getElevenLabsUsageLive(elKey),
                         ]);
                         const remaining = elUsage?.remaining;

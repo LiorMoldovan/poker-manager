@@ -2,7 +2,9 @@
 
 ## What Is This Project?
 
-A Hebrew-language web app for managing friendly poker nights among ~8-10 regular players. Tracks games, calculates settlements, generates AI-powered narratives, forecasts, statistics, and training. No backend — LocalStorage is the database, GitHub Pages is cloud sync, Vercel handles deployment.
+A Hebrew-language web app for managing friendly poker nights among ~8-10 regular players. Tracks games, calculates settlements, generates AI-powered narratives, forecasts, statistics, and training.
+
+**Active migration**: Moving from LocalStorage + GitHub Pages to **Supabase** (PostgreSQL). Controlled by `USE_SUPABASE` flag in `src/database/config.ts`. When `false` (current live): localStorage + GitHub. When `true`: Supabase. The `supabase-migration` branch contains all migration work.
 
 ## Tech Stack
 
@@ -13,10 +15,11 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 | Charts | Recharts |
 | Screenshots | html2canvas |
 | AI | Google Gemini API (gemini-2.0-flash) |
-| Cloud sync | GitHub API → GitHub Pages repo |
+| Cloud sync | GitHub API → GitHub Pages repo (legacy) / **Supabase** (migration) |
+| Backend DB | **Supabase** (PostgreSQL + RLS + Auth) — migration in progress |
 | Deployment | Vercel (auto-deploy from `main`) |
 | Dev server | `npm run dev` → **http://localhost:3000** (NEVER 3001) |
-| Data | LocalStorage (client-side only) |
+| Data | LocalStorage (legacy) / Supabase PostgreSQL (migration) |
 | Styling | Inline React styles + CSS variables (dark theme) |
 | Font | Outfit (Google Fonts) |
 
@@ -28,8 +31,8 @@ Do NOT commit, push, or merge unless the user explicitly asks. When they say "me
 ### 2. Hebrew RTL
 All user-facing text in Hebrew. Use `direction: 'rtl'` on containers. Use `gap` not `marginRight` in flex layouts.
 
-### 3. No Backend
-Everything is client-side. LocalStorage = database. GitHub Pages repo = cloud sync. No server, no API routes.
+### 3. Dual Data Layer (Migration In Progress)
+**Legacy** (`USE_SUPABASE = false`): LocalStorage = database, GitHub Pages = cloud sync. **New** (`USE_SUPABASE = true`): Supabase PostgreSQL via `supabaseCache.ts` (in-memory cache that syncs to Supabase). Feature flag in `src/database/config.ts` controls which path runs. All `storage.ts` functions have `USE_SUPABASE` branches. Training functions in `githubSync.ts` and activity functions in `activityLogger.ts` also have branches.
 
 ### 4. Inline Styles
 No CSS modules, no styled-components, no Tailwind. Follow existing inline React style patterns.
@@ -58,16 +61,23 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
 ```
 
 ### Auth
-PIN-based. 4 roles: admin (2351), member (2580), memberSync (0852), viewer (9876). Stored in sessionStorage.
+**Legacy** (`USE_SUPABASE = false`): PIN-based. 4 roles: admin (2351), member (2580), memberSync (0852), viewer (9876). Stored in sessionStorage.
+**Supabase** (`USE_SUPABASE = true`): Supabase Auth (email/password). Group-based multi-tenancy with invite codes. Hook: `src/hooks/useSupabaseAuth.ts`. SQL functions: `create_group`, `join_group_by_invite`, `link_member_to_player`.
 
 ### AI Pipeline
-Admin generates → cached in localStorage → synced to GitHub → non-admin users pull from cloud. All AI functions in `src/utils/geminiAI.ts`.
+Admin generates → cached in localStorage → synced to GitHub (legacy) or Supabase (migration) → non-admin users pull from cloud. All AI functions in `src/utils/geminiAI.ts`.
+**Legacy** (`USE_SUPABASE = false`): API keys in localStorage, direct client-side calls to Google/ElevenLabs.
+**Supabase** (`USE_SUPABASE = true`): API keys in Vercel env vars (`GEMINI_API_KEY`, `ELEVENLABS_API_KEY`). All calls routed through Vercel Edge Functions (`/api/gemini`, `/api/elevenlabs-tts`, etc.) via `src/utils/apiProxy.ts`.
 
 ### Cloud Sync
-Admin pushes via personal GitHub token. Non-admin reads via embedded obfuscated token (`embeddedToken.ts`). Sync file: `public/full-backup.json` on `LiorMoldovan/poker-manager`.
+**Legacy**: Admin pushes via personal GitHub token. Non-admin reads via embedded obfuscated token (`embeddedToken.ts`). Sync file: `public/full-backup.json` on `LiorMoldovan/poker-manager`.
+**Supabase**: Direct DB reads/writes through `supabaseCache.ts`. RLS policies enforce group isolation. Supabase Realtime subscriptions on 11 tables auto-refresh the cache (500ms debounce). `syncToCloud`/`syncFromCloud` are no-ops. Screens use `useRealtimeRefresh` hook for live updates.
 
 ### Activity Tracking
-Silent tracking of non-admin sessions. Device fingerprint (GPU, cores, RAM, canvas hash) + screens visited + duration. Stored in `public/activity-log.json` on GitHub. Admin views in Settings → Activity tab.
+Silent tracking of non-admin sessions. Device fingerprint (GPU, cores, RAM, canvas hash) + screens visited + duration.
+**Legacy**: Stored in `public/activity-log.json` on GitHub.
+**Supabase**: Stored in `activity_log` table with `group_id` isolation.
+Admin views in Settings → Activity tab.
 
 ## File Map
 
@@ -75,15 +85,19 @@ Silent tracking of non-admin sessions. Device fingerprint (GPU, cores, RAM, canv
 |------|-------|
 | **Entry** | `src/main.tsx`, `src/App.tsx` |
 | **Types** | `src/types/index.ts` (ALL interfaces) |
-| **Auth** | `src/permissions.ts`, `src/components/PinLock.tsx` |
-| **Storage** | `src/database/storage.ts` (LocalStorage CRUD) |
-| **Cloud** | `src/database/githubSync.ts`, `src/database/embeddedToken.ts` |
+| **Auth** | `src/permissions.ts`, `src/components/PinLock.tsx`, `src/hooks/useSupabaseAuth.ts` |
+| **Storage** | `src/database/storage.ts` (dual: localStorage OR supabaseCache) |
+| **Supabase** | `src/database/supabaseClient.ts`, `src/database/supabaseCache.ts`, `src/database/config.ts`, `src/database/migrateToSupabase.ts` |
+| **Cloud** | `src/database/githubSync.ts` (dual: GitHub OR Supabase for training), `src/database/embeddedToken.ts` |
 | **AI** | `src/utils/geminiAI.ts` (forecasts, summaries, chronicles, graph insights) |
-| **Screens** | `src/screens/*.tsx` (12 screen components) |
+| **Screens** | `src/screens/*.tsx` (12 screen components), `src/screens/AuthScreen.tsx`, `src/screens/GroupSetupScreen.tsx` |
 | **Nav** | `src/components/Navigation.tsx` (bottom tab bar) |
-| **Utils** | `src/utils/calculations.ts` (formatting), `milestones.ts`, `comboHistory.ts`, `activityLogger.ts`, `sharing.ts`, `tts.ts`, `pokerTraining.ts` |
+| **Utils** | `src/utils/calculations.ts` (formatting), `milestones.ts`, `comboHistory.ts`, `activityLogger.ts` (dual: GitHub OR Supabase), `sharing.ts`, `tts.ts`, `pokerTraining.ts` |
 | **Styles** | `src/styles/index.css` (CSS variables, dark theme) |
 | **Version** | `src/version.ts` (APP_VERSION + CHANGELOG) |
+| **API Proxy** | `src/utils/apiProxy.ts` (centralizes USE_SUPABASE branching for all external API calls) |
+| **API Routes** | `api/gemini.ts`, `api/gemini-models.ts`, `api/elevenlabs-tts.ts`, `api/elevenlabs-usage.ts` (Vercel Edge Functions) |
+| **Schema** | `supabase/schema.sql` (20 tables), `supabase/002-auth-support.sql` (auth functions) |
 | **Config** | `vite.config.ts`, `tsconfig.json`, `vercel.json` |
 
 ## User Preferences

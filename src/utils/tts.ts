@@ -1,3 +1,5 @@
+import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage, isServerManagedKey } from './apiProxy';
+
 // Gender-aware Hebrew number words for TTS
 // feminine=true for feminine nouns (קניות, פעמים, דקות)
 // feminine=false for masculine nouns (נצחונות, הפסדים, משחקים, שחקנים, אחוז, שקלים)
@@ -164,7 +166,7 @@ function ttsStatus(text: string, type: 'info' | 'warn' | 'success' | 'error' = '
 // Gemini TTS (uses same API key as AI features — best Hebrew quality)
 // ---------------------------------------------------------------------------
 
-const GEMINI_TTS_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+// Gemini TTS URL now routed through apiProxy.ts (proxyGeminiGenerateWithSignal)
 const GEMINI_TTS_MODELS = [
   'gemini-2.5-flash-preview-tts',
 ];
@@ -295,27 +297,19 @@ async function speakWithGeminiTTS(messages: string[], apiKey: string, onBeforePl
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), GEMINI_FETCH_TIMEOUT_MS);
 
-      const res = await fetch(
-        `${GEMINI_TTS_URL}${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: fullPrompt }] }],
-            generationConfig: {
-              responseModalities: ['AUDIO'],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: voice,
-                  },
-                },
+      const res = await proxyGeminiGenerateWithSignal('v1beta', model, apiKey, {
+        contents: [{ parts: [{ text: fullPrompt }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: voice,
               },
             },
-          }),
-        }
-      );
+          },
+        },
+      }, controller.signal);
       clearTimeout(timeoutId);
       const elapsed = Date.now() - t0;
 
@@ -410,7 +404,7 @@ async function playAudioUrl(url: string): Promise<void> {
 // Requires API key with Text to Speech + Voices Read permissions
 // ---------------------------------------------------------------------------
 
-const ELEVENLABS_API = 'https://api.elevenlabs.io/v1/text-to-speech';
+// ElevenLabs TTS URL now routed through apiProxy.ts (proxyElevenLabsTTS)
 const ELEVENLABS_VOICES = [
   'CwhRBWXzGAHq8TQ4Fs17',  // Roger
   'JBFqnCBsd6RMkjVDRZzb',  // George
@@ -420,6 +414,7 @@ const ELEVENLABS_TIMEOUT_MS = 10000;
 const ELEVENLABS_KEY_STORAGE = 'elevenlabs_api_key';
 
 export const getElevenLabsApiKey = (): string | null => {
+  if (isServerManagedKey()) return 'server-managed';
   return localStorage.getItem(ELEVENLABS_KEY_STORAGE);
 };
 
@@ -429,9 +424,7 @@ export const setElevenLabsApiKey = (key: string): void => {
 
 export async function getElevenLabsUsageLive(apiKey: string): Promise<{ used: number; limit: number; remaining: number; resetDate: string } | null> {
   try {
-    const res = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
-      headers: { 'xi-api-key': apiKey },
-    });
+    const res = await proxyElevenLabsUsage(apiKey);
     if (!res.ok) return null;
     const data = await res.json();
     const used = data.character_count ?? 0;
@@ -520,21 +513,12 @@ async function speakWithElevenLabs(messages: string[], apiKey: string, onBeforeP
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), ELEVENLABS_TIMEOUT_MS);
 
-    const res = await fetch(
-      `${ELEVENLABS_API}/${voice}?output_format=mp3_22050_32`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': apiKey,
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          text: combinedText,
-          model_id: 'eleven_v3',
-          language_code: 'he',
-        }),
-      }
+    const res = await proxyElevenLabsTTS(
+      apiKey,
+      voice,
+      { text: combinedText, model_id: 'eleven_v3', language_code: 'he' },
+      'mp3_22050_32',
+      controller.signal
     );
     clearTimeout(timeoutId);
     const elapsed = Date.now() - t0;

@@ -1,6 +1,7 @@
 import { getGeminiApiKey, API_CONFIGS, getModelDisplayName, runGeminiTextPrompt } from './geminiAI';
 import { getPlayerStats, getAllPlayers } from '../database/storage';
 import { PlayerStats } from '../types';
+import { proxyGeminiGenerate } from './apiProxy';
 
 let lastUsedTrainingModel = '';
 export const getLastTrainingModel = () => lastUsedTrainingModel;
@@ -638,24 +639,17 @@ export const generateTrainingHand = async (
   let lastError = '';
 
   for (const config of FULL_MODE_MODELS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-
     const MAX_VALIDATION_RETRIES = 2;
     for (let attempt = 0; attempt <= MAX_VALIDATION_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.75 + attempt * 0.05,
-            topP: 0.9,
-            maxOutputTokens: 3000,
-            responseMimeType: 'application/json',
-          },
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.75 + attempt * 0.05,
+          topP: 0.9,
+          maxOutputTokens: 3000,
+          responseMimeType: 'application/json',
+        },
       });
 
       if (!response.ok) {
@@ -888,22 +882,15 @@ export const generateQuickBatch = async (
   let lastError = '';
 
   for (const config of QUICK_MODE_MODELS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.75,
-            topP: 0.9,
-            maxOutputTokens: 4096,
-            responseMimeType: 'application/json',
-          },
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.75,
+          topP: 0.9,
+          maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+        },
       });
 
       if (!response.ok) {
@@ -1703,22 +1690,16 @@ export const generatePoolBatch = async (
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const config = POOL_MODEL;
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.85,
-            topP: 0.95,
-            maxOutputTokens: 16384,
-            responseMimeType: 'application/json',
-          },
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.85,
+          topP: 0.95,
+          maxOutputTokens: 16384,
+          responseMimeType: 'application/json',
+        },
       });
 
       if (!response.ok) {

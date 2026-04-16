@@ -31,6 +31,7 @@ import {
   clearPendingUploadsForPlayer,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
+import { proxyGeminiGenerate } from '../utils/apiProxy';
 import { shareToWhatsApp } from '../utils/sharing';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
@@ -1127,17 +1128,10 @@ JSON בלבד, בלי markdown:`;
         let lastError = '';
         for (const model of models) {
           try {
-            const resp = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: prompt }] }],
-                  generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-                }),
-              }
-            );
+            const resp = await proxyGeminiGenerate('v1beta', model, apiKey, {
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+            });
             if (!resp.ok) {
               const errBody = await resp.text().catch(() => '');
               const errMsg = errBody.includes('RESOURCE_EXHAUSTED') ? 'חריגה ממכסת API' :

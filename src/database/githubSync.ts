@@ -9,9 +9,12 @@
  * - Version tracking prevents unnecessary syncs
  */
 
-import { Player, Game, GamePlayer, PendingForecast, TrainingPool, TrainingAnswersFile, TrainingInsightsFile } from '../types';
+import { Player, Game, GamePlayer, PendingForecast, TrainingPool, TrainingAnswersFile, TrainingInsightsFile, PoolScenario } from '../types';
 import { getEmbeddedToken } from './embeddedToken';
 import { ChronicleEntry, GraphInsightsEntry } from './storage';
+import { USE_SUPABASE } from './config';
+import { supabase } from './supabaseClient';
+import { getGroupId } from './supabaseCache';
 
 // GitHub repository info
 export const GITHUB_OWNER = 'LiorMoldovan';
@@ -537,6 +540,9 @@ export const syncFromCloud = async (): Promise<{
   gamesChanged?: number;
   playersChanged?: number;
 }> => {
+  if (USE_SUPABASE) {
+    return { success: true, message: 'Supabase mode — data synced via Realtime', synced: false };
+  }
   try {
     const remoteData = await fetchFromGitHub();
     
@@ -650,6 +656,9 @@ export const syncToCloud = async (useMemberSyncToken: boolean = false): Promise<
   success: boolean;
   message: string;
 }> => {
+  if (USE_SUPABASE) {
+    return { success: true, message: 'Supabase mode — data persisted via cache' };
+  }
   const token = getEffectiveToken(useMemberSyncToken);
   
   if (!token) {
@@ -900,27 +909,125 @@ const fetchGitHubJson = async <T>(path: string, token?: string): Promise<T | nul
 };
 
 export const uploadTrainingPool = async (pool: TrainingPool): Promise<{ success: boolean; message: string }> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return { success: false, message: 'No active group' };
+    await supabase.from('training_pool').delete().eq('group_id', gid);
+    if (pool.scenarios.length > 0) {
+      const rows = pool.scenarios.map(s => ({
+        group_id: gid,
+        scenario_id: s.poolId,
+        category: s.category,
+        category_id: s.categoryId,
+        scenario: s,
+        reviewed_at: s.reviewedAt || null,
+      }));
+      for (let i = 0; i < rows.length; i += 50) {
+        const { error } = await supabase.from('training_pool').insert(rows.slice(i, i + 50));
+        if (error) return { success: false, message: error.message };
+      }
+    }
+    return { success: true, message: `${pool.totalScenarios} scenarios uploaded` };
+  }
   const token = getEffectiveToken(false);
   if (!token) return { success: false, message: 'No GitHub token' };
   return uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Training pool update - ${pool.totalScenarios} scenarios`);
 };
 
 export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return null;
+    const { data, error } = await supabase.from('training_pool').select('*').eq('group_id', gid);
+    if (error || !data || data.length === 0) return null;
+    const scenarios: PoolScenario[] = data.map(row => ({
+      ...(row.scenario as Record<string, unknown>),
+      poolId: row.scenario_id as string,
+      categoryId: row.category_id as string,
+      category: row.category as string,
+    } as PoolScenario));
+    const byCategory: Record<string, number> = {};
+    scenarios.forEach(s => { byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1; });
+    const latestCreatedAt = data.reduce((max, row) => {
+      const t = (row.created_at as string) || '';
+      return t > max ? t : max;
+    }, '');
+    return {
+      generatedAt: latestCreatedAt || new Date().toISOString(),
+      totalScenarios: scenarios.length,
+      byCategory,
+      scenarios,
+    };
+  }
   const token = getEffectiveToken(true);
   return fetchGitHubJson<TrainingPool>(GITHUB_TRAINING_POOL_PATH, token || undefined);
 };
 
 export const fetchTrainingAnswers = async (): Promise<TrainingAnswersFile | null> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return null;
+    const { data: rows } = await supabase.from('training_answers').select('*').eq('group_id', gid);
+    if (!rows || rows.length === 0) return { lastUpdated: '', players: [] };
+    return {
+      lastUpdated: rows.reduce((latest, r) => ((r.updated_at as string) || '') > latest ? (r.updated_at as string) : latest, ''),
+      players: rows.map(row => {
+        const stats = (row.stats || {}) as Record<string, unknown>;
+        return {
+          playerName: row.player_name as string,
+          sessions: (row.sessions || []) as TrainingAnswersFile['players'][0]['sessions'],
+          totalQuestions: (stats.totalQuestions as number) || 0,
+          totalCorrect: (stats.totalCorrect as number) || 0,
+          accuracy: (stats.accuracy as number) || 0,
+          reports: (row.reports || []) as TrainingAnswersFile['players'][0]['reports'],
+          pendingReportMilestones: (stats.pendingReportMilestones as number[]) || [],
+        };
+      }),
+    };
+  }
   const token = getEffectiveToken(true);
   return fetchGitHubJson<TrainingAnswersFile>(GITHUB_TRAINING_ANSWERS_PATH, token || undefined);
 };
 
 export const fetchTrainingInsights = async (): Promise<TrainingInsightsFile | null> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return null;
+    const { data: rows } = await supabase.from('training_insights').select('*').eq('group_id', gid);
+    if (!rows || rows.length === 0) return { lastUpdated: '', insights: {} };
+    const insights: TrainingInsightsFile['insights'] = {};
+    for (const row of rows) {
+      const data = row.insights as Record<string, unknown>;
+      insights[row.player_name as string] = {
+        generatedAt: (data.generatedAt as string) || '',
+        sessionsAtGeneration: (data.sessionsAtGeneration as number) || 0,
+        improvement: (data.improvement as string) || '',
+      };
+    }
+    return {
+      lastUpdated: rows.reduce((latest, r) => ((r.updated_at as string) || '') > latest ? (r.updated_at as string) : latest, ''),
+      insights,
+    };
+  }
   const token = getEffectiveToken(true);
   return fetchGitHubJson<TrainingInsightsFile>(GITHUB_TRAINING_INSIGHTS_PATH, token || undefined);
 };
 
 export const uploadTrainingInsights = async (data: TrainingInsightsFile): Promise<{ success: boolean; message: string }> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return { success: false, message: 'No active group' };
+    for (const [playerName, insight] of Object.entries(data.insights)) {
+      const { error } = await supabase.from('training_insights').upsert({
+        group_id: gid,
+        player_name: playerName,
+        insights: insight,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'group_id,player_name' });
+      if (error) return { success: false, message: error.message };
+    }
+    return { success: true, message: 'Insights uploaded' };
+  }
   const token = getEffectiveToken(false);
   if (!token) return { success: false, message: 'No GitHub token' };
   return uploadGitHubFile(token, GITHUB_TRAINING_INSIGHTS_PATH, data, 'Training insights update');
@@ -928,8 +1035,36 @@ export const uploadTrainingInsights = async (data: TrainingInsightsFile): Promis
 
 export const writeTrainingAnswersWithRetry = async (
   mutate: (data: TrainingAnswersFile) => TrainingAnswersFile,
-  keepalive = false
+  _keepalive = false
 ): Promise<boolean> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return false;
+    try {
+      const existing = await fetchTrainingAnswers() || { lastUpdated: '', players: [] };
+      const updated = mutate(existing);
+      for (const player of updated.players) {
+        await supabase.from('training_answers').upsert({
+          group_id: gid,
+          player_name: player.playerName,
+          sessions: player.sessions,
+          stats: {
+            totalQuestions: player.totalQuestions,
+            totalCorrect: player.totalCorrect,
+            accuracy: player.accuracy,
+            pendingReportMilestones: player.pendingReportMilestones,
+          },
+          reports: player.reports || [],
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'group_id,player_name' });
+      }
+      return true;
+    } catch (err) {
+      console.warn('Training answers Supabase write failed:', err);
+      return false;
+    }
+  }
+  const keepalive = _keepalive;
   const token = getEffectiveToken(true);
   if (!token) return false;
 
@@ -984,6 +1119,30 @@ export const writeTrainingAnswersWithRetry = async (
 };
 
 export const removeFromTrainingPool = async (poolIdsToRemove: string[]): Promise<{ success: boolean; message: string }> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return { success: false, message: 'No active group' };
+    const { error } = await supabase.from('training_pool')
+      .delete()
+      .eq('group_id', gid)
+      .in('scenario_id', poolIdsToRemove);
+    if (error) return { success: false, message: error.message };
+    const cached = localStorage.getItem('training_pool_cached');
+    if (cached) {
+      try {
+        const pool = JSON.parse(cached) as TrainingPool;
+        const removeSet = new Set(poolIdsToRemove);
+        pool.scenarios = pool.scenarios.filter(s => !removeSet.has(s.poolId));
+        pool.totalScenarios = pool.scenarios.length;
+        pool.byCategory = {};
+        pool.scenarios.forEach(s => { pool.byCategory[s.categoryId] = (pool.byCategory[s.categoryId] || 0) + 1; });
+        pool.generatedAt = new Date().toISOString();
+        localStorage.setItem('training_pool_cached', JSON.stringify(pool));
+        localStorage.setItem('training_pool_generatedAt', pool.generatedAt);
+      } catch { /* ignore */ }
+    }
+    return { success: true, message: `Removed ${poolIdsToRemove.length} scenarios` };
+  }
   const token = getEffectiveToken(false);
   if (!token) return { success: false, message: 'No GitHub token' };
 

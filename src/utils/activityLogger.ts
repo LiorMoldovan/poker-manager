@@ -1,6 +1,9 @@
 import { ActivityLogEntry, DeviceFingerprint, PermissionRole } from '../types';
 import { getEmbeddedToken } from '../database/embeddedToken';
 import { GITHUB_OWNER, GITHUB_REPO, GITHUB_ACTIVITY_PATH, GITHUB_BRANCH } from '../database/githubSync';
+import { USE_SUPABASE } from '../database/config';
+import { supabase } from '../database/supabaseClient';
+import { getGroupId } from '../database/supabaseCache';
 
 const DEVICE_ID_KEY = 'poker_device_id';
 const MAX_LOG_ENTRIES = 200;
@@ -318,7 +321,25 @@ export const logActivity = async (role: PermissionRole, playerName?: string): Pr
   lastPushedScreens = [];
   saveSessionBuffer(entry);
 
-  // Push immediately on login (first entry), then cooldown applies for updates
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    await supabase.from('activity_log').insert({
+      group_id: gid,
+      device_id: entry.deviceId,
+      role: entry.role,
+      timestamp: entry.timestamp,
+      device: entry.device,
+      screen_size: entry.screenSize,
+      screens_visited: entry.screensVisited,
+      session_duration: entry.sessionDuration,
+      last_active: entry.lastActive,
+      fingerprint: entry.fingerprint,
+      player_name: entry.playerName || null,
+    });
+    markPushed();
+    return;
+  }
+
   const token = getEmbeddedToken();
   if (!token) return;
 
@@ -347,13 +368,49 @@ export const updateSessionActivity = async (
     saveSessionBuffer(buffered);
   }
 
-  // Only push to GitHub if cooldown expired OR this is a keepalive (app closing)
+  if (USE_SUPABASE) {
+    if (keepalive || shouldPushNow()) {
+      const entry = loadSessionBuffer();
+      if (!entry) return;
+      await supabase.from('activity_log').update({
+        screens_visited: entry.screensVisited,
+        session_duration: entry.sessionDuration,
+        last_active: entry.lastActive,
+      }).eq('device_id', entry.deviceId).eq('timestamp', entry.timestamp);
+      markPushed();
+      lastPushedScreens = [...(entry.screensVisited || [])];
+    }
+    return;
+  }
+
   if (keepalive || shouldPushNow()) {
     await pushBufferToGitHub(keepalive);
   }
 };
 
 export const fetchActivityLog = async (): Promise<ActivityLogEntry[]> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return [];
+    const { data } = await supabase.from('activity_log')
+      .select('*')
+      .eq('group_id', gid)
+      .order('timestamp', { ascending: false })
+      .limit(MAX_LOG_ENTRIES);
+    return (data || []).map(row => ({
+      deviceId: row.device_id as string,
+      role: row.role as PermissionRole,
+      timestamp: row.timestamp as string,
+      device: (row.device || '') as string,
+      screenSize: (row.screen_size || '') as string,
+      screensVisited: (row.screens_visited || []) as string[],
+      sessionDuration: (row.session_duration || 0) as number,
+      lastActive: (row.last_active || '') as string,
+      fingerprint: (row.fingerprint || {}) as DeviceFingerprint,
+      playerName: row.player_name as string | undefined,
+    }));
+  }
+
   const token = getEmbeddedToken();
   if (!token) return [];
 
@@ -362,6 +419,14 @@ export const fetchActivityLog = async (): Promise<ActivityLogEntry[]> => {
 };
 
 export const deleteActivityEntry = async (deviceId: string, timestamp: string): Promise<boolean> => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('activity_log')
+      .delete()
+      .eq('device_id', deviceId)
+      .eq('timestamp', timestamp);
+    return !error;
+  }
+
   const token = getEmbeddedToken();
   if (!token) return false;
 
@@ -373,6 +438,13 @@ export const deleteActivityEntry = async (deviceId: string, timestamp: string): 
 };
 
 export const deleteDeviceEntries = async (deviceId: string): Promise<boolean> => {
+  if (USE_SUPABASE) {
+    const { error } = await supabase.from('activity_log')
+      .delete()
+      .eq('device_id', deviceId);
+    return !error;
+  }
+
   const token = getEmbeddedToken();
   if (!token) return false;
 
@@ -384,6 +456,15 @@ export const deleteDeviceEntries = async (deviceId: string): Promise<boolean> =>
 };
 
 export const clearActivityLog = async (): Promise<boolean> => {
+  if (USE_SUPABASE) {
+    const gid = getGroupId();
+    if (!gid) return false;
+    const { error } = await supabase.from('activity_log')
+      .delete()
+      .eq('group_id', gid);
+    return !error;
+  }
+
   const token = getEmbeddedToken();
   if (!token) return false;
 

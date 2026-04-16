@@ -11,6 +11,7 @@ import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGame
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
+import { proxyGeminiGenerate, proxyGeminiModels, isServerManagedKey } from './apiProxy';
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
@@ -59,9 +60,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
   let fallbackFrom: string | undefined;
 
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-
     console.log(`   ${label}: trying ${config.model}...`);
 
     try {
@@ -70,13 +68,9 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
       if (topK !== undefined) genConfig.topK = topK;
       if (responseMimeType) genConfig.responseMimeType = responseMimeType;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: genConfig,
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: genConfig,
       });
 
       if (!response.ok) {
@@ -202,6 +196,7 @@ const API_KEY_STORAGE = 'gemini_api_key';
 export const isOnline = (): boolean => navigator.onLine;
 
 export const getGeminiApiKey = (): string | null => {
+  if (isServerManagedKey()) return 'server-managed';
   return localStorage.getItem(API_KEY_STORAGE);
 };
 
@@ -1489,29 +1484,20 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
   // Try each model until one works
   let forecastFallbackFrom: string | undefined;
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    
     console.log(`   Trying: ${config.version}/${config.model}...`);
     
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 12288,
-            responseMimeType: 'application/json',
-          }
-        })
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 12288,
+          responseMimeType: 'application/json',
+        }
       });
 
       if (!response.ok) {
@@ -1979,10 +1965,9 @@ const listAvailableModels = async (apiKey: string): Promise<string[]> => {
   
   for (const version of ['v1beta', 'v1']) {
     try {
-      const url = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
       console.log(`📋 Listing models with ${version}...`);
       
-      const response = await fetch(url);
+      const response = await proxyGeminiModels(apiKey, version);
       if (response.ok) {
         const data = await response.json();
         const foundModels = data.models?.map((m: {name: string}) => `${version}: ${m.name}`) || [];
@@ -2040,19 +2025,12 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
   
   // Try all configs
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    
     console.log(`\n🧪 Trying ${config.version} / ${config.model}...`);
     
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say: OK' }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 5 }
-        })
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: 'Say: OK' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 }
       });
 
       if (response.ok) {
@@ -2108,18 +2086,12 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
   const results: ModelTestResult[] = [];
 
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
     const start = Date.now();
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say: OK' }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 5 },
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: 'Say: OK' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 },
       });
 
       const elapsed = Date.now() - start;

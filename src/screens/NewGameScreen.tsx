@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
@@ -252,6 +253,9 @@ const NewGameScreen = () => {
     setPlayers(getAllPlayers());
     setPlayerStats(getPlayerStats());
   };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadPlayers(), []));
 
   // Separate players by type
   const permanentPlayers = players.filter(p => p.type === 'permanent');

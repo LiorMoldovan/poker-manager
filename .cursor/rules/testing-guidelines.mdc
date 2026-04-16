@@ -20,6 +20,7 @@ This project has no test suite. All testing is manual by the user.
 3. **Imports**: Verify all new imports exist and are correctly pathed
 4. **Logic trace**: Walk through the code mentally for edge cases
 5. **Unused variables**: TypeScript strict mode catches "declared but never read" — always clean up
+6. **Supabase column audit** (when touching database code): Cross-reference every column name, type, and constraint against `supabase/schema.sql`. Verify `onConflict` matches UNIQUE constraints. Verify NOT NULL columns have fallbacks. Verify delete sync for removable items.
 
 ## Algorithm Validation
 
@@ -44,9 +45,17 @@ When modifying the forecast algorithm or any data-driven logic:
 - Activity logger caps at 200 entries
 
 ### Cloud Sync
-- `writeWithRetry()` handles GitHub API 409 conflicts
+- `writeWithRetry()` handles GitHub API 409 conflicts (legacy GitHub path)
 - Always use fresh `lastUpdated` timestamp when pushing
 - `keepalive: true` on fetch for `visibilitychange` handlers
+
+### Supabase (Migration)
+- Always check `USE_SUPABASE` before adding Supabase code — both branches must work
+- `getGroupId()` can return `null` — always guard with early return
+- Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return
+- JSONB columns accept objects/arrays directly — no JSON.stringify needed
+- Timestamps should be ISO strings for TIMESTAMPTZ columns
+- `onConflict` must match exact UNIQUE constraint columns from schema
 
 ### TypeScript Strict Mode
 - `noUnusedLocals: true` — remove unused variables

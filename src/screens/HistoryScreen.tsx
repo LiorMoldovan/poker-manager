@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GameWithDetails } from '../types';
 import { getAllGames, getGamePlayers, getSettings, deleteGame, getAllPlayers } from '../database/storage';
@@ -54,6 +55,8 @@ const HistoryScreen = () => {
       loadGames();
     }
   }, [location.pathname, loadGames]);
+
+  useRealtimeRefresh(loadGames);
 
   useEffect(() => {
     const onVisible = () => {

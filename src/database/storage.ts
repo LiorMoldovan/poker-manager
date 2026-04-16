@@ -1,5 +1,12 @@
 import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
 import { uploadBackupToGitHub, syncToCloud, fetchBackupFromGitHub } from './githubSync';
+import { USE_SUPABASE } from './config';
+import {
+  cacheGet, cacheSet, cacheRemove,
+  cacheGetItem, cacheSetItem, cacheRemoveItem,
+  cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
+  isInitialized as isCacheReady,
+} from './supabaseCache';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -12,13 +19,15 @@ const STORAGE_KEYS = {
   PENDING_FORECAST: 'poker_pending_forecast',
 };
 
-// Generate unique ID
+// Generate unique ID (UUID for Supabase, short string for localStorage)
 export const generateId = (): string => {
+  if (USE_SUPABASE) return crypto.randomUUID();
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
-// Helper functions for localStorage
+// Helper functions — delegate to Supabase cache or localStorage
 const getItem = <T>(key: string, defaultValue: T): T => {
+  if (USE_SUPABASE) return cacheGet<T>(key, defaultValue);
   const item = localStorage.getItem(key);
   if (!item) return defaultValue;
   try {
@@ -30,6 +39,7 @@ const getItem = <T>(key: string, defaultValue: T): T => {
 };
 
 const setItem = <T>(key: string, value: T): void => {
+  if (USE_SUPABASE) { cacheSet<T>(key, value); return; }
   localStorage.setItem(key, JSON.stringify(value));
 };
 
@@ -70,6 +80,7 @@ const DEFAULT_PLAYERS: Player[] = [
 
 // Initialize default values if not exist
 export const initializeStorage = (): void => {
+  if (USE_SUPABASE) return; // Supabase cache is initialized separately via initSupabaseCache
   if (!localStorage.getItem(STORAGE_KEYS.CHIP_VALUES)) {
     setItem(STORAGE_KEYS.CHIP_VALUES, DEFAULT_CHIP_VALUES);
   } else {
@@ -714,10 +725,13 @@ export const createBackupWithCloudSync = async (
   useMemberSyncToken: boolean = false
 ): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
   const backup = createBackup(type, trigger);
+
+  if (USE_SUPABASE) {
+    // Data is already in Supabase — no GitHub sync needed
+    return { backup, cloudResult: { success: true, message: 'הנתונים מסונכרנים אוטומטית ב-Supabase' } };
+  }
   
   const cloudResult = await uploadBackupToGitHub(backup, useMemberSyncToken);
-
-  // Also update sync-data.json so other users get the latest data
   syncToCloud(useMemberSyncToken).catch(err =>
     console.warn('Sync after backup failed:', err)
   );
@@ -756,6 +770,9 @@ export const restoreFromBackup = (backupId: string): boolean => {
 
 // Restore from cloud backup (full-backup.json on GitHub)
 export const restoreFromCloudBackup = async (): Promise<{ success: boolean; message: string; gamesCount?: number }> => {
+  if (USE_SUPABASE) {
+    return { success: false, message: 'ב-Supabase הנתונים כבר בענן — אין צורך בשחזור' };
+  }
   try {
     const backup = await fetchBackupFromGitHub();
     if (!backup) {
@@ -954,6 +971,7 @@ export const linkForecastToGame = (gameId: string): void => {
 
 // Clear pending forecast
 export const clearPendingForecast = (): void => {
+  if (USE_SUPABASE) { cacheRemove(STORAGE_KEYS.PENDING_FORECAST); return; }
   localStorage.removeItem(STORAGE_KEYS.PENDING_FORECAST);
 };
 
@@ -1180,14 +1198,20 @@ const WARNING_THRESHOLD = 70;  // Show warning at 70%
 const CRITICAL_THRESHOLD = 90; // Critical at 90%
 
 export const getStorageUsage = (): StorageUsage => {
+  if (USE_SUPABASE) {
+    // Supabase has virtually unlimited storage; report as safe
+    return {
+      used: 0, limit: STORAGE_LIMIT, percent: 0, breakdown: {},
+      status: 'safe', gamesCount: getAllGames().length, estimatedGamesRemaining: 9999,
+    };
+  }
+
   const breakdown: Record<string, number> = {};
   let totalUsed = 0;
 
-  // Calculate size of each poker-related key
   for (const key of Object.keys(localStorage)) {
     if (key.startsWith('poker_') || key === 'github_token' || key === 'gemini_api_key' || key === 'elevenlabs_api_key') {
       const value = localStorage.getItem(key) || '';
-      // localStorage uses UTF-16, so each character is 2 bytes
       const size = (key.length + value.length) * 2;
       breakdown[key] = size;
       totalUsed += size;
@@ -1196,9 +1220,7 @@ export const getStorageUsage = (): StorageUsage => {
 
   const percent = (totalUsed / STORAGE_LIMIT) * 100;
   const gamesCount = getAllGames().length;
-  
-  // Estimate average bytes per game (including gamePlayers and backup overhead)
-  const avgBytesPerGame = gamesCount > 0 ? totalUsed / gamesCount : 3500; // ~3.5KB default estimate
+  const avgBytesPerGame = gamesCount > 0 ? totalUsed / gamesCount : 3500;
   const remainingBytes = STORAGE_LIMIT - totalUsed;
   const estimatedGamesRemaining = Math.max(0, Math.floor(remainingBytes / avgBytesPerGame));
 
@@ -1210,13 +1232,8 @@ export const getStorageUsage = (): StorageUsage => {
   }
 
   return {
-    used: totalUsed,
-    limit: STORAGE_LIMIT,
-    percent,
-    breakdown,
-    status,
-    gamesCount,
-    estimatedGamesRemaining,
+    used: totalUsed, limit: STORAGE_LIMIT, percent, breakdown,
+    status, gamesCount, estimatedGamesRemaining,
   };
 };
 
@@ -1244,7 +1261,7 @@ export interface ChronicleEntry {
 }
 
 export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null => {
-  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
   if (!raw) return null;
   try {
     const all: Record<string, ChronicleEntry> = JSON.parse(raw);
@@ -1255,14 +1272,15 @@ export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null =
 };
 
 export const saveChronicleProfiles = (periodKey: string, profiles: Record<string, string>, model?: string): void => {
-  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
   const all: Record<string, ChronicleEntry> = raw ? JSON.parse(raw) : {};
   all[periodKey] = { profiles, generatedAt: new Date().toISOString(), model };
-  localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
+  if (USE_SUPABASE) cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
+  else localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
 };
 
 export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null => {
-  const raw = localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -1272,7 +1290,8 @@ export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null
 };
 
 export const setAllChronicleProfiles = (data: Record<string, ChronicleEntry>): void => {
-  localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
+  if (USE_SUPABASE) cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
+  else localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
 };
 
 // ========== Graph Insights (AI-generated group narrative for Graphs page) ==========
@@ -1286,7 +1305,7 @@ export interface GraphInsightsEntry {
 }
 
 export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null => {
-  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
   if (!raw) return null;
   try {
     const all: Record<string, GraphInsightsEntry> = JSON.parse(raw);
@@ -1297,14 +1316,15 @@ export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null =
 };
 
 export const saveGraphInsights = (periodKey: string, text: string, model?: string): void => {
-  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
   const all: Record<string, GraphInsightsEntry> = raw ? JSON.parse(raw) : {};
   all[periodKey] = { text, generatedAt: new Date().toISOString(), model };
-  localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
+  if (USE_SUPABASE) cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
+  else localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
 };
 
 export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null => {
-  const raw = localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -1314,12 +1334,18 @@ export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null
 };
 
 export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): void => {
-  localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
+  if (USE_SUPABASE) cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
+  else localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
 };
 
 export const invalidateAICaches = (): void => {
-  localStorage.removeItem(CHRONICLE_STORAGE_KEY);
-  localStorage.removeItem(GRAPH_INSIGHTS_KEY);
+  if (USE_SUPABASE) {
+    cacheRemoveItem(CHRONICLE_STORAGE_KEY);
+    cacheRemoveItem(GRAPH_INSIGHTS_KEY);
+  } else {
+    localStorage.removeItem(CHRONICLE_STORAGE_KEY);
+    localStorage.removeItem(GRAPH_INSIGHTS_KEY);
+  }
 };
 
 // --- Rebuy Records (2026+) ---
@@ -1365,11 +1391,13 @@ const TTS_POOL_PREFIX = 'poker_tts_pool_';
 
 
 export const saveTTSPool = (gameId: string, pool: unknown, model?: string): void => {
+  if (USE_SUPABASE) { cacheSaveTTS(gameId, pool, model); return; }
   localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}`, JSON.stringify(pool));
   if (model) localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}_model`, model);
 };
 
 export const loadTTSPool = <T>(gameId: string): T | null => {
+  if (USE_SUPABASE) return cacheLoadTTS(gameId) as T | null;
   const raw = localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}`);
   if (!raw) return null;
   try {
@@ -1380,15 +1408,19 @@ export const loadTTSPool = <T>(gameId: string): T | null => {
 };
 
 export const loadTTSPoolModel = (gameId: string): string | null => {
+  if (USE_SUPABASE) return cacheLoadTTSModel(gameId);
   return localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}_model`);
 };
 
 export const deleteTTSPool = (gameId: string): void => {
+  if (USE_SUPABASE) { cacheDeleteTTS(gameId); return; }
   localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}`);
   localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}_model`);
 };
 
 export const cleanupOrphanedTTSPools = (): void => {
+  if (USE_SUPABASE && isCacheReady()) return; // Supabase handles cleanup via FK cascades
+  if (USE_SUPABASE) return;
   const liveGameIds = new Set(
     getAllGames().filter(g => g.status === 'live').map(g => g.id)
   );

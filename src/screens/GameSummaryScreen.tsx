@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit } from '../utils/sharing';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, Game } from '../types';
@@ -161,6 +162,9 @@ const GameSummaryScreen = () => {
       setIsLoading(false);
     }
   }, [gameId]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => { loadData(); }, []));
 
   const loadData = async () => {
     if (!gameId) {

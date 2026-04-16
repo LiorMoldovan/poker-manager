@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
@@ -663,6 +664,9 @@ const StatisticsScreen = () => {
   useEffect(() => {
     loadStats();
   }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadStats(), []));
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);

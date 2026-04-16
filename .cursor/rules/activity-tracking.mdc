@@ -8,7 +8,9 @@ alwaysApply: false
 
 ## Overview
 
-Silent, transparent tracking of non-admin user activity. Admin sessions are excluded. Data stored in `public/activity-log.json` on GitHub via embedded token.
+Silent, transparent tracking of non-admin user activity. Admin sessions are excluded.
+- **Legacy** (`USE_SUPABASE = false`): Data stored in `public/activity-log.json` on GitHub via embedded token.
+- **Supabase** (`USE_SUPABASE = true`): Data stored in `activity_log` table with `group_id` isolation via RLS.
 
 ## Files
 
@@ -39,7 +41,18 @@ Admin labels devices with player names in Activity tab (`poker_device_labels` in
 3. **Tab close**: `visibilitychange` fires with `keepalive: true`
 4. **Sign out**: Final update + `resetSession()`
 
+## Dual-Branch Functions
+
+6 functions in `activityLogger.ts` have `USE_SUPABASE` branches:
+- `logActivity` → INSERT into `activity_log`
+- `updateSessionActivity` → UPDATE by `device_id` + `timestamp`
+- `fetchActivityLog` → SELECT with group_id filter, ORDER BY timestamp DESC, LIMIT 200
+- `deleteActivityEntry` → DELETE by `device_id` + `timestamp`
+- `deleteDeviceEntries` → DELETE by `device_id`
+- `clearActivityLog` → DELETE by `group_id`
+
 ## Limits
 
-- Max 200 entries (oldest trimmed)
-- `writeWithRetry()` handles GitHub 409 conflicts with one retry
+- Max 200 entries (oldest trimmed in legacy; LIMIT 200 in Supabase SELECT)
+- `writeWithRetry()` handles GitHub 409 conflicts with one retry (legacy only)
+- Supabase writes are direct inserts/updates — no retry needed (PostgreSQL handles conflicts)
