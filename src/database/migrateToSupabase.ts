@@ -15,6 +15,16 @@ function readLS<T>(key: string, fallback: T): T {
   try { return JSON.parse(raw); } catch { return fallback; }
 }
 
+function remapChipCounts(chipCounts: Record<string, number>, chipIdMap: IdMap): Record<string, number> {
+  if (!chipCounts || Object.keys(chipCounts).length === 0) return chipCounts;
+  const remapped: Record<string, number> = {};
+  for (const [oldId, count] of Object.entries(chipCounts)) {
+    const newId = chipIdMap.get(oldId);
+    remapped[newId || oldId] = count;
+  }
+  return remapped;
+}
+
 export interface MigrationProgress {
   step: string;
   current: number;
@@ -29,6 +39,7 @@ export async function migrateLocalStorageToSupabase(
   const playerIdMap: IdMap = new Map();
   const gameIdMap: IdMap = new Map();
   const gamePlayerIdMap: IdMap = new Map();
+  const chipIdMap: IdMap = new Map();
 
   try {
     // Safety: prevent double migration
@@ -40,6 +51,10 @@ export async function migrateLocalStorageToSupabase(
         stats,
       };
     }
+
+    // Pre-build chip ID map so chipCounts keys can be remapped in game_players
+    const chipValues = readLS<ChipValue[]>('poker_chip_values', []);
+    for (const cv of chipValues) chipIdMap.set(cv.id, newUUID());
 
     // ── 1. Players ──
     onProgress?.({ step: 'שחקנים', current: 1, total: 9 });
@@ -85,7 +100,6 @@ export async function migrateLocalStorageToSupabase(
           created_at: g.createdAt || g.date || new Date().toISOString(),
         };
       });
-      // Insert in batches of 50 to avoid payload limits
       for (let i = 0; i < rows.length; i += 50) {
         const batch = rows.slice(i, i + 50);
         const { error } = await supabase.from('games').insert(batch);
@@ -95,8 +109,6 @@ export async function migrateLocalStorageToSupabase(
     }
 
     // ── 3. Game Players ──
-    // Handle orphaned players: if a player was deleted from localStorage but their
-    // game records remain, we create a placeholder so FK constraints are satisfied.
     onProgress?.({ step: 'שחקני משחק', current: 3, total: 9 });
     const gamePlayers = readLS<GamePlayer[]>('poker_game_players', []);
     if (gamePlayers.length > 0) {
@@ -134,7 +146,7 @@ export async function migrateLocalStorageToSupabase(
             player_id: playerIdMap.get(gp.playerId)!,
             player_name: gp.playerName,
             rebuys: Math.round(gp.rebuys ?? 0),
-            chip_counts: gp.chipCounts,
+            chip_counts: remapChipCounts(gp.chipCounts, chipIdMap),
             final_value: gp.finalValue,
             profit: gp.profit,
           };
@@ -238,12 +250,11 @@ export async function migrateLocalStorageToSupabase(
     }
     stats.periodMarkers = markerCount;
 
-    // ── 7. Chip Values ──
+    // ── 7. Chip Values (use pre-built chipIdMap) ──
     onProgress?.({ step: 'ערכי ז\'יטונים', current: 6, total: 9 });
-    const chipValues = readLS<ChipValue[]>('poker_chip_values', []);
     if (chipValues.length > 0) {
       const rows = chipValues.map(cv => ({
-        id: newUUID(),
+        id: chipIdMap.get(cv.id) || newUUID(),
         group_id: groupId,
         color: cv.color,
         value: cv.value,
@@ -406,6 +417,7 @@ export async function migrateFromCloud(
   const stats: Record<string, number> = {};
   const playerIdMap: IdMap = new Map();
   const gameIdMap: IdMap = new Map();
+  const chipIdMap: IdMap = new Map();
 
   try {
     // ── Step 1: Fetch data from GitHub ──
@@ -429,6 +441,9 @@ export async function migrateFromCloud(
     const chronicles = syncData?.chronicleProfiles || {};
     const insights = syncData?.graphInsights || {};
     const pending = syncData?.pendingForecast || null;
+
+    // Pre-build chip ID map so chipCounts keys can be remapped in game_players
+    for (const cv of chipValues) chipIdMap.set(cv.id, newUUID());
 
     console.log(`Cloud data: ${players.length} players, ${games.length} games, ${gamePlayers.length} game-players`);
 
@@ -520,7 +535,7 @@ export async function migrateFromCloud(
           player_id: playerIdMap.get(gp.playerId)!,
           player_name: gp.playerName,
           rebuys: Math.round(gp.rebuys ?? 0),
-          chip_counts: gp.chipCounts,
+          chip_counts: remapChipCounts(gp.chipCounts, chipIdMap),
           final_value: gp.finalValue,
           profit: gp.profit,
         }));
@@ -590,11 +605,11 @@ export async function migrateFromCloud(
     stats.settlements = settleCount;
     stats.periodMarkers = markerCount;
 
-    // ── Step 8: Chip Values ──
+    // ── Step 8: Chip Values (use pre-built chipIdMap) ──
     onProgress?.({ step: 'ערכי ז\'יטונים', current: 8, total: 12 });
     if (chipValues.length > 0) {
       const rows = chipValues.map(cv => ({
-        id: newUUID(), group_id: groupId, color: cv.color, value: cv.value, display_color: cv.displayColor,
+        id: chipIdMap.get(cv.id) || newUUID(), group_id: groupId, color: cv.color, value: cv.value, display_color: cv.displayColor,
       }));
       const { error } = await supabase.from('chip_values').insert(rows);
       if (error) console.warn('ChipValues:', error.message);
@@ -776,5 +791,75 @@ export async function migrateTrainingFromCloud(
   } catch (err) {
     console.error('Training migration error:', err);
   }
+  return result;
+}
+
+/**
+ * One-time fix for chip_counts in existing migrated data.
+ * Builds a mapping from old chip IDs (from GitHub backup) to current Supabase UUIDs
+ * by matching on value+color, then updates all game_players rows.
+ */
+export async function fixChipCountIds(groupId: string): Promise<{ updated: number; skipped: number }> {
+  const result = { updated: 0, skipped: 0 };
+
+  // 1. Fetch old chip values from GitHub backup
+  const backupData = await fetchGitHubJSON<CloudBackupData>('public/full-backup.json');
+  if (!backupData?.chipValues?.length) {
+    console.warn('fixChipCountIds: no chip values in backup');
+    return result;
+  }
+
+  // 2. Fetch current chip values from Supabase
+  const { data: supaChips, error } = await supabase
+    .from('chip_values')
+    .select('id, color, value')
+    .eq('group_id', groupId);
+  if (error || !supaChips?.length) {
+    console.warn('fixChipCountIds: no chip values in Supabase', error?.message);
+    return result;
+  }
+
+  // 3. Build mapping: old ID → new UUID (match by value + color)
+  const oldToNew = new Map<string, string>();
+  for (const oldCv of backupData.chipValues) {
+    const match = supaChips.find(sc => Number(sc.value) === oldCv.value && sc.color === oldCv.color);
+    if (match) oldToNew.set(oldCv.id, match.id);
+  }
+  console.log(`fixChipCountIds: ${oldToNew.size} chip ID mappings built`);
+  if (oldToNew.size === 0) return result;
+
+  // 4. Fetch all game_players for this group's games
+  const { data: games } = await supabase.from('games').select('id').eq('group_id', groupId);
+  if (!games?.length) return result;
+
+  const BATCH = 30;
+  const allGps: Array<{ id: string; chip_counts: Record<string, number> }> = [];
+  for (let i = 0; i < games.length; i += BATCH) {
+    const ids = games.slice(i, i + BATCH).map(g => g.id);
+    const { data: gps } = await supabase.from('game_players').select('id, chip_counts').in('game_id', ids);
+    if (gps) allGps.push(...(gps as Array<{ id: string; chip_counts: Record<string, number> }>));
+  }
+
+  // 5. Update chip_counts keys
+  for (const gp of allGps) {
+    if (!gp.chip_counts || Object.keys(gp.chip_counts).length === 0) {
+      result.skipped++;
+      continue;
+    }
+    const hasOldKeys = Object.keys(gp.chip_counts).some(k => oldToNew.has(k));
+    if (!hasOldKeys) {
+      result.skipped++;
+      continue;
+    }
+    const fixed: Record<string, number> = {};
+    for (const [k, v] of Object.entries(gp.chip_counts)) {
+      fixed[oldToNew.get(k) || k] = v;
+    }
+    const { error: upErr } = await supabase.from('game_players').update({ chip_counts: fixed }).eq('id', gp.id);
+    if (upErr) console.warn(`fixChipCountIds ${gp.id}:`, upErr.message);
+    else result.updated++;
+  }
+
+  console.log(`fixChipCountIds done: ${result.updated} updated, ${result.skipped} skipped`);
   return result;
 }

@@ -10,7 +10,7 @@ import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { supabase } from './database/supabaseClient';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
-import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData, migrateTrainingFromCloud } from './database/migrateToSupabase';
+import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData, migrateTrainingFromCloud, fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
 import AuthScreen from './screens/AuthScreen';
@@ -407,12 +407,14 @@ function SupabaseApp() {
         migrateLocalStorageToSupabase(groupId, progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
       win.cleanGroupData = () => cleanGroupData(groupId);
       win.migrateTraining = () => migrateTrainingFromCloud(groupId, (msg) => console.log('[training]', msg));
+      win.fixChipCounts = () => fixChipCountIds(groupId);
     }
     return () => {
       delete win.migrateFromCloud;
       delete win.migrateToSupabase;
       delete win.cleanGroupData;
       delete win.migrateTraining;
+      delete win.fixChipCounts;
     };
   }, [groupId]);
 
