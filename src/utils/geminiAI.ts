@@ -2109,9 +2109,12 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
         recordRateLimit(config.model, rlHeaders, errMsg);
         results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'rate_limited', responseTimeMs: elapsed, remaining, limit });
       } else {
+        const errBody = await response.text().catch(() => '');
+        console.warn(`AI test ${config.model}: HTTP ${response.status}`, errBody.substring(0, 300));
         results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error', responseTimeMs: elapsed });
       }
-    } catch {
+    } catch (err) {
+      console.warn(`AI test ${config.model}: exception`, err);
       results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error' });
     }
   }
