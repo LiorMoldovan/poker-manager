@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 
 // ID mapping: old localStorage IDs → new UUIDs
@@ -354,9 +354,6 @@ export async function checkGroupHasData(groupId: string): Promise<boolean> {
 
 // Clean all group data (use before retrying a failed migration)
 export async function cleanGroupData(groupId: string): Promise<void> {
-  // Delete in reverse FK order to avoid constraint violations
-  // game_players, game_forecasts, shared_expenses, paid_settlements, period_markers
-  // are cascade-deleted when games are deleted
   await supabase.from('pending_forecasts').delete().eq('group_id', groupId);
   await supabase.from('chronicle_profiles').delete().eq('group_id', groupId);
   await supabase.from('graph_insights').delete().eq('group_id', groupId);
@@ -364,4 +361,303 @@ export async function cleanGroupData(groupId: string): Promise<void> {
   await supabase.from('chip_values').delete().eq('group_id', groupId);
   await supabase.from('settings').delete().eq('group_id', groupId);
   await supabase.from('players').delete().eq('group_id', groupId);
+}
+
+// ── Cloud Migration: fetch from GitHub and migrate to Supabase ──
+
+const GH_OWNER = 'LiorMoldovan';
+const GH_REPO = 'poker-manager';
+const GH_BRANCH = 'main';
+
+async function fetchGitHubJSON<T>(path: string): Promise<T | null> {
+  try {
+    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
+    if (!res.ok) return null;
+    const info = await res.json();
+    const bin = atob(info.content.replace(/\n/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes)) as T;
+  } catch { return null; }
+}
+
+interface CloudSyncData {
+  players: Player[];
+  games: Game[];
+  gamePlayers: GamePlayer[];
+  chronicleProfiles?: Record<string, ChronicleEntry>;
+  graphInsights?: Record<string, GraphInsightsEntry>;
+  pendingForecast?: PendingForecast | null;
+}
+
+interface CloudBackupData {
+  players: Player[];
+  games: Game[];
+  gamePlayers: GamePlayer[];
+  chipValues: ChipValue[];
+  settings: Settings;
+}
+
+export async function migrateFromCloud(
+  groupName: string = 'Poker Night',
+  onProgress?: (p: MigrationProgress) => void,
+): Promise<{ success: boolean; message: string; stats: Record<string, number>; groupId?: string }> {
+  const stats: Record<string, number> = {};
+  const playerIdMap: IdMap = new Map();
+  const gameIdMap: IdMap = new Map();
+
+  try {
+    // ── Step 1: Fetch data from GitHub ──
+    onProgress?.({ step: 'מוריד נתונים מהענן...', current: 1, total: 11 });
+
+    const [syncData, backupData] = await Promise.all([
+      fetchGitHubJSON<CloudSyncData>('public/sync-data.json'),
+      fetchGitHubJSON<CloudBackupData>('public/full-backup.json'),
+    ]);
+
+    const source = syncData || backupData;
+    if (!source || !source.players?.length) {
+      return { success: false, message: 'לא נמצאו נתונים בענן (sync-data.json / full-backup.json)', stats };
+    }
+
+    const players: Player[] = source.players;
+    const games: Game[] = source.games || [];
+    const gamePlayers: GamePlayer[] = source.gamePlayers || [];
+    const chipValues: ChipValue[] = backupData?.chipValues || [];
+    const settings: Settings = backupData?.settings || { rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 };
+    const chronicles = syncData?.chronicleProfiles || {};
+    const insights = syncData?.graphInsights || {};
+    const pending = syncData?.pendingForecast || null;
+
+    console.log(`Cloud data: ${players.length} players, ${games.length} games, ${gamePlayers.length} game-players`);
+
+    // ── Step 2: Create group ──
+    onProgress?.({ step: 'יוצר קבוצה...', current: 2, total: 11 });
+
+    const { data: groupResult, error: groupError } = await supabase.rpc('create_group', { group_name: groupName });
+    if (groupError) throw new Error(`Group creation: ${groupError.message}`);
+
+    const groupId = (groupResult as { group_id: string }).group_id;
+    console.log(`Created group "${groupName}" with ID: ${groupId}`);
+
+    // ── Step 3: Players ──
+    onProgress?.({ step: 'שחקנים', current: 3, total: 11 });
+    if (players.length > 0) {
+      const rows = players.map(p => {
+        const uuid = newUUID();
+        playerIdMap.set(p.id, uuid);
+        return {
+          id: uuid,
+          group_id: groupId,
+          name: p.name,
+          type: p.type || 'permanent',
+          gender: p.gender || 'male',
+          created_at: p.createdAt || new Date().toISOString(),
+        };
+      });
+      const { error } = await supabase.from('players').insert(rows);
+      if (error) throw new Error(`Players: ${error.message}`);
+      stats.players = rows.length;
+    }
+
+    // ── Step 4: Games ──
+    onProgress?.({ step: 'משחקים', current: 4, total: 11 });
+    if (games.length > 0) {
+      const rows = games.map(g => {
+        const uuid = newUUID();
+        gameIdMap.set(g.id, uuid);
+        return {
+          id: uuid,
+          group_id: groupId,
+          date: g.date,
+          status: g.status,
+          location: g.location || null,
+          chip_gap: g.chipGap ?? null,
+          chip_gap_per_player: g.chipGapPerPlayer ?? null,
+          ai_summary: g.aiSummary || null,
+          ai_summary_model: g.aiSummaryModel || null,
+          pre_game_teaser: g.preGameTeaser || null,
+          forecast_comment: g.forecastComment || null,
+          forecast_accuracy: g.forecastAccuracy || null,
+          created_at: g.createdAt || g.date || new Date().toISOString(),
+        };
+      });
+      for (let i = 0; i < rows.length; i += 50) {
+        const { error } = await supabase.from('games').insert(rows.slice(i, i + 50));
+        if (error) throw new Error(`Games batch ${i}: ${error.message}`);
+      }
+      stats.games = rows.length;
+    }
+
+    // ── Step 5: Game Players (with orphan handling) ──
+    onProgress?.({ step: 'שחקני משחק', current: 5, total: 11 });
+    if (gamePlayers.length > 0) {
+      const orphaned = new Set<string>();
+      for (const gp of gamePlayers) {
+        if (!playerIdMap.has(gp.playerId)) orphaned.add(gp.playerId);
+      }
+      if (orphaned.size > 0) {
+        console.warn(`Migration: ${orphaned.size} orphaned player(s), creating placeholders`);
+        for (const oldId of orphaned) {
+          const uuid = newUUID();
+          playerIdMap.set(oldId, uuid);
+          const gp = gamePlayers.find(g => g.playerId === oldId);
+          await supabase.from('players').insert({
+            id: uuid, group_id: groupId,
+            name: gp?.playerName || `[שחקן ${oldId}]`,
+            type: 'guest', gender: 'male', created_at: new Date().toISOString(),
+          });
+        }
+        stats.orphanedPlayers = orphaned.size;
+      }
+
+      const rows = gamePlayers
+        .filter(gp => gameIdMap.has(gp.gameId) && playerIdMap.has(gp.playerId))
+        .map(gp => ({
+          id: newUUID(),
+          game_id: gameIdMap.get(gp.gameId)!,
+          player_id: playerIdMap.get(gp.playerId)!,
+          player_name: gp.playerName,
+          rebuys: gp.rebuys,
+          chip_counts: gp.chipCounts,
+          final_value: gp.finalValue,
+          profit: gp.profit,
+        }));
+      for (let i = 0; i < rows.length; i += 50) {
+        const { error } = await supabase.from('game_players').insert(rows.slice(i, i + 50));
+        if (error) throw new Error(`GamePlayers batch ${i}: ${error.message}`);
+      }
+      stats.gamePlayers = rows.length;
+    }
+
+    // ── Step 6: Game Forecasts ──
+    onProgress?.({ step: 'תחזיות', current: 6, total: 11 });
+    let forecastCount = 0;
+    for (const game of games) {
+      if (game.forecasts?.length) {
+        const gid = gameIdMap.get(game.id);
+        if (!gid) continue;
+        const rows = game.forecasts.map((f: GameForecast) => ({
+          game_id: gid, player_name: f.playerName, expected_profit: f.expectedProfit,
+          highlight: f.highlight || null, sentence: f.sentence || null, is_surprise: f.isSurprise || false,
+        }));
+        const { error } = await supabase.from('game_forecasts').insert(rows);
+        if (!error) forecastCount += rows.length;
+      }
+    }
+    stats.forecasts = forecastCount;
+
+    // ── Step 7: Shared Expenses + Paid Settlements + Period Markers ──
+    onProgress?.({ step: 'הוצאות והתחשבנויות', current: 7, total: 11 });
+    let expCount = 0, settleCount = 0, markerCount = 0;
+    for (const game of games) {
+      const gid = gameIdMap.get(game.id);
+      if (!gid) continue;
+
+      if (game.sharedExpenses?.length) {
+        const rows = game.sharedExpenses.map((e: SharedExpense) => ({
+          id: newUUID(), game_id: gid, description: e.description,
+          paid_by: playerIdMap.get(e.paidBy) || null, paid_by_name: e.paidByName,
+          amount: e.amount, participants: e.participants.map(pid => playerIdMap.get(pid) || pid),
+          participant_names: e.participantNames, created_at: e.createdAt,
+        }));
+        const { error } = await supabase.from('shared_expenses').insert(rows);
+        if (!error) expCount += rows.length;
+      }
+
+      if (game.paidSettlements?.length) {
+        const rows = game.paidSettlements.map(ps => ({
+          game_id: gid, from_player: ps.from, to_player: ps.to, paid_at: ps.paidAt,
+        }));
+        const { error } = await supabase.from('paid_settlements').insert(rows);
+        if (!error) settleCount += rows.length;
+      }
+
+      if (game.periodMarkers) {
+        const pm = game.periodMarkers;
+        const { error } = await supabase.from('period_markers').insert({
+          game_id: gid,
+          is_first_game_of_month: pm.isFirstGameOfMonth, is_last_game_of_month: pm.isLastGameOfMonth,
+          is_first_game_of_half: pm.isFirstGameOfHalf, is_last_game_of_half: pm.isLastGameOfHalf,
+          is_first_game_of_year: pm.isFirstGameOfYear, is_last_game_of_year: pm.isLastGameOfYear,
+          month_name: pm.monthName, half_label: pm.halfLabel, year: pm.year,
+        });
+        if (!error) markerCount++;
+      }
+    }
+    stats.sharedExpenses = expCount;
+    stats.settlements = settleCount;
+    stats.periodMarkers = markerCount;
+
+    // ── Step 8: Chip Values ──
+    onProgress?.({ step: 'ערכי ז\'יטונים', current: 8, total: 11 });
+    if (chipValues.length > 0) {
+      const rows = chipValues.map(cv => ({
+        id: newUUID(), group_id: groupId, color: cv.color, value: cv.value, display_color: cv.displayColor,
+      }));
+      const { error } = await supabase.from('chip_values').insert(rows);
+      if (error) console.warn('ChipValues:', error.message);
+      else stats.chipValues = rows.length;
+    }
+
+    // ── Step 9: Settings ──
+    onProgress?.({ step: 'הגדרות', current: 9, total: 11 });
+    if (settings.rebuyValue) {
+      const { error } = await supabase.from('settings').insert({
+        group_id: groupId, rebuy_value: settings.rebuyValue,
+        chips_per_rebuy: settings.chipsPerRebuy, min_transfer: settings.minTransfer,
+        game_night_days: settings.gameNightDays || [4, 6],
+        locations: settings.locations || [], blocked_transfers: settings.blockedTransfers || [],
+      });
+      if (error) console.warn('Settings:', error.message);
+      else stats.settings = 1;
+    }
+
+    // ── Step 10: AI Caches ──
+    onProgress?.({ step: 'קאש AI', current: 10, total: 11 });
+    for (const [key, entry] of Object.entries(chronicles)) {
+      await supabase.from('chronicle_profiles').insert({
+        group_id: groupId, period_key: key,
+        profiles: entry.profiles, generated_at: entry.generatedAt, model: entry.model || null,
+      });
+    }
+    stats.chronicles = Object.keys(chronicles).length;
+
+    for (const [key, entry] of Object.entries(insights)) {
+      await supabase.from('graph_insights').insert({
+        group_id: groupId, period_key: key,
+        text: entry.text, generated_at: entry.generatedAt, model: entry.model || null,
+      });
+    }
+    stats.graphInsights = Object.keys(insights).length;
+
+    // ── Step 11: Pending Forecast ──
+    onProgress?.({ step: 'תחזית ממתינה', current: 11, total: 11 });
+    if (pending?.playerIds) {
+      await supabase.from('pending_forecasts').insert({
+        id: newUUID(), group_id: groupId,
+        player_ids: pending.playerIds.map((pid: string) => playerIdMap.get(pid) || pid),
+        forecasts: pending.forecasts,
+        linked_game_id: pending.linkedGameId ? (gameIdMap.get(pending.linkedGameId) || null) : null,
+        pre_game_teaser: pending.preGameTeaser || null,
+        ai_model: pending.aiModel || null,
+        published: pending.published || false,
+        location: pending.location || null,
+        created_at: pending.createdAt,
+      });
+      stats.pendingForecast = 1;
+    }
+
+    const msg = `הועברו בהצלחה: ${stats.players || 0} שחקנים, ${stats.games || 0} משחקים, ${stats.gamePlayers || 0} רשומות`;
+    console.log('Migration complete!', msg, stats);
+    console.log('Reloading in 2 seconds...');
+    setTimeout(() => window.location.reload(), 2000);
+
+    return { success: true, message: msg, stats, groupId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Cloud migration failed:', msg);
+    return { success: false, message: `שגיאה בהעברה: ${msg}`, stats };
+  }
 }

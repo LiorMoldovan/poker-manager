@@ -9,7 +9,7 @@ import { logActivity, updateSessionActivity, getScreenName, resetSession } from 
 import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
-import { migrateLocalStorageToSupabase, cleanGroupData } from './database/migrateToSupabase';
+import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
 import AuthScreen from './screens/AuthScreen';
@@ -324,13 +324,18 @@ function SupabaseApp() {
   const playerName = auth.membership?.playerName ?? null;
 
   useEffect(() => {
-    if (!groupId) return;
-    (window as unknown as Record<string, unknown>).migrateToSupabase = (progress?: boolean) =>
-      migrateLocalStorageToSupabase(groupId, progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
-    (window as unknown as Record<string, unknown>).cleanGroupData = () => cleanGroupData(groupId);
+    const win = window as unknown as Record<string, unknown>;
+    win.migrateFromCloud = (progress?: boolean) =>
+      migrateFromCloud('Poker Night', progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
+    if (groupId) {
+      win.migrateToSupabase = (progress?: boolean) =>
+        migrateLocalStorageToSupabase(groupId, progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
+      win.cleanGroupData = () => cleanGroupData(groupId);
+    }
     return () => {
-      delete (window as unknown as Record<string, unknown>).migrateToSupabase;
-      delete (window as unknown as Record<string, unknown>).cleanGroupData;
+      delete win.migrateFromCloud;
+      delete win.migrateToSupabase;
+      delete win.cleanGroupData;
     };
   }, [groupId]);
 
