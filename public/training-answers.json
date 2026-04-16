@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-13T18:33:17.951Z",
+  "lastUpdated": "2026-04-16T06:57:48.126Z",
   "players": [
     {
       "playerName": "אייל",
@@ -4249,11 +4249,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-11T14:08:44.610Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 10,
+          "results": [
+            {
+              "poolId": "w5q5i8",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "dggvq9",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "q9fgt5",
+              "categoryId": "second_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "wm733d",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7v5e1i",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iwytf7",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "7e7006",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "e6dhq4",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "4sx3pr",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "uqy13n",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 48,
-      "totalCorrect": 38,
-      "accuracy": 79.16666666666666
+      "totalQuestions": 58,
+      "totalCorrect": 48,
+      "accuracy": 82.75862068965517
     },
     {
       "playerName": "חרדון",
