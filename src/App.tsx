@@ -9,6 +9,7 @@ import { logActivity, updateSessionActivity, getScreenName, resetSession } from 
 import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
+import { migrateLocalStorageToSupabase, cleanGroupData } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
 import AuthScreen from './screens/AuthScreen';
@@ -321,6 +322,17 @@ function SupabaseApp() {
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
   const playerName = auth.membership?.playerName ?? null;
+
+  useEffect(() => {
+    if (!groupId) return;
+    (window as unknown as Record<string, unknown>).migrateToSupabase = (progress?: boolean) =>
+      migrateLocalStorageToSupabase(groupId, progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
+    (window as unknown as Record<string, unknown>).cleanGroupData = () => cleanGroupData(groupId);
+    return () => {
+      delete (window as unknown as Record<string, unknown>).migrateToSupabase;
+      delete (window as unknown as Record<string, unknown>).cleanGroupData;
+    };
+  }, [groupId]);
 
   // Initialize Supabase cache once we have a group
   useEffect(() => {
