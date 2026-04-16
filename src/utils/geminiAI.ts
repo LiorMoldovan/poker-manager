@@ -2184,7 +2184,7 @@ export const generateForecastComparison = async (
       prompt,
       apiKey,
       temperature: 0.7,
-      maxOutputTokens: 100,
+      maxOutputTokens: 1024,
       label: 'Forecast comparison',
     });
     return result.text;
@@ -2626,7 +2626,7 @@ ${playerLines}
     prompt,
     apiKey,
     temperature: 0.9,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 4096,
     topP: 0.95,
     label: 'Graph insights',
   });
