@@ -934,45 +934,71 @@ export const uploadTrainingPool = async (pool: TrainingPool): Promise<{ success:
   return uploadGitHubFile(token, GITHUB_TRAINING_POOL_PATH, pool, `Training pool update - ${pool.totalScenarios} scenarios`);
 };
 
+function supabaseRowsToTrainingPool(allRows: Record<string, unknown>[]): TrainingPool {
+  const scenarios: PoolScenario[] = allRows.map(row => ({
+    ...(row.scenario as Record<string, unknown>),
+    poolId: row.scenario_id as string,
+    categoryId: row.category_id as string,
+    category: row.category as string,
+  } as PoolScenario));
+  const byCategory: Record<string, number> = {};
+  scenarios.forEach(s => { byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1; });
+  const latestCreatedAt = allRows.reduce((max, row) => {
+    const t = (row.created_at as string) || '';
+    return t > max ? t : max;
+  }, '');
+  return {
+    generatedAt: latestCreatedAt || new Date().toISOString(),
+    totalScenarios: scenarios.length,
+    byCategory,
+    scenarios,
+  };
+}
+
+async function fetchAllTrainingRows(gid: string): Promise<Record<string, unknown>[]> {
+  const allRows: Record<string, unknown>[] = [];
+  const PAGE = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from('training_pool')
+      .select('*')
+      .eq('group_id', gid)
+      .range(offset, offset + PAGE - 1);
+    if (error) { console.warn('fetchTrainingPool error:', error.message); break; }
+    if (!data || data.length === 0) break;
+    allRows.push(...(data as Record<string, unknown>[]));
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return allRows;
+}
+
+let _trainingAutoImportDone = false;
+
 export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
   if (USE_SUPABASE) {
     const gid = getGroupId();
     if (!gid) return null;
-    // Paginate to avoid the 1000-row default limit
-    const allRows: Record<string, unknown>[] = [];
-    const PAGE = 1000;
-    let offset = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('training_pool')
-        .select('*')
-        .eq('group_id', gid)
-        .range(offset, offset + PAGE - 1);
-      if (error) { console.warn('fetchTrainingPool error:', error.message); break; }
-      if (!data || data.length === 0) break;
-      allRows.push(...(data as Record<string, unknown>[]));
-      if (data.length < PAGE) break;
-      offset += PAGE;
+    const allRows = await fetchAllTrainingRows(gid);
+    if (allRows.length > 0) return supabaseRowsToTrainingPool(allRows);
+
+    // Supabase empty — auto-import from GitHub backup (one-time)
+    if (_trainingAutoImportDone) return null;
+    _trainingAutoImportDone = true;
+    console.warn('Training pool empty in Supabase, auto-importing from GitHub...');
+    try {
+      const { migrateTrainingFromCloud } = await import('./migrateToSupabase');
+      const result = await migrateTrainingFromCloud(gid);
+      console.warn('Training auto-import done:', result);
+      if (result.pool > 0) {
+        const rows = await fetchAllTrainingRows(gid);
+        if (rows.length > 0) return supabaseRowsToTrainingPool(rows);
+      }
+    } catch (err) {
+      console.warn('Training auto-import failed:', err);
     }
-    if (allRows.length === 0) return null;
-    const scenarios: PoolScenario[] = allRows.map(row => ({
-      ...(row.scenario as Record<string, unknown>),
-      poolId: row.scenario_id as string,
-      categoryId: row.category_id as string,
-      category: row.category as string,
-    } as PoolScenario));
-    const byCategory: Record<string, number> = {};
-    scenarios.forEach(s => { byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1; });
-    const latestCreatedAt = allRows.reduce((max, row) => {
-      const t = (row.created_at as string) || '';
-      return t > max ? t : max;
-    }, '');
-    return {
-      generatedAt: latestCreatedAt || new Date().toISOString(),
-      totalScenarios: scenarios.length,
-      byCategory,
-      scenarios,
-    };
+    return null;
   }
   const token = getEffectiveToken(true);
   return fetchGitHubJson<TrainingPool>(GITHUB_TRAINING_POOL_PATH, token || undefined);
