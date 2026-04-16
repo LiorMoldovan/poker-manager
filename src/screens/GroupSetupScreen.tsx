@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { migrateFromCloud } from '../database/migrateToSupabase';
 
 interface GroupSetupScreenProps {
   userEmail: string;
@@ -18,6 +19,30 @@ export default function GroupSetupScreen({
   const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState('');
+
+  const handleMigrate = async () => {
+    setMigrating(true);
+    setError('');
+    setMigrationStatus('מוריד נתונים מהענן...');
+    try {
+      const result = await migrateFromCloud('Poker Night', (p) => {
+        setMigrationStatus(`[${p.current}/${p.total}] ${p.step}`);
+      });
+      if (result.success) {
+        setMigrationStatus(`${result.message} — טוען מחדש...`);
+      } else {
+        setError(result.message);
+        setMigrating(false);
+        setMigrationStatus('');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'שגיאה בהעברה');
+      setMigrating(false);
+      setMigrationStatus('');
+    }
+  };
 
   const handleCreate = async () => {
     if (!groupName.trim()) {
@@ -82,6 +107,33 @@ export default function GroupSetupScreen({
 
       {mode === 'choose' && (
         <div style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <button onClick={handleMigrate} disabled={migrating} style={{
+            ...cardButtonStyle,
+            background: migrating ? 'var(--surface)' : 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
+            border: '2px solid rgba(59, 130, 246, 0.4)',
+          }}>
+            <span style={{ fontSize: '1.5rem' }}>{migrating ? '⏳' : '📦'}</span>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text)' }}>
+                {migrating ? 'מעביר נתונים...' : 'העבר מהאפליקציה הקיימת'}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {migrationStatus || 'יוצר קבוצה ומייבא את כל הנתונים'}
+              </div>
+            </div>
+          </button>
+
+          {error && <p style={errorStyle}>{error}</p>}
+
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.75rem',
+            margin: '0.25rem 0', color: 'var(--text-muted)', fontSize: '0.8rem',
+          }}>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+            <span>או התחל מאפס</span>
+            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
+          </div>
+
           <button onClick={() => setMode('create')} style={cardButtonStyle}>
             <span style={{ fontSize: '1.5rem' }}>👑</span>
             <div>
