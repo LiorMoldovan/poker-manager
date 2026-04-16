@@ -34,9 +34,6 @@ import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/gemi
 import { proxyGeminiGenerate } from '../utils/apiProxy';
 import { shareToWhatsApp } from '../utils/sharing';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
-import { USE_SUPABASE } from '../database/config';
-import { migrateTrainingFromCloud } from '../database/migrateToSupabase';
-import { getGroupId } from '../database/supabaseCache';
 
 const RATE_LIMIT_DELAY = 7500;
 
@@ -262,25 +259,6 @@ const TrainingAdminTab = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
-
-  const [migratingTraining, setMigratingTraining] = useState(false);
-  const [migrateTrainingMsg, setMigrateTrainingMsg] = useState<string | null>(null);
-
-  const handleMigrateTraining = useCallback(async () => {
-    const gid = getGroupId();
-    if (!gid) return;
-    setMigratingTraining(true);
-    setMigrateTrainingMsg('מוריד נתוני אימון...');
-    try {
-      const result = await migrateTrainingFromCloud(gid, (msg) => setMigrateTrainingMsg(msg));
-      setMigrateTrainingMsg(`✅ הועברו: ${result.pool} תרחישים, ${result.answers} שחקנים, ${result.insights} תובנות`);
-      await loadAll();
-    } catch (err) {
-      setMigrateTrainingMsg(`❌ שגיאה: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setMigratingTraining(false);
-    }
-  }, [loadAll]);
 
   const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
   const [cloudCleaningPlayer, setCloudCleaningPlayer] = useState<string | null>(null);
@@ -1749,29 +1727,6 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
               </div>
             ) : (
               <div>
-                {USE_SUPABASE && poolStatus.status === 'empty' && (
-                  <button
-                    onClick={handleMigrateTraining}
-                    disabled={migratingTraining}
-                    style={{
-                      width: '100%', padding: '0.6rem', borderRadius: '10px', border: 'none',
-                      marginBottom: '0.5rem',
-                      background: migratingTraining ? 'var(--surface)' : 'linear-gradient(135deg, #10b981, #059669)',
-                      color: 'white', fontWeight: 600, fontSize: '0.8rem',
-                      cursor: migratingTraining ? 'wait' : 'pointer',
-                    }}
-                  >
-                    {migratingTraining ? '⏳ מעביר...' : '📥 העבר מאגר מהאפליקציה הקיימת'}
-                  </button>
-                )}
-                {migrateTrainingMsg && (
-                  <div style={{
-                    fontSize: '0.75rem', color: migrateTrainingMsg.startsWith('✅') ? '#22c55e' : migrateTrainingMsg.startsWith('❌') ? '#ef4444' : 'var(--text-muted)',
-                    textAlign: 'center', marginBottom: '0.5rem',
-                  }}>
-                    {migrateTrainingMsg}
-                  </div>
-                )}
                 <button onClick={() => handleSmartGenerate()} style={{
                   width: '100%', padding: '0.6rem', borderRadius: '10px', border: 'none',
                   background: poolStatus.status === 'empty'

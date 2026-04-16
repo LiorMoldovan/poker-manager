@@ -938,9 +938,24 @@ export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
   if (USE_SUPABASE) {
     const gid = getGroupId();
     if (!gid) return null;
-    const { data, error } = await supabase.from('training_pool').select('*').eq('group_id', gid);
-    if (error || !data || data.length === 0) return null;
-    const scenarios: PoolScenario[] = data.map(row => ({
+    // Paginate to avoid the 1000-row default limit
+    const allRows: Record<string, unknown>[] = [];
+    const PAGE = 1000;
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('training_pool')
+        .select('*')
+        .eq('group_id', gid)
+        .range(offset, offset + PAGE - 1);
+      if (error) { console.warn('fetchTrainingPool error:', error.message); break; }
+      if (!data || data.length === 0) break;
+      allRows.push(...(data as Record<string, unknown>[]));
+      if (data.length < PAGE) break;
+      offset += PAGE;
+    }
+    if (allRows.length === 0) return null;
+    const scenarios: PoolScenario[] = allRows.map(row => ({
       ...(row.scenario as Record<string, unknown>),
       poolId: row.scenario_id as string,
       categoryId: row.category_id as string,
@@ -948,7 +963,7 @@ export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
     } as PoolScenario));
     const byCategory: Record<string, number> = {};
     scenarios.forEach(s => { byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1; });
-    const latestCreatedAt = data.reduce((max, row) => {
+    const latestCreatedAt = allRows.reduce((max, row) => {
       const t = (row.created_at as string) || '';
       return t > max ? t : max;
     }, '');
