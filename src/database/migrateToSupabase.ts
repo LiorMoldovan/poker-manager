@@ -392,14 +392,21 @@ const GH_BRANCH = 'main';
 
 async function fetchGitHubJSON<T>(path: string): Promise<T | null> {
   try {
-    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`;
-    const res = await fetch(url, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
+    const contentsUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`;
+    const res = await fetch(contentsUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
     if (!res.ok) return null;
     const info = await res.json();
-    const bin = atob(info.content.replace(/\n/g, ''));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return JSON.parse(new TextDecoder('utf-8').decode(bytes)) as T;
+    if (info.content) {
+      const bin = atob(info.content.replace(/\n/g, ''));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return JSON.parse(new TextDecoder('utf-8').decode(bytes)) as T;
+    }
+    // Files > 1MB don't include content — use raw URL
+    const rawUrl = `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${path}`;
+    const rawRes = await fetch(rawUrl);
+    if (!rawRes.ok) return null;
+    return (await rawRes.json()) as T;
   } catch { return null; }
 }
 
