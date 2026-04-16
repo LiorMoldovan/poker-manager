@@ -409,7 +409,7 @@ export async function migrateFromCloud(
 
   try {
     // ── Step 1: Fetch data from GitHub ──
-    onProgress?.({ step: 'מוריד נתונים מהענן...', current: 1, total: 11 });
+    onProgress?.({ step: 'מוריד נתונים מהענן...', current: 1, total: 12 });
 
     const [syncData, backupData] = await Promise.all([
       fetchGitHubJSON<CloudSyncData>('public/sync-data.json'),
@@ -433,7 +433,7 @@ export async function migrateFromCloud(
     console.log(`Cloud data: ${players.length} players, ${games.length} games, ${gamePlayers.length} game-players`);
 
     // ── Step 2: Create group ──
-    onProgress?.({ step: 'יוצר קבוצה...', current: 2, total: 11 });
+    onProgress?.({ step: 'יוצר קבוצה...', current: 2, total: 12 });
 
     const { data: groupResult, error: groupError } = await supabase.rpc('create_group', { group_name: groupName });
     if (groupError) throw new Error(`Group creation: ${groupError.message}`);
@@ -442,7 +442,7 @@ export async function migrateFromCloud(
     console.log(`Created group "${groupName}" with ID: ${groupId}`);
 
     // ── Step 3: Players ──
-    onProgress?.({ step: 'שחקנים', current: 3, total: 11 });
+    onProgress?.({ step: 'שחקנים', current: 3, total: 12 });
     if (players.length > 0) {
       const rows = players.map(p => {
         const uuid = newUUID();
@@ -462,7 +462,7 @@ export async function migrateFromCloud(
     }
 
     // ── Step 4: Games ──
-    onProgress?.({ step: 'משחקים', current: 4, total: 11 });
+    onProgress?.({ step: 'משחקים', current: 4, total: 12 });
     if (games.length > 0) {
       const rows = games.map(g => {
         const uuid = newUUID();
@@ -491,7 +491,7 @@ export async function migrateFromCloud(
     }
 
     // ── Step 5: Game Players (with orphan handling) ──
-    onProgress?.({ step: 'שחקני משחק', current: 5, total: 11 });
+    onProgress?.({ step: 'שחקני משחק', current: 5, total: 12 });
     if (gamePlayers.length > 0) {
       const orphaned = new Set<string>();
       for (const gp of gamePlayers) {
@@ -532,7 +532,7 @@ export async function migrateFromCloud(
     }
 
     // ── Step 6: Game Forecasts ──
-    onProgress?.({ step: 'תחזיות', current: 6, total: 11 });
+    onProgress?.({ step: 'תחזיות', current: 6, total: 12 });
     let forecastCount = 0;
     for (const game of games) {
       if (game.forecasts?.length) {
@@ -549,7 +549,7 @@ export async function migrateFromCloud(
     stats.forecasts = forecastCount;
 
     // ── Step 7: Shared Expenses + Paid Settlements + Period Markers ──
-    onProgress?.({ step: 'הוצאות והתחשבנויות', current: 7, total: 11 });
+    onProgress?.({ step: 'הוצאות והתחשבנויות', current: 7, total: 12 });
     let expCount = 0, settleCount = 0, markerCount = 0;
     for (const game of games) {
       const gid = gameIdMap.get(game.id);
@@ -591,7 +591,7 @@ export async function migrateFromCloud(
     stats.periodMarkers = markerCount;
 
     // ── Step 8: Chip Values ──
-    onProgress?.({ step: 'ערכי ז\'יטונים', current: 8, total: 11 });
+    onProgress?.({ step: 'ערכי ז\'יטונים', current: 8, total: 12 });
     if (chipValues.length > 0) {
       const rows = chipValues.map(cv => ({
         id: newUUID(), group_id: groupId, color: cv.color, value: cv.value, display_color: cv.displayColor,
@@ -602,7 +602,7 @@ export async function migrateFromCloud(
     }
 
     // ── Step 9: Settings ──
-    onProgress?.({ step: 'הגדרות', current: 9, total: 11 });
+    onProgress?.({ step: 'הגדרות', current: 9, total: 12 });
     if (settings.rebuyValue) {
       const { error } = await supabase.from('settings').insert({
         group_id: groupId, rebuy_value: settings.rebuyValue,
@@ -615,7 +615,7 @@ export async function migrateFromCloud(
     }
 
     // ── Step 10: AI Caches ──
-    onProgress?.({ step: 'קאש AI', current: 10, total: 11 });
+    onProgress?.({ step: 'קאש AI', current: 10, total: 12 });
     for (const [key, entry] of Object.entries(chronicles)) {
       await supabase.from('chronicle_profiles').insert({
         group_id: groupId, period_key: key,
@@ -633,7 +633,7 @@ export async function migrateFromCloud(
     stats.graphInsights = Object.keys(insights).length;
 
     // ── Step 11: Pending Forecast ──
-    onProgress?.({ step: 'תחזית ממתינה', current: 11, total: 11 });
+    onProgress?.({ step: 'תחזית ממתינה', current: 11, total: 12 });
     if (pending?.playerIds) {
       await supabase.from('pending_forecasts').insert({
         id: newUUID(), group_id: groupId,
@@ -649,6 +649,13 @@ export async function migrateFromCloud(
       stats.pendingForecast = 1;
     }
 
+    // ── Step 12: Training Data ──
+    onProgress?.({ step: 'אימון פוקר', current: 12, total: 12 });
+    const trainingStats = await migrateTrainingFromCloud(groupId);
+    stats.trainingPool = trainingStats.pool;
+    stats.trainingAnswers = trainingStats.answers;
+    stats.trainingInsights = trainingStats.insights;
+
     const msg = `הועברו בהצלחה: ${stats.players || 0} שחקנים, ${stats.games || 0} משחקים, ${stats.gamePlayers || 0} רשומות`;
     console.log('Migration complete!', msg, stats);
     console.log('Reloading in 2 seconds...');
@@ -660,4 +667,114 @@ export async function migrateFromCloud(
     console.error('Cloud migration failed:', msg);
     return { success: false, message: `שגיאה בהעברה: ${msg}`, stats };
   }
+}
+
+// ── Training Data Migration (can be called independently) ──
+
+interface TrainingScenario {
+  poolId: string;
+  categoryId: string;
+  category: string;
+  [key: string]: unknown;
+}
+
+interface TrainingPoolData {
+  scenarios: TrainingScenario[];
+  totalScenarios: number;
+}
+
+interface TrainingPlayerData {
+  playerName: string;
+  sessions: unknown[];
+  totalQuestions: number;
+  totalCorrect: number;
+  accuracy: number;
+  pendingReportMilestones: number[];
+  reports: unknown[];
+}
+
+interface TrainingAnswersData {
+  players: TrainingPlayerData[];
+}
+
+interface TrainingInsightsData {
+  insights: Record<string, unknown>;
+}
+
+export async function migrateTrainingFromCloud(
+  groupId: string,
+  onProgress?: (msg: string) => void
+): Promise<{ pool: number; answers: number; insights: number }> {
+  const result = { pool: 0, answers: 0, insights: 0 };
+
+  try {
+    // Fetch training data from GitHub
+    onProgress?.('מוריד נתוני אימון...');
+    const [pool, answersFile, insightsFile] = await Promise.all([
+      fetchGitHubJSON<TrainingPoolData>('public/training-pool.json'),
+      fetchGitHubJSON<TrainingAnswersData>('public/training-answers.json'),
+      fetchGitHubJSON<TrainingInsightsData>('public/training-insights.json'),
+    ]);
+
+    // Pool scenarios — batch insert
+    if (pool?.scenarios?.length) {
+      onProgress?.(`מעביר ${pool.scenarios.length} תרחישי אימון...`);
+      const rows = pool.scenarios.map(s => ({
+        group_id: groupId,
+        scenario_id: s.poolId,
+        category_id: s.categoryId,
+        category: s.category,
+        scenario: s,
+      }));
+      const BATCH = 50;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const { error } = await supabase.from('training_pool').insert(rows.slice(i, i + BATCH));
+        if (error) console.warn(`Training pool batch ${i}: ${error.message}`);
+        else result.pool += rows.slice(i, i + BATCH).length;
+      }
+    }
+
+    // Player answers
+    if (answersFile?.players?.length) {
+      onProgress?.(`מעביר תשובות ${answersFile.players.length} שחקנים...`);
+      for (const player of answersFile.players) {
+        const { error } = await supabase.from('training_answers').upsert({
+          group_id: groupId,
+          player_name: player.playerName,
+          sessions: player.sessions,
+          stats: {
+            totalQuestions: player.totalQuestions,
+            totalCorrect: player.totalCorrect,
+            accuracy: player.accuracy,
+            pendingReportMilestones: player.pendingReportMilestones || [],
+          },
+          reports: player.reports || [],
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'group_id,player_name' });
+        if (error) console.warn(`Training answer ${player.playerName}: ${error.message}`);
+        else result.answers++;
+      }
+    }
+
+    // Player insights
+    if (insightsFile?.insights) {
+      const entries = Object.entries(insightsFile.insights);
+      onProgress?.(`מעביר תובנות ${entries.length} שחקנים...`);
+      for (const [playerName, data] of entries) {
+        const { error } = await supabase.from('training_insights').upsert({
+          group_id: groupId,
+          player_name: playerName,
+          insights: data,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'group_id,player_name' });
+        if (error) console.warn(`Training insight ${playerName}: ${error.message}`);
+        else result.insights++;
+      }
+    }
+
+    console.log('Training migration complete:', result);
+  } catch (err) {
+    console.error('Training migration error:', err);
+  }
+  return result;
 }

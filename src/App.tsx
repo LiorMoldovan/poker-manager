@@ -9,7 +9,7 @@ import { logActivity, updateSessionActivity, getScreenName, resetSession } from 
 import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
-import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData } from './database/migrateToSupabase';
+import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData, migrateTrainingFromCloud } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import PinLock from './components/PinLock';
 import AuthScreen from './screens/AuthScreen';
@@ -331,11 +331,13 @@ function SupabaseApp() {
       win.migrateToSupabase = (progress?: boolean) =>
         migrateLocalStorageToSupabase(groupId, progress ? (p) => console.log(`[${p.current}/${p.total}] ${p.step}`) : undefined);
       win.cleanGroupData = () => cleanGroupData(groupId);
+      win.migrateTraining = () => migrateTrainingFromCloud(groupId, (msg) => console.log('[training]', msg));
     }
     return () => {
       delete win.migrateFromCloud;
       delete win.migrateToSupabase;
       delete win.cleanGroupData;
+      delete win.migrateTraining;
     };
   }, [groupId]);
 
@@ -388,6 +390,49 @@ function SupabaseApp() {
         onJoinGroup={auth.joinGroup}
         onSignOut={auth.signOut}
       />
+    );
+  }
+
+  // Player linking: after data loads, if no player linked, show picker
+  if (dataReady && !playerName) {
+    const allPlayers = getAllPlayers();
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--background)', direction: 'rtl',
+      }}>
+        <div style={{
+          background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
+          maxWidth: '400px', width: '90%', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+        }}>
+          <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
+            בחר את השחקן שלך כדי להמשיך
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {allPlayers
+              .filter(p => p.type === 'permanent')
+              .map(p => (
+                <button
+                  key={p.id}
+                  onClick={async () => {
+                    await auth.linkToPlayer(p.id);
+                  }}
+                  style={{
+                    padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
+                    background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
+                    fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
+                >
+                  {p.name}
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
     );
   }
 

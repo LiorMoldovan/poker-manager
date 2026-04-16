@@ -45,7 +45,7 @@ import TrainingAdminTab from '../components/TrainingAdminTab';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
-  const { role, hasPermission, signOut } = usePermissions();
+  const { role, playerName: authPlayerName, hasPermission, signOut } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -1871,10 +1871,10 @@ const SettingsScreen = () => {
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>מזוהה כ:</div>
               <div style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text)' }}>
-                {(() => { const n = localStorage.getItem('poker_player_identity'); return n || '—'; })()}
+                {USE_SUPABASE ? (authPlayerName || '—') : (localStorage.getItem('poker_player_identity') || '—')}
               </div>
             </div>
-            {role !== 'admin' && !showSwitchPin && (
+            {!USE_SUPABASE && role !== 'admin' && !showSwitchPin && (
               <button
                 className="btn btn-sm btn-outline"
                 onClick={() => { setShowSwitchPin(true); setSwitchPin(''); setSwitchPinError(false); }}
