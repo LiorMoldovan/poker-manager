@@ -45,7 +45,7 @@ import TrainingAdminTab from '../components/TrainingAdminTab';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
-  const { role, playerName: authPlayerName, hasPermission, signOut } = usePermissions();
+  const { role, isOwner, playerName: authPlayerName, hasPermission, signOut } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -146,7 +146,7 @@ const SettingsScreen = () => {
 
   // Auto-load activity log when tab is selected
   useEffect(() => {
-    if (activeTab === 'activity' && role === 'admin' && activityLog.length === 0 && !activityLoading) {
+    if (activeTab === 'activity' && isOwner && activityLog.length === 0 && !activityLoading) {
       loadActivityLog();
     }
   }, [activeTab]);
@@ -455,18 +455,18 @@ const SettingsScreen = () => {
 
   // Filter tabs based on permissions
   const allTabs = [
-    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const, adminOnly: false },
-    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, adminOnly: false },
-    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, adminOnly: false },
-    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, adminOnly: false },
-    { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, adminOnly: true },
-    { id: 'training', label: '🎯 Training', icon: '🎯', requiresPermission: null, adminOnly: true },
-    { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, adminOnly: true },
-    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, adminOnly: false },
+    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const, ownerOnly: false },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false },
+    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false },
+    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, ownerOnly: false },
+    { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, ownerOnly: true },
+    { id: 'training', label: '🎯 Training', icon: '🎯', requiresPermission: null, ownerOnly: true },
+    { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, ownerOnly: true },
+    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, ownerOnly: false },
   ];
   
   const tabs = allTabs.filter(tab => {
-    if (tab.adminOnly && role !== 'admin') return false;
+    if (tab.ownerOnly && !isOwner) return false;
     return tab.requiresPermission === null || hasPermission(tab.requiresPermission);
   }) as { id: 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'; label: string; icon: string }[];
 
@@ -497,8 +497,8 @@ const SettingsScreen = () => {
         </button>
       </div>
 
-      {/* Poker Training - Admin Only */}
-      {role === 'admin' && (
+      {/* Poker Training - Owner Only */}
+      {isOwner && (
         <button
           onClick={() => navigate('/training')}
           style={{
@@ -1440,8 +1440,8 @@ const SettingsScreen = () => {
         </div>
       )}
 
-      {/* AI Tab - Admin Only */}
-      {activeTab === 'ai' && role === 'admin' && (() => {
+      {/* AI Tab - Owner Only */}
+      {activeTab === 'ai' && isOwner && (() => {
         const todayActions = getTodayActions();
         const todayTokens = getTodayTokens();
         const todayLog = getTodayLog();
@@ -2042,11 +2042,11 @@ const SettingsScreen = () => {
         </>
       )}
 
-      {/* Training Admin Tab - Admin Only */}
-      {activeTab === 'training' && role === 'admin' && <TrainingAdminTab />}
+      {/* Training Admin Tab - Owner Only */}
+      {activeTab === 'training' && isOwner && <TrainingAdminTab />}
 
-      {/* Activity Tab - Admin Only */}
-      {activeTab === 'activity' && role === 'admin' && (
+      {/* Activity Tab - Owner Only */}
+      {activeTab === 'activity' && isOwner && (
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">📊 Activity Log</h2>

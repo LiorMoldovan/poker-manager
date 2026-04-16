@@ -363,7 +363,10 @@ async function pushToSupabase(key: string) {
     }
     case CHRONICLE_KEY: {
       const all = state.data.get(key) as Record<string, ChronicleEntry> | null;
-      if (!all) break;
+      if (!all) {
+        await supabase.from('chronicle_profiles').delete().eq('group_id', gid);
+        break;
+      }
       for (const [periodKey, entry] of Object.entries(all)) {
         await supabase.from('chronicle_profiles').upsert({
           group_id: gid,
@@ -377,7 +380,10 @@ async function pushToSupabase(key: string) {
     }
     case GRAPH_INSIGHTS_KEY: {
       const all = state.data.get(key) as Record<string, GraphInsightsEntry> | null;
-      if (!all) break;
+      if (!all) {
+        await supabase.from('graph_insights').delete().eq('group_id', gid);
+        break;
+      }
       for (const [periodKey, entry] of Object.entries(all)) {
         await supabase.from('graph_insights').upsert({
           group_id: gid,

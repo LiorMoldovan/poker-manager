@@ -7,6 +7,7 @@ interface GroupMembership {
   groupId: string;
   groupName: string;
   role: PermissionRole;
+  isOwner: boolean;
   playerName: string | null;
   playerId: string | null;
   inviteCode: string | null;
@@ -41,7 +42,7 @@ export function useSupabaseAuth() {
         role,
         player_id,
         players ( name ),
-        groups ( name, invite_code )
+        groups ( name, invite_code, created_by )
       `)
       .eq('user_id', userId)
       .limit(1)
@@ -49,13 +50,14 @@ export function useSupabaseAuth() {
 
     if (data && !error) {
       const playerRow = data.players as unknown as { name: string } | null;
-      const groupRow = data.groups as unknown as { name: string; invite_code: string | null } | null;
+      const groupRow = data.groups as unknown as { name: string; invite_code: string | null; created_by: string } | null;
       setState(prev => ({
         ...prev,
         membership: {
           groupId: data.group_id,
           groupName: groupRow?.name ?? '',
           role: SUPABASE_ROLE_MAP[data.role] ?? 'viewer',
+          isOwner: groupRow?.created_by === userId,
           playerName: playerRow?.name ?? null,
           playerId: data.player_id ?? null,
           inviteCode: groupRow?.invite_code ?? null,

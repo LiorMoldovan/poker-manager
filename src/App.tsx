@@ -8,6 +8,7 @@ import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
+import { supabase } from './database/supabaseClient';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import { migrateLocalStorageToSupabase, migrateFromCloud, cleanGroupData, migrateTrainingFromCloud } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
@@ -75,6 +76,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 // Permission context
 interface PermissionContextType {
   role: PermissionRole | null;
+  isOwner: boolean;
   playerName: string | null;
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
   signOut: () => void;
@@ -82,6 +84,7 @@ interface PermissionContextType {
 
 const PermissionContext = createContext<PermissionContextType>({
   role: null,
+  isOwner: false,
   playerName: null,
   hasPermission: () => false,
   signOut: () => {},
@@ -313,6 +316,77 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
   );
 }
 
+function PlayerPicker({ groupId, onLink }: { groupId: string; onLink: (playerId: string) => Promise<{ error: unknown }> }) {
+  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const allPlayers = getAllPlayers();
+
+  useEffect(() => {
+    supabase.from('group_members')
+      .select('player_id')
+      .eq('group_id', groupId)
+      .not('player_id', 'is', null)
+      .then(({ data }) => {
+        setLinkedIds(new Set((data || []).map(r => r.player_id as string)));
+        setLoading(false);
+      });
+  }, [groupId]);
+
+  const available = allPlayers.filter(p => p.type === 'permanent' && !linkedIds.has(p.id));
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--background)',
+      }}>
+        <div style={{ color: 'var(--text-muted)' }}>טוען...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'var(--background)', direction: 'rtl',
+    }}>
+      <div style={{
+        background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
+        maxWidth: '400px', width: '90%', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
+      }}>
+        <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
+          בחר את השחקן שלך כדי להמשיך
+        </p>
+        {available.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {available.map(p => (
+              <button
+                key={p.id}
+                onClick={() => onLink(p.id)}
+                style={{
+                  padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
+                  background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
+                  fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
+            אין שחקנים זמינים. פנה למנהל הקבוצה כדי שיוסיף אותך.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SupabaseApp() {
   const location = useLocation();
   const auth = useSupabaseAuth();
@@ -321,6 +395,7 @@ function SupabaseApp() {
 
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
+  const isOwner = auth.membership?.isOwner ?? false;
   const playerName = auth.membership?.playerName ?? null;
 
   useEffect(() => {
@@ -359,6 +434,7 @@ function SupabaseApp() {
 
   const permissionValue: PermissionContextType = {
     role,
+    isOwner,
     playerName,
     hasPermission: (permission) => hasPermission(role, permission),
     signOut: () => { auth.signOut(); },
@@ -395,45 +471,7 @@ function SupabaseApp() {
 
   // Player linking: after data loads, if no player linked, show picker
   if (dataReady && !playerName) {
-    const allPlayers = getAllPlayers();
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--background)', direction: 'rtl',
-      }}>
-        <div style={{
-          background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
-          maxWidth: '400px', width: '90%', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-        }}>
-          <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
-            בחר את השחקן שלך כדי להמשיך
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {allPlayers
-              .filter(p => p.type === 'permanent')
-              .map(p => (
-                <button
-                  key={p.id}
-                  onClick={async () => {
-                    await auth.linkToPlayer(p.id);
-                  }}
-                  style={{
-                    padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
-                    background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
-                    fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
-                >
-                  {p.name}
-                </button>
-              ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <PlayerPicker groupId={groupId!} onLink={auth.linkToPlayer} />;
   }
 
   // Wait for Supabase data to load
@@ -511,9 +549,9 @@ function SupabaseApp() {
               <Route path="/statistics" element={<StatisticsScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
               <Route path="/graphs" element={<GraphsScreen />} />
-              {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
-              {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
-              {role === 'admin' && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
+              {isOwner && <Route path="/training" element={<TrainingScreen />} />}
+              {isOwner && <Route path="/training/play" element={<TrainingHandScreen />} />}
+              {isOwner && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
               <Route path="/shared-training" element={<SharedTrainingScreen />} />
               <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -679,9 +717,10 @@ function LegacyApp() {
     sessionStorage.removeItem('poker_role');
   };
 
-  // Permission context value
+  // Permission context value — in legacy mode, admin IS the owner
   const permissionValue: PermissionContextType = {
     role,
+    isOwner: role === 'admin',
     playerName,
     hasPermission: (permission) => hasPermission(role, permission),
     signOut: handleSignOut,
