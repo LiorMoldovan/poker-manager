@@ -392,50 +392,110 @@ async function pushToSupabase(key: string) {
   }
 }
 
+// ── Data fetching helpers ──
+// PostgREST defaults to max 1000 rows per request.
+
+async function fetchAllRows(
+  table: string,
+  filter?: { column: string; value: string },
+): Promise<Record<string, unknown>[]> {
+  const PAGE = 1000;
+  const all: Record<string, unknown>[] = [];
+  let from = 0;
+  for (;;) {
+    let q = supabase.from(table).select('*');
+    if (filter) q = q.eq(filter.column, filter.value);
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) { console.warn(`fetchAllRows(${table}):`, error.message); break; }
+    if (!data || data.length === 0) break;
+    all.push(...(data as Record<string, unknown>[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+// Fetch child rows by game_id in batches — avoids RLS subquery performance issues
+// and the 1000-row global limit for tables without a group_id column.
+async function fetchByGameIds(
+  table: string,
+  gameIds: string[],
+): Promise<Record<string, unknown>[]> {
+  if (gameIds.length === 0) return [];
+  const BATCH = 30;
+  const batches: string[][] = [];
+  for (let i = 0; i < gameIds.length; i += BATCH) {
+    batches.push(gameIds.slice(i, i + BATCH));
+  }
+  const results = await Promise.all(batches.map(async (batch, idx) => {
+    const { data, error } = await supabase.from(table).select('*').in('game_id', batch);
+    if (error) console.warn(`${table} batch ${idx}:`, error.message);
+    return (data || []) as Record<string, unknown>[];
+  }));
+  return results.flat();
+}
+
 // ── Public API ──
 
 export async function initSupabaseCache(groupId: string): Promise<void> {
   const data = new Map<string, unknown>();
   const ttsPools = new Map<string, { pool: unknown; model?: string }>();
 
+  // Phase 1: fetch group-scoped tables + small child tables in parallel
   const [
-    playersRes, gamesRes, gamePlayersRes, chipValuesRes, settingsRes,
-    sharedExpRes, forecastsRes, settlementsRes, periodMarkersRes, pendingRes,
-    chroniclesRes, insightsRes, ttsRes,
+    playersRows, gamesRows, chipValuesRes, settingsRes, pendingRes,
+    chroniclesRes, insightsRes,
   ] = await Promise.all([
-    supabase.from('players').select('*').eq('group_id', groupId),
-    supabase.from('games').select('*').eq('group_id', groupId),
-    supabase.from('game_players').select('*'),
+    fetchAllRows('players', { column: 'group_id', value: groupId }),
+    fetchAllRows('games', { column: 'group_id', value: groupId }),
     supabase.from('chip_values').select('*').eq('group_id', groupId),
     supabase.from('settings').select('*').eq('group_id', groupId).maybeSingle(),
-    supabase.from('shared_expenses').select('*'),
-    supabase.from('game_forecasts').select('*'),
-    supabase.from('paid_settlements').select('*'),
-    supabase.from('period_markers').select('*'),
     supabase.from('pending_forecasts').select('*').eq('group_id', groupId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('chronicle_profiles').select('*').eq('group_id', groupId),
     supabase.from('graph_insights').select('*').eq('group_id', groupId),
-    supabase.from('tts_pools').select('*'),
   ]);
 
-  // Players
-  data.set(STORAGE_KEYS.PLAYERS, (playersRes.data || []).map(r => toPlayer(r)));
+  if (chipValuesRes.error) console.warn('chip_values:', chipValuesRes.error.message);
+  if (settingsRes.error) console.warn('settings:', settingsRes.error.message);
+  if (pendingRes.error) console.warn('pending_forecasts:', pendingRes.error.message);
+  if (chroniclesRes.error) console.warn('chronicle_profiles:', chroniclesRes.error.message);
+  if (insightsRes.error) console.warn('graph_insights:', insightsRes.error.message);
 
-  // Games (with embedded shared_expenses, forecasts, paidSettlements)
+  // Players
+  data.set(STORAGE_KEYS.PLAYERS, playersRows.map(r => toPlayer(r)));
+
+  // Build game ID set for child table filtering
+  const games = gamesRows.map(r => toGame(r));
+  const groupGameIds = new Set(games.map(g => g.id));
+
+  // Phase 2: fetch child tables by game_id in batches (avoids RLS subquery perf issues + 1000-row limit)
+  const gameIds = Array.from(groupGameIds);
+  const [
+    gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows, ttsRows,
+  ] = await Promise.all([
+    fetchByGameIds('game_players', gameIds),
+    fetchByGameIds('shared_expenses', gameIds),
+    fetchByGameIds('game_forecasts', gameIds),
+    fetchByGameIds('paid_settlements', gameIds),
+    fetchByGameIds('period_markers', gameIds),
+    fetchByGameIds('tts_pools', gameIds),
+  ]);
+
+  // Games (with embedded shared_expenses, forecasts, paidSettlements, periodMarkers)
   const sharedExpByGame = new Map<string, SharedExpense[]>();
-  for (const row of sharedExpRes.data || []) {
+  for (const row of sharedExpRows) {
     const gameId = row.game_id as string;
     if (!sharedExpByGame.has(gameId)) sharedExpByGame.set(gameId, []);
     sharedExpByGame.get(gameId)!.push(toSharedExpense(row));
   }
   const forecastsByGame = new Map<string, GameForecast[]>();
-  for (const row of forecastsRes.data || []) {
+  for (const row of forecastsRows) {
     const gameId = row.game_id as string;
     if (!forecastsByGame.has(gameId)) forecastsByGame.set(gameId, []);
     forecastsByGame.get(gameId)!.push(toForecast(row));
   }
   const settlementsByGame = new Map<string, { from: string; to: string; paidAt: string }[]>();
-  for (const row of settlementsRes.data || []) {
+  for (const row of settlementsRows) {
     const gameId = row.game_id as string;
     if (!settlementsByGame.has(gameId)) settlementsByGame.set(gameId, []);
     settlementsByGame.get(gameId)!.push({
@@ -445,7 +505,7 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     });
   }
   const periodMarkersByGame = new Map<string, Game['periodMarkers']>();
-  for (const row of periodMarkersRes.data || []) {
+  for (const row of periodMarkersRows) {
     periodMarkersByGame.set(row.game_id as string, {
       isFirstGameOfMonth: !!row.is_first_game_of_month,
       isLastGameOfMonth: !!row.is_last_game_of_month,
@@ -458,8 +518,7 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
       year: Number(row.year) || 0,
     });
   }
-  const games = (gamesRes.data || []).map(r => {
-    const game = toGame(r);
+  for (const game of games) {
     const se = sharedExpByGame.get(game.id);
     if (se && se.length > 0) game.sharedExpenses = se;
     const fc = forecastsByGame.get(game.id);
@@ -468,28 +527,26 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     if (ps && ps.length > 0) game.paidSettlements = ps;
     const pm = periodMarkersByGame.get(game.id);
     if (pm) game.periodMarkers = pm;
-    return game;
-  });
+  }
   data.set(STORAGE_KEYS.GAMES, games);
 
-  // Filter game_players to only include games in this group
-  const groupGameIds = new Set(games.map(g => g.id));
-  const gps = (gamePlayersRes.data || [])
-    .filter(r => groupGameIds.has(r.game_id as string))
-    .map(r => toGamePlayer(r));
+  // Game players — already filtered to group's games by fetchByGameIds
+  const gps = gamePlayersRows.map(r => toGamePlayer(r));
   data.set(STORAGE_KEYS.GAME_PLAYERS, gps);
 
-  // Chip values
-  data.set(STORAGE_KEYS.CHIP_VALUES, (chipValuesRes.data || []).map(r => toChipValue(r)));
+  // Chip values (empty array → caller uses DEFAULT_CHIP_VALUES via storage.ts)
+  data.set(STORAGE_KEYS.CHIP_VALUES, (chipValuesRes.data || []).map(r => toChipValue(r as Record<string, unknown>)));
 
-  // Settings
+  // Settings — always set the key so getSettings() merges with defaults consistently
   if (settingsRes.data) {
-    data.set(STORAGE_KEYS.SETTINGS, toSettings(settingsRes.data));
+    data.set(STORAGE_KEYS.SETTINGS, toSettings(settingsRes.data as Record<string, unknown>));
+  } else {
+    data.set(STORAGE_KEYS.SETTINGS, {});
   }
 
   // Pending forecast
   if (pendingRes.data) {
-    data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pendingRes.data));
+    data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pendingRes.data as Record<string, unknown>));
   }
 
   // Backups (not stored in Supabase — data IS the backup)
@@ -517,16 +574,15 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   }
   data.set(GRAPH_INSIGHTS_KEY, insights);
 
-  // TTS Pools
-  for (const row of ttsRes.data || []) {
-    if (groupGameIds.has(row.game_id as string)) {
-      ttsPools.set(row.game_id as string, {
-        pool: row.pool,
-        model: row.model as string | undefined,
-      });
-    }
+  // TTS Pools — already filtered to group's games by fetchByGameIds
+  for (const row of ttsRows) {
+    ttsPools.set(row.game_id as string, {
+      pool: row.pool,
+      model: row.model as string | undefined,
+    });
   }
 
+  console.log(`Supabase cache loaded: ${games.length} games, ${gps.length} game-players, ${playersRows.length} players`);
   state = { groupId, data, ttsPools, initialized: true };
 }
 
@@ -606,8 +662,8 @@ export function cacheDeleteTTS(gameId: string): void {
 
 const REALTIME_TABLES = [
   'players', 'games', 'game_players', 'shared_expenses', 'game_forecasts',
-  'paid_settlements', 'settings', 'chip_values', 'pending_forecasts',
-  'chronicle_profiles', 'graph_insights',
+  'paid_settlements', 'period_markers', 'settings', 'chip_values',
+  'pending_forecasts', 'chronicle_profiles', 'graph_insights', 'tts_pools',
 ];
 
 function scheduleRealtimeRefresh() {

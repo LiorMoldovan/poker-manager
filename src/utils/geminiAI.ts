@@ -915,11 +915,11 @@ export const generateAIForecasts = async (
 
   const n = players.length;
 
-  // STEP 1: Collect game templates from localStorage (full game shapes, not just tonight's players)
+  // STEP 1: Collect game templates from all completed games
   let templates: number[][] = [];
   try {
-    const storedGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
-    const storedGPs: { gameId: string; profit: number }[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+    const storedGames = getAllGames();
+    const storedGPs = getAllGamePlayers();
     const completedIds = new Set(storedGames.filter(g => g.status === 'completed').map(g => g.id));
     const gameProfits = new Map<string, number[]>();
     for (const gp of storedGPs) {

@@ -427,7 +427,8 @@ export const updateGamePlayerResults = (gamePlayerId: string, finalValue: number
 
 // Chip Values
 export const getChipValues = (): ChipValue[] => {
-  return getItem<ChipValue[]>(STORAGE_KEYS.CHIP_VALUES, DEFAULT_CHIP_VALUES);
+  const values = getItem<ChipValue[]>(STORAGE_KEYS.CHIP_VALUES, DEFAULT_CHIP_VALUES);
+  return values.length > 0 ? values : DEFAULT_CHIP_VALUES;
 };
 
 export const saveChipValue = (chipValue: Omit<ChipValue, 'id'> & { id?: string }): ChipValue => {
