@@ -15,6 +15,15 @@ function readLS<T>(key: string, fallback: T): T {
   try { return JSON.parse(raw); } catch { return fallback; }
 }
 
+function remapObjectKeys<T>(obj: Record<string, T>, idMap: IdMap): Record<string, T> {
+  if (!obj || Object.keys(obj).length === 0) return obj;
+  const remapped: Record<string, T> = {};
+  for (const [oldKey, value] of Object.entries(obj)) {
+    remapped[idMap.get(oldKey) || oldKey] = value;
+  }
+  return remapped;
+}
+
 function remapChipCounts(chipCounts: Record<string, number>, chipIdMap: IdMap): Record<string, number> {
   if (!chipCounts || Object.keys(chipCounts).length === 0) return chipCounts;
   const remapped: Record<string, number> = {};
@@ -289,10 +298,11 @@ export async function migrateLocalStorageToSupabase(
       try {
         const all: Record<string, ChronicleEntry> = JSON.parse(chroniclesRaw);
         for (const [periodKey, entry] of Object.entries(all)) {
+          const remappedProfiles = remapObjectKeys(entry.profiles, playerIdMap);
           await supabase.from('chronicle_profiles').insert({
             group_id: groupId,
             period_key: periodKey,
-            profiles: entry.profiles,
+            profiles: remappedProfiles,
             generated_at: entry.generatedAt,
             model: entry.model || null,
           });
@@ -632,9 +642,10 @@ export async function migrateFromCloud(
     // ── Step 10: AI Caches ──
     onProgress?.({ step: 'קאש AI', current: 10, total: 12 });
     for (const [key, entry] of Object.entries(chronicles)) {
+      const remappedProfiles = remapObjectKeys(entry.profiles, playerIdMap);
       await supabase.from('chronicle_profiles').insert({
         group_id: groupId, period_key: key,
-        profiles: entry.profiles, generated_at: entry.generatedAt, model: entry.model || null,
+        profiles: remappedProfiles, generated_at: entry.generatedAt, model: entry.model || null,
       });
     }
     stats.chronicles = Object.keys(chronicles).length;
