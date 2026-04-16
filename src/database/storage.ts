@@ -221,6 +221,10 @@ export const updatePlayerName = (playerId: string, newName: string): boolean => 
   return true;
 };
 
+export const playerHasGames = (playerId: string): boolean => {
+  return getAllGamePlayers().some(gp => gp.playerId === playerId);
+};
+
 export const deletePlayer = (id: string): void => {
   const players = getAllPlayers().filter(p => p.id !== id);
   setItem(STORAGE_KEYS.PLAYERS, players);

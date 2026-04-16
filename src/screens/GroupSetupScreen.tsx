@@ -5,6 +5,7 @@ interface GroupSetupScreenProps {
   onCreateGroup: (name: string) => Promise<{ data: any; error: any }>;
   onJoinGroup: (code: string) => Promise<{ data: any; error: any }>;
   onSignOut: () => void;
+  onContinue?: () => void;
 }
 
 export default function GroupSetupScreen({
@@ -12,12 +13,15 @@ export default function GroupSetupScreen({
   onCreateGroup,
   onJoinGroup,
   onSignOut,
+  onContinue,
 }: GroupSetupScreenProps) {
-  const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
+  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'created'>('choose');
   const [groupName, setGroupName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [createdInviteCode, setCreatedInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCreate = async () => {
     if (!groupName.trim()) {
@@ -26,9 +30,13 @@ export default function GroupSetupScreen({
     }
     setLoading(true);
     setError('');
-    const { error: err } = await onCreateGroup(groupName.trim());
+    const { data, error: err } = await onCreateGroup(groupName.trim());
     if (err) {
       setError(err.message || 'שגיאה ביצירת הקבוצה');
+    } else {
+      const code = data?.invite_code || '';
+      setCreatedInviteCode(code);
+      setMode('created');
     }
     setLoading(false);
   };
@@ -72,11 +80,13 @@ export default function GroupSetupScreen({
           {mode === 'choose' && 'ברוך הבא!'}
           {mode === 'create' && 'צור קבוצה חדשה'}
           {mode === 'join' && 'הצטרף לקבוצה'}
+          {mode === 'created' && groupName}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
           {mode === 'choose' && 'כדי להתחיל, צור קבוצה או הצטרף לקיימת'}
           {mode === 'create' && 'תן שם לקבוצת הפוקר שלך'}
           {mode === 'join' && 'הזן את קוד ההזמנה שקיבלת מהמנהל'}
+          {mode === 'created' && 'קוד ההזמנה שלך'}
         </p>
       </div>
 
@@ -159,6 +169,85 @@ export default function GroupSetupScreen({
 
           <button onClick={() => { setMode('choose'); setError(''); }} style={backLinkStyle}>
             חזרה
+          </button>
+        </div>
+      )}
+
+      {mode === 'created' && (
+        <div style={{ width: '100%', maxWidth: '320px', textAlign: 'center' }}>
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: '12px',
+            padding: '1.25rem',
+            marginBottom: '1.25rem',
+          }}>
+            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+            <p style={{ color: '#10B981', fontWeight: 600, fontSize: '1rem', marginBottom: '0.5rem' }}>
+              הקבוצה נוצרה בהצלחה!
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+              שתף את הקוד הזה עם חברי הקבוצה כדי שיוכלו להצטרף
+            </p>
+            <div style={{
+              background: 'var(--surface)',
+              border: '2px dashed var(--border)',
+              borderRadius: '10px',
+              padding: '0.75rem',
+              letterSpacing: '6px',
+              fontSize: '1.6rem',
+              fontWeight: 700,
+              color: 'var(--text)',
+              fontFamily: 'monospace',
+              direction: 'ltr',
+            }}>
+              {createdInviteCode}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(createdInviteCode);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              style={{
+                ...actionButtonStyle,
+                flex: 1,
+                background: copied ? '#10B981' : 'var(--surface)',
+                color: copied ? 'white' : 'var(--text)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {copied ? '✓ הועתק!' : '📋 העתק קוד'}
+            </button>
+            {typeof navigator.share === 'function' && (
+              <button
+                onClick={() => {
+                  navigator.share({
+                    title: `הצטרף ל${groupName}`,
+                    text: `הצטרף לקבוצת הפוקר שלנו! קוד הזמנה: ${createdInviteCode}`,
+                  }).catch(() => {});
+                }}
+                style={{
+                  ...actionButtonStyle,
+                  flex: 1,
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                📤 שתף
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={onContinue}
+            style={actionButtonStyle}
+          >
+            המשך לאפליקציה
           </button>
         </div>
       )}

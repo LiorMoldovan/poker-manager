@@ -7,7 +7,7 @@ import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
 import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry } from '../types';
 import { playerTraitsByName } from './playerTraits';
-import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
@@ -196,7 +196,10 @@ const API_KEY_STORAGE = 'gemini_api_key';
 export const isOnline = (): boolean => navigator.onLine;
 
 export const getGeminiApiKey = (): string | null => {
-  if (isServerManagedKey()) return 'server-managed';
+  if (isServerManagedKey()) {
+    const key = getSettings()?.geminiApiKey;
+    return key || 'server-managed';
+  }
   return localStorage.getItem(API_KEY_STORAGE);
 };
 

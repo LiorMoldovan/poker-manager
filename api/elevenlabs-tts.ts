@@ -10,16 +10,15 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured' } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
-    const { voiceId, outputFormat, payload } = await req.json();
+    const { voiceId, outputFormat, payload, apiKey: clientKey } = await req.json();
+    const apiKey = clientKey || process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured. Set it in group settings.' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (!voiceId || !payload) {
       return new Response(JSON.stringify({ error: { message: 'Missing voiceId or payload' } }), {
         status: 400,

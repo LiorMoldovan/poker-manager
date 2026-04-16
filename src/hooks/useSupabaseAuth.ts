@@ -3,6 +3,14 @@ import { supabase } from '../database/supabaseClient';
 import type { User, Session } from '@supabase/supabase-js';
 import type { PermissionRole } from '../types';
 
+export interface GroupMember {
+  userId: string;
+  displayName: string | null;
+  role: string;
+  playerId: string | null;
+  playerName: string | null;
+}
+
 interface GroupMembership {
   groupId: string;
   groupName: string;
@@ -117,7 +125,14 @@ export function useSupabaseAuth() {
   }, []);
 
   const createGroup = useCallback(async (groupName: string) => {
-    const { data, error } = await supabase.rpc('create_group', { group_name: groupName });
+    const displayName = state.user?.user_metadata?.full_name
+      || state.user?.user_metadata?.name
+      || state.user?.email?.split('@')[0]
+      || null;
+    const { data, error } = await supabase.rpc('create_group', {
+      group_name: groupName,
+      display_name: displayName,
+    });
     if (!error && state.user) {
       await fetchMembership(state.user.id);
     }
@@ -125,7 +140,14 @@ export function useSupabaseAuth() {
   }, [state.user, fetchMembership]);
 
   const joinGroup = useCallback(async (inviteCode: string) => {
-    const { data, error } = await supabase.rpc('join_group_by_invite', { code: inviteCode });
+    const displayName = state.user?.user_metadata?.full_name
+      || state.user?.user_metadata?.name
+      || state.user?.email?.split('@')[0]
+      || null;
+    const { data, error } = await supabase.rpc('join_group_by_invite', {
+      code: inviteCode,
+      display_name: displayName,
+    });
     if (!error && state.user) {
       await fetchMembership(state.user.id);
     }
@@ -142,6 +164,70 @@ export function useSupabaseAuth() {
     return { error };
   }, [state.user, fetchMembership]);
 
+  const selfCreateAndLink = useCallback(async (playerName: string) => {
+    const { data, error } = await supabase.rpc('self_create_and_link', {
+      player_name: playerName,
+    });
+    if (!error && state.user) {
+      await fetchMembership(state.user.id);
+    }
+    return { data, error };
+  }, [state.user, fetchMembership]);
+
+  const updateMemberRole = useCallback(async (targetUserId: string, newRole: string) => {
+    const { error } = await supabase.rpc('update_member_role', {
+      target_user_id: targetUserId,
+      new_role: newRole,
+    });
+    return { error };
+  }, []);
+
+  const removeMember = useCallback(async (targetUserId: string) => {
+    const { error } = await supabase.rpc('remove_group_member', {
+      target_user_id: targetUserId,
+    });
+    return { error };
+  }, []);
+
+  const transferOwnership = useCallback(async (newOwnerId: string) => {
+    const { error } = await supabase.rpc('transfer_ownership', {
+      new_owner_id: newOwnerId,
+    });
+    if (!error && state.user) {
+      await fetchMembership(state.user.id);
+    }
+    return { error };
+  }, [state.user, fetchMembership]);
+
+  const regenerateInviteCode = useCallback(async () => {
+    const { data, error } = await supabase.rpc('regenerate_invite_code');
+    return { data: data as string | null, error };
+  }, []);
+
+  const unlinkMemberPlayer = useCallback(async (targetUserId: string) => {
+    const { error } = await supabase.rpc('unlink_member_player', {
+      target_user_id: targetUserId,
+    });
+    return { error };
+  }, []);
+
+  const fetchMembers = useCallback(async (): Promise<GroupMember[]> => {
+    const groupId = state.membership?.groupId;
+    if (!groupId) return [];
+    const { data, error } = await supabase
+      .from('group_members')
+      .select('user_id, display_name, role, player_id, players ( name )')
+      .eq('group_id', groupId);
+    if (error || !data) return [];
+    return data.map(row => ({
+      userId: row.user_id,
+      displayName: row.display_name,
+      role: row.role,
+      playerId: row.player_id,
+      playerName: (row.players as unknown as { name: string } | null)?.name ?? null,
+    }));
+  }, [state.membership?.groupId]);
+
   return {
     ...state,
     signIn,
@@ -151,6 +237,13 @@ export function useSupabaseAuth() {
     createGroup,
     joinGroup,
     linkToPlayer,
+    selfCreateAndLink,
+    updateMemberRole,
+    removeMember,
+    transferOwnership,
+    regenerateInviteCode,
+    unlinkMemberPlayer,
+    fetchMembers,
     refreshMembership: () => {
       if (state.user) fetchMembership(state.user.id);
     },

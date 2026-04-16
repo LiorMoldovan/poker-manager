@@ -30,7 +30,7 @@ const HistoryScreen = () => {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({ permanent_guest: true, guest: true });
   
   const canDeleteGames = hasPermission('game:delete');
-  const canSyncToCloud = role === 'admin' || role === 'memberSync';
+  const canSyncToCloud = role === 'admin';
 
   const loadGames = useCallback(() => {
     const allGames = getAllGames();
@@ -73,11 +73,9 @@ const HistoryScreen = () => {
     loadGames();
     setDeleteConfirm(null);
     
-    // If admin or memberSync, sync deletion to cloud
     if (canSyncToCloud) {
       setSyncStatus('Syncing deletion...');
-      const useMemberSyncToken = role === 'memberSync';
-      const result = await syncToCloud(useMemberSyncToken);
+      const result = await syncToCloud(false);
       if (result.success) {
         setSyncStatus('✅ Deletion synced to cloud');
       } else {

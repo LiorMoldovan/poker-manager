@@ -1,4 +1,5 @@
 import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage, isServerManagedKey } from './apiProxy';
+import { getSettings } from '../database/storage';
 
 // Gender-aware Hebrew number words for TTS
 // feminine=true for feminine nouns (קניות, פעמים, דקות)
@@ -414,7 +415,10 @@ const ELEVENLABS_TIMEOUT_MS = 10000;
 const ELEVENLABS_KEY_STORAGE = 'elevenlabs_api_key';
 
 export const getElevenLabsApiKey = (): string | null => {
-  if (isServerManagedKey()) return 'server-managed';
+  if (isServerManagedKey()) {
+    const key = getSettings()?.elevenlabsApiKey;
+    return key || 'server-managed';
+  }
   return localStorage.getItem(ELEVENLABS_KEY_STORAGE);
 };
 

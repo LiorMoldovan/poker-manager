@@ -1,7 +1,7 @@
 export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
 
 // Permission system
-export type PermissionRole = 'admin' | 'member' | 'memberSync' | 'viewer';
+export type PermissionRole = 'admin' | 'member' | 'viewer';
 
 export type Permission = 
   // Game management
@@ -134,6 +134,8 @@ export interface Settings {
   gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
   locations?: string[];
   blockedTransfers?: BlockedTransferPair[];
+  geminiApiKey?: string;
+  elevenlabsApiKey?: string;
 }
 
 export interface Settlement {

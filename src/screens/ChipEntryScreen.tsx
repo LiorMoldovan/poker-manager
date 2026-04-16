@@ -484,11 +484,10 @@ const ChipEntryScreen = () => {
     // Create auto backup after game ends
     createGameEndBackup();
     
-    // Upload to GitHub if admin or memberSync
-    if (role === 'admin' || role === 'memberSync') {
+    // Upload to GitHub if admin
+    if (role === 'admin') {
       setUploadStatus('Syncing to cloud...');
-      const useMemberSyncToken = role === 'memberSync';
-      syncToCloud(useMemberSyncToken).then(result => {
+      syncToCloud(false).then(result => {
         if (result.success) {
           setUploadStatus('✅ Synced!');
         } else {

@@ -10,17 +10,17 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY not configured' } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
     const { searchParams } = new URL(req.url);
     const version = searchParams.get('version') || 'v1beta';
+    const clientKey = searchParams.get('apiKey');
+    const apiKey = clientKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY not configured. Set it in group settings.' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
     const upstream = await fetch(url, {

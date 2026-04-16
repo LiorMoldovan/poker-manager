@@ -10,15 +10,17 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured' } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
+    const { searchParams } = new URL(req.url);
+    const clientKey = searchParams.get('apiKey');
+    const apiKey = clientKey || process.env.ELEVENLABS_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured. Set it in group settings.' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const upstream = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
       headers: { 'xi-api-key': apiKey },
     });

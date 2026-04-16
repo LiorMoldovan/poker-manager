@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.12.7';
+export const APP_VERSION = '5.13.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.13.0',
+    date: '2026-04-17',
+    changes: [
+      '✅ Group Management tab in Settings — view members, change roles, invite code, transfer ownership',
+      '✅ Per-group API keys — each group configures its own Gemini & ElevenLabs keys',
+      '✅ Post-creation invite code screen with copy/share',
+      '✅ Self-create player flow for new users not in the player list',
+      '🔧 Owner-aware security in all management RPCs — admins cannot modify the owner',
+      '🔧 Player delete guard — blocks deletion if player has game history',
+      '🔧 Player linking uniqueness — prevents two members linking to the same player',
+      '🔧 Removed deprecated memberSync role',
+    ]
+  },
   {
     version: '5.12.6',
     date: '2026-04-12',

@@ -26,7 +26,8 @@ import {
   BackupData,
   getStorageUsage,
   formatStorageSize,
-  StorageUsage
+  StorageUsage,
+  playerHasGames
 } from '../database/storage';
 import { getGitHubToken, saveGitHubToken, syncToCloud, syncFromCloud } from '../database/githubSync';
 import { getGeminiApiKey, setGeminiApiKey, testGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
@@ -42,10 +43,11 @@ import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji, ROLE_PINS } from '../permissions';
 import { flushPendingUploads } from '../utils/pokerTraining';
 import TrainingAdminTab from '../components/TrainingAdminTab';
+import GroupManagementTab from '../components/GroupManagementTab';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
-  const { role, isOwner, playerName: authPlayerName, hasPermission, signOut } = usePermissions();
+  const { role, isOwner, playerName: authPlayerName, hasPermission, signOut, groupMgmt } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -124,9 +126,8 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
   const syncPlayersToCloud = () => {
-    if (role === 'admin' || role === 'memberSync') {
-      const useMemberSyncToken = role === 'memberSync';
-      syncToCloud(useMemberSyncToken).then(result => {
+    if (role === 'admin') {
+      syncToCloud(false).then(result => {
         console.log('Player sync:', result.message);
       });
     }
@@ -138,7 +139,7 @@ const SettingsScreen = () => {
     return 'backup';
   };
   
-  const [activeTab, setActiveTab] = useState<'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training'>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training'>(USE_SUPABASE && role === 'admin' ? 'group' : getDefaultTab());
 
   useEffect(() => {
     loadData();
@@ -275,6 +276,9 @@ const SettingsScreen = () => {
   };
 
   const handleDeletePlayer = (id: string) => {
+    if (playerHasGames(id)) {
+      return;
+    }
     deletePlayer(id);
     setPlayers(players.filter(p => p.id !== id));
     setDeletePlayerConfirm(null);
@@ -321,9 +325,7 @@ const SettingsScreen = () => {
     setBackupMessage({ type: 'success', text: '💾 Creating backup...' });
     
     try {
-      // Use embedded token if memberSync role
-      const useMemberSyncToken = role === 'memberSync';
-      const { cloudResult } = await createBackupWithCloudSync('manual', undefined, useMemberSyncToken);
+      const { cloudResult } = await createBackupWithCloudSync('manual', undefined, false);
       
       setBackups(getBackups());
       setLastBackup(getLastBackupDate());
@@ -447,7 +449,7 @@ const SettingsScreen = () => {
   const getRoleInfo = (r: string) => {
     switch (r) {
       case 'member': return { emoji: '⭐', name: 'Member', color: '#10B981' };
-      case 'memberSync': return { emoji: '🔄', name: 'Member+Sync', color: '#3B82F6' };
+      
       case 'viewer': return { emoji: '👁️', name: 'Viewer', color: '#94a3b8' };
       default: return { emoji: '👤', name: r, color: '#94a3b8' };
     }
@@ -455,20 +457,22 @@ const SettingsScreen = () => {
 
   // Filter tabs based on permissions
   const allTabs = [
-    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const, ownerOnly: false },
-    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false },
-    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false },
-    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, ownerOnly: false },
-    { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, ownerOnly: true },
-    { id: 'training', label: '🎯 Training', icon: '🎯', requiresPermission: null, ownerOnly: true },
-    { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, ownerOnly: true },
-    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, ownerOnly: false },
+    ...(USE_SUPABASE ? [{ id: 'group', label: '🏠 Group', icon: '🏠', requiresPermission: null, ownerOnly: false, adminOnly: true }] : []),
+    { id: 'players', label: '👥 Players', icon: '👥', requiresPermission: 'player:add' as const, ownerOnly: false, adminOnly: false },
+    { id: 'chips', label: '🎰 Chips', icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false, adminOnly: false },
+    { id: 'game', label: '💰 Game', icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false, adminOnly: false },
+    { id: 'backup', label: '📦 Backup', icon: '📦', requiresPermission: null, ownerOnly: false, adminOnly: false },
+    { id: 'ai', label: '🤖 AI', icon: '🤖', requiresPermission: null, ownerOnly: true, adminOnly: false },
+    { id: 'training', label: '🎯 Training', icon: '🎯', requiresPermission: null, ownerOnly: true, adminOnly: false },
+    { id: 'activity', label: '📊 Activity', icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false },
+    { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false },
   ];
   
   const tabs = allTabs.filter(tab => {
     if (tab.ownerOnly && !isOwner) return false;
+    if (tab.adminOnly && role !== 'admin') return false;
     return tab.requiresPermission === null || hasPermission(tab.requiresPermission);
-  }) as { id: 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'; label: string; icon: string }[];
+  }) as { id: 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity'; label: string; icon: string }[];
 
   return (
     <div className="fade-in">
@@ -566,6 +570,22 @@ const SettingsScreen = () => {
         }}>
           <p style={{ color: 'var(--success)' }}>✓ Settings saved</p>
         </div>
+      )}
+
+      {/* Group Management Tab */}
+      {activeTab === 'group' && groupMgmt && (
+        <GroupManagementTab
+          groupName={groupMgmt.groupName}
+          inviteCode={groupMgmt.inviteCode}
+          isOwner={isOwner}
+          currentUserId={groupMgmt.currentUserId}
+          fetchMembers={groupMgmt.fetchMembers}
+          updateMemberRole={groupMgmt.updateMemberRole}
+          removeMember={groupMgmt.removeMember}
+          transferOwnership={groupMgmt.transferOwnership}
+          regenerateInviteCode={groupMgmt.regenerateInviteCode}
+          unlinkMemberPlayer={groupMgmt.unlinkMemberPlayer}
+        />
       )}
 
       {/* Game Settings Tab */}
@@ -1150,7 +1170,7 @@ const SettingsScreen = () => {
             </div>
           </div>
 
-          {/* Cloud Sync & API Keys - Admin Only */}
+          {/* Cloud Sync Status - Admin Only */}
           {role === 'admin' && USE_SUPABASE && (
             <div style={{ 
               background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(16, 185, 129, 0.1))',
@@ -1175,20 +1195,9 @@ const SettingsScreen = () => {
                   Connected
                 </span>
               </div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                נתונים מסונכרנים בזמן אמת דרך Supabase Realtime. כל שינוי מופיע אוטומטית אצל כל המשתמשים.
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                נתונים מסונכרנים בזמן אמת דרך Supabase Realtime.
               </p>
-              
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <div style={{ flex: 1, background: 'rgba(168, 85, 247, 0.1)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.7rem', color: '#A855F7', fontWeight: '600' }}>🔑 Gemini AI</span>
-                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>Server-managed</p>
-                </div>
-                <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px', padding: '0.5rem', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.7rem', color: '#10B981', fontWeight: '600' }}>🎙️ ElevenLabs</span>
-                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', margin: '0.2rem 0 0' }}>Server-managed</p>
-                </div>
-              </div>
             </div>
           )}
 
@@ -1463,6 +1472,82 @@ const SettingsScreen = () => {
 
         return (
           <>
+            {/* Per-Group API Keys — Supabase Mode */}
+            {USE_SUPABASE && (
+              <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+                <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>🔑 מפתחות API של הקבוצה</h2>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem', direction: 'rtl' }}>
+                  מפתחות אלו משמשים לתכונות AI. כל קבוצה מגדירה מפתחות משלה.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', direction: 'ltr' }}>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
+                      Gemini API Key
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input
+                        type="password"
+                        value={settings.geminiApiKey || ''}
+                        onChange={e => setSettings({ ...settings, geminiApiKey: e.target.value })}
+                        placeholder="AIza..."
+                        style={{
+                          flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                          background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
+                          fontFamily: 'monospace',
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          saveSettings(settings);
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2000);
+                        }}
+                        style={{
+                          padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none',
+                          background: 'var(--primary)', color: 'white', fontSize: '0.75rem',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.2rem' }}>
+                      ElevenLabs API Key
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input
+                        type="password"
+                        value={settings.elevenlabsApiKey || ''}
+                        onChange={e => setSettings({ ...settings, elevenlabsApiKey: e.target.value })}
+                        placeholder="sk_..."
+                        style={{
+                          flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                          background: 'var(--background)', color: 'var(--text)', fontSize: '0.8rem',
+                          fontFamily: 'monospace',
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          saveSettings(settings);
+                          setSaved(true);
+                          setTimeout(() => setSaved(false), 2000);
+                        }}
+                        style={{
+                          padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none',
+                          background: 'var(--primary)', color: 'white', fontSize: '0.75rem',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Game Readiness Card */}
             <div className="card" style={{ padding: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -2743,30 +2828,51 @@ const SettingsScreen = () => {
       )}
 
       {/* Delete Player Confirmation Modal */}
-      {deletePlayerConfirm && (
-        <div className="modal-overlay" onClick={() => setDeletePlayerConfirm(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">🗑️ Delete Player</h3>
-              <button className="modal-close" onClick={() => setDeletePlayerConfirm(null)}>×</button>
-            </div>
-            <p style={{ marginBottom: '1rem' }}>
-              Are you sure you want to delete <strong>{deletePlayerConfirm.name}</strong>?
-            </p>
-            <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
-              ⚠️ This will not delete their game history, but they will no longer appear in the player list.
-            </p>
-            <div className="actions">
-              <button className="btn btn-secondary" onClick={() => setDeletePlayerConfirm(null)}>
-                Cancel
-              </button>
-              <button className="btn btn-danger" onClick={() => handleDeletePlayer(deletePlayerConfirm.id)}>
-                Delete
-              </button>
+      {deletePlayerConfirm && (() => {
+        const hasGames = playerHasGames(deletePlayerConfirm.id);
+        return (
+          <div className="modal-overlay" onClick={() => setDeletePlayerConfirm(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">🗑️ Delete Player</h3>
+                <button className="modal-close" onClick={() => setDeletePlayerConfirm(null)}>×</button>
+              </div>
+              {hasGames ? (
+                <>
+                  <p style={{ marginBottom: '1rem', color: '#ef4444', fontWeight: 600 }}>
+                    לא ניתן למחוק את <strong>{deletePlayerConfirm.name}</strong>
+                  </p>
+                  <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    לשחקן זה יש היסטוריית משחקים. שחקנים עם משחקים לא ניתנים למחיקה כדי לשמור על שלמות הנתונים.
+                  </p>
+                  <div className="actions">
+                    <button className="btn btn-secondary" onClick={() => setDeletePlayerConfirm(null)}>
+                      סגור
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ marginBottom: '1rem' }}>
+                    Are you sure you want to delete <strong>{deletePlayerConfirm.name}</strong>?
+                  </p>
+                  <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>
+                    ⚠️ This will not delete their game history, but they will no longer appear in the player list.
+                  </p>
+                  <div className="actions">
+                    <button className="btn btn-secondary" onClick={() => setDeletePlayerConfirm(null)}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-danger" onClick={() => handleDeletePlayer(deletePlayerConfirm.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Delete Chip Confirmation Modal */}
       {deleteChipConfirm && (

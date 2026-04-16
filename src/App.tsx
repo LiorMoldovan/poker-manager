@@ -74,12 +74,25 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 // Permission context
+interface GroupManagementFns {
+  groupName: string;
+  inviteCode: string | null;
+  currentUserId: string;
+  fetchMembers: () => Promise<import('./hooks/useSupabaseAuth').GroupMember[]>;
+  updateMemberRole: (userId: string, role: string) => Promise<{ error: unknown }>;
+  removeMember: (userId: string) => Promise<{ error: unknown }>;
+  transferOwnership: (userId: string) => Promise<{ error: unknown }>;
+  regenerateInviteCode: () => Promise<{ data: string | null; error: unknown }>;
+  unlinkMemberPlayer: (userId: string) => Promise<{ error: unknown }>;
+}
+
 interface PermissionContextType {
   role: PermissionRole | null;
   isOwner: boolean;
   playerName: string | null;
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
   signOut: () => void;
+  groupMgmt?: GroupManagementFns;
 }
 
 const PermissionContext = createContext<PermissionContextType>({
@@ -316,9 +329,18 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
   );
 }
 
-function PlayerPicker({ groupId, onLink }: { groupId: string; onLink: (playerId: string) => Promise<{ error: unknown }> }) {
+function PlayerPicker({ groupId, onLink, onSelfCreate, userDisplayName, onSkip }: {
+  groupId: string;
+  onLink: (playerId: string) => Promise<{ error: unknown }>;
+  onSelfCreate: (name: string) => Promise<{ data: unknown; error: unknown }>;
+  userDisplayName: string;
+  onSkip?: () => void;
+}) {
   const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<'pick' | 'create'>('pick');
+  const [newName, setNewName] = useState(userDisplayName);
+  const [error, setError] = useState('');
   const allPlayers = getAllPlayers();
 
   useEffect(() => {
@@ -345,6 +367,17 @@ function PlayerPicker({ groupId, onLink }: { groupId: string; onLink: (playerId:
     );
   }
 
+  const handleSelfCreate = async () => {
+    const trimmed = newName.trim();
+    if (!trimmed) { setError('נא להזין שם'); return; }
+    setError('');
+    const { error: err } = await onSelfCreate(trimmed);
+    if (err) {
+      const msg = (err as { message?: string })?.message || '';
+      setError(msg.includes('duplicate') ? 'שם זה כבר קיים בקבוצה' : msg || 'שגיאה ביצירת שחקן');
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -354,33 +387,105 @@ function PlayerPicker({ groupId, onLink }: { groupId: string; onLink: (playerId:
         background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
         maxWidth: '400px', width: '90%', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
       }}>
-        <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
-          בחר את השחקן שלך כדי להמשיך
-        </p>
-        {available.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {available.map(p => (
+        {mode === 'pick' && (
+          <>
+            <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
+              בחר את השחקן שלך כדי להמשיך
+            </p>
+            {available.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {available.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => onLink(p.id)}
+                    style={{
+                      padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
+                      background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
+                      fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>
+                אין שחקנים זמינים ברשימה
+              </p>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <button
-                key={p.id}
-                onClick={() => onLink(p.id)}
+                onClick={() => setMode('create')}
                 style={{
-                  padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
-                  background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
-                  fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
-                  transition: 'all 0.15s ease',
+                  padding: '0.65rem 1rem', borderRadius: '10px', border: '1px dashed var(--primary)',
+                  background: 'rgba(16, 185, 129, 0.08)', color: 'var(--primary)', cursor: 'pointer',
+                  fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
               >
-                {p.name}
+                אני לא ברשימה — צור אותי
               </button>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-            אין שחקנים זמינים. פנה למנהל הקבוצה כדי שיוסיף אותך.
-          </p>
+              {onSkip && (
+                <button
+                  onClick={onSkip}
+                  style={{
+                    padding: '0.5rem', background: 'none', border: 'none',
+                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem',
+                    fontFamily: 'Outfit, sans-serif', textDecoration: 'underline',
+                  }}
+                >
+                  דלג לעכשיו
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {mode === 'create' && (
+          <>
+            <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>יצירת שחקן חדש</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
+              הזן את השם שיוצג במשחקים
+            </p>
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="השם שלך"
+              autoFocus
+              dir="rtl"
+              style={{
+                width: '100%', padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '10px',
+                border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
+                marginBottom: '0.75rem', boxSizing: 'border-box', outline: 'none', fontFamily: 'Outfit, sans-serif',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSelfCreate(); }}
+            />
+            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
+            <button
+              onClick={handleSelfCreate}
+              style={{
+                width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, borderRadius: '10px',
+                border: 'none', background: 'var(--primary)', color: 'white', cursor: 'pointer',
+                fontFamily: 'Outfit, sans-serif', marginBottom: '0.5rem',
+              }}
+            >
+              צור והמשך
+            </button>
+            <button
+              onClick={() => { setMode('pick'); setError(''); }}
+              style={{
+                display: 'block', width: '100%', background: 'none', border: 'none',
+                color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
+                fontFamily: 'Outfit, sans-serif', textAlign: 'center',
+              }}
+            >
+              חזרה לרשימה
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -427,6 +532,17 @@ function SupabaseApp() {
     playerName,
     hasPermission: (permission) => hasPermission(role, permission),
     signOut: () => { auth.signOut(); },
+    groupMgmt: auth.membership ? {
+      groupName: auth.membership.groupName,
+      inviteCode: auth.membership.inviteCode,
+      currentUserId: auth.user?.id ?? '',
+      fetchMembers: auth.fetchMembers,
+      updateMemberRole: auth.updateMemberRole,
+      removeMember: auth.removeMember,
+      transferOwnership: auth.transferOwnership,
+      regenerateInviteCode: auth.regenerateInviteCode,
+      unlinkMemberPlayer: auth.unlinkMemberPlayer,
+    } : undefined,
   };
 
   if (auth.loading) {
@@ -454,13 +570,25 @@ function SupabaseApp() {
         onCreateGroup={auth.createGroup}
         onJoinGroup={auth.joinGroup}
         onSignOut={auth.signOut}
+        onContinue={() => auth.refreshMembership()}
       />
     );
   }
 
   // Player linking: after data loads, if no player linked, show picker
   if (dataReady && !playerName) {
-    return <PlayerPicker groupId={groupId!} onLink={auth.linkToPlayer} />;
+    const displayName = auth.user?.user_metadata?.full_name
+      || auth.user?.user_metadata?.name
+      || auth.user?.email?.split('@')[0]
+      || '';
+    return (
+      <PlayerPicker
+        groupId={groupId!}
+        onLink={auth.linkToPlayer}
+        onSelfCreate={auth.selfCreateAndLink}
+        userDisplayName={displayName}
+      />
+    );
   }
 
   // Wait for Supabase data to load

@@ -10,16 +10,15 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY not configured' } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   try {
-    const { version, model, payload } = await req.json();
+    const { version, model, payload, apiKey: clientKey } = await req.json();
+    const apiKey = clientKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: { message: 'GEMINI_API_KEY not configured. Set it in group settings.' } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (!version || !model || !payload) {
       return new Response(JSON.stringify({ error: { message: 'Missing version, model, or payload' } }), {
         status: 400,
