@@ -541,7 +541,23 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   data.set(STORAGE_KEYS.GAME_PLAYERS, gps);
 
   // Chip values (empty array → caller uses DEFAULT_CHIP_VALUES via storage.ts)
-  data.set(STORAGE_KEYS.CHIP_VALUES, (chipValuesRes.data || []).map(r => toChipValue(r as Record<string, unknown>)));
+  const chipValues = (chipValuesRes.data || []).map(r => toChipValue(r as Record<string, unknown>));
+  data.set(STORAGE_KEYS.CHIP_VALUES, chipValues);
+
+  // Auto-repair: if any game_player chip_counts keys don't match chip_value IDs, fix them
+  if (chipValues.length > 0 && gps.length > 0) {
+    const cvIds = new Set(chipValues.map(cv => cv.id));
+    const needsRepair = gps.some(gp =>
+      Object.keys(gp.chipCounts).length > 0 && !Object.keys(gp.chipCounts).some(k => cvIds.has(k))
+    );
+    if (needsRepair) {
+      console.warn('Auto-repair: chip_counts keys mismatch detected, triggering fixChipCountIds...');
+      import('./migrateToSupabase').then(m => m.fixChipCountIds(groupId)).then(result => {
+        console.warn('Auto-repair done:', result);
+        if (result.updated > 0) window.location.reload();
+      }).catch(err => console.warn('Auto-repair failed:', err));
+    }
+  }
 
   // Settings — always set the key so getSettings() merges with defaults consistently
   if (settingsRes.data) {
