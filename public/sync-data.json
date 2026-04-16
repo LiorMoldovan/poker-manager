@@ -286,6 +286,13 @@
       "createdAt": "2026-03-12T10:39:08.960Z",
       "type": "guest",
       "gender": "male"
+    },
+    {
+      "id": "mo1es06vxlwbsduf7p",
+      "name": "סמי",
+      "createdAt": "2026-04-16T11:41:13.591Z",
+      "type": "guest",
+      "gender": "male"
     }
   ],
   "games": [
@@ -20484,7 +20491,7 @@
       "profit": -134.7
     }
   ],
-  "lastUpdated": "2026-04-15T09:56:03.695Z",
+  "lastUpdated": "2026-04-16T11:41:13.595Z",
   "updatedBy": "admin",
   "chronicleProfiles": {
     "H1-2026": {
