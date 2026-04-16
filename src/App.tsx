@@ -377,7 +377,7 @@ function SupabaseApp() {
   }
 
   if (!auth.user) {
-    return <AuthScreen onSignIn={auth.signIn} onSignUp={auth.signUp} />;
+    return <AuthScreen onSignIn={auth.signIn} onSignUp={auth.signUp} onGoogleSignIn={auth.signInWithGoogle} />;
   }
 
   if (!auth.membership) {

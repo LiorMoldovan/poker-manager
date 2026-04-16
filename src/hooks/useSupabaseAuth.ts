@@ -99,6 +99,16 @@ export function useSupabaseAuth() {
     return { data, error };
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    return { error };
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setState({ user: null, session: null, membership: null, loading: false });
@@ -134,6 +144,7 @@ export function useSupabaseAuth() {
     ...state,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
     createGroup,
     joinGroup,
