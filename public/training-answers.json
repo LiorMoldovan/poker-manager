@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-17T14:15:17.544Z",
+  "lastUpdated": "2026-04-17T14:28:05.856Z",
   "players": [
     {
       "playerName": "אייל",
@@ -7067,11 +7067,230 @@
               "date": "2026-04-12T14:20:46.000Z"
             }
           ]
+        },
+        {
+          "date": "2026-04-17T14:18:40.249Z",
+          "questionsAnswered": 8,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "yh1w5g",
+              "categoryId": "dominated_hands",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "olgmbu",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "r2dxa9",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "h1iu50",
+              "categoryId": "second_pair",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "8lww36",
+              "categoryId": "set_mining",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "x1jgyk",
+              "categoryId": "missed_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "njd0lo",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "xmlx8x",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "sv7206",
+              "categoryId": "preflop_vs_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dgs28h",
+              "categoryId": "blind_defense",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-17T14:23:33.070Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 7,
+          "results": [
+            {
+              "poolId": "math_1775389653327_yqq6lg",
+              "categoryId": "true_false",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "math2_1775390836673_nsi666",
+              "categoryId": "true_false",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "math_1775389680104_ukijff",
+              "categoryId": "true_false",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "e6dhq4",
+              "categoryId": "two_pair_plus",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "pggni3",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387263630_krux37",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "mn1yza",
+              "categoryId": "thin_value",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "hxpt4b",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "7czlfy",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "vh0088",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-17T14:28:04.961Z",
+          "questionsAnswered": 9,
+          "correctAnswers": 9,
+          "results": [
+            {
+              "poolId": "odds_math_1775387023360_gtmtot",
+              "categoryId": "odds_math",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "kr4f56",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tcw2g1",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "C"
+            },
+            {
+              "poolId": "qpv756",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "3d2cej",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "jd1te1",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "tlpgst",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "rpfdfa",
+              "categoryId": "squeeze_isolation",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "327l5c",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "lxoqrw",
+              "categoryId": "position_play",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": [
+            "rpfdfa"
+          ],
+          "flagReports": [
+            {
+              "poolId": "rpfdfa",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "אז מלכה אנח משחק רגוע.",
+              "date": "2026-04-17T14:27:30.410Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 317,
-      "totalCorrect": 246,
-      "accuracy": 77.60252365930599,
+      "totalQuestions": 343,
+      "totalCorrect": 269,
+      "accuracy": 78.4256559766764,
       "pendingReportMilestones": [
         400
       ],
