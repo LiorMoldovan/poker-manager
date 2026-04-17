@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-16T06:57:48.126Z",
+  "lastUpdated": "2026-04-17T14:15:17.544Z",
   "players": [
     {
       "playerName": "אייל",
@@ -6984,12 +6984,97 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-12T14:23:51.528Z",
+          "questionsAnswered": 6,
+          "correctAnswers": 6,
+          "results": [
+            {
+              "poolId": "ahldpc",
+              "categoryId": "flush_draw",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "y70tio",
+              "categoryId": "preflop_vs_raise",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dfwrmp",
+              "categoryId": "check_raise",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "x2zx80",
+              "categoryId": "squeeze_isolation",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "dpfps7",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "iqhtut",
+              "categoryId": "stack_depth",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "pfg85t",
+              "categoryId": "multiway_pots",
+              "correct": false,
+              "nearMiss": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "hh2mjt",
+              "categoryId": "dominated_hands",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "vcojzi",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "57rzmc",
+              "categoryId": "overbet",
+              "correct": true,
+              "chosenId": "B"
+            }
+          ],
+          "flaggedPoolIds": [
+            "ahldpc"
+          ],
+          "flagReports": [
+            {
+              "poolId": "ahldpc",
+              "playerName": "חרדון",
+              "reason": "other",
+              "comment": "יש ארבעה קלפים מעליי אני מאמר אני לא חושב שזה טעות",
+              "date": "2026-04-12T14:20:46.000Z"
+            }
+          ]
         }
       ],
-      "totalQuestions": 311,
-      "totalCorrect": 240,
-      "accuracy": 77.17041800643086,
-      "pendingReportMilestones": [],
+      "totalQuestions": 317,
+      "totalCorrect": 246,
+      "accuracy": 77.60252365930599,
+      "pendingReportMilestones": [
+        400
+      ],
       "reports": [
         {
           "milestone": 100,
