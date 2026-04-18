@@ -161,7 +161,7 @@ export default function GroupManagementTab({
   };
 
   const linkedPlayerIds = new Set(members.map(m => m.playerId).filter(Boolean));
-  const unlinkedPlayers = getAllPlayers().filter(p => p.type === 'permanent' && !linkedPlayerIds.has(p.id));
+  const unlinkedPlayers = getAllPlayers().filter(p => !linkedPlayerIds.has(p.id));
 
   const roleLabel = (role: string) => {
     switch (role) {

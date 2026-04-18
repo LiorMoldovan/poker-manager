@@ -8,7 +8,6 @@ import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
-import { supabase } from './database/supabaseClient';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
@@ -331,43 +330,12 @@ function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (n
   );
 }
 
-function PlayerPicker({ groupId, onLink, onSelfCreate, userDisplayName, onSkip }: {
-  groupId: string;
-  onLink: (playerId: string) => Promise<{ error: unknown }>;
+function PlayerPicker({ onSelfCreate, userDisplayName }: {
   onSelfCreate: (name: string) => Promise<{ data: unknown; error: unknown }>;
   userDisplayName: string;
-  onSkip?: () => void;
 }) {
-  const [linkedIds, setLinkedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'pick' | 'create'>('pick');
   const [newName, setNewName] = useState(userDisplayName);
   const [error, setError] = useState('');
-  const allPlayers = getAllPlayers();
-
-  useEffect(() => {
-    supabase.from('group_members')
-      .select('player_id')
-      .eq('group_id', groupId)
-      .not('player_id', 'is', null)
-      .then(({ data }) => {
-        setLinkedIds(new Set((data || []).map(r => r.player_id as string)));
-        setLoading(false);
-      });
-  }, [groupId]);
-
-  const available = allPlayers.filter(p => p.type === 'permanent' && !linkedIds.has(p.id));
-
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--background)',
-      }}>
-        <div style={{ color: 'var(--text-muted)' }}>טוען...</div>
-      </div>
-    );
-  }
 
   const handleSelfCreate = async () => {
     const trimmed = newName.trim();
@@ -389,106 +357,38 @@ function PlayerPicker({ groupId, onLink, onSelfCreate, userDisplayName, onSkip }
         background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
         maxWidth: '400px', width: '90%', boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
       }}>
-        {mode === 'pick' && (
-          <>
-            <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>מי אתה? 🃏</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
-              בחר את השחקן שלך כדי להמשיך
-            </p>
-            {available.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {available.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => onLink(p.id)}
-                    style={{
-                      padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
-                      background: 'var(--background)', color: 'var(--text)', cursor: 'pointer',
-                      fontSize: '1rem', fontFamily: 'Outfit, sans-serif', textAlign: 'right',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = 'white'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--background)'; e.currentTarget.style.color = 'var(--text)'; }}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>
-                אין שחקנים זמינים ברשימה
-              </p>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <button
-                onClick={() => setMode('create')}
-                style={{
-                  padding: '0.65rem 1rem', borderRadius: '10px', border: '1px dashed var(--primary)',
-                  background: 'rgba(16, 185, 129, 0.08)', color: 'var(--primary)', cursor: 'pointer',
-                  fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                }}
-              >
-                אני לא ברשימה — צור אותי
-              </button>
-              {onSkip && (
-                <button
-                  onClick={onSkip}
-                  style={{
-                    padding: '0.5rem', background: 'none', border: 'none',
-                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', textDecoration: 'underline',
-                  }}
-                >
-                  דלג לעכשיו
-                </button>
-              )}
-            </div>
-          </>
-        )}
-
-        {mode === 'create' && (
-          <>
-            <h2 style={{ color: 'var(--text)', marginBottom: '0.5rem', textAlign: 'center' }}>יצירת שחקן חדש</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center' }}>
-              הזן את השם שיוצג במשחקים
-            </p>
-            <input
-              type="text"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              placeholder="השם שלך"
-              autoFocus
-              dir="rtl"
-              style={{
-                width: '100%', padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '10px',
-                border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
-                marginBottom: '0.75rem', boxSizing: 'border-box', outline: 'none', fontFamily: 'Outfit, sans-serif',
-              }}
-              onKeyDown={e => { if (e.key === 'Enter') handleSelfCreate(); }}
-            />
-            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
-            <button
-              onClick={handleSelfCreate}
-              style={{
-                width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, borderRadius: '10px',
-                border: 'none', background: 'var(--primary)', color: 'white', cursor: 'pointer',
-                fontFamily: 'Outfit, sans-serif', marginBottom: '0.5rem',
-              }}
-            >
-              צור והמשך
-            </button>
-            <button
-              onClick={() => { setMode('pick'); setError(''); }}
-              style={{
-                display: 'block', width: '100%', background: 'none', border: 'none',
-                color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
-                fontFamily: 'Outfit, sans-serif', textAlign: 'center',
-              }}
-            >
-              חזרה לרשימה
-            </button>
-          </>
-        )}
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🃏</div>
+          <h2 style={{ color: 'var(--text)', marginBottom: '0.25rem' }}>ברוך הבא!</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            אשר את השם שלך כדי להמשיך
+          </p>
+        </div>
+        <input
+          type="text"
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          placeholder="השם שלך"
+          autoFocus
+          dir="rtl"
+          style={{
+            width: '100%', padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '10px',
+            border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
+            marginBottom: '0.75rem', boxSizing: 'border-box', outline: 'none', fontFamily: 'Outfit, sans-serif',
+          }}
+          onKeyDown={e => { if (e.key === 'Enter') handleSelfCreate(); }}
+        />
+        {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
+        <button
+          onClick={handleSelfCreate}
+          style={{
+            width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, borderRadius: '10px',
+            border: 'none', background: 'var(--primary)', color: 'white', cursor: 'pointer',
+            fontFamily: 'Outfit, sans-serif',
+          }}
+        >
+          המשך
+        </button>
       </div>
     </div>
   );
@@ -580,7 +480,7 @@ function SupabaseApp() {
     );
   }
 
-  // Player linking: after data loads, if no player linked, show picker
+  // Player linking: after data loads, if no player linked, show self-create
   if (dataReady && !playerName) {
     const displayName = auth.user?.user_metadata?.full_name
       || auth.user?.user_metadata?.name
@@ -588,8 +488,6 @@ function SupabaseApp() {
       || '';
     return (
       <PlayerPicker
-        groupId={groupId!}
-        onLink={auth.linkToPlayer}
         onSelfCreate={auth.selfCreateAndLink}
         userDisplayName={displayName}
       />
