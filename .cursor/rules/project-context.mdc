@@ -11,8 +11,8 @@ alwaysApply: true
 
 - **Stack**: React 19 + TypeScript 5 (strict) + Vite 6
 - **Styling**: Inline React styles + CSS variables (dark theme in `src/styles/index.css`)
-- **Data**: LocalStorage (legacy) / **Supabase PostgreSQL** (migration in progress, controlled by `USE_SUPABASE` in `src/database/config.ts`)
-- **Cloud**: GitHub Pages repo via GitHub API (legacy) / **Supabase** direct DB (migration)
+- **Data**: **Supabase PostgreSQL** (primary) / LocalStorage (legacy, controlled by `USE_SUPABASE` in `src/database/config.ts`)
+- **Cloud**: **Supabase** direct DB with Realtime / GitHub Pages via GitHub API (legacy)
 - **Deployment**: Vercel (auto-deploys from `main` branch)
 - **Dev server**: `npm run dev` → **http://localhost:3000** (NEVER use port 3001)
 - **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
@@ -27,12 +27,13 @@ src/
 ├── App.tsx                    # Root: routing, auth (PinLock), permission context, activity tracking
 ├── main.tsx                   # Entry point (renders App into #root)
 ├── version.ts                 # APP_VERSION constant + CHANGELOG array
-├── permissions.ts             # Role system: admin | member | memberSync | viewer (PIN-based)
+├── permissions.ts             # Role system: admin | member | viewer (PIN-based legacy, Supabase Auth for new)
 ├── types/index.ts             # ALL TypeScript interfaces and types
 ├── styles/index.css           # CSS variables, dark theme, global styles
 ├── components/
 │   ├── Navigation.tsx         # Bottom tab bar (New Game, History, Stats, Graphs, Settings)
-│   ├── PinLock.tsx            # PIN entry screen with 4-digit keypad
+│   ├── PinLock.tsx            # PIN entry screen with 4-digit keypad (legacy)
+│   ├── GroupManagementTab.tsx # Group management UI: members, roles, invite code, ownership transfer
 │   └── AddExpenseModal.tsx    # Modal for shared expenses (pizza etc.) during live games
 ├── screens/
 │   ├── NewGameScreen.tsx      # Game setup: player selection, AI forecast, pre-game teaser, period indicators
@@ -43,12 +44,12 @@ src/
 │   ├── GameDetailsScreen.tsx  # Individual game details (legacy — not routed, GameSummaryScreen used instead)
 │   ├── StatisticsScreen.tsx   # Player stats table, records, AI-generated Chronicle per player
 │   ├── GraphsScreen.tsx       # Charts (Recharts): cumulative profit, head-to-head, impact analysis + AI insights
-│   ├── SettingsScreen.tsx     # Tabs: Players, Game, Chips, Backup, Activity (admin), About
+│   ├── SettingsScreen.tsx     # Tabs: Group (admin), Players, Game, Chips, Backup, AI (owner), Training (owner), Activity (owner), About
 │   ├── TrainingScreen.tsx     # Poker training hub with category selection
 │   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
 │   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
 ├── hooks/
-│   └── useSupabaseAuth.ts     # Supabase auth hook: session, group membership, login/signup
+│   └── useSupabaseAuth.ts     # Supabase auth: session, group membership, login/signup, group management RPCs
 ├── database/
 │   ├── storage.ts             # Dual data layer: localStorage (legacy) OR supabaseCache (migration)
 │   ├── config.ts              # USE_SUPABASE feature flag
@@ -84,14 +85,15 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
 ## Auth & Permissions
 
 **Legacy** (`USE_SUPABASE = false`): PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
-**Supabase** (`USE_SUPABASE = true`): Supabase Auth (email/password). Group-based multi-tenancy. Hook: `useSupabaseAuth.ts`. Auth screens: `AuthScreen.tsx`, `GroupSetupScreen.tsx`.
+**Supabase** (`USE_SUPABASE = true`): Supabase Auth (email/password + Google OAuth). Group-based multi-tenancy with invite codes. Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.tsx` (create/join) → `PlayerPicker` (link account to player) → app.
 
-| Role | PIN | Can Do |
-|------|-----|--------|
-| `admin` | 2351 | Everything: games, players, settings, AI, sync, training |
+| Role | Legacy PIN | Can Do |
+|------|-----------|--------|
+| `admin` | 2351 | Everything: games, players, settings, AI, sync |
 | `member` | 2580 | View + manage games + add players |
-| `memberSync` | 0852 | Same as member + cloud sync via embedded token |
 | `viewer` | 9876 | View only + backup |
+
+**Owner vs Admin** (Supabase mode only): The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, and manage per-group API keys. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext).
 
 ## Key Patterns
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getAllPlayers } from '../database/storage';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 
 interface GroupManagementTabProps {
@@ -12,6 +13,9 @@ interface GroupManagementTabProps {
   transferOwnership: (userId: string) => Promise<{ error: unknown }>;
   regenerateInviteCode: () => Promise<{ data: string | null; error: unknown }>;
   unlinkMemberPlayer: (userId: string) => Promise<{ error: unknown }>;
+  createPlayerInvite: (playerId: string) => Promise<{ data: { invite_code: string; player_name: string; already_existed: boolean } | null; error: unknown }>;
+  addMemberByEmail: (email: string, playerId?: string) => Promise<{ data: { user_id: string; display_name: string; player_id: string | null } | null; error: unknown }>;
+  appUrl: string;
 }
 
 export default function GroupManagementTab({
@@ -25,6 +29,9 @@ export default function GroupManagementTab({
   transferOwnership,
   regenerateInviteCode,
   unlinkMemberPlayer,
+  createPlayerInvite,
+  addMemberByEmail,
+  appUrl,
 }: GroupManagementTabProps) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +43,14 @@ export default function GroupManagementTab({
     userId?: string;
     name?: string;
   } | null>(null);
+  const [personalInvite, setPersonalInvite] = useState<{
+    playerName: string;
+    code: string;
+    message: string;
+  } | null>(null);
+  const [addEmail, setAddEmail] = useState('');
+  const [addEmailPlayer, setAddEmailPlayer] = useState('');
+  const [addEmailLoading, setAddEmailLoading] = useState(false);
 
   const loadMembers = useCallback(async () => {
     setLoading(true);
@@ -103,6 +118,50 @@ export default function GroupManagementTab({
       loadMembers();
     }
   };
+
+  const handleCreateInvite = async (playerId: string) => {
+    const { data, error } = await createPlayerInvite(playerId);
+    if (error) {
+      showMsg('error', (error as { message?: string })?.message || 'שגיאה ביצירת הזמנה');
+      return;
+    }
+    if (data) {
+      const msg = [
+        `🃏 ${data.player_name}, הוזמנת לקבוצת הפוקר שלנו!`,
+        ``,
+        `📱 היכנס לאפליקציה:`,
+        appUrl,
+        ``,
+        `🔑 קוד ההצטרפות האישי שלך:`,
+        data.invite_code,
+        ``,
+        `המקום שלך שמור — פשוט היכנס עם הקוד הזה ותהיה מוכן למשחק הבא! 🎯`,
+      ].join('\n');
+      setPersonalInvite({ playerName: data.player_name, code: data.invite_code, message: msg });
+    }
+  };
+
+  const handleAddByEmail = async () => {
+    const email = addEmail.trim();
+    if (!email) { showMsg('error', 'נא להזין כתובת אימייל'); return; }
+    setAddEmailLoading(true);
+    const { error } = await addMemberByEmail(email, addEmailPlayer || undefined);
+    setAddEmailLoading(false);
+    if (error) {
+      const msg = (error as { message?: string })?.message || '';
+      if (msg.includes('No registered user')) showMsg('error', 'לא נמצא משתמש רשום עם האימייל הזה');
+      else if (msg.includes('already a member')) showMsg('error', 'המשתמש כבר חבר בקבוצה');
+      else showMsg('error', msg || 'שגיאה בהוספת חבר');
+    } else {
+      showMsg('success', 'החבר נוסף לקבוצה!');
+      setAddEmail('');
+      setAddEmailPlayer('');
+      loadMembers();
+    }
+  };
+
+  const linkedPlayerIds = new Set(members.map(m => m.playerId).filter(Boolean));
+  const unlinkedPlayers = getAllPlayers().filter(p => p.type === 'permanent' && !linkedPlayerIds.has(p.id));
 
   const roleLabel = (role: string) => {
     switch (role) {
@@ -199,6 +258,156 @@ export default function GroupManagementTab({
                 🔄
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Personal Player Invites */}
+      {isOwner && unlinkedPlayers.length > 0 && (
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>📨 הזמנות אישיות</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            שלח הזמנה אישית לשחקן — כשיירשם עם הקוד, הוא יקושר אוטומטית
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {unlinkedPlayers.map(p => (
+              <div key={p.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '0.55rem 0.75rem', borderRadius: '8px', background: 'var(--background)',
+                border: '1px solid var(--border)',
+              }}>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.name}</span>
+                <button
+                  onClick={() => handleCreateInvite(p.id)}
+                  style={{
+                    padding: '0.35rem 0.75rem', borderRadius: '8px', border: 'none',
+                    background: 'var(--primary)', color: 'white', cursor: 'pointer',
+                    fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                  }}
+                >
+                  📩 הזמן
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add Member by Email */}
+      {isOwner && (
+        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>➕ הוסף חבר לפי אימייל</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            הוסף משתמש שכבר נרשם לאפליקציה אבל לא הצטרף לקבוצה
+          </p>
+          <input
+            type="email"
+            value={addEmail}
+            onChange={e => setAddEmail(e.target.value)}
+            placeholder="example@gmail.com"
+            dir="ltr"
+            style={{
+              width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px',
+              border: '1px solid var(--border)', background: 'var(--background)',
+              color: 'var(--text)', fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif',
+              boxSizing: 'border-box', marginBottom: '0.5rem',
+            }}
+          />
+          {unlinkedPlayers.length > 0 && (
+            <select
+              value={addEmailPlayer}
+              onChange={e => setAddEmailPlayer(e.target.value)}
+              style={{
+                width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                border: '1px solid var(--border)', background: '#1a1a2e',
+                color: '#ffffff', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
+                marginBottom: '0.5rem', cursor: 'pointer',
+              }}
+            >
+              <option value="" style={{ background: '#1a1a2e', color: '#ffffff' }}>קשר לשחקן (אופציונלי)</option>
+              {unlinkedPlayers.map(p => (
+                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={handleAddByEmail}
+            disabled={addEmailLoading}
+            style={{
+              width: '100%', padding: '0.6rem', borderRadius: '8px', border: 'none',
+              background: 'var(--primary)', color: 'white', cursor: addEmailLoading ? 'not-allowed' : 'pointer',
+              fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+              opacity: addEmailLoading ? 0.6 : 1,
+            }}
+          >
+            {addEmailLoading ? '...' : '➕ הוסף לקבוצה'}
+          </button>
+        </div>
+      )}
+
+      {/* Personal Invite Share Modal */}
+      {personalInvite && (
+        <div className="modal-overlay" onClick={() => setPersonalInvite(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ direction: 'rtl', maxWidth: '380px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">📨 הזמנה ל{personalInvite.playerName}</h3>
+              <button className="modal-close" onClick={() => setPersonalInvite(null)}>×</button>
+            </div>
+
+            <div style={{
+              background: 'var(--background)', borderRadius: '10px', padding: '1rem',
+              fontSize: '0.85rem', lineHeight: '1.6', whiteSpace: 'pre-line',
+              marginBottom: '1rem', border: '1px solid var(--border)',
+              direction: 'rtl',
+            }}>
+              {personalInvite.message}
+            </div>
+
+            <div style={{
+              background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
+              borderRadius: '8px', padding: '0.6rem', textAlign: 'center', marginBottom: '1rem',
+            }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>קוד אישי</div>
+              <div style={{
+                letterSpacing: '4px', fontSize: '1.4rem', fontWeight: 700,
+                fontFamily: 'monospace', color: 'var(--text)', direction: 'ltr',
+              }}>
+                {personalInvite.code}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(personalInvite.message);
+                  showMsg('success', 'ההודעה הועתקה!');
+                }}
+                style={{
+                  flex: 1, padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border)',
+                  background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer',
+                  fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                }}
+              >
+                📋 העתק הודעה
+              </button>
+              {typeof navigator.share === 'function' && (
+                <button
+                  onClick={() => {
+                    navigator.share({
+                      title: `הזמנה ל${personalInvite.playerName}`,
+                      text: personalInvite.message,
+                    }).catch(() => {});
+                  }}
+                  style={{
+                    flex: 1, padding: '0.65rem', borderRadius: '8px', border: 'none',
+                    background: '#25D366', color: 'white', cursor: 'pointer',
+                    fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                  }}
+                >
+                  📤 שלח בוואטסאפ
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

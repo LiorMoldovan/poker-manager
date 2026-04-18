@@ -84,6 +84,8 @@ interface GroupManagementFns {
   transferOwnership: (userId: string) => Promise<{ error: unknown }>;
   regenerateInviteCode: () => Promise<{ data: string | null; error: unknown }>;
   unlinkMemberPlayer: (userId: string) => Promise<{ error: unknown }>;
+  createPlayerInvite: (playerId: string) => Promise<{ data: { invite_code: string; player_name: string; already_existed: boolean } | null; error: unknown }>;
+  addMemberByEmail: (email: string, playerId?: string) => Promise<{ data: { user_id: string; display_name: string; player_id: string | null } | null; error: unknown }>;
 }
 
 interface PermissionContextType {
@@ -542,6 +544,8 @@ function SupabaseApp() {
       transferOwnership: auth.transferOwnership,
       regenerateInviteCode: auth.regenerateInviteCode,
       unlinkMemberPlayer: auth.unlinkMemberPlayer,
+      createPlayerInvite: auth.createPlayerInvite,
+      addMemberByEmail: auth.addMemberByEmail,
     } : undefined,
   };
 
@@ -569,6 +573,7 @@ function SupabaseApp() {
         userEmail={auth.user.email ?? ''}
         onCreateGroup={auth.createGroup}
         onJoinGroup={auth.joinGroup}
+        onJoinByPlayerInvite={auth.joinByPlayerInvite}
         onSignOut={auth.signOut}
         onContinue={() => auth.refreshMembership()}
       />

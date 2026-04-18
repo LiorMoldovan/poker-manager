@@ -16,7 +16,7 @@ Silent, transparent tracking of non-admin user activity. Admin sessions are excl
 
 - **Logger**: `src/utils/activityLogger.ts` — session init, updates, fingerprinting, GitHub read/write
 - **Hooks**: `src/App.tsx` — starts tracking on `handleUnlock`, updates on navigation + `visibilitychange`
-- **UI**: `src/screens/SettingsScreen.tsx` — admin-only "Activity" tab with device cards
+- **UI**: `src/screens/SettingsScreen.tsx` — owner-only "Activity" tab with device cards (in Supabase mode, only the group owner sees this)
 - **Type**: `ActivityLogEntry` + `DeviceFingerprint` in `src/types/index.ts`
 
 ## Device Identification

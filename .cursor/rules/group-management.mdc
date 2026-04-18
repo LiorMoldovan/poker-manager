@@ -1,0 +1,94 @@
+---
+description: Group management — creation, joining, roles, player linking, ownership, invite codes, API key isolation
+globs: "{src/components/GroupManagementTab.tsx,src/screens/GroupSetupScreen.tsx,src/screens/AuthScreen.tsx,src/hooks/useSupabaseAuth.ts,supabase/004-group-management.sql}"
+alwaysApply: false
+---
+
+# Group Management (Supabase Mode)
+
+## Overview
+
+Group management is the primary motivation for the Supabase migration. Every poker group is fully isolated — separate players, games, settings, and API keys. The group creator (owner) has elevated privileges beyond regular admins.
+
+## User Flow
+
+### New User Registration
+```
+AuthScreen (email/password or Google OAuth)
+  → GroupSetupScreen (create group OR join via invite code)
+  → PlayerPicker (link account to existing player OR self-create)
+  → App (full access based on role)
+```
+
+### Group Creation
+1. User enters group name in `GroupSetupScreen`
+2. `create_group` RPC auto-creates: group record, owner membership (admin role), owner's player record, default settings with empty API keys
+3. UI shows the generated invite code with copy/share options
+4. Owner proceeds to the app (no PlayerPicker needed — auto-linked to their player)
+
+### Joining a Group
+1. User enters 8-char invite code in `GroupSetupScreen`
+2. `join_group_by_invite` RPC adds them as `member` role
+3. `PlayerPicker` shows: list of unlinked players + "I'm not on the list — create me" option
+4. Name pre-filled from Google profile or email prefix, editable
+
+### New Player Mid-Game
+- Admin creates player in Settings > Players tab (just a player record, not linked to any user)
+- If that person later creates an account and joins the group, they pick their player from the list
+
+## Roles & Permissions
+
+| Role | Granted By | Can Do |
+|------|-----------|--------|
+| `viewer` | Admin/Owner | View all data |
+| `member` | Default on join | View + manage games + add players |
+| `admin` | Owner only | Everything except owner-reserved actions |
+| **owner** | Group creation | All admin powers + modify admins, transfer ownership, manage API keys, regenerate invite, training, activity |
+
+**Owner is NOT a separate role** — it's derived from `groups.created_by === auth.uid()`. The `isOwner` boolean is computed in `useSupabaseAuth.ts` and propagated via `PermissionContext` in `App.tsx`.
+
+## SQL RPCs (`supabase/004-group-management.sql`)
+
+All RPCs use `SECURITY DEFINER` and manually verify permissions. Owner-only operations explicitly check `groups.created_by`.
+
+### Security Invariants
+1. Nobody can modify the owner's role or remove the owner
+2. Only the owner can modify/remove other admins
+3. Any admin can modify/remove members and viewers
+4. `transfer_ownership` updates `groups.created_by` and ensures target is an admin
+5. Player linking uses a partial unique index — one player per member per group
+6. `self_create_and_link` creates a player AND links in one atomic operation
+
+## UI Components
+
+### `GroupManagementTab.tsx`
+Located in Settings > Group tab (default tab for admins in Supabase mode). Shows:
+- Group name and creation date
+- Invite code with copy button (owner: regenerate button)
+- Member list with roles, linked player names
+- Role change dropdowns (owner sees all options, admin sees member/viewer only)
+- Remove member button (with confirmation modal)
+- Unlink player button
+- Transfer ownership button (owner only, with confirmation modal)
+
+### `GroupSetupScreen.tsx`
+Create or join flow. After creation, shows invite code in a `'created'` mode with share/copy options before proceeding.
+
+### `PlayerPicker` (in `App.tsx`)
+Shown when a group member has no linked player. Filters out already-linked players. Self-create option calls `self_create_and_link` RPC.
+
+## Per-Group API Keys
+
+Each group stores its own Gemini and ElevenLabs API keys in the `settings` table. Owner manages them in Settings > AI tab.
+
+Key flow:
+```
+getSettings().geminiApiKey → apiProxy sends in request body → Vercel Edge Function uses it
+                                                             ↳ fallback: process.env.GEMINI_API_KEY
+```
+
+This prevents groups from using another group's keys. New groups must set their own keys or rely on the env var fallback (which the project owner controls).
+
+## Important: No `memberSync` Role
+
+The old `memberSync` role was removed during the migration. Only 3 roles exist: `admin`, `member`, `viewer`. Any references to `memberSync` in legacy code should be cleaned up.

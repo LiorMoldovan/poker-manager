@@ -49,13 +49,18 @@ When modifying the forecast algorithm or any data-driven logic:
 - Always use fresh `lastUpdated` timestamp when pushing
 - `keepalive: true` on fetch for `visibilitychange` handlers
 
-### Supabase (Migration)
+### Supabase
 - Always check `USE_SUPABASE` before adding Supabase code — both branches must work
 - `getGroupId()` can return `null` — always guard with early return
 - Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return
 - JSONB columns accept objects/arrays directly — no JSON.stringify needed
 - Timestamps should be ISO strings for TIMESTAMPTZ columns
 - `onConflict` must match exact UNIQUE constraint columns from schema
+- PostgREST default limit is 1000 rows — use pagination (`fetchAllRows`) for large tables
+- RPCs with `SECURITY DEFINER` bypass RLS — they must manually verify permissions
+- Group management RPCs must check `groups.created_by` for owner-only operations
+- Player linking: partial unique index prevents duplicate links — handle the constraint error gracefully
+- GitHub Contents API has 1MB limit — use raw URLs as fallback for large files
 
 ### TypeScript Strict Mode
 - `noUnusedLocals: true` — remove unused variables

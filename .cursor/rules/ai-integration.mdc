@@ -11,7 +11,7 @@ alwaysApply: false
 All AI text generation lives in `src/utils/geminiAI.ts`. TTS (text-to-speech) lives in `src/utils/tts.ts`. Training AI in `src/utils/pokerTraining.ts`.
 
 **Legacy** (`USE_SUPABASE = false`): API key in localStorage (`gemini_api_key`, `elevenlabs_api_key`), direct client-side calls to Google/ElevenLabs.
-**Supabase** (`USE_SUPABASE = true`): API keys in Vercel env vars (`GEMINI_API_KEY`, `ELEVENLABS_API_KEY`). All calls routed through Vercel Edge Functions via `src/utils/apiProxy.ts`. `getGeminiApiKey()` and `getElevenLabsApiKey()` return `'server-managed'`.
+**Supabase** (`USE_SUPABASE = true`): Per-group API keys stored in `settings` table (`gemini_api_key`, `elevenlabs_api_key`). All calls routed through Vercel Edge Functions via `src/utils/apiProxy.ts`. Key priority: (1) group settings key sent in request body, (2) Vercel env var fallback (`GEMINI_API_KEY`, `ELEVENLABS_API_KEY`), (3) error. Owner manages keys in Settings > AI tab. `getGeminiApiKey()` and `getElevenLabsApiKey()` return the group key or `'server-managed'`.
 
 ## API Proxy Architecture
 
@@ -26,14 +26,20 @@ All external API calls are centralized through `src/utils/apiProxy.ts`:
 
 ## Vercel Edge Functions (`api/` directory)
 
-| Route | Method | Env Var | Proxies To |
-|-------|--------|---------|-----------|
-| `/api/gemini` | POST | `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../generateContent` |
-| `/api/gemini-models` | GET | `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
-| `/api/elevenlabs-tts` | POST | `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/text-to-speech` |
-| `/api/elevenlabs-usage` | GET | `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
+| Route | Method | Key Source | Proxies To |
+|-------|--------|-----------|-----------|
+| `/api/gemini` | POST | Body `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../generateContent` |
+| `/api/gemini-models` | GET | Query `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
+| `/api/elevenlabs-tts` | POST | Body `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/text-to-speech` |
+| `/api/elevenlabs-usage` | GET | Query `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
 
-Non-admin users see cached AI content synced from cloud.
+All Edge Functions verify Supabase JWT (`api/_auth.ts`) and accept per-group API keys in the request. Non-admin users see cached AI content via Supabase Realtime sync.
+
+### Thinking Model Token Limits
+Gemini 3 Flash (thinking model) uses tokens from `maxOutputTokens` for internal reasoning. Allocate generous limits:
+- `generateGraphInsights`: 4096 tokens
+- `generateForecastComparison`: 1024 tokens
+- Standard generation: keep defaults reasonable (~1024-2048)
 
 ## AI Features
 

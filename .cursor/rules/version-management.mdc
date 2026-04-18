@@ -12,7 +12,7 @@ The app version is in `src/version.ts`, NOT `package.json`. Never modify `packag
 
 ## When to Bump
 
-Version is bumped ONLY as part of the merge/push process (see git-workflow rule). Every push to `main` must include a version bump.
+Version is bumped ONLY as part of the merge/push process (see git-workflow rule). Every push to `main` must include a version bump. Pushes to `supabase-migration` should also bump the version for tracking preview deployments.
 
 ## How to Bump
 

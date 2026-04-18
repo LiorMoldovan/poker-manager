@@ -14,7 +14,9 @@ alwaysApply: false
 
 ### Schema
 - **20 tables** in `supabase/schema.sql`: groups, group_members, players, player_traits, games, game_players, game_forecasts, shared_expenses, paid_settlements, period_markers, chip_values, settings, pending_forecasts, chronicle_profiles, graph_insights, tts_pools, activity_log, training_pool, training_answers, training_insights
-- **Auth functions** in `supabase/002-auth-support.sql`: create_group, join_group_by_invite, link_member_to_player
+- **Auth functions** in `supabase/002-auth-support.sql`: create_group, join_group_by_invite, link_member_to_player (base versions)
+- **Group management RPCs** in `supabase/004-group-management.sql`: 9 RPCs with owner-aware security (create_group enhanced, self_create_and_link, update_member_role, remove_group_member, transfer_ownership, regenerate_invite_code, unlink_member_player)
+- **Schema additions** in `004`: `group_members.display_name`, `settings.gemini_api_key`, `settings.elevenlabs_api_key`, partial unique index on player linking
 - All tables have **Row Level Security (RLS)** policies enforcing group-level isolation via `auth.uid()` + `group_id`
 - UUIDs for all primary keys; foreign keys enforce referential integrity
 

@@ -585,6 +585,9 @@ const SettingsScreen = () => {
           transferOwnership={groupMgmt.transferOwnership}
           regenerateInviteCode={groupMgmt.regenerateInviteCode}
           unlinkMemberPlayer={groupMgmt.unlinkMemberPlayer}
+          createPlayerInvite={groupMgmt.createPlayerInvite}
+          addMemberByEmail={groupMgmt.addMemberByEmail}
+          appUrl={window.location.origin}
         />
       )}
 

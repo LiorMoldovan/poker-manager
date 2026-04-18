@@ -4,6 +4,7 @@ interface GroupSetupScreenProps {
   userEmail: string;
   onCreateGroup: (name: string) => Promise<{ data: any; error: any }>;
   onJoinGroup: (code: string) => Promise<{ data: any; error: any }>;
+  onJoinByPlayerInvite: (code: string) => Promise<{ data: any; error: any }>;
   onSignOut: () => void;
   onContinue?: () => void;
 }
@@ -12,6 +13,7 @@ export default function GroupSetupScreen({
   userEmail,
   onCreateGroup,
   onJoinGroup,
+  onJoinByPlayerInvite,
   onSignOut,
   onContinue,
 }: GroupSetupScreenProps) {
@@ -49,6 +51,16 @@ export default function GroupSetupScreen({
     }
     setLoading(true);
     setError('');
+
+    // Try personal invite first (8 chars), then generic (6 chars)
+    const { data: personalData } = await onJoinByPlayerInvite(code);
+    if (personalData) {
+      // Personal invite succeeded — player already linked, proceed
+      setLoading(false);
+      return;
+    }
+
+    // Fall back to generic group invite
     const { error: err } = await onJoinGroup(code);
     if (err) {
       setError(
@@ -150,10 +162,10 @@ export default function GroupSetupScreen({
             type="text"
             value={inviteCode}
             onChange={e => setInviteCode(e.target.value)}
-            placeholder="קוד הזמנה (6 תווים)"
+            placeholder="קוד הזמנה"
             autoFocus
             dir="ltr"
-            maxLength={6}
+            maxLength={8}
             style={{ ...inputStyle, textAlign: 'center', letterSpacing: '4px', fontSize: '1.3rem', fontWeight: 600 }}
           />
 

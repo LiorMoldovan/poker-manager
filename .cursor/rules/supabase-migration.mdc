@@ -1,6 +1,6 @@
 ---
-description: Supabase migration standards — validation checklist, column mapping, audit requirements
-globs: "{src/database/**,src/utils/activityLogger.ts,src/hooks/useSupabaseAuth.ts,supabase/**}"
+description: Supabase migration standards — validation checklist, column mapping, audit requirements, group management RPCs
+globs: "{src/database/**,src/utils/activityLogger.ts,src/hooks/useSupabaseAuth.ts,src/components/GroupManagementTab.tsx,supabase/**,api/**}"
 alwaysApply: false
 ---
 
@@ -11,13 +11,15 @@ alwaysApply: false
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1. Schema + RLS | DONE | 20 tables, RLS policies, indexes in `supabase/schema.sql` |
-| 2. Auth + Groups | DONE | Supabase Auth, group management, SQL functions in `supabase/002-auth-support.sql` |
+| 2. Auth + Groups | DONE | Supabase Auth (email + Google OAuth), group management, SQL functions |
 | 3. Core Data Layer | DONE | `supabaseCache.ts`, `migrateToSupabase.ts`, `storage.ts` dual branches |
 | 4. Training + Activity | DONE | `githubSync.ts` (7 functions), `activityLogger.ts` (6 functions) dual branches |
-| 5. Server-side AI | DONE | 4 Vercel Edge Functions + `apiProxy.ts` centralized proxy, 13 call sites migrated |
-| 6. Realtime | DONE | 11-table subscription, debounced cache refresh, `useRealtimeRefresh` hook on 6 screens, sync guards |
-| 7. Cleanup | PENDING | Remove legacy GitHub sync, localStorage keys, embedded token |
-| 8. Deploy | PENDING | Full test, merge to main, version bump to 6.0.0 |
+| 5. Server-side AI | DONE | 4 Vercel Edge Functions + `apiProxy.ts`, per-group API key support |
+| 6. Realtime | DONE | 11-table subscription, debounced cache refresh, `useRealtimeRefresh` hook on 6 screens |
+| 7. Group Management | DONE | Full group lifecycle: create, join, roles, invite codes, ownership transfer, player linking |
+| 8. Per-Group API Keys | DONE | `gemini_api_key` + `elevenlabs_api_key` in `settings` table, proxy fallback chain |
+| 9. Cleanup | PENDING | Remove legacy GitHub sync, localStorage keys, embedded token, `memberSync` role remnants |
+| 10. Deploy | PENDING | Full test, merge to main, version bump to 6.0.0 |
 
 ## Mandatory Validation After Every Change
 
@@ -80,7 +82,43 @@ if (USE_SUPABASE) {
 ### Multi-Tenancy
 Every table has `group_id` column. RLS policies enforce `group_id` matches the user's group. `getGroupId()` from `supabaseCache.ts` provides the current group.
 
+## Group Management SQL RPCs (`supabase/004-group-management.sql`)
+
+9 RPCs with owner-aware security. All sensitive operations check `groups.created_by` to distinguish owner from regular admin.
+
+| RPC | Who Can Call | Purpose |
+|-----|-------------|---------|
+| `create_group(name, display_name)` | Any authenticated user | Creates group, auto-creates owner player, inserts default settings |
+| `join_group_by_invite(code, display_name)` | Any authenticated user | Joins group via invite code, adds member with `member` role |
+| `link_member_to_player(target_player_id)` | Any group member | Links own account to an existing player (with uniqueness check) |
+| `self_create_and_link(player_name)` | Any group member | Creates new player and links self to it |
+| `update_member_role(target_user_id, new_role)` | Admin (owner for admin targets) | Changes a member's role |
+| `remove_group_member(target_user_id)` | Admin (owner for admin targets) | Removes a member from group |
+| `transfer_ownership(new_owner_id)` | Owner only | Transfers group ownership (target must be admin) |
+| `regenerate_invite_code()` | Owner only | Generates new invite code, invalidates old |
+| `unlink_member_player(target_user_id)` | Admin (owner for admin targets) | Unlinks member from their player record |
+
+### Schema Changes in `004-group-management.sql`
+- `group_members.display_name TEXT` — user's display name in the group
+- `settings.gemini_api_key TEXT` — per-group Gemini API key
+- `settings.elevenlabs_api_key TEXT` — per-group ElevenLabs API key
+- Partial unique index `idx_gm_unique_player` on `group_members(group_id, player_id) WHERE player_id IS NOT NULL`
+- FK `group_members.player_id` changed to `ON DELETE SET NULL`
+
+## API Key Flow (Supabase Mode)
+
+```
+Group owner sets keys in Settings > AI tab
+  → Saved to `settings` table (gemini_api_key / elevenlabs_api_key)
+  → Client reads from getSettings() via getGroupGeminiKey() / getGroupElevenLabsKey()
+  → Sent in proxy request body to Vercel Edge Functions
+  → Edge Function: request body key > env var fallback > error
+```
+
+This ensures each group uses its own keys. The Vercel env var serves as a global fallback (e.g., for the owner's primary group).
+
 ## Supabase Project Details
 - **Region**: Europe (Frankfurt)
 - **Project URL**: `https://ursjltxklmxmapfvkttj.supabase.co`
 - **Client**: Initialized in `src/database/supabaseClient.ts`
+- **Google OAuth**: Configured in Google Cloud Console (project: Poker-Manager), redirect via Supabase Auth

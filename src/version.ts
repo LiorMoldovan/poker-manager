@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.13.0';
+export const APP_VERSION = '5.14.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.14.0',
+    date: '2026-04-18',
+    changes: [
+      '✅ Personal player invites — send unique invite codes that auto-link players on join',
+      '✅ Add member by email — owner can add registered users directly from Group tab',
+      '✅ Nice shareable invite messages with WhatsApp support',
+      '✅ Join flow supports both personal (8-char) and generic (6-char) invite codes',
+    ]
+  },
   {
     version: '5.13.0',
     date: '2026-04-17',

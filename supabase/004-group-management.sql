@@ -289,7 +289,133 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 13. Unlink member from player (admin/owner)
+-- 13. Player invites table — personal invite codes tied to a specific player
+CREATE TABLE IF NOT EXISTS player_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  invite_code TEXT NOT NULL UNIQUE,
+  created_by UUID NOT NULL REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  used_by UUID REFERENCES auth.users(id),
+  used_at TIMESTAMPTZ,
+  UNIQUE(group_id, player_id)
+);
+
+ALTER TABLE player_invites ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'pi_admin_read' AND tablename = 'player_invites') THEN
+    CREATE POLICY pi_admin_read ON player_invites FOR SELECT
+      USING (group_id IN (SELECT group_id FROM group_members WHERE user_id = auth.uid() AND role = 'admin'));
+  END IF;
+END $$;
+
+-- 14. Create a personal invite for a specific player (admin only)
+CREATE OR REPLACE FUNCTION create_player_invite(target_player_id UUID)
+RETURNS JSON AS $$
+DECLARE
+  caller_group UUID;
+  caller_role TEXT;
+  player_group UUID;
+  player_name_val TEXT;
+  new_code TEXT;
+  existing_code TEXT;
+BEGIN
+  SELECT gm.group_id, gm.role INTO caller_group, caller_role
+  FROM group_members gm WHERE gm.user_id = auth.uid() LIMIT 1;
+
+  IF caller_role != 'admin' THEN
+    RAISE EXCEPTION 'Only admins can create player invites';
+  END IF;
+
+  SELECT group_id, name INTO player_group, player_name_val
+  FROM players WHERE id = target_player_id;
+
+  IF player_group IS NULL OR player_group != caller_group THEN
+    RAISE EXCEPTION 'Player not found in your group';
+  END IF;
+
+  -- Check if player is already linked to a member
+  IF EXISTS (
+    SELECT 1 FROM group_members
+    WHERE group_id = caller_group AND player_id = target_player_id
+  ) THEN
+    RAISE EXCEPTION 'Player is already linked to a member';
+  END IF;
+
+  -- Return existing unused invite if one exists
+  SELECT invite_code INTO existing_code
+  FROM player_invites
+  WHERE group_id = caller_group AND player_id = target_player_id AND used_by IS NULL;
+
+  IF existing_code IS NOT NULL THEN
+    RETURN json_build_object(
+      'invite_code', existing_code,
+      'player_name', player_name_val,
+      'already_existed', true
+    );
+  END IF;
+
+  new_code := substr(md5(random()::text || clock_timestamp()::text), 1, 8);
+
+  INSERT INTO player_invites (group_id, player_id, invite_code, created_by)
+  VALUES (caller_group, target_player_id, new_code, auth.uid())
+  ON CONFLICT (group_id, player_id)
+  DO UPDATE SET invite_code = EXCLUDED.invite_code, used_by = NULL, used_at = NULL, created_at = now();
+
+  RETURN json_build_object(
+    'invite_code', new_code,
+    'player_name', player_name_val,
+    'already_existed', false
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 15. Join group via personal player invite (auto-links to player)
+CREATE OR REPLACE FUNCTION join_group_by_player_invite(code TEXT, display_name TEXT DEFAULT NULL)
+RETURNS JSON AS $$
+DECLARE
+  inv RECORD;
+  member_name TEXT;
+  found_group_name TEXT;
+BEGIN
+  SELECT pi.*, p.name AS player_name
+  INTO inv
+  FROM player_invites pi
+  JOIN players p ON p.id = pi.player_id
+  WHERE pi.invite_code = code AND pi.used_by IS NULL;
+
+  IF inv IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  member_name := COALESCE(NULLIF(TRIM(display_name), ''), split_part(
+    (SELECT email FROM auth.users WHERE id = auth.uid()), '@', 1
+  ));
+
+  SELECT name INTO found_group_name FROM groups WHERE id = inv.group_id;
+
+  -- Insert as member with player already linked
+  INSERT INTO group_members (group_id, user_id, role, display_name, player_id)
+  VALUES (inv.group_id, auth.uid(), 'member', member_name, inv.player_id)
+  ON CONFLICT (group_id, user_id) DO UPDATE SET player_id = EXCLUDED.player_id;
+
+  -- Mark invite as used
+  UPDATE player_invites
+  SET used_by = auth.uid(), used_at = now()
+  WHERE id = inv.id;
+
+  RETURN json_build_object(
+    'group_id', inv.group_id,
+    'group_name', found_group_name,
+    'player_id', inv.player_id,
+    'player_name', inv.player_name
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 16. Unlink member from player (admin/owner)
 CREATE OR REPLACE FUNCTION unlink_member_player(target_user_id UUID)
 RETURNS VOID AS $$
 DECLARE
@@ -306,5 +432,50 @@ BEGIN
   UPDATE group_members
   SET player_id = NULL
   WHERE user_id = target_user_id AND group_id = caller_group;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 17. Add a registered user to the group by email (admin only, optional player linking)
+CREATE OR REPLACE FUNCTION add_member_by_email(
+  target_email TEXT,
+  target_player_id UUID DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  caller_group UUID;
+  caller_role TEXT;
+  target_user_id UUID;
+  target_display TEXT;
+BEGIN
+  SELECT gm.group_id, gm.role INTO caller_group, caller_role
+  FROM group_members gm WHERE gm.user_id = auth.uid() LIMIT 1;
+
+  IF caller_role != 'admin' THEN
+    RAISE EXCEPTION 'Only admins can add members';
+  END IF;
+
+  SELECT id INTO target_user_id
+  FROM auth.users WHERE email = lower(trim(target_email));
+
+  IF target_user_id IS NULL THEN
+    RAISE EXCEPTION 'No registered user with this email';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM group_members WHERE group_id = caller_group AND user_id = target_user_id
+  ) THEN
+    RAISE EXCEPTION 'User is already a member of this group';
+  END IF;
+
+  target_display := split_part(target_email, '@', 1);
+
+  INSERT INTO group_members (group_id, user_id, role, display_name, player_id)
+  VALUES (caller_group, target_user_id, 'member', target_display, target_player_id);
+
+  RETURN json_build_object(
+    'user_id', target_user_id,
+    'display_name', target_display,
+    'player_id', target_player_id
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
