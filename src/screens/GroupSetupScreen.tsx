@@ -264,8 +264,31 @@ export default function GroupSetupScreen({
         </div>
       )}
 
+      {/* Already added by admin? */}
+      {(mode === 'choose' || mode === 'join') && (
+        <div style={{
+          marginTop: '2rem', padding: '1rem', borderRadius: '10px',
+          background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+          textAlign: 'center', maxWidth: '320px', width: '100%',
+        }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+            אין לך קוד? בקש מהמנהל שיוסיף אותך לפי אימייל
+          </p>
+          <button
+            onClick={onContinue}
+            style={{
+              background: 'none', border: '1px solid var(--border)', borderRadius: '8px',
+              color: 'var(--text)', padding: '0.45rem 1rem', cursor: 'pointer',
+              fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
+            }}
+          >
+            🔄 כבר הוספתי — בדוק שוב
+          </button>
+        </div>
+      )}
+
       {/* Signed in as + sign out */}
-      <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
+      <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
           {userEmail}
         </p>
