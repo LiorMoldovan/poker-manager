@@ -277,7 +277,8 @@ export default function GroupSetupScreen({
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               onClick={() => {
-                const msg = `היי, נרשמתי לאפליקציית הפוקר 🃏\nאפשר להוסיף אותי לקבוצה?\n\nהאימייל שלי: ${userEmail}`;
+                const addLink = `${window.location.origin}?addMember=${encodeURIComponent(userEmail)}`;
+                const msg = `היי, נרשמתי לאפליקציית הפוקר 🃏\nאפשר להוסיף אותי לקבוצה?\n\nלחץ כאן להוספה מהירה:\n${addLink}`;
                 if (typeof navigator.share === 'function') {
                   navigator.share({ text: msg }).catch(() => {});
                 } else {

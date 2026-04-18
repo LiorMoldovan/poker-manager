@@ -399,6 +399,9 @@ function SupabaseApp() {
   const auth = useSupabaseAuth();
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [addMemberPrompt, setAddMemberPrompt] = useState<string | null>(null);
+  const [addMemberStatus, setAddMemberStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [addMemberMsg, setAddMemberMsg] = useState('');
 
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
@@ -427,6 +430,33 @@ function SupabaseApp() {
       });
     return () => unsubscribeFromRealtime();
   }, [groupId]);
+
+  // Detect ?addMember=email deep link
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get('addMember');
+    if (email && auth.membership && role === 'admin') {
+      setAddMemberPrompt(email);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [auth.membership, role]);
+
+  const handleAddMemberFromLink = async () => {
+    if (!addMemberPrompt) return;
+    setAddMemberStatus('loading');
+    const { error } = await auth.addMemberByEmail(addMemberPrompt);
+    if (error) {
+      const msg = (error as { message?: string })?.message || '';
+      if (msg.includes('No registered user')) setAddMemberMsg('לא נמצא משתמש רשום עם האימייל הזה');
+      else if (msg.includes('already a member')) setAddMemberMsg('המשתמש כבר חבר בקבוצה');
+      else setAddMemberMsg(msg || 'שגיאה בהוספה');
+      setAddMemberStatus('error');
+    } else {
+      setAddMemberMsg(`${addMemberPrompt} נוסף לקבוצה!`);
+      setAddMemberStatus('success');
+      setTimeout(() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }, 3000);
+    }
+  };
 
   const permissionValue: PermissionContextType = {
     role,
@@ -529,10 +559,74 @@ function SupabaseApp() {
     location.pathname.startsWith(path)
   );
 
+  const addMemberBanner = addMemberPrompt && (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+      background: 'var(--surface)', borderBottom: '2px solid var(--primary)',
+      padding: '1rem', direction: 'rtl', boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+    }}>
+      {addMemberStatus === 'idle' && (
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text)' }}>
+            ➕ בקשת הצטרפות
+          </p>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            להוסיף את <strong style={{ color: 'var(--text)' }}>{addMemberPrompt}</strong> לקבוצה?
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+            <button
+              onClick={handleAddMemberFromLink}
+              style={{
+                padding: '0.55rem 1.5rem', borderRadius: '8px', border: 'none',
+                background: 'var(--primary)', color: 'white', cursor: 'pointer',
+                fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+              }}
+            >
+              ✓ הוסף
+            </button>
+            <button
+              onClick={() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }}
+              style={{
+                padding: '0.55rem 1.5rem', borderRadius: '8px',
+                border: '1px solid var(--border)', background: 'none',
+                color: 'var(--text-muted)', cursor: 'pointer',
+                fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif',
+              }}
+            >
+              ✕ לא עכשיו
+            </button>
+          </div>
+        </div>
+      )}
+      {addMemberStatus === 'loading' && (
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>מוסיף...</p>
+      )}
+      {addMemberStatus === 'success' && (
+        <p style={{ textAlign: 'center', color: '#10B981', fontWeight: 600 }}>✓ {addMemberMsg}</p>
+      )}
+      {addMemberStatus === 'error' && (
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ color: '#EF4444', marginBottom: '0.5rem' }}>{addMemberMsg}</p>
+          <button
+            onClick={() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }}
+            style={{
+              padding: '0.4rem 1rem', borderRadius: '6px', border: '1px solid var(--border)',
+              background: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+              fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
+            }}
+          >
+            סגור
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   if (role === 'viewer') {
     return (
       <ErrorBoundary>
         <PermissionContext.Provider value={permissionValue}>
+          {addMemberBanner}
           <div className="app-container">
             <main className="main-content">
               <Routes>
@@ -557,6 +651,7 @@ function SupabaseApp() {
   return (
     <ErrorBoundary>
       <PermissionContext.Provider value={permissionValue}>
+        {addMemberBanner}
         <div className="app-container">
           <main className="main-content">
             <Routes>
