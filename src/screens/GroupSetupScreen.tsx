@@ -271,19 +271,40 @@ export default function GroupSetupScreen({
           background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
           textAlign: 'center', maxWidth: '320px', width: '100%',
         }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-            אין לך קוד? בקש מהמנהל שיוסיף אותך לפי אימייל
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
+            אין לך קוד? בקש מהמנהל שיוסיף אותך
           </p>
-          <button
-            onClick={onContinue}
-            style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: '8px',
-              color: 'var(--text)', padding: '0.45rem 1rem', cursor: 'pointer',
-              fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
-            }}
-          >
-            🔄 כבר הוספתי — בדוק שוב
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => {
+                const msg = `היי, נרשמתי לאפליקציית הפוקר 🃏\nאפשר להוסיף אותי לקבוצה?\n\nהאימייל שלי: ${userEmail}`;
+                if (typeof navigator.share === 'function') {
+                  navigator.share({ text: msg }).catch(() => {});
+                } else {
+                  const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+                  window.open(waUrl, '_blank');
+                }
+              }}
+              style={{
+                flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                background: '#25D366', color: 'white', cursor: 'pointer',
+                fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+              }}
+            >
+              📩 שלח בקשה למנהל
+            </button>
+            <button
+              onClick={onContinue}
+              style={{
+                flex: 1, padding: '0.5rem', borderRadius: '8px',
+                background: 'none', border: '1px solid var(--border)',
+                color: 'var(--text)', cursor: 'pointer',
+                fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
+              }}
+            >
+              🔄 בדוק שוב
+            </button>
+          </div>
         </div>
       )}
 
