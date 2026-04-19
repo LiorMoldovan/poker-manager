@@ -4120,5 +4120,25 @@
       "canvasHash": "wtr4re"
     },
     "playerName": "חרדון"
+  },
+  {
+    "deviceId": "a080d2df-7906-4099-a09a-65dc219c49dd",
+    "role": "member",
+    "timestamp": "2026-04-19T06:52:05.033Z",
+    "device": "Windows PC / Windows 10/11 / Chrome",
+    "screenSize": "1920x1080",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-19T06:52:05.034Z",
+    "fingerprint": {
+      "gpu": "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00009BC5) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "cores": 16,
+      "memory": 32,
+      "touchPoints": 0,
+      "language": "en-US",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "kziin2"
+    },
+    "playerName": "ליאור"
   }
 ]
