@@ -774,7 +774,7 @@ const GraphsScreen = () => {
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
-            className={`btn btn-sm ${viewMode === 'cumulative' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode === 'impact' && prevTimePeriodRef.current) {
                 setTimePeriod(prevTimePeriodRef.current.period);
@@ -783,12 +783,12 @@ const GraphsScreen = () => {
               }
               setViewMode('cumulative');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'cumulative' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.trends')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode === 'impact' && prevTimePeriodRef.current) {
                 setTimePeriod(prevTimePeriodRef.current.period);
@@ -797,12 +797,12 @@ const GraphsScreen = () => {
               }
               setViewMode('headToHead');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'headToHead' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.headToHead')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'impact' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode !== 'impact') {
                 prevTimePeriodRef.current = { period: timePeriod, year: selectedYear };
@@ -810,7 +810,7 @@ const GraphsScreen = () => {
               }
               setViewMode('impact');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'impact' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('graphs.impact')}
           </button>

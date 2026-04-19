@@ -563,32 +563,33 @@ const SettingsScreen = () => {
 
       {/* Tabs */}
       <div className="card" style={{ padding: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {tabs.slice(0, 4).map(tab => (
-            <button
-              key={tab.id}
-              className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setActiveTab(tab.id)}
-              style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        {tabs.length > 4 && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-            {tabs.slice(4).map(tab => (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '0.4rem',
+        }}>
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
               <button
                 key={tab.id}
-                className={`btn btn-sm ${activeTab === tab.id ? 'btn-primary' : 'btn-secondary'}`}
+                className="btn btn-sm btn-secondary"
                 onClick={() => setActiveTab(tab.id)}
-                style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+                style={{
+                  padding: '0.45rem 0.2rem', fontSize: '0.7rem',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  ...(isActive ? {
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    color: '#34d399',
+                  } : {}),
+                }}
               >
                 {tab.label}
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
 
       {saved && (
@@ -967,7 +968,7 @@ const SettingsScreen = () => {
           <div className="card-header">
             <h2 className="card-title">{t('settings.players.title', { count: players.length })}</h2>
             {canAddPlayers && (
-              <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
+              <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)} style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>
                 {t('settings.players.add')}
               </button>
             )}

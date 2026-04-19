@@ -1227,23 +1227,23 @@ const StatisticsScreen = () => {
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
-            className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('table')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'table' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('stats.tableView')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('records')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'records' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('stats.recordsView')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'players' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('players')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'players' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
             {t('stats.playersView')}
           </button>

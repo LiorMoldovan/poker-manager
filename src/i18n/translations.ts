@@ -422,7 +422,7 @@ const he = {
   'notification.emailSubject': 'תזכורת תשלום — Poker Manager',
 
   // ── Push Notifications ──
-  'push.tabLabel': 'התראות',
+  'push.tabLabel': '🔔 התראות',
   'push.title': 'שליחת התראה',
   'push.recipients': 'נמענים',
   'push.allPlayers': 'כל השחקנים',
@@ -1441,7 +1441,7 @@ const en: Record<keyof typeof he, string> = {
   'notification.emailSubject': 'Payment Reminder — Poker Manager',
 
   // ── Push Notifications ──
-  'push.tabLabel': 'Notifications',
+  'push.tabLabel': '🔔 Notifications',
   'push.title': 'Send Notification',
   'push.recipients': 'Recipients',
   'push.allPlayers': 'All players',

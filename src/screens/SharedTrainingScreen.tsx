@@ -248,8 +248,8 @@ const SharedTrainingScreen = () => {
             <button
               key={n}
               onClick={() => setSessionCount(n)}
-              className={`btn btn-sm ${sessionCount === n ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem' }}
+              className="btn btn-sm btn-secondary"
+              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem', ...(sessionCount === n ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
             >
               {n === 0 ? 'ללא הגבלה' : n}
             </button>
@@ -268,8 +268,8 @@ const SharedTrainingScreen = () => {
             <button
               key={mode}
               onClick={() => { setTrainingMode(mode); if (mode === 'specific') { setShowCategoryPicker(true); } else { setSelectedCategories([]); setShowCategoryPicker(false); } }}
-              className={`btn btn-sm ${trainingMode === mode ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, padding: '0.4rem 0.3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', lineHeight: 1.2 }}
+              className="btn btn-sm btn-secondary"
+              style={{ flex: 1, padding: '0.4rem 0.3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', lineHeight: 1.2, ...(trainingMode === mode ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
             >
               <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{icon}{count > 0 ? ` (${count})` : ''}</span>
               <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{text}</span>
@@ -302,8 +302,8 @@ const SharedTrainingScreen = () => {
                     <button
                       key={cat.id}
                       onClick={() => toggleCategory(cat.id)}
-                      className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
+                      className="btn btn-sm btn-secondary"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', ...(isSelected ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
                     >
                       {cat.icon} {cat.name} ({catCount})
                     </button>

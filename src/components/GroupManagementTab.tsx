@@ -223,26 +223,27 @@ export default function GroupManagementTab({
                 <div key={m.userId} style={{
                   padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border)',
                   background: isMe ? 'rgba(16,185,129,0.05)' : 'var(--background)',
+                  overflow: 'hidden',
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {m.displayName || m.playerName || t('groupMgmt.noName')}
                       </span>
                       {isMe && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '0.1rem 0.4rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
                           {t('groupMgmt.you')}
                         </span>
                       )}
                       {isMemberOwner && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308', padding: '0.1rem 0.4rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
                           {t('groupMgmt.owner')}
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
                       {m.email && (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', direction: 'ltr' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
                           {m.email}
                         </span>
                       )}
