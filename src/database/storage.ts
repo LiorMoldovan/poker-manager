@@ -1067,8 +1067,13 @@ export async function pushBackupToGitHub(
     });
 
     if (!res.ok) {
-      const data = await res.json();
-      return { success: false, error: data.error?.message || `HTTP ${res.status}` };
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        return { success: false, error: data.error?.message || `HTTP ${res.status}` };
+      } catch {
+        return { success: false, error: text || `HTTP ${res.status}` };
+      }
     }
     return { success: true };
   } catch (err) {
