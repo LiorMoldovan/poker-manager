@@ -276,7 +276,7 @@ function SupabaseApp() {
           const perm = await Notification.requestPermission();
           if (perm !== 'granted') return;
         }
-        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
         if (!vapidKey) return;
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,

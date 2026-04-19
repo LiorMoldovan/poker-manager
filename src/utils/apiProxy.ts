@@ -124,9 +124,16 @@ export async function proxySendPush(payload: {
       headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const text = await res.text();
+      let msg = `HTTP ${res.status}`;
+      try { const j = JSON.parse(text); msg = j.error?.message || msg; } catch { msg = text || msg; }
+      console.error('[push]', msg);
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    console.error('[push]', err);
     return null;
   }
 }

@@ -2191,18 +2191,23 @@ const SettingsScreen = () => {
                 if (!gid || !pushMsg.trim()) return;
                 setPushSending(true);
                 setPushResult(null);
-                const result = await proxySendPush({
-                  groupId: gid,
-                  title: '🃏 Poker Manager',
-                  body: pushMsg.trim(),
-                  targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
-                });
-                setPushSending(false);
-                if (result) {
-                  setPushResult(t('push.sent', { sent: String(result.sent), total: String(result.total) }));
-                  if (result.sent > 0) setPushMsg('');
-                } else {
-                  setPushResult(t('push.error'));
+                try {
+                  const result = await proxySendPush({
+                    groupId: gid,
+                    title: '🃏 Poker Manager',
+                    body: pushMsg.trim(),
+                    targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
+                  });
+                  if (result) {
+                    setPushResult(t('push.sent', { sent: String(result.sent), total: String(result.total) }));
+                    if (result.sent > 0) setPushMsg('');
+                  } else {
+                    setPushResult(t('push.error'));
+                  }
+                } catch (err) {
+                  setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
+                } finally {
+                  setPushSending(false);
                 }
               }}
               style={{
@@ -2225,6 +2230,95 @@ const SettingsScreen = () => {
                 {pushResult}
               </p>
             )}
+
+            {/* Test section */}
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                🧪 {language === 'he' ? 'בדיקה' : 'Test'}
+              </h4>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={async () => {
+                    const gid = getGroupId();
+                    if (!gid) return;
+                    setPushSending(true);
+                    setPushResult(null);
+                    try {
+                      const result = await proxySendPush({
+                        groupId: gid,
+                        title: '🧪 Test Notification',
+                        body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
+                      });
+                      if (result) {
+                        setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
+                      } else {
+                        setPushResult(`❌ ${language === 'he' ? 'שגיאה - בדוק הגדרות' : 'Error - check settings'}`);
+                      }
+                    } catch (err) {
+                      setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
+                    } finally {
+                      setPushSending(false);
+                    }
+                  }}
+                  disabled={pushSending}
+                  style={{
+                    flex: 1, padding: '0.5rem', borderRadius: '0.5rem',
+                    border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.1)',
+                    color: '#3B82F6', cursor: 'pointer', fontSize: '0.8rem',
+                    fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                  }}
+                >
+                  🔔 {language === 'he' ? 'בדיקת Push' : 'Test Push'}
+                </button>
+                <button
+                  onClick={async () => {
+                    setPushSending(true);
+                    setPushResult(null);
+                    try {
+                      const auth = await (await import('../database/supabaseClient')).supabase.auth.getSession();
+                      const token = auth.data.session?.access_token;
+                      const res = await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                        body: JSON.stringify({
+                          to: auth.data.session?.user?.email || '',
+                          subject: '🧪 Poker Manager - Test Email',
+                          playerName: 'Test Player',
+                          reporterName: 'Admin',
+                          amount: '100',
+                          gameDate: new Date().toLocaleDateString('he-IL'),
+                          payLink: '',
+                        }),
+                      });
+                      if (res.ok) {
+                        setPushResult(`✅ ${language === 'he' ? 'מייל נשלח לחשבון שלך' : 'Email sent to your account'}`);
+                      } else {
+                        const text = await res.text();
+                        let msg = `HTTP ${res.status}`;
+                        try { const j = JSON.parse(text); msg = j.error?.message || msg; } catch { msg = text || msg; }
+                        setPushResult(`❌ Email: ${msg}`);
+                      }
+                    } catch (err) {
+                      setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
+                    } finally {
+                      setPushSending(false);
+                    }
+                  }}
+                  disabled={pushSending}
+                  style={{
+                    flex: 1, padding: '0.5rem', borderRadius: '0.5rem',
+                    border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.1)',
+                    color: '#A855F7', cursor: 'pointer', fontSize: '0.8rem',
+                    fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                  }}
+                >
+                  📧 {language === 'he' ? 'בדיקת מייל' : 'Test Email'}
+                </button>
+              </div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem', textAlign: 'center' }}>
+                {language === 'he' ? 'Push נשלח לכל המנויים, מייל נשלח לחשבון שלך' : 'Push sent to all subscribers, email sent to your account'}
+              </p>
+            </div>
           </div>
         </div>
       )}

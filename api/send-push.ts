@@ -202,15 +202,9 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
-  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '39mPz53FHNkirEA3utU_d99xnPsKYBZM2B3lSRukUxg';
   const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:pokermanager.app@gmail.com';
-
-  if (!vapidPublicKey || !vapidPrivateKey) {
-    return new Response(JSON.stringify({ error: { message: 'VAPID keys not configured' } }), {
-      status: 500, headers: JSON_HEADERS,
-    });
-  }
 
   try {
     const { groupId, title, body, targetPlayerNames, url: notifUrl } = await req.json();
@@ -221,9 +215,12 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || 'https://ajmcbxmwfqfbbnshakci.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
-    const db = createClient(supabaseUrl, supabaseKey);
+    const supabaseUrl = process.env.SUPABASE_URL || 'https://ursjltxklmxmapfvkttj.supabase.co';
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_TzhEQmU6mX2n-utnOUAtwQ_zkGTR13j';
+    const authHeader = req.headers.get('Authorization') || '';
+    const db = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     let query = db.from('push_subscriptions').select('endpoint, keys_p256dh, keys_auth, player_name').eq('group_id', groupId);
     if (targetPlayerNames && targetPlayerNames.length > 0) {
