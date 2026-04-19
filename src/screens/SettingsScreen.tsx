@@ -17,7 +17,14 @@ import {
   saveSettings,
   getPlayerByName,
   playerHasGames,
-  getAllGames
+  getAllGames,
+  downloadFullBackup,
+  pushBackupToGitHub,
+  listGitHubBackups,
+  fetchGitHubBackup,
+  restoreFromBackup,
+  parseBackupSummary,
+  getLastBackupDate,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
@@ -30,6 +37,7 @@ import { isEdgeBrowser } from '../utils/tts';
 import { usePermissions } from '../App';
 import { getRoleDisplayName, getRoleEmoji } from '../permissions';
 import { supabase } from '../database/supabaseClient';
+import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import GroupManagementTab from '../components/GroupManagementTab';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -37,7 +45,7 @@ import { useTranslation } from '../i18n';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
-  const { t, isRTL } = useTranslation();
+  const { t, isRTL, language, setLanguage } = useTranslation();
   const { role, isOwner, isSuperAdmin, playerName: authPlayerName, hasPermission, signOut, groupMgmt } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
@@ -127,7 +135,7 @@ const SettingsScreen = () => {
   const handleToggleTraining = async (groupId: string, enabled: boolean) => {
     const { error } = await supabase.rpc('toggle_group_training', { target_group_id: groupId, enabled });
     if (error) {
-      setGlobalError(`שגיאה בעדכון אימון: ${error.message}`);
+      setGlobalError(t('settings.superAdmin.trainingToggleError', { message: error.message }));
       return;
     }
     if (globalStats) {
@@ -146,10 +154,17 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'game' | 'chips' | 'players' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin';
+  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin';
   const getDefaultTab = (): TabId => 'group';
   
   const [activeTab, setActiveTab] = useState<TabId>(getDefaultTab());
+
+  // Backup state
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [githubBackups, setGithubBackups] = useState<{ name: string; size: number }[]>([]);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -171,6 +186,17 @@ const SettingsScreen = () => {
       loadGlobalStats();
     }
   }, [activeTab, isSuperAdmin, globalStats, globalLoading, globalError, loadGlobalStats]);
+
+  // Auto-load GitHub backups when backup tab is selected
+  useEffect(() => {
+    if (activeTab === 'backup' && isOwner && groupMgmt?.groupName && githubBackups.length === 0 && !githubLoading) {
+      setGithubLoading(true);
+      listGitHubBackups(groupMgmt.groupName).then(files => {
+        setGithubBackups(files);
+        setGithubLoading(false);
+      });
+    }
+  }, [activeTab, isOwner, groupMgmt?.groupName, githubBackups.length, githubLoading]);
 
   // Load AI status when AI tab is selected + tick for countdowns
   useEffect(() => {
@@ -361,17 +387,18 @@ const SettingsScreen = () => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const entryDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const diffDays = Math.floor((today.getTime() - entryDay.getTime()) / 86400000);
-    const time = date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-    if (diffDays === 0) return `היום ${time}`;
-    if (diffDays === 1) return `אתמול ${time}`;
-    if (diffDays < 7) return `לפני ${diffDays} ימים ${time}`;
-    return `${date.toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { day: 'numeric', month: 'short' })} ${time}`;
+    const loc = language === 'he' ? 'he-IL' : 'en-US';
+    const time = date.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 0) return t('settings.relative.today', { time });
+    if (diffDays === 1) return t('settings.relative.yesterday', { time });
+    if (diffDays < 7) return t('settings.relative.daysAgo', { days: diffDays, time });
+    return `${date.toLocaleDateString(loc, { day: 'numeric', month: 'short' })} ${time}`;
   };
 
   const getRoleInfo = (r: string) => {
     switch (r) {
-      case 'admin': return { emoji: '👑', name: 'מנהל', color: '#f59e0b' };
-      case 'member': return { emoji: '⭐', name: 'חבר', color: '#10B981' };
+      case 'admin': return { emoji: '👑', name: t('settings.role.admin'), color: '#f59e0b' };
+      case 'member': return { emoji: '⭐', name: t('settings.role.member'), color: '#10B981' };
       default: return { emoji: '👤', name: r, color: '#94a3b8' };
     }
   };
@@ -382,11 +409,12 @@ const SettingsScreen = () => {
     { id: 'players', label: t('settings.tabPlayers'), icon: '👥', requiresPermission: 'player:add' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'chips', label: t('settings.tabChips'), icon: '🎰', requiresPermission: 'chips:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'game', label: t('settings.tabGame'), icon: '💰', requiresPermission: 'settings:edit' as const, ownerOnly: false, adminOnly: false, superAdminOnly: false },
+    { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'ai', label: t('settings.tabAI'), icon: '🤖', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
-    { id: 'superadmin', label: 'ניהול גלובלי', icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
+    { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
   ];
   
   const tabs = allTabs.filter(tab => {
@@ -457,11 +485,11 @@ const SettingsScreen = () => {
       {/* Setup Wizard Banner — shown for group owners when setup is incomplete */}
       {isOwner && (() => {
         const hasPlayers = players.length > 1;
-        const hasApiKey = !!settings.geminiApiKey;
+        const aiWorking = !!settings.geminiApiKey || getAllGames().some(g => g.aiSummary);
         const steps = [
-          { done: true, label: 'יצירת קבוצה', icon: '✅' },
-          { done: hasPlayers, label: 'הוספת שחקנים', icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
-          { done: hasApiKey, label: 'מפתח AI (אופציונלי)', icon: hasApiKey ? '✅' : '🔑', tab: 'ai' as TabId },
+          { done: true, label: t('settings.setup.stepGroup'), icon: '✅' },
+          { done: hasPlayers, label: t('settings.setup.stepPlayers'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
+          { done: aiWorking, label: t('settings.setup.stepAi'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
         ];
         const allDone = steps.every(s => s.done);
         if (allDone) return null;
@@ -475,7 +503,7 @@ const SettingsScreen = () => {
             marginBottom: '0.75rem',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa' }}>🚀 השלמת הגדרת הקבוצה</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa' }}>{t('settings.setup.bannerTitle')}</span>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                 {steps.filter(s => s.done).length}/{steps.length}
               </span>
@@ -543,6 +571,29 @@ const SettingsScreen = () => {
           <p style={{ color: 'var(--success)' }}>{t('settings.saved')}</p>
         </div>
       )}
+
+      {/* Backup reminder banner - show when >30 days since last backup */}
+      {isOwner && activeTab !== 'backup' && (() => {
+        const last = getLastBackupDate();
+        if (!last) return null;
+        const days = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+        if (days <= 30) return null;
+        return (
+          <div className="card" style={{
+            background: 'rgba(234, 179, 8, 0.1)',
+            borderLeft: '4px solid #eab308',
+            marginBottom: '1rem',
+            cursor: 'pointer',
+          }} onClick={() => setActiveTab('backup')}>
+            <p style={{ color: '#eab308', fontSize: '0.85rem', margin: 0 }}>
+              {t('settings.backup.reminder')}
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* Tab content with crossfade */}
+      <div key={activeTab} style={{ animation: 'contentFadeIn 0.2s ease-out' }}>
 
       {/* Group Management Tab */}
       {activeTab === 'group' && groupMgmt && (
@@ -756,7 +807,7 @@ const SettingsScreen = () => {
                 <span style={{ flex: 1 }}>
                   {pair.playerA} ↔ {pair.playerB}
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginRight: '0.5rem' }}>
-                    (מ-{new Date(pair.after).toLocaleDateString('he-IL')})
+                    (מ-{new Date(pair.after).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')})
                   </span>
                 </span>
                 {canEditSettings && (
@@ -960,6 +1011,197 @@ const SettingsScreen = () => {
           )}
         </div>
       )}
+
+      {/* Backup Tab - Owner Only */}
+      {activeTab === 'backup' && isOwner && (() => {
+        const lastDate = getLastBackupDate();
+        const daysSince = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : null;
+        const statusColor = daysSince === null ? 'var(--text-muted)' : daysSince <= 14 ? '#22c55e' : daysSince <= 30 ? '#eab308' : '#ef4444';
+        const statusKey = daysSince === null ? 'settings.backup.never' : daysSince <= 14 ? 'settings.backup.statusGood' : daysSince <= 30 ? 'settings.backup.statusWarning' : 'settings.backup.statusCritical';
+        const gameCount = getAllGames().length;
+        const playerCount = getAllPlayers().length;
+        const groupName = groupMgmt?.groupName || 'group';
+
+        const handleDownload = async () => {
+          setBackupLoading(true);
+          setBackupStatus(null);
+          try {
+            const json = await downloadFullBackup(groupName);
+            setBackupStatus(t('settings.backup.downloaded'));
+            setBackupStatus(t('settings.backup.pushingGithub'));
+            const ghResult = await pushBackupToGitHub(groupName, json);
+            if (ghResult.success) {
+              setBackupStatus(t('settings.backup.githubSuccess'));
+              setGithubBackups([]);
+              listGitHubBackups(groupName).then(f => setGithubBackups(f));
+            } else {
+              setBackupStatus(t('settings.backup.githubFailed', { error: ghResult.error || '' }));
+            }
+          } catch (err) {
+            setBackupStatus(t('settings.backup.failed'));
+            console.error('Backup failed:', err);
+          }
+          setBackupLoading(false);
+        };
+
+        const handleFileRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          e.target.value = '';
+          const text = await file.text();
+          const summary = parseBackupSummary(text);
+          if (!summary.valid) {
+            setBackupStatus(t('settings.backup.invalidFile'));
+            return;
+          }
+          const msg = `${t('settings.backup.restoreConfirm')}\n\n${summary.groupName} - ${summary.exportedAt?.split('T')[0]}\n${t('settings.backup.stats', { players: String(summary.playerCount || 0), games: String(summary.gameCount || 0) })}`;
+          if (!window.confirm(msg)) return;
+          const currentGroupId = getGroupId();
+          if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
+          setRestoreLoading(true);
+          setBackupStatus(t('settings.backup.restoring'));
+          const result = await restoreFromBackup(text, currentGroupId);
+          if (result.success) {
+            setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
+          } else {
+            setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
+          }
+          setRestoreLoading(false);
+        };
+
+        const handleGitHubRestore = async (fileName: string) => {
+          if (!window.confirm(t('settings.backup.restoreConfirm'))) return;
+          const currentGroupId = getGroupId();
+          if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
+          setRestoreLoading(true);
+          setBackupStatus(t('settings.backup.fetchingBackup'));
+          const content = await fetchGitHubBackup(groupName, fileName);
+          if (!content) {
+            setBackupStatus(t('settings.backup.failed'));
+            setRestoreLoading(false);
+            return;
+          }
+          setBackupStatus(t('settings.backup.restoring'));
+          const result = await restoreFromBackup(content, currentGroupId);
+          if (result.success) {
+            setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
+          } else {
+            setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
+          }
+          setRestoreLoading(false);
+        };
+
+        return (
+          <div>
+            {/* Status Card */}
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h2 className="card-title mb-2">{t('settings.backup.title')}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div style={{
+                  width: 12, height: 12, borderRadius: '50%',
+                  background: statusColor, flexShrink: 0,
+                }} />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{t(statusKey as never)}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    {lastDate
+                      ? `${t('settings.backup.lastBackup')} ${new Date(lastDate).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')} (${t('settings.backup.daysAgo', { days: String(daysSince) })})`
+                      : `${t('settings.backup.lastBackup')} ${t('settings.backup.never')}`}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                {t('settings.backup.stats', { players: String(playerCount), games: String(gameCount) })}
+              </div>
+
+              {/* Download + Push Button */}
+              <button
+                className="btn btn-primary"
+                onClick={handleDownload}
+                disabled={backupLoading || restoreLoading}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600 }}
+              >
+                {backupLoading ? t('settings.backup.downloading') : t('settings.backup.downloadFull')}
+              </button>
+
+              {backupStatus && (
+                <div style={{
+                  marginTop: '0.75rem', padding: '0.5rem 0.75rem',
+                  borderRadius: '0.5rem', fontSize: '0.85rem',
+                  background: backupStatus.includes('✅') ? 'rgba(34, 197, 94, 0.1)' : backupStatus.includes('⚠️') ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  color: backupStatus.includes('✅') ? 'var(--success)' : backupStatus.includes('⚠️') ? '#eab308' : 'var(--danger)',
+                }}>
+                  {backupStatus}
+                </div>
+              )}
+            </div>
+
+            {/* Restore from File */}
+            <div className="card" style={{ marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                {t('settings.backup.fromFile')} {t('settings.backup.restoreData')}
+              </h3>
+              <label
+                className="btn btn-secondary"
+                style={{ display: 'block', textAlign: 'center', cursor: restoreLoading ? 'not-allowed' : 'pointer', opacity: restoreLoading ? 0.5 : 1 }}
+              >
+                {restoreLoading ? t('settings.backup.restoring') : t('settings.backup.fromFile')}
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileRestore}
+                  disabled={restoreLoading || backupLoading}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+
+            {/* GitHub Backups */}
+            <div className="card">
+              <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                {t('settings.backup.githubBackups')}
+              </h3>
+              {githubLoading ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {t('settings.backup.loadingGithub')}
+                </div>
+              ) : githubBackups.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {t('settings.backup.noGithubBackups')}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {githubBackups.map(f => (
+                    <div key={f.name} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '0.5rem 0.75rem', borderRadius: '0.5rem',
+                      background: 'var(--surface-alt, rgba(255,255,255,0.05))',
+                      border: '1px solid var(--border)',
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                          {f.name.replace('poker-backup-', '').replace('.json', '')}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {(f.size / 1024).toFixed(0)} KB
+                        </div>
+                      </div>
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleGitHubRestore(f.name)}
+                        disabled={restoreLoading || backupLoading}
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {t('settings.backup.restore')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* AI Tab - Owner Only */}
       {activeTab === 'ai' && isOwner && (() => {
@@ -1365,8 +1607,9 @@ const SettingsScreen = () => {
                         <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>{t('settings.ai.usageByGame')}</div>
                         {history.slice(0, 10).map((h, i) => {
                           const d = new Date(h.date);
-                          const dateStr = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
-                          const dayStr = d.toLocaleDateString('he-IL', { weekday: 'short' });
+                          const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
+                          const dateStr = d.toLocaleDateString(usageLoc, { day: 'numeric', month: 'short' });
+                          const dayStr = d.toLocaleDateString(usageLoc, { weekday: 'short' });
                           const pct = Math.round((h.charsUsed / limit) * 100);
                           return (
                             <div key={h.gameId} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0', borderBottom: i < Math.min(history.length, 10) - 1 ? '1px solid var(--border)' : 'none' }}>
@@ -1435,7 +1678,7 @@ const SettingsScreen = () => {
                   {showAiLog && (
                     <div style={{ marginTop: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
                       {[...todayLog].reverse().map((entry, i) => {
-                        const time = new Date(entry.timestamp).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+                        const time = new Date(entry.timestamp).toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' });
                         const displayModel = getModelDisplayName(entry.model);
                         const hasFallback = !!entry.fallbackFrom;
                         return (
@@ -1490,7 +1733,7 @@ const SettingsScreen = () => {
         {/* Language toggle */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '1rem', fontWeight: '600' }}>🌐 Language / שפה</span>
+            <span style={{ fontSize: '1rem', fontWeight: '600' }}>{t('settings.about.language')}</span>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               {(['he', 'en'] as const).map(lang => (
                 <button
@@ -1499,7 +1742,7 @@ const SettingsScreen = () => {
                     const newSettings = { ...settings, language: lang };
                     setSettings(newSettings);
                     saveSettings(newSettings);
-                    window.location.reload();
+                    setLanguage(lang);
                   }}
                   style={{
                     padding: '0.4rem 1rem',
@@ -1512,7 +1755,7 @@ const SettingsScreen = () => {
                     fontSize: '0.875rem',
                   }}
                 >
-                  {lang === 'he' ? 'עברית' : 'English'}
+                  {lang === 'he' ? t('settings.lang.he') : t('settings.lang.en')}
                 </button>
               ))}
             </div>
@@ -1610,14 +1853,14 @@ const SettingsScreen = () => {
             {globalLoading && (
               <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🔄</div>
-                טוען נתונים גלובליים...
+                {t('settings.superAdmin.loading')}
               </div>
             )}
 
             {globalError && (
               <div className="card" style={{ padding: '1rem', background: 'rgba(239,68,68,0.1)', borderInlineStart: '3px solid #EF4444' }}>
-                <p style={{ color: '#EF4444', margin: 0, fontSize: '0.85rem' }}>שגיאה: {globalError}</p>
-                <button className="btn btn-sm" onClick={loadGlobalStats} style={{ marginTop: '0.5rem' }}>נסה שוב</button>
+                <p style={{ color: '#EF4444', margin: 0, fontSize: '0.85rem' }}>{t('common.errorDetail', { detail: globalError })}</p>
+                <button className="btn btn-sm" onClick={loadGlobalStats} style={{ marginTop: '0.5rem' }}>{t('common.retry')}</button>
               </div>
             )}
 
@@ -1626,12 +1869,12 @@ const SettingsScreen = () => {
                 {/* Global Overview Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
                   {[
-                    { icon: '🏠', label: 'קבוצות', value: globalStats.total_groups },
-                    { icon: '👥', label: 'משתמשים', value: globalStats.total_users },
-                    { icon: '🃏', label: 'משחקים', value: globalStats.total_games },
-                    { icon: '🎭', label: 'שחקנים', value: globalStats.total_players },
+                    { id: 'statGroups', icon: '🏠', label: t('settings.superAdmin.statGroups'), value: globalStats.total_groups },
+                    { id: 'statUsers', icon: '👥', label: t('settings.superAdmin.statUsers'), value: globalStats.total_users },
+                    { id: 'statGames', icon: '🃏', label: t('settings.superAdmin.statGames'), value: globalStats.total_games },
+                    { id: 'statPlayers', icon: '🎭', label: t('settings.superAdmin.statPlayers'), value: globalStats.total_players },
                   ].map(stat => (
-                    <div key={stat.label} className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
+                    <div key={stat.id} className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
                       <div style={{ fontSize: '1.2rem' }}>{stat.icon}</div>
                       <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>{stat.value}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{stat.label}</div>
@@ -1643,10 +1886,10 @@ const SettingsScreen = () => {
                 {globalStats.orphaned_groups.length > 0 && (
                   <div className="card" style={{ padding: '1rem', marginBottom: '1rem', background: 'rgba(245,158,11,0.08)', borderInlineStart: '3px solid #F59E0B' }}>
                     <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: '#F59E0B' }}>
-                      ⚠️ קבוצות ללא בעלים ({globalStats.orphaned_groups.length})
+                      {t('settings.superAdmin.orphanedTitle', { count: globalStats.orphaned_groups.length })}
                     </h3>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem' }}>
-                      הבעלים מחק את החשבון — יש להעביר בעלות
+                      {t('settings.superAdmin.orphanedDesc')}
                     </p>
                     {globalStats.orphaned_groups.map(og => (
                       <div key={og.id} style={{
@@ -1655,7 +1898,7 @@ const SettingsScreen = () => {
                       }}>
                         <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{og.name}</span>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          {new Date(og.created_at).toLocaleDateString('he-IL')}
+                          {new Date(og.created_at).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')}
                         </span>
                       </div>
                     ))}
@@ -1665,8 +1908,8 @@ const SettingsScreen = () => {
                 {/* Groups List */}
                 <div className="card" style={{ padding: '1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h2 className="card-title" style={{ margin: 0 }}>🏠 כל הקבוצות</h2>
-                    <button className="btn btn-sm" onClick={loadGlobalStats} style={{ fontSize: '0.7rem' }}>🔄 רענן</button>
+                    <h2 className="card-title" style={{ margin: 0 }}>{t('settings.superAdmin.allGroups')}</h2>
+                    <button className="btn btn-sm" onClick={loadGlobalStats} style={{ fontSize: '0.7rem' }}>{t('common.refresh')}</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                     {globalStats.groups.map(g => (
@@ -1678,7 +1921,7 @@ const SettingsScreen = () => {
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{g.name}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              {g.owner_email || 'ללא בעלים'}
+                              {g.owner_email || t('settings.superAdmin.noOwner')}
                             </div>
                           </div>
                           <button
@@ -1690,14 +1933,14 @@ const SettingsScreen = () => {
                               color: g.training_enabled ? '#10B981' : 'var(--text-muted)',
                             }}
                           >
-                            {g.training_enabled ? '🎯 אימון פעיל' : '🎯 אימון כבוי'}
+                            {g.training_enabled ? t('settings.superAdmin.trainingOn') : t('settings.superAdmin.trainingOff')}
                           </button>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                           <span>👥 {g.member_count}</span>
-                          <span>🃏 {g.completed_game_count}/{g.game_count}</span>
+                          <span>🃏 {g.completed_game_count === g.game_count ? g.game_count : `${g.completed_game_count}/${g.game_count}`}</span>
                           {g.last_game_date && (
-                            <span>📅 {new Date(g.last_game_date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}</span>
+                            <span>📅 {new Date(g.last_game_date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: '2-digit', month: '2-digit' })}</span>
                           )}
                         </div>
                       </div>
@@ -2046,7 +2289,7 @@ const SettingsScreen = () => {
                             if (meaningful.length === 0) {
                               return (
                                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.3rem' }}>
-                                  אין נתוני סשן מפורטים
+                                  {t('settings.activity.noSessionDetail')}
                                 </div>
                               );
                             }
@@ -2131,7 +2374,7 @@ const SettingsScreen = () => {
                     </div>
                     {postGameEngagement.map(({ game, visitedCount }) => {
                       const d = new Date(game.date);
-                      const label = d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+                      const label = d.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short' });
                       const total = memberNames.length || 1;
                       const pct = Math.round((visitedCount / total) * 100);
                       return (
@@ -2497,6 +2740,8 @@ const SettingsScreen = () => {
           </div>
         );
       })()}
+
+      </div>{/* end tab crossfade wrapper */}
 
       {/* Delete Chip Confirmation Modal */}
       {deleteChipConfirm && (

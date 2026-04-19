@@ -76,6 +76,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         justifyContent: 'center',
         zIndex: 1000,
         padding: '0.5rem',
+        animation: 'backdropFadeIn 0.2s ease-out',
       }}
       onClick={onClose}
     >
@@ -86,6 +87,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
           maxWidth: '360px',
           padding: '0.75rem',
           background: '#1a1a2e',
+          animation: 'modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         onClick={e => e.stopPropagation()}
       >

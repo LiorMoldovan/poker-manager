@@ -54,10 +54,10 @@ export async function proxyGeminiGenerateWithSignal(
 export async function proxyGeminiModels(_apiKey: string, version = 'v1beta'): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();
-  const params = new URLSearchParams({ version });
-  if (groupKey) params.set('apiKey', groupKey);
-  return fetch(`/api/gemini-models?${params}`, {
-    headers: auth,
+  return fetch('/api/gemini-models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({ version, ...(groupKey && { apiKey: groupKey }) }),
   });
 }
 
@@ -81,9 +81,10 @@ export async function proxyElevenLabsTTS(
 export async function proxyElevenLabsUsage(_apiKey: string): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupElevenLabsKey();
-  const params = new URLSearchParams();
-  if (groupKey) params.set('apiKey', groupKey);
-  const qs = params.toString();
-  return fetch(`/api/elevenlabs-usage${qs ? `?${qs}` : ''}`, { headers: auth });
+  return fetch('/api/elevenlabs-usage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({ ...(groupKey && { apiKey: groupKey }) }),
+  });
 }
 

@@ -58,8 +58,8 @@ Standardized sizing: `padding: '0.6rem'`, `fontSize: '0.8rem'`
 ### Navigation
 Bottom tab bar: New Game | History | Statistics | Graphs (admin/member) | Settings. Hidden during live game, chip entry, game summary, training play.
 
-### Settings Tabs (Supabase Mode)
-Group (admin, default) | Players | Game | Chips | Backup | AI (owner) | Training (owner) | Activity (owner) | About. Tab visibility depends on role and `isOwner` flag.
+### Settings Tabs
+Group (default) | Players | Chips | Game | AI (owner) | Training (super admin) | Activity (owner) | About | SuperAdmin (super admin). Tab visibility depends on role, `isOwner`, and `isSuperAdmin` flags. There is no Backup tab — backups are automatic on game end.
 
 ### Confirmation Modals
 Destructive actions (remove member, transfer ownership, delete player with games) use inline confirmation modals with warning text and confirm/cancel buttons. Never auto-execute destructive operations.

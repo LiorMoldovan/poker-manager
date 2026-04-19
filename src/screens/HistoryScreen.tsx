@@ -411,13 +411,17 @@ const HistoryScreen = () => {
           </div>
         </div>
       ) : (
-        filteredGames.map(game => {
+        filteredGames.map((game, i) => {
           const winner = getWinner(game);
           return (
             <div 
               key={game.id} 
               className="card" 
-              style={{ cursor: 'pointer' }}
+              style={{
+                cursor: 'pointer',
+                animation: i < 15 ? 'contentFadeIn 0.25s ease-out backwards' : undefined,
+                animationDelay: i < 15 ? `${i * 0.04}s` : undefined,
+              }}
               onClick={() => navigate(`/game-summary/${game.id}`, { state: { from: 'history' } })}
             >
                 <div className="card-header">

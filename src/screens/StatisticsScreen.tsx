@@ -26,7 +26,7 @@ const meNameStyle = { color: ME_NAME_COLOR } as const;
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, playerName: identityName } = usePermissions();
+  const { playerName: identityName, isOwner } = usePermissions();
   const { t, isRTL, language } = useTranslation();
   const locationState = location.state as { 
     viewMode?: ViewMode;
@@ -103,7 +103,6 @@ const StatisticsScreen = () => {
   const isInitialActiveFilterRef = useRef(true);
 
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-  const EN_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   const formatCustomRange = () => {
     if (!customStartDate && !customEndDate) return t('stats.selectDates');
@@ -129,7 +128,7 @@ const StatisticsScreen = () => {
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
     if (timePeriod === 'custom') return formatCustomRange();
-    if (timePeriod === 'month') return `${EN_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+    if (timePeriod === 'month') return `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear}`;
     return '';
   };
 
@@ -1471,22 +1470,13 @@ const StatisticsScreen = () => {
                           minWidth: '70px'
                         }}
                       >
-                        {[
-                          { value: 1, label: 'ינואר' },
-                          { value: 2, label: 'פברואר' },
-                          { value: 3, label: 'מרץ' },
-                          { value: 4, label: 'אפריל' },
-                          { value: 5, label: 'מאי' },
-                          { value: 6, label: 'יוני' },
-                          { value: 7, label: 'יולי' },
-                          { value: 8, label: 'אוגוסט' },
-                          { value: 9, label: 'ספטמבר' },
-                          { value: 10, label: 'אוקטובר' },
-                          { value: 11, label: 'נובמבר' },
-                          { value: 12, label: 'דצמבר' },
-                        ].map(month => (
-                          <option key={month.value} value={month.value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{month.label}</option>
-                        ))}
+                        {Array.from({ length: 12 }, (_, monthIndex) => {
+                          const value = monthIndex + 1;
+                          const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
+                          return (
+                            <option key={value} value={value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{label}</option>
+                          );
+                        })}
                       </select>
                     </>
                   )}
@@ -2061,7 +2051,7 @@ const StatisticsScreen = () => {
                         (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{t('stats.nLosses', { n: Math.abs(p.currentStreak) })}</span>,
                         { fontSize: '1rem', color: '#ef4444' },
                         'currentLossStreak',
-                        '❄️ רצף הפסדים נוכחי'
+                        t('stats.recordCurrentLossStreak')
                       )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</div>
@@ -2346,7 +2336,7 @@ const StatisticsScreen = () => {
                   paddingBottom: '0.3rem',
                   borderBottom: '1px solid var(--border)'
                 }}>
-                  📊 {getHebrewTimeframeLabel()}
+                  📊 {getTimeframeLabel()}
                   {' • '}{t('stats.gamesCount', { count: totalGamesInPeriod })}
                   {filterActiveOnly && t('stats.activePlayersNote')}
                 </div>
@@ -2381,7 +2371,12 @@ const StatisticsScreen = () => {
                       <tr 
                         key={player.playerId}
                         onClick={() => showPlayerGames(player)}
-                        style={{ cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                        style={{
+                          cursor: 'pointer',
+                          ...(isMe ? meRowStyle : {}),
+                          animation: index < 15 ? 'contentFadeIn 0.25s ease-out backwards' : undefined,
+                          animationDelay: index < 15 ? `${index * 0.03}s` : undefined,
+                        }}
                         onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = isMe ? ME_BG : ''}
                       >
@@ -2687,7 +2682,7 @@ const StatisticsScreen = () => {
                   {sortedStats.map((player, index) => {
                     const isMe = identityName && player.playerName === identityName;
                     return (
-            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}) }}>
+            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}), animation: index < 10 ? 'contentFadeIn 0.25s ease-out backwards' : undefined, animationDelay: index < 10 ? `${index * 0.05}s` : undefined }}>
               <div className="card-header">
                 <h3 className="card-title" style={isMe ? meNameStyle : undefined}>
                   {player.playerName}
@@ -3036,14 +3031,14 @@ const StatisticsScreen = () => {
               return items.map(m => `${m.emoji} ${m.title}: ${m.description}`);
             };
 
-            // ===== AUTO-GENERATE AI STORIES (admin only) =====
+            // ===== AUTO-GENERATE AI STORIES (owner only) =====
             const periodKey = getChronicleKey();
-            const isAdmin = role === 'admin';
+            const canGenerateAI = isOwner;
             const cached = getChronicleProfiles(periodKey);
             // Only auto-generate if there are games newer than the cached chronicle
             const hasNewData = latestGameDate && (!cached || latestGameDate.getTime() > new Date(cached.generatedAt).getTime());
 
-            if (isAdmin && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
+            if (canGenerateAI && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
               chronicleGenRef.current = true;
               const latestGD = latestGameDate as Date;
 
@@ -3259,7 +3254,7 @@ const StatisticsScreen = () => {
                         </div>
                       )}
                     </div>
-                    {isAdmin && !chronicleLoading && totalPeriodGames > 0 && (
+                    {canGenerateAI && !chronicleLoading && totalPeriodGames > 0 && (
                       <button
                         onClick={handleRegenerate}
                         style={{
@@ -3279,7 +3274,7 @@ const StatisticsScreen = () => {
                   )}
                   {chronicleError && (
                     <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.3rem' }}>
-                      שגיאה: {chronicleError}
+                      {t('common.errorDetail', { detail: chronicleError })}
                     </div>
                   )}
                 </div>
@@ -3295,7 +3290,7 @@ const StatisticsScreen = () => {
 
                 {!chronicleLoading && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {!hasAiStories && !isAdmin && totalPeriodGames > 0 && (
+                    {!hasAiStories && !canGenerateAI && totalPeriodGames > 0 && (
                       <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
                         {t('stats.chronicleNotCreated')}
                       </div>

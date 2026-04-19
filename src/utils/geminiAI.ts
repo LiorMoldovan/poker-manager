@@ -112,7 +112,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         if (text.length >= 60) {
           console.warn(`   ${label}: ${config.model} MAX_TOKENS — נשמר טקסט חלקי (${text.length} תווים)`);
           lastUsedModel = config.model;
-          localStorage.setItem('gemini_working_config', JSON.stringify(config));
           const usage = data?.usageMetadata ? {
             promptTokens: data.usageMetadata.promptTokenCount || 0,
             outputTokens: data.usageMetadata.candidatesTokenCount || 0,
@@ -136,7 +135,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
       console.log(`   ${label}: ✅ ${config.model} responded (${text.length} chars)`);
       lastUsedModel = config.model;
-      localStorage.setItem('gemini_working_config', JSON.stringify(config));
 
       const usage = data?.usageMetadata ? {
         promptTokens: data.usageMetadata.promptTokenCount || 0,
@@ -1507,10 +1505,8 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         throw new Error(`API_ERROR: ${response.status} - ${errorMsg}`);
       }
       
-      // Success! Save this working model
       console.log(`   ✅ ${config.model} responded!`);
       lastUsedModel = config.model;
-      localStorage.setItem('gemini_working_config', JSON.stringify(config));
       const forecastRlHeaders = readRateLimitHeaders(response);
 
       const data = await response.json();
@@ -2024,19 +2020,15 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
 
       if (response.ok) {
         console.log(`✅ SUCCESS! ${config.version}/${config.model} works!`);
-        localStorage.setItem('gemini_working_config', JSON.stringify(config));
         return true;
       }
       
       const errorData = await response.json().catch(() => ({}));
       const errorMsg = errorData?.error?.message || `Status ${response.status}`;
       
-      // 429 = rate limited but key is valid! Save config and return success
       if (response.status === 429) {
         console.log(`⚠️ ${config.version}/${config.model}: Rate limited but KEY IS VALID!`);
-        console.log('   Wait a minute and try the forecast again.');
-        localStorage.setItem('gemini_working_config', JSON.stringify(config));
-        return true; // Key works, just rate limited
+        return true;
       }
       
       console.log(`❌ ${config.version}/${config.model}: ${errorMsg}`);

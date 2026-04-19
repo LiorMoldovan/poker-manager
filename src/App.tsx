@@ -9,6 +9,7 @@ import { LanguageProvider, useTranslation } from './i18n';
 import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
+import GroupSwitcher from './components/GroupSwitcher';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
 import NewGameScreen from './screens/NewGameScreen';
@@ -91,6 +92,15 @@ interface PermissionContextType {
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
   signOut: () => void;
   groupMgmt?: GroupManagementFns;
+  multiGroup?: {
+    memberships: import('./hooks/useSupabaseAuth').GroupMembership[];
+    switchGroup: (groupId: string) => void;
+    createGroup: (name: string) => Promise<{ data: unknown; error: unknown }>;
+    joinGroup: (code: string) => Promise<{ data: unknown; error: unknown }>;
+    joinByPlayerInvite: (code: string) => Promise<{ data: unknown; error: unknown }>;
+    refreshMembership: () => void;
+    userEmail: string;
+  };
 }
 
 const PermissionContext = createContext<PermissionContextType>({
@@ -221,12 +231,15 @@ function SupabaseApp() {
     setDataReady(false);
     setDataError(null);
     resetCache();
-    initSupabaseCache(groupId)
+    const targetGroupId = groupId;
+    initSupabaseCache(targetGroupId)
       .then(() => {
+        if (!isCacheForGroup(targetGroupId)) return;
         setDataReady(true);
         subscribeToRealtime();
       })
       .catch(err => {
+        if (!isCacheForGroup(targetGroupId)) return;
         console.error('Failed to load data from Supabase:', err);
         setDataError(t('app.cloudError'));
       });
@@ -326,6 +339,20 @@ function SupabaseApp() {
       createPlayerInvite: auth.createPlayerInvite,
       addMemberByEmail: auth.addMemberByEmail,
     } : undefined,
+    multiGroup: {
+      memberships: auth.memberships,
+      switchGroup: (gid: string) => {
+        unsubscribeFromRealtime();
+        resetCache();
+        setDataReady(false);
+        auth.switchGroup(gid);
+      },
+      createGroup: auth.createGroup,
+      joinGroup: auth.joinGroup,
+      joinByPlayerInvite: auth.joinByPlayerInvite,
+      refreshMembership: auth.refreshMembership,
+      userEmail: auth.user?.email ?? '',
+    },
   };
 
   if (auth.loading) {
@@ -477,6 +504,7 @@ function SupabaseApp() {
       <PermissionContext.Provider value={permissionValue}>
         {addMemberBanner}
         <div className="app-container">
+          {!hideNav && <GroupSwitcher />}
           <main className="main-content">
             <Routes>
               <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />

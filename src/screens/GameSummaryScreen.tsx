@@ -33,7 +33,7 @@ const GameSummaryScreen = () => {
   const cameFromTable = locationState?.from === 'statistics';
   const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const cameFromChipEntry = locationState?.from === 'chip-entry';
-  const { role, playerName: identityName } = usePermissions();
+  const { role, playerName: identityName, isOwner } = usePermissions();
   const highlightName = cameFromChipEntry ? null : identityName;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -242,7 +242,7 @@ const GameSummaryScreen = () => {
       // Use cached comment if available, otherwise generate and cache
       if (game.forecastComment) {
         setForecastComment(game.forecastComment);
-      } else if (getGeminiApiKey()) {
+      } else if (isOwner && getGeminiApiKey()) {
         setIsLoadingComment(true);
         try {
           const comment = await withAITiming('forecast_comparison', () => generateForecastComparison(game.forecasts!, sortedPlayers));
@@ -1057,7 +1057,7 @@ const GameSummaryScreen = () => {
       }
     } catch (error) {
       console.error('Error sharing:', error);
-      alert('Could not share. Please try again.');
+      alert(t('summary.shareError'));
     } finally {
       setCollapsedSections(savedCollapsed);
       setIsSharing(false);
@@ -1092,7 +1092,7 @@ const GameSummaryScreen = () => {
       </button>
 
       {/* Results Section - for screenshot */}
-      <div ref={summaryRef} style={{ padding: '0.75rem', background: '#1a1a2e' }}>
+      <div ref={summaryRef} style={{ padding: '0.75rem', background: '#1a1a2e', animation: 'contentFadeIn 0.3s ease-out' }}>
         <div className="page-header">
           <h1 className="page-title">{t('summary.title')}</h1>
           <p className="page-subtitle">
@@ -1123,7 +1123,11 @@ const GameSummaryScreen = () => {
               </thead>
               <tbody>
                 {players.map((player, index) => (
-                  <tr key={player.id} style={highlightName && player.playerName === highlightName ? { background: '#243a5e' } : undefined}>
+                  <tr key={player.id} style={{
+                    ...(highlightName && player.playerName === highlightName ? { background: '#243a5e' } : {}),
+                    animation: `${player.profit > 0 ? 'profitReveal' : player.profit < 0 ? 'lossReveal' : 'contentFadeIn'} 0.6s ease-out backwards`,
+                    animationDelay: `${index * 0.06}s`,
+                  }}>
                     <td style={{ ...(highlightName && player.playerName === highlightName ? { color: '#60a5fa', borderInlineStart: '3px solid #3b82f6' } : { borderInlineStart: '3px solid transparent' }) }}>
                       {player.playerName}
                       {index === 0 && player.profit > 0 && ' 🥇'}
@@ -1181,7 +1185,7 @@ const GameSummaryScreen = () => {
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.settlements')} {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
-            {!collapsedSections.settlements && (<>
+            {!collapsedSections.settlements && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
               {(() => {
                 const iOwe = identityName && settlements.some(s => s.from === identityName && !isSettlementPaid(s.from, s.to));
                 const iReceive = identityName && settlements.some(s => s.to === identityName && !isSettlementPaid(s.from, s.to));
@@ -1277,7 +1281,7 @@ const GameSummaryScreen = () => {
                   ))}
                 </div>
               )}
-            </>)}
+            </div>)}
           </div>
 
           {!collapsedSections.settlements && skippedTransfers.length > 0 && (
@@ -1308,7 +1312,7 @@ const GameSummaryScreen = () => {
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.forecast ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             
-            {!collapsedSections.forecast && (<>
+            {!collapsedSections.forecast && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             {/* Legend - compact */}
             <div style={{ 
               marginBottom: '0.5rem',
@@ -1434,7 +1438,7 @@ const GameSummaryScreen = () => {
               {forecastComment && !isLoadingComment && <span>🤖 {forecastComment}</span>}
               {!forecastComment && !isLoadingComment && <span style={{ color: '#94a3b8' }}>{t('summary.noSummary')}</span>}
             </div>
-            </>)}
+            </div>)}
           </div>
         </div>
       )}
@@ -1518,7 +1522,7 @@ const GameSummaryScreen = () => {
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.expenses ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             
-            {!collapsedSections.expenses && (<>
+            {!collapsedSections.expenses && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             {/* Expense Summary */}
             <div>
               {sharedExpenses.map(expense => (
@@ -1565,7 +1569,7 @@ const GameSummaryScreen = () => {
             }}>
               {t('summary.expenseIncluded')}
             </div>
-            </>)}
+            </div>)}
           </div>
         </div>
       )}
@@ -1578,7 +1582,7 @@ const GameSummaryScreen = () => {
               <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? t('summary.nightSummary') : t('summary.highlights')}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
-            {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (
+            {!collapsedSections.aiSummary && isOwner && aiSummary && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -1589,7 +1593,7 @@ const GameSummaryScreen = () => {
                 </span>
               </div>
             )}
-            {!collapsedSections.aiSummary && role === 'admin' && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
+            {!collapsedSections.aiSummary && isOwner && !aiSummary && !isLoadingAiSummary && getGeminiApiKey() && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
                 <span
                   className="btn btn-sm"
@@ -1602,11 +1606,11 @@ const GameSummaryScreen = () => {
             )}
             {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && !getGeminiApiKey() && (
               <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                {role === 'admin' ? '🔑 הגדר מפתח Gemini בהגדרות > AI כדי להפעיל סיכומים' : 'סיכום AI לא זמין — פנה למנהל הקבוצה'}
+                {isOwner ? t('summary.aiKeyHintOwner') : t('summary.aiKeyHintMember')}
               </div>
             )}
             {!collapsedSections.aiSummary && (
-              <>
+              <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
                 {aiSummary ? (
                   <div style={{
                     fontSize: '0.85rem',
@@ -1691,7 +1695,7 @@ const GameSummaryScreen = () => {
                     </div>
                   </>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -1708,7 +1712,7 @@ const GameSummaryScreen = () => {
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.combo ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
 
-            {!collapsedSections.combo && (comboHistory.isFirstTime ? (
+            {!collapsedSections.combo && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>{comboHistory.isFirstTime ? (
               <div style={{
                 direction: isRTL ? 'rtl' : 'ltr',
                 textAlign: isRTL ? 'right' : 'left',
@@ -1821,7 +1825,7 @@ const GameSummaryScreen = () => {
                   return (
                     <div>
                       <div style={{ fontSize: '0.75rem', marginBottom: '0.4rem', color: '#94a3b8', fontWeight: 600 }}>
-                        💡 תובנות מההרכב:
+                        {t('summary.comboInsightsHeading')}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         {insights.map((ins, i) => (
@@ -1834,7 +1838,7 @@ const GameSummaryScreen = () => {
                   );
                 })()}
               </div>
-            ))}
+            )}</div>)}
           </div>
         </div>
       )}
@@ -1847,7 +1851,7 @@ const GameSummaryScreen = () => {
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.monthSummary', { month: monthLabel })}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
-            {!collapsedSections.monthly && (<>
+            {!collapsedSections.monthly && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{
               textAlign: 'center',
               fontSize: '0.65rem',
@@ -1925,7 +1929,7 @@ const GameSummaryScreen = () => {
                 })}
               </tbody>
             </table>
-            </>)}
+            </div>)}
           </div>
         </div>
       )}
@@ -1938,7 +1942,7 @@ const GameSummaryScreen = () => {
               <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{t('summary.updatedStandings', { period: standingsLabel })}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
-            {!collapsedSections.standings && (<>
+            {!collapsedSections.standings && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{
               textAlign: 'center',
               fontSize: '0.65rem',
@@ -2047,7 +2051,7 @@ const GameSummaryScreen = () => {
                 })}
               </tbody>
             </table>
-            </>)}
+            </div>)}
             <div style={{
               textAlign: 'center',
               marginTop: '0.5rem',

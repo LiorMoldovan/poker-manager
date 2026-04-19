@@ -27,13 +27,16 @@ src/
 ├── App.tsx                    # Root: routing, Supabase auth, PlayerPicker, PermissionContext, activity tracking
 ├── main.tsx                   # Entry point (renders App into #root)
 ├── version.ts                 # APP_VERSION constant + CHANGELOG array
-├── permissions.ts             # Role system: admin | member | viewer
+├── permissions.ts             # Role system: admin | member
 ├── types/index.ts             # ALL TypeScript interfaces and types
 ├── styles/index.css           # CSS variables, dark theme, global styles
 ├── components/
 │   ├── Navigation.tsx         # Bottom tab bar (New Game, History, Stats, Graphs, Settings)
-│   ├── GroupManagementTab.tsx # Group management UI: members, roles, invite code, ownership transfer
-│   └── AddExpenseModal.tsx    # Modal for shared expenses (pizza etc.) during live games
+│   ├── GroupManagementTab.tsx  # Group management UI: members, roles, invite code, ownership transfer
+│   ├── GroupSwitcher.tsx       # Multi-group switcher UI for users in multiple groups
+│   ├── TrainingAdminTab.tsx    # Training admin panel (super admin)
+│   ├── AIProgressBar.tsx       # Animated progress bar for AI generation
+│   └── AddExpenseModal.tsx     # Modal for shared expenses (pizza etc.) during live games
 ├── screens/
 │   ├── NewGameScreen.tsx      # Game setup: player selection, AI forecast, pre-game teaser, period indicators
 │   ├── LiveGameScreen.tsx     # Active game: rebuys, timer, voice announcements, shared expenses
@@ -42,10 +45,13 @@ src/
 │   ├── HistoryScreen.tsx      # Completed games list with search/filter
 │   ├── StatisticsScreen.tsx   # Player stats table, records, AI-generated Chronicle per player
 │   ├── GraphsScreen.tsx       # Charts (Recharts): cumulative profit, head-to-head, impact analysis + AI insights
-│   ├── SettingsScreen.tsx     # Tabs: Group (admin), Players, Game, Chips, Backup, AI (owner), Training (owner), Activity (owner), About
-│   ├── TrainingScreen.tsx     # Poker training hub with category selection
-│   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
-│   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
+│   ├── SettingsScreen.tsx      # Tabs: Group, Players, Chips, Game, AI (owner), Training (super admin), Activity (owner), About, SuperAdmin
+│   ├── GameDetailsScreen.tsx   # Detailed view of a single completed game (with realtime refresh)
+│   ├── TrainingScreen.tsx      # Poker training hub with category selection
+│   ├── QuickTrainingScreen.tsx # Quick poker scenario drills
+│   ├── TrainingHandScreen.tsx  # Full hand-by-hand training with AI analysis
+│   ├── SharedTrainingScreen.tsx# Shared training scenarios (public links)
+│   └── SharedQuickPlayScreen.tsx # Shared quick-play training (public links)
 ├── hooks/
 │   ├── useSupabaseAuth.ts     # Supabase auth: session, group membership, login/signup, group management RPCs
 │   └── useRealtimeRefresh.ts  # Listens for 'supabase-cache-updated' events to trigger screen re-renders
@@ -53,13 +59,21 @@ src/
 │   ├── storage.ts             # Data access API — delegates to supabaseCache
 │   ├── supabaseClient.ts      # Supabase client initialization (anon key)
 │   ├── supabaseCache.ts       # In-memory cache syncing to Supabase (denormalize/normalize mappers)
-│   ├── migrateToSupabase.ts   # One-time migration + chip repair utility
+│   ├── migrateToSupabase.ts   # Chip repair (fixChipCountIds) + training import (migrateTrainingFromCloud)
 │   └── githubSync.ts          # Training data helpers (Supabase-backed)
+├── i18n/
+│   ├── index.ts               # i18n initialization and useTranslation hook
+│   ├── translations.ts        # Hebrew + English translation strings
+│   └── LanguageContext.tsx     # Language context provider
 └── utils/
     ├── geminiAI.ts            # ALL Gemini AI: forecasts, summaries, chronicles, graph insights, comparison
-    ├── apiProxy.ts            # Vercel Edge Function proxy with per-group API key support
+    ├── backgroundAI.ts        # Background AI generation after game completion
+    ├── apiProxy.ts            # Vercel Edge Function proxy (all POST, per-group API key support)
+    ├── aiTiming.ts            # AI generation timing utilities
+    ├── aiUsageTracker.ts      # AI usage tracking per group
     ├── calculations.ts        # Currency formatting, Hebrew dates, formatHebrewHalf, utility math
     ├── milestones.ts          # Player milestone detection (streaks, records, comebacks, etc.)
+    ├── playerTraits.ts        # AI-generated player personality traits
     ├── comboHistory.ts        # Recurring player combo analysis (who played together before)
     ├── activityLogger.ts      # Silent user activity tracking + device fingerprinting
     ├── sharing.ts             # Text-based game summary generation + WhatsApp sharing
@@ -87,11 +101,10 @@ Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.ts
 
 | Role | Can Do |
 |------|--------|
-| `admin` | Everything: games, players, settings, AI, sync |
-| `member` | View + manage games + add players |
-| `viewer` | View only + backup |
+| `admin` | Everything: games, players, settings, AI |
+| `member` | View all data |
 
-**Owner vs Admin**: The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, and manage per-group API keys. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext).
+**Owner vs Admin**: The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, manage per-group API keys, and access training/activity tabs. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext). **Super Admin** is a platform-level role (`super_admins` table, migration 007) for cross-group visibility.
 
 ## Key Patterns
 
@@ -100,4 +113,4 @@ Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.ts
 - **Dark theme**: Use CSS variables (`var(--surface)`, `var(--text)`, etc.)
 - **Native elements**: Use explicit hex colors for `<select>`/`<option>` on PC compatibility
 - **Audio**: Shared `AudioContext` (max ~6 per page), `speechSynthesis` for Hebrew TTS
-- **Zero-sum**: Game profits across all players must always sum to exactly zero
+- **Zero-sum**: Game profits across all players must always sum to exactly zero (two DB triggers: on `games` status + on `game_players` profit)

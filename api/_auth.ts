@@ -15,7 +15,12 @@ function base64Decode(str: string): Uint8Array | null {
 
 export async function verifySupabaseAuth(req: Request): Promise<Response | null> {
   const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
-  if (!jwtSecret) return null;
+  if (!jwtSecret) {
+    return new Response(JSON.stringify({ error: { message: 'Server authentication not configured' } }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {

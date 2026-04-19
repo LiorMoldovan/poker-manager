@@ -3,7 +3,7 @@ import { verifySupabaseAuth } from './_auth';
 export const config = { runtime: 'edge' };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== 'GET') {
+  if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
@@ -11,8 +11,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (authError) return authError;
 
   try {
-    const { searchParams } = new URL(req.url);
-    const clientKey = searchParams.get('apiKey');
+    const { apiKey: clientKey } = await req.json();
     const apiKey = clientKey || process.env.ELEVENLABS_API_KEY;
     if (!apiKey) {
       return new Response(JSON.stringify({ error: { message: 'ELEVENLABS_API_KEY not configured. Set it in group settings.' } }), {

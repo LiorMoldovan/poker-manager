@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.15.1';
+export const APP_VERSION = '5.16.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.16.0',
+    date: '2026-04-19',
+    changes: [
+      '✅ Multi-group support — switch between groups, create/join new groups without leaving current one',
+      '📦 Full backup & restore — download all 19 tables as JSON, auto-push to GitHub (keeps 3 per group)',
+      '📦 Backup tab in Settings — status indicator, restore from file or GitHub, 30-day reminder banner',
+      '🌐 i18n audit — fixed 50+ hardcoded Hebrew strings across all screens for proper bilingual support',
+      '🤖 AI features restricted to group owner only (forecasts, summaries, chronicles, insights)',
+      '🔧 TTS pool auto-cleanup — free DB space by deleting voice data when game ends',
+      '🔧 Enhanced auto game-end backup — now includes chronicle profiles and graph insights',
+      '🔧 Vercel toolbar disabled — removed floating debug icon from deployed site',
+    ]
+  },
   {
     version: '5.15.1',
     date: '2026-04-19',

@@ -1,9 +1,9 @@
-import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
+import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
 import {
   cacheGet, cacheSet, cacheRemove,
   cacheGetItem, cacheSetItem, cacheRemoveItem,
   cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
-  getGroupId,
+  getGroupId, resetCache, initSupabaseCache,
 } from './supabaseCache';
 import { supabase } from './supabaseClient';
 
@@ -13,8 +13,6 @@ const STORAGE_KEYS = {
   GAME_PLAYERS: 'poker_game_players',
   CHIP_VALUES: 'poker_chip_values',
   SETTINGS: 'poker_settings',
-  BACKUPS: 'poker_backups',
-  LAST_BACKUP_DATE: 'poker_last_backup_date',
   PENDING_FORECAST: 'poker_pending_forecast',
 };
 
@@ -273,11 +271,6 @@ export const deleteGame = (id: string): void => {
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
 };
 
-// Clear all game history (reset statistics)
-export const clearAllGameHistory = (): void => {
-  setItem(STORAGE_KEYS.GAMES, []);
-  setItem(STORAGE_KEYS.GAME_PLAYERS, []);
-};
 
 // Game Players
 export const getGamePlayers = (gameId: string): GamePlayer[] => {
@@ -378,21 +371,6 @@ export const saveSettings = (settings: Settings): void => {
   setItem(STORAGE_KEYS.SETTINGS, settings);
 };
 
-// Game with details
-export const getGameWithDetails = (gameId: string): GameWithDetails | null => {
-  const game = getGame(gameId);
-  if (!game) return null;
-  
-  const players = getGamePlayers(gameId);
-  const settings = getSettings();
-  const totalPot = players.reduce((sum, p) => sum + p.rebuys * settings.rebuyValue, 0);
-  
-  return {
-    ...game,
-    players,
-    totalPot,
-  };
-};
 
 // Player Statistics
 export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): PlayerStats[] => {
@@ -529,76 +507,28 @@ export const getPlayerStats = (dateFilter?: { start?: Date; end?: Date }): Playe
   }).filter(stats => stats.gamesPlayed > 0);
 };
 
-// Import a historical completed game (safe - only adds data, doesn't modify existing)
-export const importHistoricalGame = (
-  gameDate: string,
-  playersData: Array<{
-    playerName: string;
-    rebuys: number;
-    chipCounts: Record<string, number>;
-    finalValue: number;
-    profit: number;
-  }>
-): Game | null => {
-  const players = getAllPlayers();
-  const games = getAllGames();
-  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
-  
-  // Check if a game with this exact date already exists (prevent duplicates)
-  const existingGame = games.find(g => g.date.startsWith(gameDate.split('T')[0]));
-  if (existingGame) {
-    console.log('Game for this date already exists, skipping import');
-    return null;
-  }
-  
-  const gameId = generateId();
-  const newGame: Game = {
-    id: gameId,
-    date: gameDate,
-    status: 'completed',
-    createdAt: gameDate,
-  };
-  
-  // Create GamePlayer entries
-  playersData.forEach(pd => {
-    const player = players.find(p => p.name === pd.playerName);
-    if (player) {
-      gamePlayers.push({
-        id: generateId(),
-        gameId,
-        playerId: player.id,
-        playerName: pd.playerName,
-        rebuys: pd.rebuys,
-        chipCounts: pd.chipCounts,
-        finalValue: pd.finalValue,
-        profit: pd.profit,
-      });
-    }
-  });
-  
-  games.push(newGame);
-  setItem(STORAGE_KEYS.GAMES, games);
-  setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
-  
-  return newGame;
-};
 
-// ==================== BACKUP & RESTORE ====================
 
-export interface BackupData {
+// ==================== BACKUP ====================
+
+interface BackupData {
   id: string;
   date: string;
   type: 'auto' | 'manual';
-  trigger?: 'friday' | 'game-end';  // For auto backups, what triggered it
+  trigger?: 'friday' | 'game-end';
   players: Player[];
   games: Game[];
   gamePlayers: GamePlayer[];
   chipValues: ChipValue[];
   settings: Settings;
+  chronicleProfiles?: Record<string, ChronicleEntry>;
+  graphInsights?: Record<string, GraphInsightsEntry>;
 }
 
-// Create a backup of all data and persist to Supabase
-export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'friday' | 'game-end'): BackupData => {
+const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'friday' | 'game-end'): BackupData => {
+  const chronicleRaw = cacheGetItem(CHRONICLE_STORAGE_KEY);
+  const insightsRaw = cacheGetItem(GRAPH_INSIGHTS_KEY);
+
   const backup: BackupData = {
     id: generateId(),
     date: new Date().toISOString(),
@@ -609,6 +539,8 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
     gamePlayers: getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []),
     chipValues: getChipValues(),
     settings: getSettings(),
+    chronicleProfiles: chronicleRaw ? JSON.parse(chronicleRaw) : {},
+    graphInsights: insightsRaw ? JSON.parse(insightsRaw) : {},
   };
 
   const groupId = getGroupId();
@@ -624,6 +556,8 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
         gamePlayers: backup.gamePlayers,
         chipValues: backup.chipValues,
         settings: backup.settings,
+        chronicleProfiles: backup.chronicleProfiles,
+        graphInsights: backup.graphInsights,
       },
       created_at: backup.date,
     }).then(({ error }) => {
@@ -632,201 +566,11 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
     });
   }
 
-  if (type === 'auto') {
-    setItem(STORAGE_KEYS.LAST_BACKUP_DATE, new Date().toDateString());
-  }
-
   return backup;
 };
 
-// Create backup with cloud sync (always succeeds since data is in Supabase)
-export const createBackupWithCloudSync = async (
-  type: 'auto' | 'manual' = 'manual',
-  trigger?: 'friday' | 'game-end',
-): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
-  const backup = createBackup(type, trigger);
-  return { backup, cloudResult: { success: true, message: 'גיבוי נשמר בענן בהצלחה' } };
-};
-
-// Get all available backups (from Supabase)
-export const getBackups = (): BackupData[] => {
-  return getItem<BackupData[]>(STORAGE_KEYS.BACKUPS, []);
-};
-
-// Load backups from Supabase DB (async version)
-export const loadCloudBackups = async (): Promise<BackupData[]> => {
-  const groupId = getGroupId();
-  if (!groupId) return [];
-  const { data, error } = await supabase
-    .from('backups')
-    .select('*')
-    .eq('group_id', groupId)
-    .order('created_at', { ascending: false })
-    .limit(5);
-  if (error || !data) return [];
-  return data.map((row: Record<string, unknown>) => {
-    const d = row.data as Record<string, unknown>;
-    return {
-      id: row.id as string,
-      date: row.created_at as string,
-      type: row.type as 'auto' | 'manual',
-      trigger: row.trigger as 'friday' | 'game-end' | undefined,
-      players: (d.players || []) as Player[],
-      games: (d.games || []) as Game[],
-      gamePlayers: (d.gamePlayers || []) as GamePlayer[],
-      chipValues: (d.chipValues || []) as ChipValue[],
-      settings: (d.settings || {}) as Settings,
-    };
-  });
-};
-
-// Get last backup date
-export const getLastBackupDate = (): string | null => {
-  const backups = getBackups();
-  if (backups.length === 0) return null;
-  return backups[0].date;
-};
-
-// Restore from a backup
-export const restoreFromBackup = (backupId: string): boolean => {
-  const backups = getBackups();
-  const backup = backups.find(b => b.id === backupId);
-
-  if (!backup) return false;
-
-  setItem(STORAGE_KEYS.PLAYERS, backup.players);
-  setItem(STORAGE_KEYS.GAMES, backup.games);
-  setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
-  setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
-  setItem(STORAGE_KEYS.SETTINGS, backup.settings);
-
-  return true;
-};
-
-// Restore from cloud backup
-export const restoreFromCloudBackup = async (): Promise<{ success: boolean; message: string; gamesCount?: number }> => {
-  const backups = await loadCloudBackups();
-  if (backups.length === 0) {
-    return { success: false, message: 'לא נמצאו גיבויים בענן' };
-  }
-  const latest = backups[0];
-  setItem(STORAGE_KEYS.PLAYERS, latest.players);
-  setItem(STORAGE_KEYS.GAMES, latest.games);
-  setItem(STORAGE_KEYS.GAME_PLAYERS, latest.gamePlayers);
-  setItem(STORAGE_KEYS.CHIP_VALUES, latest.chipValues);
-  setItem(STORAGE_KEYS.SETTINGS, latest.settings);
-  return {
-    success: true,
-    message: `שוחזר גיבוי מ-${new Date(latest.date).toLocaleDateString('he-IL')}`,
-    gamesCount: latest.games.length,
-  };
-};
-
-// Download backup as JSON file
-export const downloadBackup = (): void => {
-  const backup = createBackup('manual');
-  const dataStr = JSON.stringify(backup, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `poker-backup-${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  
-  URL.revokeObjectURL(url);
-};
-
-// Share backup as file (for WhatsApp, etc.)
-export const shareBackupAsFile = async (): Promise<'shared' | 'downloaded' | 'error'> => {
-  const backup = createBackup('manual');
-  const today = new Date().toISOString().split('T')[0];
-  const fileName = `poker-backup-${today}.json`;
-  
-  // Create the file
-  const dataStr = JSON.stringify(backup, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const file = new File([blob], fileName, { type: 'application/json' });
-  
-  // Try Web Share API with files
-  try {
-    if (navigator.share) {
-      // Check if we can share files
-      const canShareFiles = navigator.canShare && navigator.canShare({ files: [file] });
-      
-      if (canShareFiles) {
-        await navigator.share({
-          files: [file],
-          title: 'Poker Backup',
-          text: `🎰 Poker Backup - ${today}`
-        });
-        return 'shared';
-      } else {
-        // Try sharing without files (just triggers share dialog, user downloads first)
-        // Download the file first, then show share dialog for the text
-        downloadFile(blob, fileName);
-        await navigator.share({
-          title: 'Poker Backup',
-          text: `🎰 Poker Backup saved as ${fileName}. Send this file via WhatsApp or save it somewhere safe!`
-        });
-        return 'shared';
-      }
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    // AbortError means user cancelled - that's fine
-    if (errorMessage.includes('abort') || errorMessage.includes('cancel')) {
-      return 'error';
-    }
-    console.log('Share failed:', errorMessage);
-  }
-  
-  // Fallback: just download the file
-  downloadFile(blob, fileName);
-  return 'downloaded';
-};
-
-// Helper to download a file
-const downloadFile = (blob: Blob, fileName: string): void => {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
-
-// Import backup from JSON file
-export const importBackupFromFile = (jsonData: string): boolean => {
-  try {
-    const backup = JSON.parse(jsonData) as BackupData;
-    
-    // Validate backup structure
-    if (!backup.players || !backup.games || !backup.gamePlayers || !backup.chipValues || !backup.settings) {
-      console.error('Invalid backup file structure');
-      return false;
-    }
-    
-    // Restore all data
-    setItem(STORAGE_KEYS.PLAYERS, backup.players);
-    setItem(STORAGE_KEYS.GAMES, backup.games);
-    setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
-    setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
-    setItem(STORAGE_KEYS.SETTINGS, backup.settings);
-    
-    return true;
-  } catch (error) {
-    console.error('Error importing backup:', error);
-    return false;
-  }
-};
-
-// Create auto backup after game ends
 export const createGameEndBackup = (): void => {
   createBackup('auto', 'game-end');
-  console.log('Auto backup created after game end!');
 };
 
 // ========== Pending Forecast Management ==========
@@ -1044,42 +788,6 @@ export const saveGameAiSummary = (gameId: string, summary: string, model?: strin
   }
 };
 
-// Get aggregate forecast accuracy across all games
-export const getOverallForecastAccuracy = (): {
-  totalGames: number;
-  avgScore: number;
-  avgDirectionRate: number;
-  avgGap: number;
-  totalDirectionHits: number;
-  totalDirectionAttempts: number;
-} => {
-  const games = getAllGames().filter(g => g.status === 'completed' && g.forecastAccuracy);
-  if (games.length === 0) {
-    return { totalGames: 0, avgScore: 0, avgDirectionRate: 0, avgGap: 0, totalDirectionHits: 0, totalDirectionAttempts: 0 };
-  }
-  
-  let totalScore = 0;
-  let totalDirectionHits = 0;
-  let totalDirectionAttempts = 0;
-  let totalGap = 0;
-  
-  for (const game of games) {
-    const acc = game.forecastAccuracy!;
-    totalScore += acc.score;
-    totalDirectionHits += acc.directionHits;
-    totalDirectionAttempts += acc.totalPlayers;
-    totalGap += acc.avgGap;
-  }
-  
-  return {
-    totalGames: games.length,
-    avgScore: Math.round(totalScore / games.length),
-    avgDirectionRate: totalDirectionAttempts > 0 ? Math.round((totalDirectionHits / totalDirectionAttempts) * 100) : 0,
-    avgGap: Math.round(totalGap / games.length),
-    totalDirectionHits,
-    totalDirectionAttempts,
-  };
-};
 
 // ========== Chronicle Profiles (AI-generated player stories) ==========
 
@@ -1109,19 +817,6 @@ export const saveChronicleProfiles = (periodKey: string, profiles: Record<string
   cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
 };
 
-export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null => {
-  const raw = cacheGetItem(CHRONICLE_STORAGE_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
-
-export const setAllChronicleProfiles = (data: Record<string, ChronicleEntry>): void => {
-  cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
-};
 
 // ========== Graph Insights (AI-generated group narrative for Graphs page) ==========
 
@@ -1151,19 +846,6 @@ export const saveGraphInsights = (periodKey: string, text: string, model?: strin
   cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
 };
 
-export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null => {
-  const raw = cacheGetItem(GRAPH_INSIGHTS_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
-
-export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): void => {
-  cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
-};
 
 export const invalidateAICaches = (): void => {
   cacheRemoveItem(CHRONICLE_STORAGE_KEY);
@@ -1221,5 +903,316 @@ export const deleteTTSPool = (gameId: string): void => {
   cacheDeleteTTS(gameId);
 };
 
-/** No-op: TTS pools are stored in Supabase and follow game lifecycle */
+// ==================== FULL BACKUP & RESTORE ====================
+
+interface FullBackupData {
+  version: number;
+  exportedAt: string;
+  groupId: string;
+  groupName: string;
+  tables: Record<string, unknown>;
+}
+
+async function getBackupAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return { 'Authorization': `Bearer ${session.access_token}` };
+    }
+  } catch { /* session unavailable */ }
+  return {};
+}
+
+async function fetchPaginated(
+  table: string,
+  column: string,
+  value: string,
+): Promise<Record<string, unknown>[]> {
+  const PAGE = 1000;
+  const all: Record<string, unknown>[] = [];
+  let from = 0;
+  for (;;) {
+    const { data } = await supabase
+      .from(table)
+      .select('*')
+      .eq(column, value)
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    all.push(...(data as Record<string, unknown>[]));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+async function fetchByIds(
+  table: string,
+  column: string,
+  ids: string[],
+): Promise<Record<string, unknown>[]> {
+  if (ids.length === 0) return [];
+  const BATCH = 100;
+  const all: Record<string, unknown>[] = [];
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const { data } = await supabase.from(table).select('*').in(column, batch);
+    if (data) all.push(...(data as Record<string, unknown>[]));
+  }
+  return all;
+}
+
+export async function downloadFullBackup(groupName: string): Promise<string> {
+  const groupId = getGroupId();
+  if (!groupId) throw new Error('No active group');
+
+  const [
+    players, games, chipValues, settingsRes, pendingRes,
+    chronicles, insights,
+    trainingPool, trainingAnswers, trainingInsights,
+    groupMembers, playerInvites, activityLog,
+  ] = await Promise.all([
+    fetchPaginated('players', 'group_id', groupId),
+    fetchPaginated('games', 'group_id', groupId),
+    fetchPaginated('chip_values', 'group_id', groupId),
+    supabase.from('settings').select('*').eq('group_id', groupId).maybeSingle(),
+    supabase.from('pending_forecasts').select('*').eq('group_id', groupId)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    fetchPaginated('chronicle_profiles', 'group_id', groupId),
+    fetchPaginated('graph_insights', 'group_id', groupId),
+    fetchPaginated('training_pool', 'group_id', groupId),
+    fetchPaginated('training_answers', 'group_id', groupId),
+    fetchPaginated('training_insights', 'group_id', groupId),
+    fetchPaginated('group_members', 'group_id', groupId),
+    fetchPaginated('player_invites', 'group_id', groupId),
+    fetchPaginated('activity_log', 'group_id', groupId),
+  ]);
+
+  const gameIds = games.map(g => g.id as string);
+  const playerIds = players.map(p => p.id as string);
+
+  const [gamePlayers, gameForecasts, sharedExpenses, paidSettlements, periodMarkers, playerTraits] =
+    await Promise.all([
+      fetchByIds('game_players', 'game_id', gameIds),
+      fetchByIds('game_forecasts', 'game_id', gameIds),
+      fetchByIds('shared_expenses', 'game_id', gameIds),
+      fetchByIds('paid_settlements', 'game_id', gameIds),
+      fetchByIds('period_markers', 'game_id', gameIds),
+      fetchByIds('player_traits', 'player_id', playerIds),
+    ]);
+
+  const backup: FullBackupData = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    groupId,
+    groupName,
+    tables: {
+      players,
+      games,
+      game_players: gamePlayers,
+      game_forecasts: gameForecasts,
+      shared_expenses: sharedExpenses,
+      paid_settlements: paidSettlements,
+      period_markers: periodMarkers,
+      chip_values: chipValues,
+      settings: settingsRes.data || null,
+      pending_forecasts: pendingRes.data || null,
+      chronicle_profiles: chronicles,
+      graph_insights: insights,
+      training_pool: trainingPool,
+      training_answers: trainingAnswers,
+      training_insights: trainingInsights,
+      group_members: groupMembers,
+      player_invites: playerInvites,
+      player_traits: playerTraits,
+      activity_log: activityLog,
+    },
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `poker-backup-${groupName.replace(/\s+/g, '-')}-${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  localStorage.setItem('lastBackupDownload', new Date().toISOString());
+
+  return json;
+}
+
+export async function pushBackupToGitHub(
+  groupName: string,
+  content: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const auth = await getBackupAuthHeaders();
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `poker-backup-${dateStr}.json`;
+
+    const res = await fetch('/api/github-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify({ action: 'push', groupName, fileName, content }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      return { success: false, error: data.error?.message || `HTTP ${res.status}` };
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+export async function listGitHubBackups(
+  groupName: string,
+): Promise<{ name: string; size: number }[]> {
+  try {
+    const auth = await getBackupAuthHeaders();
+    const res = await fetch('/api/github-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify({ action: 'list', groupName }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.files || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchGitHubBackup(
+  groupName: string,
+  fileName: string,
+): Promise<string | null> {
+  try {
+    const auth = await getBackupAuthHeaders();
+    const res = await fetch('/api/github-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify({ action: 'fetch', groupName, fileName }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.content || null;
+  } catch {
+    return null;
+  }
+}
+
+const RESTORE_ORDER = [
+  'players', 'chip_values', 'settings', 'games',
+  'game_players', 'game_forecasts', 'shared_expenses', 'paid_settlements', 'period_markers',
+  'pending_forecasts',
+  'chronicle_profiles', 'graph_insights',
+  'training_pool', 'training_answers', 'training_insights',
+  'player_traits', 'player_invites', 'activity_log',
+  'group_members',
+];
+
+export interface RestoreResult {
+  success: boolean;
+  tablesRestored: number;
+  errors: string[];
+}
+
+export async function restoreFromBackup(json: string, groupId: string): Promise<RestoreResult> {
+  const errors: string[] = [];
+  let tablesRestored = 0;
+
+  let backup: FullBackupData;
+  try {
+    backup = JSON.parse(json);
+  } catch {
+    return { success: false, tablesRestored: 0, errors: ['Invalid JSON'] };
+  }
+
+  if (!backup.version || !backup.tables) {
+    return { success: false, tablesRestored: 0, errors: ['Invalid backup format'] };
+  }
+
+  const tables = backup.tables as Record<string, unknown>;
+
+  for (const table of RESTORE_ORDER) {
+    const data = tables[table];
+    if (!data) continue;
+
+    try {
+      if (Array.isArray(data) && data.length > 0) {
+        const rows = data.map((row: Record<string, unknown>) => {
+          if ('group_id' in row) return { ...row, group_id: groupId };
+          return { ...row };
+        });
+
+        const BATCH = 100;
+        for (let i = 0; i < rows.length; i += BATCH) {
+          const batch = rows.slice(i, i + BATCH);
+          const { error } = await supabase.from(table).upsert(batch, { onConflict: 'id' });
+          if (error) {
+            errors.push(`${table}: ${error.message}`);
+            break;
+          }
+        }
+        tablesRestored++;
+      } else if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const row = { ...(data as Record<string, unknown>), group_id: groupId };
+        const onConflict = table === 'settings' ? 'group_id' : 'id';
+        const { error } = await supabase.from(table).upsert(row, { onConflict });
+        if (error) errors.push(`${table}: ${error.message}`);
+        else tablesRestored++;
+      }
+    } catch (err) {
+      errors.push(`${table}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }
+
+  // Reinitialize cache from freshly restored data
+  resetCache();
+  await initSupabaseCache(groupId);
+
+  return { success: errors.length === 0, tablesRestored, errors };
+}
+
+export function parseBackupSummary(json: string): {
+  valid: boolean;
+  groupName?: string;
+  exportedAt?: string;
+  playerCount?: number;
+  gameCount?: number;
+  tableCount?: number;
+} {
+  try {
+    const backup = JSON.parse(json) as FullBackupData;
+    if (!backup.version || !backup.tables) return { valid: false };
+
+    const t = backup.tables as Record<string, unknown>;
+    const arrayCount = (key: string) => Array.isArray(t[key]) ? (t[key] as unknown[]).length : 0;
+
+    return {
+      valid: true,
+      groupName: backup.groupName,
+      exportedAt: backup.exportedAt,
+      playerCount: arrayCount('players'),
+      gameCount: arrayCount('games'),
+      tableCount: Object.keys(t).filter(k => {
+        const v = t[k];
+        return (Array.isArray(v) && v.length > 0) || (v && typeof v === 'object' && !Array.isArray(v));
+      }).length,
+    };
+  } catch {
+    return { valid: false };
+  }
+}
+
+export function getLastBackupDate(): string | null {
+  return localStorage.getItem('lastBackupDownload');
+}
 

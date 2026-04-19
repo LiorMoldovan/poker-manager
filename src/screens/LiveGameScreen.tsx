@@ -1881,7 +1881,7 @@ const LiveGameScreen = () => {
               </div>
             </div>
             <div className="player-rebuys">
-              <span className="rebuy-count">{Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}</span>
+              <span key={player.rebuys} className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out' }}>{Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}</span>
               {isAdmin && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                   <button 

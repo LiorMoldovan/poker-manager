@@ -12,20 +12,22 @@ The app is fully Supabase-backed. There is no `USE_SUPABASE` flag, no `config.ts
 
 | Phase | Status |
 |-------|--------|
-| Schema + RLS | DONE — 21 tables with RLS policies |
+| Schema + RLS | DONE — 24 tables with RLS policies |
 | Auth + Groups | DONE — Supabase Auth + group management RPCs |
-| Core Data Layer | DONE — `supabaseCache.ts` + `storage.ts` (single path) |
+| Core Data Layer | DONE — `supabaseCache.ts` + `storage.ts` (single path, with error handling) |
 | Training + Activity | DONE — `githubSync.ts` + `activityLogger.ts` (Supabase-only) |
-| Server-side AI | DONE — 4 Vercel Edge Functions + `apiProxy.ts` |
-| Realtime | DONE — 13-table subscription, `useRealtimeRefresh` on all screens |
-| Group Management | DONE — 13 RPCs with owner-aware security |
+| Server-side AI | DONE — 4 Vercel Edge Functions (all POST) + `apiProxy.ts` |
+| Realtime | DONE — 15-table subscription + publication, `useRealtimeRefresh` on all screens |
+| Group Management | DONE — 13+ RPCs with owner-aware security, multi-group support (008) |
 | Per-Group API Keys | DONE — `settings.gemini_api_key` + `elevenlabs_api_key`, mapped in cache |
-| Security Hardening | DONE — RLS fixes, search_path, membership checks in RPCs |
-| Legacy Cleanup | DONE — No dual branches remain |
+| Security Hardening | DONE — RLS fixes, search_path, membership checks in RPCs, JWT auth returns 500 if misconfigured |
+| Permissions Overhaul | DONE — Viewer role removed (007), `super_admins` table, `training_enabled` per group |
+| Zero-Sum Hardening | DONE — Two DB triggers: `check_game_zero_sum` on games + `check_game_players_zero_sum` on game_players (008) |
+| Legacy Cleanup | DONE — No dual branches remain, dead migration code removed |
 
 ## Cache Architecture
 
-`supabaseCache.ts` provides synchronous read/write via an in-memory `Map`. Writes debounce (300ms) and push to Supabase asynchronously. Realtime subscriptions auto-refresh the cache on remote changes (500ms debounce).
+`supabaseCache.ts` provides synchronous read/write via an in-memory `Map`. Writes debounce (300ms) and push to Supabase asynchronously via `pushToSupabase` (which includes `logSyncError` error handling for all operations). Realtime subscriptions on 15 tables auto-refresh the cache on remote changes (500ms debounce).
 
 ### ID Strategy
 All new IDs use `crypto.randomUUID()`. Legacy timestamp IDs may exist in migrated data.
@@ -33,9 +35,9 @@ All new IDs use `crypto.randomUUID()`. Legacy timestamp IDs may exist in migrate
 ### Multi-Tenancy
 Every table has `group_id`. RLS policies enforce isolation. `getGroupId()` from `supabaseCache.ts` provides the current group.
 
-## Group Management SQL RPCs (`supabase/004-group-management.sql`)
+## Group Management SQL RPCs (`supabase/004-group-management.sql` + `008-multi-group.sql`)
 
-13 RPCs with owner-aware security. All sensitive operations check `groups.created_by`.
+13+ RPCs with owner-aware security. All sensitive operations check `groups.created_by`. Multi-group RPCs (008) accept optional `p_group_id` parameter with `DEFAULT NULL` for backward compatibility.
 
 | RPC | Who Can Call | Purpose |
 |-----|-------------|---------|

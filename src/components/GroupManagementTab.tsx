@@ -167,7 +167,10 @@ export default function GroupManagementTab({
   };
 
   const linkedPlayerIds = new Set(members.map(m => m.playerId).filter(Boolean));
-  const unlinkedPlayers = getAllPlayers().filter(p => !linkedPlayerIds.has(p.id));
+  const typeOrder: Record<string, number> = { permanent: 0, permanent_guest: 1, guest: 2 };
+  const unlinkedPlayers = getAllPlayers()
+    .filter(p => !linkedPlayerIds.has(p.id))
+    .sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9));
 
   const roleLabel = (role: string) => {
     switch (role) {
@@ -325,7 +328,7 @@ export default function GroupManagementTab({
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.inviteCode')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            שתף את הקוד עם שחקנים חדשים כדי שיצטרפו לקבוצה
+            {t('groupMgmt.inviteCodeHelp')}
           </p>
           <div style={{
             background: 'var(--background)', border: '2px dashed var(--border)', borderRadius: '10px',
@@ -353,8 +356,8 @@ export default function GroupManagementTab({
               <button
                 onClick={() => {
                   navigator.share({
-                    title: `הצטרף ל${groupName}`,
-                    text: `הצטרף לקבוצת הפוקר שלנו! קוד הזמנה: ${inviteCode}`,
+                    title: t('groupMgmt.shareGroupTitle', { name: groupName }),
+                    text: t('groupMgmt.shareGroupText', { code: inviteCode }),
                   }).catch(() => {});
                 }}
                 style={{
@@ -374,7 +377,7 @@ export default function GroupManagementTab({
                   background: 'rgba(239,68,68,0.08)', color: '#EF4444', cursor: 'pointer',
                   fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif',
                 }}
-                title="הקוד הישן יפסיק לעבוד"
+                title={t('groupMgmt.regenerateTooltip')}
               >
                 🔄
               </button>
@@ -388,16 +391,30 @@ export default function GroupManagementTab({
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.personalInvites')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            שלח הזמנה אישית לשחקן — כשיירשם עם הקוד, הוא יקושר אוטומטית
+            {t('groupMgmt.personalInvitesHelp')}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {unlinkedPlayers.map(p => (
-              <div key={p.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '0.55rem 0.75rem', borderRadius: '8px', background: 'var(--background)',
-                border: '1px solid var(--border)',
-              }}>
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.name}</span>
+            {unlinkedPlayers.map((p, i, arr) => {
+              const prevType = i > 0 ? arr[i - 1].type : null;
+              const showDivider = prevType !== null && prevType !== p.type;
+              return (
+              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {showDivider && <div style={{ height: '1px', background: 'var(--border)', margin: '0.2rem 0' }} />}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '0.55rem 0.75rem', borderRadius: '8px', background: 'var(--background)',
+                  border: '1px solid var(--border)',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.name}</span>
+                  <span style={{
+                    fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px',
+                    background: p.type === 'permanent' ? 'rgba(99,102,241,0.12)' : 'rgba(100,100,100,0.12)',
+                    color: p.type === 'permanent' ? '#818cf8' : 'var(--text-muted)',
+                  }}>
+                    {p.type === 'permanent' ? t('groupMgmt.playerTypePermanent') : p.type === 'permanent_guest' ? t('groupMgmt.playerTypeGuest') : t('groupMgmt.playerTypeOccasional')}
+                  </span>
+                </div>
                 <button
                   onClick={() => handleCreateInvite(p.id)}
                   style={{
@@ -409,7 +426,9 @@ export default function GroupManagementTab({
                   {t('groupMgmt.invite')}
                 </button>
               </div>
-            ))}
+              </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -419,7 +438,7 @@ export default function GroupManagementTab({
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.addByEmail')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            הוסף משתמש שכבר נרשם לאפליקציה אבל לא הצטרף לקבוצה
+            {t('groupMgmt.addByEmailHelp')}
           </p>
           <input
             type="email"
@@ -471,7 +490,7 @@ export default function GroupManagementTab({
         <div className="modal-overlay" onClick={() => setPersonalInvite(null)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">📨 הזמנה ל{personalInvite.playerName}</h3>
+              <h3 className="modal-title">{t('groupMgmt.personalInviteTitle', { name: personalInvite.playerName })}</h3>
               <button className="modal-close" onClick={() => setPersonalInvite(null)}>×</button>
             </div>
 
@@ -487,7 +506,7 @@ export default function GroupManagementTab({
               background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)',
               borderRadius: '8px', padding: '0.6rem', textAlign: 'center', marginBottom: '1rem',
             }}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>קוד אישי</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('groupMgmt.personalCodeLabel')}</div>
               <div style={{
                 letterSpacing: '4px', fontSize: '1.4rem', fontWeight: 700,
                 fontFamily: 'monospace', color: 'var(--text)', direction: 'ltr',
@@ -514,7 +533,7 @@ export default function GroupManagementTab({
                 <button
                   onClick={() => {
                     navigator.share({
-                      title: `הזמנה ל${personalInvite.playerName}`,
+                      title: t('groupMgmt.personalInviteTitle', { name: personalInvite.playerName }),
                       text: personalInvite.message,
                     }).catch(() => {});
                   }}
@@ -548,30 +567,30 @@ export default function GroupManagementTab({
             {confirmAction.type === 'remove' && (
               <>
                 <p style={{ marginBottom: '0.5rem' }}>
-                  להסיר את <strong>{confirmAction.name}</strong> מהקבוצה?
+                  {t('groupMgmt.removeConfirmBody', { name: confirmAction.name ?? '' })}
                 </p>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                  היסטוריית המשחקים שלו תישמר
+                  {t('groupMgmt.removeConfirmNote')}
                 </p>
               </>
             )}
             {confirmAction.type === 'transfer' && (
               <>
                 <p style={{ marginBottom: '0.5rem' }}>
-                  להעביר את בעלות הקבוצה ל<strong>{confirmAction.name}</strong>?
+                  {t('groupMgmt.transferConfirmBody', { name: confirmAction.name ?? '' })}
                 </p>
                 <p style={{ fontSize: '0.8rem', color: '#F59E0B', marginBottom: '1rem' }}>
-                  ⚠️ לא תוכל לבטל פעולה זו. תישאר כמנהל אבל לא כבעלים.
+                  {t('groupMgmt.transferConfirmWarning')}
                 </p>
               </>
             )}
             {confirmAction.type === 'regenerate' && (
               <>
                 <p style={{ marginBottom: '0.5rem' }}>
-                  ליצור קוד הזמנה חדש?
+                  {t('groupMgmt.regenConfirmBody')}
                 </p>
                 <p style={{ fontSize: '0.8rem', color: '#F59E0B', marginBottom: '1rem' }}>
-                  ⚠️ הקוד הנוכחי יפסיק לעבוד. מי שלא הצטרף עדיין יצטרך את הקוד החדש.
+                  {t('groupMgmt.regenConfirmWarning')}
                 </p>
               </>
             )}

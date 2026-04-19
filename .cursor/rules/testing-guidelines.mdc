@@ -42,7 +42,7 @@ When modifying the forecast algorithm or any data-driven logic:
 
 ### Supabase
 - `getGroupId()` can return `null` — always guard with early return
-- Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return
+- Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return (note: `pushToSupabase` now has `logSyncError` handling for all operations)
 - JSONB columns accept objects/arrays directly — no JSON.stringify needed
 - Timestamps should be ISO strings for TIMESTAMPTZ columns
 - `onConflict` must match exact UNIQUE constraint columns from schema
@@ -52,6 +52,8 @@ When modifying the forecast algorithm or any data-driven logic:
 - Player linking: partial unique index prevents duplicate links — handle the constraint error gracefully
 - `initSupabaseCache` uses 3-phase loading: essential data first, deferred data (chronicles, insights, TTS) loads in background after UI renders
 - New SQL RPCs must be run manually in Supabase dashboard — they are NOT auto-applied
+- SQL migrations go in `supabase/` directory (current: schema.sql, 002 through 008)
+- Only 2 roles exist: `admin` and `member` — viewer was removed in migration 007
 
 ### TypeScript Strict Mode
 - `noUnusedLocals: true` — remove unused variables

@@ -77,13 +77,23 @@ const GraphsScreen = () => {
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
 
-  const formatCustomRange = useCallback(() => {
+  /** Hebrew-only range text for `getInsightsPeriodLabel` (AI prompts). */
+  const formatCustomRangeHebrewForAI = useCallback(() => {
     if (!customStartDate && !customEndDate) return 'בחר תאריכים';
     const fmt = (d: string) => new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
     if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
     if (customStartDate) return `מ-${fmt(customStartDate)}`;
     return `עד ${fmt(customEndDate)}`;
   }, [customStartDate, customEndDate]);
+
+  const formatCustomRange = useCallback(() => {
+    if (!customStartDate && !customEndDate) return t('stats.selectDates');
+    const locale = language === 'he' ? 'he-IL' : 'en-US';
+    const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: '2-digit' });
+    if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
+    if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
+    return `${t('stats.to')} ${fmt(customEndDate)}`;
+  }, [customStartDate, customEndDate, t, language]);
 
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
@@ -95,7 +105,7 @@ const GraphsScreen = () => {
   const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
   // AI Graph Insights state
-  const { role } = usePermissions();
+  const { role, isOwner } = usePermissions();
   const [insightsText, setInsightsText] = useState<string>('');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -179,13 +189,13 @@ const GraphsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `חציון ראשון ${selectedYear}`;
     if (timePeriod === 'h2') return `חציון שני ${selectedYear}`;
-    if (timePeriod === 'custom') return formatCustomRange();
+    if (timePeriod === 'custom') return formatCustomRangeHebrewForAI();
     if (timePeriod === 'month') {
       const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
       return `${months[selectedMonth - 1]} ${selectedYear}`;
     }
     return '';
-  }, [timePeriod, selectedYear, selectedMonth, formatCustomRange]);
+  }, [timePeriod, selectedYear, selectedMonth, formatCustomRangeHebrewForAI]);
 
   const getDateFilter = useCallback((): { start?: Date; end?: Date } | undefined => {
     const year = selectedYear;
@@ -268,9 +278,9 @@ const GraphsScreen = () => {
     });
   }, [allGames, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
-  // Auto-generate insights for admin only when cache is empty for this period
+  // Auto-generate insights for owner only when cache is empty for this period
   useEffect(() => {
-    if (role !== 'admin') return;
+    if (!isOwner) return;
     if (insightsGenRef.current || insightsLoading) return;
     if (!getGeminiApiKey()) return;
     if (filteredGames.length === 0) return;
@@ -318,7 +328,7 @@ const GraphsScreen = () => {
         setInsightsLoading(false);
       }
     })();
-  }, [role, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
+  }, [isOwner, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
 
   const handleGenerateInsights = useCallback(async () => {
     if (insightsLoading) return;
@@ -693,38 +703,29 @@ const GraphsScreen = () => {
     return results;
   }, [impactPlayerId, filteredGames, gamePlayers, players, getPlayerColor]);
 
-  const HEBREW_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
-  const EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
   const getTimeframeLabel = () => {
-    const locale = isRTL ? 'he-IL' : 'en-GB';
+    const locale = language === 'he' ? 'he-IL' : 'en-US';
+    if (timePeriod === 'all') return t('stats.allTimeLabel');
+    if (timePeriod === 'custom') {
+      if (!customStartDate && !customEndDate) return t('stats.custom');
+      const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: '2-digit' });
+      if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
+      if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
+      return `${t('stats.to')} ${fmt(customEndDate)}`;
+    }
+    if (timePeriod === 'month') {
+      const monthName = new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(2024, selectedMonth - 1, 1));
+      return `${monthName} ${selectedYear}`;
+    }
     if (language === 'he') {
-      if (timePeriod === 'all') return 'כל הזמנים';
       if (timePeriod === 'year') return `שנת ${selectedYear}`;
       if (timePeriod === 'h1') return formatHebrewHalf(1, selectedYear);
       if (timePeriod === 'h2') return formatHebrewHalf(2, selectedYear);
-      if (timePeriod === 'custom') {
-        if (!customStartDate && !customEndDate) return t('stats.custom');
-        const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: '2-digit' });
-        if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
-        if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
-        return `${t('stats.to')} ${fmt(customEndDate)}`;
-      }
-      if (timePeriod === 'month') return `${HEBREW_MONTHS[selectedMonth - 1]} ${selectedYear}`;
       return '';
     }
-    if (timePeriod === 'all') return 'All Time';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
-    if (timePeriod === 'custom') {
-      if (!customStartDate && !customEndDate) return 'Custom';
-      const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: '2-digit' });
-      if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
-      if (customStartDate) return `From ${fmt(customStartDate)}`;
-      return `Until ${fmt(customEndDate)}`;
-    }
-    if (timePeriod === 'month') return `${EN_MONTHS[selectedMonth - 1]} ${selectedYear}`;
     return '';
   };
 
@@ -834,7 +835,7 @@ const GraphsScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
           </button>
@@ -983,22 +984,13 @@ const GraphsScreen = () => {
                           minWidth: '70px'
                         }}
                       >
-                        {[
-                          { value: 1, label: 'ינואר' },
-                          { value: 2, label: 'פברואר' },
-                          { value: 3, label: 'מרץ' },
-                          { value: 4, label: 'אפריל' },
-                          { value: 5, label: 'מאי' },
-                          { value: 6, label: 'יוני' },
-                          { value: 7, label: 'יולי' },
-                          { value: 8, label: 'אוגוסט' },
-                          { value: 9, label: 'ספטמבר' },
-                          { value: 10, label: 'אוקטובר' },
-                          { value: 11, label: 'נובמבר' },
-                          { value: 12, label: 'דצמבר' },
-                        ].map(month => (
-                          <option key={month.value} value={month.value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{month.label}</option>
-                        ))}
+                        {Array.from({ length: 12 }, (_, monthIndex) => {
+                          const value = monthIndex + 1;
+                          const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
+                          return (
+                            <option key={value} value={value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{label}</option>
+                          );
+                        })}
                       </select>
                     </>
                   )}
@@ -1220,7 +1212,7 @@ const GraphsScreen = () => {
 
       {/* CUMULATIVE PROFIT CHART */}
       {viewMode === 'cumulative' && cumulativeData.length > 0 && (
-        <div ref={chartRef} className="card">
+        <div ref={chartRef} className="card" style={{ animation: 'scaleIn 0.3s ease-out' }}>
           <h2 className="card-title mb-2">{t('graphs.cumulativeProfit')}</h2>
           <div style={{ 
             fontSize: '0.7rem', 
@@ -1286,10 +1278,10 @@ const GraphsScreen = () => {
 
       {/* 🤖 AI GRAPH INSIGHTS */}
       {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin' || role === 'member') && (
-        <div ref={insightsRef} className="card">
+        <div ref={insightsRef} className="card" style={{ animation: 'contentFadeIn 0.3s ease-out 0.15s backwards' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.aiInsights')}</h2>
-            {role === 'admin' && !insightsLoading && filteredGames.length > 0 && (
+            {isOwner && !insightsLoading && filteredGames.length > 0 && (
               <button
                 onClick={handleGenerateInsights}
                 style={{
@@ -1354,7 +1346,7 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginTop: '0.4rem',
                 }}>
-                  נוצר: {new Date(insightsGeneratedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {t('graphs.generatedLabel')} {new Date(insightsGeneratedAt).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   {insightsModelName && ` · model: ${insightsModelName}`}
                 </div>
               )}

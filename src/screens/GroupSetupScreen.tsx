@@ -8,6 +8,8 @@ interface GroupSetupScreenProps {
   onJoinByPlayerInvite: (code: string) => Promise<{ data: any; error: any }>;
   onSignOut: () => void;
   onContinue?: () => void;
+  onClose?: () => void;
+  initialMode?: 'choose' | 'create' | 'join';
 }
 
 export default function GroupSetupScreen({
@@ -17,9 +19,11 @@ export default function GroupSetupScreen({
   onJoinByPlayerInvite,
   onSignOut,
   onContinue,
+  onClose,
+  initialMode = 'choose',
 }: GroupSetupScreenProps) {
   const { t, isRTL } = useTranslation();
-  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'created'>('choose');
+  const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'created'>(initialMode);
   const [groupName, setGroupName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [createdInviteCode, setCreatedInviteCode] = useState('');
@@ -83,6 +87,19 @@ export default function GroupSetupScreen({
 
   return (
     <div style={containerStyle} onKeyDown={handleKeyDown}>
+      {onClose && (
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: '1rem', right: '1rem',
+            background: 'none', border: 'none', color: 'var(--text-muted)',
+            fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem',
+            lineHeight: 1, fontFamily: 'Outfit, sans-serif',
+          }}
+        >
+          ✕
+        </button>
+      )}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🃏</div>
         <h1 style={{
@@ -311,23 +328,25 @@ export default function GroupSetupScreen({
         </div>
       )}
 
-      {/* Signed in as + sign out */}
-      <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
-          {userEmail}
-        </p>
-        <button onClick={onSignOut} style={{
-          background: 'none',
-          border: 'none',
-          color: '#ef4444',
-          fontSize: '0.8rem',
-          cursor: 'pointer',
-          fontFamily: 'Outfit, sans-serif',
-          textDecoration: 'underline',
-        }}>
-          {t('common.signOut')}
-        </button>
-      </div>
+      {/* Signed in as + sign out (hidden in modal mode) */}
+      {!onClose && (
+        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+            {userEmail}
+          </p>
+          <button onClick={onSignOut} style={{
+            background: 'none',
+            border: 'none',
+            color: '#ef4444',
+            fontSize: '0.8rem',
+            cursor: 'pointer',
+            fontFamily: 'Outfit, sans-serif',
+            textDecoration: 'underline',
+          }}>
+            {t('common.signOut')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -340,6 +359,7 @@ const containerStyle: React.CSSProperties = {
   justifyContent: 'center',
   background: 'var(--background)',
   padding: '2rem',
+  position: 'relative',
 };
 
 const cardButtonStyle: React.CSSProperties = {

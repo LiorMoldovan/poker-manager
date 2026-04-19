@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { getComboHistory, ComboHistory } from '../utils/comboHistory';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { useTranslation } from '../i18n';
 
 const GameDetailsScreen = () => {
+  const { t } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -65,19 +68,7 @@ const GameDetailsScreen = () => {
     return Math.round(value).toString();
   };
 
-  useEffect(() => {
-    // Scroll to top when page loads
-    window.scrollTo(0, 0);
-    
-    if (gameId) {
-      loadData();
-    } else {
-      setGameNotFound(true);
-      setIsLoading(false);
-    }
-  }, [gameId]);
-
-  const loadData = () => {
+  const loadData = useCallback(() => {
     if (!gameId) {
       setGameNotFound(true);
       setIsLoading(false);
@@ -131,7 +122,20 @@ const GameDetailsScreen = () => {
     }
     
     setIsLoading(false);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    if (gameId) {
+      loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
+    }
+  }, [gameId, loadData]);
+
+  useRealtimeRefresh(loadData);
   
   // Calculate expense total
   const totalExpenseAmount = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -365,9 +369,9 @@ const GameDetailsScreen = () => {
                       <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - {cleanNumber(expense.amount)}
                     </div>
                     <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
-                      שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
+                      {t('gameDetails.expensePaidBy')} <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
                       {' • '}
-                      אכלו: {expense.participantNames.join(', ')}
+                      {t('gameDetails.expenseParticipants')} {expense.participantNames.join(', ')}
                     </div>
                   </div>
                 ))}
@@ -447,7 +451,7 @@ const GameDetailsScreen = () => {
         {comboHistory && !comboHistory.isFirstTime && (
           <div className="card">
             <h2 className="card-title" style={{ marginBottom: '0.75rem' }}>
-              🔄 הרכב חוזר
+              {t('gameDetails.returningCombo')}
             </h2>
             <div style={{ direction: 'rtl', textAlign: 'right' }}>
               <div style={{

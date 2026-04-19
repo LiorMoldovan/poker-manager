@@ -40,12 +40,12 @@ AuthScreen (email/password or Google OAuth)
 
 | Role | Granted By | Can Do |
 |------|-----------|--------|
-| `viewer` | Admin/Owner | View all data |
-| `member` | Default on join | View + manage games + add players |
+| `member` | Default on join | View all data |
 | `admin` | Owner only | Everything except owner-reserved actions |
-| **owner** | Group creation | All admin powers + modify admins, transfer ownership, manage API keys, regenerate invite, training, activity |
+| **owner** | Group creation | All admin powers + modify admins, transfer ownership, manage API keys, regenerate invite, activity tab |
+| **super admin** | `super_admins` table (007) | Cross-group visibility, training management, global stats |
 
-**Owner is NOT a separate role** — it's derived from `groups.created_by === auth.uid()`. The `isOwner` boolean is computed in `useSupabaseAuth.ts` and propagated via `PermissionContext` in `App.tsx`.
+**Owner is NOT a separate role** — it's derived from `groups.created_by === auth.uid()`. The `isOwner` boolean is computed in `useSupabaseAuth.ts` and propagated via `PermissionContext` in `App.tsx`. **Super admin** is a platform-level role stored in the `super_admins` table, not a group role.
 
 ## SQL RPCs (`supabase/004-group-management.sql`)
 
@@ -54,10 +54,11 @@ All RPCs use `SECURITY DEFINER` and manually verify permissions. Owner-only oper
 ### Security Invariants
 1. Nobody can modify the owner's role or remove the owner
 2. Only the owner can modify/remove other admins
-3. Any admin can modify/remove members and viewers
+3. Any admin can modify/remove members
 4. `transfer_ownership` updates `groups.created_by` and ensures target is an admin
 5. Player linking uses a partial unique index — one player per member per group
 6. `self_create_and_link` creates a player AND links in one atomic operation
+7. Multi-group RPCs (008) accept optional `p_group_id` for correct group targeting
 
 ## UI Components
 
@@ -91,4 +92,4 @@ This prevents groups from using another group's keys. New groups must set their 
 
 ## Roles
 
-Only 3 roles exist: `admin`, `member`, `viewer`. Owner is derived from `groups.created_by`, not a separate role.
+Only 2 group roles exist: `admin` and `member` (viewer was removed in migration 007). Owner is derived from `groups.created_by`, not a separate role. Super admin is a platform-level role in the `super_admins` table.

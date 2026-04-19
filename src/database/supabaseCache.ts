@@ -87,8 +87,8 @@ function toSharedExpense(row: Record<string, unknown>): SharedExpense {
   return {
     id: row.id as string,
     description: row.description as string,
-    paidBy: row.paid_by as string,
-    paidByName: row.paid_by_name as string,
+    paidBy: (row.paid_by as string) || '',
+    paidByName: (row.paid_by_name as string) || '',
     amount: Number(row.amount),
     participants: (row.participants as string[]) || [],
     participantNames: (row.participant_names as string[]) || [],
@@ -198,8 +198,6 @@ const STORAGE_KEYS = {
   GAME_PLAYERS: 'poker_game_players',
   CHIP_VALUES: 'poker_chip_values',
   SETTINGS: 'poker_settings',
-  BACKUPS: 'poker_backups',
-  LAST_BACKUP_DATE: 'poker_last_backup_date',
   PENDING_FORECAST: 'poker_pending_forecast',
 };
 
@@ -221,6 +219,10 @@ function debouncedSync(key: string) {
 
 // ── Push changes to Supabase ──
 
+function logSyncError(table: string, op: string, error: { message: string }) {
+  console.warn(`Sync failed [${table}/${op}]:`, error.message);
+}
+
 async function pushToSupabase(key: string) {
   if (!state) return;
   const gid = state.groupId;
@@ -230,13 +232,16 @@ async function pushToSupabase(key: string) {
       const players = (state.data.get(key) as Player[]) || [];
       const rows = players.map(p => playerToRow(p, gid));
       if (rows.length > 0) {
-        await supabase.from('players').upsert(rows, { onConflict: 'id' });
+        const { error } = await supabase.from('players').upsert(rows, { onConflict: 'id' });
+        if (error) { logSyncError('players', 'upsert', error); break; }
       }
-      const { data: existing } = await supabase.from('players').select('id').eq('group_id', gid);
+      const { data: existing, error: selErr } = await supabase.from('players').select('id').eq('group_id', gid);
+      if (selErr) { logSyncError('players', 'select', selErr); break; }
       const currentIds = new Set(players.map(p => p.id));
       const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
       if (toDelete.length > 0) {
-        await supabase.from('players').delete().in('id', toDelete);
+        const { error: delErr } = await supabase.from('players').delete().in('id', toDelete);
+        if (delErr) logSyncError('players', 'delete', delErr);
       }
       break;
     }
@@ -244,16 +249,17 @@ async function pushToSupabase(key: string) {
       const games = (state.data.get(key) as Game[]) || [];
       const rows = games.map(g => gameToRow(g, gid));
       if (rows.length > 0) {
-        await supabase.from('games').upsert(rows, { onConflict: 'id' });
+        const { error } = await supabase.from('games').upsert(rows, { onConflict: 'id' });
+        if (error) { logSyncError('games', 'upsert', error); break; }
       }
-      // Sync embedded shared_expenses
       for (const game of games) {
         if (game.sharedExpenses && game.sharedExpenses.length > 0) {
           const currentExpIds = new Set(game.sharedExpenses.map(e => e.id));
           const { data: existingExps } = await supabase.from('shared_expenses').select('id').eq('game_id', game.id);
           const expToDelete = (existingExps || []).filter(r => !currentExpIds.has(r.id)).map(r => r.id);
           if (expToDelete.length > 0) {
-            await supabase.from('shared_expenses').delete().in('id', expToDelete);
+            const { error: de } = await supabase.from('shared_expenses').delete().in('id', expToDelete);
+            if (de) logSyncError('shared_expenses', 'delete', de);
           }
           const expRows = game.sharedExpenses.map(e => ({
             id: e.id,
@@ -266,12 +272,15 @@ async function pushToSupabase(key: string) {
             participant_names: e.participantNames,
             created_at: e.createdAt,
           }));
-          await supabase.from('shared_expenses').upsert(expRows, { onConflict: 'id' });
+          const { error: ue } = await supabase.from('shared_expenses').upsert(expRows, { onConflict: 'id' });
+          if (ue) logSyncError('shared_expenses', 'upsert', ue);
         } else {
-          await supabase.from('shared_expenses').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('shared_expenses').delete().eq('game_id', game.id);
+          if (de) logSyncError('shared_expenses', 'delete', de);
         }
         if (game.forecasts && game.forecasts.length > 0) {
-          await supabase.from('game_forecasts').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('game_forecasts').delete().eq('game_id', game.id);
+          if (de) logSyncError('game_forecasts', 'delete', de);
           const fcRows = game.forecasts.map(f => ({
             game_id: game.id,
             player_name: f.playerName,
@@ -280,24 +289,29 @@ async function pushToSupabase(key: string) {
             sentence: f.sentence || null,
             is_surprise: f.isSurprise || false,
           }));
-          await supabase.from('game_forecasts').insert(fcRows);
+          const { error: ie } = await supabase.from('game_forecasts').insert(fcRows);
+          if (ie) logSyncError('game_forecasts', 'insert', ie);
         } else {
-          await supabase.from('game_forecasts').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('game_forecasts').delete().eq('game_id', game.id);
+          if (de) logSyncError('game_forecasts', 'delete', de);
         }
         if (game.paidSettlements && game.paidSettlements.length > 0) {
-          await supabase.from('paid_settlements').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('paid_settlements').delete().eq('game_id', game.id);
+          if (de) logSyncError('paid_settlements', 'delete', de);
           const psRows = game.paidSettlements.map(ps => ({
             game_id: game.id,
             from_player: ps.from,
             to_player: ps.to,
             paid_at: ps.paidAt,
           }));
-          await supabase.from('paid_settlements').insert(psRows);
+          const { error: ie } = await supabase.from('paid_settlements').insert(psRows);
+          if (ie) logSyncError('paid_settlements', 'insert', ie);
         } else {
-          await supabase.from('paid_settlements').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('paid_settlements').delete().eq('game_id', game.id);
+          if (de) logSyncError('paid_settlements', 'delete', de);
         }
         if (game.periodMarkers) {
-          await supabase.from('period_markers').upsert({
+          const { error: ue } = await supabase.from('period_markers').upsert({
             game_id: game.id,
             is_first_game_of_month: game.periodMarkers.isFirstGameOfMonth,
             is_last_game_of_month: game.periodMarkers.isLastGameOfMonth,
@@ -309,16 +323,19 @@ async function pushToSupabase(key: string) {
             half_label: game.periodMarkers.halfLabel,
             year: game.periodMarkers.year,
           }, { onConflict: 'game_id' });
+          if (ue) logSyncError('period_markers', 'upsert', ue);
         } else {
-          await supabase.from('period_markers').delete().eq('game_id', game.id);
+          const { error: de } = await supabase.from('period_markers').delete().eq('game_id', game.id);
+          if (de) logSyncError('period_markers', 'delete', de);
         }
       }
-      // Delete games removed from cache
-      const { data: existing } = await supabase.from('games').select('id').eq('group_id', gid);
+      const { data: existing, error: selErr } = await supabase.from('games').select('id').eq('group_id', gid);
+      if (selErr) { logSyncError('games', 'select', selErr); break; }
       const currentIds = new Set(games.map(g => g.id));
       const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
       if (toDelete.length > 0) {
-        await supabase.from('games').delete().in('id', toDelete);
+        const { error: delErr } = await supabase.from('games').delete().in('id', toDelete);
+        if (delErr) logSyncError('games', 'delete', delErr);
       }
       break;
     }
@@ -326,40 +343,46 @@ async function pushToSupabase(key: string) {
       const gps = (state.data.get(key) as GamePlayer[]) || [];
       const rows = gps.map(gamePlayerToRow);
       if (rows.length > 0) {
-        await supabase.from('game_players').upsert(rows, { onConflict: 'id' });
+        const { error } = await supabase.from('game_players').upsert(rows, { onConflict: 'id' });
+        if (error) { logSyncError('game_players', 'upsert', error); break; }
       }
-      // Remove game_players that were deleted from cache
       const gameIds = [...new Set(gps.map(gp => gp.gameId))];
       if (gameIds.length > 0) {
-        const { data: existing } = await supabase.from('game_players').select('id').in('game_id', gameIds);
+        const { data: existing, error: selErr } = await supabase.from('game_players').select('id').in('game_id', gameIds);
+        if (selErr) { logSyncError('game_players', 'select', selErr); break; }
         const currentIds = new Set(gps.map(gp => gp.id));
         const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
         if (toDelete.length > 0) {
-          await supabase.from('game_players').delete().in('id', toDelete);
+          const { error: delErr } = await supabase.from('game_players').delete().in('id', toDelete);
+          if (delErr) logSyncError('game_players', 'delete', delErr);
         }
       }
       break;
     }
     case STORAGE_KEYS.CHIP_VALUES: {
       const cvs = (state.data.get(key) as ChipValue[]) || [];
-      await supabase.from('chip_values').delete().eq('group_id', gid);
+      const { error: delErr } = await supabase.from('chip_values').delete().eq('group_id', gid);
+      if (delErr) { logSyncError('chip_values', 'delete', delErr); break; }
       if (cvs.length > 0) {
-        await supabase.from('chip_values').insert(cvs.map(cv => chipValueToRow(cv, gid)));
+        const { error } = await supabase.from('chip_values').insert(cvs.map(cv => chipValueToRow(cv, gid)));
+        if (error) logSyncError('chip_values', 'insert', error);
       }
       break;
     }
     case STORAGE_KEYS.SETTINGS: {
       const settings = state.data.get(key) as Settings;
       if (settings) {
-        await supabase.from('settings').upsert(settingsToRow(settings, gid), { onConflict: 'group_id' });
+        const { error } = await supabase.from('settings').upsert(settingsToRow(settings, gid), { onConflict: 'group_id' });
+        if (error) logSyncError('settings', 'upsert', error);
       }
       break;
     }
     case STORAGE_KEYS.PENDING_FORECAST: {
       const pf = state.data.get(key) as PendingForecast | null;
-      await supabase.from('pending_forecasts').delete().eq('group_id', gid);
+      const { error: delErr } = await supabase.from('pending_forecasts').delete().eq('group_id', gid);
+      if (delErr) { logSyncError('pending_forecasts', 'delete', delErr); break; }
       if (pf) {
-        await supabase.from('pending_forecasts').insert({
+        const { error } = await supabase.from('pending_forecasts').insert({
           id: pf.id,
           group_id: gid,
           player_ids: pf.playerIds,
@@ -371,40 +394,45 @@ async function pushToSupabase(key: string) {
           location: pf.location || null,
           created_at: pf.createdAt,
         });
+        if (error) logSyncError('pending_forecasts', 'insert', error);
       }
       break;
     }
     case CHRONICLE_KEY: {
       const all = state.data.get(key) as Record<string, ChronicleEntry> | null;
       if (!all) {
-        await supabase.from('chronicle_profiles').delete().eq('group_id', gid);
+        const { error } = await supabase.from('chronicle_profiles').delete().eq('group_id', gid);
+        if (error) logSyncError('chronicle_profiles', 'delete', error);
         break;
       }
       for (const [periodKey, entry] of Object.entries(all)) {
-        await supabase.from('chronicle_profiles').upsert({
+        const { error } = await supabase.from('chronicle_profiles').upsert({
           group_id: gid,
           period_key: periodKey,
           profiles: entry.profiles,
           generated_at: entry.generatedAt,
           model: entry.model || null,
         }, { onConflict: 'group_id,period_key' });
+        if (error) logSyncError('chronicle_profiles', 'upsert', error);
       }
       break;
     }
     case GRAPH_INSIGHTS_KEY: {
       const all = state.data.get(key) as Record<string, GraphInsightsEntry> | null;
       if (!all) {
-        await supabase.from('graph_insights').delete().eq('group_id', gid);
+        const { error } = await supabase.from('graph_insights').delete().eq('group_id', gid);
+        if (error) logSyncError('graph_insights', 'delete', error);
         break;
       }
       for (const [periodKey, entry] of Object.entries(all)) {
-        await supabase.from('graph_insights').upsert({
+        const { error } = await supabase.from('graph_insights').upsert({
           group_id: gid,
           period_key: periodKey,
           text: entry.text,
           generated_at: entry.generatedAt,
           model: entry.model || null,
         }, { onConflict: 'group_id,period_key' });
+        if (error) logSyncError('graph_insights', 'upsert', error);
       }
       break;
     }
@@ -577,9 +605,6 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   if (pendingRes.data) {
     data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pendingRes.data as Record<string, unknown>));
   }
-
-  // Backups loaded async via loadCloudBackups() in UI; keep empty default
-  data.set(STORAGE_KEYS.BACKUPS, []);
 
   // Set empty defaults for deferred data so the cache is usable immediately
   data.set(CHRONICLE_KEY, {});

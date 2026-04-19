@@ -28,9 +28,9 @@ All external API calls are centralized through `src/utils/apiProxy.ts`:
 | Route | Method | Key Source | Proxies To |
 |-------|--------|-----------|-----------|
 | `/api/gemini` | POST | Body `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../generateContent` |
-| `/api/gemini-models` | GET | Query `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
+| `/api/gemini-models` | POST | Body `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
 | `/api/elevenlabs-tts` | POST | Body `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/text-to-speech` |
-| `/api/elevenlabs-usage` | GET | Query `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
+| `/api/elevenlabs-usage` | POST | Body `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
 
 All Edge Functions verify Supabase JWT (`api/_auth.ts`) and accept per-group API keys in the request. Non-admin users see cached AI content via Supabase Realtime sync.
 
@@ -77,7 +77,7 @@ Uses **Game Shape Sampling** — NOT simple score-based sorting:
 ## Background AI Generation
 
 After game completion in ChipEntryScreen:
-1. Navigate to GameSummaryScreen with `state: { autoAI: true }`
-2. GameSummaryScreen auto-triggers AI summary + forecast comparison
-3. After generation, `syncToCloud()` pushes results to GitHub
-4. All users then see fresh AI content on next sync
+1. Navigate to GameSummaryScreen with `state: { autoAI: true }` (only if owner with API key)
+2. GameSummaryScreen auto-triggers AI summary + forecast comparison via `backgroundAI.ts`
+3. Results are stored directly to Supabase via the cache layer
+4. All group members see fresh AI content via Realtime subscriptions

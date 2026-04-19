@@ -17,11 +17,12 @@ storage.ts (app API) → cacheGet/cacheSet → supabaseCache (in-memory Map) →
 
 ## Schema
 
-- **21 tables** across `supabase/schema.sql` + migrations (002, 004, 005, 006)
-- Key tables: `groups`, `group_members`, `players`, `games`, `game_players`, `game_forecasts`, `shared_expenses`, `paid_settlements`, `period_markers`, `chip_values`, `settings`, `pending_forecasts`, `chronicle_profiles`, `graph_insights`, `tts_pools`, `activity_log`, `training_pool`, `training_answers`, `training_insights`, `player_invites`, `backups`
+- **24 tables** across `supabase/schema.sql` + migrations (002, 003, 004, 005, 006, 007, 008)
+- Key tables: `groups`, `group_members`, `players`, `player_traits`, `games`, `game_players`, `game_forecasts`, `shared_expenses`, `paid_settlements`, `period_markers`, `chip_values`, `settings`, `pending_forecasts`, `chronicle_profiles`, `graph_insights`, `tts_pools`, `activity_log`, `training_pool`, `training_answers`, `training_insights`, `player_invites` (004), `backups` (006), `super_admins` (007)
 - All tables have **Row Level Security (RLS)** enforcing group-level isolation via `auth.uid()` + `group_id`
 - UUIDs for all primary keys; foreign keys enforce referential integrity
 - `settings` table includes `gemini_api_key` and `elevenlabs_api_key` columns (mapped in `toSettings`/`settingsToRow`)
+- Only 2 roles: `admin` and `member` (viewer removed in 007)
 
 ## Cache Layer (`supabaseCache.ts`)
 
@@ -30,15 +31,14 @@ storage.ts (app API) → cacheGet/cacheSet → supabaseCache (in-memory Map) →
   - **Phase 1**: Essential group tables (players, games, settings, chips, pending forecast) — parallel
   - **Phase 2**: Child tables by game_id in batches of 100
   - **Phase 3 (deferred)**: Non-essential data (chronicles, graph_insights, tts_pools) loads in background. Dispatches `supabase-cache-updated` event when done.
-- Reads are synchronous; writes debounce (300ms) async pushes via `pushToSupabase`
+- Reads are synchronous; writes debounce (300ms) async pushes via `pushToSupabase` (with `logSyncError` error handling for all operations)
 - `storage.ts` delegates all reads/writes to `cacheGet`/`cacheSet` — it never touches localStorage
-- Realtime: single channel subscribing to 13 tables; on change, debounced (500ms) selective cache refresh
+- Realtime: single channel subscribing to 15 tables (all in `supabase_realtime` publication after 008); on change, debounced (500ms) selective cache refresh
 
 ## Migration Script (`migrateToSupabase.ts`)
 
-Still present for:
-- One-time migration from localStorage → Supabase (UUID remapping)
-- `fixChipCountIds()` auto-repair (triggered by `initSupabaseCache` if chip key mismatch detected)
+Slimmed down — legacy migration code removed. Only exports:
+- `fixChipCountIds()` — auto-repair (triggered by `initSupabaseCache` if chip key mismatch detected)
 - `migrateTrainingFromCloud()` — auto-imports training pool from GitHub JSON on first access
 
 ## Training Data (`githubSync.ts`)
@@ -47,7 +47,7 @@ Thin Supabase wrapper (~197 lines). Provides `fetchTrainingPool`, `uploadTrainin
 
 ## Data Integrity Rules
 
-1. **Zero-sum**: Game profits must sum to exactly zero (DB trigger `check_game_zero_sum` + client validation)
+1. **Zero-sum**: Game profits must sum to exactly zero (DB triggers: `check_game_zero_sum` on games status change + `check_game_players_zero_sum` on game_players profit changes + client validation)
 2. **UUID IDs**: All new records use `crypto.randomUUID()`
 3. **Foreign keys**: Supabase enforces referential integrity
 4. **Delete sync**: `pushToSupabase` explicitly deletes Supabase rows when items are removed from cache

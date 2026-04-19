@@ -159,7 +159,7 @@ const NewGameScreen = () => {
   const navigate = useNavigate();
   const { t, isRTL } = useTranslation();
   const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
-  const { role, signOut, playerName, trainingEnabled, isSuperAdmin } = usePermissions();
+  const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin';
   const isMember = role === 'member' && !isSuperAdmin;
   const [players, setPlayers] = useState<Player[]>([]);
@@ -397,7 +397,7 @@ const NewGameScreen = () => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (apiKey) {
+    if (apiKey && isOwner) {
       setGeneratingTTS(true);
       try {
         const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
@@ -1537,7 +1537,7 @@ const NewGameScreen = () => {
   };
 
 
-  const renderPlayerTile = (player: Player) => (
+  const renderPlayerTile = (player: Player, index: number) => (
     <div
       key={player.id}
       onClick={() => togglePlayer(player.id)}
@@ -1551,7 +1551,9 @@ const NewGameScreen = () => {
         background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
         color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
         transition: 'all 0.15s ease',
-        textAlign: 'center'
+        textAlign: 'center',
+        animation: 'scaleIn 0.2s ease-out backwards',
+        animationDelay: `${index * 0.03}s`,
       }}
     >
       {selectedIds.has(player.id) && '✓ '}{player.name}
@@ -1979,8 +1981,7 @@ const NewGameScreen = () => {
       </div>
 
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
-        {isAdmin && (
-          <>
+        {isOwner && (
             <button 
               className="btn btn-secondary"
               onClick={() => handleShowForecast()}
@@ -1989,6 +1990,9 @@ const NewGameScreen = () => {
             >
               {t('newGame.forecast')}
             </button>
+        )}
+        {isAdmin && (
+          <>
             {periodMarkers && isAdmin && (() => {
               const autoValue = getAutoDetectedPeriodValue(periodMarkers);
               const activeValue = periodOverride || autoValue;

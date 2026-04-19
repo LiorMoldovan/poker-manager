@@ -8,8 +8,8 @@ alwaysApply: false
 
 ## Overview
 
-Silent, transparent tracking of non-admin user activity. Admin sessions are excluded.
-Data stored in `activity_log` table with `group_id` isolation via RLS. Only the group owner can view activity.
+Silent, transparent tracking of all user sessions (both admin and member).
+Data stored in `activity_log` table with `group_id` isolation via RLS. Only the group owner can view activity in Settings > Activity tab.
 
 ## Files
 
@@ -35,7 +35,7 @@ Admin labels devices with player names in Activity tab (`poker_device_labels` in
 
 ## Session Lifecycle
 
-1. **Start**: `logActivity(role)` on login (non-admin only)
+1. **Start**: `logActivity(role)` on login (all roles)
 2. **Updates**: `updateSessionActivity(screens, duration)` every 5 minutes + on navigation; skips if unchanged
 3. **Tab close**: `visibilitychange` fires with `keepalive: true`
 4. **Sign out**: Final update + `resetSession()`

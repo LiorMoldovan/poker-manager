@@ -10,7 +10,8 @@ import {
   updateGameStatus,
   updateGameChipGap,
   createGameEndBackup,
-  invalidateAICaches
+  invalidateAICaches,
+  deleteTTSPool,
 } from '../database/storage';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
@@ -211,7 +212,7 @@ const ChipEntryScreen = () => {
   const { t } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
-  const { role, isSuperAdmin } = usePermissions();
+  const { role, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
@@ -486,9 +487,12 @@ const ChipEntryScreen = () => {
     
     // Create auto backup after game ends
     createGameEndBackup();
+
+    // TTS pool served its purpose during the live game — free up DB space
+    deleteTTSPool(gameId);
     
     navigate(`/game-summary/${gameId}`, {
-      state: { from: 'chip-entry', autoAI: role === 'admin' && !!getGeminiApiKey() },
+      state: { from: 'chip-entry', autoAI: isOwner && !!getGeminiApiKey() },
     });
   };
 
@@ -813,7 +817,7 @@ const ChipEntryScreen = () => {
           disabled={!isAdmin}
           style={{ padding: '0.6rem', opacity: isAdmin ? 1 : 0.5 }}
         >
-          {!isAdmin ? 'צפייה בלבד' : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
+          {!isAdmin ? t('common.viewOnly') : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
         </button>
       </div>
 
