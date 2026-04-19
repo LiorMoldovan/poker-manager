@@ -4160,5 +4160,25 @@
       "canvasHash": "ed0s7f"
     },
     "playerName": "ליאור"
+  },
+  {
+    "deviceId": "a69b0ad7-f615-4a16-aafd-c73a62408ca1",
+    "role": "memberSync",
+    "timestamp": "2026-04-19T06:45:48.089Z",
+    "device": "Windows PC / Windows 10/11 / Chrome",
+    "screenSize": "1920x1080",
+    "screensVisited": [],
+    "sessionDuration": 0,
+    "lastActive": "2026-04-19T06:45:48.089Z",
+    "fingerprint": {
+      "gpu": "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "cores": 8,
+      "memory": 8,
+      "touchPoints": 0,
+      "language": "en-US",
+      "timezone": "Asia/Jerusalem",
+      "canvasHash": "t85vsi"
+    },
+    "playerName": "ליאור"
   }
 ]
