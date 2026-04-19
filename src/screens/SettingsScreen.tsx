@@ -977,81 +977,55 @@ const SettingsScreen = () => {
           {players.length === 0 ? (
             <p className="text-muted">{t('settings.players.noPlayers')}</p>
           ) : (
-            <div className="list">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               {players.map(player => (
-                <div key={player.id} className="list-item" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                    <span style={{ fontWeight: '500' }}>{player.name}</span>
-                    <span style={{ 
-                      fontSize: '0.7rem', 
-                      padding: '0.15rem 0.4rem', 
-                      borderRadius: '4px',
-                      background: player.type === 'permanent' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 100, 100, 0.15)',
-                      color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)'
-                    }}>
-                      {player.type === 'permanent' ? t('settings.players.permanent') : player.type === 'permanent_guest' ? t('settings.players.guest') : t('settings.players.occasional')}
-                    </span>
+                <div key={player.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '0.45rem 0.6rem', borderRadius: '8px',
+                  background: 'var(--background)', border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flex: 1 }}>
+                    <span style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{player.name}</span>
                     <span style={{
-                      fontSize: '0.65rem',
-                      color: player.gender === 'female' ? '#EC4899' : '#3B82F6',
-                      opacity: 0.7,
+                      fontSize: '0.6rem', padding: '0.1rem 0.3rem', borderRadius: '4px', whiteSpace: 'nowrap',
+                      background: player.type === 'permanent' ? 'rgba(16,185,129,0.15)' : 'rgba(100,100,100,0.15)',
+                      color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
                     }}>
+                      {player.type === 'permanent' ? '⭐' : player.type === 'permanent_guest' ? '🏠' : '👤'}
+                    </span>
+                    <span style={{ fontSize: '0.6rem', color: player.gender === 'female' ? '#EC4899' : '#3B82F6', opacity: 0.7 }}>
                       {player.gender === 'female' ? '♀' : '♂'}
                     </span>
                   </div>
                   {(canEditPlayers || canDeletePlayers) && (
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', gap: '0.2rem', marginInlineStart: '0.3rem' }}>
                       {canEditPlayers && (
-                        <button 
+                        <button
                           className="btn btn-sm"
-                          style={{ 
-                            padding: '0.35rem 0.6rem', 
-                            fontSize: '0.75rem',
-                            background: 'var(--surface)',
-                            border: '1px solid var(--border)',
-                            color: 'var(--text)'
-                          }}
+                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', lineHeight: 1 }}
                           onClick={() => openEditPlayer(player)}
                           title={t('common.edit')}
-                        >
-                          {t('common.edit')}
-                        </button>
+                        >✏️</button>
                       )}
                       {canEditPlayers && (
                         <button
                           className="btn btn-sm"
-                          style={{
-                            padding: '0.35rem 0.5rem',
-                            fontSize: '0.75rem',
-                            background: 'rgba(168, 85, 247, 0.1)',
-                            border: '1px solid rgba(168, 85, 247, 0.3)',
-                            color: '#A855F7',
-                          }}
+                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', color: '#A855F7', lineHeight: 1 }}
                           onClick={() => {
                             const existing = getAllPlayerTraits().get(player.name);
                             setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
                             setEditingTraitsPlayer(player);
                           }}
                           title={t('settings.traits.button')}
-                        >
-                          {t('settings.traits.button')}
-                        </button>
+                        >🎭</button>
                       )}
                       {canDeletePlayers && (
-                        <button 
+                        <button
                           className="btn btn-sm"
-                          style={{ 
-                            padding: '0.35rem 0.5rem', 
-                            fontSize: '0.75rem',
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            color: 'var(--danger)'
-                          }}
+                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', lineHeight: 1 }}
                           onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
                           title={t('settings.players.deleteTitle')}
-                        >
-                          🗑️
-                        </button>
+                        >🗑️</button>
                       )}
                     </div>
                   )}
