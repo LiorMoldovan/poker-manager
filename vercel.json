@@ -1,7 +1,4 @@
 {
-  "toolbar": {
-    "enabled": false
-  },
   "git": {
     "deploymentEnabled": {
       "main": true,

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.16.0';
+export const APP_VERSION = '5.16.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.16.1',
+    date: '2026-04-19',
+    changes: [
+      '🔧 Fix Vercel build — remove invalid toolbar property from vercel.json',
+    ],
+  },
   {
     version: '5.16.0',
     date: '2026-04-19',
