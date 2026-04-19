@@ -1,7 +1,7 @@
 /**
  * App Version Management
  * Increment version with each change for tracking purposes
- * Last deploy trigger: 2026-02-05
+ * Last deploy trigger: 2026-04-20
  */
 
 export const APP_VERSION = '5.17.0';
