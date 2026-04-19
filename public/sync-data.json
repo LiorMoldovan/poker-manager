@@ -291,7 +291,7 @@
       "id": "mo1es06vxlwbsduf7p",
       "name": "סמי",
       "createdAt": "2026-04-16T11:41:13.591Z",
-      "type": "guest",
+      "type": "permanent",
       "gender": "male"
     }
   ],
@@ -20665,7 +20665,7 @@
       "profit": -24.900000000000006
     }
   ],
-  "lastUpdated": "2026-04-18T23:35:57.647Z",
+  "lastUpdated": "2026-04-19T06:56:30.222Z",
   "updatedBy": "admin",
   "chronicleProfiles": {
     "H1-2026": {
