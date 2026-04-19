@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-04-17T14:28:05.856Z",
+  "lastUpdated": "2026-04-19T18:14:07.295Z",
   "players": [
     {
       "playerName": "אייל",
@@ -2545,11 +2545,79 @@
             }
           ],
           "flaggedPoolIds": []
+        },
+        {
+          "date": "2026-04-19T18:14:06.002Z",
+          "questionsAnswered": 10,
+          "correctAnswers": 8,
+          "results": [
+            {
+              "poolId": "iik2oe",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "mqu8uu",
+              "categoryId": "stack_depth",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "o3j9jx",
+              "categoryId": "wet_board_top_pair",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "bqqono",
+              "categoryId": "straight_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "w7ybtr",
+              "categoryId": "multiway_pots",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "gen_1775387399620_43uby8",
+              "categoryId": "bluff_catching",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "sd2yfu",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            },
+            {
+              "poolId": "qmajxm",
+              "categoryId": "three_bet_pots",
+              "correct": false,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "d63mn8",
+              "categoryId": "slow_play",
+              "correct": true,
+              "chosenId": "B"
+            },
+            {
+              "poolId": "qo456n",
+              "categoryId": "flush_draw",
+              "correct": true,
+              "chosenId": "A"
+            }
+          ],
+          "flaggedPoolIds": []
         }
       ],
-      "totalQuestions": 205,
-      "totalCorrect": 155,
-      "accuracy": 75.60975609756098
+      "totalQuestions": 215,
+      "totalCorrect": 163,
+      "accuracy": 75.81395348837209
     },
     {
       "playerName": "מלמד",
