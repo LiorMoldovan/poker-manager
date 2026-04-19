@@ -132,9 +132,9 @@ const GraphsScreen = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRealtimeRefresh(useCallback(() => loadData(), []));
+  useRealtimeRefresh(useCallback(() => loadData(true), []));
 
-  const loadData = () => {
+  const loadData = (preserveSelection = false) => {
     const allPlayersData = getAllPlayers();
     const allGamesData = getAllGames()
       .filter(g => g.status === 'completed')
@@ -145,20 +145,20 @@ const GraphsScreen = () => {
     setAllGames(allGamesData);
     setGamePlayers(allGamePlayersData);
     
-    // Default: select all permanent players
-    const permanentPlayerIds = allPlayersData
-      .filter(p => p.type === 'permanent')
-      .map(p => p.id);
-    setSelectedPlayers(new Set(permanentPlayerIds));
-    
-    // Set default head-to-head players
-    if (permanentPlayerIds.length >= 2) {
-      setPlayer1Id(permanentPlayerIds[0]);
-      setPlayer2Id(permanentPlayerIds[1]);
-    }
-    
-    if (permanentPlayerIds.length >= 1) {
-      setImpactPlayerId(permanentPlayerIds[0]);
+    if (!preserveSelection) {
+      const permanentPlayerIds = allPlayersData
+        .filter(p => p.type === 'permanent')
+        .map(p => p.id);
+      setSelectedPlayers(new Set(permanentPlayerIds));
+      
+      if (permanentPlayerIds.length >= 2) {
+        setPlayer1Id(permanentPlayerIds[0]);
+        setPlayer2Id(permanentPlayerIds[1]);
+      }
+      
+      if (permanentPlayerIds.length >= 1) {
+        setImpactPlayerId(permanentPlayerIds[0]);
+      }
     }
   };
 

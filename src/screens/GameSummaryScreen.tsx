@@ -2071,7 +2071,7 @@ const GameSummaryScreen = () => {
           onClick={handleShare}
           disabled={isSharing || isLoadingAiSummary}
         >
-          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ Waiting for summary...' : t('summary.shareResults')}
+          {isSharing ? t('common.capturing') : isLoadingAiSummary ? t('summary.waitingForAI') : t('summary.shareResults')}
         </button>
       </div>
 

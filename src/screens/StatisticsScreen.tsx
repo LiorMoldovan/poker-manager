@@ -653,19 +653,8 @@ const StatisticsScreen = () => {
     return { h1, h2, yearly, year: currentYear, history };
   }, [players]); // Recalculate when player data changes (name updates, syncs, etc.)
 
-  // Load initial data on mount
   useEffect(() => {
     loadStats();
-    
-    // Listen for storage changes (e.g., from GitHub sync)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'poker_players' || e.key === 'poker_games' || e.key === 'poker_game_players') {
-        loadStats();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Reload data when filters change
@@ -674,7 +663,7 @@ const StatisticsScreen = () => {
   }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRealtimeRefresh(useCallback(() => loadStats(), []));
+  useRealtimeRefresh(useCallback(() => loadStats(true), []));
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);
@@ -711,20 +700,21 @@ const StatisticsScreen = () => {
     }
   }, [savedPlayerInfo, viewMode, stats]);
 
-  const loadStats = () => {
+  const loadStats = (preserveSelection = false) => {
     const dateFilter = getDateFilter();
     const playerStats = getPlayerStats(dateFilter);
     const allPlayers = getAllPlayers();
     setStats(playerStats);
     setPlayers(allPlayers);
-    // By default, select only permanent players
-    const permanentPlayerIds = allPlayers
-      .filter(p => p.type === 'permanent')
-      .map(p => p.id);
-    const permanentStatsIds = playerStats
-      .filter(s => permanentPlayerIds.includes(s.playerId))
-      .map(s => s.playerId);
-    setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
+    if (!preserveSelection) {
+      const permanentPlayerIds = allPlayers
+        .filter(p => p.type === 'permanent')
+        .map(p => p.id);
+      const permanentStatsIds = playerStats
+        .filter(s => permanentPlayerIds.includes(s.playerId))
+        .map(s => s.playerId);
+      setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
+    }
   };
 
   // Get player type - memoized

@@ -6,7 +6,7 @@ import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
-import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
+import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import AuthScreen from './screens/AuthScreen';
@@ -216,8 +216,11 @@ function SupabaseApp() {
 
   // Initialize Supabase cache once we have a group
   useEffect(() => {
-    if (!groupId || isCacheReady()) { if (groupId && isCacheReady()) setDataReady(true); return; }
+    if (!groupId) return;
+    if (isCacheForGroup(groupId)) { setDataReady(true); return; }
+    setDataReady(false);
     setDataError(null);
+    resetCache();
     initSupabaseCache(groupId)
       .then(() => {
         setDataReady(true);
@@ -309,7 +312,7 @@ function SupabaseApp() {
     trainingEnabled,
     playerName,
     hasPermission: (permission) => isSuperAdmin || hasPermission(role, permission),
-    signOut: () => { auth.signOut(); },
+    signOut: () => { unsubscribeFromRealtime(); resetCache(); setDataReady(false); auth.signOut(); },
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
       inviteCode: auth.membership.inviteCode,

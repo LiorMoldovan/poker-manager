@@ -643,6 +643,18 @@ export function isInitialized(): boolean {
   return state?.initialized === true;
 }
 
+export function isCacheForGroup(groupId: string): boolean {
+  return state?.initialized === true && state?.groupId === groupId;
+}
+
+export function resetCache(): void {
+  if (state) {
+    state.initialized = false;
+    state.data.clear();
+  }
+  state = null;
+}
+
 export function getGroupId(): string | null {
   return state?.groupId ?? null;
 }

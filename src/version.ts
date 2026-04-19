@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.15.0';
+export const APP_VERSION = '5.15.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.15.1',
+    date: '2026-04-19',
+    changes: [
+      '✅ Cache isolation fix — reset cache on logout, prevent stale data across sessions',
+      '✅ Graphs & Statistics preserve player selection on realtime data refresh',
+      '✅ Game summary share button Hebrew localization',
+      '✅ Removed legacy storage event listeners',
+    ]
+  },
   {
     version: '5.15.0',
     date: '2026-04-19',
