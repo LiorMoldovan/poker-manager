@@ -41,8 +41,8 @@ export async function verifySupabaseAuth(req: Request): Promise<Response | null>
     }
   }
 
-  // Token present but verification failed — allow through with warning header
-  // (Vercel Deployment Protection already secures preview deployments)
-  console.warn('JWT verification failed for token, allowing request through');
-  return null;
+  return new Response(JSON.stringify({ error: { message: 'Invalid authentication token' } }), {
+    status: 401,
+    headers: JSON_HEADERS,
+  });
 }

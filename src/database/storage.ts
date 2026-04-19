@@ -1,12 +1,11 @@
 import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, GameWithDetails, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
-import { uploadBackupToGitHub, syncToCloud, fetchBackupFromGitHub } from './githubSync';
-import { USE_SUPABASE } from './config';
 import {
   cacheGet, cacheSet, cacheRemove,
   cacheGetItem, cacheSetItem, cacheRemoveItem,
   cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
-  isInitialized as isCacheReady,
+  getGroupId,
 } from './supabaseCache';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEYS = {
   PLAYERS: 'poker_players',
@@ -19,28 +18,14 @@ const STORAGE_KEYS = {
   PENDING_FORECAST: 'poker_pending_forecast',
 };
 
-// Generate unique ID (UUID for Supabase, short string for localStorage)
-export const generateId = (): string => {
-  if (USE_SUPABASE) return crypto.randomUUID();
-  return Date.now().toString(36) + Math.random().toString(36).substring(2);
-};
+// Generate unique ID (UUID for Supabase rows)
+export const generateId = (): string => crypto.randomUUID();
 
-// Helper functions — delegate to Supabase cache or localStorage
-const getItem = <T>(key: string, defaultValue: T): T => {
-  if (USE_SUPABASE) return cacheGet<T>(key, defaultValue);
-  const item = localStorage.getItem(key);
-  if (!item) return defaultValue;
-  try {
-    return JSON.parse(item);
-  } catch {
-    console.warn(`Corrupted localStorage key "${key}", using default`);
-    return defaultValue;
-  }
-};
+// Helper functions — delegate to Supabase in-memory cache
+const getItem = <T>(key: string, defaultValue: T): T => cacheGet<T>(key, defaultValue);
 
 const setItem = <T>(key: string, value: T): void => {
-  if (USE_SUPABASE) { cacheSet<T>(key, value); return; }
-  localStorage.setItem(key, JSON.stringify(value));
+  cacheSet<T>(key, value);
 };
 
 // Default chip values
@@ -62,89 +47,6 @@ const DEFAULT_SETTINGS: Settings = {
   blockedTransfers: [
     { playerA: 'פיליפ', playerB: 'תומר', after: '2026-03-24' },
   ],
-};
-
-// Default players (all permanent, all male)
-const DEFAULT_PLAYERS: Player[] = [
-  { id: 'p1', name: 'ליאור', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p2', name: 'אייל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p3', name: 'ארז', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p4', name: 'אורן', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p5', name: 'ליכטר', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p6', name: 'סגל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p7', name: 'תומר', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p8', name: 'פיליפ', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p9', name: 'אסף', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p10', name: 'פבל', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-  { id: 'p11', name: 'מלמד', createdAt: new Date().toISOString(), type: 'permanent', gender: 'male' },
-];
-
-// Initialize default values if not exist
-export const initializeStorage = (): void => {
-  if (USE_SUPABASE) return; // Supabase cache is initialized separately via initSupabaseCache
-  if (!localStorage.getItem(STORAGE_KEYS.CHIP_VALUES)) {
-    setItem(STORAGE_KEYS.CHIP_VALUES, DEFAULT_CHIP_VALUES);
-  } else {
-    // Force update black chip to pure black if it's the old gray color
-    const chipValues = getItem<ChipValue[]>(STORAGE_KEYS.CHIP_VALUES, []);
-    const blackChip = chipValues.find(c => c.color === 'Black');
-    if (blackChip && blackChip.displayColor !== '#000000') {
-      blackChip.displayColor = '#000000';
-      setItem(STORAGE_KEYS.CHIP_VALUES, chipValues);
-    }
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
-    setItem(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-  } else {
-    const settings = getItem<Settings>(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-    if (!settings.blockedTransfers) {
-      settings.blockedTransfers = DEFAULT_SETTINGS.blockedTransfers;
-      setItem(STORAGE_KEYS.SETTINGS, settings);
-    }
-  }
-  // Initialize players - use defaults if no players exist or if array is empty
-  const existingPlayers = localStorage.getItem(STORAGE_KEYS.PLAYERS);
-  if (!existingPlayers || JSON.parse(existingPlayers).length === 0) {
-    setItem(STORAGE_KEYS.PLAYERS, DEFAULT_PLAYERS);
-  } else {
-    // Migrate existing players - add type: 'permanent' if missing
-    const players = JSON.parse(existingPlayers) as Player[];
-    let needsUpdate = false;
-    players.forEach(p => {
-      if (!p.type) {
-        p.type = 'permanent';
-        needsUpdate = true;
-      }
-    });
-    if (needsUpdate) {
-      setItem(STORAGE_KEYS.PLAYERS, players);
-    }
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.GAMES)) {
-    setItem(STORAGE_KEYS.GAMES, []);
-  } else {
-    // Fix: only the 2 most recent "מקלט ליכטר" games should keep that name;
-    // all others should revert to "ליכטר" (undoes over-eager earlier migration).
-    const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
-    const shelterGames = games
-      .filter(g => g.location === 'מקלט ליכטר')
-      .sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
-    if (shelterGames.length > 2) {
-      const keepIds = new Set([shelterGames[0].id, shelterGames[1].id]);
-      games.forEach(g => {
-        if (g.location === 'מקלט ליכטר' && !keepIds.has(g.id)) {
-          g.location = 'ליכטר';
-        }
-      });
-      setItem(STORAGE_KEYS.GAMES, games);
-    }
-  }
-  if (!localStorage.getItem(STORAGE_KEYS.GAME_PLAYERS)) {
-    setItem(STORAGE_KEYS.GAME_PLAYERS, []);
-  }
-  
-  // Check for automatic Friday backup
-  checkAndAutoBackup();
 };
 
 // Players
@@ -695,7 +597,7 @@ export interface BackupData {
   settings: Settings;
 }
 
-// Create a backup of all data
+// Create a backup of all data and persist to Supabase
 export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'friday' | 'game-end'): BackupData => {
   const backup: BackupData = {
     id: generateId(),
@@ -708,50 +610,74 @@ export const createBackup = (type: 'auto' | 'manual' = 'manual', trigger?: 'frid
     chipValues: getChipValues(),
     settings: getSettings(),
   };
-  
-  // Save to backups list
-  const backups = getBackups();
-  backups.unshift(backup); // Add to beginning (newest first)
-  
-  // Keep only the latest backup (1 backup max)
-  while (backups.length > 1) {
-    backups.pop();
+
+  const groupId = getGroupId();
+  if (groupId) {
+    supabase.from('backups').insert({
+      id: backup.id,
+      group_id: groupId,
+      type: backup.type,
+      trigger: backup.trigger || null,
+      data: {
+        players: backup.players,
+        games: backup.games,
+        gamePlayers: backup.gamePlayers,
+        chipValues: backup.chipValues,
+        settings: backup.settings,
+      },
+      created_at: backup.date,
+    }).then(({ error }) => {
+      if (error) console.warn('Backup save to DB failed:', error.message);
+      else supabase.rpc('prune_old_backups', { p_group_id: groupId }).then(null, () => {});
+    });
   }
-  
-  setItem(STORAGE_KEYS.BACKUPS, backups);
-  
+
   if (type === 'auto') {
-    // Record that we did an auto-backup today
     setItem(STORAGE_KEYS.LAST_BACKUP_DATE, new Date().toDateString());
   }
-  
+
   return backup;
 };
 
-// Create backup and also upload to GitHub cloud
+// Create backup with cloud sync (always succeeds since data is in Supabase)
 export const createBackupWithCloudSync = async (
-  type: 'auto' | 'manual' = 'manual', 
+  type: 'auto' | 'manual' = 'manual',
   trigger?: 'friday' | 'game-end',
-  useMemberSyncToken: boolean = false
 ): Promise<{ backup: BackupData; cloudResult: { success: boolean; message: string } }> => {
   const backup = createBackup(type, trigger);
-
-  if (USE_SUPABASE) {
-    // Data is already in Supabase — no GitHub sync needed
-    return { backup, cloudResult: { success: true, message: 'הנתונים מסונכרנים אוטומטית ב-Supabase' } };
-  }
-  
-  const cloudResult = await uploadBackupToGitHub(backup, useMemberSyncToken);
-  syncToCloud(useMemberSyncToken).catch(err =>
-    console.warn('Sync after backup failed:', err)
-  );
-  
-  return { backup, cloudResult };
+  return { backup, cloudResult: { success: true, message: 'גיבוי נשמר בענן בהצלחה' } };
 };
 
-// Get all available backups
+// Get all available backups (from Supabase)
 export const getBackups = (): BackupData[] => {
   return getItem<BackupData[]>(STORAGE_KEYS.BACKUPS, []);
+};
+
+// Load backups from Supabase DB (async version)
+export const loadCloudBackups = async (): Promise<BackupData[]> => {
+  const groupId = getGroupId();
+  if (!groupId) return [];
+  const { data, error } = await supabase
+    .from('backups')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (error || !data) return [];
+  return data.map((row: Record<string, unknown>) => {
+    const d = row.data as Record<string, unknown>;
+    return {
+      id: row.id as string,
+      date: row.created_at as string,
+      type: row.type as 'auto' | 'manual',
+      trigger: row.trigger as 'friday' | 'game-end' | undefined,
+      players: (d.players || []) as Player[],
+      games: (d.games || []) as Game[],
+      gamePlayers: (d.gamePlayers || []) as GamePlayer[],
+      chipValues: (d.chipValues || []) as ChipValue[],
+      settings: (d.settings || {}) as Settings,
+    };
+  });
 };
 
 // Get last backup date
@@ -765,49 +691,35 @@ export const getLastBackupDate = (): string | null => {
 export const restoreFromBackup = (backupId: string): boolean => {
   const backups = getBackups();
   const backup = backups.find(b => b.id === backupId);
-  
+
   if (!backup) return false;
-  
-  // Restore all data
+
   setItem(STORAGE_KEYS.PLAYERS, backup.players);
   setItem(STORAGE_KEYS.GAMES, backup.games);
   setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
   setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
   setItem(STORAGE_KEYS.SETTINGS, backup.settings);
-  
+
   return true;
 };
 
-// Restore from cloud backup (full-backup.json on GitHub)
+// Restore from cloud backup
 export const restoreFromCloudBackup = async (): Promise<{ success: boolean; message: string; gamesCount?: number }> => {
-  if (USE_SUPABASE) {
-    return { success: false, message: 'ב-Supabase הנתונים כבר בענן — אין צורך בשחזור' };
+  const backups = await loadCloudBackups();
+  if (backups.length === 0) {
+    return { success: false, message: 'לא נמצאו גיבויים בענן' };
   }
-  try {
-    const backup = await fetchBackupFromGitHub();
-    if (!backup) {
-      return { success: false, message: 'לא נמצא גיבוי בענן' };
-    }
-
-    if (!backup.games || !backup.players || !backup.gamePlayers) {
-      return { success: false, message: 'הגיבוי בענן פגום' };
-    }
-
-    setItem(STORAGE_KEYS.PLAYERS, backup.players);
-    setItem(STORAGE_KEYS.GAMES, backup.games);
-    setItem(STORAGE_KEYS.GAME_PLAYERS, backup.gamePlayers);
-    if (backup.chipValues) setItem(STORAGE_KEYS.CHIP_VALUES, backup.chipValues);
-    if (backup.settings) setItem(STORAGE_KEYS.SETTINGS, backup.settings);
-
-    return {
-      success: true,
-      message: `שוחזרו ${backup.games.length} משחקים מהגיבוי בענן`,
-      gamesCount: backup.games.length,
-    };
-  } catch (error) {
-    console.error('Cloud backup restore failed:', error);
-    return { success: false, message: 'שגיאה בשחזור מהענן' };
-  }
+  const latest = backups[0];
+  setItem(STORAGE_KEYS.PLAYERS, latest.players);
+  setItem(STORAGE_KEYS.GAMES, latest.games);
+  setItem(STORAGE_KEYS.GAME_PLAYERS, latest.gamePlayers);
+  setItem(STORAGE_KEYS.CHIP_VALUES, latest.chipValues);
+  setItem(STORAGE_KEYS.SETTINGS, latest.settings);
+  return {
+    success: true,
+    message: `שוחזר גיבוי מ-${new Date(latest.date).toLocaleDateString('he-IL')}`,
+    gamesCount: latest.games.length,
+  };
 };
 
 // Download backup as JSON file
@@ -911,27 +823,6 @@ export const importBackupFromFile = (jsonData: string): boolean => {
   }
 };
 
-// Check if we should auto-backup (Friday and not already backed up today)
-export const checkAndAutoBackup = (): boolean => {
-  const today = new Date();
-  const isFriday = today.getDay() === 5;
-  
-  if (!isFriday) return false;
-  
-  const lastBackupDate = getItem<string | null>(STORAGE_KEYS.LAST_BACKUP_DATE, null);
-  const todayStr = today.toDateString();
-  
-  if (lastBackupDate === todayStr) {
-    // Already backed up today
-    return false;
-  }
-  
-  // Create automatic backup
-  createBackup('auto', 'friday');
-  console.log('Automatic Friday backup created!');
-  return true;
-};
-
 // Create auto backup after game ends
 export const createGameEndBackup = (): void => {
   createBackup('auto', 'game-end');
@@ -981,8 +872,7 @@ export const linkForecastToGame = (gameId: string): void => {
 
 // Clear pending forecast
 export const clearPendingForecast = (): void => {
-  if (USE_SUPABASE) { cacheRemove(STORAGE_KEYS.PENDING_FORECAST); return; }
-  localStorage.removeItem(STORAGE_KEYS.PENDING_FORECAST);
+  cacheRemove(STORAGE_KEYS.PENDING_FORECAST);
 };
 
 // Publish/unpublish pending forecast (makes it visible to all roles)
@@ -1191,75 +1081,6 @@ export const getOverallForecastAccuracy = (): {
   };
 };
 
-// ========== Storage Usage Monitoring ==========
-
-export interface StorageUsage {
-  used: number;           // bytes used
-  limit: number;          // estimated limit (5MB)
-  percent: number;        // percentage used
-  breakdown: Record<string, number>;  // bytes per key
-  status: 'safe' | 'warning' | 'critical';
-  gamesCount: number;
-  estimatedGamesRemaining: number;
-}
-
-const STORAGE_LIMIT = 5 * 1024 * 1024; // 5MB in bytes
-const WARNING_THRESHOLD = 70;  // Show warning at 70%
-const CRITICAL_THRESHOLD = 90; // Critical at 90%
-
-export const getStorageUsage = (): StorageUsage => {
-  if (USE_SUPABASE) {
-    // Supabase has virtually unlimited storage; report as safe
-    return {
-      used: 0, limit: STORAGE_LIMIT, percent: 0, breakdown: {},
-      status: 'safe', gamesCount: getAllGames().length, estimatedGamesRemaining: 9999,
-    };
-  }
-
-  const breakdown: Record<string, number> = {};
-  let totalUsed = 0;
-
-  for (const key of Object.keys(localStorage)) {
-    if (key.startsWith('poker_') || key === 'github_token' || key === 'gemini_api_key' || key === 'elevenlabs_api_key') {
-      const value = localStorage.getItem(key) || '';
-      const size = (key.length + value.length) * 2;
-      breakdown[key] = size;
-      totalUsed += size;
-    }
-  }
-
-  const percent = (totalUsed / STORAGE_LIMIT) * 100;
-  const gamesCount = getAllGames().length;
-  const avgBytesPerGame = gamesCount > 0 ? totalUsed / gamesCount : 3500;
-  const remainingBytes = STORAGE_LIMIT - totalUsed;
-  const estimatedGamesRemaining = Math.max(0, Math.floor(remainingBytes / avgBytesPerGame));
-
-  let status: 'safe' | 'warning' | 'critical' = 'safe';
-  if (percent >= CRITICAL_THRESHOLD) {
-    status = 'critical';
-  } else if (percent >= WARNING_THRESHOLD) {
-    status = 'warning';
-  }
-
-  return {
-    used: totalUsed, limit: STORAGE_LIMIT, percent, breakdown,
-    status, gamesCount, estimatedGamesRemaining,
-  };
-};
-
-// Check if storage write might fail
-export const canWriteToStorage = (additionalBytes: number = 10000): boolean => {
-  const usage = getStorageUsage();
-  return (usage.used + additionalBytes) < STORAGE_LIMIT;
-};
-
-// Get human-readable storage size
-export const formatStorageSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-};
-
 // ========== Chronicle Profiles (AI-generated player stories) ==========
 
 const CHRONICLE_STORAGE_KEY = 'poker_chronicle_profiles';
@@ -1271,7 +1092,7 @@ export interface ChronicleEntry {
 }
 
 export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null => {
-  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = cacheGetItem(CHRONICLE_STORAGE_KEY);
   if (!raw) return null;
   try {
     const all: Record<string, ChronicleEntry> = JSON.parse(raw);
@@ -1282,15 +1103,14 @@ export const getChronicleProfiles = (periodKey: string): ChronicleEntry | null =
 };
 
 export const saveChronicleProfiles = (periodKey: string, profiles: Record<string, string>, model?: string): void => {
-  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = cacheGetItem(CHRONICLE_STORAGE_KEY);
   const all: Record<string, ChronicleEntry> = raw ? JSON.parse(raw) : {};
   all[periodKey] = { profiles, generatedAt: new Date().toISOString(), model };
-  if (USE_SUPABASE) cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
-  else localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
+  cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(all));
 };
 
 export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null => {
-  const raw = USE_SUPABASE ? cacheGetItem(CHRONICLE_STORAGE_KEY) : localStorage.getItem(CHRONICLE_STORAGE_KEY);
+  const raw = cacheGetItem(CHRONICLE_STORAGE_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -1300,8 +1120,7 @@ export const getAllChronicleProfiles = (): Record<string, ChronicleEntry> | null
 };
 
 export const setAllChronicleProfiles = (data: Record<string, ChronicleEntry>): void => {
-  if (USE_SUPABASE) cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
-  else localStorage.setItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
+  cacheSetItem(CHRONICLE_STORAGE_KEY, JSON.stringify(data));
 };
 
 // ========== Graph Insights (AI-generated group narrative for Graphs page) ==========
@@ -1315,7 +1134,7 @@ export interface GraphInsightsEntry {
 }
 
 export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null => {
-  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = cacheGetItem(GRAPH_INSIGHTS_KEY);
   if (!raw) return null;
   try {
     const all: Record<string, GraphInsightsEntry> = JSON.parse(raw);
@@ -1326,15 +1145,14 @@ export const getGraphInsights = (periodKey: string): GraphInsightsEntry | null =
 };
 
 export const saveGraphInsights = (periodKey: string, text: string, model?: string): void => {
-  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = cacheGetItem(GRAPH_INSIGHTS_KEY);
   const all: Record<string, GraphInsightsEntry> = raw ? JSON.parse(raw) : {};
   all[periodKey] = { text, generatedAt: new Date().toISOString(), model };
-  if (USE_SUPABASE) cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
-  else localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
+  cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(all));
 };
 
 export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null => {
-  const raw = USE_SUPABASE ? cacheGetItem(GRAPH_INSIGHTS_KEY) : localStorage.getItem(GRAPH_INSIGHTS_KEY);
+  const raw = cacheGetItem(GRAPH_INSIGHTS_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -1344,18 +1162,12 @@ export const getAllGraphInsights = (): Record<string, GraphInsightsEntry> | null
 };
 
 export const setAllGraphInsights = (data: Record<string, GraphInsightsEntry>): void => {
-  if (USE_SUPABASE) cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
-  else localStorage.setItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
+  cacheSetItem(GRAPH_INSIGHTS_KEY, JSON.stringify(data));
 };
 
 export const invalidateAICaches = (): void => {
-  if (USE_SUPABASE) {
-    cacheRemoveItem(CHRONICLE_STORAGE_KEY);
-    cacheRemoveItem(GRAPH_INSIGHTS_KEY);
-  } else {
-    localStorage.removeItem(CHRONICLE_STORAGE_KEY);
-    localStorage.removeItem(GRAPH_INSIGHTS_KEY);
-  }
+  cacheRemoveItem(CHRONICLE_STORAGE_KEY);
+  cacheRemoveItem(GRAPH_INSIGHTS_KEY);
 };
 
 // --- Rebuy Records (2026+) ---
@@ -1397,52 +1209,17 @@ export const getRebuyRecords = (): RebuyRecords => {
 
 // --- TTS Pool Storage ---
 
-const TTS_POOL_PREFIX = 'poker_tts_pool_';
-
-
 export const saveTTSPool = (gameId: string, pool: unknown, model?: string): void => {
-  if (USE_SUPABASE) { cacheSaveTTS(gameId, pool, model); return; }
-  localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}`, JSON.stringify(pool));
-  if (model) localStorage.setItem(`${TTS_POOL_PREFIX}${gameId}_model`, model);
+  cacheSaveTTS(gameId, pool, model);
 };
 
-export const loadTTSPool = <T>(gameId: string): T | null => {
-  if (USE_SUPABASE) return cacheLoadTTS(gameId) as T | null;
-  const raw = localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-};
+export const loadTTSPool = <T>(gameId: string): T | null => cacheLoadTTS(gameId) as T | null;
 
-export const loadTTSPoolModel = (gameId: string): string | null => {
-  if (USE_SUPABASE) return cacheLoadTTSModel(gameId);
-  return localStorage.getItem(`${TTS_POOL_PREFIX}${gameId}_model`);
-};
+export const loadTTSPoolModel = (gameId: string): string | null => cacheLoadTTSModel(gameId);
 
 export const deleteTTSPool = (gameId: string): void => {
-  if (USE_SUPABASE) { cacheDeleteTTS(gameId); return; }
-  localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}`);
-  localStorage.removeItem(`${TTS_POOL_PREFIX}${gameId}_model`);
+  cacheDeleteTTS(gameId);
 };
 
-export const cleanupOrphanedTTSPools = (): void => {
-  if (USE_SUPABASE && isCacheReady()) return; // Supabase handles cleanup via FK cascades
-  if (USE_SUPABASE) return;
-  const liveGameIds = new Set(
-    getAllGames().filter(g => g.status === 'live').map(g => g.id)
-  );
-  const keysToRemove: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key) continue;
-    if (key.startsWith(TTS_POOL_PREFIX)) {
-      const gid = key.slice(TTS_POOL_PREFIX.length);
-      if (!liveGameIds.has(gid)) keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach(k => localStorage.removeItem(k));
-};
+/** No-op: TTS pools are stored in Supabase and follow game lifecycle */
 

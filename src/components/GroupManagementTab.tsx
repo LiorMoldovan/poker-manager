@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAllPlayers } from '../database/storage';
+import { useTranslation } from '../i18n';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 
 interface GroupManagementTabProps {
   groupName: string;
   inviteCode: string | null;
   isOwner: boolean;
+  isAdmin: boolean;
   currentUserId: string;
   fetchMembers: () => Promise<GroupMember[]>;
   updateMemberRole: (userId: string, role: string) => Promise<{ error: unknown }>;
@@ -22,6 +25,7 @@ export default function GroupManagementTab({
   groupName,
   inviteCode: initialInviteCode,
   isOwner,
+  isAdmin,
   currentUserId,
   fetchMembers,
   updateMemberRole,
@@ -33,6 +37,7 @@ export default function GroupManagementTab({
   addMemberByEmail,
   appUrl,
 }: GroupManagementTabProps) {
+  const { t, isRTL } = useTranslation();
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteCode, setInviteCode] = useState(initialInviteCode);
@@ -60,6 +65,7 @@ export default function GroupManagementTab({
   }, [fetchMembers]);
 
   useEffect(() => { loadMembers(); }, [loadMembers]);
+  useRealtimeRefresh(loadMembers);
 
   const showMsg = (type: 'success' | 'error', text: string) => {
     setActionMsg({ type, text });
@@ -69,9 +75,9 @@ export default function GroupManagementTab({
   const handleRoleChange = async (userId: string, newRole: string) => {
     const { error } = await updateMemberRole(userId, newRole);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה בשינוי תפקיד');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorChangeRole'));
     } else {
-      showMsg('success', 'התפקיד עודכן');
+      showMsg('success', t('groupMgmt.roleUpdated'));
       loadMembers();
     }
   };
@@ -80,9 +86,9 @@ export default function GroupManagementTab({
     const { error } = await removeMember(userId);
     setConfirmAction(null);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה בהסרת חבר');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorRemove'));
     } else {
-      showMsg('success', 'החבר הוסר מהקבוצה');
+      showMsg('success', t('groupMgmt.memberRemoved'));
       loadMembers();
     }
   };
@@ -91,9 +97,9 @@ export default function GroupManagementTab({
     const { error } = await transferOwnership(userId);
     setConfirmAction(null);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה בהעברת בעלות');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorTransfer'));
     } else {
-      showMsg('success', 'הבעלות הועברה בהצלחה');
+      showMsg('success', t('groupMgmt.transferred'));
       loadMembers();
     }
   };
@@ -102,19 +108,19 @@ export default function GroupManagementTab({
     const { data, error } = await regenerateInviteCode();
     setConfirmAction(null);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה ביצירת קוד חדש');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorRegen'));
     } else if (data) {
       setInviteCode(data);
-      showMsg('success', 'קוד הזמנה חדש נוצר');
+      showMsg('success', t('groupMgmt.regenSuccess'));
     }
   };
 
   const handleUnlink = async (userId: string) => {
     const { error } = await unlinkMemberPlayer(userId);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה בניתוק שחקן');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorUnlink'));
     } else {
-      showMsg('success', 'השחקן נותק מהחבר');
+      showMsg('success', t('groupMgmt.unlinkSuccess'));
       loadMembers();
     }
   };
@@ -122,7 +128,7 @@ export default function GroupManagementTab({
   const handleCreateInvite = async (playerId: string) => {
     const { data, error } = await createPlayerInvite(playerId);
     if (error) {
-      showMsg('error', (error as { message?: string })?.message || 'שגיאה ביצירת הזמנה');
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorInvite'));
       return;
     }
     if (data) {
@@ -143,17 +149,17 @@ export default function GroupManagementTab({
 
   const handleAddByEmail = async () => {
     const email = addEmail.trim();
-    if (!email) { showMsg('error', 'נא להזין כתובת אימייל'); return; }
+    if (!email) { showMsg('error', t('groupMgmt.emptyEmail')); return; }
     setAddEmailLoading(true);
     const { error } = await addMemberByEmail(email, addEmailPlayer || undefined);
     setAddEmailLoading(false);
     if (error) {
       const msg = (error as { message?: string })?.message || '';
-      if (msg.includes('No registered user')) showMsg('error', 'לא נמצא משתמש רשום עם האימייל הזה');
-      else if (msg.includes('already a member')) showMsg('error', 'המשתמש כבר חבר בקבוצה');
-      else showMsg('error', msg || 'שגיאה בהוספת חבר');
+      if (msg.includes('No registered user')) showMsg('error', t('groupMgmt.noUser'));
+      else if (msg.includes('already a member')) showMsg('error', t('groupMgmt.alreadyMember'));
+      else showMsg('error', msg || t('groupMgmt.addError'));
     } else {
-      showMsg('success', 'החבר נוסף לקבוצה!');
+      showMsg('success', t('groupMgmt.memberAdded'));
       setAddEmail('');
       setAddEmailPlayer('');
       loadMembers();
@@ -165,15 +171,14 @@ export default function GroupManagementTab({
 
   const roleLabel = (role: string) => {
     switch (role) {
-      case 'admin': return '👑 מנהל';
-      case 'member': return '⭐ חבר';
-      case 'viewer': return '👁️ צופה';
+      case 'admin': return t('groupMgmt.roleAdminBadge');
+      case 'member': return t('groupMgmt.roleMemberBadge');
       default: return role;
     }
   };
 
   return (
-    <div style={{ direction: 'rtl' }}>
+    <div>
       {/* Action feedback */}
       {actionMsg && (
         <div style={{
@@ -181,6 +186,7 @@ export default function GroupManagementTab({
           background: actionMsg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
           color: actionMsg.type === 'success' ? '#10B981' : '#EF4444',
           border: `1px solid ${actionMsg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+          textAlign: isRTL ? 'right' : 'left',
         }}>
           {actionMsg.text}
         </div>
@@ -188,21 +194,136 @@ export default function GroupManagementTab({
 
       {/* Group Info */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-        <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>🏠 פרטי קבוצה</h2>
+        <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>{t('groupMgmt.details')}</h2>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>שם הקבוצה</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.name')}</span>
           <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{groupName}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>חברים</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.memberCount')}</span>
           <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{members.length}</span>
         </div>
       </div>
 
-      {/* Invite Code — visible to owner/admin */}
-      {inviteCode && (
+      {/* Member List — at the top */}
+      <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+        <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>{t('groupMgmt.members')}</h2>
+
+        {loading ? (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('common.loading')}</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {members.map(m => {
+              const isMe = m.userId === currentUserId;
+              const isMemberOwner = members.length > 0 && isOwner && isMe;
+              return (
+                <div key={m.userId} style={{
+                  padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border)',
+                  background: isMe ? 'rgba(16,185,129,0.05)' : 'var(--background)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                        {m.displayName || m.playerName || t('groupMgmt.noName')}
+                      </span>
+                      {isMe && (
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
+                          {t('groupMgmt.you')}
+                        </span>
+                      )}
+                      {isMemberOwner && (
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
+                          {t('groupMgmt.owner')}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {m.email && (
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', direction: 'ltr' }}>
+                          {m.email}
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                        {roleLabel(m.role)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {m.playerName && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                      {t('groupMgmt.linkedPlayer', { name: m.playerName })}
+                    </div>
+                  )}
+                  {!m.playerName && m.playerId === null && (
+                    <div style={{ fontSize: '0.75rem', color: '#F59E0B' }}>
+                      {t('groupMgmt.notLinked')}
+                    </div>
+                  )}
+
+                  {/* Admin Controls — owner can manage all, non-owner admins can manage non-admins */}
+                  {isAdmin && !isMe && !isMemberOwner && (isOwner || (m.role !== 'admin')) && (
+                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      {(isOwner || m.role !== 'admin') && (
+                        <select
+                          value={m.role}
+                          onChange={e => handleRoleChange(m.userId, e.target.value)}
+                          style={{
+                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
+                            background: '#1a1a2e', color: 'var(--text)', fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <option value="admin" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleAdmin')}</option>
+                          <option value="member" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleMember')}</option>
+                        </select>
+                      )}
+                      {m.playerName && (
+                        <button
+                          onClick={() => handleUnlink(m.userId)}
+                          style={{
+                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)',
+                            background: 'rgba(245,158,11,0.08)', color: '#F59E0B', fontSize: '0.7rem',
+                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                          }}
+                        >
+                          {t('groupMgmt.unlinkPlayer')}
+                        </button>
+                      )}
+                      {isOwner && (
+                        <button
+                          onClick={() => setConfirmAction({ type: 'transfer', userId: m.userId, name: m.displayName || m.playerName || '' })}
+                          style={{
+                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(168,85,247,0.3)',
+                            background: 'rgba(168,85,247,0.08)', color: '#A855F7', fontSize: '0.7rem',
+                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                          }}
+                        >
+                          {t('groupMgmt.transferOwnership')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.displayName || m.playerName || '' })}
+                        style={{
+                          padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
+                          background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: '0.7rem',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                        }}
+                      >
+                        {t('groupMgmt.removeMember')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Invite Code — visible to admins */}
+      {isAdmin && inviteCode && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>🔗 קוד הזמנה</h2>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.inviteCode')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
             שתף את הקוד עם שחקנים חדשים כדי שיצטרפו לקבוצה
           </p>
@@ -226,7 +347,7 @@ export default function GroupManagementTab({
                 cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
               }}
             >
-              {copied ? '✓ הועתק!' : '📋 העתק'}
+              {copied ? t('groupMgmt.codeCopied') : t('groupMgmt.copyCode')}
             </button>
             {typeof navigator.share === 'function' && (
               <button
@@ -242,7 +363,7 @@ export default function GroupManagementTab({
                   fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                 }}
               >
-                📤 שתף
+                {t('common.share')}
               </button>
             )}
             {isOwner && (
@@ -262,10 +383,10 @@ export default function GroupManagementTab({
         </div>
       )}
 
-      {/* Personal Player Invites */}
-      {isOwner && unlinkedPlayers.length > 0 && (
+      {/* Personal Player Invites — available to all admins */}
+      {isAdmin && unlinkedPlayers.length > 0 && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>📨 הזמנות אישיות</h2>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.personalInvites')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
             שלח הזמנה אישית לשחקן — כשיירשם עם הקוד, הוא יקושר אוטומטית
           </p>
@@ -285,7 +406,7 @@ export default function GroupManagementTab({
                     fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                   }}
                 >
-                  📩 הזמן
+                  {t('groupMgmt.invite')}
                 </button>
               </div>
             ))}
@@ -293,10 +414,10 @@ export default function GroupManagementTab({
         </div>
       )}
 
-      {/* Add Member by Email */}
-      {isOwner && (
+      {/* Add Member by Email — available to all admins */}
+      {isAdmin && (
         <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>➕ הוסף חבר לפי אימייל</h2>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.addByEmail')}</h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
             הוסף משתמש שכבר נרשם לאפליקציה אבל לא הצטרף לקבוצה
           </p>
@@ -304,7 +425,7 @@ export default function GroupManagementTab({
             type="email"
             value={addEmail}
             onChange={e => setAddEmail(e.target.value)}
-            placeholder="example@gmail.com"
+            placeholder={t('groupMgmt.emailPlaceholder')}
             dir="ltr"
             style={{
               width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px',
@@ -324,7 +445,7 @@ export default function GroupManagementTab({
                 marginBottom: '0.5rem', cursor: 'pointer',
               }}
             >
-              <option value="" style={{ background: '#1a1a2e', color: '#ffffff' }}>קשר לשחקן (אופציונלי)</option>
+              <option value="" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.linkToPlayer')}</option>
               {unlinkedPlayers.map(p => (
                 <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
               ))}
@@ -340,7 +461,7 @@ export default function GroupManagementTab({
               opacity: addEmailLoading ? 0.6 : 1,
             }}
           >
-            {addEmailLoading ? '...' : '➕ הוסף לקבוצה'}
+            {addEmailLoading ? '...' : t('groupMgmt.addToGroup')}
           </button>
         </div>
       )}
@@ -348,7 +469,7 @@ export default function GroupManagementTab({
       {/* Personal Invite Share Modal */}
       {personalInvite && (
         <div className="modal-overlay" onClick={() => setPersonalInvite(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ direction: 'rtl', maxWidth: '380px' }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px' }}>
             <div className="modal-header">
               <h3 className="modal-title">📨 הזמנה ל{personalInvite.playerName}</h3>
               <button className="modal-close" onClick={() => setPersonalInvite(null)}>×</button>
@@ -358,7 +479,6 @@ export default function GroupManagementTab({
               background: 'var(--background)', borderRadius: '10px', padding: '1rem',
               fontSize: '0.85rem', lineHeight: '1.6', whiteSpace: 'pre-line',
               marginBottom: '1rem', border: '1px solid var(--border)',
-              direction: 'rtl',
             }}>
               {personalInvite.message}
             </div>
@@ -380,7 +500,7 @@ export default function GroupManagementTab({
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(personalInvite.message);
-                  showMsg('success', 'ההודעה הועתקה!');
+                  showMsg('success', t('groupMgmt.messageCopied'));
                 }}
                 style={{
                   flex: 1, padding: '0.65rem', borderRadius: '8px', border: '1px solid var(--border)',
@@ -388,7 +508,7 @@ export default function GroupManagementTab({
                   fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                 }}
               >
-                📋 העתק הודעה
+                {t('groupMgmt.copyMessage')}
               </button>
               {typeof navigator.share === 'function' && (
                 <button
@@ -404,7 +524,7 @@ export default function GroupManagementTab({
                     fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                   }}
                 >
-                  📤 שלח בוואטסאפ
+                  {t('groupMgmt.sendWhatsApp')}
                 </button>
               )}
             </div>
@@ -412,120 +532,15 @@ export default function GroupManagementTab({
         </div>
       )}
 
-      {/* Member List */}
-      <div className="card" style={{ padding: '1rem' }}>
-        <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>👥 חברי קבוצה</h2>
-
-        {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>טוען...</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {members.map(m => {
-              const isMe = m.userId === currentUserId;
-              const isMemberOwner = members.length > 0 && isOwner && isMe;
-              return (
-                <div key={m.userId} style={{
-                  padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border)',
-                  background: isMe ? 'rgba(16,185,129,0.05)' : 'var(--background)',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                        {m.displayName || m.playerName || '(ללא שם)'}
-                      </span>
-                      {isMe && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
-                          אתה
-                        </span>
-                      )}
-                      {isMemberOwner && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308', padding: '0.1rem 0.4rem', borderRadius: '6px' }}>
-                          בעלים
-                        </span>
-                      )}
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {roleLabel(m.role)}
-                    </span>
-                  </div>
-
-                  {m.playerName && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                      שחקן: {m.playerName}
-                    </div>
-                  )}
-                  {!m.playerName && m.playerId === null && (
-                    <div style={{ fontSize: '0.75rem', color: '#F59E0B' }}>
-                      לא מקושר לשחקן
-                    </div>
-                  )}
-
-                  {/* Admin Controls */}
-                  {!isMe && isOwner && (
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                      <select
-                        value={m.role}
-                        onChange={e => handleRoleChange(m.userId, e.target.value)}
-                        style={{
-                          padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
-                          background: '#1a1a2e', color: 'var(--text)', fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <option value="admin" style={{ background: '#1a1a2e', color: '#ffffff' }}>מנהל</option>
-                        <option value="member" style={{ background: '#1a1a2e', color: '#ffffff' }}>חבר</option>
-                        <option value="viewer" style={{ background: '#1a1a2e', color: '#ffffff' }}>צופה</option>
-                      </select>
-                      {m.playerName && (
-                        <button
-                          onClick={() => handleUnlink(m.userId)}
-                          style={{
-                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)',
-                            background: 'rgba(245,158,11,0.08)', color: '#F59E0B', fontSize: '0.7rem',
-                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                          }}
-                        >
-                          נתק שחקן
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setConfirmAction({ type: 'transfer', userId: m.userId, name: m.displayName || m.playerName || '' })}
-                        style={{
-                          padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(168,85,247,0.3)',
-                          background: 'rgba(168,85,247,0.08)', color: '#A855F7', fontSize: '0.7rem',
-                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                        }}
-                      >
-                        העבר בעלות
-                      </button>
-                      <button
-                        onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.displayName || m.playerName || '' })}
-                        style={{
-                          padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
-                          background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: '0.7rem',
-                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                        }}
-                      >
-                        הסר
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {/* Confirmation Modal */}
       {confirmAction && (
         <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ direction: 'rtl' }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
-                {confirmAction.type === 'remove' && '🗑️ הסרת חבר'}
-                {confirmAction.type === 'transfer' && '👑 העברת בעלות'}
-                {confirmAction.type === 'regenerate' && '🔄 יצירת קוד חדש'}
+                {confirmAction.type === 'remove' && t('groupMgmt.removeConfirmTitle')}
+                {confirmAction.type === 'transfer' && t('groupMgmt.transferConfirmTitle')}
+                {confirmAction.type === 'regenerate' && t('groupMgmt.regenConfirmTitle')}
               </h3>
               <button className="modal-close" onClick={() => setConfirmAction(null)}>×</button>
             </div>
@@ -563,7 +578,7 @@ export default function GroupManagementTab({
 
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setConfirmAction(null)}>
-                ביטול
+                {t('common.cancel')}
               </button>
               <button
                 className={confirmAction.type === 'transfer' ? 'btn' : 'btn btn-danger'}
@@ -574,9 +589,9 @@ export default function GroupManagementTab({
                   if (confirmAction.type === 'regenerate') handleRegenerate();
                 }}
               >
-                {confirmAction.type === 'remove' && 'הסר'}
-                {confirmAction.type === 'transfer' && 'העבר בעלות'}
-                {confirmAction.type === 'regenerate' && 'צור קוד חדש'}
+                {confirmAction.type === 'remove' && t('groupMgmt.confirmRemove')}
+                {confirmAction.type === 'transfer' && t('groupMgmt.confirmTransfer')}
+                {confirmAction.type === 'regenerate' && t('groupMgmt.confirmRegen')}
               </button>
             </div>
           </div>

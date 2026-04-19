@@ -1,4 +1,4 @@
-import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage, isServerManagedKey } from './apiProxy';
+import { proxyGeminiGenerateWithSignal, proxyElevenLabsTTS, proxyElevenLabsUsage } from './apiProxy';
 import { getSettings } from '../database/storage';
 
 // Gender-aware Hebrew number words for TTS
@@ -412,18 +412,9 @@ const ELEVENLABS_VOICES = [
   'pNInz6obpgDQGcFmaJgB',  // Adam
 ];
 const ELEVENLABS_TIMEOUT_MS = 10000;
-const ELEVENLABS_KEY_STORAGE = 'elevenlabs_api_key';
-
 export const getElevenLabsApiKey = (): string | null => {
-  if (isServerManagedKey()) {
-    const key = getSettings()?.elevenlabsApiKey;
-    return key || 'server-managed';
-  }
-  return localStorage.getItem(ELEVENLABS_KEY_STORAGE);
-};
-
-export const setElevenLabsApiKey = (key: string): void => {
-  localStorage.setItem(ELEVENLABS_KEY_STORAGE, key);
+  const key = getSettings()?.elevenlabsApiKey;
+  return key || 'server-managed';
 };
 
 export async function getElevenLabsUsageLive(apiKey: string): Promise<{ used: number; limit: number; remaining: number; resetDate: string } | null> {

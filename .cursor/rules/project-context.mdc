@@ -11,10 +11,10 @@ alwaysApply: true
 
 - **Stack**: React 19 + TypeScript 5 (strict) + Vite 6
 - **Styling**: Inline React styles + CSS variables (dark theme in `src/styles/index.css`)
-- **Data**: **Supabase PostgreSQL** (primary) / LocalStorage (legacy, controlled by `USE_SUPABASE` in `src/database/config.ts`)
-- **Cloud**: **Supabase** direct DB with Realtime / GitHub Pages via GitHub API (legacy)
+- **Data**: **Supabase PostgreSQL** via in-memory cache (`supabaseCache.ts`)
+- **Cloud**: Supabase direct DB with Realtime subscriptions
 - **Deployment**: Vercel (auto-deploys from `main` branch)
-- **Dev server**: `npm run dev` → **http://localhost:3000** (NEVER use port 3001)
+- **Dev server**: `npm run dev` → **http://localhost:3000** (default; use `npx vite --port <PORT>` if 3000 is busy)
 - **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
 - **Language**: Hebrew (RTL) — all user-facing text in Hebrew
 - **Target**: Mobile-first, must also work on desktop
@@ -24,24 +24,22 @@ alwaysApply: true
 
 ```
 src/
-├── App.tsx                    # Root: routing, auth (PinLock), permission context, activity tracking
+├── App.tsx                    # Root: routing, Supabase auth, PlayerPicker, PermissionContext, activity tracking
 ├── main.tsx                   # Entry point (renders App into #root)
 ├── version.ts                 # APP_VERSION constant + CHANGELOG array
-├── permissions.ts             # Role system: admin | member | viewer (PIN-based legacy, Supabase Auth for new)
+├── permissions.ts             # Role system: admin | member | viewer
 ├── types/index.ts             # ALL TypeScript interfaces and types
 ├── styles/index.css           # CSS variables, dark theme, global styles
 ├── components/
 │   ├── Navigation.tsx         # Bottom tab bar (New Game, History, Stats, Graphs, Settings)
-│   ├── PinLock.tsx            # PIN entry screen with 4-digit keypad (legacy)
 │   ├── GroupManagementTab.tsx # Group management UI: members, roles, invite code, ownership transfer
 │   └── AddExpenseModal.tsx    # Modal for shared expenses (pizza etc.) during live games
 ├── screens/
 │   ├── NewGameScreen.tsx      # Game setup: player selection, AI forecast, pre-game teaser, period indicators
 │   ├── LiveGameScreen.tsx     # Active game: rebuys, timer, voice announcements, shared expenses
 │   ├── ChipEntryScreen.tsx    # End-of-game chip counting, profit calculation, triggers background AI
-│   ├── GameSummaryScreen.tsx  # Post-game: results, settlements, AI summary, forecast comparison, collapsible sections
+│   ├── GameSummaryScreen.tsx  # Post-game: results, settlements, AI summary, forecast comparison
 │   ├── HistoryScreen.tsx      # Completed games list with search/filter
-│   ├── GameDetailsScreen.tsx  # Individual game details (legacy — not routed, GameSummaryScreen used instead)
 │   ├── StatisticsScreen.tsx   # Player stats table, records, AI-generated Chronicle per player
 │   ├── GraphsScreen.tsx       # Charts (Recharts): cumulative profit, head-to-head, impact analysis + AI insights
 │   ├── SettingsScreen.tsx     # Tabs: Group (admin), Players, Game, Chips, Backup, AI (owner), Training (owner), Activity (owner), About
@@ -49,24 +47,24 @@ src/
 │   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
 │   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
 ├── hooks/
-│   └── useSupabaseAuth.ts     # Supabase auth: session, group membership, login/signup, group management RPCs
+│   ├── useSupabaseAuth.ts     # Supabase auth: session, group membership, login/signup, group management RPCs
+│   └── useRealtimeRefresh.ts  # Listens for 'supabase-cache-updated' events to trigger screen re-renders
 ├── database/
-│   ├── storage.ts             # Dual data layer: localStorage (legacy) OR supabaseCache (migration)
-│   ├── config.ts              # USE_SUPABASE feature flag
+│   ├── storage.ts             # Data access API — delegates to supabaseCache
 │   ├── supabaseClient.ts      # Supabase client initialization (anon key)
 │   ├── supabaseCache.ts       # In-memory cache syncing to Supabase (denormalize/normalize mappers)
-│   ├── migrateToSupabase.ts   # One-time migration: localStorage → Supabase (UUID mapping, FK handling)
-│   ├── githubSync.ts          # Dual: GitHub API (legacy) OR Supabase (training pool/answers/insights)
-│   └── embeddedToken.ts       # Obfuscated GitHub token for non-admin users (legacy)
+│   ├── migrateToSupabase.ts   # One-time migration + chip repair utility
+│   └── githubSync.ts          # Training data helpers (Supabase-backed)
 └── utils/
     ├── geminiAI.ts            # ALL Gemini AI: forecasts, summaries, chronicles, graph insights, comparison
+    ├── apiProxy.ts            # Vercel Edge Function proxy with per-group API key support
     ├── calculations.ts        # Currency formatting, Hebrew dates, formatHebrewHalf, utility math
     ├── milestones.ts          # Player milestone detection (streaks, records, comebacks, etc.)
     ├── comboHistory.ts        # Recurring player combo analysis (who played together before)
     ├── activityLogger.ts      # Silent user activity tracking + device fingerprinting
     ├── sharing.ts             # Text-based game summary generation + WhatsApp sharing
     ├── pokerTraining.ts       # Training scenario generation, progress tracking, categories
-    ├── tts.ts                 # Hebrew text-to-speech (browser speechSynthesis + Google Cloud TTS)
+    ├── tts.ts                 # Hebrew text-to-speech (browser speechSynthesis + ElevenLabs TTS)
     └── validatePlayerData.ts  # Console-based data validation (window.validateAllPlayers)
 ```
 
@@ -84,16 +82,16 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
 
 ## Auth & Permissions
 
-**Legacy** (`USE_SUPABASE = false`): PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
-**Supabase** (`USE_SUPABASE = true`): Supabase Auth (email/password + Google OAuth). Group-based multi-tenancy with invite codes. Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.tsx` (create/join) → `PlayerPicker` (link account to player) → app.
+Supabase Auth (email/password + Google OAuth). Group-based multi-tenancy with invite codes.
+Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.tsx` (create/join) → `PlayerPicker` (self-create player) → app.
 
-| Role | Legacy PIN | Can Do |
-|------|-----------|--------|
-| `admin` | 2351 | Everything: games, players, settings, AI, sync |
-| `member` | 2580 | View + manage games + add players |
-| `viewer` | 9876 | View only + backup |
+| Role | Can Do |
+|------|--------|
+| `admin` | Everything: games, players, settings, AI, sync |
+| `member` | View + manage games + add players |
+| `viewer` | View only + backup |
 
-**Owner vs Admin** (Supabase mode only): The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, and manage per-group API keys. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext).
+**Owner vs Admin**: The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, and manage per-group API keys. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext).
 
 ## Key Patterns
 

@@ -1,17 +1,14 @@
-import { Component, useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
+﻿import { Component, useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { initializeStorage, getStorageUsage, formatStorageSize, StorageUsage, cleanupOrphanedTTSPools, getAllPlayers } from './database/storage';
-import { syncFromCloud, restoreTrainingFromGitHub } from './database/githubSync';
 import { PermissionRole } from './types';
-import { getRoleFromPin, hasPermission, ROLE_PINS } from './permissions';
+import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
-import { USE_SUPABASE } from './database/config';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
+import { LanguageProvider, useTranslation } from './i18n';
 import { initSupabaseCache, isInitialized as isCacheReady, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
-import PinLock from './components/PinLock';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
 import NewGameScreen from './screens/NewGameScreen';
@@ -29,7 +26,6 @@ import QuickTrainingScreen from './screens/QuickTrainingScreen';
 import SharedTrainingScreen from './screens/SharedTrainingScreen';
 import SharedQuickPlayScreen from './screens/SharedQuickPlayScreen';
 
-// Error boundary — catches runtime rendering crashes and shows a recovery UI
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
     super(props);
@@ -72,7 +68,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-// Permission context
 interface GroupManagementFns {
   groupName: string;
   inviteCode: string | null;
@@ -90,6 +85,8 @@ interface GroupManagementFns {
 interface PermissionContextType {
   role: PermissionRole | null;
   isOwner: boolean;
+  isSuperAdmin: boolean;
+  trainingEnabled: boolean;
   playerName: string | null;
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
   signOut: () => void;
@@ -99,46 +96,17 @@ interface PermissionContextType {
 const PermissionContext = createContext<PermissionContextType>({
   role: null,
   isOwner: false,
+  isSuperAdmin: false,
+  trainingEnabled: false,
   playerName: null,
   hasPermission: () => false,
   signOut: () => {},
 });
 
-const IDENTITY_KEY = 'poker_player_identity';
-const IDENTITY_ID_KEY = 'poker_player_identity_id';
-
 export const LEGACY_NAME_CORRECTIONS: Record<string, string> = {
   'פבל': 'פאבל',
   'ארז': 'חרדון',
 };
-
-function resolveIdentity(): string | null {
-  const players = getAllPlayers();
-
-  const savedId = localStorage.getItem(IDENTITY_ID_KEY);
-  if (savedId) {
-    const player = players.find(p => p.id === savedId);
-    if (player) {
-      localStorage.setItem(IDENTITY_KEY, player.name);
-      return player.name;
-    }
-  }
-
-  let savedName = localStorage.getItem(IDENTITY_KEY);
-  if (!savedName) return null;
-
-  const corrected = LEGACY_NAME_CORRECTIONS[savedName];
-  if (corrected) savedName = corrected;
-
-  const player = players.find(p => p.name === savedName);
-  if (player) {
-    localStorage.setItem(IDENTITY_ID_KEY, player.id);
-    localStorage.setItem(IDENTITY_KEY, player.name);
-    return player.name;
-  }
-
-  return savedName;
-}
 
 export const usePermissions = () => useContext(PermissionContext);
 
@@ -157,194 +125,22 @@ export const useOnlineStatus = () => {
   return online;
 };
 
-function IdentityPrompt({ role, onSelect }: { role: PermissionRole; onSelect: (name: string, id?: string) => void }) {
-  const [selectedValue, setSelectedValue] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest'>('all');
-  const players = getAllPlayers();
-  const permanentPlayers = players.filter(p => p.type === 'permanent');
-  const permanentGuestPlayers = players.filter(p => p.type === 'permanent_guest');
-  const guestPlayers = players.filter(p => p.type === 'guest');
-
-  const isViewer = role === 'viewer';
-
-  const filteredPlayers = typeFilter === 'all' ? players : players.filter(p => p.type === typeFilter);
-
-  const handleConfirm = () => {
-    if (isViewer && selectedValue === '__custom__') {
-      const name = customName.trim();
-      if (name) onSelect(name);
-    } else {
-      const player = players.find(p => p.id === selectedValue);
-      if (player) onSelect(player.name, player.id);
-    }
-  };
-
-  const filterChipStyle = (active: boolean) => ({
-    padding: '0.35rem 0.7rem',
-    fontSize: '0.75rem',
-    fontWeight: active ? '600' : '400' as const,
-    borderRadius: '20px',
-    border: active ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-    background: active ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-    color: active ? 'var(--primary)' : 'var(--text-muted)',
-    cursor: 'pointer' as const,
-    transition: 'all 0.2s ease',
-  });
-
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--background)',
-      padding: '2rem',
-      direction: 'rtl'
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>👤</div>
-        <h2 style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--text)', marginBottom: '0.5rem' }}>
-          מי אתה?
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          בחר את השם שלך מהרשימה
-        </p>
-      </div>
-
-      <div style={{ width: '100%', maxWidth: '300px' }}>
-        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <button style={filterChipStyle(typeFilter === 'all')} onClick={() => { setTypeFilter('all'); setSelectedValue(''); }}>
-            הכל ({players.length})
-          </button>
-          {permanentPlayers.length > 0 && (
-            <button style={filterChipStyle(typeFilter === 'permanent')} onClick={() => { setTypeFilter('permanent'); setSelectedValue(''); }}>
-              קבועים ({permanentPlayers.length})
-            </button>
-          )}
-          {permanentGuestPlayers.length > 0 && (
-            <button style={filterChipStyle(typeFilter === 'permanent_guest')} onClick={() => { setTypeFilter('permanent_guest'); setSelectedValue(''); }}>
-              אורחים קבועים ({permanentGuestPlayers.length})
-            </button>
-          )}
-          {guestPlayers.length > 0 && (
-            <button style={filterChipStyle(typeFilter === 'guest')} onClick={() => { setTypeFilter('guest'); setSelectedValue(''); }}>
-              אורחים ({guestPlayers.length})
-            </button>
-          )}
-        </div>
-
-        <select
-          value={selectedValue}
-          onChange={e => setSelectedValue(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '0.75rem 1rem',
-            fontSize: '1rem',
-            borderRadius: '10px',
-            border: '2px solid var(--border)',
-            background: '#1a1a2e',
-            color: '#e2e8f0',
-            direction: 'rtl',
-            marginBottom: '0.75rem',
-          }}
-        >
-          <option value="">בחר שם...</option>
-          {typeFilter === 'all' ? (
-            <>
-              {permanentPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── שחקנים קבועים ──</option>}
-              {permanentPlayers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-              {permanentGuestPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── אורחים קבועים ──</option>}
-              {permanentGuestPlayers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-              {guestPlayers.length > 0 && <option disabled style={{ color: '#6b7280' }}>── אורחים ──</option>}
-              {guestPlayers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </>
-          ) : (
-            filteredPlayers.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))
-          )}
-          {isViewer && (
-            <>
-              <option disabled>──────</option>
-              <option value="__custom__">שם אחר...</option>
-            </>
-          )}
-        </select>
-
-        {isViewer && selectedValue === '__custom__' && (
-          <input
-            type="text"
-            value={customName}
-            onChange={e => setCustomName(e.target.value)}
-            placeholder="הקלד את שמך..."
-            autoFocus
-            style={{
-              width: '100%',
-              padding: '0.75rem 1rem',
-              fontSize: '1rem',
-              borderRadius: '10px',
-              border: '2px solid var(--border)',
-              background: '#1a1a2e',
-              color: '#e2e8f0',
-              direction: 'rtl',
-              marginBottom: '0.75rem',
-              boxSizing: 'border-box',
-            }}
-          />
-        )}
-
-        <button
-          onClick={handleConfirm}
-          disabled={!selectedValue || (selectedValue === '__custom__' && !customName.trim())}
-          style={{
-            width: '100%',
-            padding: '0.85rem',
-            fontSize: '1rem',
-            fontWeight: '600',
-            borderRadius: '10px',
-            border: 'none',
-            background: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
-              ? 'var(--surface-light)'
-              : 'var(--primary)',
-            color: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
-              ? 'var(--text-muted)'
-              : 'white',
-            cursor: (!selectedValue || (selectedValue === '__custom__' && !customName.trim()))
-              ? 'not-allowed'
-              : 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-        >
-          המשך
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function PlayerPicker({ onSelfCreate, userDisplayName }: {
   onSelfCreate: (name: string) => Promise<{ data: unknown; error: unknown }>;
   userDisplayName: string;
 }) {
+  const { t } = useTranslation();
   const [newName, setNewName] = useState(userDisplayName);
   const [error, setError] = useState('');
 
   const handleSelfCreate = async () => {
     const trimmed = newName.trim();
-    if (!trimmed) { setError('נא להזין שם'); return; }
+    if (!trimmed) { setError(t('picker.emptyName')); return; }
     setError('');
     const { error: err } = await onSelfCreate(trimmed);
     if (err) {
       const msg = (err as { message?: string })?.message || '';
-      setError(msg.includes('duplicate') ? 'שם זה כבר קיים בקבוצה' : msg || 'שגיאה ביצירת שחקן');
+      setError(msg.includes('duplicate') ? t('picker.duplicate') : msg || t('picker.createError'));
     }
   };
 
@@ -359,16 +155,16 @@ function PlayerPicker({ onSelfCreate, userDisplayName }: {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🃏</div>
-          <h2 style={{ color: 'var(--text)', marginBottom: '0.25rem' }}>ברוך הבא!</h2>
+          <h2 style={{ color: 'var(--text)', marginBottom: '0.25rem' }}>{t('picker.welcome')}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            אשר את השם שלך כדי להמשיך
+            {t('picker.subtitle')}
           </p>
         </div>
         <input
           type="text"
           value={newName}
           onChange={e => setNewName(e.target.value)}
-          placeholder="השם שלך"
+          placeholder={t('picker.placeholder')}
           autoFocus
           dir="rtl"
           style={{
@@ -387,7 +183,7 @@ function PlayerPicker({ onSelfCreate, userDisplayName }: {
             fontFamily: 'Outfit, sans-serif',
           }}
         >
-          המשך
+          {t('picker.continue')}
         </button>
       </div>
     </div>
@@ -395,6 +191,7 @@ function PlayerPicker({ onSelfCreate, userDisplayName }: {
 }
 
 function SupabaseApp() {
+  const { t } = useTranslation();
   const location = useLocation();
   const auth = useSupabaseAuth();
   const [dataReady, setDataReady] = useState(false);
@@ -406,6 +203,8 @@ function SupabaseApp() {
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
   const isOwner = auth.membership?.isOwner ?? false;
+  const isSuperAdmin = auth.isSuperAdmin;
+  const trainingEnabled = auth.membership?.trainingEnabled ?? false;
   const playerName = auth.membership?.playerName ?? null;
 
   useEffect(() => {
@@ -426,10 +225,55 @@ function SupabaseApp() {
       })
       .catch(err => {
         console.error('Failed to load data from Supabase:', err);
-        setDataError('שגיאה בטעינת נתונים מהענן');
+        setDataError(t('app.cloudError'));
       });
     return () => unsubscribeFromRealtime();
   }, [groupId]);
+
+  // Activity tracking
+  const sessionStartRef = useRef<number | null>(null);
+  const screensVisitedRef = useRef<Set<string>>(new Set());
+  const isTrackingRef = useRef(false);
+  const activityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pushSessionUpdate = useCallback((keepalive = false) => {
+    if (!isTrackingRef.current || !sessionStartRef.current) return;
+    const screens = Array.from(screensVisitedRef.current);
+    const duration = (Date.now() - sessionStartRef.current) / 60000;
+    updateSessionActivity(screens, duration, keepalive).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!dataReady || !role || !auth.user) return;
+    sessionStartRef.current = Date.now();
+    screensVisitedRef.current = new Set([getScreenName(location.pathname)]);
+    isTrackingRef.current = true;
+
+    logActivity(role, playerName || undefined, auth.user.id).catch(() => {});
+
+    activityIntervalRef.current = setInterval(() => pushSessionUpdate(), 5 * 60 * 1000);
+
+    const handleVisChange = () => {
+      if (document.visibilityState === 'hidden') pushSessionUpdate(true);
+    };
+    document.addEventListener('visibilitychange', handleVisChange);
+
+    return () => {
+      if (isTrackingRef.current) {
+        pushSessionUpdate(true);
+        isTrackingRef.current = false;
+        resetSession();
+      }
+      if (activityIntervalRef.current) clearInterval(activityIntervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisChange);
+    };
+  }, [dataReady, role, auth.user, playerName, pushSessionUpdate, location.pathname]);
+
+  useEffect(() => {
+    if (isTrackingRef.current) {
+      screensVisitedRef.current.add(getScreenName(location.pathname));
+    }
+  }, [location.pathname]);
 
   // Detect ?addMember=email deep link
   useEffect(() => {
@@ -447,12 +291,12 @@ function SupabaseApp() {
     const { error } = await auth.addMemberByEmail(addMemberPrompt);
     if (error) {
       const msg = (error as { message?: string })?.message || '';
-      if (msg.includes('No registered user')) setAddMemberMsg('לא נמצא משתמש רשום עם האימייל הזה');
-      else if (msg.includes('already a member')) setAddMemberMsg('המשתמש כבר חבר בקבוצה');
-      else setAddMemberMsg(msg || 'שגיאה בהוספה');
+      if (msg.includes('No registered user')) setAddMemberMsg(t('addMember.noUser'));
+      else if (msg.includes('already a member')) setAddMemberMsg(t('addMember.alreadyMember'));
+      else setAddMemberMsg(msg || t('addMember.error'));
       setAddMemberStatus('error');
     } else {
-      setAddMemberMsg(`${addMemberPrompt} נוסף לקבוצה!`);
+      setAddMemberMsg(t('addMember.added', { email: addMemberPrompt }));
       setAddMemberStatus('success');
       setTimeout(() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }, 3000);
     }
@@ -461,8 +305,10 @@ function SupabaseApp() {
   const permissionValue: PermissionContextType = {
     role,
     isOwner,
+    isSuperAdmin,
+    trainingEnabled,
     playerName,
-    hasPermission: (permission) => hasPermission(role, permission),
+    hasPermission: (permission) => isSuperAdmin || hasPermission(role, permission),
     signOut: () => { auth.signOut(); },
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
@@ -487,7 +333,7 @@ function SupabaseApp() {
       }}>
         <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
-          Loading...
+          {t('app.loading')}
         </div>
       </div>
     );
@@ -510,7 +356,6 @@ function SupabaseApp() {
     );
   }
 
-  // Player linking: after data loads, if no player linked, show self-create
   if (dataReady && !playerName) {
     const displayName = auth.user?.user_metadata?.full_name
       || auth.user?.user_metadata?.name
@@ -524,7 +369,6 @@ function SupabaseApp() {
     );
   }
 
-  // Wait for Supabase data to load
   if (!dataReady) {
     return (
       <div style={{
@@ -544,11 +388,11 @@ function SupabaseApp() {
                   fontFamily: 'Outfit, sans-serif',
                 }}
               >
-                נסה שוב
+                {t('common.retry')}
               </button>
             </>
           ) : (
-            'טוען נתונים...'
+            t('app.loadingData')
           )}
         </div>
       </div>
@@ -568,10 +412,10 @@ function SupabaseApp() {
       {addMemberStatus === 'idle' && (
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text)' }}>
-            ➕ בקשת הצטרפות
+            {t('addMember.title')}
           </p>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            להוסיף את <strong style={{ color: 'var(--text)' }}>{addMemberPrompt}</strong> לקבוצה?
+            {t('addMember.question', { email: addMemberPrompt })}
           </p>
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
             <button
@@ -582,7 +426,7 @@ function SupabaseApp() {
                 fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
               }}
             >
-              ✓ הוסף
+              {t('addMember.confirm')}
             </button>
             <button
               onClick={() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }}
@@ -593,13 +437,13 @@ function SupabaseApp() {
                 fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif',
               }}
             >
-              ✕ לא עכשיו
+              {t('addMember.dismiss')}
             </button>
           </div>
         </div>
       )}
       {addMemberStatus === 'loading' && (
-        <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>מוסיף...</p>
+        <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('addMember.adding')}</p>
       )}
       {addMemberStatus === 'success' && (
         <p style={{ textAlign: 'center', color: '#10B981', fontWeight: 600 }}>✓ {addMemberMsg}</p>
@@ -615,38 +459,15 @@ function SupabaseApp() {
               fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
             }}
           >
-            סגור
+            {t('common.close')}
           </button>
         </div>
       )}
     </div>
   );
 
-  if (role === 'viewer') {
-    return (
-      <ErrorBoundary>
-        <PermissionContext.Provider value={permissionValue}>
-          {addMemberBanner}
-          <div className="app-container">
-            <main className="main-content">
-              <Routes>
-                <Route path="/statistics" element={<StatisticsScreen />} />
-                <Route path="/history" element={<HistoryScreen />} />
-                <Route path="/game/:gameId" element={<GameSummaryScreen />} />
-                <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
-                <Route path="/graphs" element={<GraphsScreen />} />
-                <Route path="/settings" element={<SettingsScreen />} />
-                <Route path="/shared-training" element={<SharedTrainingScreen />} />
-                <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
-                <Route path="*" element={<Navigate to="/statistics" replace />} />
-              </Routes>
-            </main>
-            <Navigation />
-          </div>
-        </PermissionContext.Provider>
-      </ErrorBoundary>
-    );
-  }
+  const isAdmin = role === 'admin';
+  const defaultRoute = isAdmin ? '/' : '/statistics';
 
   return (
     <ErrorBoundary>
@@ -655,7 +476,7 @@ function SupabaseApp() {
         <div className="app-container">
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<NewGameScreen />} />
+              <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />
               <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
               <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
               <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
@@ -664,12 +485,12 @@ function SupabaseApp() {
               <Route path="/statistics" element={<StatisticsScreen />} />
               <Route path="/settings" element={<SettingsScreen />} />
               <Route path="/graphs" element={<GraphsScreen />} />
-              {isOwner && <Route path="/training" element={<TrainingScreen />} />}
-              {isOwner && <Route path="/training/play" element={<TrainingHandScreen />} />}
-              {isOwner && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
-              <Route path="/shared-training" element={<SharedTrainingScreen />} />
-              <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {isSuperAdmin && <Route path="/training" element={<TrainingScreen />} />}
+              {isSuperAdmin && <Route path="/training/play" element={<TrainingHandScreen />} />}
+              {isSuperAdmin && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
+              {trainingEnabled && <Route path="/shared-training" element={<SharedTrainingScreen />} />}
+              {trainingEnabled && <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />}
+              <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
           </main>
           {!hideNav && <Navigation />}
@@ -679,414 +500,21 @@ function SupabaseApp() {
   );
 }
 
-function LegacyApp() {
-  const location = useLocation();
-  const [role, setRole] = useState<PermissionRole | null>(null);
-  const [playerName, setPlayerName] = useState<string | null>(null);
-  const [pendingRole, setPendingRole] = useState<PermissionRole | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<{ syncing: boolean; message: string | null }>({ syncing: false, message: null });
-  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
-  const [storageWarningDismissed, setStorageWarningDismissed] = useState(false);
-
-  // Activity tracking
-  const screensVisitedRef = useRef<Set<string>>(new Set());
-  const sessionStartRef = useRef<number | null>(null);
-  const activityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isTrackingRef = useRef(false);
-
-  const pushSessionUpdate = useCallback((keepalive = false) => {
-    if (!isTrackingRef.current || !sessionStartRef.current) return;
-    const screens = Array.from(screensVisitedRef.current);
-    const duration = (Date.now() - sessionStartRef.current) / 60000;
-    updateSessionActivity(screens, duration, keepalive).catch(() => {});
-  }, []);
-
+function AppWithLanguage() {
+  const { isRTL } = useTranslation();
   useEffect(() => {
-    initializeStorage();
-    cleanupOrphanedTTSPools();
-    setIsInitialized(true);
-    const savedRole = sessionStorage.getItem('poker_role') as PermissionRole;
-    if (savedRole && Object.keys(ROLE_PINS).includes(savedRole)) {
-      const savedName = savedRole === 'admin' ? 'ליאור' : resolveIdentity();
-      if (savedName) {
-        setRole(savedRole);
-        setPlayerName(savedName);
-        sessionStorage.setItem('poker_player_name', savedName);
-      } else {
-        setPendingRole(savedRole);
-      }
-    }
-  }, []);
-
-  // Track screen visits for activity logging
-  useEffect(() => {
-    if (isTrackingRef.current) {
-      const screenName = getScreenName(location.pathname);
-      screensVisitedRef.current.add(screenName);
-    }
-  }, [location.pathname]);
-
-  // Check storage usage on init and after navigation
-  useEffect(() => {
-    if (isInitialized) {
-      const usage = getStorageUsage();
-      setStorageUsage(usage);
-      
-      // Log to console for debugging
-      if (usage.status !== 'safe') {
-        console.warn(`⚠️ Storage ${usage.status}: ${usage.percent.toFixed(1)}% used (${formatStorageSize(usage.used)} / ${formatStorageSize(usage.limit)})`);
-      }
-    }
-  }, [isInitialized, location.pathname]);
-
-  // Sync from cloud when role is set (admin or member only)
-  useEffect(() => {
-    if (role && role !== 'viewer') {
-      setSyncStatus({ syncing: true, message: 'Syncing...' });
-      syncFromCloud().then(result => {
-        const hasChanges = result.success && result.synced && 
-          ((result.gamesChanged && result.gamesChanged > 0) || (result.playersChanged && result.playersChanged > 0));
-        if (hasChanges) {
-          setSyncStatus({ syncing: false, message: `☁️ ${result.message}` });
-          setTimeout(() => {
-            window.location.reload();
-          }, 1500);
-        } else {
-          setSyncStatus({ syncing: false, message: null });
-        }
-      }).catch(() => {
-        setSyncStatus({ syncing: false, message: '⚠️ סנכרון נכשל — ייתכן שהנתונים לא מעודכנים' });
-        setTimeout(() => setSyncStatus(prev => ({ ...prev, message: null })), 6000);
-      });
-
-      if (role === 'admin') {
-        restoreTrainingFromGitHub().catch(err =>
-          console.warn('Training restore failed:', err)
-        );
-      }
-    }
-  }, [role]);
-
-  const activateRole = useCallback((userRole: PermissionRole, name: string) => {
-    setRole(userRole);
-    setPlayerName(name);
-    sessionStorage.setItem('poker_role', userRole);
-    sessionStorage.setItem('poker_player_name', name);
-
-    if (userRole !== 'admin') {
-      sessionStartRef.current = Date.now();
-      screensVisitedRef.current = new Set();
-      isTrackingRef.current = true;
-
-      logActivity(userRole, name).catch(() => {});
-
-      activityIntervalRef.current = setInterval(() => {
-        pushSessionUpdate();
-      }, 15 * 60 * 1000);
-
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'hidden') {
-          pushSessionUpdate(true);
-        }
-      };
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      (window as any).__activityVisHandler = handleVisibilityChange;
-    }
-  }, [pushSessionUpdate]);
-
-  const handleUnlock = (pin: string) => {
-    const userRole = getRoleFromPin(pin);
-    if (userRole) {
-      if (userRole === 'admin') {
-        const name = 'ליאור';
-        localStorage.setItem(IDENTITY_KEY, name);
-        activateRole(userRole, name);
-      } else {
-        const savedName = resolveIdentity();
-        if (savedName) {
-          activateRole(userRole, savedName);
-        } else {
-          setPendingRole(userRole);
-        }
-      }
-    }
-  };
-
-  const handleSignOut = () => {
-    // Push final activity update before clearing session
-    if (isTrackingRef.current) {
-      pushSessionUpdate();
-      isTrackingRef.current = false;
-      resetSession();
-      if (activityIntervalRef.current) {
-        clearInterval(activityIntervalRef.current);
-        activityIntervalRef.current = null;
-      }
-      if ((window as any).__activityVisHandler) {
-        document.removeEventListener('visibilitychange', (window as any).__activityVisHandler);
-        delete (window as any).__activityVisHandler;
-      }
-    }
-    setRole(null);
-    sessionStorage.removeItem('poker_role');
-  };
-
-  // Permission context value — in legacy mode, admin IS the owner
-  const permissionValue: PermissionContextType = {
-    role,
-    isOwner: role === 'admin',
-    playerName,
-    hasPermission: (permission) => hasPermission(role, permission),
-    signOut: handleSignOut,
-  };
-
-  // Show loading while initializing
-  if (!isInitialized) {
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'var(--background)'
-      }}>
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🃏</div>
-          Loading...
-        </div>
-      </div>
-    );
-  }
-
-  // Show PIN lock if not authenticated
-  if (!role && !pendingRole) {
-    return (
-      <PinLock 
-        validPins={Object.values(ROLE_PINS)} 
-        onUnlock={handleUnlock} 
-      />
-    );
-  }
-
-  // Show identity prompt after PIN entry (non-admin, no saved identity)
-  if (pendingRole && !role) {
-    return (
-      <IdentityPrompt
-        role={pendingRole}
-        onSelect={(name, id) => {
-          localStorage.setItem(IDENTITY_KEY, name);
-          if (id) localStorage.setItem(IDENTITY_ID_KEY, id);
-          activateRole(pendingRole, name);
-          setPendingRole(null);
-        }}
-      />
-    );
-  }
-
-  // Viewer role - limited access (view statistics, history, game details, settings for backup only)
-  if (role === 'viewer') {
-    // Storage warning banner for viewer (simpler version)
-    const ViewerStorageWarning = () => {
-      if (!storageUsage || storageUsage.status === 'safe' || storageWarningDismissed) return null;
-      const isCritical = storageUsage.status === 'critical';
-      return (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          background: isCritical 
-            ? 'linear-gradient(135deg, #DC2626, #B91C1C)' 
-            : 'linear-gradient(135deg, #F59E0B, #D97706)',
-          color: 'white',
-          padding: '0.6rem 1rem',
-          fontSize: '0.8rem',
-          fontWeight: '500',
-          zIndex: 999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem',
-        }}>
-          <span>{isCritical ? '🚨' : '⚠️'} Storage {storageUsage.percent.toFixed(0)}% full</span>
-          <button 
-            onClick={() => setStorageWarningDismissed(true)}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              color: 'white',
-              padding: '0.2rem 0.5rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.75rem',
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      );
-    };
-
-    return (
-      <ErrorBoundary>
-        <PermissionContext.Provider value={permissionValue}>
-          <div className="app-container">
-            <ViewerStorageWarning />
-            <main className="main-content" style={{ 
-              paddingTop: storageUsage && storageUsage.status !== 'safe' && !storageWarningDismissed ? '2.5rem' : undefined 
-            }}>
-              <Routes>
-                <Route path="/statistics" element={<StatisticsScreen />} />
-                <Route path="/history" element={<HistoryScreen />} />
-                <Route path="/game/:gameId" element={<GameSummaryScreen />} />
-                <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
-                <Route path="/graphs" element={<GraphsScreen />} />
-                <Route path="/settings" element={<SettingsScreen />} />
-                <Route path="/shared-training" element={<SharedTrainingScreen />} />
-                <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
-                {/* Redirect everything else to statistics */}
-                <Route path="*" element={<Navigate to="/statistics" replace />} />
-              </Routes>
-            </main>
-            <Navigation />
-          </div>
-        </PermissionContext.Provider>
-      </ErrorBoundary>
-    );
-  }
-
-  // Admin and Member - full/partial access
-  // Hide navigation on game flow screens
-  const hideNav = ['/live-game', '/chip-entry', '/game-summary', '/training/play', '/shared-training/play'].some(path => 
-    location.pathname.startsWith(path)
-  );
-
-  // Sync status banner component
-  const SyncBanner = () => {
-    if (!syncStatus.message) return null;
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        background: syncStatus.syncing ? 'var(--primary)' : syncStatus.message?.startsWith('⚠️') ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'linear-gradient(135deg, #10B981, #059669)',
-        color: 'white',
-        padding: '0.5rem 1rem',
-        textAlign: 'center',
-        fontSize: '0.85rem',
-        fontWeight: '500',
-        zIndex: 1000,
-        animation: 'fadeIn 0.3s ease',
-      }}>
-        {syncStatus.syncing ? '⏳ ' : ''}{syncStatus.message}
-      </div>
-    );
-  };
-
-  // Storage warning banner component
-  const StorageWarningBanner = () => {
-    if (!storageUsage || storageUsage.status === 'safe' || storageWarningDismissed) return null;
-    
-    const isCritical = storageUsage.status === 'critical';
-    const syncBannerOffset = syncStatus.message ? '2.5rem' : '0';
-    
-    return (
-      <div style={{
-        position: 'fixed',
-        top: syncBannerOffset,
-        left: 0,
-        right: 0,
-        background: isCritical 
-          ? 'linear-gradient(135deg, #DC2626, #B91C1C)' 
-          : 'linear-gradient(135deg, #F59E0B, #D97706)',
-        color: 'white',
-        padding: '0.6rem 1rem',
-        fontSize: '0.8rem',
-        fontWeight: '500',
-        zIndex: 999,
-        animation: 'fadeIn 0.3s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0.5rem',
-      }}>
-        <span>
-          {isCritical ? '🚨' : '⚠️'} Storage {storageUsage.percent.toFixed(0)}% full 
-          ({formatStorageSize(storageUsage.used)}/{formatStorageSize(storageUsage.limit)})
-          {storageUsage.estimatedGamesRemaining > 0 && !isCritical && (
-            <span style={{ opacity: 0.9 }}> • ~{storageUsage.estimatedGamesRemaining} games left</span>
-          )}
-          {isCritical && (
-            <span style={{ opacity: 0.9 }}> • Export data in Settings!</span>
-          )}
-        </span>
-        <button 
-          onClick={() => setStorageWarningDismissed(true)}
-          style={{
-            background: 'rgba(255,255,255,0.2)',
-            border: 'none',
-            color: 'white',
-            padding: '0.2rem 0.5rem',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.75rem',
-            marginLeft: '0.5rem',
-          }}
-        >
-          ✕
-        </button>
-      </div>
-    );
-  };
-
-  // Calculate total banner offset for main content
-  const getBannerOffset = () => {
-    let offset = 0;
-    if (syncStatus.message) offset += 2.5;
-    if (storageUsage && storageUsage.status !== 'safe' && !storageWarningDismissed) offset += 2.5;
-    return offset > 0 ? `${offset}rem` : undefined;
-  };
-
-  return (
-    <ErrorBoundary>
-      <PermissionContext.Provider value={permissionValue}>
-        <div className="app-container">
-          <SyncBanner />
-          <StorageWarningBanner />
-          <main className="main-content" style={{ paddingTop: getBannerOffset() }}>
-            <Routes>
-              <Route path="/" element={<NewGameScreen />} />
-              <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
-              <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
-              <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
-              <Route path="/history" element={<HistoryScreen />} />
-              <Route path="/game/:gameId" element={<GameSummaryScreen />} />
-              <Route path="/statistics" element={<StatisticsScreen />} />
-              <Route path="/settings" element={<SettingsScreen />} />
-              {/* Graphs page - all authenticated users (viewer = read-only) */}
-              <Route path="/graphs" element={<GraphsScreen />} />
-              {/* Training - admin only */}
-              {role === 'admin' && <Route path="/training" element={<TrainingScreen />} />}
-              {role === 'admin' && <Route path="/training/play" element={<TrainingHandScreen />} />}
-              {role === 'admin' && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
-              {/* Shared training - all roles */}
-              <Route path="/shared-training" element={<SharedTrainingScreen />} />
-              <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />
-              {/* Catch-all route - redirect unknown URLs to home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-          {!hideNav && <Navigation />}
-        </div>
-      </PermissionContext.Provider>
-    </ErrorBoundary>
-  );
+    document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+    document.documentElement.lang = isRTL ? 'he' : 'en';
+  }, [isRTL]);
+  return <SupabaseApp />;
 }
 
 function App() {
-  return USE_SUPABASE ? <SupabaseApp /> : <LegacyApp />;
+  return (
+    <LanguageProvider>
+      <AppWithLanguage />
+    </LanguageProvider>
+  );
 }
 
 export default App;

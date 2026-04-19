@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.14.0';
+export const APP_VERSION = '5.15.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,22 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.15.0',
+    date: '2026-04-19',
+    changes: [
+      '✅ Permissions overhaul — removed viewer role, simplified to admin + member',
+      '✅ Super Admin dashboard — global stats, training toggle, orphaned group detection',
+      '✅ New group setup wizard for owners — guided players + API key setup',
+      '✅ AI key onboarding guide for group owners',
+      '✅ Member read-only views on all game screens (live, chip entry, summary)',
+      '✅ Training access control — per-group training_enabled flag',
+      '✅ Removed backup tab — Supabase handles all data storage',
+      '✅ Settlement toggle now works for admins + participants',
+      '✅ Permission hardening — members cannot undo rebuys, edit expenses, or abandon games',
+      '✅ Hebrew localization fixes across activity log and settings',
+    ]
+  },
   {
     version: '5.14.0',
     date: '2026-04-18',

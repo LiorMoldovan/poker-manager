@@ -14,9 +14,8 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 | Screenshots | html2canvas |
 | AI | Google Gemini API (gemini-2.0-flash) |
 | Database | **Supabase** (PostgreSQL + RLS + Auth + Realtime) |
-| Legacy data | LocalStorage + GitHub API (controlled by `USE_SUPABASE` flag) |
 | Deployment | Vercel (auto-deploy from `main`, preview from `supabase-migration`) |
-| Dev server | `npm run dev` → **http://localhost:3000** (NEVER 3001) |
+| Dev server | `npm run dev` → **http://localhost:3000** (default; use `npx vite --port <PORT>` if 3000 is busy) |
 | Styling | Inline React styles + CSS variables (dark theme) |
 | Font | Outfit (Google Fonts) |
 
@@ -28,14 +27,14 @@ Do NOT commit, push, or merge unless the user explicitly asks. When they say "me
 ### 2. Hebrew RTL
 All user-facing text in Hebrew. Use `direction: 'rtl'` on containers. Use `gap` not `marginRight` in flex layouts.
 
-### 3. Dual Data Layer
-**Legacy** (`USE_SUPABASE = false`): LocalStorage = database, GitHub Pages = cloud sync. **Supabase** (`USE_SUPABASE = true`): PostgreSQL via `supabaseCache.ts` (in-memory cache that syncs). Feature flag in `src/database/config.ts` controls which path runs. All `storage.ts` functions have `USE_SUPABASE` branches.
+### 3. Supabase-Only Data Layer
+All data goes through `supabaseCache.ts` (in-memory cache that syncs to Supabase PostgreSQL). `storage.ts` delegates to the cache via `cacheGet`/`cacheSet`. There is no localStorage fallback — Supabase is the single source of truth. Realtime subscriptions auto-refresh the cache on remote changes.
 
 ### 4. Inline Styles
 No CSS modules, no styled-components, no Tailwind. Follow existing inline React style patterns.
 
 ### 5. Zero-Sum
-Game profits across all players must always sum to exactly zero.
+Game profits across all players must always sum to exactly zero. Enforced by DB trigger (`check_game_zero_sum`) and client-side validation.
 
 ### 6. Holistic AI Prompts
 Build prompts as one flowing instruction set. NEVER patch prompts with constraints — it degrades quality. Refactor the entire prompt if something needs changing.
@@ -50,10 +49,10 @@ Dev environment is Windows. No bash syntax (`&&`, heredocs, `cat`, `grep`). Use 
 Validate with `npx tsc --noEmit` and ReadLints. For algorithm changes, use `node -e` scripts against `public/full-backup.json`.
 
 ### 10. Roles: 3 Roles, Owner vs Admin Distinction
-Roles are `admin`, `member`, `viewer` (the old `memberSync` role was removed). In Supabase mode, the **owner** (group creator, `groups.created_by`) has extra powers beyond a regular admin — only the owner can modify other admins, transfer ownership, regenerate invite codes, manage API keys, and access training/activity tabs. This is enforced in SQL RPCs via `groups.created_by` checks and in the UI via `isOwner` boolean.
+Roles are `admin`, `member`, `viewer`. The **owner** (group creator, `groups.created_by`) has extra powers beyond a regular admin — only the owner can modify other admins, transfer ownership, regenerate invite codes, manage API keys, and access training/activity tabs. This is enforced in SQL RPCs via `groups.created_by` checks and in the UI via `isOwner` boolean.
 
 ### 11. Per-Group API Keys
-Each group stores its own `gemini_api_key` and `elevenlabs_api_key` in the `settings` table. The client reads keys from group settings and sends them in proxy requests. Vercel Edge Functions check: (1) key from request body, (2) env var fallback, (3) return error. **NEVER hardcode API keys.** Owner manages keys in Settings > AI tab.
+Each group stores its own `gemini_api_key` and `elevenlabs_api_key` in the `settings` table (mapped via `toSettings`/`settingsToRow` in `supabaseCache.ts`). The client reads keys from group settings and sends them in proxy requests. Vercel Edge Functions check: (1) key from request body, (2) env var fallback, (3) return error. **NEVER hardcode API keys.** Owner manages keys in Settings > AI tab.
 
 ## Architecture
 
@@ -63,28 +62,31 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
    (setup)        (play)          (count)           (results + AI)
 ```
 
-### Auth & Group Management (Supabase mode)
+### Auth & Group Management
 - **Login**: Supabase Auth (email/password + Google OAuth) via `AuthScreen.tsx`
 - **Groups**: Create or join via invite code in `GroupSetupScreen.tsx`
-- **Player linking**: After joining, users pick their player name (or self-create) via `PlayerPicker` in `App.tsx`
+- **Player linking**: After joining, users self-create their player name via `PlayerPicker` in `App.tsx`
 - **Roles**: `admin` | `member` | `viewer`. Owner = admin who created the group (`groups.created_by`)
-- **Group management**: Settings > Group tab (`GroupManagementTab.tsx`): member list, role changes, invite code, ownership transfer
-- **SQL RPCs**: `004-group-management.sql` has all RPCs with owner-aware security
+- **Group management**: Settings > Group tab (`GroupManagementTab.tsx`): member list (with emails for admins), role changes, invite code, personal player invites, add by email, ownership transfer
+- **SQL RPCs**: `004-group-management.sql` has 13 RPCs with owner-aware security
 - **Hook**: `src/hooks/useSupabaseAuth.ts` exposes all auth + group management functions
-
-### Auth (Legacy mode)
-PIN-based. 3 roles: admin (2351), member (2580), viewer (9876). Stored in sessionStorage.
 
 ### AI Pipeline
 Admin generates → stored in Supabase → all group members see it via cache. All AI functions in `src/utils/geminiAI.ts`.
 API calls go through `src/utils/apiProxy.ts` → Vercel Edge Functions (`api/*.ts`) → Google/ElevenLabs. Keys flow: group settings → client → proxy request body → upstream API.
 
-### Cloud Sync (Supabase mode)
-Direct DB reads/writes through `supabaseCache.ts`. RLS policies enforce group isolation. Supabase Realtime subscriptions on 11 tables auto-refresh the cache (500ms debounce). Screens use `useRealtimeRefresh` hook for live updates.
+### Data Sync
+Direct DB reads/writes through `supabaseCache.ts`. RLS policies enforce group isolation. Supabase Realtime subscriptions on 13 tables auto-refresh the cache (500ms debounce). Screens use `useRealtimeRefresh` hook for live updates.
+
+### Login Performance (Deferred Cache Loading)
+`initSupabaseCache` uses a 3-phase approach for fast startup:
+- **Phase 1**: Essential group tables (players, games, settings, chips) — parallel
+- **Phase 2**: Child tables by game_id in batches of 100 (game_players, expenses, forecasts, settlements, markers)
+- **Phase 3 (deferred)**: Non-essential data (chronicles, graph_insights, tts_pools) loads in background after UI renders. Dispatches `supabase-cache-updated` event so screens auto-refresh when deferred data arrives.
 
 ### Activity Tracking
 Silent tracking of non-admin sessions. Device fingerprint + screens visited + duration.
-**Supabase**: `activity_log` table with `group_id` isolation. Owner views in Settings > Activity tab.
+`activity_log` table with `group_id` isolation. Owner views in Settings > Activity tab.
 
 ## File Map
 
@@ -92,14 +94,14 @@ Silent tracking of non-admin sessions. Device fingerprint + screens visited + du
 |------|-------|
 | **Entry** | `src/main.tsx`, `src/App.tsx` (routing, auth, PlayerPicker, PermissionContext) |
 | **Types** | `src/types/index.ts` (ALL interfaces including Settings with API key fields) |
-| **Auth** | `src/permissions.ts` (3 roles: admin/member/viewer), `src/hooks/useSupabaseAuth.ts` (Supabase auth + group mgmt), `src/components/PinLock.tsx` (legacy) |
+| **Auth** | `src/permissions.ts` (3 roles: admin/member/viewer), `src/hooks/useSupabaseAuth.ts` (Supabase auth + group mgmt + `GroupMember` with email), `src/hooks/useRealtimeRefresh.ts` (cache-updated event listener) |
 | **Group Mgmt** | `src/components/GroupManagementTab.tsx`, `src/screens/GroupSetupScreen.tsx`, `src/screens/AuthScreen.tsx` |
-| **Storage** | `src/database/storage.ts` (dual: localStorage OR supabaseCache) |
-| **Supabase** | `src/database/supabaseClient.ts`, `src/database/supabaseCache.ts`, `src/database/config.ts`, `src/database/migrateToSupabase.ts` |
+| **Storage** | `src/database/storage.ts` (delegates to supabaseCache) |
+| **Supabase** | `src/database/supabaseClient.ts`, `src/database/supabaseCache.ts`, `src/database/migrateToSupabase.ts` (one-time migration + chip repair) |
 | **AI** | `src/utils/geminiAI.ts`, `src/utils/apiProxy.ts` (proxy with per-group key support), `src/utils/tts.ts` |
 | **API Routes** | `api/gemini.ts`, `api/gemini-models.ts`, `api/elevenlabs-tts.ts`, `api/elevenlabs-usage.ts`, `api/_auth.ts` (JWT verification) |
 | **Screens** | `src/screens/*.tsx` (12+ screen components) |
-| **SQL** | `supabase/schema.sql` (20 tables), `supabase/002-auth-support.sql`, `supabase/004-group-management.sql` (RPCs with owner security) |
+| **SQL** | `supabase/schema.sql` (20 tables), `supabase/002-auth-support.sql`, `supabase/004-group-management.sql` (RPCs), `supabase/005-security-hardening.sql`, `supabase/006-supabase-improvements.sql` |
 | **Config** | `vite.config.ts`, `tsconfig.json`, `vercel.json` |
 
 ## Group Management Security Model
@@ -117,6 +119,7 @@ Silent tracking of non-admin sessions. Device fingerprint + screens visited + du
 | Training/Activity tabs | Owner only | UI: `isOwner` gate + RLS |
 | Delete player with games | Nobody | UI: `playerHasGames()` check blocks delete |
 | Link to already-linked player | Nobody | Partial unique index + RPC check |
+| View member emails | Admin only | `fetch_group_members_with_email` RPC (joins `auth.users`) |
 
 ## User Preferences
 

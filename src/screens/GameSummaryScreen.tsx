@@ -11,8 +11,10 @@ import { speakHebrew, hebrewNum } from '../utils/tts';
 import { usePermissions } from '../App';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
+import { useTranslation } from '../i18n';
 
 const GameSummaryScreen = () => {
+  const { t, isRTL } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -97,8 +99,14 @@ const GameSummaryScreen = () => {
   const isSettlementPaid = (from: string, to: string) =>
     paidSettlements.some(p => p.from === from && p.to === to);
 
+  const canToggleSettlement = (from: string, to: string) => {
+    if (role === 'admin') return true;
+    return identityName === from || identityName === to;
+  };
+
   const toggleSettlementPaid = (from: string, to: string) => {
     if (!gameId) return;
+    if (!canToggleSettlement(from, to)) return;
     let updated: Game['paidSettlements'];
     if (isSettlementPaid(from, to)) {
       updated = paidSettlements.filter(p => !(p.from === from && p.to === to));
@@ -253,7 +261,7 @@ const GameSummaryScreen = () => {
     const combo = getComboHistory(comboPlayerIds);
     setComboHistory(combo);
 
-    // Pre-load shared data once to avoid repeated localStorage parsing
+    // Pre-load shared data once to avoid repeated cache lookups
     const cachedAllGames = getAllGames();
     const cachedAllGP = getAllGamePlayers();
 
@@ -612,7 +620,9 @@ const GameSummaryScreen = () => {
     const gameYear = actualGameDate.getFullYear();
     const halfStart = new Date(gameYear, gameMonth <= 6 ? 0 : 6, 1);
     const halfEnd = new Date(gameYear, gameMonth <= 6 ? 6 : 12, 0, 23, 59, 59);
-    const halfLabel = formatHebrewHalf(gameMonth <= 6 ? 1 : 2, gameYear);
+    const halfNum = gameMonth <= 6 ? 1 : 2;
+    const halfLabel = formatHebrewHalf(halfNum, gameYear);
+    const halfLabelDisplay = isRTL ? halfLabel : `H${halfNum} ${gameYear}`;
 
     const halfStats = getPlayerStats({ start: halfStart, end: halfEnd });
     const allPlayers = getAllPlayers();
@@ -636,7 +646,7 @@ const GameSummaryScreen = () => {
       .sort((a, b) => b.totalProfit - a.totalProfit);
 
     setStandingsData(activeStats);
-    setStandingsLabel(halfLabel);
+    setStandingsLabel(halfLabelDisplay);
 
     // Compute previous rankings (before this game) for ranking change indicators
     const thisGameProfitMap = new Map<string, number>();
@@ -657,6 +667,7 @@ const GameSummaryScreen = () => {
 
     // Monthly summary table — primary: user confirmed at game creation; fallback: history-based
     const hebrewMonths = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const enMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const gameMonthIdx = actualGameDate.getMonth();
     const isLastGameOfMonth = gameYear >= 2026 && (
       game.periodMarkers?.isLastGameOfMonth ??
@@ -685,7 +696,7 @@ const GameSummaryScreen = () => {
           .filter(s => s.gamesPlayed >= mThreshold || tonightPlayerIds.has(s.playerId))
           .sort((a, b) => b.totalProfit - a.totalProfit);
         setMonthlyStats(activeMonthly);
-        setMonthLabel(hebrewMonths[gameMonthIdx]);
+        setMonthLabel(isRTL ? hebrewMonths[gameMonthIdx] : enMonths[gameMonthIdx]);
       } else {
         setMonthlyStats([]);
       }
@@ -848,11 +859,6 @@ const GameSummaryScreen = () => {
           setAiSummaryError(null);
           saveGameAiSummary(game.id, result.text, modelDisplay);
           if (shouldAutoGenerate) {
-            try {
-              const { syncToCloud } = await import('../database/githubSync');
-              await syncToCloud();
-              console.log('Background: synced after auto AI summary');
-            } catch (e) { console.warn('Background sync failed:', e); }
             import('../utils/backgroundAI').then(({ regenerateAIInBackground }) => {
               regenerateAIInBackground();
             }).catch(() => {});
@@ -862,11 +868,11 @@ const GameSummaryScreen = () => {
           console.error('AI summary generation failed:', err);
           const msg = err?.message || String(err);
           if (msg.includes('quota') || msg.includes('429') || msg.includes('rate')) {
-            setAiSummaryError('מכסת ה-AI נגמרה. נסה שוב מאוחר יותר');
+            setAiSummaryError(t('summary.aiQuotaError'));
           } else if (msg.includes('NO_API_KEY')) {
-            setAiSummaryError('מפתח Gemini לא מוגדר. הוסף אותו בהגדרות');
+            setAiSummaryError(t('summary.noKeyError'));
           } else {
-            setAiSummaryError('שגיאה ביצירת הסיכום. נסה שוב');
+            setAiSummaryError(t('summary.aiGenError'));
           }
         })
         .finally(() => {
@@ -965,7 +971,7 @@ const GameSummaryScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
-        <p className="text-muted">Loading summary...</p>
+        <p className="text-muted">{t('summary.loading')}</p>
       </div>
     );
   }
@@ -975,9 +981,9 @@ const GameSummaryScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('summary.gameNotFound')}</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{t('summary.gameNotFoundDesc')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('summary.goHome')}</button>
       </div>
     );
   }
@@ -1082,15 +1088,15 @@ const GameSummaryScreen = () => {
         className="btn btn-sm btn-secondary mb-2"
         onClick={navigateBack}
       >
-        ← {cameFromRecords ? 'Back to Records' : cameFromStatistics ? 'Back to Statistics' : cameFromChipEntry ? 'Home' : 'Back to History'}
+        {isRTL ? '→' : '←'} {cameFromRecords ? t('summary.backToRecords') : cameFromStatistics ? t('summary.backToStatistics') : cameFromChipEntry ? t('summary.backHome') : t('summary.backToHistory')}
       </button>
 
       {/* Results Section - for screenshot */}
       <div ref={summaryRef} style={{ padding: '0.75rem', background: '#1a1a2e' }}>
         <div className="page-header">
-          <h1 className="page-title">🃏 Poker Night</h1>
+          <h1 className="page-title">{t('summary.title')}</h1>
           <p className="page-subtitle">
-            {new Date(gameDate).toLocaleDateString('en-US', { 
+            {new Date(gameDate).toLocaleDateString(isRTL ? 'he-IL' : 'en-US', { 
               weekday: 'long', 
               month: 'short', 
               day: 'numeric' 
@@ -1100,25 +1106,25 @@ const GameSummaryScreen = () => {
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>Results</h2>
+            <h2 className="card-title" style={{ margin: 0 }}>{t('summary.results')}</h2>
             <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-              Total Buyins: <span style={{ color: '#f8fafc', fontWeight: '600' }}>{players.reduce((sum, p) => sum + p.rebuys, 0)}</span>
+              {t('summary.totalBuyins')} <span style={{ color: '#f8fafc', fontWeight: '600' }}>{players.reduce((sum, p) => sum + p.rebuys, 0)}</span>
             </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ fontSize: '0.9rem' }}>
               <thead>
                 <tr>
-                  <th>Player</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Chips</th>
-                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>Buyins</th>
-                  <th style={{ textAlign: 'right' }}>+/-</th>
+                  <th style={{ textAlign: isRTL ? 'right' : 'left' }}>{t('summary.playerCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>{t('summary.chipsCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.5rem 0.25rem' }}>{t('summary.buyinsCol')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('summary.profitCol')}</th>
                 </tr>
               </thead>
               <tbody>
                 {players.map((player, index) => (
                   <tr key={player.id} style={highlightName && player.playerName === highlightName ? { background: '#243a5e' } : undefined}>
-                    <td style={{ ...(highlightName && player.playerName === highlightName ? { color: '#60a5fa', borderLeft: '3px solid #3b82f6' } : { borderLeft: '3px solid transparent' }) }}>
+                    <td style={{ ...(highlightName && player.playerName === highlightName ? { color: '#60a5fa', borderInlineStart: '3px solid #3b82f6' } : { borderInlineStart: '3px solid transparent' }) }}>
                       {player.playerName}
                       {index === 0 && player.profit > 0 && ' 🥇'}
                       {index === 1 && player.profit > 0 && ' 🥈'}
@@ -1130,7 +1136,7 @@ const GameSummaryScreen = () => {
                     <td style={{ textAlign: 'center', padding: '0.5rem 0.25rem', color: '#94a3b8' }}>
                       {player.rebuys}
                     </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap', color: player.profit > 0 ? '#22c55e' : player.profit < 0 ? '#ef4444' : '#94a3b8' }}>
+                    <td style={{ direction: 'ltr', textAlign: 'right', whiteSpace: 'nowrap', color: player.profit > 0 ? '#22c55e' : player.profit < 0 ? '#ef4444' : '#94a3b8' }}>
                       {player.profit >= 0 ? '\u200E+' : ''}{formatCurrency(player.profit)}
                     </td>
                   </tr>
@@ -1145,20 +1151,22 @@ const GameSummaryScreen = () => {
               padding: '0.75rem', 
               background: '#2a2518', 
               borderRadius: '8px',
-              borderLeft: '3px solid #f59e0b'
+              borderInlineStart: '3px solid #f59e0b'
             }}>
               <div style={{ fontSize: '0.875rem', color: '#f59e0b', fontWeight: '600' }}>
-                ⚠️ Chip Count Adjustment
+                {t('summary.adjustment')}
               </div>
               <div style={{ fontSize: '0.875rem', marginTop: '0.25rem', color: '#94a3b8' }}>
                 {chipGap > 0 ? (
-                  <>Counted {cleanNumber(chipGap)} more than expected (extra chips)</>
+                  <>{t('summary.overCounted', { amount: cleanNumber(chipGap) })}</>
                 ) : (
-                  <>Counted {cleanNumber(Math.abs(chipGap))} less than expected (missing chips)</>
+                  <>{t('summary.underCounted', { amount: cleanNumber(Math.abs(chipGap)) })}</>
                 )}
               </div>
               <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                Adjusted {chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}{cleanNumber(Math.abs(chipGapPerPlayer || 0))} per player to balance
+                {t('summary.adjustedPerPlayer', {
+                  amount: `${chipGapPerPlayer && chipGapPerPlayer > 0 ? '-' : '+'}${cleanNumber(Math.abs(chipGapPerPlayer || 0))}`,
+                })}
               </div>
             </div>
           )}
@@ -1170,7 +1178,7 @@ const GameSummaryScreen = () => {
         <div ref={(el) => { (settlementsRef as React.MutableRefObject<HTMLDivElement | null>).current = el; (settlementsSectionRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('settlements')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.settlements ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.settlements')} {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.settlements && (<>
@@ -1178,13 +1186,13 @@ const GameSummaryScreen = () => {
                 const iOwe = identityName && settlements.some(s => s.from === identityName && !isSettlementPaid(s.from, s.to));
                 const iReceive = identityName && settlements.some(s => s.to === identityName && !isSettlementPaid(s.from, s.to));
                 if (iOwe) return (
-                  <div style={{ direction: 'rtl', fontSize: '0.75rem', color: '#3b82f6', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: '#1e2d45', borderRadius: '6px', textAlign: 'center' }}>
-                    יש לך תשלום — לחץ על <strong>שלם</strong> בשורה שלך
+                  <div style={{ fontSize: '0.75rem', color: '#3b82f6', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: '#1e2d45', borderRadius: '6px', textAlign: 'center' }}>
+                    {t('summary.payPrompt')}
                   </div>
                 );
                 if (iReceive) return (
-                  <div style={{ direction: 'rtl', fontSize: '0.75rem', color: '#94a3b8', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: '#1f2b3d', borderRadius: '6px', textAlign: 'center' }}>
-                    ממתין לתשלומים אליך
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', padding: '0.3rem 0.5rem', marginBottom: '0.4rem', background: '#1f2b3d', borderRadius: '6px', textAlign: 'center' }}>
+                    {t('summary.waitingPayments')}
                   </div>
                 );
                 return null;
@@ -1194,7 +1202,7 @@ const GameSummaryScreen = () => {
                 const iAmFrom = identityName && s.from === identityName;
                 const iAmTo = identityName && s.to === identityName;
                 const isMySettlement = iAmFrom || iAmTo;
-                const isClickable = iAmFrom && !paid;
+                const isClickable = !paid && canToggleSettlement(s.from, s.to);
                 return (
                   <div
                     key={index}
@@ -1233,7 +1241,7 @@ const GameSummaryScreen = () => {
                             setPaymentModal({ from: s.from, to: s.to, amount: s.amount });
                           }}
                         >
-                          💳 שלם
+                          {t('summary.pay')}
                         </button>
                       )}
                       <span className="settlement-amount" style={{ textDecoration: paid ? 'line-through' : undefined, marginLeft: 0 }}>
@@ -1254,16 +1262,16 @@ const GameSummaryScreen = () => {
                     <div key={idx} style={{ 
                       fontSize: '0.75rem', 
                       color: '#94a3b8',
-                      direction: 'rtl',
+                      direction: isRTL ? 'rtl' : 'ltr',
                       marginBottom: idx < sharedExpenses.length - 1 ? '0.4rem' : 0
                     }}>
                       <div>
                         <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - {cleanNumber(expense.amount)}
                       </div>
                       <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
-                        שילם: <span style={{ color: '#6366f1' }}>{expense.paidByName}</span>
+                        {t('summary.paid')} <span style={{ color: '#6366f1' }}>{expense.paidByName}</span>
                         {' • '}
-                        אכלו: {expense.participantNames.join(', ')}
+                        {t('summary.paidTo')} {expense.participantNames.join(', ')}
                       </div>
                     </div>
                   ))}
@@ -1274,9 +1282,9 @@ const GameSummaryScreen = () => {
 
           {!collapsedSections.settlements && skippedTransfers.length > 0 && (
             <div className="card">
-              <h2 className="card-title mb-2">💡 Small Amounts</h2>
+              <h2 className="card-title mb-2">{t('summary.smallAmounts')}</h2>
               <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
-                Payments below {cleanNumber(getSettings().minTransfer)} are not mandatory
+                {t('summary.smallAmountsDesc', { amount: cleanNumber(getSettings().minTransfer) })}
               </p>
               {skippedTransfers.map((s, index) => (
                 <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
@@ -1296,7 +1304,7 @@ const GameSummaryScreen = () => {
         <div ref={forecastCompareRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('forecast')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.forecast ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>🎯 Forecast vs Reality</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.forecastVsReality')}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.forecast ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             
@@ -1326,10 +1334,10 @@ const GameSummaryScreen = () => {
             }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #475569' }}>
-                  <th style={{ textAlign: 'left', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>Player</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>Fcst</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>Real</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>Gap</th>
+                  <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>{t('summary.playerCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>{t('summary.forecastCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>{t('summary.realCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', fontSize: '0.7rem', color: '#94a3b8' }}>{t('summary.gapCol')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1403,10 +1411,9 @@ const GameSummaryScreen = () => {
                   gap: '1rem',
                   fontSize: '0.75rem',
                   color: '#94a3b8',
-                  direction: 'rtl'
                 }}>
-                  <span>🎯 כיוון: <span style={{ color: dirHits >= matched.length * 0.6 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{dirHits}/{matched.length}</span></span>
-                  <span>📊 פער ממוצע: <span style={{ color: avgGap <= 40 ? '#22c55e' : avgGap <= 70 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>{avgGap}</span></span>
+                  <span>{t('summary.direction')} <span style={{ color: dirHits >= matched.length * 0.6 ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{dirHits}/{matched.length}</span></span>
+                  <span>{t('summary.avgGap')} <span style={{ color: avgGap <= 40 ? '#22c55e' : avgGap <= 70 ? '#f59e0b' : '#ef4444', fontWeight: 600 }}>{avgGap}</span></span>
                 </div>
               );
             })()}
@@ -1417,16 +1424,15 @@ const GameSummaryScreen = () => {
               padding: '0.5rem', 
               background: '#231e35',
               borderRadius: '6px',
-              borderRight: '3px solid #a855f7',
+              borderInlineStart: '3px solid #a855f7',
               fontSize: '0.8rem',
               color: '#f8fafc',
-              direction: 'rtl',
               textAlign: 'center',
               minHeight: '2rem'
             }}>
-              {isLoadingComment && <><span style={{ color: '#a855f7' }}>🤖 Summarizing...</span><AIProgressBar operationKey="forecast_comparison" /></>}
+              {isLoadingComment && <><span style={{ color: '#a855f7' }}>{t('summary.summarizing')}</span><AIProgressBar operationKey="forecast_comparison" /></>}
               {forecastComment && !isLoadingComment && <span>🤖 {forecastComment}</span>}
-              {!forecastComment && !isLoadingComment && <span style={{ color: '#94a3b8' }}>🤖 No summary available</span>}
+              {!forecastComment && !isLoadingComment && <span style={{ color: '#94a3b8' }}>{t('summary.noSummary')}</span>}
             </div>
             </>)}
           </div>
@@ -1451,12 +1457,12 @@ const GameSummaryScreen = () => {
                 color: 'var(--text)',
               }}
             >
-              <h2 className="card-title" style={{ margin: 0 }}>🔮 Pre-Game Forecast</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.preGameForecast')}</h2>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', transform: showHistoricalForecast ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
 
             {showHistoricalForecast && (
-              <div style={{ paddingTop: '0.5rem', direction: 'rtl' }}>
+              <div style={{ paddingTop: '0.5rem', direction: isRTL ? 'rtl' : 'ltr' }}>
                 {preGameTeaser && (
                   <div style={{
                     padding: '0.85rem 1rem',
@@ -1464,11 +1470,11 @@ const GameSummaryScreen = () => {
                     borderRadius: '12px',
                     background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10))',
                     border: '1px solid rgba(139, 92, 246, 0.35)',
-                    textAlign: 'right',
+                    textAlign: isRTL ? 'right' : 'left',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.4rem', justifyContent: 'center' }}>
                       <span style={{ fontSize: '1rem' }}>🎙️</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa' }}>טיזר המשחק</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa' }}>{t('summary.teaserTitle')}</span>
                     </div>
                     <div style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: 1.6 }}>{preGameTeaser}</div>
                   </div>
@@ -1481,7 +1487,7 @@ const GameSummaryScreen = () => {
                     borderRadius: '8px',
                     background: 'rgba(255,255,255,0.03)',
                     border: '1px solid rgba(255,255,255,0.06)',
-                    textAlign: 'right',
+                    textAlign: isRTL ? 'right' : 'left',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: forecast.expectedProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
@@ -1508,7 +1514,7 @@ const GameSummaryScreen = () => {
         <div ref={expenseSettlementsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('expenses')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.expenses ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>🍕 Shared Expenses</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.sharedExpenses')}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.expenses ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             
@@ -1527,7 +1533,11 @@ const GameSummaryScreen = () => {
                     <span>{cleanNumber(expense.amount)}</span>
                   </div>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                    {expense.paidByName} paid • {expense.participantNames.length} participants • {cleanNumber(expense.participants.length > 0 ? expense.amount / expense.participants.length : 0)} each
+                    {t('summary.expensePaid', {
+                      name: expense.paidByName,
+                      participants: expense.participantNames.length,
+                      amount: cleanNumber(expense.participants.length > 0 ? expense.amount / expense.participants.length : 0),
+                    })}
                   </div>
                 </div>
               ))}
@@ -1541,7 +1551,7 @@ const GameSummaryScreen = () => {
               borderRadius: '6px',
               textAlign: 'center',
             }}>
-              <span style={{ color: '#94a3b8' }}>Total: </span>
+              <span style={{ color: '#94a3b8' }}>{t('summary.expenseTotal')}</span>
               <span style={{ fontWeight: '600', color: '#f59e0b' }}>{cleanNumber(totalExpenseAmount)}</span>
             </div>
             
@@ -1553,7 +1563,7 @@ const GameSummaryScreen = () => {
               textAlign: 'center',
               fontStyle: 'italic',
             }}>
-              ✓ Included in settlements above (combined with poker)
+              {t('summary.expenseIncluded')}
             </div>
             </>)}
           </div>
@@ -1565,7 +1575,7 @@ const GameSummaryScreen = () => {
         <div ref={funStatsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? '🎭 Game Night Summary' : '🎭 Game Highlights'}</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? t('summary.nightSummary') : t('summary.highlights')}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.aiSummary && role === 'admin' && aiSummary && (
@@ -1575,7 +1585,7 @@ const GameSummaryScreen = () => {
                   style={{ background: '#2a1f3d', color: '#A855F7', border: '1px solid #4a2f6e', fontSize: '0.7rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
                   onClick={() => handleRegenerateAiSummary()}
                 >
-                  🔄 Regenerate
+                  {t('summary.regenerate')}
                 </span>
               </div>
             )}
@@ -1586,29 +1596,33 @@ const GameSummaryScreen = () => {
                   style={{ background: 'linear-gradient(135deg, #A855F7, #EC4899)', color: 'white', fontSize: '0.7rem', padding: '0.2rem 0.5rem', cursor: 'pointer' }}
                   onClick={() => handleRegenerateAiSummary()}
                 >
-                  ✨ Generate AI Summary
+                  {t('summary.generateAI')}
                 </span>
+              </div>
+            )}
+            {!collapsedSections.aiSummary && !aiSummary && !isLoadingAiSummary && !getGeminiApiKey() && (
+              <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                {role === 'admin' ? '🔑 הגדר מפתח Gemini בהגדרות > AI כדי להפעיל סיכומים' : 'סיכום AI לא זמין — פנה למנהל הקבוצה'}
               </div>
             )}
             {!collapsedSections.aiSummary && (
               <>
                 {aiSummary ? (
                   <div style={{
-                    direction: 'rtl',
                     fontSize: '0.85rem',
                     lineHeight: 1.8,
                     color: '#f8fafc',
                     padding: '0.75rem',
                     background: '#211e35',
                     borderRadius: '8px',
-                    borderRight: '3px solid #6366f1',
+                    borderInlineStart: '3px solid #6366f1',
                     wordBreak: 'break-word',
                     overflowWrap: 'break-word',
                   }}>
                     {aiSummary.split('\n').filter(line => line.trim()).map((paragraph, i) => (
                       <p key={i} style={{
                         margin: i === 0 ? 0 : '0.75rem 0 0 0',
-                        textAlign: 'right',
+                        textAlign: isRTL ? 'right' : 'left',
                       }}>
                         {paragraph}
                       </p>
@@ -1621,21 +1635,19 @@ const GameSummaryScreen = () => {
                   </div>
                 ) : isLoadingAiSummary ? (
                   <div style={{
-                    direction: 'rtl',
                     textAlign: 'center',
                     padding: '1.5rem',
                     color: '#94a3b8',
                     fontSize: '0.85rem',
                   }}>
                     <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>✍️</div>
-                    Generating summary...
+                    {t('summary.generating')}
                     <AIProgressBar operationKey="game_summary" />
                   </div>
                 ) : (
                   <>
                     {aiSummaryError && (
                       <div style={{
-                        direction: 'rtl',
                         padding: '0.6rem 0.75rem',
                         marginBottom: '0.5rem',
                         background: '#2d1f1f',
@@ -1659,7 +1671,6 @@ const GameSummaryScreen = () => {
                             padding: '0.4rem 0.5rem',
                             background: '#1f2b3d',
                             borderRadius: '6px',
-                            direction: 'rtl',
                           }}
                         >
                           <span style={{ fontSize: '0.95rem', flexShrink: 0, lineHeight: 1.4 }}>{stat.emoji}</span>
@@ -1692,15 +1703,15 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('combo')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.combo ? 0 : '0.75rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>
-                {comboHistory.isFirstTime ? '🆕 New Combo' : '🔄 Returning Combo'}
+                {comboHistory.isFirstTime ? t('summary.newCombo') : t('summary.returningCombo')}
               </h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.combo ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
 
             {!collapsedSections.combo && (comboHistory.isFirstTime ? (
               <div style={{
-                direction: 'rtl',
-                textAlign: 'right',
+                direction: isRTL ? 'rtl' : 'ltr',
+                textAlign: isRTL ? 'right' : 'left',
                 fontSize: '0.85rem',
                 color: '#e2e8f0',
                 padding: '0.75rem',
@@ -1711,7 +1722,7 @@ const GameSummaryScreen = () => {
                 זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה שיחקו יחד!
               </div>
             ) : (
-              <div style={{ direction: 'rtl', textAlign: 'right' }}>
+              <div style={{ direction: isRTL ? 'rtl' : 'ltr', textAlign: isRTL ? 'right' : 'left' }}>
                 <div style={{
                   fontSize: '0.85rem',
                   color: '#fbbf24',
@@ -1753,7 +1764,7 @@ const GameSummaryScreen = () => {
                           color: ps.totalProfit > 0 ? '#22c55e' : ps.totalProfit < 0 ? '#ef4444' : '#94a3b8',
                           fontSize: '0.78rem',
                           minWidth: '3.5rem',
-                          textAlign: 'left',
+                          textAlign: 'start',
                         }}>
                           {ps.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(ps.totalProfit)}
                         </span>
@@ -1833,7 +1844,7 @@ const GameSummaryScreen = () => {
         <div ref={monthlyRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('monthly')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.monthly ? 0 : '0.5rem' }}>
-              <h2 className="card-title" style={{ margin: 0 }}>📅 סיכום חודש {monthLabel}</h2>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.monthSummary', { month: monthLabel })}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.monthly && (<>
@@ -1845,17 +1856,17 @@ const GameSummaryScreen = () => {
               paddingBottom: '0.3rem',
               borderBottom: '1px solid #475569',
             }}>
-              <span>📊 {monthlyStats.reduce((max, s) => Math.max(max, s.gamesPlayed), 0)} games this month</span>
+              <span>{t('summary.gamesThisMonth', { count: monthlyStats.reduce((max, s) => Math.max(max, s.gamesPlayed), 0) })}</span>
             </div>
             <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #475569' }}>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left', color: '#94a3b8' }}>#</th>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left', color: '#94a3b8' }}>Player</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Profit</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Avg</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>G</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>W%</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: isRTL ? 'right' : 'left', color: '#94a3b8' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left', color: '#94a3b8' }}>{t('stats.playerCol')}</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.profitCol')}</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.avgCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.gamesCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.winRateCol')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1867,7 +1878,7 @@ const GameSummaryScreen = () => {
                       borderBottom: '1px solid #252f3f',
                       background: isMe ? '#243d64' : isInThisGame ? '#2d3055' : undefined,
                     }}>
-                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc', borderLeft: isMe ? '3px solid #3b82f6' : isInThisGame ? '3px solid #554399' : '3px solid transparent' }}>
+                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc', borderInlineStart: isMe ? '3px solid #3b82f6' : isInThisGame ? '3px solid #554399' : '3px solid transparent' }}>
                         {index + 1}
                         {index === 0 && ' 🥇'}
                         {index === 1 && ' 🥈'}
@@ -1924,7 +1935,7 @@ const GameSummaryScreen = () => {
         <div ref={standingsRef} style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div style={{ padding: '0.75rem', background: '#1e293b', borderRadius: '12px', border: '1px solid #475569' }}>
             <button onClick={() => toggleSection('standings')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.standings ? 0 : '0.5rem' }}>
-              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>🏆 Updated Standings — {standingsLabel}</h2>
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{t('summary.updatedStandings', { period: standingsLabel })}</h2>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
             </button>
             {!collapsedSections.standings && (<>
@@ -1940,7 +1951,7 @@ const GameSummaryScreen = () => {
               alignItems: 'center',
               gap: '0.75rem',
             }}>
-              <span>📊 Active players • Including latest game</span>
+              <span>{t('summary.activePlayers')}</span>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1954,18 +1965,18 @@ const GameSummaryScreen = () => {
                   background: '#3b3560',
                   border: '1px solid #554399',
                 }} />
-                Played tonight
+                {t('summary.playedTonight')}
               </span>
             </div>
             <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', color: '#f8fafc' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #475569' }}>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: 'left', color: '#94a3b8' }}>#</th>
-                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left', color: '#94a3b8' }}>Player</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Profit</th>
-                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>Avg</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>G</th>
-                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>W%</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: isRTL ? 'right' : 'left', color: '#94a3b8' }}>#</th>
+                  <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left', color: '#94a3b8' }}>{t('stats.playerCol')}</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.profitCol')}</th>
+                  <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.avgCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.gamesCol')}</th>
+                  <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>{t('stats.winRateCol')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1981,17 +1992,17 @@ const GameSummaryScreen = () => {
                       borderBottom: '1px solid #252f3f',
                       background: isMe ? '#243d64' : isInThisGame ? '#2d3055' : undefined,
                     }}>
-                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc', borderLeft: isMe ? '3px solid #3b82f6' : isInThisGame ? '3px solid #554399' : '3px solid transparent' }}>
+                      <td style={{ padding: '0.25rem 0.2rem', whiteSpace: 'nowrap', color: '#f8fafc', borderInlineStart: isMe ? '3px solid #3b82f6' : isInThisGame ? '3px solid #554399' : '3px solid transparent' }}>
                         <span>{currentRank}</span>
                         {index === 0 && ' 🥇'}
                         {index === 1 && ' 🥈'}
                         {index === 2 && ' 🥉'}
                         {isNewEntry ? (
-                          <span style={{ fontSize: '0.55rem', color: '#60a5fa', marginLeft: '0.2rem', fontWeight: 700 }}>NEW</span>
+                          <span style={{ fontSize: '0.55rem', color: '#60a5fa', marginInlineStart: '0.2rem', fontWeight: 700 }}>{t('summary.newEntry')}</span>
                         ) : rankDiff > 0 ? (
-                          <span style={{ fontSize: '0.6rem', color: '#22c55e', marginLeft: '0.15rem' }}>▲{rankDiff}</span>
+                          <span style={{ fontSize: '0.6rem', color: '#22c55e', marginInlineStart: '0.15rem' }}>▲{rankDiff}</span>
                         ) : rankDiff < 0 ? (
-                          <span style={{ fontSize: '0.6rem', color: '#ef4444', marginLeft: '0.15rem' }}>▼{Math.abs(rankDiff)}</span>
+                          <span style={{ fontSize: '0.6rem', color: '#ef4444', marginInlineStart: '0.15rem' }}>▼{Math.abs(rankDiff)}</span>
                         ) : null}
                       </td>
                       <td style={{
@@ -2053,14 +2064,14 @@ const GameSummaryScreen = () => {
       {/* Action buttons - outside the screenshot area */}
       <div className="actions mt-3" style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
         <button className="btn btn-secondary btn-lg" onClick={navigateBack}>
-          {cameFromRecords ? '📊 Records' : cameFromStatistics ? '📈 Statistics' : cameFromChipEntry ? '🏠 Home' : '📜 History'}
+          {cameFromRecords ? t('summary.records') : cameFromStatistics ? t('summary.stats') : cameFromChipEntry ? t('summary.home') : t('summary.historyLink')}
         </button>
         <button 
           className="btn btn-primary btn-lg" 
           onClick={handleShare}
           disabled={isSharing || isLoadingAiSummary}
         >
-          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ Waiting for summary...' : '📤 Share'}
+          {isSharing ? '📸 Capturing...' : isLoadingAiSummary ? '✍️ Waiting for summary...' : t('summary.shareResults')}
         </button>
       </div>
 
@@ -2073,16 +2084,16 @@ const GameSummaryScreen = () => {
               style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.75rem' }}
               onClick={() => setShowReopenConfirm(true)}
             >
-              🔄 Re-open Chip Entry
+              {t('summary.reopenChips')}
             </button>
           ) : (
             <div style={{ textAlign: 'center', padding: '0.75rem', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-              <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginBottom: '0.5rem', direction: 'rtl' }}>
-                פעולה זו תפתח מחדש את ספירת הצ׳יפים. הסיכום וה-AI יאופסו.
+              <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginBottom: '0.5rem' }}>
+                {t('summary.reopenWarning')}
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                <button className="btn btn-sm btn-secondary" onClick={() => setShowReopenConfirm(false)}>ביטול</button>
-                <button className="btn btn-sm" style={{ background: '#f59e0b', color: 'white' }} onClick={handleReopenChipEntry}>אישור</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowReopenConfirm(false)}>{t('common.cancel')}</button>
+                <button className="btn btn-sm" style={{ background: '#f59e0b', color: 'white' }} onClick={handleReopenChipEntry}>{t('common.confirm')}</button>
               </div>
             </div>
           )}
@@ -2103,12 +2114,12 @@ const GameSummaryScreen = () => {
           <div
             style={{
               background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
-              maxWidth: '320px', width: '100%', direction: 'rtl', textAlign: 'center',
+              maxWidth: '320px', width: '100%', direction: isRTL ? 'rtl' : 'ltr', textAlign: 'center',
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)' }}>
-              {paymentModal.from} ← {paymentModal.to}
+            <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)', direction: 'ltr' }}>
+              {paymentModal.from} → {paymentModal.to}
             </div>
             <button
               onClick={() => copyAmount(paymentModal.amount)}
@@ -2127,11 +2138,11 @@ const GameSummaryScreen = () => {
                 {cleanNumber(paymentModal.amount)}
               </div>
               <div style={{ fontSize: '0.65rem', color: amountCopied ? 'var(--success)' : 'var(--text-muted)', fontWeight: amountCopied ? '600' : '400' }}>
-                {amountCopied ? '✅ הסכום הועתק!' : '📋 לחץ להעתקת הסכום'}
+                {amountCopied ? t('summary.paymentCopied') : t('summary.copyAmount')}
               </div>
             </button>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.75rem', direction: 'rtl' }}>
-              העתיקו את הסכום והדביקו באפליקציית התשלום
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              {t('summary.copyInstructions')}
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -2169,7 +2180,7 @@ const GameSummaryScreen = () => {
                 marginBottom: '0.5rem',
               }}
             >
-              {isSettlementPaid(paymentModal.from, paymentModal.to) ? '↩️ סמן כלא שולם' : '✅ סמן כשולם'}
+              {isSettlementPaid(paymentModal.from, paymentModal.to) ? t('summary.markUnpaid') : t('summary.markPaid')}
             </button>
 
             <button
@@ -2180,7 +2191,7 @@ const GameSummaryScreen = () => {
                 color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer',
               }}
             >
-              סגור
+              {t('common.close')}
             </button>
           </div>
         </div>

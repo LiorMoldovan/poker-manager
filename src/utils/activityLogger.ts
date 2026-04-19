@@ -1,7 +1,4 @@
 import { ActivityLogEntry, DeviceFingerprint, PermissionRole } from '../types';
-import { getEmbeddedToken } from '../database/embeddedToken';
-import { GITHUB_OWNER, GITHUB_REPO, GITHUB_ACTIVITY_PATH, GITHUB_BRANCH } from '../database/githubSync';
-import { USE_SUPABASE } from '../database/config';
 import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 
@@ -9,7 +6,7 @@ const DEVICE_ID_KEY = 'poker_device_id';
 const MAX_LOG_ENTRIES = 200;
 const ACTIVITY_BUFFER_KEY = 'poker_activity_buffer';
 const ACTIVITY_LAST_PUSH_KEY = 'poker_activity_last_push';
-const ACTIVITY_PUSH_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes between GitHub pushes
+const ACTIVITY_PUSH_COOLDOWN_MS = 15 * 60 * 1000; // throttle session row updates
 
 let currentSessionTimestamp: string | null = null;
 let lastPushedScreens: string[] = [];
@@ -122,88 +119,6 @@ export const getScreenName = (pathname: string): string => {
   return 'Other';
 };
 
-interface GitHubFileResult {
-  entries: ActivityLogEntry[];
-  sha: string | undefined;
-}
-
-const fetchActivityFile = async (token: string, keepalive = false): Promise<GitHubFileResult> => {
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_ACTIVITY_PATH}`;
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-    },
-    keepalive,
-  });
-
-  if (!response.ok) {
-    return { entries: [], sha: undefined };
-  }
-
-  const fileInfo = await response.json();
-  try {
-    const content = decodeURIComponent(escape(atob(fileInfo.content)));
-    const entries = JSON.parse(content) as ActivityLogEntry[];
-    return { entries, sha: fileInfo.sha };
-  } catch {
-    return { entries: [], sha: fileInfo.sha };
-  }
-};
-
-const writeActivityFile = async (
-  token: string,
-  entries: ActivityLogEntry[],
-  sha: string | undefined,
-  message: string,
-  keepalive = false
-): Promise<boolean> => {
-  const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_ACTIVITY_PATH}`;
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(entries, null, 2))));
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message,
-      content,
-      sha,
-      branch: GITHUB_BRANCH,
-    }),
-    keepalive,
-  });
-
-  return response.ok;
-};
-
-const writeWithRetry = async (
-  token: string,
-  mutate: (entries: ActivityLogEntry[]) => ActivityLogEntry[],
-  message: string,
-  keepalive = false
-): Promise<boolean> => {
-  try {
-    const { entries, sha } = await fetchActivityFile(token, keepalive);
-    const updated = mutate(entries);
-    const success = await writeActivityFile(token, updated, sha, message, keepalive);
-
-    if (!success) {
-      const fresh = await fetchActivityFile(token, keepalive);
-      const retryUpdated = mutate(fresh.entries);
-      return await writeActivityFile(token, retryUpdated, fresh.sha, message, keepalive);
-    }
-
-    return true;
-  } catch (err) {
-    console.warn('Activity log write failed:', err);
-    return false;
-  }
-};
-
 const getGPURenderer = (): string => {
   try {
     const canvas = document.createElement('canvas');
@@ -250,7 +165,6 @@ export const getDeviceFingerprint = (): DeviceFingerprint => ({
   canvasHash: getCanvasHash(),
 });
 
-// Buffer the current session entry locally; push to GitHub on cooldown or app close
 const saveSessionBuffer = (entry: ActivityLogEntry): void => {
   try { localStorage.setItem(ACTIVITY_BUFFER_KEY, JSON.stringify(entry)); } catch { /* full */ }
 };
@@ -271,39 +185,7 @@ const markPushed = (): void => {
   localStorage.setItem(ACTIVITY_LAST_PUSH_KEY, Date.now().toString());
 };
 
-const pushBufferToGitHub = async (keepalive = false): Promise<void> => {
-  const entry = loadSessionBuffer();
-  if (!entry) return;
-
-  const token = getEmbeddedToken();
-  if (!token) return;
-
-  const success = await writeWithRetry(
-    token,
-    (entries) => {
-      const idx = entries.findIndex(
-        e => e.deviceId === entry.deviceId && e.timestamp === entry.timestamp
-      );
-      if (idx !== -1) {
-        entries[idx] = entry;
-      } else {
-        entries.push(entry);
-      }
-      return entries.slice(-MAX_LOG_ENTRIES);
-    },
-    'Activity: session update',
-    keepalive
-  );
-
-  if (success) {
-    markPushed();
-    lastPushedScreens = [...(entry.screensVisited || [])];
-  }
-};
-
-export const logActivity = async (role: PermissionRole, playerName?: string): Promise<void> => {
-  if (role === 'admin') return;
-
+export const logActivity = async (role: PermissionRole, playerName?: string, userId?: string): Promise<void> => {
   const entry: ActivityLogEntry = {
     deviceId: getDeviceId(),
     role,
@@ -313,41 +195,30 @@ export const logActivity = async (role: PermissionRole, playerName?: string): Pr
     screensVisited: [],
     sessionDuration: 0,
     lastActive: new Date().toISOString(),
-    fingerprint: getDeviceFingerprint(),
+    fingerprint: undefined,
     playerName: playerName || undefined,
+    userId: userId || undefined,
   };
 
   currentSessionTimestamp = entry.timestamp;
   lastPushedScreens = [];
   saveSessionBuffer(entry);
 
-  if (USE_SUPABASE) {
-    const gid = getGroupId();
-    await supabase.from('activity_log').insert({
-      group_id: gid,
-      device_id: entry.deviceId,
-      role: entry.role,
-      timestamp: entry.timestamp,
-      device: entry.device,
-      screen_size: entry.screenSize,
-      screens_visited: entry.screensVisited,
-      session_duration: entry.sessionDuration,
-      last_active: entry.lastActive,
-      fingerprint: entry.fingerprint,
-      player_name: entry.playerName || null,
-    });
-    markPushed();
-    return;
-  }
-
-  const token = getEmbeddedToken();
-  if (!token) return;
-
-  await writeWithRetry(
-    token,
-    (entries) => [...entries, entry].slice(-MAX_LOG_ENTRIES),
-    `Activity: ${role} login`
-  );
+  const gid = getGroupId();
+  await supabase.from('activity_log').insert({
+    group_id: gid,
+    device_id: entry.deviceId,
+    user_id: entry.userId || null,
+    role: entry.role,
+    timestamp: entry.timestamp,
+    device: entry.device,
+    screen_size: entry.screenSize,
+    screens_visited: entry.screensVisited,
+    session_duration: entry.sessionDuration,
+    last_active: entry.lastActive,
+    fingerprint: null,
+    player_name: entry.playerName || null,
+  });
   markPushed();
 };
 
@@ -368,108 +239,64 @@ export const updateSessionActivity = async (
     saveSessionBuffer(buffered);
   }
 
-  if (USE_SUPABASE) {
-    if (keepalive || shouldPushNow()) {
-      const entry = loadSessionBuffer();
-      if (!entry) return;
-      await supabase.from('activity_log').update({
-        screens_visited: entry.screensVisited,
-        session_duration: entry.sessionDuration,
-        last_active: entry.lastActive,
-      }).eq('device_id', entry.deviceId).eq('timestamp', entry.timestamp);
-      markPushed();
-      lastPushedScreens = [...(entry.screensVisited || [])];
-    }
-    return;
-  }
-
   if (keepalive || shouldPushNow()) {
-    await pushBufferToGitHub(keepalive);
+    const entry = loadSessionBuffer();
+    if (!entry) return;
+    await supabase.from('activity_log').update({
+      screens_visited: entry.screensVisited,
+      session_duration: entry.sessionDuration,
+      last_active: entry.lastActive,
+    }).eq('device_id', entry.deviceId).eq('timestamp', entry.timestamp);
+    markPushed();
+    lastPushedScreens = [...(entry.screensVisited || [])];
   }
 };
 
 export const fetchActivityLog = async (): Promise<ActivityLogEntry[]> => {
-  if (USE_SUPABASE) {
-    const gid = getGroupId();
-    if (!gid) return [];
-    const { data } = await supabase.from('activity_log')
-      .select('*')
-      .eq('group_id', gid)
-      .order('timestamp', { ascending: false })
-      .limit(MAX_LOG_ENTRIES);
-    return (data || []).map(row => ({
-      deviceId: row.device_id as string,
-      role: row.role as PermissionRole,
-      timestamp: row.timestamp as string,
-      device: (row.device || '') as string,
-      screenSize: (row.screen_size || '') as string,
-      screensVisited: (row.screens_visited || []) as string[],
-      sessionDuration: (row.session_duration || 0) as number,
-      lastActive: (row.last_active || '') as string,
-      fingerprint: (row.fingerprint || {}) as DeviceFingerprint,
-      playerName: row.player_name as string | undefined,
-    }));
-  }
-
-  const token = getEmbeddedToken();
-  if (!token) return [];
-
-  const { entries } = await fetchActivityFile(token);
-  return entries;
+  const gid = getGroupId();
+  if (!gid) return [];
+  const { data } = await supabase.from('activity_log')
+    .select('*')
+    .eq('group_id', gid)
+    .order('timestamp', { ascending: false })
+    .limit(MAX_LOG_ENTRIES);
+  return (data || []).map(row => ({
+    deviceId: row.device_id as string,
+    role: row.role as PermissionRole,
+    timestamp: row.timestamp as string,
+    device: (row.device || '') as string,
+    screenSize: (row.screen_size || '') as string,
+    screensVisited: (row.screens_visited || []) as string[],
+    sessionDuration: (row.session_duration || 0) as number,
+    lastActive: (row.last_active || '') as string,
+    fingerprint: row.fingerprint ? (row.fingerprint as DeviceFingerprint) : undefined,
+    playerName: row.player_name as string | undefined,
+    userId: (row.user_id || undefined) as string | undefined,
+  }));
 };
 
 export const deleteActivityEntry = async (deviceId: string, timestamp: string): Promise<boolean> => {
-  if (USE_SUPABASE) {
-    const { error } = await supabase.from('activity_log')
-      .delete()
-      .eq('device_id', deviceId)
-      .eq('timestamp', timestamp);
-    return !error;
-  }
-
-  const token = getEmbeddedToken();
-  if (!token) return false;
-
-  return await writeWithRetry(
-    token,
-    (entries) => entries.filter(e => !(e.deviceId === deviceId && e.timestamp === timestamp)),
-    'Activity: entry deleted'
-  );
+  const { error } = await supabase.from('activity_log')
+    .delete()
+    .eq('device_id', deviceId)
+    .eq('timestamp', timestamp);
+  return !error;
 };
 
 export const deleteDeviceEntries = async (deviceId: string): Promise<boolean> => {
-  if (USE_SUPABASE) {
-    const { error } = await supabase.from('activity_log')
-      .delete()
-      .eq('device_id', deviceId);
-    return !error;
-  }
-
-  const token = getEmbeddedToken();
-  if (!token) return false;
-
-  return await writeWithRetry(
-    token,
-    (entries) => entries.filter(e => e.deviceId !== deviceId),
-    'Activity: device entries deleted'
-  );
+  const { error } = await supabase.from('activity_log')
+    .delete()
+    .eq('device_id', deviceId);
+  return !error;
 };
 
 export const clearActivityLog = async (): Promise<boolean> => {
-  if (USE_SUPABASE) {
-    const gid = getGroupId();
-    if (!gid) return false;
-    const { error } = await supabase.from('activity_log')
-      .delete()
-      .eq('group_id', gid);
-    return !error;
-  }
-
-  const token = getEmbeddedToken();
-  if (!token) return false;
-
-  const { sha } = await fetchActivityFile(token);
-  return await writeActivityFile(token, [], sha, 'Activity: log cleared');
+  const gid = getGroupId();
+  if (!gid) return false;
+  const { error } = await supabase.from('activity_log')
+    .delete()
+    .eq('group_id', gid);
+  return !error;
 };
 
 export const resetSession = (): void => {

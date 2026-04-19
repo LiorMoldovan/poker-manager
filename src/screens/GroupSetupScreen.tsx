@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../i18n';
 
 interface GroupSetupScreenProps {
   userEmail: string;
@@ -17,6 +18,7 @@ export default function GroupSetupScreen({
   onSignOut,
   onContinue,
 }: GroupSetupScreenProps) {
+  const { t, isRTL } = useTranslation();
   const [mode, setMode] = useState<'choose' | 'create' | 'join' | 'created'>('choose');
   const [groupName, setGroupName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -27,14 +29,14 @@ export default function GroupSetupScreen({
 
   const handleCreate = async () => {
     if (!groupName.trim()) {
-      setError('נא להזין שם קבוצה');
+      setError(t('groupSetup.emptyName'));
       return;
     }
     setLoading(true);
     setError('');
     const { data, error: err } = await onCreateGroup(groupName.trim());
     if (err) {
-      setError(err.message || 'שגיאה ביצירת הקבוצה');
+      setError(err.message || t('groupSetup.createError'));
     } else {
       const code = data?.invite_code || '';
       setCreatedInviteCode(code);
@@ -46,7 +48,7 @@ export default function GroupSetupScreen({
   const handleJoin = async () => {
     const code = inviteCode.trim().toLowerCase();
     if (!code) {
-      setError('נא להזין קוד הזמנה');
+      setError(t('groupSetup.emptyCode'));
       return;
     }
     setLoading(true);
@@ -65,8 +67,8 @@ export default function GroupSetupScreen({
     if (err) {
       setError(
         err.message?.includes('Invalid invite')
-          ? 'קוד הזמנה לא תקין'
-          : err.message || 'שגיאה בהצטרפות'
+          ? t('groupSetup.invalidCode')
+          : err.message || t('groupSetup.joinError')
       );
     }
     setLoading(false);
@@ -89,16 +91,16 @@ export default function GroupSetupScreen({
           color: 'var(--text)',
           marginBottom: '0.25rem',
         }}>
-          {mode === 'choose' && 'ברוך הבא!'}
-          {mode === 'create' && 'צור קבוצה חדשה'}
-          {mode === 'join' && 'הצטרף לקבוצה'}
+          {mode === 'choose' && t('groupSetup.welcome')}
+          {mode === 'create' && t('groupSetup.createTitle')}
+          {mode === 'join' && t('groupSetup.joinTitle')}
           {mode === 'created' && groupName}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          {mode === 'choose' && 'כדי להתחיל, צור קבוצה או הצטרף לקיימת'}
-          {mode === 'create' && 'תן שם לקבוצת הפוקר שלך'}
-          {mode === 'join' && 'הזן את קוד ההזמנה שקיבלת מהמנהל'}
-          {mode === 'created' && 'קוד ההזמנה שלך'}
+          {mode === 'choose' && t('groupSetup.subtitle')}
+          {mode === 'create' && t('groupSetup.createSubtitle')}
+          {mode === 'join' && t('groupSetup.joinSubtitle')}
+          {mode === 'created' && t('groupSetup.inviteCode')}
         </p>
       </div>
 
@@ -106,22 +108,22 @@ export default function GroupSetupScreen({
         <div style={{ width: '100%', maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {error && <p style={errorStyle}>{error}</p>}
 
-          <button onClick={() => setMode('create')} style={cardButtonStyle}>
+          <button onClick={() => setMode('create')} style={{ ...cardButtonStyle, textAlign: isRTL ? 'right' : 'left' }}>
             <span style={{ fontSize: '1.5rem' }}>👑</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text)' }}>צור קבוצה</div>
+              <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text)' }}>{t('groupSetup.createCard')}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                אתה מנהל הקבוצה — הזמן שחקנים
+                {t('groupSetup.createCardDesc')}
               </div>
             </div>
           </button>
 
-          <button onClick={() => setMode('join')} style={cardButtonStyle}>
+          <button onClick={() => setMode('join')} style={{ ...cardButtonStyle, textAlign: isRTL ? 'right' : 'left' }}>
             <span style={{ fontSize: '1.5rem' }}>🤝</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text)' }}>הצטרף לקבוצה</div>
+              <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text)' }}>{t('groupSetup.joinCard')}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                יש לך קוד הזמנה מחבר
+                {t('groupSetup.joinCardDesc')}
               </div>
             </div>
           </button>
@@ -134,9 +136,9 @@ export default function GroupSetupScreen({
             type="text"
             value={groupName}
             onChange={e => setGroupName(e.target.value)}
-            placeholder="למשל: פוקר יום חמישי"
+            placeholder={t('groupSetup.namePlaceholder')}
             autoFocus
-            dir="rtl"
+            dir={isRTL ? 'rtl' : 'ltr'}
             style={inputStyle}
           />
 
@@ -147,11 +149,11 @@ export default function GroupSetupScreen({
             disabled={loading}
             style={{ ...actionButtonStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? '...' : 'צור קבוצה'}
+            {loading ? '...' : t('groupSetup.createButton')}
           </button>
 
           <button onClick={() => { setMode('choose'); setError(''); }} style={backLinkStyle}>
-            חזרה
+            {t('common.back')}
           </button>
         </div>
       )}
@@ -162,7 +164,7 @@ export default function GroupSetupScreen({
             type="text"
             value={inviteCode}
             onChange={e => setInviteCode(e.target.value)}
-            placeholder="קוד הזמנה"
+            placeholder={t('groupSetup.codePlaceholder')}
             autoFocus
             dir="ltr"
             maxLength={8}
@@ -176,11 +178,11 @@ export default function GroupSetupScreen({
             disabled={loading}
             style={{ ...actionButtonStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? '...' : 'הצטרף'}
+            {loading ? '...' : t('groupSetup.joinButton')}
           </button>
 
           <button onClick={() => { setMode('choose'); setError(''); }} style={backLinkStyle}>
-            חזרה
+            {t('common.back')}
           </button>
         </div>
       )}
@@ -196,10 +198,10 @@ export default function GroupSetupScreen({
           }}>
             <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
             <p style={{ color: '#10B981', fontWeight: 600, fontSize: '1rem', marginBottom: '0.5rem' }}>
-              הקבוצה נוצרה בהצלחה!
+              {t('groupSetup.created')}
             </p>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
-              שתף את הקוד הזה עם חברי הקבוצה כדי שיוכלו להצטרף
+              {t('groupSetup.shareCode')}
             </p>
             <div style={{
               background: 'var(--surface)',
@@ -232,14 +234,14 @@ export default function GroupSetupScreen({
                 border: '1px solid var(--border)',
               }}
             >
-              {copied ? '✓ הועתק!' : '📋 העתק קוד'}
+              {copied ? t('groupSetup.copied') : t('groupSetup.copyCode')}
             </button>
             {typeof navigator.share === 'function' && (
               <button
                 onClick={() => {
                   navigator.share({
-                    title: `הצטרף ל${groupName}`,
-                    text: `הצטרף לקבוצת הפוקר שלנו! קוד הזמנה: ${createdInviteCode}`,
+                    title: t('groupSetup.shareJoinTitle', { name: groupName }),
+                    text: t('groupSetup.shareJoinText', { code: createdInviteCode }),
                   }).catch(() => {});
                 }}
                 style={{
@@ -250,7 +252,7 @@ export default function GroupSetupScreen({
                   border: '1px solid var(--border)',
                 }}
               >
-                📤 שתף
+                {t('common.share')}
               </button>
             )}
           </div>
@@ -259,7 +261,7 @@ export default function GroupSetupScreen({
             onClick={onContinue}
             style={actionButtonStyle}
           >
-            המשך לאפליקציה
+            {t('groupSetup.continue')}
           </button>
         </div>
       )}
@@ -272,7 +274,7 @@ export default function GroupSetupScreen({
           textAlign: 'center', maxWidth: '320px', width: '100%',
         }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '0.75rem' }}>
-            אין לך קוד? בקש מהמנהל שיוסיף אותך
+            {t('groupSetup.noCode')}
           </p>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
@@ -292,7 +294,7 @@ export default function GroupSetupScreen({
                 fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
               }}
             >
-              📩 שלח בקשה למנהל
+              {t('groupSetup.sendRequest')}
             </button>
             <button
               onClick={onContinue}
@@ -303,7 +305,7 @@ export default function GroupSetupScreen({
                 fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
               }}
             >
-              🔄 בדוק שוב
+              {t('groupSetup.checkAgain')}
             </button>
           </div>
         </div>
@@ -323,7 +325,7 @@ export default function GroupSetupScreen({
           fontFamily: 'Outfit, sans-serif',
           textDecoration: 'underline',
         }}>
-          התנתק
+          {t('common.signOut')}
         </button>
       </div>
     </div>
@@ -338,7 +340,6 @@ const containerStyle: React.CSSProperties = {
   justifyContent: 'center',
   background: 'var(--background)',
   padding: '2rem',
-  direction: 'rtl',
 };
 
 const cardButtonStyle: React.CSSProperties = {
@@ -350,7 +351,6 @@ const cardButtonStyle: React.CSSProperties = {
   border: '2px solid var(--border)',
   background: 'var(--surface)',
   cursor: 'pointer',
-  textAlign: 'right',
   transition: 'all 0.2s ease',
   fontFamily: 'Outfit, sans-serif',
   width: '100%',

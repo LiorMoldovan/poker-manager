@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { APP_VERSION } from '../version';
+import { useTranslation } from '../i18n';
 
 interface AuthScreenProps {
   onSignIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -8,6 +9,7 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthScreenProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,17 +22,17 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
     setError('');
 
     if (!email.trim() || !password) {
-      setError(mode === 'login' ? 'נא להזין אימייל וסיסמה' : 'נא למלא את כל השדות');
+      setError(mode === 'login' ? t('auth.emptyFields') : t('auth.emptySignup'));
       return;
     }
 
     if (mode === 'signup') {
       if (password.length < 6) {
-        setError('הסיסמה חייבת להכיל לפחות 6 תווים');
+        setError(t('auth.shortPassword'));
         return;
       }
       if (password !== confirmPassword) {
-        setError('הסיסמאות לא תואמות');
+        setError(t('auth.mismatch'));
         return;
       }
     }
@@ -42,7 +44,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
       if (err) {
         setError(
           err.message === 'Invalid login credentials'
-            ? 'אימייל או סיסמה שגויים'
+            ? t('auth.invalidCreds')
             : err.message
         );
       }
@@ -51,7 +53,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
       if (err) {
         setError(
           err.message?.includes('already registered')
-            ? 'האימייל הזה כבר רשום — נסה להתחבר'
+            ? t('auth.alreadyRegistered')
             : err.message
         );
       } else {
@@ -72,18 +74,18 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
         <div style={{ textAlign: 'center', maxWidth: '320px' }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📧</div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text)', marginBottom: '0.75rem' }}>
-            בדוק את האימייל
+            {t('auth.checkEmail')}
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
-            שלחנו לינק אימות ל-<br />
+            {t('auth.verifyMsg')}<br />
             <strong style={{ color: 'var(--primary)' }}>{email}</strong><br />
-            לחץ על הלינק ואז חזור להתחבר.
+            {t('auth.verifyAction')}
           </p>
           <button
             onClick={() => { setSignupSuccess(false); setMode('login'); setPassword(''); setConfirmPassword(''); }}
             style={{ ...buttonStyle, background: 'var(--primary)', color: 'white', cursor: 'pointer' }}
           >
-            חזרה להתחברות
+            {t('auth.backToLogin')}
           </button>
         </div>
       </div>
@@ -102,10 +104,10 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
           WebkitTextFillColor: 'transparent',
           backgroundClip: 'text',
         }}>
-          Poker Manager
+          {t('auth.title')}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-          {mode === 'login' ? 'התחבר לחשבון שלך' : 'צור חשבון חדש'}
+          {mode === 'login' ? t('auth.loginSubtitle') : t('auth.signupSubtitle')}
         </p>
       </div>
 
@@ -136,7 +138,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
               color: mode === m ? 'white' : 'var(--text-muted)',
             }}
           >
-            {m === 'login' ? 'התחברות' : 'הרשמה'}
+            {m === 'login' ? t('auth.login') : t('auth.signup')}
           </button>
         ))}
       </div>
@@ -147,7 +149,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
           type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          placeholder="אימייל"
+          placeholder={t('auth.email')}
           autoComplete="email"
           dir="ltr"
           style={inputStyle}
@@ -157,7 +159,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
           type="password"
           value={password}
           onChange={e => setPassword(e.target.value)}
-          placeholder="סיסמה"
+          placeholder={t('auth.password')}
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           dir="ltr"
           style={inputStyle}
@@ -168,7 +170,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
             type="password"
             value={confirmPassword}
             onChange={e => setConfirmPassword(e.target.value)}
-            placeholder="אימות סיסמה"
+            placeholder={t('auth.confirmPassword')}
             autoComplete="new-password"
             dir="ltr"
             style={inputStyle}
@@ -182,7 +184,6 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
             fontWeight: 500,
             textAlign: 'center',
             marginBottom: '0.75rem',
-            direction: 'rtl',
           }}>
             {error}
           </p>
@@ -198,7 +199,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? '...' : mode === 'login' ? 'התחבר' : 'צור חשבון'}
+          {loading ? '...' : mode === 'login' ? t('auth.loginButton') : t('auth.signupButton')}
         </button>
 
         {onGoogleSignIn && (
@@ -208,7 +209,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
               margin: '1.25rem 0', color: 'var(--text-muted)', fontSize: '0.8rem',
             }}>
               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
-              <span>או</span>
+              <span>{t('common.or')}</span>
               <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
             </div>
 
@@ -233,7 +234,7 @@ export default function AuthScreen({ onSignIn, onSignUp, onGoogleSignIn }: AuthS
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              התחבר עם Google
+              {t('auth.google')}
             </button>
           </>
         )}
@@ -254,7 +255,6 @@ const containerStyle: React.CSSProperties = {
   justifyContent: 'center',
   background: 'var(--background)',
   padding: '2rem',
-  direction: 'rtl',
 };
 
 const inputStyle: React.CSSProperties = {

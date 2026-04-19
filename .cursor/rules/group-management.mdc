@@ -4,7 +4,7 @@ globs: "{src/components/GroupManagementTab.tsx,src/screens/GroupSetupScreen.tsx,
 alwaysApply: false
 ---
 
-# Group Management (Supabase Mode)
+# Group Management
 
 ## Overview
 
@@ -62,14 +62,14 @@ All RPCs use `SECURITY DEFINER` and manually verify permissions. Owner-only oper
 ## UI Components
 
 ### `GroupManagementTab.tsx`
-Located in Settings > Group tab (default tab for admins in Supabase mode). Shows:
-- Group name and creation date
-- Invite code with copy button (owner: regenerate button)
-- Member list with roles, linked player names
-- Role change dropdowns (owner sees all options, admin sees member/viewer only)
-- Remove member button (with confirmation modal)
-- Unlink player button
-- Transfer ownership button (owner only, with confirmation modal)
+Located in Settings > Group tab (default tab for admins). Layout order (top to bottom):
+1. **Group info** — name, member count
+2. **Member list** — each card shows: display name, email (admin-only via `fetch_group_members_with_email` RPC), linked player name, role badge, admin controls (role change, unlink, transfer ownership, remove)
+3. **Invite code** — with copy/share buttons (owner: regenerate button)
+4. **Personal player invites** — owner can send invite codes tied to specific unlinked players
+5. **Add member by email** — owner can add registered users directly
+
+The `GroupMember` interface includes `email: string | null`. `fetchMembers` uses the `fetch_group_members_with_email` RPC for admins (which joins `auth.users` for email), and falls back to direct query for non-admins (email = null).
 
 ### `GroupSetupScreen.tsx`
 Create or join flow. After creation, shows invite code in a `'created'` mode with share/copy options before proceeding.
@@ -89,6 +89,6 @@ getSettings().geminiApiKey → apiProxy sends in request body → Vercel Edge Fu
 
 This prevents groups from using another group's keys. New groups must set their own keys or rely on the env var fallback (which the project owner controls).
 
-## Important: No `memberSync` Role
+## Roles
 
-The old `memberSync` role was removed during the migration. Only 3 roles exist: `admin`, `member`, `viewer`. Any references to `memberSync` in legacy code should be cleaned up.
+Only 3 roles exist: `admin`, `member`, `viewer`. Owner is derived from `groups.created_by`, not a separate role.

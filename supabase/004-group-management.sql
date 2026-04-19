@@ -435,7 +435,44 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 17. Add a registered user to the group by email (admin only, optional player linking)
+-- 17. Fetch group members with emails (admin/owner only, SECURITY DEFINER to access auth.users)
+CREATE OR REPLACE FUNCTION fetch_group_members_with_email()
+RETURNS JSON AS $$
+DECLARE
+  caller_group UUID;
+  caller_role TEXT;
+  result JSON;
+BEGIN
+  SELECT gm.group_id, gm.role INTO caller_group, caller_role
+  FROM group_members gm WHERE gm.user_id = auth.uid() LIMIT 1;
+
+  IF caller_role != 'admin' THEN
+    RAISE EXCEPTION 'Only admins can view member emails';
+  END IF;
+
+  SELECT json_agg(row_to_json(t)) INTO result
+  FROM (
+    SELECT
+      gm.user_id,
+      gm.display_name,
+      gm.role,
+      gm.player_id,
+      p.name AS player_name,
+      au.email
+    FROM group_members gm
+    LEFT JOIN players p ON p.id = gm.player_id
+    LEFT JOIN auth.users au ON au.id = gm.user_id
+    WHERE gm.group_id = caller_group
+    ORDER BY
+      CASE gm.role WHEN 'admin' THEN 0 WHEN 'member' THEN 1 ELSE 2 END,
+      gm.display_name
+  ) t;
+
+  RETURN COALESCE(result, '[]'::json);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 18. Add a registered user to the group by email (admin only, optional player linking)
 CREATE OR REPLACE FUNCTION add_member_by_email(
   target_email TEXT,
   target_player_id UUID DEFAULT NULL
@@ -479,3 +516,6 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 19. Add user_id column to activity_log for Supabase Auth identity tracking
+ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id);

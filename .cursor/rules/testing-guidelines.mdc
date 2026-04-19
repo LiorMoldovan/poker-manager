@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Dev Server
 
-The app runs on **http://localhost:3000**. NEVER use port 3001. This is configured in `vite.config.ts`.
+The app runs on **http://localhost:3000** by default (configured in `vite.config.ts`). If port 3000 is busy, use `npx vite --port <PORT>` to start on an alternate port — the user may request this.
 
 ## No Automated Tests
 
@@ -40,17 +40,7 @@ When modifying the forecast algorithm or any data-driven logic:
 - Native `<select>` may show blank text with CSS variables on PC
 - `navigator.share()` unavailable on desktop
 
-### LocalStorage
-- ~5-10MB per origin; `canWriteToStorage()` checks before large writes
-- Activity logger caps at 200 entries
-
-### Cloud Sync
-- `writeWithRetry()` handles GitHub API 409 conflicts (legacy GitHub path)
-- Always use fresh `lastUpdated` timestamp when pushing
-- `keepalive: true` on fetch for `visibilitychange` handlers
-
 ### Supabase
-- Always check `USE_SUPABASE` before adding Supabase code — both branches must work
 - `getGroupId()` can return `null` — always guard with early return
 - Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return
 - JSONB columns accept objects/arrays directly — no JSON.stringify needed
@@ -60,7 +50,8 @@ When modifying the forecast algorithm or any data-driven logic:
 - RPCs with `SECURITY DEFINER` bypass RLS — they must manually verify permissions
 - Group management RPCs must check `groups.created_by` for owner-only operations
 - Player linking: partial unique index prevents duplicate links — handle the constraint error gracefully
-- GitHub Contents API has 1MB limit — use raw URLs as fallback for large files
+- `initSupabaseCache` uses 3-phase loading: essential data first, deferred data (chronicles, insights, TTS) loads in background after UI renders
+- New SQL RPCs must be run manually in Supabase dashboard — they are NOT auto-applied
 
 ### TypeScript Strict Mode
 - `noUnusedLocals: true` — remove unused variables

@@ -11,7 +11,7 @@ import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGame
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
-import { proxyGeminiGenerate, proxyGeminiModels, isServerManagedKey } from './apiProxy';
+import { proxyGeminiGenerate, proxyGeminiModels } from './apiProxy';
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
@@ -190,25 +190,11 @@ export async function runGeminiTextPrompt(
   return result.text;
 }
 
-// Store API key in localStorage
-const API_KEY_STORAGE = 'gemini_api_key';
-
 export const isOnline = (): boolean => navigator.onLine;
 
 export const getGeminiApiKey = (): string | null => {
-  if (isServerManagedKey()) {
-    const key = getSettings()?.geminiApiKey;
-    return key || 'server-managed';
-  }
-  return localStorage.getItem(API_KEY_STORAGE);
-};
-
-export const setGeminiApiKey = (key: string): void => {
-  localStorage.setItem(API_KEY_STORAGE, key);
-};
-
-export const clearGeminiApiKey = (): void => {
-  localStorage.removeItem(API_KEY_STORAGE);
+  const key = getSettings()?.geminiApiKey;
+  return key || 'server-managed';
 };
 
 export interface PlayerForecastData {

@@ -69,7 +69,7 @@ function toChipValue(row: Record<string, unknown>): ChipValue {
 }
 
 function toSettings(row: Record<string, unknown>): Settings {
-  return {
+  const s: Settings = {
     rebuyValue: Number(row.rebuy_value),
     chipsPerRebuy: Number(row.chips_per_rebuy),
     minTransfer: Number(row.min_transfer),
@@ -77,6 +77,10 @@ function toSettings(row: Record<string, unknown>): Settings {
     locations: (row.locations as string[]) || [],
     blockedTransfers: (row.blocked_transfers as Settings['blockedTransfers']) || [],
   };
+  if (row.gemini_api_key) s.geminiApiKey = row.gemini_api_key as string;
+  if (row.elevenlabs_api_key) s.elevenlabsApiKey = row.elevenlabs_api_key as string;
+  if (row.language) s.language = row.language as 'he' | 'en';
+  return s;
 }
 
 function toSharedExpense(row: Record<string, unknown>): SharedExpense {
@@ -180,6 +184,9 @@ function settingsToRow(s: Settings, groupId: string) {
     game_night_days: s.gameNightDays,
     locations: s.locations,
     blocked_transfers: s.blockedTransfers,
+    gemini_api_key: s.geminiApiKey || null,
+    elevenlabs_api_key: s.elevenlabsApiKey || null,
+    language: s.language || 'he',
   };
 }
 
@@ -274,8 +281,10 @@ async function pushToSupabase(key: string) {
             is_surprise: f.isSurprise || false,
           }));
           await supabase.from('game_forecasts').insert(fcRows);
+        } else {
+          await supabase.from('game_forecasts').delete().eq('game_id', game.id);
         }
-        if (game.paidSettlements) {
+        if (game.paidSettlements && game.paidSettlements.length > 0) {
           await supabase.from('paid_settlements').delete().eq('game_id', game.id);
           const psRows = game.paidSettlements.map(ps => ({
             game_id: game.id,
@@ -283,7 +292,9 @@ async function pushToSupabase(key: string) {
             to_player: ps.to,
             paid_at: ps.paidAt,
           }));
-          if (psRows.length > 0) await supabase.from('paid_settlements').insert(psRows);
+          await supabase.from('paid_settlements').insert(psRows);
+        } else {
+          await supabase.from('paid_settlements').delete().eq('game_id', game.id);
         }
         if (game.periodMarkers) {
           await supabase.from('period_markers').upsert({
@@ -298,6 +309,8 @@ async function pushToSupabase(key: string) {
             half_label: game.periodMarkers.halfLabel,
             year: game.periodMarkers.year,
           }, { onConflict: 'game_id' });
+        } else {
+          await supabase.from('period_markers').delete().eq('game_id', game.id);
         }
       }
       // Delete games removed from cache
@@ -428,7 +441,7 @@ async function fetchByGameIds(
   gameIds: string[],
 ): Promise<Record<string, unknown>[]> {
   if (gameIds.length === 0) return [];
-  const BATCH = 30;
+  const BATCH = 100;
   const batches: string[][] = [];
   for (let i = 0; i < gameIds.length; i += BATCH) {
     batches.push(gameIds.slice(i, i + BATCH));
@@ -447,25 +460,20 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   const data = new Map<string, unknown>();
   const ttsPools = new Map<string, { pool: unknown; model?: string }>();
 
-  // Phase 1: fetch group-scoped tables + small child tables in parallel
+  // Phase 1: fetch essential tables in parallel (players, games, settings, chips)
   const [
     playersRows, gamesRows, chipValuesRes, settingsRes, pendingRes,
-    chroniclesRes, insightsRes,
   ] = await Promise.all([
     fetchAllRows('players', { column: 'group_id', value: groupId }),
     fetchAllRows('games', { column: 'group_id', value: groupId }),
     supabase.from('chip_values').select('*').eq('group_id', groupId),
     supabase.from('settings').select('*').eq('group_id', groupId).maybeSingle(),
     supabase.from('pending_forecasts').select('*').eq('group_id', groupId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('chronicle_profiles').select('*').eq('group_id', groupId),
-    supabase.from('graph_insights').select('*').eq('group_id', groupId),
   ]);
 
   if (chipValuesRes.error) console.warn('chip_values:', chipValuesRes.error.message);
   if (settingsRes.error) console.warn('settings:', settingsRes.error.message);
   if (pendingRes.error) console.warn('pending_forecasts:', pendingRes.error.message);
-  if (chroniclesRes.error) console.warn('chronicle_profiles:', chroniclesRes.error.message);
-  if (insightsRes.error) console.warn('graph_insights:', insightsRes.error.message);
 
   // Players
   data.set(STORAGE_KEYS.PLAYERS, playersRows.map(r => toPlayer(r)));
@@ -474,17 +482,16 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   const games = gamesRows.map(r => toGame(r));
   const groupGameIds = new Set(games.map(g => g.id));
 
-  // Phase 2: fetch child tables by game_id in batches (avoids RLS subquery perf issues + 1000-row limit)
+  // Phase 2: fetch essential child tables by game_id in batches
   const gameIds = Array.from(groupGameIds);
   const [
-    gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows, ttsRows,
+    gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows,
   ] = await Promise.all([
     fetchByGameIds('game_players', gameIds),
     fetchByGameIds('shared_expenses', gameIds),
     fetchByGameIds('game_forecasts', gameIds),
     fetchByGameIds('paid_settlements', gameIds),
     fetchByGameIds('period_markers', gameIds),
-    fetchByGameIds('tts_pools', gameIds),
   ]);
 
   // Games (with embedded shared_expenses, forecasts, paidSettlements, periodMarkers)
@@ -571,41 +578,65 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pendingRes.data as Record<string, unknown>));
   }
 
-  // Backups (not stored in Supabase — data IS the backup)
+  // Backups loaded async via loadCloudBackups() in UI; keep empty default
   data.set(STORAGE_KEYS.BACKUPS, []);
 
-  // Chronicles
-  const chronicles: Record<string, ChronicleEntry> = {};
-  for (const row of chroniclesRes.data || []) {
-    chronicles[row.period_key as string] = {
-      profiles: row.profiles as Record<string, string>,
-      generatedAt: row.generated_at as string,
-      model: row.model as string | undefined,
-    };
-  }
-  data.set(CHRONICLE_KEY, chronicles);
-
-  // Graph insights
-  const insights: Record<string, GraphInsightsEntry> = {};
-  for (const row of insightsRes.data || []) {
-    insights[row.period_key as string] = {
-      text: row.text as string,
-      generatedAt: row.generated_at as string,
-      model: row.model as string | undefined,
-    };
-  }
-  data.set(GRAPH_INSIGHTS_KEY, insights);
-
-  // TTS Pools — already filtered to group's games by fetchByGameIds
-  for (const row of ttsRows) {
-    ttsPools.set(row.game_id as string, {
-      pool: row.pool,
-      model: row.model as string | undefined,
-    });
-  }
+  // Set empty defaults for deferred data so the cache is usable immediately
+  data.set(CHRONICLE_KEY, {});
+  data.set(GRAPH_INSIGHTS_KEY, {});
 
   console.log(`Supabase cache loaded: ${games.length} games, ${gps.length} game-players, ${playersRows.length} players`);
   state = { groupId, data, ttsPools, initialized: true };
+
+  // Phase 3 (deferred): load non-essential data in background after UI renders
+  loadDeferredData(groupId, gameIds);
+}
+
+async function loadDeferredData(groupId: string, gameIds: string[]): Promise<void> {
+  try {
+    const [chroniclesRes, insightsRes, ttsRows] = await Promise.all([
+      supabase.from('chronicle_profiles').select('*').eq('group_id', groupId),
+      supabase.from('graph_insights').select('*').eq('group_id', groupId),
+      fetchByGameIds('tts_pools', gameIds),
+    ]);
+
+    if (!state || state.groupId !== groupId) return;
+
+    if (!chroniclesRes.error) {
+      const chronicles: Record<string, ChronicleEntry> = {};
+      for (const row of chroniclesRes.data || []) {
+        chronicles[row.period_key as string] = {
+          profiles: row.profiles as Record<string, string>,
+          generatedAt: row.generated_at as string,
+          model: row.model as string | undefined,
+        };
+      }
+      state.data.set(CHRONICLE_KEY, chronicles);
+    }
+
+    if (!insightsRes.error) {
+      const insights: Record<string, GraphInsightsEntry> = {};
+      for (const row of insightsRes.data || []) {
+        insights[row.period_key as string] = {
+          text: row.text as string,
+          generatedAt: row.generated_at as string,
+          model: row.model as string | undefined,
+        };
+      }
+      state.data.set(GRAPH_INSIGHTS_KEY, insights);
+    }
+
+    for (const row of ttsRows) {
+      state.ttsPools.set(row.game_id as string, {
+        pool: row.pool,
+        model: row.model as string | undefined,
+      });
+    }
+
+    window.dispatchEvent(new CustomEvent('supabase-cache-updated'));
+  } catch (err) {
+    console.warn('Deferred data load failed:', err);
+  }
 }
 
 export function isInitialized(): boolean {
@@ -682,19 +713,38 @@ export function cacheDeleteTTS(gameId: string): void {
 
 // ── Realtime subscriptions ──
 
-const REALTIME_TABLES = [
-  'players', 'games', 'game_players', 'shared_expenses', 'game_forecasts',
-  'paid_settlements', 'period_markers', 'settings', 'chip_values',
-  'pending_forecasts', 'chronicle_profiles', 'graph_insights', 'tts_pools',
-];
+type RefreshGroup = 'players' | 'games' | 'settings' | 'forecast' | 'ai' | 'tts';
 
-function scheduleRealtimeRefresh() {
+const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
+  players: 'players',
+  games: 'games',
+  game_players: 'games',
+  shared_expenses: 'games',
+  game_forecasts: 'games',
+  paid_settlements: 'games',
+  period_markers: 'games',
+  settings: 'settings',
+  chip_values: 'settings',
+  pending_forecasts: 'forecast',
+  chronicle_profiles: 'ai',
+  graph_insights: 'ai',
+  tts_pools: 'tts',
+  group_members: 'players',
+  groups: 'settings',
+};
+
+const pendingGroups = new Set<RefreshGroup>();
+
+function scheduleRealtimeRefresh(group: RefreshGroup) {
+  pendingGroups.add(group);
   if (realtimeRefreshTimer) clearTimeout(realtimeRefreshTimer);
   realtimeRefreshTimer = setTimeout(async () => {
     realtimeRefreshTimer = null;
     if (!state) return;
+    const groups = new Set(pendingGroups);
+    pendingGroups.clear();
     try {
-      await initSupabaseCache(state.groupId);
+      await refreshGroups(groups);
       window.dispatchEvent(new CustomEvent('supabase-cache-updated'));
     } catch (err) {
       console.warn('Realtime cache refresh failed:', err);
@@ -702,16 +752,152 @@ function scheduleRealtimeRefresh() {
   }, 500);
 }
 
+async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
+  if (!state) return;
+  const gid = state.groupId;
+
+  if (groups.has('players')) {
+    const rows = await fetchAllRows('players', { column: 'group_id', value: gid });
+    state.data.set(STORAGE_KEYS.PLAYERS, rows.map(r => toPlayer(r)));
+  }
+
+  if (groups.has('games')) {
+    const gamesRows = await fetchAllRows('games', { column: 'group_id', value: gid });
+    const games = gamesRows.map(r => toGame(r));
+    const gameIds = games.map(g => g.id);
+
+    const [gpRows, seRows, fcRows, psRows, pmRows] = await Promise.all([
+      fetchByGameIds('game_players', gameIds),
+      fetchByGameIds('shared_expenses', gameIds),
+      fetchByGameIds('game_forecasts', gameIds),
+      fetchByGameIds('paid_settlements', gameIds),
+      fetchByGameIds('period_markers', gameIds),
+    ]);
+
+    const seByGame = new Map<string, SharedExpense[]>();
+    for (const row of seRows) {
+      const id = row.game_id as string;
+      if (!seByGame.has(id)) seByGame.set(id, []);
+      seByGame.get(id)!.push(toSharedExpense(row));
+    }
+    const fcByGame = new Map<string, GameForecast[]>();
+    for (const row of fcRows) {
+      const id = row.game_id as string;
+      if (!fcByGame.has(id)) fcByGame.set(id, []);
+      fcByGame.get(id)!.push(toForecast(row));
+    }
+    const psByGame = new Map<string, { from: string; to: string; paidAt: string }[]>();
+    for (const row of psRows) {
+      const id = row.game_id as string;
+      if (!psByGame.has(id)) psByGame.set(id, []);
+      psByGame.get(id)!.push({ from: row.from_player as string, to: row.to_player as string, paidAt: row.paid_at as string });
+    }
+    const pmByGame = new Map<string, Game['periodMarkers']>();
+    for (const row of pmRows) {
+      pmByGame.set(row.game_id as string, {
+        isFirstGameOfMonth: !!row.is_first_game_of_month,
+        isLastGameOfMonth: !!row.is_last_game_of_month,
+        isFirstGameOfHalf: !!row.is_first_game_of_half,
+        isLastGameOfHalf: !!row.is_last_game_of_half,
+        isFirstGameOfYear: !!row.is_first_game_of_year,
+        isLastGameOfYear: !!row.is_last_game_of_year,
+        monthName: (row.month_name as string) || '',
+        halfLabel: (row.half_label as string) || '',
+        year: Number(row.year) || 0,
+      });
+    }
+    for (const game of games) {
+      const se = seByGame.get(game.id);
+      if (se && se.length > 0) game.sharedExpenses = se;
+      const fc = fcByGame.get(game.id);
+      if (fc && fc.length > 0) game.forecasts = fc;
+      const ps = psByGame.get(game.id);
+      if (ps && ps.length > 0) game.paidSettlements = ps;
+      const pm = pmByGame.get(game.id);
+      if (pm) game.periodMarkers = pm;
+    }
+    state.data.set(STORAGE_KEYS.GAMES, games);
+    state.data.set(STORAGE_KEYS.GAME_PLAYERS, gpRows.map(r => toGamePlayer(r)));
+  }
+
+  if (groups.has('settings')) {
+    const [cvRes, sRes] = await Promise.all([
+      supabase.from('chip_values').select('*').eq('group_id', gid),
+      supabase.from('settings').select('*').eq('group_id', gid).maybeSingle(),
+    ]);
+    if (!cvRes.error) {
+      state.data.set(STORAGE_KEYS.CHIP_VALUES, (cvRes.data || []).map(r => toChipValue(r as Record<string, unknown>)));
+    }
+    if (!sRes.error && sRes.data) {
+      state.data.set(STORAGE_KEYS.SETTINGS, toSettings(sRes.data as Record<string, unknown>));
+    }
+  }
+
+  if (groups.has('forecast')) {
+    const pfRes = await supabase.from('pending_forecasts').select('*').eq('group_id', gid)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!pfRes.error) {
+      if (pfRes.data) {
+        state.data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pfRes.data as Record<string, unknown>));
+      } else {
+        state.data.delete(STORAGE_KEYS.PENDING_FORECAST);
+      }
+    }
+  }
+
+  if (groups.has('ai')) {
+    const [cRes, iRes] = await Promise.all([
+      supabase.from('chronicle_profiles').select('*').eq('group_id', gid),
+      supabase.from('graph_insights').select('*').eq('group_id', gid),
+    ]);
+    if (!cRes.error) {
+      const chronicles: Record<string, ChronicleEntry> = {};
+      for (const row of cRes.data || []) {
+        chronicles[row.period_key as string] = {
+          profiles: row.profiles as Record<string, string>,
+          generatedAt: row.generated_at as string,
+          model: row.model as string | undefined,
+        };
+      }
+      state.data.set(CHRONICLE_KEY, chronicles);
+    }
+    if (!iRes.error) {
+      const insights: Record<string, GraphInsightsEntry> = {};
+      for (const row of iRes.data || []) {
+        insights[row.period_key as string] = {
+          text: row.text as string,
+          generatedAt: row.generated_at as string,
+          model: row.model as string | undefined,
+        };
+      }
+      state.data.set(GRAPH_INSIGHTS_KEY, insights);
+    }
+  }
+
+  if (groups.has('tts')) {
+    const games = (state.data.get(STORAGE_KEYS.GAMES) as Game[]) || [];
+    const gameIds = games.map(g => g.id);
+    const ttsRows = await fetchByGameIds('tts_pools', gameIds);
+    state.ttsPools.clear();
+    for (const row of ttsRows) {
+      state.ttsPools.set(row.game_id as string, {
+        pool: row.pool,
+        model: row.model as string | undefined,
+      });
+    }
+  }
+}
+
 export function subscribeToRealtime(): void {
   if (realtimeChannel || !state) return;
 
   const channel = supabase.channel('group-data-changes');
 
-  for (const table of REALTIME_TABLES) {
+  for (const [table, group] of Object.entries(TABLE_TO_GROUP)) {
     channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table } as { event: '*'; schema: 'public'; table: string },
-      () => scheduleRealtimeRefresh()
+      () => scheduleRealtimeRefresh(group)
     );
   }
 

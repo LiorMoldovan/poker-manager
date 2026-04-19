@@ -9,6 +9,7 @@ export interface GroupMember {
   role: string;
   playerId: string | null;
   playerName: string | null;
+  email: string | null;
 }
 
 interface GroupMembership {
@@ -19,19 +20,20 @@ interface GroupMembership {
   playerName: string | null;
   playerId: string | null;
   inviteCode: string | null;
+  trainingEnabled: boolean;
 }
 
 interface AuthState {
   user: User | null;
   session: Session | null;
   membership: GroupMembership | null;
+  isSuperAdmin: boolean;
   loading: boolean;
 }
 
 const SUPABASE_ROLE_MAP: Record<string, PermissionRole> = {
   admin: 'admin',
   member: 'member',
-  viewer: 'viewer',
 };
 
 export function useSupabaseAuth() {
@@ -39,8 +41,18 @@ export function useSupabaseAuth() {
     user: null,
     session: null,
     membership: null,
+    isSuperAdmin: false,
     loading: true,
   });
+
+  const checkSuperAdmin = useCallback(async (userId: string) => {
+    const { data } = await supabase
+      .from('super_admins')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    setState(prev => ({ ...prev, isSuperAdmin: !!data }));
+  }, []);
 
   const fetchMembership = useCallback(async (userId: string) => {
     const { data, error } = await supabase
@@ -50,25 +62,31 @@ export function useSupabaseAuth() {
         role,
         player_id,
         players ( name ),
-        groups ( name, invite_code, created_by )
+        groups ( name, invite_code, created_by, training_enabled )
       `)
       .eq('user_id', userId)
       .limit(1)
       .maybeSingle();
 
-    if (data && !error) {
+    if (error) {
+      console.warn('fetchMembership network error, keeping current state:', error.message);
+      setState(prev => ({ ...prev, loading: false }));
+      return;
+    }
+    if (data) {
       const playerRow = data.players as unknown as { name: string } | null;
-      const groupRow = data.groups as unknown as { name: string; invite_code: string | null; created_by: string } | null;
+      const groupRow = data.groups as unknown as { name: string; invite_code: string | null; created_by: string; training_enabled: boolean } | null;
       setState(prev => ({
         ...prev,
         membership: {
           groupId: data.group_id,
           groupName: groupRow?.name ?? '',
-          role: SUPABASE_ROLE_MAP[data.role] ?? 'viewer',
+          role: SUPABASE_ROLE_MAP[data.role] ?? 'member',
           isOwner: groupRow?.created_by === userId,
           playerName: playerRow?.name ?? null,
           playerId: data.player_id ?? null,
           inviteCode: groupRow?.invite_code ?? null,
+          trainingEnabled: groupRow?.training_enabled ?? false,
         },
         loading: false,
       }));
@@ -78,10 +96,14 @@ export function useSupabaseAuth() {
   }, []);
 
   useEffect(() => {
+    let membershipFetchedFor: string | null = null;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setState(prev => ({ ...prev, user: session.user, session }));
+        membershipFetchedFor = session.user.id;
         fetchMembership(session.user.id);
+        checkSuperAdmin(session.user.id);
       } else {
         setState(prev => ({ ...prev, loading: false }));
       }
@@ -90,14 +112,19 @@ export function useSupabaseAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setState(prev => ({ ...prev, user: session.user, session }));
-        fetchMembership(session.user.id);
+        if (session.user.id !== membershipFetchedFor) {
+          membershipFetchedFor = session.user.id;
+          fetchMembership(session.user.id);
+          checkSuperAdmin(session.user.id);
+        }
       } else {
-        setState({ user: null, session: null, membership: null, loading: false });
+        membershipFetchedFor = null;
+        setState({ user: null, session: null, membership: null, isSuperAdmin: false, loading: false });
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchMembership]);
+  }, [fetchMembership, checkSuperAdmin]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -121,7 +148,7 @@ export function useSupabaseAuth() {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setState({ user: null, session: null, membership: null, loading: false });
+    setState({ user: null, session: null, membership: null, isSuperAdmin: false, loading: false });
   }, []);
 
   const createGroup = useCallback(async (groupName: string) => {
@@ -244,6 +271,20 @@ export function useSupabaseAuth() {
   const fetchMembers = useCallback(async (): Promise<GroupMember[]> => {
     const groupId = state.membership?.groupId;
     if (!groupId) return [];
+    const isAdmin = state.membership?.role === 'admin';
+    if (isAdmin) {
+      const { data, error } = await supabase.rpc('fetch_group_members_with_email');
+      if (!error && Array.isArray(data)) {
+        return (data as Array<{ user_id: string; display_name: string | null; role: string; player_id: string | null; player_name: string | null; email: string | null }>).map(row => ({
+          userId: row.user_id,
+          displayName: row.display_name,
+          role: row.role,
+          playerId: row.player_id,
+          playerName: row.player_name,
+          email: row.email,
+        }));
+      }
+    }
     const { data, error } = await supabase
       .from('group_members')
       .select('user_id, display_name, role, player_id, players ( name )')
@@ -255,8 +296,9 @@ export function useSupabaseAuth() {
       role: row.role,
       playerId: row.player_id,
       playerName: (row.players as unknown as { name: string } | null)?.name ?? null,
+      email: null,
     }));
-  }, [state.membership?.groupId]);
+  }, [state.membership?.groupId, state.membership?.role]);
 
   return {
     ...state,

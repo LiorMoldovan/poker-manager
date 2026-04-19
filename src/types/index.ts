@@ -1,7 +1,7 @@
 export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
 
 // Permission system
-export type PermissionRole = 'admin' | 'member' | 'viewer';
+export type PermissionRole = 'admin' | 'member';
 
 export type Permission = 
   // Game management
@@ -20,8 +20,6 @@ export type Permission =
   | 'chips:edit'
   // Settings
   | 'settings:edit'
-  // Backup (all roles have this)
-  | 'backup:all'
   // View (all roles have this)
   | 'view:all';
 
@@ -136,6 +134,7 @@ export interface Settings {
   blockedTransfers?: BlockedTransferPair[];
   geminiApiKey?: string;
   elevenlabsApiKey?: string;
+  language?: 'he' | 'en';
 }
 
 export interface Settlement {
@@ -222,6 +221,7 @@ export interface ActivityLogEntry {
   lastActive: string;
   fingerprint?: DeviceFingerprint;
   playerName?: string;
+  userId?: string;
 }
 
 // --- Live Game AI TTS Pool ---

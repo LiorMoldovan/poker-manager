@@ -1,36 +1,39 @@
 import { NavLink } from 'react-router-dom';
 import { usePermissions } from '../App';
+import { useTranslation } from '../i18n';
 
 const Navigation = () => {
-  const { hasPermission, role } = usePermissions();
+  const { t } = useTranslation();
+  const { hasPermission, role, trainingEnabled } = usePermissions();
   const canCreateGame = hasPermission('game:create');
-  const canViewGraphs = role === 'admin' || role === 'member' || role === 'viewer';
+  const showNewGameTab = canCreateGame || trainingEnabled;
+  const canViewGraphs = !!role;
 
   return (
     <nav className="bottom-nav">
-      {canCreateGame && (
+      {showNewGameTab && (
         <NavLink to="/" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <span className="nav-icon">🃏</span>
-          <span>New Game</span>
+          <span>{t('nav.newGame')}</span>
         </NavLink>
       )}
       <NavLink to="/history" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <span className="nav-icon">📚</span>
-        <span>History</span>
+        <span>{t('nav.history')}</span>
       </NavLink>
       <NavLink to="/statistics" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <span className="nav-icon">📈</span>
-        <span>Statistics</span>
+        <span>{t('nav.statistics')}</span>
       </NavLink>
       {canViewGraphs && (
         <NavLink to="/graphs" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <span className="nav-icon">📊</span>
-          <span>Graphs</span>
+          <span>{t('nav.graphs')}</span>
         </NavLink>
       )}
       <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
         <span className="nav-icon">⚙️</span>
-        <span>Settings</span>
+        <span>{t('nav.settings')}</span>
       </NavLink>
     </nav>
   );
