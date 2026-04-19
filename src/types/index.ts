@@ -33,6 +33,14 @@ export interface Player {
   gender: PlayerGender;
 }
 
+export interface PlayerTraits {
+  team?: string;
+  job?: string;
+  nickname?: string;
+  style: string[];
+  quirks: string[];
+}
+
 export interface GameForecast {
   playerName: string;
   expectedProfit: number;
@@ -98,7 +106,27 @@ export interface Game {
   aiSummaryModel?: string; // Model used to generate the AI summary
   preGameTeaser?: string; // AI-generated pre-game teaser text
   periodMarkers?: PeriodMarkers; // Period context stored at game creation
-  paidSettlements?: { from: string; to: string; paidAt: string }[];
+  paidSettlements?: PaidSettlement[];
+}
+
+export interface PaidSettlement {
+  from: string;
+  to: string;
+  paidAt: string;
+  amount?: number;
+  autoClosed?: boolean;
+}
+
+export interface AppNotification {
+  id: string;
+  groupId: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  read: boolean;
+  createdAt: string;
 }
 
 export interface GamePlayer {

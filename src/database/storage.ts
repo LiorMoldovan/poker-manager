@@ -1,9 +1,14 @@
-import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense } from '../types';
+import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense, AppNotification, PlayerTraits } from '../types';
 import {
   cacheGet, cacheSet, cacheRemove,
   cacheGetItem, cacheSetItem, cacheRemoveItem,
   cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
   getGroupId, resetCache, initSupabaseCache,
+  fetchNotifications, getCachedNotifications, getUnreadNotificationCount,
+  markNotificationRead, createNotification,
+  resolvePlayerUserId, getPlayerEmailForNotification,
+  getPlayerTraitsByName, getAllPlayerTraits, savePlayerTraits,
+  savePushSubscription, deletePushSubscription, getGroupPushSubscribers,
 } from './supabaseCache';
 import { supabase } from './supabaseClient';
 
@@ -1014,7 +1019,7 @@ export async function downloadFullBackup(groupName: string): Promise<string> {
       paid_settlements: paidSettlements,
       period_markers: periodMarkers,
       chip_values: chipValues,
-      settings: settingsRes.data || null,
+      settings: settingsRes.data ? { ...settingsRes.data, gemini_api_key: undefined, elevenlabs_api_key: undefined } : null,
       pending_forecasts: pendingRes.data || null,
       chronicle_profiles: chronicles,
       graph_insights: insights,
@@ -1215,4 +1220,23 @@ export function parseBackupSummary(json: string): {
 export function getLastBackupDate(): string | null {
   return localStorage.getItem('lastBackupDownload');
 }
+
+// ── Notifications ──
+export {
+  fetchNotifications,
+  getCachedNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  createNotification,
+  resolvePlayerUserId,
+  getPlayerEmailForNotification,
+  getGroupId,
+  getPlayerTraitsByName,
+  getAllPlayerTraits,
+  savePlayerTraits,
+  savePushSubscription,
+  deletePushSubscription,
+  getGroupPushSubscribers,
+};
+export type { AppNotification, PlayerTraits };
 

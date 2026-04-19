@@ -1,8 +1,17 @@
-import { createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from 'react';
 import { translations, type TranslationKey } from './translations';
-import { getSettings } from '../database/storage';
 
 type Language = 'he' | 'en';
+
+const LANG_STORAGE_KEY = 'poker_user_language';
+
+function getStoredLanguage(): Language {
+  try {
+    const stored = localStorage.getItem(LANG_STORAGE_KEY);
+    if (stored === 'en' || stored === 'he') return stored;
+  } catch { /* localStorage unavailable */ }
+  return 'he';
+}
 
 interface LanguageContextValue {
   language: Language;
@@ -19,19 +28,11 @@ const LanguageContext = createContext<LanguageContextValue>({
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => getSettings().language || 'he');
-
-  useEffect(() => {
-    const handler = () => {
-      const lang = getSettings().language || 'he';
-      setLanguageState(lang);
-    };
-    window.addEventListener('supabase-cache-updated', handler);
-    return () => window.removeEventListener('supabase-cache-updated', handler);
-  }, []);
+  const [language, setLanguageState] = useState<Language>(getStoredLanguage);
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang);
+    try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch { /* ignore */ }
   }, []);
 
   const value = useMemo<LanguageContextValue>(() => {

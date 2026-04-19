@@ -1,12 +1,8 @@
-export type PlayerTraits = {
-  team?: string;
-  job?: string;
-  style: string[];
-  nickname?: string;
-  quirks: string[];
-};
+import type { PlayerTraits } from '../types';
+import { getPlayerTraitsByName } from '../database/storage';
 
-export const playerTraitsByName: Record<string, PlayerTraits> = {
+// Seed data for initial migration — these get written to DB on first load
+export const SEED_TRAITS: Record<string, PlayerTraits> = {
   'ליאור': { job: 'הייטק', team: 'מכבי הרצליה', style: ['מחושב'], quirks: ['מנצח עם מעט קניות', 'שחקן אסטרטגי'] },
   'אייל': { job: 'פיננסים', team: 'הפועל פתח תקווה', style: ['אגרסיבי', 'בלופר'], quirks: ['אמרגן הקבוצה', 'מתאם את המשחקים', 'הולך למשחקים של הפועל פתח תקווה למרות שלא באמת אוהד'] },
   'ארז': { job: 'מהנדס בטיחות', style: ['מחושב', 'אגרסיבי'], quirks: ['צנח חופשי', 'מהנדס בטיחות שמסתכן'] },
@@ -20,142 +16,47 @@ export const playerTraitsByName: Record<string, PlayerTraits> = {
   'מלמד': { job: 'הייטק', style: ['מחושב'], quirks: ['משחק כדורעף', 'משחק פוקר כמו מחשבון'] },
 };
 
+export function getTraitsForPlayer(playerName: string): PlayerTraits | undefined {
+  return getPlayerTraitsByName(playerName);
+}
+
 export const generateTraitMessages = (playerName: string): string[] => {
-  const traits = playerTraitsByName[playerName];
+  const traits = getPlayerTraitsByName(playerName);
   if (!traits) return [];
   const msgs: string[] = [];
+  const name = playerName;
 
-  if (playerName === 'ליאור') {
-    msgs.push(`${playerName} בנה את האפליקציה הזאת, אבל לא בנה אסטרטגיה לערב`);
-    msgs.push(`מכבי הרצליה ו${playerName} עם מסורת משותפת של ציפיות גבוהות ותוצאות מאכזבות`);
-    msgs.push(`הקוד של ${playerName} רץ מושלם, הקלפים שלו קורסים`);
-    msgs.push(`${playerName} כתב אלגוריתם לכל דבר חוץ מאיך לא להפסיד`);
-    msgs.push(`${playerName} מריץ דיבאג על הערב, ומוצא רק באגים`);
-    msgs.push(`בדרך כלל ${playerName} סוגר עם מינימום קניות, מי שינה לו את הסטטינגס?`);
-    msgs.push(`${playerName} מחשב הכל, חוץ מהסיכוי שלו הערב`);
-    msgs.push(`${playerName} ניסה לעשות קונטרול זד על הקנייה האחרונה, לא עבד`);
-    msgs.push(`האסטרטג של הקבוצה, הערב שכח את האסטרטגיה בבית`);
-    msgs.push(`${playerName} פיתח חצי אפליקציה ולא פיתח משחק פוקר`);
+  if (traits.job) {
+    msgs.push(`${name} עובד ב${traits.job}, אבל הערב העבודה לא עוזרת`);
+    msgs.push(`איש ה${traits.job} מקבל תוצאות לא צפויות הערב`);
   }
-  if (playerName === 'אייל') {
-    msgs.push(`האמרגן שמארגן ערב מעולה לכולם חוץ מעצמו`);
-    msgs.push(`איש הפיננסים קיבל תשואה שלילית הערב, שוק דובי`);
-    msgs.push(`${playerName} הולך למשחקים של הפועל פתח תקווה בלי לאהוד, מה עוד הוא עושה בלי סיבה?`);
-    msgs.push(`${playerName} מנהל תיק השקעות כל היום, הערב התיק שלו במינוס`);
-    msgs.push(`בפיננסים ${playerName} סוגר עסקאות, בפוקר סוגר ארנק`);
-    msgs.push(`${playerName} מתאם משחקים ברמת שיא, משחק ברמת שפל`);
-    msgs.push(`${playerName} יודע לארגן ערב, אבל לא יודע לנצח בו`);
-    msgs.push(`האנליסט הפיננסי ממליץ מכירה חזקה על הקלפים של ${playerName}`);
-    msgs.push(`${playerName} הבטיח שהערב יהיה שווה, הוא צדק, עבור כולם חוץ ממנו`);
-    msgs.push(`${playerName} מתאם את כל המשחקים, חבל שלא מתאם את הקלפים`);
+  if (traits.team) {
+    msgs.push(`${name} אוהד ${traits.team}, הערב שניהם באותו מצב`);
+    msgs.push(`${traits.team} ו${name} עם מסורת משותפת של ציפיות גבוהות`);
   }
-  if (playerName === 'ארז') {
-    msgs.push(`מהנדס בטיחות בעבודה, מהנדס הרס עצמי בפוקר`);
-    msgs.push(`${playerName} צונח מעשרת אלפים רגל ולא פוחד, אבל מהקלפים הערב כדאי לפחד`);
-    msgs.push(`${playerName} בודק ציוד בטיחות כל יום, הערב שכח לבדוק את הארנק`);
-    msgs.push(`הצנחן של השולחן, הערב הנחיתה בלי מצנח`);
-    msgs.push(`${playerName} עושה תדריך בטיחות לכולם, חוץ מלארנק שלו`);
-    msgs.push(`אסור לצנוח בלי ציוד, אבל מותר לשחק פוקר בלי תוכנית, שאלו את ${playerName}`);
-    msgs.push(`${playerName} מחשב גובה וזוויות נפילה, אבל לא חישב את הנפילה הזאת`);
-    msgs.push(`מהנדס הבטיחות עבר את כל תקני הסיכון הערב`);
-    msgs.push(`${playerName} קופץ ממטוסים ולא מפחד, אבל הקלפים הערב מפחידים`);
-    msgs.push(`${playerName} מסתכן בצניחה חופשית, הערב מסתכן עם הארנק`);
+  if (traits.nickname) {
+    msgs.push(`${traits.nickname} קנה עוד אחד, מישהו יבדוק שזה באמת ${name}?`);
   }
-  if (playerName === 'אורן') {
-    msgs.push(`${playerName} גובה מיסים מכולם מהבוקר, ובערב כולם גובים ממנו`);
-    msgs.push(`התינוק ישן סוף סוף, ו${playerName} ער כדי לממן את שאר השולחן`);
-    msgs.push(`${playerName} טוען שאין לו מזל, והערב מוכיח את זה`);
-    msgs.push(`במס הכנסה יודעים לגבות, בפוקר ${playerName} יודע רק לשלם`);
-    msgs.push(`גם הפועל כפר סבא לא מנצחת, אז ${playerName} לפחות בחברה טובה`);
-    msgs.push(`במס הכנסה לוקחים אחוזים, בפוקר ${playerName} נותן מאה אחוז`);
-    msgs.push(`${playerName} בודק הצהרות הון כל היום, הערב ההצהרה שלו מצערת`);
-    msgs.push(`אם הקניות של ${playerName} היו מוכרות מס, הוא היה יוצא בפלוס`);
-    msgs.push(`אבא טרי, ${playerName} לא ישן בלילה ולא מנצח בערב`);
-    msgs.push(`${playerName} בודק החזרי מס כל יום, הערב אין מה להחזיר`);
+  if (traits.style.length > 0) {
+    const style = traits.style[0];
+    msgs.push(`${name} ה${style} של השולחן, הערב הסגנון לא עובד`);
+    if (traits.style.includes('בלופר')) {
+      msgs.push(`הבלפן הרשמי של השולחן, הערב אפילו הבלוף לא עובד`);
+    }
+    if (traits.style.includes('אגרסיבי')) {
+      msgs.push(`${name} אגרסיבי כרגיל, הערב רק אגרסיבי עם הארנק`);
+    }
+    if (traits.style.includes('שמרני')) {
+      msgs.push(`השמרן של השולחן יצא מהכלוב, מה קרה ${name}?`);
+    }
+    if (traits.style.includes('מחושב')) {
+      msgs.push(`${name} מחשב הכל, חוץ מהסיכוי שלו הערב`);
+    }
   }
-  if (playerName === 'ליכטר') {
-    msgs.push(`רואה חשבון שלא רואה את הרווחים הערב`);
-    msgs.push(`${playerName} סופר מיליונים בעבודה, ובפוקר סופר קניות`);
-    msgs.push(`הנרגילה של ${playerName} מוציאה יותר עשן מהקלפים שלו`);
-    msgs.push(`הבלפן הרשמי של השולחן, הערב אפילו הבלוף לא עובד`);
-    msgs.push(`${playerName} מאזן ספרים כל היום, הערב המאזן שלו במינוס עמוק`);
-    msgs.push(`גם כפר סבא וגם ${playerName} מאבדים הערב, לפחות ביחד`);
-    msgs.push(`${playerName} מומחה לבלופים, אבל הקלפים לא מאמינים לו הערב`);
-    msgs.push(`${playerName} שורף כסף על השולחן יותר מהר מנרגילה`);
-    msgs.push(`${playerName} מאזן ספרים לאחרים, את שלו הוא לא מצליח לאזן`);
-    msgs.push(`רואה חשבון שהחשבון שלו לא מסתדר הערב`);
-  }
-  if (playerName === 'סגל') {
-    msgs.push(`איוון סטיבן קנה עוד אחד, מישהו יבדוק שזה באמת ${playerName}?`);
-    msgs.push(`${playerName} תמיד יוצא באפס, הערב שובר את המסורת`);
-    msgs.push(`בוחן תוכנה שלא בדק את הקלפים לפני שישב`);
-    msgs.push(`השמרן הכי גדול בשולחן יצא מהכלוב, מה קרה ${playerName}?`);
-    msgs.push(`${playerName} מוצא באגים בתוכנה, אבל לא מוצא קלפים טובים`);
-    msgs.push(`השיטת אפס של ${playerName} נשברה הערב`);
-    msgs.push(`הממלכה השמרנית של ${playerName} קורסת`);
-    msgs.push(`${playerName} מחפש באגים בקלפים, עדיין לא מצא`);
-    msgs.push(`איוון סטיבן הפך לאיוון קניות הערב`);
-    msgs.push(`${playerName} שובר שיגעון, אפס היה פעם, עכשיו סיפור אחר`);
-  }
-  if (playerName === 'תומר') {
-    msgs.push(`אף אחד לא מבין את המשחק של ${playerName}, כולל ${playerName} עצמו`);
-    msgs.push(`${playerName} משחק כמו הפועל פתח תקווה, טקטיקה מסתורית ותוצאות צפויות`);
-    msgs.push(`לפחות ${playerName} הביא חטיפים, כי קלפים טובים הוא לא הביא`);
-    msgs.push(`${playerName} משחק לפי חוקים שהמציא עכשיו`);
-    msgs.push(`בפתח תקווה רגילים להפסיד, ${playerName} מרגיש בבית גם על השולחן`);
-    msgs.push(`המהלכים של ${playerName} מבלבלים את כולם כולל את עצמו`);
-    msgs.push(`${playerName} הביא אנרגיה לשולחן, חבל שלא הביא מזל`);
-    msgs.push(`${playerName} אוכל חטיפים ומשלם קניות, לפחות נהנה מאחד מהשניים`);
-    msgs.push(`אף אחד לא צפה למהלך הזה של ${playerName}, כולל ${playerName}`);
-    msgs.push(`${playerName} והפועל פתח תקווה, שניהם עם תוכניות מפתיעות`);
-  }
-  if (playerName === 'פיליפ') {
-    msgs.push(`${playerName} הציע עוד עסקה מפוקפקת על השולחן`);
-    msgs.push(`מנהל מוצר שהמוצר שלו הערב זה הפסד`);
-    msgs.push(`${playerName} רגשי על השולחן כרגיל, הרגש הזה עולה כסף`);
-    msgs.push(`באיירן מינכן מנצחים בעקביות, ${playerName} מפסיד בעקביות`);
-    msgs.push(`${playerName} מחפש עסקת חייו על השולחן, עדיין מחפש`);
-    msgs.push(`${playerName} אוהד באיירן, אבל הערב משחק כמו קבוצה מליגה ג`);
-    msgs.push(`${playerName} השיק גרסה חדשה של ההפסד`);
-    msgs.push(`בגרמניה היו כבר פוטרים את ${playerName}, פה רק קונים לו עוד קנייה`);
-    msgs.push(`${playerName} עושה פיבוט מהפסד להפסד, סטארטאפ שורף כסף`);
-    msgs.push(`כל קנייה של ${playerName} מלווה בנאום רגשני`);
-  }
-  if (playerName === 'אסף') {
-    msgs.push(`${playerName} אבא טרי, הלילות הלבנים עכשיו גם בפוקר`);
-    msgs.push(`מכבי תל אביב בגמר ו${playerName} בתחתית`);
-    msgs.push(`${playerName} מחושב ואגרסיבי, הערב רק אגרסיבי עם הארנק`);
-    msgs.push(`התינוק בבית בוכה, ${playerName} פה משלם, מי מרוויח? אף אחד`);
-    msgs.push(`${playerName} אוהד מכבי, לפחות שם יש נצחונות`);
-    msgs.push(`${playerName} מחליף חיתולים ביום וקניות בלילה`);
-    msgs.push(`הלילה הלבן של ${playerName} ממשיך, אפס שעות שינה`);
-    msgs.push(`${playerName} בדרך כלל מחושב, הערב רק מוציא כסף`);
-    msgs.push(`אבא חדש ושחקן ותיק, ${playerName} עייף אבל לא מוותר`);
-    msgs.push(`${playerName} עם סגנון אגרסיבי שהערב עובד נגדו`);
-  }
-  if (playerName === 'פבל') {
-    msgs.push(`${playerName} יצא לעשן וחזר, הסיגריה לא עזרה`);
-    msgs.push(`איש ה IT שהמערכת שלו קרסה ואין גיבוי`);
-    msgs.push(`${playerName} מתקן מחשבים כל היום, אבל הערב שום דבר לא ניתן לתיקון`);
-    msgs.push(`${playerName} נוהג מהר במכוניות מרוץ, הערב הכסף שלו בנסיעת פרידה`);
-    msgs.push(`${playerName} במרוצים עוקף את כולם, בפוקר כולם עוקפים אותו`);
-    msgs.push(`הפרארי של ${playerName} על המסלול, הכסף שלו מחוץ למסלול`);
-    msgs.push(`${playerName} מפרמט מחשבים ביום ומפרמט ארנקים בלילה`);
-    msgs.push(`${playerName} אוהב מכוניות מרוץ, הערב הוא שורף דלק על השולחן`);
-    msgs.push(`${playerName} שורף כסף הערב יותר מהר ממכונית מרוץ שורפת דלק`);
-    msgs.push(`איש ה IT, הערב אפילו ריסטארט לא יעזור`);
-  }
-  if (playerName === 'מלמד') {
-    msgs.push(`${playerName} משחק כמו מחשבון, הערב מחשבון שלימדו אותו לחשב לא נכון`);
-    msgs.push(`שחקן כדורעף שהכדור נוחת תמיד על הצד השני`);
-    msgs.push(`${playerName} מדויק כמו אלגוריתם, חוץ מכשהוא יושב על שולחן פוקר`);
-    msgs.push(`${playerName} עושה סמאש בכדורעף, בפוקר עושים לו סמאש`);
-    msgs.push(`${playerName} מחשב כמו מכונה, אבל הערב מכונה תקועה`);
-    msgs.push(`הייטקיסט שהקוד שלו מושלם, אבל הקלפים שלו מלאים באגים`);
-    msgs.push(`${playerName} סוגר ספרינטים בזמן, סוגר ערבי פוקר במינוס`);
-    msgs.push(`בכדורעף ${playerName} עושה בלוקים, בפוקר הוא קופץ לקניות`);
-    msgs.push(`${playerName} משחק כדורעף ופוקר, באחד מהם הוא באמת טוב`);
-    msgs.push(`${playerName} מחשב הכל כמו מחשבון, חוץ מהסיכוי שלו הערב`);
+  if (traits.quirks.length > 0) {
+    for (const quirk of traits.quirks.slice(0, 2)) {
+      msgs.push(`${name} — ${quirk}, והערב זה לא משנה`);
+    }
   }
   return msgs;
 };

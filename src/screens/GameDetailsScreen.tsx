@@ -171,7 +171,7 @@ const GameDetailsScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
-        <p className="text-muted">Loading game...</p>
+        <p className="text-muted">{t('gameDetails.loading')}</p>
       </div>
     );
   }
@@ -181,9 +181,9 @@ const GameDetailsScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/history')}>Go to History</button>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('gameDetails.notFound')}</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{t('gameDetails.notFoundDesc')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/history')}>{t('gameDetails.goToHistory')}</button>
       </div>
     );
   }

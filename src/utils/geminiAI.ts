@@ -5,8 +5,9 @@
 
 import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
-import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry } from '../types';
-import { playerTraitsByName } from './playerTraits';
+import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits } from '../types';
+import { getTraitsForPlayer } from './playerTraits';
+import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
@@ -167,6 +168,26 @@ export interface RunGeminiTextOptions {
   responseMimeType?: string;
   topP?: number;
   topK?: number;
+}
+
+/** Build a compact trait block for AI prompts. Returns empty string if no traits exist. */
+function buildTraitBlock(playerNames: string[]): string {
+  const allTraits = getAllPlayerTraits();
+  if (allTraits.size === 0) return '';
+  const lines: string[] = [];
+  for (const name of playerNames) {
+    const t = allTraits.get(name);
+    if (!t) continue;
+    const parts: string[] = [];
+    if (t.nickname) parts.push(`כינוי "${t.nickname}"`);
+    if (t.job) parts.push(t.job);
+    if (t.team) parts.push(`אוהד ${t.team}`);
+    if (t.style.length > 0) parts.push(`סגנון: ${t.style.join('/')}`);
+    if (t.quirks.length > 0) parts.push(`תכונות: ${t.quirks.join(', ')}`);
+    if (parts.length > 0) lines.push(`${name}: ${parts.join(', ')}`);
+  }
+  if (lines.length === 0) return '';
+  return `\n--- תכונות השחקנים (השתמש בזה להעשרת התוכן) ---\n${lines.join('\n')}\n---\n`;
 }
 
 /** Plain-text Gemini call with model fallback (used by training admin, coaching, etc.). */
@@ -1394,6 +1415,7 @@ export const generateAIForecasts = async (
   const chosenStyle = teaserStyles[Math.floor(Math.random() * teaserStyles.length)];
 
   const rosterImpactText = buildTonightRosterImpactLines(players.map(p => p.name));
+  const traitBlock = buildTraitBlock(players.map(p => p.name));
 
   const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
 💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
@@ -1408,7 +1430,7 @@ ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${m
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
 ${comboHistoryText ? `\n${comboHistoryText}` : ''}
 ${rosterImpactText}
-${surpriseText}
+${traitBlock}${surpriseText}
 
 📤 פלט JSON בפורמט הבא:
 {"preGameTeaser":"טיזר טרום-משחק","players":[{"name":"שם","highlight":"כותרת","sentence":"משפט"}]}
@@ -2157,7 +2179,7 @@ export const generateForecastComparison = async (
 - החטאה (פער >60): ${missed}/${total}
 - תחזית מדויקת ביותר: ${bestPrediction.name} (פער ${bestPrediction.gap})
 - תחזית רחוקה ביותר: ${worstPrediction.name} (פער ${worstPrediction.gap})
-
+${buildTraitBlock(comparisons.map(c => c.name))}
 כתוב משפט סיכום שכולל את אחוז הכיוון (${directionHits}/${total}) ותובנה על התחזית. לא להיות מצחיק. כתוב רק את המשפט.`;
 
   try {
@@ -2314,8 +2336,7 @@ ${style.desc}
 ${tonightLines}
 
 טבלת ${periodLabel} (מעודכנת כולל הערב):
-${standingsLines}${contextBlock}${periodEndingBlock}
-
+${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.map(p => p.name))}
 ✍️ הנחיות:
 - עברית טבעית וזורמת. הזכר את כל ${tonight.length} השחקנים בשמם
 - 2-3 פסקאות קצרות (שורה ריקה ביניהן), כל פסקה 2-4 משפטים. סה״כ 60-120 מילים${periodEndingLines.length > 0 ? ` (+ פסקאות תקופתיות נוספות)` : ''}
@@ -2328,7 +2349,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}
 ⚠️ דיוק עובדתי:
 - כל מספר, רווח, הפסד, רצף, שיא ודירוג חייבים להגיע ישירות מהנתונים למעלה
 - שינויי דירוג מופיעים ב"שינויים בטבלה" — אם לא מופיע שם, אל תטען שמישהו עלה/ירד/עקף
-- אל תמציא עובדות ביוגרפיות (מוצא, מקצוע, גיל). אתה יודע רק את הנתונים
+- אל תמציא עובדות ביוגרפיות. מותר להשתמש רק בתכונות שחקנים שסופקו למעלה (אם סופקו)
 - אל תמציא שיאים או הישגים שלא מופיעים בנתונים
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
@@ -2453,8 +2474,7 @@ ${style.desc}
 ${playerLines}${milestones.length > 0 ? `
 
 🏆 אבני דרך ואירועים בולטים בתקופה:
-${milestones.join('\n')}` : ''}
-
+${milestones.join('\n')}` : ''}${buildTraitBlock(players.map(p => p.name))}
 ✍️ כללי כתיבה:
 - כתוב פסקה אחת (2-4 משפטים) לכל שחקן
 - עברית טבעית, זורמת, מעניינת — לא רובוטית, לא טמפלייט
@@ -2468,7 +2488,7 @@ ${milestones.join('\n')}` : ''}
 
 ⚠️ דיוק עובדתי (חובה מוחלטת):
 - כל מספר, דירוג, רצף ותוצאה חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות, כינויים קבועים, תארים או הישגים
+- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
 📤 פורמט הפלט:
@@ -2585,7 +2605,7 @@ export const generateGraphInsights = async (
 
 📊 טבלת השחקנים (${totalGames} משחקים${isEarlyPeriod ? ', התקופה רק התחילה' : ''}):
 ${playerLines}
-
+${buildTraitBlock(sorted.map(p => p.playerName))}
 ✍️ מה לכלול:
 - מגמות: מי שולט? מי עולה? מי בנפילה?
 - יריבויות ומרדפים: מי רודף את מי בטבלה? מהם הפערים?
@@ -2596,7 +2616,7 @@ ${playerLines}
 ⚠️ כללים:
 - פסקה אחת זורמת, לא רשימה עם נקודות
 - כל מספר, רצף ודירוג חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות, כינויים קבועים, או הישגים
+- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
 - "רווח כולל" = סך כל הרווח של השחקן. "פער" = ההפרש בין שני שחקנים סמוכים בטבלה. אלו מספרים שונים! אל תבלבל ביניהם
 - כשמציין פער בטבלה, השתמש במספר מ"פער מהבא" או "פער מלמעלה", לא מהרווח הכולל
 - אם לא בטוח — השמט${isEarlyPeriod ? '\n- התקופה רק התחילה, היזהר ממסקנות גורפות' : ''}
@@ -2631,7 +2651,7 @@ interface TTSPlayerInput {
   id: string;
   name: string;
   stats: PlayerStats | null;
-  traits: typeof playerTraitsByName[string] | undefined;
+  traits: PlayerTraits | undefined;
   training: TTSPlayerTraining | null;
 }
 
@@ -2666,7 +2686,7 @@ export const generateLiveGameTTSPool = async (
     id,
     name: playerNames[i],
     stats: allStats.find(s => s.playerId === id) || null,
-    traits: playerTraitsByName[playerNames[i]],
+    traits: getTraitsForPlayer(playerNames[i]),
     training: trainingByName[playerNames[i]] || null,
   }));
 

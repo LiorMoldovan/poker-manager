@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
-import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair } from '../types';
+import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
   getAllPlayers, 
@@ -25,10 +25,13 @@ import {
   restoreFromBackup,
   parseBackupSummary,
   getLastBackupDate,
+  getAllPlayerTraits,
+  savePlayerTraits,
+  getGroupPushSubscribers,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush } from '../utils/apiProxy';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
@@ -94,6 +97,11 @@ const SettingsScreen = () => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
 
+  // Player traits editor state
+  const [editingTraitsPlayer, setEditingTraitsPlayer] = useState<Player | null>(null);
+  const [traitsForm, setTraitsForm] = useState<PlayerTraits>({ style: [], quirks: [] });
+  const [traitsSaving, setTraitsSaving] = useState(false);
+
   // Super Admin dashboard state
   interface GlobalGroup {
     id: string;
@@ -154,7 +162,7 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin';
+  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push';
   const getDefaultTab = (): TabId => 'group';
   
   const [activeTab, setActiveTab] = useState<TabId>(getDefaultTab());
@@ -164,11 +172,30 @@ const SettingsScreen = () => {
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
   const [githubBackups, setGithubBackups] = useState<{ name: string; size: number }[]>([]);
   const [githubLoading, setGithubLoading] = useState(false);
+  const [githubLoaded, setGithubLoaded] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
+
+  // Push notification state
+  const [pushMsg, setPushMsg] = useState('');
+  const [pushTarget, setPushTarget] = useState<'all' | 'select'>('all');
+  const [pushSelectedPlayers, setPushSelectedPlayers] = useState<string[]>([]);
+  const [pushSending, setPushSending] = useState(false);
+  const [pushResult, setPushResult] = useState<string | null>(null);
+  const [pushSubscriberCount, setPushSubscriberCount] = useState(0);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Load push subscriber count when tab is active
+  useEffect(() => {
+    const gid = getGroupId();
+    if (activeTab === 'push' && gid) {
+      getGroupPushSubscribers(gid).then(subs => {
+        setPushSubscriberCount(subs.length);
+      });
+    }
+  }, [activeTab]);
 
   // Auto-load activity log + group members when tab is selected
   useEffect(() => {
@@ -189,14 +216,15 @@ const SettingsScreen = () => {
 
   // Auto-load GitHub backups when backup tab is selected
   useEffect(() => {
-    if (activeTab === 'backup' && isOwner && groupMgmt?.groupName && githubBackups.length === 0 && !githubLoading) {
+    if (activeTab === 'backup' && isOwner && groupMgmt?.groupName && !githubLoaded && !githubLoading) {
       setGithubLoading(true);
       listGitHubBackups(groupMgmt.groupName).then(files => {
         setGithubBackups(files);
         setGithubLoading(false);
+        setGithubLoaded(true);
       });
     }
-  }, [activeTab, isOwner, groupMgmt?.groupName, githubBackups.length, githubLoading]);
+  }, [activeTab, isOwner, groupMgmt?.groupName, githubLoaded, githubLoading]);
 
   // Load AI status when AI tab is selected + tick for countdowns
   useEffect(() => {
@@ -412,6 +440,7 @@ const SettingsScreen = () => {
     { id: 'backup', label: t('settings.tabBackup'), icon: '📦', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'ai', label: t('settings.tabAI'), icon: '🤖', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
+    { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
@@ -987,6 +1016,26 @@ const SettingsScreen = () => {
                           {t('common.edit')}
                         </button>
                       )}
+                      {canEditPlayers && (
+                        <button
+                          className="btn btn-sm"
+                          style={{
+                            padding: '0.35rem 0.5rem',
+                            fontSize: '0.75rem',
+                            background: 'rgba(168, 85, 247, 0.1)',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
+                            color: '#A855F7',
+                          }}
+                          onClick={() => {
+                            const existing = getAllPlayerTraits().get(player.name);
+                            setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
+                            setEditingTraitsPlayer(player);
+                          }}
+                          title={t('settings.traits.button')}
+                        >
+                          {t('settings.traits.button')}
+                        </button>
+                      )}
                       {canDeletePlayers && (
                         <button 
                           className="btn btn-sm"
@@ -1012,6 +1061,101 @@ const SettingsScreen = () => {
         </div>
       )}
 
+      {/* Player Traits Editor Modal */}
+      {editingTraitsPlayer && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }} onClick={() => setEditingTraitsPlayer(null)}>
+          <div style={{
+            background: 'var(--surface-card)', borderRadius: '12px', padding: '1.5rem',
+            width: '100%', maxWidth: '420px', maxHeight: '85vh', overflowY: 'auto',
+            border: '1px solid var(--border)',
+          }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 1rem', color: 'var(--text)' }}>
+              {t('settings.traits.title', { name: editingTraitsPlayer.name })}
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.nickname')}</label>
+              <input
+                type="text"
+                value={traitsForm.nickname || ''}
+                onChange={e => setTraitsForm(f => ({ ...f, nickname: e.target.value || undefined }))}
+                placeholder={t('settings.traits.nicknamePlaceholder')}
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
+              />
+
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.job')}</label>
+              <input
+                type="text"
+                value={traitsForm.job || ''}
+                onChange={e => setTraitsForm(f => ({ ...f, job: e.target.value || undefined }))}
+                placeholder={t('settings.traits.jobPlaceholder')}
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
+              />
+
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.team')}</label>
+              <input
+                type="text"
+                value={traitsForm.team || ''}
+                onChange={e => setTraitsForm(f => ({ ...f, team: e.target.value || undefined }))}
+                placeholder={t('settings.traits.teamPlaceholder')}
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
+              />
+
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.style')}</label>
+              <input
+                type="text"
+                value={traitsForm.style.join(', ')}
+                onChange={e => setTraitsForm(f => ({ ...f, style: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                placeholder={t('settings.traits.stylePlaceholder')}
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
+              />
+
+              <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.quirks')}</label>
+              <input
+                type="text"
+                value={traitsForm.quirks.join(', ')}
+                onChange={e => setTraitsForm(f => ({ ...f, quirks: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                placeholder={t('settings.traits.quirksPlaceholder')}
+                style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
+              />
+
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.7rem', margin: 0 }}>
+                {t('settings.traits.help')}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)' }}
+                onClick={() => setEditingTraitsPlayer(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--primary)', color: '#fff', border: 'none', opacity: traitsSaving ? 0.6 : 1 }}
+                disabled={traitsSaving}
+                onClick={async () => {
+                  setTraitsSaving(true);
+                  await savePlayerTraits(editingTraitsPlayer.id, editingTraitsPlayer.name, traitsForm);
+                  setTraitsSaving(false);
+                  setEditingTraitsPlayer(null);
+                  setSaved(true);
+                  setTimeout(() => setSaved(false), 2000);
+                }}
+              >
+                {traitsSaving ? t('common.saving') : t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Backup Tab - Owner Only */}
       {activeTab === 'backup' && isOwner && (() => {
         const lastDate = getLastBackupDate();
@@ -1032,8 +1176,8 @@ const SettingsScreen = () => {
             const ghResult = await pushBackupToGitHub(groupName, json);
             if (ghResult.success) {
               setBackupStatus(t('settings.backup.githubSuccess'));
+              setGithubLoaded(false);
               setGithubBackups([]);
-              listGitHubBackups(groupName).then(f => setGithubBackups(f));
             } else {
               setBackupStatus(t('settings.backup.githubFailed', { error: ghResult.error || '' }));
             }
@@ -1739,17 +1883,14 @@ const SettingsScreen = () => {
                 <button
                   key={lang}
                   onClick={() => {
-                    const newSettings = { ...settings, language: lang };
-                    setSettings(newSettings);
-                    saveSettings(newSettings);
                     setLanguage(lang);
                   }}
                   style={{
                     padding: '0.4rem 1rem',
                     borderRadius: '0.5rem',
-                    border: settings.language === lang || (!settings.language && lang === 'he') ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: settings.language === lang || (!settings.language && lang === 'he') ? 'var(--primary)' : 'var(--surface)',
-                    color: settings.language === lang || (!settings.language && lang === 'he') ? 'white' : 'var(--text)',
+                    border: language === lang ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: language === lang ? 'var(--primary)' : 'var(--surface)',
+                    color: language === lang ? 'white' : 'var(--text)',
                     cursor: 'pointer',
                     fontWeight: '600',
                     fontSize: '0.875rem',
@@ -1952,6 +2093,166 @@ const SettingsScreen = () => {
           </div>
         );
       })()}
+
+      {/* Push Notifications Tab */}
+      {activeTab === 'push' && (
+        <div>
+          <div className="card" style={{ marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>
+              🔔 {t('push.title')}
+            </h3>
+            <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
+            </p>
+
+            {/* Templates */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                {t('push.templates')}
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                {[
+                  { key: 'tplPokerNight', msg: t('push.tplPokerNight') },
+                  { key: 'tplPayReminder', msg: t('push.tplPayReminder') },
+                  { key: 'tplGameCancelled', msg: t('push.tplGameCancelled') },
+                  { key: 'tplGameStarting', msg: t('push.tplGameStarting') },
+                ].map(tpl => (
+                  <button
+                    key={tpl.key}
+                    onClick={() => setPushMsg(tpl.msg)}
+                    style={{
+                      padding: '0.35rem 0.7rem', borderRadius: '0.5rem',
+                      border: '1px solid var(--border)', background: 'var(--surface)',
+                      color: 'var(--text)', cursor: 'pointer', fontSize: '0.78rem',
+                      fontFamily: 'Outfit, sans-serif',
+                    }}
+                  >
+                    {tpl.msg}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Message input */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                {t('push.messageLabel')}
+              </label>
+              <textarea
+                value={pushMsg}
+                onChange={e => { setPushMsg(e.target.value); setPushResult(null); }}
+                placeholder={t('push.messagePlaceholder')}
+                rows={3}
+                style={{
+                  width: '100%', padding: '0.6rem', borderRadius: '0.5rem',
+                  border: '1px solid var(--border)', background: 'var(--surface)',
+                  color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif',
+                  resize: 'vertical', direction: 'rtl', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Recipients */}
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                {t('push.recipients')}
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                <button
+                  onClick={() => { setPushTarget('all'); setPushSelectedPlayers([]); }}
+                  style={{
+                    padding: '0.35rem 0.8rem', borderRadius: '0.5rem',
+                    border: pushTarget === 'all' ? '2px solid #10B981' : '1px solid var(--border)',
+                    background: pushTarget === 'all' ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                    color: 'var(--text)', cursor: 'pointer', fontSize: '0.8rem',
+                    fontFamily: 'Outfit, sans-serif', fontWeight: pushTarget === 'all' ? 600 : 400,
+                  }}
+                >
+                  {t('push.allPlayers')}
+                </button>
+                <button
+                  onClick={() => setPushTarget('select')}
+                  style={{
+                    padding: '0.35rem 0.8rem', borderRadius: '0.5rem',
+                    border: pushTarget === 'select' ? '2px solid #10B981' : '1px solid var(--border)',
+                    background: pushTarget === 'select' ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                    color: 'var(--text)', cursor: 'pointer', fontSize: '0.8rem',
+                    fontFamily: 'Outfit, sans-serif', fontWeight: pushTarget === 'select' ? 600 : 400,
+                  }}
+                >
+                  {t('push.selectPlayers')}
+                </button>
+              </div>
+              {pushTarget === 'select' && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  {players.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setPushSelectedPlayers(prev =>
+                          prev.includes(p.name) ? prev.filter(n => n !== p.name) : [...prev, p.name]
+                        );
+                      }}
+                      style={{
+                        padding: '0.3rem 0.6rem', borderRadius: '0.4rem',
+                        border: pushSelectedPlayers.includes(p.name) ? '2px solid #10B981' : '1px solid var(--border)',
+                        background: pushSelectedPlayers.includes(p.name) ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                        color: 'var(--text)', cursor: 'pointer', fontSize: '0.75rem',
+                        fontFamily: 'Outfit, sans-serif',
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Send button */}
+            <button
+              disabled={pushSending || !pushMsg.trim() || (pushTarget === 'select' && pushSelectedPlayers.length === 0)}
+              onClick={async () => {
+                const gid = getGroupId();
+                if (!gid || !pushMsg.trim()) return;
+                setPushSending(true);
+                setPushResult(null);
+                const result = await proxySendPush({
+                  groupId: gid,
+                  title: '🃏 Poker Manager',
+                  body: pushMsg.trim(),
+                  targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
+                });
+                setPushSending(false);
+                if (result) {
+                  setPushResult(t('push.sent', { sent: String(result.sent), total: String(result.total) }));
+                  if (result.sent > 0) setPushMsg('');
+                } else {
+                  setPushResult(t('push.error'));
+                }
+              }}
+              style={{
+                width: '100%', padding: '0.7rem', borderRadius: '0.5rem',
+                border: 'none', fontWeight: 600, fontSize: '0.9rem',
+                fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
+                background: pushSending || !pushMsg.trim() ? '#374151' : '#10B981',
+                color: pushSending || !pushMsg.trim() ? '#6B7280' : 'white',
+              }}
+            >
+              {pushSending ? t('push.sending') : t('push.send')}
+            </button>
+
+            {/* Result */}
+            {pushResult && (
+              <p style={{
+                marginTop: '0.5rem', fontSize: '0.8rem', textAlign: 'center',
+                color: pushResult.includes('❌') || pushResult === t('push.error') ? '#EF4444' : '#10B981',
+              }}>
+                {pushResult}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Activity Tab - Owner Only - Enhanced Dashboard */}
       {activeTab === 'activity' && isOwner && (

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-02-05
  */
 
-export const APP_VERSION = '5.16.1';
+export const APP_VERSION = '5.17.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.0',
+    date: '2026-04-19',
+    changes: [
+      '🔔 Push notifications — admins can send real push notifications to players (even when app is closed)',
+      '📧 Settlement email switched from Resend to EmailJS (free, no domain needed)',
+      '🔧 Service Worker + Web Push API with zero third-party dependencies',
+      '💬 Notification templates: poker night, pay reminder, game cancelled, game starting',
+      '🎯 Recipient picker: send to all players or select specific ones',
+    ],
+  },
   {
     version: '5.16.1',
     date: '2026-04-19',

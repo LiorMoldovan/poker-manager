@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 
 // ── Cache state ──
@@ -9,6 +9,7 @@ interface CacheState {
   groupId: string;
   data: Map<string, unknown>;
   ttsPools: Map<string, { pool: unknown; model?: string }>;
+  playerTraits: Map<string, PlayerTraits>;
   initialized: boolean;
 }
 
@@ -303,6 +304,8 @@ async function pushToSupabase(key: string) {
             from_player: ps.from,
             to_player: ps.to,
             paid_at: ps.paidAt,
+            amount: ps.amount ?? null,
+            auto_closed: ps.autoClosed ?? false,
           }));
           const { error: ie } = await supabase.from('paid_settlements').insert(psRows);
           if (ie) logSyncError('paid_settlements', 'insert', ie);
@@ -467,6 +470,7 @@ async function fetchAllRows(
 async function fetchByGameIds(
   table: string,
   gameIds: string[],
+  column = 'game_id',
 ): Promise<Record<string, unknown>[]> {
   if (gameIds.length === 0) return [];
   const BATCH = 100;
@@ -475,7 +479,7 @@ async function fetchByGameIds(
     batches.push(gameIds.slice(i, i + BATCH));
   }
   const results = await Promise.all(batches.map(async (batch, idx) => {
-    const { data, error } = await supabase.from(table).select('*').in('game_id', batch);
+    const { data, error } = await supabase.from(table).select('*').in(column, batch);
     if (error) console.warn(`${table} batch ${idx}:`, error.message);
     return (data || []) as Record<string, unknown>[];
   }));
@@ -495,16 +499,67 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     fetchAllRows('players', { column: 'group_id', value: groupId }),
     fetchAllRows('games', { column: 'group_id', value: groupId }),
     supabase.from('chip_values').select('*').eq('group_id', groupId),
-    supabase.from('settings').select('*').eq('group_id', groupId).maybeSingle(),
+    supabase.rpc('get_group_settings', { p_group_id: groupId }) as unknown as { data: Record<string, unknown> | null; error: { message: string } | null },
     supabase.from('pending_forecasts').select('*').eq('group_id', groupId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   if (chipValuesRes.error) console.warn('chip_values:', chipValuesRes.error.message);
-  if (settingsRes.error) console.warn('settings:', settingsRes.error.message);
+  if (settingsRes.error) console.warn('settings (RPC):', settingsRes.error.message);
   if (pendingRes.error) console.warn('pending_forecasts:', pendingRes.error.message);
 
   // Players
-  data.set(STORAGE_KEYS.PLAYERS, playersRows.map(r => toPlayer(r)));
+  const players = playersRows.map(r => toPlayer(r));
+  data.set(STORAGE_KEYS.PLAYERS, players);
+
+  // Player traits (keyed by player name for quick lookup)
+  const playerTraits = new Map<string, PlayerTraits>();
+  const playerIds = players.map(p => p.id);
+  if (playerIds.length > 0) {
+    const traitsRows = await fetchByGameIds('player_traits', playerIds, 'player_id');
+    const idToName = new Map(players.map(p => [p.id, p.name]));
+    for (const row of traitsRows) {
+      const name = idToName.get(row.player_id as string);
+      if (name) {
+        playerTraits.set(name, {
+          nickname: (row.nickname as string) || undefined,
+          job: (row.job as string) || undefined,
+          team: (row.team as string) || undefined,
+          style: (row.style as string[]) || [],
+          quirks: (row.quirks as string[]) || [],
+        });
+      }
+    }
+  }
+
+  // Seed traits from hardcoded data if DB is empty (one-time migration)
+  if (playerTraits.size === 0 && players.length > 0) {
+    try {
+      const { SEED_TRAITS } = await import('../utils/playerTraits');
+      const nameToId = new Map(players.map(p => [p.name, p.id]));
+      const seedRows: Array<{ player_id: string; nickname: string | null; job: string | null; team: string | null; style: string[]; quirks: string[] }> = [];
+      for (const [name, traits] of Object.entries(SEED_TRAITS)) {
+        const pid = nameToId.get(name);
+        if (pid) {
+          playerTraits.set(name, traits);
+          seedRows.push({
+            player_id: pid,
+            nickname: traits.nickname || null,
+            job: traits.job || null,
+            team: traits.team || null,
+            style: traits.style,
+            quirks: traits.quirks,
+          });
+        }
+      }
+      if (seedRows.length > 0) {
+        const { error: seedErr } = await supabase.from('player_traits').upsert(seedRows, { onConflict: 'player_id' });
+        if (seedErr) console.warn('Trait seed failed:', seedErr);
+        else console.log(`Seeded ${seedRows.length} player traits from hardcoded data`);
+      }
+    } catch (err) {
+      console.warn('Trait seed import failed:', err);
+    }
+  }
 
   // Build game ID set for child table filtering
   const games = gamesRows.map(r => toGame(r));
@@ -535,7 +590,7 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     if (!forecastsByGame.has(gameId)) forecastsByGame.set(gameId, []);
     forecastsByGame.get(gameId)!.push(toForecast(row));
   }
-  const settlementsByGame = new Map<string, { from: string; to: string; paidAt: string }[]>();
+  const settlementsByGame = new Map<string, PaidSettlement[]>();
   for (const row of settlementsRows) {
     const gameId = row.game_id as string;
     if (!settlementsByGame.has(gameId)) settlementsByGame.set(gameId, []);
@@ -543,6 +598,8 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
       from: row.from_player as string,
       to: row.to_player as string,
       paidAt: row.paid_at as string,
+      amount: row.amount != null ? Number(row.amount) : undefined,
+      autoClosed: row.auto_closed === true,
     });
   }
   const periodMarkersByGame = new Map<string, Game['periodMarkers']>();
@@ -611,7 +668,7 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   data.set(GRAPH_INSIGHTS_KEY, {});
 
   console.log(`Supabase cache loaded: ${games.length} games, ${gps.length} game-players, ${playersRows.length} players`);
-  state = { groupId, data, ttsPools, initialized: true };
+  state = { groupId, data, ttsPools, playerTraits, initialized: true };
 
   // Phase 3 (deferred): load non-essential data in background after UI renders
   loadDeferredData(groupId, gameIds);
@@ -676,6 +733,7 @@ export function resetCache(): void {
   if (state) {
     state.initialized = false;
     state.data.clear();
+    state.playerTraits.clear();
   }
   state = null;
 }
@@ -748,15 +806,116 @@ export function cacheDeleteTTS(gameId: string): void {
   supabase.from('tts_pools').delete().eq('game_id', gameId).then(null, () => {});
 }
 
+// ── Player Traits ──
+
+export function getPlayerTraitsByName(playerName: string): PlayerTraits | undefined {
+  return state?.playerTraits.get(playerName);
+}
+
+export function getAllPlayerTraits(): Map<string, PlayerTraits> {
+  return state?.playerTraits ?? new Map();
+}
+
+export async function savePlayerTraits(playerId: string, playerName: string, traits: PlayerTraits): Promise<void> {
+  if (!state) return;
+  state.playerTraits.set(playerName, traits);
+  const { error } = await supabase.from('player_traits').upsert({
+    player_id: playerId,
+    nickname: traits.nickname || null,
+    job: traits.job || null,
+    team: traits.team || null,
+    style: traits.style,
+    quirks: traits.quirks,
+  }, { onConflict: 'player_id' });
+  if (error) console.warn('Failed to save player traits:', error);
+}
+
+// ── Notifications ──
+
+let cachedNotifications: AppNotification[] = [];
+
+export async function fetchNotifications(): Promise<AppNotification[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) { console.warn('Failed to fetch notifications:', error); return []; }
+  cachedNotifications = (data || []).map(r => ({
+    id: r.id as string,
+    groupId: r.group_id as string,
+    userId: r.user_id as string,
+    type: r.type as string,
+    title: r.title as string,
+    body: r.body as string,
+    data: r.data as Record<string, unknown> | undefined,
+    read: r.read as boolean,
+    createdAt: r.created_at as string,
+  }));
+  return cachedNotifications;
+}
+
+export function getCachedNotifications(): AppNotification[] {
+  return cachedNotifications;
+}
+
+export function getUnreadNotificationCount(): number {
+  return cachedNotifications.filter(n => !n.read).length;
+}
+
+export async function markNotificationRead(notifId: string): Promise<void> {
+  const idx = cachedNotifications.findIndex(n => n.id === notifId);
+  if (idx >= 0) cachedNotifications[idx] = { ...cachedNotifications[idx], read: true };
+  const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notifId);
+  if (error) console.warn('Failed to mark notification read:', error);
+  window.dispatchEvent(new CustomEvent('supabase-cache-updated'));
+}
+
+export async function createNotification(
+  groupId: string, targetUserId: string,
+  type: string, title: string, body: string,
+  data?: Record<string, unknown>
+): Promise<void> {
+  const { error } = await supabase.from('notifications').insert({
+    group_id: groupId,
+    user_id: targetUserId,
+    type, title, body,
+    data: data || null,
+  });
+  if (error) console.warn('Failed to create notification:', error);
+}
+
+export async function resolvePlayerUserId(groupId: string, playerName: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_user_id_for_player', {
+    p_group_id: groupId,
+    p_player_name: playerName,
+  });
+  if (error) { console.warn('Failed to resolve player user_id:', error); return null; }
+  return data as string | null;
+}
+
+export async function getPlayerEmailForNotification(groupId: string, playerName: string): Promise<{ userId: string; email: string } | null> {
+  const { data, error } = await supabase.rpc('get_player_email_for_notification', {
+    p_group_id: groupId,
+    p_player_name: playerName,
+  });
+  if (error || !data || (data as unknown[]).length === 0) return null;
+  const row = (data as unknown[])[0] as { target_user_id: string; email: string };
+  return { userId: row.target_user_id, email: row.email };
+}
+
 // ── Realtime subscriptions ──
 
-type RefreshGroup = 'players' | 'games' | 'settings' | 'forecast' | 'ai' | 'tts';
+type RefreshGroup = 'players' | 'games' | 'game_players' | 'settings' | 'forecast' | 'ai' | 'tts' | 'notifications';
 
 const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   players: 'players',
   games: 'games',
-  game_players: 'games',
-  shared_expenses: 'games',
+  game_players: 'game_players',
+  shared_expenses: 'game_players',
   game_forecasts: 'games',
   paid_settlements: 'games',
   period_markers: 'games',
@@ -768,6 +927,8 @@ const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   tts_pools: 'tts',
   group_members: 'players',
   groups: 'settings',
+  notifications: 'notifications',
+  player_traits: 'players',
 };
 
 const pendingGroups = new Set<RefreshGroup>();
@@ -795,7 +956,49 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
 
   if (groups.has('players')) {
     const rows = await fetchAllRows('players', { column: 'group_id', value: gid });
-    state.data.set(STORAGE_KEYS.PLAYERS, rows.map(r => toPlayer(r)));
+    const refreshedPlayers = rows.map(r => toPlayer(r));
+    state.data.set(STORAGE_KEYS.PLAYERS, refreshedPlayers);
+    const pIds = refreshedPlayers.map(p => p.id);
+    if (pIds.length > 0) {
+      const traitRows = await fetchByGameIds('player_traits', pIds, 'player_id');
+      const idToName = new Map(refreshedPlayers.map(p => [p.id, p.name]));
+      state.playerTraits.clear();
+      for (const row of traitRows) {
+        const name = idToName.get(row.player_id as string);
+        if (name) {
+          state.playerTraits.set(name, {
+            nickname: (row.nickname as string) || undefined,
+            job: (row.job as string) || undefined,
+            team: (row.team as string) || undefined,
+            style: (row.style as string[]) || [],
+            quirks: (row.quirks as string[]) || [],
+          });
+        }
+      }
+    }
+  }
+
+  // Lightweight refresh: only game_players + shared_expenses changed (e.g. rebuy during live game)
+  if (groups.has('game_players') && !groups.has('games')) {
+    const existingGames = (state.data.get(STORAGE_KEYS.GAMES) as Game[]) || [];
+    const gameIds = existingGames.map(g => g.id);
+    if (gameIds.length > 0) {
+      const [gpRows, seRows] = await Promise.all([
+        fetchByGameIds('game_players', gameIds),
+        fetchByGameIds('shared_expenses', gameIds),
+      ]);
+      state.data.set(STORAGE_KEYS.GAME_PLAYERS, gpRows.map(r => toGamePlayer(r)));
+      const seByGame = new Map<string, SharedExpense[]>();
+      for (const row of seRows) {
+        const id = row.game_id as string;
+        if (!seByGame.has(id)) seByGame.set(id, []);
+        seByGame.get(id)!.push(toSharedExpense(row));
+      }
+      for (const game of existingGames) {
+        const se = seByGame.get(game.id);
+        game.sharedExpenses = se && se.length > 0 ? se : undefined;
+      }
+    }
   }
 
   if (groups.has('games')) {
@@ -823,11 +1026,17 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
       if (!fcByGame.has(id)) fcByGame.set(id, []);
       fcByGame.get(id)!.push(toForecast(row));
     }
-    const psByGame = new Map<string, { from: string; to: string; paidAt: string }[]>();
+    const psByGame = new Map<string, PaidSettlement[]>();
     for (const row of psRows) {
       const id = row.game_id as string;
       if (!psByGame.has(id)) psByGame.set(id, []);
-      psByGame.get(id)!.push({ from: row.from_player as string, to: row.to_player as string, paidAt: row.paid_at as string });
+      psByGame.get(id)!.push({
+        from: row.from_player as string,
+        to: row.to_player as string,
+        paidAt: row.paid_at as string,
+        amount: row.amount != null ? Number(row.amount) : undefined,
+        autoClosed: row.auto_closed === true,
+      });
     }
     const pmByGame = new Map<string, Game['periodMarkers']>();
     for (const row of pmRows) {
@@ -860,7 +1069,7 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
   if (groups.has('settings')) {
     const [cvRes, sRes] = await Promise.all([
       supabase.from('chip_values').select('*').eq('group_id', gid),
-      supabase.from('settings').select('*').eq('group_id', gid).maybeSingle(),
+      supabase.rpc('get_group_settings', { p_group_id: gid }) as unknown as { data: Record<string, unknown> | null; error: { message: string } | null },
     ]);
     if (!cvRes.error) {
       state.data.set(STORAGE_KEYS.CHIP_VALUES, (cvRes.data || []).map(r => toChipValue(r as Record<string, unknown>)));
@@ -923,6 +1132,10 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
       });
     }
   }
+
+  if (groups.has('notifications')) {
+    await fetchNotifications();
+  }
 }
 
 export function subscribeToRealtime(): void {
@@ -956,4 +1169,44 @@ export function unsubscribeFromRealtime(): void {
     clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = null;
   }
+}
+
+// ─── Push Notification Subscriptions ───
+
+export async function savePushSubscription(
+  groupId: string,
+  playerName: string | null,
+  subscription: PushSubscription
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const keys = subscription.toJSON().keys;
+  if (!keys?.p256dh || !keys?.auth) return;
+
+  const { error } = await supabase.from('push_subscriptions').upsert({
+    group_id: groupId,
+    user_id: user.id,
+    player_name: playerName,
+    endpoint: subscription.endpoint,
+    keys_p256dh: keys.p256dh,
+    keys_auth: keys.auth,
+  }, { onConflict: 'user_id,endpoint' });
+  if (error) console.warn('Failed to save push subscription:', error);
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  const { error } = await supabase.from('push_subscriptions')
+    .delete().eq('endpoint', endpoint);
+  if (error) console.warn('Failed to delete push subscription:', error);
+}
+
+export async function getGroupPushSubscribers(groupId: string): Promise<{ playerName: string | null; endpoint: string }[]> {
+  const { data, error } = await supabase.from('push_subscriptions')
+    .select('player_name, endpoint')
+    .eq('group_id', groupId);
+  if (error) { console.warn('Failed to fetch push subs:', error); return []; }
+  return (data || []).map(r => ({
+    playerName: r.player_name as string | null,
+    endpoint: r.endpoint as string,
+  }));
 }

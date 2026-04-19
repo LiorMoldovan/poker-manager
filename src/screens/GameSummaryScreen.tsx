@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit } from '../utils/sharing';
-import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, Game } from '../types';
-import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame } from '../database/storage';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, PaidSettlement } from '../types';
+import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame, createNotification, getPlayerEmailForNotification, getGroupId } from '../database/storage';
+import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
@@ -75,7 +76,7 @@ const GameSummaryScreen = () => {
   const monthlyRef = useRef<HTMLDivElement>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
   const [showReopenConfirm, setShowReopenConfirm] = useState(false);
-  const [paidSettlements, setPaidSettlements] = useState<{ from: string; to: string; paidAt: string }[]>([]);
+  const [paidSettlements, setPaidSettlements] = useState<PaidSettlement[]>([]);
   const [paymentModal, setPaymentModal] = useState<{ from: string; to: string; amount: number } | null>(null);
   const settlementsSectionRef = useRef<HTMLDivElement>(null);
   const isPayMode = new URLSearchParams(location.search).get('pay') === '1';
@@ -104,17 +105,60 @@ const GameSummaryScreen = () => {
     return identityName === from || identityName === to;
   };
 
-  const toggleSettlementPaid = (from: string, to: string) => {
+  const getSettlementEntry = (from: string, to: string) =>
+    paidSettlements.find(p => p.from === from && p.to === to);
+
+  const toggleSettlementPaid = (from: string, to: string, amount?: number) => {
     if (!gameId) return;
     if (!canToggleSettlement(from, to)) return;
-    let updated: Game['paidSettlements'];
+    let updated: PaidSettlement[];
     if (isSettlementPaid(from, to)) {
       updated = paidSettlements.filter(p => !(p.from === from && p.to === to));
     } else {
-      updated = [...paidSettlements, { from, to, paidAt: new Date().toISOString() }];
+      updated = [...paidSettlements, { from, to, paidAt: new Date().toISOString(), amount }];
     }
-    setPaidSettlements(updated || []);
+    setPaidSettlements(updated);
     updateGame(gameId, { paidSettlements: updated });
+  };
+
+  const [disputeSending, setDisputeSending] = useState<string | null>(null);
+
+  const handleDispute = async (from: string, to: string, amount: number) => {
+    if (!gameId || !identityName) return;
+    const groupId = getGroupId();
+    if (!groupId) return;
+
+    setDisputeSending(`${from}-${to}`);
+    try {
+      const updated = paidSettlements.filter(p => !(p.from === from && p.to === to));
+      setPaidSettlements(updated);
+      updateGame(gameId, { paidSettlements: updated });
+
+      const info = await getPlayerEmailForNotification(groupId, from);
+      if (info) {
+        const gameDateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
+        await createNotification(
+          groupId, info.userId,
+          'settlement_dispute',
+          t('notification.settlementTitle'),
+          t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel }),
+          { gameId, from, to, amount, gameDate }
+        );
+        const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
+        await proxySendEmail({
+          to: info.email,
+          subject: t('notification.emailSubject'),
+          playerName: from,
+          reporterName: identityName,
+          amount,
+          gameDate: gameDateLabel,
+          payLink,
+        });
+      }
+    } catch (err) {
+      console.warn('Dispute notification failed:', err);
+    }
+    setDisputeSending(null);
   };
 
   const [amountCopied, setAmountCopied] = useState(false);
@@ -209,6 +253,7 @@ const GameSummaryScreen = () => {
     // Calculate settlements - use COMBINED if there are expenses
     const gameDateStr = game.date || game.createdAt;
     const blockedPairs = settings.blockedTransfers;
+    let computedSettlements: Settlement[];
     if (gameExpenses.length > 0) {
       const { settlements: settl, smallTransfers: small } = calculateCombinedSettlement(
         gamePlayers,
@@ -217,6 +262,7 @@ const GameSummaryScreen = () => {
         gameDateStr,
         blockedPairs
       );
+      computedSettlements = settl;
       setSettlements(settl);
       setSkippedTransfers(small);
     } else {
@@ -226,8 +272,29 @@ const GameSummaryScreen = () => {
         gameDateStr,
         blockedPairs
       );
+      computedSettlements = settl;
       setSettlements(settl);
       setSkippedTransfers(small);
+    }
+
+    // Auto-close: mark all unsettled as paid after 48 hours
+    const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
+    const gameAge = Date.now() - new Date(game.date || game.createdAt).getTime();
+    const loadedPaid = game.paidSettlements || [];
+    if (gameAge > FORTY_EIGHT_HOURS && computedSettlements.length > 0 && game.status === 'completed') {
+      const isPaid = (from: string, to: string) => loadedPaid.some(p => p.from === from && p.to === to);
+      const unsettled = computedSettlements.filter(s => !isPaid(s.from, s.to));
+      if (unsettled.length > 0) {
+        const autoEntries: PaidSettlement[] = unsettled.map(s => ({
+          from: s.from, to: s.to,
+          paidAt: new Date().toISOString(),
+          amount: s.amount,
+          autoClosed: true,
+        }));
+        const merged = [...loadedPaid, ...autoEntries];
+        setPaidSettlements(merged);
+        updateGame(game.id, { paidSettlements: merged });
+      }
     }
     
     // Load forecasts if available
@@ -1203,25 +1270,35 @@ const GameSummaryScreen = () => {
               })()}
               {settlements.map((s, index) => {
                 const paid = isSettlementPaid(s.from, s.to);
+                const entry = getSettlementEntry(s.from, s.to);
+                const isAutoClosed = entry?.autoClosed;
                 const iAmFrom = identityName && s.from === identityName;
                 const iAmTo = identityName && s.to === identityName;
                 const isMySettlement = iAmFrom || iAmTo;
-                const isClickable = !paid && canToggleSettlement(s.from, s.to);
+                const canOpenModal = canToggleSettlement(s.from, s.to);
+                const isClickable = !paid && canOpenModal;
+                const canDispute = paid && isAutoClosed && iAmTo;
+                const adminCanManage = paid && role === 'admin';
+                const rowClickable = isClickable || canDispute || adminCanManage;
                 return (
                   <div
                     key={index}
                     className="settlement-row"
                     style={{
-                      cursor: isClickable ? 'pointer' : 'default',
-                      opacity: paid ? 0.5 : 1,
-                      background: isMySettlement && !paid ? '#1e2d45' : undefined,
+                      cursor: rowClickable ? 'pointer' : 'default',
+                      opacity: paid && !canDispute && !adminCanManage ? 0.5 : 1,
+                      background: isMySettlement && !paid ? '#1e2d45' : canDispute ? 'rgba(234, 179, 8, 0.06)' : undefined,
                       borderRadius: '8px',
                       padding: '0.3rem 0.6rem',
                       margin: '0.1rem -0.4rem',
                       position: 'relative',
                       transition: 'all 0.2s ease',
                     }}
-                    onClick={() => isClickable && setPaymentModal({ from: s.from, to: s.to, amount: s.amount })}
+                    onClick={() => {
+                      if (rowClickable) {
+                        setPaymentModal({ from: s.from, to: s.to, amount: s.amount });
+                      }
+                    }}
                   >
                     <span style={iAmFrom ? { color: '#60a5fa', fontWeight: '700' } : undefined}>{renderPlayerWithFoodIcon(s.from)}</span>
                     <span className="settlement-arrow">➜</span>
@@ -1251,7 +1328,10 @@ const GameSummaryScreen = () => {
                       <span className="settlement-amount" style={{ textDecoration: paid ? 'line-through' : undefined, marginLeft: 0 }}>
                         {formatCurrency(s.amount)}
                       </span>
-                      {paid && <span style={{ fontSize: '0.85rem' }}>✅</span>}
+                      {paid && !isAutoClosed && <span style={{ fontSize: '0.85rem' }}>✅</span>}
+                      {paid && isAutoClosed && (
+                        <span style={{ fontSize: '0.6rem', color: '#94a3b8' }}>{t('summary.autoClosed')}</span>
+                      )}
                     </span>
                   </div>
                 );
@@ -2172,20 +2252,50 @@ const GameSummaryScreen = () => {
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                toggleSettlementPaid(paymentModal.from, paymentModal.to);
-                setPaymentModal(null);
-              }}
-              style={{
-                width: '100%', padding: '0.6rem', borderRadius: '10px',
-                border: '1px solid var(--border)', background: 'transparent',
-                color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer',
-                marginBottom: '0.5rem',
-              }}
-            >
-              {isSettlementPaid(paymentModal.from, paymentModal.to) ? t('summary.markUnpaid') : t('summary.markPaid')}
-            </button>
+            {(() => {
+              const entry = getSettlementEntry(paymentModal.from, paymentModal.to);
+              const isAutoClosed = entry?.autoClosed;
+              const isReceiver = identityName === paymentModal.to;
+              const isSending = disputeSending === `${paymentModal.from}-${paymentModal.to}`;
+
+              if (isAutoClosed && isReceiver) {
+                return (
+                  <button
+                    onClick={async () => {
+                      await handleDispute(paymentModal.from, paymentModal.to, paymentModal.amount);
+                      setPaymentModal(null);
+                    }}
+                    disabled={isSending}
+                    style={{
+                      width: '100%', padding: '0.6rem', borderRadius: '10px',
+                      border: '1px solid #EAB308', background: 'rgba(234, 179, 8, 0.1)',
+                      color: '#EAB308', fontSize: '0.85rem', cursor: 'pointer',
+                      marginBottom: '0.5rem', fontFamily: 'Outfit, sans-serif',
+                      opacity: isSending ? 0.6 : 1,
+                    }}
+                  >
+                    {isSending ? t('summary.disputeSending') : t('summary.disputeButton')}
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  onClick={() => {
+                    toggleSettlementPaid(paymentModal.from, paymentModal.to, paymentModal.amount);
+                    setPaymentModal(null);
+                  }}
+                  style={{
+                    width: '100%', padding: '0.6rem', borderRadius: '10px',
+                    border: '1px solid var(--border)', background: 'transparent',
+                    color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer',
+                    marginBottom: '0.5rem',
+                  }}
+                >
+                  {isSettlementPaid(paymentModal.from, paymentModal.to) ? t('summary.markUnpaid') : t('summary.markPaid')}
+                </button>
+              );
+            })()}
 
             <button
               onClick={() => setPaymentModal(null)}

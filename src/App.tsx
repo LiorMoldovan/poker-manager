@@ -1,12 +1,12 @@
 ﻿import { Component, useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PermissionRole } from './types';
 import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
-import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime } from './database/supabaseCache';
+import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
@@ -203,12 +203,15 @@ function PlayerPicker({ onSelfCreate, userDisplayName }: {
 function SupabaseApp() {
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const auth = useSupabaseAuth();
   const [dataReady, setDataReady] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [addMemberPrompt, setAddMemberPrompt] = useState<string | null>(null);
   const [addMemberStatus, setAddMemberStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [addMemberMsg, setAddMemberMsg] = useState('');
+  const [notifCount, setNotifCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
 
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
@@ -245,6 +248,45 @@ function SupabaseApp() {
       });
     return () => unsubscribeFromRealtime();
   }, [groupId]);
+
+  // Notification polling
+  useEffect(() => {
+    if (!dataReady) return;
+    const load = () => fetchNotifications().then(() => setNotifCount(getUnreadNotificationCount()));
+    load();
+    const handler = () => { setNotifCount(getUnreadNotificationCount()); };
+    window.addEventListener('supabase-cache-updated', handler);
+    return () => window.removeEventListener('supabase-cache-updated', handler);
+  }, [dataReady]);
+
+  // Push notification subscription
+  useEffect(() => {
+    if (!dataReady || !groupId || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission === 'denied') return;
+
+    const subscribe = async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          await savePushSubscription(groupId, playerName, existing);
+          return;
+        }
+        if (Notification.permission === 'default') {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') return;
+        }
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidKey) return;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: vapidKey,
+        });
+        await savePushSubscription(groupId, playerName, sub);
+      } catch { /* push not supported */ }
+    };
+    subscribe();
+  }, [dataReady, groupId, playerName]);
 
   // Activity tracking
   const sessionStartRef = useRef<number | null>(null);
@@ -496,6 +538,102 @@ function SupabaseApp() {
     </div>
   );
 
+  const notificationBanner = notifCount > 0 && !showNotifPanel && (
+    <div
+      onClick={() => setShowNotifPanel(true)}
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9998,
+        background: 'linear-gradient(135deg, #1e293b, #0f172a)', borderBottom: '2px solid #EAB308',
+        padding: '0.5rem 1rem', direction: 'rtl', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+        animation: 'contentFadeIn 0.3s ease-out',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+      }}
+    >
+      <span style={{ fontSize: '1.1rem' }}>🔔</span>
+      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#EAB308' }}>
+        {notifCount === 1
+          ? (t('notification.settlementTitle'))
+          : `${notifCount} ${t('notification.settlementTitle')}`}
+      </span>
+    </div>
+  );
+
+  const notificationPanel = showNotifPanel && (
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
+        background: 'rgba(0,0,0,0.6)', animation: 'backdropFadeIn 0.2s ease-out',
+      }}
+      onClick={() => setShowNotifPanel(false)}
+    >
+      <div
+        style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          maxHeight: '60vh', overflowY: 'auto',
+          background: 'var(--surface)', borderRadius: '0 0 16px 16px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', padding: '1rem',
+          direction: 'rtl', animation: 'modalSlideUp 0.3s ease-out',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--text)' }}>🔔 התראות</h3>
+          <button
+            onClick={() => setShowNotifPanel(false)}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}
+          >✕</button>
+        </div>
+        {getCachedNotifications().filter(n => !n.read).map(n => (
+          <div
+            key={n.id}
+            style={{
+              background: '#1e2d45', borderRadius: '10px', padding: '0.75rem',
+              marginBottom: '0.5rem', borderRight: '3px solid #EAB308',
+            }}
+          >
+            <p style={{ margin: '0 0 0.3rem', fontSize: '0.85rem', fontWeight: 600, color: '#EAB308' }}>{n.title}</p>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{n.body}</p>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {!!n.data?.gameId && (
+                <button
+                  onClick={() => {
+                    markNotificationRead(n.id).then(() => setNotifCount(getUnreadNotificationCount()));
+                    setShowNotifPanel(false);
+                    navigate(`/game-summary/${String(n.data!.gameId)}`);
+                  }}
+                  style={{
+                    padding: '0.35rem 0.75rem', borderRadius: '6px', border: 'none',
+                    background: '#3b82f6', color: 'white', fontSize: '0.75rem',
+                    fontWeight: 600, cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                  }}
+                >
+                  {t('notification.open')}
+                </button>
+              )}
+              <button
+                onClick={() => markNotificationRead(n.id).then(() => setNotifCount(getUnreadNotificationCount()))}
+                style={{
+                  padding: '0.35rem 0.75rem', borderRadius: '6px',
+                  border: '1px solid var(--border)', background: 'none',
+                  color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer',
+                  fontFamily: 'Outfit, sans-serif',
+                }}
+              >
+                {t('notification.dismiss')}
+              </button>
+            </div>
+          </div>
+        ))}
+        {getCachedNotifications().filter(n => !n.read).length === 0 && (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '1rem 0' }}>
+            אין התראות חדשות
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
   const isAdmin = role === 'admin';
   const defaultRoute = isAdmin ? '/' : '/statistics';
 
@@ -503,6 +641,8 @@ function SupabaseApp() {
     <ErrorBoundary>
       <PermissionContext.Provider value={permissionValue}>
         {addMemberBanner}
+        {notificationBanner}
+        {notificationPanel}
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
           <main className="main-content">
