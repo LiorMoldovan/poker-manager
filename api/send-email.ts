@@ -15,9 +15,9 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     const { to, subject, playerName, reporterName, amount, gameDate, payLink } = await req.json();
 
-    const serviceId = process.env.EMAILJS_SERVICE_ID;
-    const templateId = process.env.EMAILJS_TEMPLATE_ID;
-    const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+    const serviceId = process.env.EMAILJS_SERVICE_ID || 'service_9r3sap5';
+    const templateId = process.env.EMAILJS_TEMPLATE_ID || 'template_vbxffkb';
+    const publicKey = process.env.EMAILJS_PUBLIC_KEY || 'Yv-mOZmcYpLll4olj';
 
     if (!serviceId || !templateId || !publicKey) {
       return new Response(JSON.stringify({ error: { message: 'EmailJS not configured (missing env vars)' } }), {
@@ -51,9 +51,8 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      console.error('EmailJS error:', err);
-      return new Response(JSON.stringify({ error: { message: 'Failed to send email' } }), {
+      const errText = await res.text();
+      return new Response(JSON.stringify({ error: { message: `EmailJS: ${errText || res.status}` } }), {
         status: 502, headers: JSON_HEADERS,
       });
     }

@@ -188,8 +188,13 @@ async function sendPushToSubscription(
       body: encrypted,
     });
 
+    if (!res.ok && res.status !== 201) {
+      const errBody = await res.text().catch(() => '');
+      console.error(`Push to ${sub.endpoint.slice(0, 80)}... status=${res.status} body=${errBody}`);
+    }
     return { success: res.status === 201, status: res.status, gone: res.status === 410 };
-  } catch {
+  } catch (err) {
+    console.error('Push send error:', err);
     return { success: false };
   }
 }

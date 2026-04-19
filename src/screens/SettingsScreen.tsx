@@ -2250,7 +2250,13 @@ const SettingsScreen = () => {
                         body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
                       });
                       if (result) {
-                        setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
+                        if (result.total === 0) {
+                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנויים - פתח את האפליקציה במכשיר אחר ואשר התראות' : 'No subscribers - open app on another device and allow notifications'}`);
+                        } else if (result.sent > 0) {
+                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
+                        } else {
+                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
+                        }
                       } else {
                         setPushResult(`❌ ${language === 'he' ? 'שגיאה - בדוק הגדרות' : 'Error - check settings'}`);
                       }

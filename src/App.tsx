@@ -264,26 +264,32 @@ function SupabaseApp() {
     if (!dataReady || !groupId || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (Notification.permission === 'denied') return;
 
+    const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
     const subscribe = async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
         const existing = await reg.pushManager.getSubscription();
         if (existing) {
-          await savePushSubscription(groupId, playerName, existing);
-          return;
+          const existingKey = existing.options?.applicationServerKey;
+          const expectedKey = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+          const keyMatches = existingKey && new Uint8Array(existingKey).length === expectedKey.length &&
+            new Uint8Array(existingKey).every((b, i) => b === expectedKey[i]);
+          if (keyMatches) {
+            await savePushSubscription(groupId, playerName, existing);
+            return;
+          }
+          await existing.unsubscribe();
         }
         if (Notification.permission === 'default') {
           const perm = await Notification.requestPermission();
           if (perm !== 'granted') return;
         }
-        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY || 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
-        if (!vapidKey) return;
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: vapidKey,
+          applicationServerKey: VAPID_PUBLIC,
         });
         await savePushSubscription(groupId, playerName, sub);
-      } catch { /* push not supported */ }
+      } catch (err) { console.warn('Push subscription failed:', err); }
     };
     subscribe();
   }, [dataReady, groupId, playerName]);
