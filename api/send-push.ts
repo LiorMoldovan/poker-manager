@@ -34,7 +34,8 @@ function concatBuffers(...bufs: ArrayBuffer[]): Uint8Array {
 async function createVapidJwt(
   audience: string,
   subject: string,
-  privateKeyBase64: string
+  privateKeyBase64: string,
+  publicKeyBase64: string
 ): Promise<string> {
   const header = base64UrlEncode(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
   const now = Math.floor(Date.now() / 1000);
@@ -45,10 +46,16 @@ async function createVapidJwt(
   })));
   const unsignedToken = `${header}.${payload}`;
 
-  const keyData = base64UrlDecode(privateKeyBase64);
+  // Import via JWK — more reliable across runtimes than raw PKCS#8 DER construction
+  const rawPrivate = base64UrlDecode(privateKeyBase64);
+  const rawPublic = base64UrlDecode(publicKeyBase64);
+  const x = base64UrlEncode(rawPublic.slice(1, 33));
+  const y = base64UrlEncode(rawPublic.slice(33, 65));
+  const d = base64UrlEncode(rawPrivate);
+
   const key = await crypto.subtle.importKey(
-    'pkcs8',
-    await derFromRaw(keyData),
+    'jwk',
+    { kty: 'EC', crv: 'P-256', x, y, d, ext: true },
     { name: 'ECDSA', namedCurve: 'P-256' },
     false,
     ['sign']
@@ -60,20 +67,8 @@ async function createVapidJwt(
     new TextEncoder().encode(unsignedToken)
   );
 
-  // WebCrypto ECDSA P-256 returns P1363 format (64 bytes: r || s) which is
-  // exactly what JWS ES256 requires — do NOT convert to DER
   const signature = base64UrlEncode(sig);
   return `${unsignedToken}.${signature}`;
-}
-
-async function derFromRaw(raw: Uint8Array): Promise<ArrayBuffer> {
-  const prefix = new Uint8Array([
-    0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06, 0x07,
-    0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08,
-    0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x04,
-    0x27, 0x30, 0x25, 0x02, 0x01, 0x01, 0x04, 0x20,
-  ]);
-  return concatBuffers(prefix.buffer, raw.buffer).buffer;
 }
 
 async function encryptPayload(
@@ -163,12 +158,12 @@ async function sendPushToSubscription(
   vapidPublicKey: string,
   vapidPrivateKey: string,
   vapidSubject: string
-): Promise<{ success: boolean; status?: number; gone?: boolean }> {
+): Promise<{ success: boolean; status?: number; gone?: boolean; error?: string }> {
   try {
     const url = new URL(sub.endpoint);
     const audience = `${url.protocol}//${url.host}`;
 
-    const jwt = await createVapidJwt(audience, vapidSubject, vapidPrivateKey);
+    const jwt = await createVapidJwt(audience, vapidSubject, vapidPrivateKey, vapidPublicKey);
     const { encrypted } = await encryptPayload(payload, sub.keys_p256dh, sub.keys_auth);
 
     const res = await fetch(sub.endpoint, {
@@ -182,14 +177,12 @@ async function sendPushToSubscription(
       body: encrypted,
     });
 
-    if (!res.ok && res.status !== 201) {
-      const errBody = await res.text().catch(() => '');
-      console.error(`Push to ${sub.endpoint.slice(0, 80)}... status=${res.status} body=${errBody}`);
-    }
-    return { success: res.status === 201, status: res.status, gone: res.status === 410 };
+    if (res.status === 201) return { success: true, status: 201 };
+
+    const errBody = await res.text().catch(() => '');
+    return { success: false, status: res.status, gone: res.status === 410, error: errBody || `status ${res.status}` };
   } catch (err) {
-    console.error('Push send error:', err);
-    return { success: false };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -201,9 +194,11 @@ export default async function handler(req: Request): Promise<Response> {
   const authError = await verifySupabaseAuth(req);
   if (authError) return authError;
 
-  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
-  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '39mPz53FHNkirEA3utU_d99xnPsKYBZM2B3lSRukUxg';
-  const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:pokermanager.app@gmail.com';
+  // VAPID keys MUST match the applicationServerKey used by the client during pushManager.subscribe()
+  // (hardcoded in App.tsx). Using different keys causes the push service to reject with 403.
+  const vapidPublicKey = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
+  const vapidPrivateKey = '39mPz53FHNkirEA3utU_d99xnPsKYBZM2B3lSRukUxg';
+  const vapidSubject = 'mailto:pokermanager.app@gmail.com';
 
   try {
     const { groupId, title, body, targetPlayerNames, url: notifUrl } = await req.json();
@@ -235,6 +230,7 @@ export default async function handler(req: Request): Promise<Response> {
     const payload = JSON.stringify({ title, body, url: notifUrl || '/', tag: `poker-${Date.now()}` });
     let sent = 0;
     const gone: string[] = [];
+    const errors: string[] = [];
 
     for (const sub of subs) {
       const result = await sendPushToSubscription(
@@ -242,13 +238,16 @@ export default async function handler(req: Request): Promise<Response> {
       );
       if (result.success) sent++;
       if (result.gone) gone.push(sub.endpoint);
+      if (!result.success && result.error) {
+        errors.push(`${sub.endpoint.slice(0, 60)}...: ${result.status || 'ERR'} ${result.error.slice(0, 200)}`);
+      }
     }
 
     if (gone.length > 0) {
       await db.from('push_subscriptions').delete().in('endpoint', gone);
     }
 
-    return new Response(JSON.stringify({ sent, total: subs.length }), { headers: JSON_HEADERS });
+    return new Response(JSON.stringify({ sent, total: subs.length, errors: errors.length > 0 ? errors : undefined }), { headers: JSON_HEADERS });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Push notification error';
     return new Response(JSON.stringify({ error: { message } }), {

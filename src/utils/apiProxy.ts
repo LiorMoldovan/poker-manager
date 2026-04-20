@@ -132,7 +132,7 @@ export async function proxySendPush(payload: {
   body: string;
   targetPlayerNames?: string[];
   url?: string;
-}): Promise<{ sent: number; total: number } | null> {
+}): Promise<{ sent: number; total: number; errors?: string[] } | null> {
   try {
     const auth = await getAuthHeaders();
     const res = await fetch('/api/send-push', {

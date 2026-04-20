@@ -2264,7 +2264,8 @@ const SettingsScreen = () => {
                         } else if (result.sent > 0) {
                           setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
                         } else {
-                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
+                          const detail = result.errors?.[0] || '';
+                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}${detail ? `\n${detail}` : ''}`);
                         }
                       } else {
                         setPushResult(`❌ ${language === 'he' ? 'שגיאה - בדוק הגדרות' : 'Error - check settings'}`);
