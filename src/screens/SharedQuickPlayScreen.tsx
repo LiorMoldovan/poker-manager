@@ -19,6 +19,7 @@ import {
   saveSharedProgress,
   updateStreak,
   checkNewBadges,
+  directWriteSession,
   bufferSessionForUpload,
   flushPendingUploads,
   normalizeTrainingPlayers,
@@ -29,7 +30,7 @@ import {
   generatePlayerCoaching,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
-import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/githubSync';
+import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/trainingData';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -302,8 +303,7 @@ const SharedQuickPlayScreen = () => {
       ? currentMilestone * 100
       : null;
 
-    bufferSessionForUpload(name, session, crossedMilestone || undefined);
-    flushPendingUploads();
+    directWriteSession(name, session, crossedMilestone || undefined);
 
     if (!resultsToUse) {
       setShowSummary(true);

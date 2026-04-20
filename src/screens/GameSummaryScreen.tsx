@@ -13,6 +13,7 @@ import { usePermissions } from '../App';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
+import { hapticTap } from '../utils/haptics';
 
 const GameSummaryScreen = () => {
   const { t, isRTL } = useTranslation();
@@ -59,7 +60,7 @@ const GameSummaryScreen = () => {
   const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
   const isPayModeInit = new URLSearchParams(location.search).get('pay') === '1';
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: !isPayModeInit, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: true, standings: true });
-  const toggleSection = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = (key: string) => { hapticTap(); setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] })); };
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const settlementsRef = useRef<HTMLDivElement>(null);
@@ -1294,7 +1295,7 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('settlements')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.settlements ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.settlements')} {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.settlements ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             {!collapsedSections.settlements && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
               {(() => {
@@ -1337,6 +1338,7 @@ const GameSummaryScreen = () => {
                       margin: '0.1rem -0.4rem',
                       position: 'relative',
                       transition: 'all 0.2s ease',
+                      direction: 'ltr',
                     }}
                     onClick={() => {
                       if (rowClickable) {
@@ -1415,7 +1417,7 @@ const GameSummaryScreen = () => {
                 {t('summary.smallAmountsDesc', { amount: cleanNumber(getSettings().minTransfer) })}
               </p>
               {skippedTransfers.map((s, index) => (
-                <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
+                <div key={index} className="settlement-row" style={{ opacity: 0.8, direction: 'ltr' }}>
                   <span>{renderPlayerWithFoodIcon(s.from)}</span>
                   <span className="settlement-arrow">➜</span>
                   <span>{renderPlayerWithFoodIcon(s.to)}</span>
@@ -1433,7 +1435,7 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('forecast')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.forecast ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.forecastVsReality')}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.forecast ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.forecast ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             
             {!collapsedSections.forecast && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
@@ -1643,7 +1645,7 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('expenses')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.expenses ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.sharedExpenses')}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.expenses ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.expenses ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             
             {!collapsedSections.expenses && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
@@ -1704,7 +1706,7 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('aiSummary')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.aiSummary ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{aiSummary ? t('summary.nightSummary') : t('summary.highlights')}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.aiSummary ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             {!collapsedSections.aiSummary && isOwner && aiSummary && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.4rem' }}>
@@ -1833,7 +1835,7 @@ const GameSummaryScreen = () => {
               <h2 className="card-title" style={{ margin: 0 }}>
                 {comboHistory.isFirstTime ? t('summary.newCombo') : t('summary.returningCombo')}
               </h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.combo ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.combo ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
 
             {!collapsedSections.combo && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>{comboHistory.isFirstTime ? (
@@ -1973,7 +1975,7 @@ const GameSummaryScreen = () => {
           <div className="card" style={{ padding: '0.75rem' }}>
             <button onClick={() => toggleSection('monthly')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.monthly ? 0 : '0.5rem' }}>
               <h2 className="card-title" style={{ margin: 0 }}>{t('summary.monthSummary', { month: monthLabel })}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.monthly ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             {!collapsedSections.monthly && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{
@@ -2064,7 +2066,7 @@ const GameSummaryScreen = () => {
           <div style={{ padding: '0.75rem', background: '#1e293b', borderRadius: '12px', border: '1px solid #475569' }}>
             <button onClick={() => toggleSection('standings')} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.standings ? 0 : '0.5rem' }}>
               <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>{t('summary.updatedStandings', { period: standingsLabel })}</h2>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s' }}>▼</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.standings ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
             </button>
             {!collapsedSections.standings && (<div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
             <div style={{

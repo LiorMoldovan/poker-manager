@@ -992,7 +992,8 @@ import {
 import {
   fetchTrainingPool,
   writeTrainingAnswersWithRetry,
-} from '../database/githubSync';
+  upsertPlayerSession,
+} from '../database/trainingData';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 /** Merge player entries whose names are in LEGACY_NAME_CORRECTIONS into the canonical entry. */
@@ -1058,8 +1059,8 @@ export function clearPendingUploadsForPlayer(playerName: string): void {
   } catch { /* ignore */ }
 }
 
-const POOL_CACHE_KEY = 'training_pool_cached';
-const POOL_GENERATED_AT_KEY = 'training_pool_generatedAt';
+// In-memory pool cache (replaces old localStorage cache — Realtime handles invalidation)
+let poolMemoryCache: TrainingPool | null = null;
 
 const getProgressKey = (playerName: string) => `shared_training_progress_${playerName}`;
 
@@ -1219,40 +1220,31 @@ export const loadFromPool = async (
   count: number | null,
   categoryIds?: string[]
 ): Promise<{ scenarios: PoolScenario[]; exhaustedCategory: boolean; exhaustedAll: boolean }> => {
-  let pool: TrainingPool | null = null;
-
-  const cachedRaw = localStorage.getItem(POOL_CACHE_KEY);
-  const cachedGenAt = localStorage.getItem(POOL_GENERATED_AT_KEY);
-
-  if (cachedRaw) {
-    try {
-      pool = JSON.parse(cachedRaw) as TrainingPool;
-    } catch { /* ignore */ }
-  }
-
   const fetchWithTimeout = (): Promise<TrainingPool | null> =>
     Promise.race([
       fetchTrainingPool(),
       new Promise<null>(r => setTimeout(() => r(null), 3500)),
     ]);
 
-  if (!pool || !cachedGenAt) {
+  let pool: TrainingPool | null = null;
+
+  if (poolMemoryCache) {
+    pool = poolMemoryCache;
+    // Refresh from Supabase in case pool was regenerated
+    try {
+      const remote = await fetchWithTimeout();
+      if (remote && remote.generatedAt !== pool.generatedAt) {
+        pool = remote;
+        poolMemoryCache = remote;
+      }
+    } catch { /* use memory cache */ }
+  } else {
     const remote = await fetchWithTimeout();
     if (!remote) {
       return { scenarios: [], exhaustedCategory: false, exhaustedAll: false };
     }
     pool = remote;
-    localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(pool));
-    localStorage.setItem(POOL_GENERATED_AT_KEY, pool.generatedAt);
-  } else {
-    try {
-      const remote = await fetchWithTimeout();
-      if (remote && remote.generatedAt !== cachedGenAt) {
-        pool = remote;
-        localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(remote));
-        localStorage.setItem(POOL_GENERATED_AT_KEY, remote.generatedAt);
-      }
-    } catch { /* use cache */ }
+    poolMemoryCache = remote;
   }
 
   const progress = getSharedProgress(playerName);
@@ -1311,15 +1303,6 @@ export const loadFromPool = async (
   const picked = count ? shuffled.slice(0, count) : shuffled;
 
   return { scenarios: picked, exhaustedCategory, exhaustedAll };
-};
-
-export const refreshPoolCache = async (): Promise<TrainingPool | null> => {
-  const remote = await fetchTrainingPool();
-  if (remote) {
-    localStorage.setItem(POOL_CACHE_KEY, JSON.stringify(remote));
-    localStorage.setItem(POOL_GENERATED_AT_KEY, remote.generatedAt);
-  }
-  return remote;
 };
 
 // ── Streaks ──
@@ -1392,16 +1375,20 @@ export const TRAINING_BADGES: TrainingBadge[] = [
 ];
 
 export const getPoolCounts = (): { total: number; byCategory: Record<string, number> } => {
-  try {
-    const raw = localStorage.getItem('training_pool_cached');
-    if (!raw) return { total: 0, byCategory: {} };
-    const pool = JSON.parse(raw);
-    const byCategory: Record<string, number> = {};
-    (pool.scenarios || []).forEach((s: { categoryId: string }) => {
-      byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
-    });
-    return { total: pool.scenarios?.length || 0, byCategory };
-  } catch { return { total: 0, byCategory: {} }; }
+  if (!poolMemoryCache) return { total: 0, byCategory: {} };
+  const byCategory: Record<string, number> = {};
+  poolMemoryCache.scenarios.forEach(s => {
+    byCategory[s.categoryId] = (byCategory[s.categoryId] || 0) + 1;
+  });
+  return { total: poolMemoryCache.scenarios.length, byCategory };
+};
+
+export const updatePoolCache = (pool: TrainingPool): void => {
+  poolMemoryCache = pool;
+};
+
+export const clearPoolCache = (): void => {
+  poolMemoryCache = null;
 };
 
 export const getCategoryExpertBadges = (progress: SharedTrainingProgress): { id: string; name: string; icon: string; earned: boolean }[] => {
@@ -1768,11 +1755,27 @@ export const generatePoolBatch = async (
   return [];
 };
 
-// ── Silent tracking upload (batched with cooldown) ──
+// ── Direct Supabase write (primary) + buffered fallback ──
+
+/**
+ * Write a training session directly to Supabase. Falls back to localStorage
+ * buffer if the write fails (e.g. network issue).
+ */
+export const directWriteSession = async (
+  playerName: string,
+  session: TrainingSession,
+  pendingMilestone?: number,
+): Promise<void> => {
+  const correctedName = LEGACY_NAME_CORRECTIONS[playerName] || playerName;
+  const ok = await upsertPlayerSession(correctedName, session, pendingMilestone);
+  if (!ok) {
+    bufferSessionForUpload(playerName, session, pendingMilestone);
+  }
+};
 
 const PENDING_UPLOAD_KEY = 'shared_training_pending_upload';
 const LAST_FLUSH_KEY = 'shared_training_last_flush';
-const FLUSH_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes between GitHub pushes
+const FLUSH_COOLDOWN_MS = 30_000; // 30s safety net against rapid double-writes
 
 export const bufferSessionForUpload = (playerName: string, session: TrainingSession, pendingMilestone?: number): void => {
   try {
@@ -1817,14 +1820,12 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
         data.players.push(player);
       }
 
-      // Deduplicate: skip session if its poolIds already exist in this player's data
       const existingPoolIds = new Set(player.sessions.flatMap(s => s.results.map(r => r.poolId)));
       const newResults = session.results.filter(r => !existingPoolIds.has(r.poolId));
       if (newResults.length > 0) {
         player.sessions.push({ ...session, results: newResults });
       }
 
-      // Bundle pending milestone with the session upload (single atomic write)
       if (pendingMilestone) {
         if (!player.pendingReportMilestones) player.pendingReportMilestones = [];
         if (!player.pendingReportMilestones.includes(pendingMilestone)) {
@@ -1833,7 +1834,6 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
       }
     }
 
-    // Recalculate all player stats from actual session data
     for (const player of data.players) {
       let scored = 0, corr = 0;
       for (const s of player.sessions) {
@@ -1849,7 +1849,7 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
 
     data.lastUpdated = new Date().toISOString();
     return data;
-  }, keepalive);
+  });
 
   if (ok) {
     localStorage.setItem(LAST_FLUSH_KEY, Date.now().toString());

@@ -46,10 +46,8 @@ const DEFAULT_SETTINGS: Settings = {
   chipsPerRebuy: 10000,
   minTransfer: 5,
   gameNightDays: [4, 6],
-  locations: ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'],
-  blockedTransfers: [
-    { playerA: 'פיליפ', playerB: 'תומר', after: '2026-03-24' },
-  ],
+  locations: [],
+  blockedTransfers: [],
 };
 
 // Players
@@ -362,10 +360,6 @@ export const deleteChipValue = (id: string): void => {
 export const getSettings = (): Settings => {
   const stored = getItem<Partial<Settings>>(STORAGE_KEYS.SETTINGS, {});
   const merged = { ...DEFAULT_SETTINGS, ...stored };
-  // Empty arrays from Supabase migration should not override defaults
-  if (stored.locations?.length === 0 && DEFAULT_SETTINGS.locations?.length) {
-    merged.locations = DEFAULT_SETTINGS.locations;
-  }
   if (stored.gameNightDays?.length === 0 && DEFAULT_SETTINGS.gameNightDays?.length) {
     merged.gameNightDays = DEFAULT_SETTINGS.gameNightDays;
   }

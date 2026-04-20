@@ -6,6 +6,7 @@ import { getAllGames, getGamePlayers, getSettings, deleteGame, getAllPlayers } f
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
+import { hapticTap } from '../utils/haptics';
 
 const gameSortTimeMs = (g: { date: string; createdAt: string }): number => {
   const primary = new Date(g.date || g.createdAt).getTime();
@@ -416,13 +417,12 @@ const HistoryScreen = () => {
           return (
             <div 
               key={game.id} 
-              className="card" 
+              className="card card-interactive" 
               style={{
-                cursor: 'pointer',
                 animation: i < 15 ? 'contentFadeIn 0.25s ease-out backwards' : undefined,
                 animationDelay: i < 15 ? `${i * 0.04}s` : undefined,
               }}
-              onClick={() => navigate(`/game-summary/${game.id}`, { state: { from: 'history' } })}
+              onClick={() => { hapticTap(); navigate(`/game-summary/${game.id}`, { state: { from: 'history' } }); }}
             >
                 <div className="card-header">
                 <div>
@@ -477,13 +477,15 @@ const HistoryScreen = () => {
                 <button 
                   className="btn btn-sm"
                   style={{ 
-                    background: 'var(--primary)', 
-                    color: 'white',
+                    background: 'rgba(16,185,129,0.12)', 
+                    color: '#10B981',
+                    border: '1px solid rgba(16,185,129,0.3)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '0.3rem',
                     fontSize: '0.75rem',
                     padding: '0.3rem 0.5rem',
+                    cursor: 'pointer',
                   }}
                   onClick={(e) => {
                     e.stopPropagation();

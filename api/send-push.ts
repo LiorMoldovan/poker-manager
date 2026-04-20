@@ -298,18 +298,34 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ sent: 0, total: 0, details: [] }), { headers: JSON_HEADERS });
     }
 
+    const INVALID_ENDPOINT_PATTERNS = ['permanently-removed', 'invalid', 'localhost', 'example.com'];
+
+    const validSubs = subs.filter(sub => {
+      const dominated = INVALID_ENDPOINT_PATTERNS.some(p => sub.endpoint.includes(p));
+      return !dominated;
+    });
+    const invalidEndpoints = subs.filter(sub => !validSubs.includes(sub)).map(s => s.endpoint);
+
     const payload = JSON.stringify({ title, body, url: notifUrl || '/', tag: `poker-${Date.now()}` });
     let sent = 0;
-    const gone: string[] = [];
+    const gone: string[] = [...invalidEndpoints];
     const details: SubDetail[] = [];
 
-    for (const sub of subs) {
+    for (const ep of invalidEndpoints) {
+      const sub = subs.find(s => s.endpoint === ep);
+      details.push({ player: sub?.player_name || '?', type: 'Invalid', status: 'stale endpoint', ok: false, log: [`Removed: ${ep.slice(0, 60)}`] });
+    }
+
+    for (const sub of validSubs) {
       const result = await sendPushToSubscription(
         sub, payload, vapidPublicKey, vapidPrivateKey, vapidSubject
       );
       details.push(result);
       if (result.ok) sent++;
       if (!result.ok && typeof result.status === 'number' && [404, 410].includes(result.status)) {
+        gone.push(sub.endpoint);
+      }
+      if (!result.ok && typeof result.status === 'string') {
         gone.push(sub.endpoint);
       }
     }

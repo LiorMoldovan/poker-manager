@@ -21,6 +21,7 @@ export interface GroupMembership {
   playerId: string | null;
   inviteCode: string | null;
   trainingEnabled: boolean;
+  memberCount: number;
 }
 
 interface AuthState {
@@ -90,8 +91,23 @@ export function useSupabaseAuth() {
           playerId: row.player_id ?? null,
           inviteCode: groupRow?.invite_code ?? null,
           trainingEnabled: groupRow?.training_enabled ?? false,
+          memberCount: 0,
         };
       });
+
+      const { data: countData } = await supabase.rpc('get_group_member_counts', {
+        p_group_ids: memberships.map(m => m.groupId),
+      });
+      if (Array.isArray(countData)) {
+        const countMap = new Map<string, number>();
+        (countData as Array<{ group_id: string; member_count: number }>).forEach(r => {
+          countMap.set(r.group_id, r.member_count);
+        });
+        memberships.forEach(m => {
+          m.memberCount = countMap.get(m.groupId) || 0;
+        });
+      }
+
       setState(prev => ({
         ...prev,
         memberships,
@@ -299,6 +315,22 @@ export function useSupabaseAuth() {
     return { data: data as { group_id: string; group_name: string; player_id: string; player_name: string } | null, error };
   }, [state.user, fetchMemberships]);
 
+  const deleteGroup = useCallback(async (groupId: string) => {
+    const { error } = await supabase.rpc('delete_group', { p_group_id: groupId });
+    if (!error && state.user) {
+      await fetchMemberships(state.user.id);
+    }
+    return { error };
+  }, [state.user, fetchMemberships]);
+
+  const leaveGroup = useCallback(async (groupId: string) => {
+    const { error } = await supabase.rpc('leave_group', { p_group_id: groupId });
+    if (!error && state.user) {
+      await fetchMemberships(state.user.id);
+    }
+    return { error };
+  }, [state.user, fetchMemberships]);
+
   const fetchMembers = useCallback(async (): Promise<GroupMember[]> => {
     const groupId = membership?.groupId;
     if (!groupId) return [];
@@ -341,6 +373,8 @@ export function useSupabaseAuth() {
     addMemberByEmail,
     createPlayerInvite,
     joinByPlayerInvite,
+    deleteGroup,
+    leaveGroup,
     fetchMembers,
     switchGroup,
     refreshMembership: () => {

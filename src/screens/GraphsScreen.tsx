@@ -956,9 +956,9 @@ const GraphsScreen = () => {
                       padding: '0.25rem 0.4rem',
                       fontSize: '0.7rem',
                       borderRadius: '4px',
-                      border: '1px solid var(--border)',
-                      background: '#1a1a2e',
-                      color: '#ffffff',
+                      border: '1px solid rgba(16,185,129,0.3)',
+                      background: 'rgba(16,185,129,0.08)',
+                      color: '#10B981',
                       cursor: 'pointer',
                       minWidth: '60px'
                     }}
@@ -977,9 +977,9 @@ const GraphsScreen = () => {
                           padding: '0.25rem 0.4rem',
                           fontSize: '0.7rem',
                           borderRadius: '4px',
-                          border: '1px solid var(--border)',
-                          background: '#1a1a2e',
-                          color: '#ffffff',
+                          border: '1px solid rgba(16,185,129,0.3)',
+                          background: 'rgba(16,185,129,0.08)',
+                          color: '#10B981',
                           cursor: 'pointer',
                           minWidth: '70px'
                         }}
@@ -1176,11 +1176,12 @@ const GraphsScreen = () => {
                 flex: 1,
                 padding: '0.5rem',
                 borderRadius: '8px',
-                border: '2px solid #10B981',
-                background: '#1a1a2e',
-                color: '#ffffff',
+                border: '1px solid rgba(16,185,129,0.4)',
+                background: 'rgba(16,185,129,0.1)',
+                color: '#10B981',
                 fontSize: '0.9rem',
                 fontWeight: '600',
+                cursor: 'pointer',
               }}
             >
               {players.filter(p => p.type === 'permanent').map(p => (
@@ -1195,11 +1196,12 @@ const GraphsScreen = () => {
                 flex: 1,
                 padding: '0.5rem',
                 borderRadius: '8px',
-                border: '2px solid #3B82F6',
-                background: '#1a1a2e',
-                color: '#ffffff',
+                border: '1px solid rgba(16,185,129,0.4)',
+                background: 'rgba(16,185,129,0.1)',
+                color: '#10B981',
                 fontSize: '0.9rem',
                 fontWeight: '600',
+                cursor: 'pointer',
               }}
             >
               {players.filter(p => p.type === 'permanent').map(p => (
@@ -2099,11 +2101,12 @@ const GraphsScreen = () => {
                 width: '100%',
                 padding: '0.5rem',
                 borderRadius: '8px',
-                border: '2px solid var(--primary)',
-                background: '#1a1a2e',
-                color: '#ffffff',
+                border: '1px solid rgba(16,185,129,0.4)',
+                background: 'rgba(16,185,129,0.1)',
+                color: '#10B981',
                 fontSize: '0.9rem',
                 fontWeight: '600',
+                cursor: 'pointer',
               }}
             >
               {players.filter(p => p.type === 'permanent').map(p => (

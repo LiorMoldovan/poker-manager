@@ -306,7 +306,7 @@ const GameDetailsScreen = () => {
           <div className="card">
             <h2 className="card-title mb-2">💸 Settlements {sharedExpenses.length > 0 && <span style={{ fontSize: '0.7rem', color: '#f59e0b' }}>(+ 🍕)</span>}</h2>
             {settlements.map((s, index) => (
-              <div key={index} className="settlement-row">
+              <div key={index} className="settlement-row" style={{ direction: 'ltr' }}>
                 <span>{renderPlayerWithFoodIcon(s.from)}</span>
                 <span className="settlement-arrow">➜</span>
                 <span>{renderPlayerWithFoodIcon(s.to)}</span>
@@ -348,7 +348,7 @@ const GameDetailsScreen = () => {
               Payments below {cleanNumber(getSettings().minTransfer)} are not mandatory
             </p>
             {skippedTransfers.map((s, index) => (
-              <div key={index} className="settlement-row" style={{ opacity: 0.8 }}>
+              <div key={index} className="settlement-row" style={{ opacity: 0.8, direction: 'ltr' }}>
                 <span>{renderPlayerWithFoodIcon(s.from)}</span>
                 <span className="settlement-arrow">➜</span>
                 <span>{renderPlayerWithFoodIcon(s.to)}</span>

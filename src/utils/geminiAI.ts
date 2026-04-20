@@ -10,7 +10,7 @@ import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { getComboHistory } from './comboHistory';
-import { fetchTrainingAnswers } from '../database/githubSync';
+import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
 import { proxyGeminiGenerate, proxyGeminiModels } from './apiProxy';
 

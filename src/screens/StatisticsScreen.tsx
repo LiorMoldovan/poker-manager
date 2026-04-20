@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
-import html2canvas from 'html2canvas';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { PlayerStats, Player, PlayerType } from '../types';
 import { getPlayerStats, getAllPlayers, getAllGames, getAllGamePlayers, getSettings, getChronicleProfiles, saveChronicleProfiles } from '../database/storage';
@@ -12,6 +11,7 @@ import { usePermissions } from '../App';
 import { useTranslation } from '../i18n';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
+import { hapticTap } from '../utils/haptics';
 
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
 type ViewMode = 'table' | 'records' | 'players';
@@ -256,6 +256,7 @@ const StatisticsScreen = () => {
         }
 
         document.body.appendChild(container);
+        const { default: html2canvas } = await import('html2canvas');
         const canvas = await html2canvas(container, { backgroundColor: '#0f172a', scale: 2, logging: false, useCORS: true });
         document.body.removeChild(container);
 
@@ -1040,6 +1041,7 @@ const StatisticsScreen = () => {
 
   // Toggle expanded state for a record
   const toggleRecordExpand = (recordKey: string) => {
+    hapticTap();
     setExpandedRecords(prev => {
       const next = new Set(prev);
       if (next.has(recordKey)) {
@@ -1442,9 +1444,9 @@ const StatisticsScreen = () => {
                       padding: '0.25rem 0.4rem',
                       fontSize: '0.7rem',
                       borderRadius: '4px',
-                      border: '1px solid var(--border)',
-                      background: '#1a1a2e',
-                      color: '#ffffff',
+                      border: '1px solid rgba(16,185,129,0.3)',
+                      background: 'rgba(16,185,129,0.08)',
+                      color: '#10B981',
                       cursor: 'pointer',
                       minWidth: '60px'
                     }}
@@ -1463,9 +1465,9 @@ const StatisticsScreen = () => {
                           padding: '0.25rem 0.4rem',
                           fontSize: '0.7rem',
                           borderRadius: '4px',
-                          border: '1px solid var(--border)',
-                          background: '#1a1a2e',
-                          color: '#ffffff',
+                          border: '1px solid rgba(16,185,129,0.3)',
+                          background: 'rgba(16,185,129,0.08)',
+                          color: '#10B981',
                           cursor: 'pointer',
                           minWidth: '70px'
                         }}
@@ -2294,9 +2296,9 @@ const StatisticsScreen = () => {
                   padding: '0.35rem 0.5rem',
                   fontSize: '0.75rem',
                   borderRadius: '6px',
-                  border: '1px solid var(--border)',
-                  background: '#1a1a2e',
-                  color: '#ffffff',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  background: 'rgba(16,185,129,0.08)',
+                  color: '#10B981',
                   cursor: 'pointer',
                 }}
               >

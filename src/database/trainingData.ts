@@ -2,7 +2,7 @@
  * Training helpers — pool, answers, insights — all backed by Supabase tables.
  */
 
-import type { TrainingPool, TrainingAnswersFile, TrainingInsightsFile, PoolScenario } from '../types';
+import type { TrainingPool, TrainingAnswersFile, TrainingInsightsFile, PoolScenario, TrainingSession } from '../types';
 import { supabase } from './supabaseClient';
 import { getGroupId } from './supabaseCache';
 
@@ -50,28 +50,11 @@ async function fetchAllTrainingRows(gid: string): Promise<Record<string, unknown
   return allRows;
 }
 
-let _trainingAutoImportDone = false;
-
 export const fetchTrainingPool = async (): Promise<TrainingPool | null> => {
   const gid = getGroupId();
   if (!gid) return null;
   const allRows = await fetchAllTrainingRows(gid);
   if (allRows.length > 0) return supabaseRowsToTrainingPool(allRows);
-
-  if (_trainingAutoImportDone) return null;
-  _trainingAutoImportDone = true;
-  console.warn('Training pool empty in Supabase, auto-importing from GitHub...');
-  try {
-    const { migrateTrainingFromCloud } = await import('./migrateToSupabase');
-    const result = await migrateTrainingFromCloud(gid);
-    console.warn('Training auto-import done:', result);
-    if (result.pool > 0) {
-      const rows = await fetchAllTrainingRows(gid);
-      if (rows.length > 0) return supabaseRowsToTrainingPool(rows);
-    }
-  } catch (err) {
-    console.warn('Training auto-import failed:', err);
-  }
   return null;
 };
 
@@ -153,29 +136,123 @@ export const uploadTrainingInsights = async (data: TrainingInsightsFile): Promis
   return { success: true, message: 'Insights uploaded' };
 };
 
+/**
+ * Write a single player's training session directly to Supabase.
+ * Reads only this player's row, appends the session (deduped by poolId),
+ * recalculates stats, and upserts. Much faster than the read-all/mutate-all pattern.
+ */
+export const upsertPlayerSession = async (
+  playerName: string,
+  session: TrainingSession,
+  pendingMilestone?: number,
+): Promise<boolean> => {
+  const gid = getGroupId();
+  if (!gid) return false;
+  try {
+    const { data: row } = await supabase
+      .from('training_answers')
+      .select('*')
+      .eq('group_id', gid)
+      .eq('player_name', playerName)
+      .maybeSingle();
+
+    const existingSessions: TrainingSession[] = (row?.sessions || []) as TrainingSession[];
+    const existingReports = (row?.reports || []) as TrainingAnswersFile['players'][0]['reports'];
+    const existingStats = (row?.stats || {}) as Record<string, unknown>;
+    const existingMilestones = (existingStats.pendingReportMilestones as number[]) || [];
+
+    const existingPoolIds = new Set(existingSessions.flatMap(s => s.results.map(r => r.poolId)));
+    const newResults = session.results.filter(r => !existingPoolIds.has(r.poolId));
+
+    if (newResults.length > 0) {
+      existingSessions.push({ ...session, results: newResults });
+    }
+
+    let scored = 0, correct = 0;
+    for (const s of existingSessions) {
+      for (const r of s.results) {
+        if (r.neutralized) continue;
+        if (!r.nearMiss) { scored++; if (r.correct) correct++; }
+      }
+    }
+
+    const milestones = [...existingMilestones];
+    if (pendingMilestone && !milestones.includes(pendingMilestone)) {
+      milestones.push(pendingMilestone);
+    }
+
+    const { error } = await supabase.from('training_answers').upsert({
+      group_id: gid,
+      player_name: playerName,
+      sessions: existingSessions,
+      stats: {
+        totalQuestions: scored,
+        totalCorrect: correct,
+        accuracy: scored > 0 ? (correct / scored) * 100 : 0,
+        pendingReportMilestones: milestones,
+      },
+      reports: existingReports,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'group_id,player_name' });
+
+    if (error) {
+      console.warn('upsertPlayerSession failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('upsertPlayerSession error:', err);
+    return false;
+  }
+};
+
 export const writeTrainingAnswersWithRetry = async (
   mutate: (data: TrainingAnswersFile) => TrainingAnswersFile,
-  _keepalive = false,
 ): Promise<boolean> => {
   const gid = getGroupId();
   if (!gid) return false;
   try {
     const existing = await fetchTrainingAnswers() || { lastUpdated: '', players: [] };
+    const beforeMap = new Map(
+      existing.players.map(p => [p.playerName, JSON.stringify(p)])
+    );
     const updated = mutate(existing);
+    const now = new Date().toISOString();
+    const upsertPromises: PromiseLike<unknown>[] = [];
+
     for (const player of updated.players) {
-      await supabase.from('training_answers').upsert({
-        group_id: gid,
-        player_name: player.playerName,
-        sessions: player.sessions,
-        stats: {
-          totalQuestions: player.totalQuestions,
-          totalCorrect: player.totalCorrect,
-          accuracy: player.accuracy,
-          pendingReportMilestones: player.pendingReportMilestones,
-        },
-        reports: player.reports || [],
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'group_id,player_name' });
+      const afterJson = JSON.stringify(player);
+      if (afterJson === beforeMap.get(player.playerName)) continue;
+      upsertPromises.push(
+        supabase.from('training_answers').upsert({
+          group_id: gid,
+          player_name: player.playerName,
+          sessions: player.sessions,
+          stats: {
+            totalQuestions: player.totalQuestions,
+            totalCorrect: player.totalCorrect,
+            accuracy: player.accuracy,
+            pendingReportMilestones: player.pendingReportMilestones,
+          },
+          reports: player.reports || [],
+          updated_at: now,
+        }, { onConflict: 'group_id,player_name' }).then()
+      );
+    }
+
+    // Handle deleted players
+    const updatedNames = new Set(updated.players.map(p => p.playerName));
+    for (const oldName of beforeMap.keys()) {
+      if (!updatedNames.has(oldName)) {
+        upsertPromises.push(
+          supabase.from('training_answers').delete()
+            .eq('group_id', gid).eq('player_name', oldName).then()
+        );
+      }
+    }
+
+    if (upsertPromises.length > 0) {
+      await Promise.all(upsertPromises);
     }
     return true;
   } catch (err) {

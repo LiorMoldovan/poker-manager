@@ -16,7 +16,8 @@ import {
   uploadTrainingInsights,
   removeFromTrainingPool,
   writeTrainingAnswersWithRetry,
-} from '../database/githubSync';
+} from '../database/trainingData';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import {
   SCENARIO_CATEGORIES,
   generatePoolBatch,
@@ -29,6 +30,7 @@ import {
   getPlayerGameSummary,
   resetSharedTrainingProgress,
   clearPendingUploadsForPlayer,
+  updatePoolCache,
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { proxyGeminiGenerate } from '../utils/apiProxy';
@@ -259,6 +261,7 @@ const TrainingAdminTab = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  useRealtimeRefresh(loadAll);
 
   const [batchInsightsRunning, setBatchInsightsRunning] = useState(false);
   const [cloudCleaningPlayer, setCloudCleaningPlayer] = useState<string | null>(null);
@@ -318,15 +321,15 @@ const TrainingAdminTab = () => {
           clearPendingUploadsForPlayer(playerName);
         }
         const msg = isPartial
-          ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו מ-GitHub`
-          : `✅ ${playerName} הוסר מ-GitHub`;
+          ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו`
+          : `✅ ${playerName} הוסר בהצלחה`;
         setCloudCleanMsg(msg);
         setSessionCleanMode(null);
         setSelectedSessions(new Set());
         await new Promise(r => setTimeout(r, 1500));
         await loadAll();
       } else {
-        setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק טוקן GitHub בהגדרות');
+        setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק חיבור לאינטרנט');
       }
     } catch {
       setCloudCleanMsg('⚠️ שגיאה — נסה שוב');
@@ -620,9 +623,10 @@ const TrainingAdminTab = () => {
     try {
       const result = await removeFromTrainingPool(poolIds);
       if (result.success) {
-        const cached = localStorage.getItem('training_pool_cached');
-        if (cached) {
-          try { setPool(JSON.parse(cached) as TrainingPool); } catch { /* fall through */ }
+        const refreshed = await fetchTrainingPool();
+        if (refreshed) {
+          updatePoolCache(refreshed);
+          setPool(refreshed);
         }
 
         const removeSet = new Set(poolIds);
@@ -1021,7 +1025,7 @@ ${historyContext}
     try {
       const updatedScenarios = pool.scenarios.map(s => s.poolId === poolId ? fixed : s);
       const newPool = buildPoolObject(updatedScenarios);
-      pushFixLog('שמירה 2/3: העלאת מאגר ל-GitHub...', 'info');
+      pushFixLog('שמירה 2/3: העלאת מאגר...', 'info');
       const result = await uploadTrainingPool(newPool);
 
       if (!result.success) {
@@ -1037,7 +1041,7 @@ ${historyContext}
       if (!ok) {
         pushFixLog('המאגר הועלה, אך עדכון קובץ התשובות נכשל — נסה רענון ואז "רענן" בלשונית', 'error');
         setShowFixStepDetails(true);
-        setFlagMsg('⚠️ המאגר עודכן ב-GitHub; ניקוי דיווחים בקובץ התשובות נכשל — רענן נתונים');
+        setFlagMsg('⚠️ המאגר עודכן; ניקוי דיווחים בקובץ התשובות נכשל — רענן נתונים');
         setFixPreview(null);
         return;
       }
@@ -1246,8 +1250,7 @@ JSON בלבד, בלי markdown:`;
     try {
       const uploadResult = await uploadTrainingPool(newPool);
       if (uploadResult.success) {
-        localStorage.setItem('training_pool_cached', JSON.stringify(newPool));
-        localStorage.setItem('training_pool_generatedAt', newPool.generatedAt);
+        updatePoolCache(newPool);
         setPool(newPool);
         setReviewMsg(`✅ סיום: ${ok} תקינות, ${fixed} תוקנו, ${removed} הוסרו, ${errors} שגיאות`);
       } else {

@@ -17,6 +17,8 @@ interface GroupManagementTabProps {
   regenerateInviteCode: () => Promise<{ data: string | null; error: unknown }>;
   createPlayerInvite: (playerId: string) => Promise<{ data: { invite_code: string; player_name: string; already_existed: boolean } | null; error: unknown }>;
   addMemberByEmail: (email: string, playerId?: string) => Promise<{ data: { user_id: string; display_name: string; player_id: string | null } | null; error: unknown }>;
+  deleteGroup?: () => Promise<{ error: unknown }>;
+  leaveGroup?: () => Promise<{ error: unknown }>;
   appUrl: string;
 }
 
@@ -33,6 +35,8 @@ export default function GroupManagementTab({
   regenerateInviteCode,
   createPlayerInvite,
   addMemberByEmail,
+  deleteGroup,
+  leaveGroup,
   appUrl,
 }: GroupManagementTabProps) {
   const { t, isRTL } = useTranslation();
@@ -42,10 +46,11 @@ export default function GroupManagementTab({
   const [copied, setCopied] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    type: 'remove' | 'transfer' | 'regenerate';
+    type: 'remove' | 'transfer' | 'regenerate' | 'delete_group' | 'leave_group';
     userId?: string;
     name?: string;
   } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [personalInvite, setPersonalInvite] = useState<{
     playerName: string;
     code: string;
@@ -102,6 +107,25 @@ export default function GroupManagementTab({
     }
   };
 
+  const handleDeleteGroup = async () => {
+    if (!deleteGroup) return;
+    const { error } = await deleteGroup();
+    setConfirmAction(null);
+    setDeleteConfirmText('');
+    if (error) {
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorDeleteGroup'));
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!leaveGroup) return;
+    const { error } = await leaveGroup();
+    setConfirmAction(null);
+    if (error) {
+      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorLeaveGroup'));
+    }
+  };
+
   const handleRegenerate = async () => {
     const { data, error } = await regenerateInviteCode();
     setConfirmAction(null);
@@ -154,9 +178,11 @@ export default function GroupManagementTab({
     }
   };
 
+  const allPlayers = getAllPlayers();
+  const playerTypeMap = new Map(allPlayers.map(p => [p.id, p.type]));
   const linkedPlayerIds = new Set(members.map(m => m.playerId).filter(Boolean));
   const typeOrder: Record<string, number> = { permanent: 0, permanent_guest: 1, guest: 2 };
-  const unlinkedPlayers = getAllPlayers()
+  const unlinkedPlayers = allPlayers
     .filter(p => !linkedPlayerIds.has(p.id))
     .sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9));
 
@@ -200,12 +226,6 @@ export default function GroupManagementTab({
       <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
           <h2 className="card-title" style={{ margin: 0 }}>{t('groupMgmt.members')}</h2>
-          <span style={{
-            fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--surface-light)',
-            padding: '0.2rem 0.6rem', borderRadius: '10px', fontWeight: 600,
-          }}>
-            {members.length}
-          </span>
         </div>
 
         {loading ? (
@@ -214,157 +234,118 @@ export default function GroupManagementTab({
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('common.loading')}</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div>
             {members.map((m, idx) => {
               const isMe = m.userId === currentUserId;
               const isMemberOwner = members.length > 0 && isOwner && isMe;
               const displayName = m.playerName || m.displayName || t('groupMgmt.noName');
-              const initials = displayName.slice(0, 2);
-
-              const avatarColors = [
-                ['#10B981', 'rgba(16,185,129,0.15)'],
-                ['#6366F1', 'rgba(99,102,241,0.15)'],
-                ['#EC4899', 'rgba(236,72,153,0.15)'],
-                ['#F59E0B', 'rgba(245,158,11,0.15)'],
-                ['#8B5CF6', 'rgba(139,92,246,0.15)'],
-                ['#14B8A6', 'rgba(20,184,166,0.15)'],
-                ['#F97316', 'rgba(249,115,22,0.15)'],
-                ['#06B6D4', 'rgba(6,182,212,0.15)'],
-              ];
-              const [avatarColor, avatarBg] = avatarColors[idx % avatarColors.length];
+              const canManage = isAdmin && !isMe && (isOwner || m.role !== 'admin');
+              const pType = m.playerId ? playerTypeMap.get(m.playerId) : null;
+              const typeIcon = pType === 'permanent' ? '⭐' : pType === 'permanent_guest' ? '🏠' : pType ? '👤' : null;
 
               return (
-                <div key={m.userId} style={{
-                  padding: '0.65rem 0.75rem', borderRadius: '10px',
-                  background: isMe ? 'rgba(16,185,129,0.05)' : 'var(--background)',
-                  border: isMe ? '1px solid rgba(16,185,129,0.2)' : '1px solid var(--border)',
-                  transition: 'all 0.2s ease',
-                  animation: `contentFadeIn 0.3s ease-out ${idx * 0.04}s both`,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    {/* Avatar */}
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%',
-                      background: avatarBg, color: avatarColor,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.75rem', fontWeight: 700, flexShrink: 0,
-                      border: `1.5px solid ${avatarColor}30`,
-                    }}>
-                      {initials}
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {displayName}
-                        </span>
-                        {isMe && (
-                          <span style={{
-                            fontSize: '0.6rem', background: 'rgba(16,185,129,0.15)', color: '#10B981',
-                            padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600,
-                          }}>
-                            {t('groupMgmt.you')}
-                          </span>
-                        )}
-                        {isMemberOwner && (
-                          <span style={{
-                            fontSize: '0.6rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308',
-                            padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600,
-                          }}>
-                            {t('groupMgmt.owner')}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
-                        {m.email && (
-                          <span style={{
-                            fontSize: '0.68rem', color: 'var(--text-muted)', direction: 'ltr',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px',
-                          }}>
-                            {m.email}
-                          </span>
-                        )}
-                        {m.email && <span style={{ fontSize: '0.5rem', color: 'var(--border)' }}>•</span>}
+                <div
+                  key={m.userId}
+                  className={`settings-row${isMe ? ' settings-row-highlight' : ''}`}
+                  style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{
+                        fontWeight: 600, fontSize: '0.85rem',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {displayName}
+                      </span>
+                      {typeIcon && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{typeIcon}</span>
+                      )}
+                      {isMe && (
                         <span style={{
-                          fontSize: '0.68rem', whiteSpace: 'nowrap', fontWeight: 500,
-                          color: m.role === 'admin' ? '#A855F7' : 'var(--text-muted)',
+                          fontSize: '0.55rem', background: 'rgba(16,185,129,0.2)', color: '#10B981',
+                          padding: '0.1rem 0.3rem', borderRadius: '4px', fontWeight: 600,
                         }}>
-                          {roleLabel(m.role)}
+                          {t('groupMgmt.you')}
                         </span>
-                      </div>
-                      {!m.playerName && m.playerId === null && (
-                        <div style={{
-                          fontSize: '0.68rem', color: '#F59E0B', marginTop: '0.2rem',
-                          display: 'flex', alignItems: 'center', gap: '0.3rem',
-                        }}>
-                          <span style={{ fontSize: '0.6rem' }}>⚠</span> {t('groupMgmt.notLinked')}
-                        </div>
+                      )}
+                      {isMemberOwner && (
+                        <span style={{ fontSize: '0.6rem', color: '#EAB308' }}>👑</span>
                       )}
                     </div>
-
-                    {/* Inline actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
-                      {isAdmin && !isMe && (isOwner || m.role !== 'admin') && (
-                        <select
-                          value={m.role}
-                          onChange={e => handleRoleChange(m.userId, e.target.value)}
-                          style={{
-                            padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--border)',
-                            background: '#1a1a2e', color: 'var(--text)', fontSize: '0.7rem',
-                            fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
-                          }}
-                        >
-                          <option value="admin" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleAdmin')}</option>
-                          <option value="member" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleMember')}</option>
-                        </select>
-                      )}
-                      {isAdmin && !isMe && (isOwner || m.role !== 'admin') && (
-                        <button
-                          onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.playerName || m.displayName || '' })}
-                          style={{
-                            width: 28, height: 28, borderRadius: '6px',
-                            border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)',
-                            color: '#EF4444', cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem',
-                            transition: 'all 0.15s ease', flexShrink: 0,
-                          }}
-                          title={t('groupMgmt.removeMember')}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
+                    {m.email && (
+                      <span style={{
+                        fontSize: '0.68rem', color: 'var(--text-muted)', direction: 'ltr',
+                        display: 'block', overflow: 'hidden', textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap', marginTop: '0.1rem',
+                      }}>
+                        {m.email}
+                      </span>
+                    )}
+                    {!m.playerName && m.playerId === null && (
+                      <span style={{ fontSize: '0.65rem', color: '#F59E0B', marginTop: '0.1rem', display: 'block' }}>
+                        ⚠ {t('groupMgmt.notLinked')}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Owner transfer dropdown */}
-                  {isMemberOwner && members.filter(x => x.userId !== currentUserId).length > 0 && (
-                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
+                  {canManage ? (
+                    <>
                       <select
-                        value=""
-                        onChange={e => {
-                          const target = members.find(x => x.userId === e.target.value);
-                          if (target) {
-                            setConfirmAction({ type: 'transfer', userId: target.userId, name: target.playerName || target.displayName || '' });
-                          }
-                        }}
+                        value={m.role}
+                        onChange={e => handleRoleChange(m.userId, e.target.value)}
                         style={{
-                          padding: '0.3rem 0.5rem', borderRadius: '6px',
-                          border: '1px solid rgba(168,85,247,0.3)', background: '#1a1a2e',
-                          color: '#A855F7', fontSize: '0.72rem', fontFamily: 'Outfit, sans-serif',
-                          cursor: 'pointer',
+                          padding: '0.25rem 0.4rem', borderRadius: '8px',
+                          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                          color: 'var(--text)', fontSize: '0.7rem',
+                          fontFamily: 'Outfit, sans-serif', cursor: 'pointer', flexShrink: 0,
                         }}
                       >
-                        <option value="" style={{ background: '#1a1a2e', color: '#A855F7' }}>
-                          👑 {t('groupMgmt.transferOwnership')}
-                        </option>
-                        {members.filter(x => x.userId !== currentUserId).map(x => (
-                          <option key={x.userId} value={x.userId} style={{ background: '#1a1a2e', color: '#ffffff' }}>
-                            {x.playerName || x.displayName || x.email || '?'}
-                          </option>
-                        ))}
+                        <option value="admin" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleAdmin')}</option>
+                        <option value="member" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleMember')}</option>
                       </select>
-                    </div>
+                      <button
+                        className="row-action row-action-danger"
+                        onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.playerName || m.displayName || '' })}
+                        title={t('groupMgmt.removeMember')}
+                      >
+                        🗑️
+                      </button>
+                    </>
+                  ) : !isMe && (
+                    <span style={{
+                      fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0,
+                      padding: '0.2rem 0.45rem', borderRadius: '6px',
+                      background: 'rgba(255,255,255,0.04)',
+                    }}>
+                      {roleLabel(m.role)}
+                    </span>
+                  )}
+
+                  {isMemberOwner && members.filter(x => x.userId !== currentUserId).length > 0 && (
+                    <select
+                      value=""
+                      onChange={e => {
+                        const target = members.find(x => x.userId === e.target.value);
+                        if (target) {
+                          setConfirmAction({ type: 'transfer', userId: target.userId, name: target.playerName || target.displayName || '' });
+                        }
+                      }}
+                      style={{
+                        padding: '0.25rem 0.4rem', borderRadius: '8px',
+                        border: '1px solid rgba(168,85,247,0.15)', background: 'rgba(168,85,247,0.06)',
+                        color: '#A855F7', fontSize: '0.65rem', fontFamily: 'Outfit, sans-serif',
+                        cursor: 'pointer', flexShrink: 0,
+                      }}
+                    >
+                      <option value="" style={{ background: '#1a1a2e', color: '#A855F7' }}>
+                        👑 {t('groupMgmt.transferOwnership')}
+                      </option>
+                      {members.filter(x => x.userId !== currentUserId).map(x => (
+                        <option key={x.userId} value={x.userId} style={{ background: '#1a1a2e', color: '#ffffff' }}>
+                          {x.playerName || x.displayName || x.email || '?'}
+                        </option>
+                      ))}
+                    </select>
                   )}
                 </div>
               );
@@ -443,39 +424,33 @@ export default function GroupManagementTab({
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
             {t('groupMgmt.personalInvitesHelp')}
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          <div>
             {unlinkedPlayers.map((p, i, arr) => {
               const prevType = i > 0 ? arr[i - 1].type : null;
               const showDivider = prevType !== null && prevType !== p.type;
               return (
-              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                {showDivider && <div style={{ height: '1px', background: 'var(--border)', margin: '0.2rem 0' }} />}
-                <div style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '0.55rem 0.75rem', borderRadius: '8px', background: 'var(--background)',
-                  border: '1px solid var(--border)',
-                }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.name}</span>
-                  <span style={{
-                    fontSize: '0.65rem', padding: '0.1rem 0.4rem', borderRadius: '4px',
-                    background: p.type === 'permanent' ? 'rgba(99,102,241,0.12)' : 'rgba(100,100,100,0.12)',
-                    color: p.type === 'permanent' ? '#818cf8' : 'var(--text-muted)',
-                  }}>
-                    {p.type === 'permanent' ? t('groupMgmt.playerTypePermanent') : p.type === 'permanent_guest' ? t('groupMgmt.playerTypeGuest') : t('groupMgmt.playerTypeOccasional')}
-                  </span>
+              <div key={p.id}>
+                {showDivider && <div style={{ height: '1px', background: 'var(--border)', margin: '0.15rem 0', opacity: 0.3 }} />}
+                <div className="settings-row" style={{ justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.name}</span>
+                    <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                      {p.type === 'permanent' ? '⭐' : p.type === 'permanent_guest' ? '🏠' : '👤'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleCreateInvite(p.id)}
+                    className="btn btn-sm"
+                    style={{
+                      padding: '0.25rem 0.6rem', fontSize: '0.72rem',
+                      background: 'rgba(16,185,129,0.12)', color: '#10B981',
+                      border: '1px solid rgba(16,185,129,0.3)',
+                      borderRadius: '6px', fontFamily: 'Outfit, sans-serif', fontWeight: 600, cursor: 'pointer',
+                    }}
+                  >
+                    {t('groupMgmt.invite')}
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleCreateInvite(p.id)}
-                  style={{
-                    padding: '0.35rem 0.75rem', borderRadius: '8px', border: 'none',
-                    background: 'var(--primary)', color: 'white', cursor: 'pointer',
-                    fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                  }}
-                >
-                  {t('groupMgmt.invite')}
-                </button>
-              </div>
               </div>
               );
             })}
@@ -503,35 +478,39 @@ export default function GroupManagementTab({
               boxSizing: 'border-box', marginBottom: '0.5rem',
             }}
           />
-          {unlinkedPlayers.length > 0 && (
-            <select
-              value={addEmailPlayer}
-              onChange={e => setAddEmailPlayer(e.target.value)}
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            {unlinkedPlayers.length > 0 && (
+              <select
+                value={addEmailPlayer}
+                onChange={e => setAddEmailPlayer(e.target.value)}
+                style={{
+                  flex: 1, padding: '0.5rem 0.6rem', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--text)', fontSize: '0.78rem', fontFamily: 'Outfit, sans-serif',
+                  cursor: 'pointer', minWidth: 0,
+                }}
+              >
+                <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('groupMgmt.linkToPlayer')}</option>
+                {unlinkedPlayers.map(p => (
+                  <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={handleAddByEmail}
+              disabled={addEmailLoading}
               style={{
-                width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
-                border: '1px solid var(--border)', background: '#1a1a2e',
-                color: '#ffffff', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif',
-                marginBottom: '0.5rem', cursor: 'pointer',
+                flex: unlinkedPlayers.length > 0 ? undefined : 1,
+                padding: '0.5rem 0.75rem', borderRadius: '8px',
+                border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                color: '#10B981', cursor: addEmailLoading ? 'not-allowed' : 'pointer',
+                fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                opacity: addEmailLoading ? 0.6 : 1, whiteSpace: 'nowrap',
               }}
             >
-              <option value="" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.linkToPlayer')}</option>
-              {unlinkedPlayers.map(p => (
-                <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={handleAddByEmail}
-            disabled={addEmailLoading}
-            style={{
-              width: '100%', padding: '0.6rem', borderRadius: '8px', border: 'none',
-              background: 'var(--primary)', color: 'white', cursor: addEmailLoading ? 'not-allowed' : 'pointer',
-              fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-              opacity: addEmailLoading ? 0.6 : 1,
-            }}
-          >
-            {addEmailLoading ? '...' : t('groupMgmt.addToGroup')}
-          </button>
+              {addEmailLoading ? '...' : t('groupMgmt.addToGroup')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -601,17 +580,67 @@ export default function GroupManagementTab({
         </div>
       )}
 
+      {/* Danger Zone */}
+      <div className="card" style={{
+        padding: '1rem', marginBottom: '0.75rem',
+        borderInlineStart: '3px solid #EF4444',
+        background: 'rgba(239,68,68,0.04)',
+      }}>
+        <h2 className="card-title" style={{ margin: '0 0 0.5rem 0', color: '#EF4444' }}>
+          {t('groupMgmt.dangerZone')}
+        </h2>
+        {isOwner ? (
+          <>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              {t('groupMgmt.deleteGroupDesc')}
+            </p>
+            <button
+              onClick={() => { setConfirmAction({ type: 'delete_group' }); setDeleteConfirmText(''); }}
+              style={{
+                width: '100%', padding: '0.6rem', borderRadius: '8px',
+                border: '1px solid rgba(239,68,68,0.4)',
+                background: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                cursor: 'pointer', fontSize: '0.85rem',
+                fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+              }}
+            >
+              {t('groupMgmt.deleteGroup')}
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              {t('groupMgmt.leaveGroupDesc')}
+            </p>
+            <button
+              onClick={() => setConfirmAction({ type: 'leave_group' })}
+              style={{
+                width: '100%', padding: '0.6rem', borderRadius: '8px',
+                border: '1px solid rgba(239,68,68,0.4)',
+                background: 'rgba(239,68,68,0.1)', color: '#EF4444',
+                cursor: 'pointer', fontSize: '0.85rem',
+                fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+              }}
+            >
+              {t('groupMgmt.leaveGroup')}
+            </button>
+          </>
+        )}
+      </div>
+
       {/* Confirmation Modal */}
       {confirmAction && (
-        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
+        <div className="modal-overlay" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">
                 {confirmAction.type === 'remove' && t('groupMgmt.removeConfirmTitle')}
                 {confirmAction.type === 'transfer' && t('groupMgmt.transferConfirmTitle')}
                 {confirmAction.type === 'regenerate' && t('groupMgmt.regenConfirmTitle')}
+                {confirmAction.type === 'delete_group' && t('groupMgmt.deleteGroupConfirmTitle')}
+                {confirmAction.type === 'leave_group' && t('groupMgmt.leaveGroupConfirmTitle')}
               </h3>
-              <button className="modal-close" onClick={() => setConfirmAction(null)}>×</button>
+              <button className="modal-close" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>×</button>
             </div>
 
             {confirmAction.type === 'remove' && (
@@ -644,23 +673,64 @@ export default function GroupManagementTab({
                 </p>
               </>
             )}
+            {confirmAction.type === 'delete_group' && (
+              <>
+                <p style={{ marginBottom: '0.5rem', color: '#EF4444', fontWeight: 600 }}>
+                  {t('groupMgmt.deleteGroupConfirmBody', { name: groupName })}
+                </p>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  {t('groupMgmt.deleteGroupConfirmWarning')}
+                </p>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                  {t('groupMgmt.deleteGroupTypeConfirm', { name: groupName })}
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  placeholder={groupName}
+                  dir="rtl"
+                  style={{
+                    width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                    border: '1px solid var(--border)', background: 'var(--background)',
+                    color: 'var(--text)', fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif',
+                    boxSizing: 'border-box', marginBottom: '1rem',
+                  }}
+                />
+              </>
+            )}
+            {confirmAction.type === 'leave_group' && (
+              <>
+                <p style={{ marginBottom: '0.5rem' }}>
+                  {t('groupMgmt.leaveGroupConfirmBody', { name: groupName })}
+                </p>
+                <p style={{ fontSize: '0.8rem', color: '#F59E0B', marginBottom: '1rem' }}>
+                  {t('groupMgmt.leaveGroupConfirmWarning')}
+                </p>
+              </>
+            )}
 
             <div className="actions">
-              <button className="btn btn-secondary" onClick={() => setConfirmAction(null)}>
+              <button className="btn btn-secondary" onClick={() => { setConfirmAction(null); setDeleteConfirmText(''); }}>
                 {t('common.cancel')}
               </button>
               <button
                 className={confirmAction.type === 'transfer' ? 'btn' : 'btn btn-danger'}
                 style={confirmAction.type === 'transfer' ? { background: '#A855F7', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', fontFamily: 'Outfit, sans-serif' } : undefined}
+                disabled={confirmAction.type === 'delete_group' && deleteConfirmText !== groupName}
                 onClick={() => {
                   if (confirmAction.type === 'remove' && confirmAction.userId) handleRemove(confirmAction.userId);
                   if (confirmAction.type === 'transfer' && confirmAction.userId) handleTransfer(confirmAction.userId);
                   if (confirmAction.type === 'regenerate') handleRegenerate();
+                  if (confirmAction.type === 'delete_group') handleDeleteGroup();
+                  if (confirmAction.type === 'leave_group') handleLeaveGroup();
                 }}
               >
                 {confirmAction.type === 'remove' && t('groupMgmt.confirmRemove')}
                 {confirmAction.type === 'transfer' && t('groupMgmt.confirmTransfer')}
                 {confirmAction.type === 'regenerate' && t('groupMgmt.confirmRegen')}
+                {confirmAction.type === 'delete_group' && t('groupMgmt.confirmDeleteGroup')}
+                {confirmAction.type === 'leave_group' && t('groupMgmt.confirmLeaveGroup')}
               </button>
             </div>
           </div>

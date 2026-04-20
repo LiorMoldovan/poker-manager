@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits } from '../types';
@@ -33,8 +33,9 @@ import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestR
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendEmail } from '../utils/apiProxy';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
-import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
-import { ActivityLogEntry } from '../types';
+import { fetchActivityLog } from '../utils/activityLogger';
+import { fetchTrainingAnswers } from '../database/trainingData';
+import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
 import { usePermissions } from '../App';
@@ -43,13 +44,14 @@ import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import GroupManagementTab from '../components/GroupManagementTab';
+import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 import { useTranslation } from '../i18n';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
   const { t, isRTL, language, setLanguage } = useTranslation();
-  const { role, isOwner, isSuperAdmin, playerName: authPlayerName, hasPermission, signOut, groupMgmt } = usePermissions();
+  const { role, isOwner, isSuperAdmin, playerName: authPlayerName, hasPermission, signOut, groupMgmt, multiGroup } = usePermissions();
   const [settings, setSettings] = useState<Settings>({ rebuyValue: 30, chipsPerRebuy: 10000, minTransfer: 5 });
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -87,12 +89,17 @@ const SettingsScreen = () => {
   const [showAiLog, setShowAiLog] = useState(false);
   const [aiTick, setAiTick] = useState(0);
 
+  // Group setup overlay (create/join)
+  const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
+  const [groupJustCreated, setGroupJustCreated] = useState(false);
+
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [activityMembers, setActivityMembers] = useState<GroupMember[]>([]);
+  const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
   const [deviceLabels] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
@@ -113,21 +120,30 @@ const SettingsScreen = () => {
     training_enabled: boolean;
     owner_email: string | null;
     member_count: number;
+    player_count: number;
     game_count: number;
     completed_game_count: number;
     last_game_date: string | null;
+    active_users_7d: number;
+    training_players: number;
+    training_players_total: number;
+    feature_adoption: { screen: string; users: number }[];
   }
   interface GlobalStats {
     total_groups: number;
     total_users: number;
     total_games: number;
     total_players: number;
+    total_active_users_7d: number;
+    total_training_players: number;
     groups: GlobalGroup[];
     orphaned_groups: { id: string; name: string; created_at: string; created_by: string }[];
   }
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [globalSubTab, setGlobalSubTab] = useState<'mine' | 'others'>('mine');
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const loadGlobalStats = useCallback(async () => {
     if (!isSuperAdmin) return;
@@ -392,8 +408,13 @@ const SettingsScreen = () => {
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const entries = await fetchActivityLog();
+      const { data: { user } } = await supabase.auth.getUser();
+      const [entries, trainingData] = await Promise.all([
+        fetchActivityLog(user?.id),
+        fetchTrainingAnswers(),
+      ]);
       setActivityLog(entries.reverse());
+      setTrainingPlayers(trainingData?.players || []);
     } catch (err) {
       setActivityError(err instanceof Error ? err.message : t('settings.activity.loadError'));
     } finally {
@@ -401,33 +422,8 @@ const SettingsScreen = () => {
     }
   };
 
-  const handleClearActivityLog = async () => {
-    if (!window.confirm(t('settings.activity.clearConfirm'))) return;
-    setActivityLoading(true);
-    try {
-      await clearActivityLog();
-      setActivityLog([]);
-    } catch (err) {
-      setActivityError(err instanceof Error ? err.message : t('settings.activity.loadError'));
-    } finally {
-      setActivityLoading(false);
-    }
-  };
+  // handleClearActivityLog removed — trash button was removed from Activity tab
 
-
-  const formatRelativeTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const entryDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = Math.floor((today.getTime() - entryDay.getTime()) / 86400000);
-    const loc = language === 'he' ? 'he-IL' : 'en-US';
-    const time = date.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
-    if (diffDays === 0) return t('settings.relative.today', { time });
-    if (diffDays === 1) return t('settings.relative.yesterday', { time });
-    if (diffDays < 7) return t('settings.relative.daysAgo', { days: diffDays, time });
-    return `${date.toLocaleDateString(loc, { day: 'numeric', month: 'short' })} ${time}`;
-  };
 
   const getRoleInfo = (r: string) => {
     switch (r) {
@@ -448,8 +444,8 @@ const SettingsScreen = () => {
     { id: 'training', label: t('settings.tabTraining'), icon: '🎯', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
-    { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
+    { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
   ];
   
   const tabs = allTabs.filter(tab => {
@@ -486,8 +482,8 @@ const SettingsScreen = () => {
         </button>
       </div>
 
-      {/* Poker Training - Super Admin Only */}
-      {isSuperAdmin && (
+      {/* Poker Training - Super Admin Only (hidden banner, navigable via Training tab) */}
+      {isSuperAdmin && false && (
         <button
           onClick={() => navigate('/training')}
           style={{
@@ -520,10 +516,12 @@ const SettingsScreen = () => {
       {/* Setup Wizard Banner — shown for group owners when setup is incomplete */}
       {isOwner && (() => {
         const hasPlayers = players.length > 1;
+        const hasLocations = (settings.locations ?? []).length > 0;
         const aiWorking = !!settings.geminiApiKey || getAllGames().some(g => g.aiSummary);
         const steps = [
           { done: true, label: t('settings.setup.stepGroup'), icon: '✅' },
           { done: hasPlayers, label: t('settings.setup.stepPlayers'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
+          { done: hasLocations, label: t('settings.setup.stepLocations'), icon: hasLocations ? '✅' : '📍', tab: 'game' as TabId },
           { done: aiWorking, label: t('settings.setup.stepAi'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
         ];
         const allDone = steps.every(s => s.done);
@@ -570,9 +568,9 @@ const SettingsScreen = () => {
       {/* Tabs */}
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '0.4rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.35rem',
         }}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
@@ -582,8 +580,8 @@ const SettingsScreen = () => {
                 className="btn btn-sm btn-secondary"
                 onClick={() => setActiveTab(tab.id)}
                 style={{
-                  padding: '0.45rem 0.2rem', fontSize: '0.7rem',
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  padding: '0.4rem 0.55rem', fontSize: '0.7rem',
+                  whiteSpace: 'nowrap',
                   ...(isActive ? {
                     background: 'rgba(16, 185, 129, 0.15)',
                     border: '1px solid rgba(16, 185, 129, 0.4)',
@@ -646,8 +644,43 @@ const SettingsScreen = () => {
           regenerateInviteCode={groupMgmt.regenerateInviteCode}
           createPlayerInvite={groupMgmt.createPlayerInvite}
           addMemberByEmail={groupMgmt.addMemberByEmail}
+          deleteGroup={multiGroup ? () => multiGroup.deleteGroup(multiGroup.activeGroupId ?? '') : undefined}
+          leaveGroup={multiGroup ? () => multiGroup.leaveGroup(multiGroup.activeGroupId ?? '') : undefined}
           appUrl={window.location.origin}
         />
+      )}
+      {activeTab === 'group' && multiGroup && (
+        <div className="card" style={{ padding: '1rem', marginTop: '0.75rem' }}>
+          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupSwitcher.manageGroups')}</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+            {t('groupSwitcher.manageGroupsDesc')}
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setGroupSetupMode('create')}
+              style={{
+                flex: 1, padding: '0.6rem', borderRadius: '8px',
+                border: 'none', background: 'var(--primary)', color: 'white',
+                cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                fontSize: '0.8rem', fontWeight: 600,
+              }}
+            >
+              {t('groupSwitcher.createNew')}
+            </button>
+            <button
+              onClick={() => setGroupSetupMode('join')}
+              style={{
+                flex: 1, padding: '0.6rem', borderRadius: '8px',
+                border: '1px solid var(--border)', background: 'transparent',
+                color: 'var(--text)', cursor: 'pointer',
+                fontFamily: 'Outfit, sans-serif',
+                fontSize: '0.8rem', fontWeight: 600,
+              }}
+            >
+              {t('groupSwitcher.joinGroup')}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Game Settings Tab */}
@@ -765,7 +798,12 @@ const SettingsScreen = () => {
           <div className="input-group">
             <label className="label">{t('settings.game.locations')}</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
-              {(settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל']).map(loc => (
+              {(settings.locations ?? []).length === 0 && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  {t('settings.game.noLocations')}
+                </span>
+              )}
+              {(settings.locations ?? []).map(loc => (
                 <div key={loc} style={{
                   display: 'flex', alignItems: 'center', gap: '0.3rem',
                   padding: '0.3rem 0.5rem', borderRadius: '6px',
@@ -776,7 +814,7 @@ const SettingsScreen = () => {
                   {canEditSettings && (
                     <button
                       onClick={() => {
-                        const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                        const current = settings.locations ?? [];
                         handleSettingsChange('locations', current.filter(l => l !== loc));
                       }}
                       style={{
@@ -800,7 +838,7 @@ const SettingsScreen = () => {
                   style={{ flex: 1, fontSize: '0.85rem' }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && newLocation.trim()) {
-                      const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                      const current = settings.locations ?? [];
                       if (!current.includes(newLocation.trim())) {
                         handleSettingsChange('locations', [...current, newLocation.trim()]);
                       }
@@ -812,7 +850,7 @@ const SettingsScreen = () => {
                   className="btn btn-sm"
                   disabled={!newLocation.trim()}
                   onClick={() => {
-                    const current = settings.locations || ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+                    const current = settings.locations ?? [];
                     if (!current.includes(newLocation.trim())) {
                       handleSettingsChange('locations', [...current, newLocation.trim()]);
                     }
@@ -820,7 +858,8 @@ const SettingsScreen = () => {
                   }}
                   style={{
                     fontSize: '0.8rem', padding: '0.35rem 0.7rem',
-                    background: 'var(--primary)', color: 'white', border: 'none',
+                    background: 'rgba(16,185,129,0.12)', color: '#10B981',
+                    border: '1px solid rgba(16,185,129,0.3)', cursor: 'pointer',
                   }}
                 >{t('settings.game.addLocation')}</button>
               </div>
@@ -862,23 +901,21 @@ const SettingsScreen = () => {
                   <select
                     value={newBlockedA}
                     onChange={e => setNewBlockedA(e.target.value)}
-                    className="input"
-                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.15)', background: '#1a1a2e', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
                   >
-                    <option value="">{t('settings.game.playerA')}</option>
+                    <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerA')}</option>
                     {players.filter(p => p.type === 'permanent').map(p => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
+                      <option key={p.id} value={p.name} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
                     ))}
                   </select>
                   <select
                     value={newBlockedB}
                     onChange={e => setNewBlockedB(e.target.value)}
-                    className="input"
-                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.15)', background: '#1a1a2e', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
                   >
-                    <option value="">{t('settings.game.playerB')}</option>
+                    <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerB')}</option>
                     {players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => (
-                      <option key={p.id} value={p.name}>{p.name}</option>
+                      <option key={p.id} value={p.name} style={{ background: '#1a1a2e', color: '#ffffff' }}>{p.name}</option>
                     ))}
                   </select>
                 </div>
@@ -905,7 +942,7 @@ const SettingsScreen = () => {
                       setNewBlockedB('');
                     }}
                     className="btn btn-sm"
-                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem', background: 'var(--primary)', color: 'white', border: 'none', whiteSpace: 'nowrap' }}
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem', background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', whiteSpace: 'nowrap', cursor: 'pointer' }}
                   >{t('settings.game.addBlocked')}</button>
                 </div>
               </div>
@@ -948,14 +985,7 @@ const SettingsScreen = () => {
               />
               {canEditChips && (
                 <button 
-                  className="btn btn-sm"
-                  style={{ 
-                    padding: '0.35rem 0.5rem', 
-                    fontSize: '0.75rem',
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    color: 'var(--danger)'
-                  }}
+                  className="row-action row-action-danger"
                   onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
                   title={t('settings.chips.deleteTitle')}
                 >
@@ -970,74 +1000,84 @@ const SettingsScreen = () => {
       {/* Players Tab */}
       {activeTab === 'players' && (
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">{t('settings.players.title', { count: players.length })}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 className="card-title" style={{ margin: 0 }}>{t('settings.players.title', { count: players.length })}</h2>
+            </div>
             {canAddPlayers && (
-              <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)} style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>
-                {t('settings.players.add')}
+              <button
+                onClick={() => setShowAddPlayer(true)}
+                style={{
+                  padding: '0.35rem 0.75rem', borderRadius: '8px',
+                  border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                  color: '#10B981', cursor: 'pointer',
+                  fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                }}
+              >
+                + {t('settings.players.add')}
               </button>
             )}
           </div>
 
           {players.length === 0 ? (
-            <p className="text-muted">{t('settings.players.noPlayers')}</p>
+            <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+              <div className="empty-icon">👥</div>
+              <p>{t('settings.players.noPlayers')}</p>
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              {players.map(player => (
-                <div key={player.id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0.45rem 0.6rem', borderRadius: '8px',
-                  background: 'var(--background)', border: '1px solid var(--border)',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flex: 1 }}>
-                    <span style={{ fontWeight: 500, fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{player.name}</span>
-                    <span style={{
-                      fontSize: '0.6rem', padding: '0.1rem 0.3rem', borderRadius: '4px', whiteSpace: 'nowrap',
-                      background: player.type === 'permanent' ? 'rgba(16,185,129,0.15)' : 'rgba(100,100,100,0.15)',
-                      color: player.type === 'permanent' ? 'var(--primary)' : 'var(--text-muted)',
-                    }}>
-                      {player.type === 'permanent' ? '⭐' : player.type === 'permanent_guest' ? '🏠' : '👤'}
-                    </span>
-                    <span style={{ fontSize: '0.6rem', color: player.gender === 'female' ? '#EC4899' : '#3B82F6', opacity: 0.7 }}>
-                      {player.gender === 'female' ? '♀' : '♂'}
-                    </span>
-                  </div>
-                  {(canEditPlayers || canDeletePlayers) && (
-                    <div style={{ display: 'flex', gap: '0.2rem', marginInlineStart: '0.3rem' }}>
-                      {canEditPlayers && (
-                        <button
-                          className="btn btn-sm"
-                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', lineHeight: 1 }}
-                          onClick={() => openEditPlayer(player)}
-                          title={t('common.edit')}
-                        >✏️</button>
-                      )}
-                      {canEditPlayers && (
-                        <button
-                          className="btn btn-sm"
-                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', color: '#A855F7', lineHeight: 1 }}
-                          onClick={() => {
-                            const existing = getAllPlayerTraits().get(player.name);
-                            setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
-                            setTraitsStyleText(existing?.style.join(', ') || '');
-                            setTraitsQuirksText(existing?.quirks.join(', ') || '');
-                            setEditingTraitsPlayer(player);
-                          }}
-                          title={t('settings.traits.button')}
-                        >🎭</button>
-                      )}
-                      {canDeletePlayers && (
-                        <button
-                          className="btn btn-sm"
-                          style={{ padding: '0.2rem 0.35rem', fontSize: '0.7rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', lineHeight: 1 }}
-                          onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
-                          title={t('settings.players.deleteTitle')}
-                        >🗑️</button>
-                      )}
+            <div>
+              {players.map((player, idx) => {
+                const typeLabel = player.type === 'permanent' ? '⭐'
+                  : player.type === 'permanent_guest' ? '🏠' : '👤';
+
+                return (
+                  <div
+                    key={player.id}
+                    className="settings-row"
+                    style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{player.name}</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{typeLabel}</span>
+                      <span style={{ fontSize: '0.55rem', color: player.gender === 'female' ? '#EC4899' : '#60A5FA', opacity: 0.6 }}>
+                        {player.gender === 'female' ? '♀' : '♂'}
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {(canEditPlayers || canDeletePlayers) && (
+                      <div style={{ display: 'flex', gap: '0.2rem', flexShrink: 0 }}>
+                        {canEditPlayers && (
+                          <button
+                            className="row-action"
+                            onClick={() => openEditPlayer(player)}
+                            title={t('common.edit')}
+                          >✏️</button>
+                        )}
+                        {canEditPlayers && (
+                          <button
+                            className="row-action row-action-purple"
+                            onClick={() => {
+                              const existing = getAllPlayerTraits().get(player.name);
+                              setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
+                              setTraitsStyleText(existing?.style.join(', ') || '');
+                              setTraitsQuirksText(existing?.quirks.join(', ') || '');
+                              setEditingTraitsPlayer(player);
+                            }}
+                            title={t('settings.traits.button')}
+                          >🎭</button>
+                        )}
+                        {canDeletePlayers && (
+                          <button
+                            className="row-action row-action-danger"
+                            onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
+                            title={t('settings.players.deleteTitle')}
+                          >🗑️</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1120,7 +1160,7 @@ const SettingsScreen = () => {
               </button>
               <button
                 className="btn btn-sm"
-                style={{ background: 'var(--primary)', color: '#fff', border: 'none', opacity: traitsSaving ? 0.6 : 1 }}
+                style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', opacity: traitsSaving ? 0.6 : 1, cursor: 'pointer' }}
                 disabled={traitsSaving}
                 onClick={async () => {
                   setTraitsSaving(true);
@@ -1387,8 +1427,9 @@ const SettingsScreen = () => {
                           setTimeout(() => setSaved(false), 2000);
                         }}
                         style={{
-                          padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none',
-                          background: 'var(--primary)', color: 'white', fontSize: '0.75rem',
+                          padding: '0.5rem 0.75rem', borderRadius: '6px',
+                          border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                          color: '#10B981', fontSize: '0.75rem',
                           cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
                         }}
                       >
@@ -1420,8 +1461,9 @@ const SettingsScreen = () => {
                             setTimeout(() => setSaved(false), 2000);
                           }}
                           style={{
-                            padding: '0.5rem 0.75rem', borderRadius: '6px', border: 'none',
-                            background: 'var(--primary)', color: 'white', fontSize: '0.75rem',
+                            padding: '0.5rem 0.75rem', borderRadius: '6px',
+                            border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                            color: '#10B981', fontSize: '0.75rem',
                             cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
                           }}
                         >
@@ -1444,7 +1486,7 @@ const SettingsScreen = () => {
                   <li>לחץ שמור — וזהו!</li>
                 </ol>
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '0.5rem 0 0', opacity: 0.7 }}>
-                  המפתח בחינם עד 1,500 בקשות ביום — מספיק בשופי לערבי פוקר
+                  המפתח בחינם עד 1,500 בקשות ביום — מספיק לגמרי לערבי פוקר
                 </p>
               </div>
             )}
@@ -1535,7 +1577,7 @@ const SettingsScreen = () => {
                     setIsTestingModels(false);
                   }}
                   disabled={isTestingModels || !geminiKey}
-                  style={{ fontSize: '0.7rem', padding: '0.3rem 0.7rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 8 }}
+                  style={{ fontSize: '0.7rem', padding: '0.3rem 0.7rem', background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8, cursor: 'pointer' }}
                 >
                   {isTestingModels ? t('settings.ai.checking') : t('settings.ai.checkNow')}
                 </button>
@@ -1976,6 +2018,25 @@ const SettingsScreen = () => {
 
       {/* Super Admin Dashboard */}
       {activeTab === 'superadmin' && isSuperAdmin && (() => {
+        const myGroupId = getGroupId();
+        const myGroup = globalStats?.groups.find(g => g.id === myGroupId);
+        const otherGroups = globalStats?.groups.filter(g => g.id !== myGroupId) ?? [];
+        const now = new Date();
+        const oneDayMs = 86400000;
+
+        const getActivityStatus = (lastGameDate: string | null) => {
+          if (!lastGameDate) return { label: t('settings.superAdmin.inactive'), color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+          const days = Math.floor((now.getTime() - new Date(lastGameDate).getTime()) / oneDayMs);
+          if (days <= 30) return { label: t('settings.superAdmin.active'), color: '#10B981', bg: 'rgba(16,185,129,0.1)' };
+          if (days <= 90) return { label: t('settings.superAdmin.dormant'), color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' };
+          return { label: t('settings.superAdmin.inactive'), color: '#ef4444', bg: 'rgba(239,68,68,0.1)' };
+        };
+
+        const daysAgo = (dateStr: string | null) => {
+          if (!dateStr) return null;
+          return Math.floor((now.getTime() - new Date(dateStr).getTime()) / oneDayMs);
+        };
+
         return (
           <div>
             {globalLoading && (
@@ -1992,91 +2053,240 @@ const SettingsScreen = () => {
               </div>
             )}
 
-            {globalStats && (
-              <>
-                {/* Global Overview Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginBottom: '1rem' }}>
-                  {[
-                    { id: 'statGroups', icon: '🏠', label: t('settings.superAdmin.statGroups'), value: globalStats.total_groups },
-                    { id: 'statUsers', icon: '👥', label: t('settings.superAdmin.statUsers'), value: globalStats.total_users },
-                    { id: 'statGames', icon: '🃏', label: t('settings.superAdmin.statGames'), value: globalStats.total_games },
-                    { id: 'statPlayers', icon: '🎭', label: t('settings.superAdmin.statPlayers'), value: globalStats.total_players },
-                  ].map(stat => (
-                    <div key={stat.id} className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.2rem' }}>{stat.icon}</div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>{stat.value}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{stat.label}</div>
+            {globalStats && (() => {
+              const renderStatCards = (g: GlobalGroup) => {
+                const lastGameLabel = g.last_game_date
+                  ? new Date(g.last_game_date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: '2-digit', month: '2-digit', year: '2-digit' })
+                  : '—';
+                const lastGameColor = g.last_game_date && daysAgo(g.last_game_date)! <= 30 ? '#10B981' : '#f59e0b';
+                return (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    {/* Core stats row */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: '1px solid var(--border)', marginBottom: '0.35rem' }}>
+                      {[
+                        { label: language === 'he' ? 'חברים' : 'Members', value: g.member_count, color: 'var(--text)' },
+                        { label: language === 'he' ? 'שחקנים' : 'Players', value: g.player_count ?? '—', color: '#818cf8' },
+                        { label: language === 'he' ? 'משחקים' : 'Games', value: g.completed_game_count, color: '#10B981' },
+                        { label: language === 'he' ? 'אחרון' : 'Last', value: lastGameLabel, color: lastGameColor },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                          <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginTop: '0.05rem' }}>{s.label}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    {/* Engagement row */}
+                    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.6rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                      {g.active_users_7d > 0 && (
+                        <span>📊 <span style={{ color: '#10B981', fontWeight: 600 }}>{g.active_users_7d}</span> {language === 'he' ? 'פעילים השבוע' : 'active this week'}</span>
+                      )}
+                      {g.training_players > 0 && (
+                        <span>🎯 <span style={{ color: '#f59e0b', fontWeight: 600 }}>{g.training_players}</span> {language === 'he' ? 'מתאמנים השבוע' : 'trainers this week'}</span>
+                      )}
+                    </div>
+                    {/* Feature Adoption */}
+                    {g.feature_adoption && g.feature_adoption.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem', marginTop: '0.3rem' }}>
+                        {g.feature_adoption.map(f => {
+                          const total = (g.player_count ?? g.member_count) || 1;
+                          const pct = Math.round((f.users / total) * 100);
+                          const color = pct >= 75 ? '#10B981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+                          return (
+                            <span key={f.screen} style={{
+                              fontSize: '0.52rem', padding: '0.1rem 0.3rem', borderRadius: '6px',
+                              background: `${color}12`, color, fontWeight: 600,
+                            }}>
+                              {f.screen} {f.users}/{total}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
 
-                {/* Orphaned Groups Warning */}
-                {globalStats.orphaned_groups.length > 0 && (
-                  <div className="card" style={{ padding: '1rem', marginBottom: '1rem', background: 'rgba(245,158,11,0.08)', borderInlineStart: '3px solid #F59E0B' }}>
-                    <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: '#F59E0B' }}>
-                      {t('settings.superAdmin.orphanedTitle', { count: globalStats.orphaned_groups.length })}
-                    </h3>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 0.5rem' }}>
-                      {t('settings.superAdmin.orphanedDesc')}
-                    </p>
-                    {globalStats.orphaned_groups.map(og => (
-                      <div key={og.id} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '0.5rem', background: 'var(--surface)', borderRadius: '8px', marginBottom: '0.3rem',
-                      }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{og.name}</span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          {new Date(og.created_at).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')}
+              const othersTotalMembers = otherGroups.reduce((s, g) => s + g.member_count, 0);
+              const othersTotalPlayers = otherGroups.reduce((s, g) => s + (g.player_count ?? 0), 0);
+              const othersTotalCompleted = otherGroups.reduce((s, g) => s + g.completed_game_count, 0);
+
+              return (
+                <>
+                  {/* Platform Overview */}
+                  <div style={{
+                    padding: '0.65rem 0.75rem', borderRadius: '12px', marginBottom: '0.65rem',
+                    background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(16,185,129,0.06))',
+                    border: '1px solid rgba(99,102,241,0.15)',
+                  }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', letterSpacing: '0.02em' }}>
+                      {t('settings.superAdmin.platformTotals')}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      {[
+                        { label: language === 'he' ? 'קבוצות' : 'Groups', value: globalStats.total_groups, color: '#818cf8' },
+                        { label: language === 'he' ? 'משתמשים' : 'Users', value: globalStats.total_users, color: 'var(--text)' },
+                        { label: language === 'he' ? 'שחקנים' : 'Players', value: globalStats.total_players, color: 'var(--text)' },
+                        { label: language === 'he' ? 'משחקים' : 'Games', value: globalStats.total_games, color: '#10B981' },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.15rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                          <div style={{ fontSize: '0.5rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sub-tab toggle */}
+                  <div style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                    {(['mine', 'others'] as const).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => { setGlobalSubTab(tab); setExpandedGroupId(null); }}
+                        style={{
+                          flex: 1, padding: '0.5rem', borderRadius: '10px', border: 'none',
+                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                          fontSize: '0.78rem', fontWeight: 600,
+                          background: globalSubTab === tab ? 'rgba(99, 102, 241, 0.15)' : 'var(--surface)',
+                          color: globalSubTab === tab ? '#818cf8' : 'var(--text-muted)',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {tab === 'mine' ? t('settings.superAdmin.tabMine') : t('settings.superAdmin.tabOthers', { count: otherGroups.length })}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* My Group sub-tab */}
+                  {globalSubTab === 'mine' && myGroup && (
+                    <>
+                      <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.5rem' }}>{myGroup.name}</div>
+                      {renderStatCards(myGroup)}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                          {myGroup.owner_email || t('settings.superAdmin.noOwner')}
                         </span>
+                        <button
+                          onClick={() => handleToggleTraining(myGroup.id, !myGroup.training_enabled)}
+                          style={{
+                            padding: '0.3rem 0.6rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                            fontSize: '0.7rem', fontWeight: 600, fontFamily: 'Outfit, sans-serif',
+                            background: myGroup.training_enabled ? 'rgba(16,185,129,0.15)' : 'rgba(100,100,100,0.15)',
+                            color: myGroup.training_enabled ? '#10B981' : 'var(--text-muted)',
+                          }}
+                        >
+                          {myGroup.training_enabled ? t('settings.superAdmin.trainingOn') : t('settings.superAdmin.trainingOff')}
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {/* Groups List */}
-                <div className="card" style={{ padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h2 className="card-title" style={{ margin: 0 }}>{t('settings.superAdmin.allGroups')}</h2>
-                    <button className="btn btn-sm" onClick={loadGlobalStats} style={{ fontSize: '0.7rem' }}>{t('common.refresh')}</button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                    {globalStats.groups.map(g => (
-                      <div key={g.id} style={{
-                        padding: '0.75rem', background: 'var(--surface)', borderRadius: '10px',
-                        border: '1px solid var(--border)',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{g.name}</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              {g.owner_email || t('settings.superAdmin.noOwner')}
-                            </div>
+                      {globalStats.orphaned_groups.length > 0 && (
+                        <div style={{ marginTop: '0.75rem', padding: '0.65rem', borderRadius: '10px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#f59e0b', marginBottom: '0.25rem' }}>
+                            {t('settings.superAdmin.orphanedTitle', { count: globalStats.orphaned_groups.length })}
                           </div>
-                          <button
-                            onClick={() => handleToggleTraining(g.id, !g.training_enabled)}
-                            style={{
-                              padding: '0.3rem 0.6rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
-                              fontSize: '0.7rem', fontWeight: 600, fontFamily: 'Outfit, sans-serif',
-                              background: g.training_enabled ? 'rgba(16,185,129,0.15)' : 'rgba(100,100,100,0.15)',
-                              color: g.training_enabled ? '#10B981' : 'var(--text-muted)',
-                            }}
-                          >
-                            {g.training_enabled ? t('settings.superAdmin.trainingOn') : t('settings.superAdmin.trainingOff')}
-                          </button>
+                          {globalStats.orphaned_groups.map(og => (
+                            <div key={og.id} style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>
+                              {og.name} — {new Date(og.created_at).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')}
+                            </div>
+                          ))}
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          <span>👥 {g.member_count}</span>
-                          <span>🃏 {g.completed_game_count === g.game_count ? g.game_count : `${g.completed_game_count}/${g.game_count}`}</span>
-                          {g.last_game_date && (
-                            <span>📅 {new Date(g.last_game_date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: '2-digit', month: '2-digit' })}</span>
-                          )}
+                      )}
+                    </>
+                  )}
+
+                  {/* Others sub-tab */}
+                  {globalSubTab === 'others' && (
+                    <>
+                      {otherGroups.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                          {t('settings.superAdmin.noOtherGroups')}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+                      ) : (
+                        <>
+                          {/* Aggregate totals */}
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0.75rem',
+                            borderRadius: '10px', background: 'var(--surface)', border: '1px solid var(--border)',
+                            marginBottom: '0.65rem',
+                          }}>
+                            {[
+                              { label: language === 'he' ? 'קבוצות' : 'Groups', value: otherGroups.length, color: '#818cf8' },
+                              { label: language === 'he' ? 'חברים' : 'Members', value: othersTotalMembers, color: 'var(--text)' },
+                              { label: language === 'he' ? 'שחקנים' : 'Players', value: othersTotalPlayers, color: 'var(--text)' },
+                              { label: language === 'he' ? 'משחקים' : 'Games', value: othersTotalCompleted, color: '#10B981' },
+                            ].map(s => (
+                              <div key={s.label} style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '1rem', fontWeight: 700, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                                <div style={{ fontSize: '0.48rem', color: 'var(--text-muted)', marginTop: '0.05rem' }}>{s.label}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Group list — click to expand */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                            {otherGroups.map(g => {
+                              const status = getActivityStatus(g.last_game_date);
+                              const isExpanded = expandedGroupId === g.id;
+                              return (
+                                <div key={g.id} data-group-card style={{
+                                  borderRadius: '10px', overflow: 'hidden',
+                                  border: isExpanded ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid var(--border)',
+                                  background: isExpanded ? 'rgba(99, 102, 241, 0.04)' : 'var(--surface)',
+                                  transition: 'all 0.2s ease',
+                                }}>
+                                  <div
+                                    onClick={() => setExpandedGroupId(isExpanded ? null : g.id)}
+                                    style={{ padding: '0.65rem 0.75rem', cursor: 'pointer' }}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{g.name}</span>
+                                        <span style={{
+                                          fontSize: '0.55rem', fontWeight: 600, padding: '0.1rem 0.3rem',
+                                          borderRadius: '6px', background: status.bg, color: status.color,
+                                        }}>
+                                          {status.label}
+                                        </span>
+                                      </div>
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'none' }}>▼</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                      {g.owner_email || t('settings.superAdmin.noOwner')} · 👥 {g.member_count} · 🃏 {g.completed_game_count}
+                                    </div>
+                                  </div>
+
+                                  {isExpanded && (
+                                    <div style={{ padding: '0 0.75rem 0.75rem' }}>
+                                      {renderStatCards(g)}
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', opacity: 0.7 }}>
+                                          {t('settings.superAdmin.createdLabel')} {new Date(g.created_at).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')}
+                                        </span>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); handleToggleTraining(g.id, !g.training_enabled); }}
+                                          style={{
+                                            padding: '0.3rem 0.6rem', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                            fontSize: '0.7rem', fontWeight: 600, fontFamily: 'Outfit, sans-serif',
+                                            background: g.training_enabled ? 'rgba(16,185,129,0.15)' : 'rgba(100,100,100,0.15)',
+                                            color: g.training_enabled ? '#10B981' : 'var(--text-muted)',
+                                          }}
+                                        >
+                                          {g.training_enabled ? t('settings.superAdmin.trainingOn') : t('settings.superAdmin.trainingOff')}
+                                        </button>
+                                      </div>
+                                      <div ref={el => { if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50); }} />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         );
       })()}
@@ -2399,117 +2609,6 @@ const SettingsScreen = () => {
               </p>
             </div>
 
-            {/* Client-side diagnostics */}
-            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                🔍 {language === 'he' ? 'אבחון מכשיר נוכחי' : 'This Device Diagnostics'}
-              </h4>
-              <button
-                onClick={async () => {
-                  const lines: string[] = [];
-                  const he = language === 'he';
-
-                  // 1. Check Notification API
-                  if (!('Notification' in window)) {
-                    lines.push('❌ Notification API: ' + (he ? 'לא נתמך בדפדפן' : 'Not supported'));
-                    setPushResult(lines.join('\n'));
-                    return;
-                  }
-                  lines.push(`${Notification.permission === 'granted' ? '✅' : '❌'} Permission: ${Notification.permission}`);
-
-                  // 2. Check Service Worker
-                  if (!('serviceWorker' in navigator)) {
-                    lines.push('❌ Service Worker: ' + (he ? 'לא נתמך' : 'Not supported'));
-                    setPushResult(lines.join('\n'));
-                    return;
-                  }
-                  const reg = await navigator.serviceWorker.getRegistration();
-                  if (!reg) {
-                    lines.push('❌ Service Worker: ' + (he ? 'לא רשום' : 'Not registered'));
-                    setPushResult(lines.join('\n'));
-                    return;
-                  }
-                  const swState = reg.active ? 'active' : reg.waiting ? 'waiting' : reg.installing ? 'installing' : 'none';
-                  lines.push(`${swState === 'active' ? '✅' : '⚠️'} Service Worker: ${swState}`);
-
-                  // 3. Check PushManager
-                  if (!('PushManager' in window)) {
-                    lines.push('❌ PushManager: ' + (he ? 'לא נתמך' : 'Not supported'));
-                    setPushResult(lines.join('\n'));
-                    return;
-                  }
-                  lines.push('✅ PushManager: ' + (he ? 'נתמך' : 'Supported'));
-
-                  // 4. Check existing subscription
-                  try {
-                    const sub = await reg.pushManager.getSubscription();
-                    if (sub) {
-                      const ep = sub.endpoint;
-                      const type = ep.includes('fcm.googleapis.com') ? 'FCM'
-                        : ep.includes('mozilla') ? 'Mozilla'
-                        : ep.includes('notify.windows.com') ? 'WNS'
-                        : ep.includes('push.apple.com') ? 'APNs'
-                        : 'Other';
-                      lines.push(`✅ Subscription: ${type}`);
-                      lines.push(`📡 Endpoint: ...${ep.slice(-40)}`);
-                      const keys = sub.toJSON().keys;
-                      lines.push(`🔑 Keys: p256dh=${keys?.p256dh ? '✓' : '✗'} auth=${keys?.auth ? '✓' : '✗'}`);
-                    } else {
-                      lines.push('❌ Subscription: ' + (he ? 'לא קיים - צריך לאשר התראות' : 'None - need to allow notifications'));
-                    }
-                  } catch (err) {
-                    lines.push(`❌ Subscription error: ${err instanceof Error ? err.message : String(err)}`);
-                  }
-
-                  setPushResult(lines.join('\n'));
-                }}
-                style={{
-                  width: '100%', padding: '0.5rem', borderRadius: '0.5rem', marginBottom: '0.5rem',
-                  border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.1)',
-                  color: '#FBBF24', cursor: 'pointer', fontSize: '0.8rem',
-                  fontFamily: 'Outfit, sans-serif', fontWeight: 500,
-                }}
-              >
-                🔍 {language === 'he' ? 'בדוק מכשיר נוכחי' : 'Check This Device'}
-              </button>
-              <button
-                onClick={async () => {
-                  const he = language === 'he';
-                  try {
-                    if (Notification.permission !== 'granted') {
-                      const perm = await Notification.requestPermission();
-                      if (perm !== 'granted') {
-                        setPushResult('❌ ' + (he ? 'הרשאת התראות נדחתה' : 'Notification permission denied'));
-                        return;
-                      }
-                    }
-                    const reg = await navigator.serviceWorker.ready;
-                    await reg.showNotification('🧪 Local Test', {
-                      body: he ? 'אם אתה רואה את זה - התראות עובדות במכשיר!' : 'If you see this - notifications work on this device!',
-                      icon: '/poker.svg',
-                      tag: 'local-test',
-                      dir: 'rtl',
-                    });
-                    setPushResult('✅ ' + (he ? 'התראה מקומית נשלחה - בדוק אם אתה רואה אותה!' : 'Local notification sent - check if you see it!'));
-                  } catch (err) {
-                    setPushResult(`❌ ${err instanceof Error ? err.message : String(err)}`);
-                  }
-                }}
-                style={{
-                  width: '100%', padding: '0.5rem', borderRadius: '0.5rem',
-                  border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)',
-                  color: '#10B981', cursor: 'pointer', fontSize: '0.8rem',
-                  fontFamily: 'Outfit, sans-serif', fontWeight: 500,
-                }}
-              >
-                🔔 {language === 'he' ? 'בדיקת התראה מקומית (ללא שרת)' : 'Test Local Notification (no server)'}
-              </button>
-              <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem', textAlign: 'center' }}>
-                {language === 'he'
-                  ? 'בדיקה מקומית עוקפת את השרת - בודקת הרשאות והתראות ישירות במכשיר'
-                  : 'Local test bypasses the server - tests permissions and notifications directly on device'}
-              </p>
-            </div>
           </div>
         </div>
       )}
@@ -2517,35 +2616,9 @@ const SettingsScreen = () => {
       {/* Activity Tab - Owner Only - Enhanced Dashboard */}
       {activeTab === 'activity' && isOwner && (
         <div>
-          {/* Header with refresh */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+          {/* Header */}
+          <div style={{ marginBottom: '0.6rem' }}>
             <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)' }}>{t('settings.activity.title')}</h2>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button
-                onClick={loadActivityLog}
-                disabled={activityLoading}
-                style={{
-                  fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
-                  background: 'var(--surface-hover)', color: 'var(--text-muted)',
-                  border: '1px solid var(--border)', cursor: 'pointer',
-                }}
-              >
-                {activityLoading ? '...' : '🔄'}
-              </button>
-              {activityLog.length > 0 && (
-                <button
-                  onClick={handleClearActivityLog}
-                  disabled={activityLoading}
-                  style={{
-                    fontSize: '0.75rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
-                    background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
-                    border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'pointer',
-                  }}
-                >
-                  🗑️
-                </button>
-              )}
-            </div>
           </div>
 
           {activityError && (
@@ -2587,59 +2660,44 @@ const SettingsScreen = () => {
             );
 
             const games = getAllGames();
-            const lastGame = games.length > 0 ? games.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] : null;
 
-            const memberNames = activityMembers.map(m => m.playerName || m.displayName || '').filter(Boolean);
-            const dormantMembers: string[] = [];
-            const neverLoggedIn: string[] = [];
-            for (const name of memberNames) {
-              const entries = userMap.get(name);
-              if (!entries || entries.length === 0) {
-                neverLoggedIn.push(name);
-              } else {
-                const latest = entries.reduce((a, b) => new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a);
-                if (now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime() > sevenDaysMs) {
-                  dormantMembers.push(name);
-                }
-              }
-            }
+            const memberNames = activityMembers.map(m => m.playerName || m.displayName || '').filter(n => n && n !== authPlayerName);
 
-            let didntCheckLastGame: string[] = [];
-            if (lastGame) {
-              const gameTime = new Date(lastGame.date).getTime();
-              const cutoff = gameTime + 48 * 3600 * 1000;
-              for (const name of memberNames) {
-                const entries = userMap.get(name) || [];
-                const visitedAfterGame = entries.some(e => {
-                  const t = new Date(e.timestamp).getTime();
-                  return t > gameTime && t < cutoff;
-                });
-                if (!visitedAfterGame) didntCheckLastGame.push(name);
-              }
-            }
-
-            const hasAlerts = dormantMembers.length > 0 || neverLoggedIn.length > 0 || didntCheckLastGame.length > 0;
-
-            const todayUniqueUsers = new Set(
+            const todayUniqueNames = [...new Set(
               activityLog.filter(e => new Date(e.timestamp).toDateString() === now.toDateString())
-                .map(e => e.playerName || deviceLabels[e.deviceId] || e.deviceId)
-            ).size;
+                .map(e => e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8))
+            )];
+            const todayUniqueUsers = todayUniqueNames.length;
 
             const weekAgo = new Date(now.getTime() - sevenDaysMs);
-            const weeklyActiveUsers = new Set(
-              activityLog.filter(e => new Date(e.timestamp) > weekAgo).map(e => e.playerName || deviceLabels[e.deviceId] || e.deviceId)
-            ).size;
+            
 
-            const engagementPct = memberNames.length > 0 ? Math.round((weeklyActiveUsers / memberNames.length) * 100) : 0;
+            const weekSessions = activityLog.filter(e => new Date(e.timestamp) > weekAgo).length;
 
-            const sessionsWithDuration = activityLog.filter(e => (e.sessionDuration || 0) > 0);
-            const avgSessionMin = sessionsWithDuration.length > 0
-              ? sessionsWithDuration.reduce((s, e) => s + (e.sessionDuration || 0), 0) / sessionsWithDuration.length
-              : 0;
+            const mostActiveThisWeek = (() => {
+              const counts = new Map<string, number>();
+              for (const e of activityLog) {
+                if (new Date(e.timestamp) <= weekAgo) continue;
+                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
+                counts.set(n, (counts.get(n) || 0) + 1);
+              }
+              let best = '';
+              let max = 0;
+              for (const [n, c] of counts) { if (c > max) { max = c; best = n; } }
+              return best;
+            })();
 
-            const daysSinceLastGame = lastGame
-              ? Math.floor((now.getTime() - new Date(lastGame.date).getTime()) / oneDayMs)
-              : -1;
+            const lastVisitor = (() => {
+              if (activityLog.length === 0) return null;
+              const latest = activityLog.reduce((a, b) =>
+                new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a
+              );
+              const name = latest.playerName || deviceLabels[latest.deviceId] || latest.deviceId.slice(0, 8);
+              const ago = Math.floor((now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime()) / 60000);
+              const agoLabel = ago < 60 ? `${ago}${language === 'he' ? ' דק׳' : 'm'}` : `${Math.floor(ago / 60)}${language === 'he' ? ' שע׳' : 'h'}`;
+              return { name, agoLabel };
+            })();
+
 
             const heatmap: number[][] = Array.from({ length: 7 }, () => [0, 0, 0, 0]);
             for (const entry of activityLog) {
@@ -2681,6 +2739,31 @@ const SettingsScreen = () => {
               return { name, sessions30d: last30.length, avgDuration, daysSince, latestEntry: latest, entries, memberRole };
             }).sort((a, b) => b.sessions30d - a.sessions30d);
 
+            const activeMemberCount = memberNames.filter(name => {
+              const entries = userMap.get(name);
+              return entries && entries.length > 0;
+            }).length || 1;
+
+            
+
+            const weeklyTrend = Array.from({ length: 8 }, (_, i) => {
+              const weekEnd = new Date(now.getTime() - i * 7 * oneDayMs);
+              const weekStart = new Date(weekEnd.getTime() - 7 * oneDayMs);
+              const entries = activityLog.filter(e => {
+                const ts = new Date(e.timestamp).getTime();
+                return ts >= weekStart.getTime() && ts < weekEnd.getTime();
+              });
+              const users = new Set(entries.map(e =>
+                e.playerName || deviceLabels[e.deviceId] || e.deviceId
+              ));
+              return { start: weekStart, users: users.size, sessions: entries.length };
+            }).reverse();
+
+            const trendMaxUsers = Math.max(1, ...weeklyTrend.map(w => w.users));
+            const thisWeekUsers = weeklyTrend[weeklyTrend.length - 1]?.users ?? 0;
+            const lastWeekUsers = weeklyTrend[weeklyTrend.length - 2]?.users ?? 0;
+            const usersDelta = thisWeekUsers - lastWeekUsers;
+
             return (
               <div>
                 {/* Live Now */}
@@ -2709,50 +2792,315 @@ const SettingsScreen = () => {
                   </div>
                 )}
 
-                {/* Health Alerts */}
-                {hasAlerts && (
-                  <div style={{
-                    padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
-                    background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)',
-                  }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 600, color: '#f59e0b', marginBottom: '0.3rem' }}>
-                      {t('settings.activity.alertsTitle')}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                      {neverLoggedIn.length > 0 && (
-                        <div>{t('settings.activity.neverLoggedIn')} <span style={{ color: '#ef4444' }}>{neverLoggedIn.join(', ')}</span></div>
-                      )}
-                      {dormantMembers.length > 0 && (
-                        <div>{t('settings.activity.dormant7')} <span style={{ color: '#f59e0b' }}>{dormantMembers.join(', ')}</span></div>
-                      )}
-                      {didntCheckLastGame.length > 0 && lastGame && (
-                        <div>{t('settings.activity.didntCheckResults')} <span style={{ color: '#818cf8' }}>{didntCheckLastGame.join(', ')}</span></div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* Summary Stats */}
                 <div style={{
-                  display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem', marginBottom: '0.5rem',
+                  display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.35rem', marginBottom: '0.5rem',
                 }}>
+                  {/* Active Today — with names */}
+                  <div style={{ padding: '0.5rem', borderRadius: '8px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>👤 {t('settings.activity.activeToday')}</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: todayUniqueUsers > 0 ? '#10B981' : 'var(--text-muted)' }}>
+                      {todayUniqueUsers > 0 ? String(todayUniqueUsers) : '—'}
+                    </div>
+                    {todayUniqueNames.length > 0 && (
+                      <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.15rem', lineHeight: 1.4 }}>
+                        {todayUniqueNames.join(', ')}
+                      </div>
+                    )}
+                  </div>
                   {[
-                    { label: t('settings.activity.activeToday'), value: todayUniqueUsers, icon: '👤', color: todayUniqueUsers > 0 ? '#10B981' : 'var(--text)' },
-                    { label: t('settings.activity.weeklyEngagement'), value: engagementPct > 0 ? `${engagementPct}%` : '—', icon: '📊', color: engagementPct > 70 ? '#10B981' : engagementPct > 40 ? '#f59e0b' : '#ef4444' },
-                    { label: t('settings.activity.avgVisit'), value: avgSessionMin < 1 ? t('settings.activity.lessThanMin') : t('settings.activity.durationMinutes', { n: Math.round(avgSessionMin) }), icon: '⏱️', color: 'var(--text)' },
-                    { label: t('settings.activity.daysSinceGame'), value: daysSinceLastGame >= 0 ? daysSinceLastGame : '—', icon: '🃏', color: daysSinceLastGame > 10 ? '#ef4444' : daysSinceLastGame > 5 ? '#f59e0b' : '#10B981' },
+                    { label: t('settings.activity.weekSessions'), value: weekSessions > 0 ? String(weekSessions) : '—', icon: '📊', color: weekSessions > 0 ? '#6366f1' : 'var(--text-muted)' },
+                    { label: t('settings.activity.mostActive'), value: mostActiveThisWeek || '—', icon: '🏆', color: mostActiveThisWeek ? '#f59e0b' : 'var(--text-muted)', small: true },
+                    { label: t('settings.activity.lastVisitor'), value: lastVisitor ? `${lastVisitor.name}` : '—', sub: lastVisitor?.agoLabel, icon: '🕐', color: lastVisitor ? 'var(--text)' : 'var(--text-muted)', small: true },
                   ].map(stat => (
                     <div key={stat.label} style={{
-                      padding: '0.4rem', borderRadius: '8px', background: 'var(--surface)',
-                      textAlign: 'center', border: '1px solid var(--border)',
+                      padding: '0.5rem', borderRadius: '8px', background: 'var(--surface)',
+                      border: '1px solid var(--border)',
                     }}>
-                      <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{stat.icon} {stat.label}</div>
-                      <div style={{ fontSize: '1rem', fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>{stat.icon} {stat.label}</div>
+                      <div style={{ fontSize: (stat as { small?: boolean }).small ? '0.82rem' : '1rem', fontWeight: 700, color: stat.color }}>
+                        {stat.value}
+                        {(stat as { sub?: string }).sub && (
+                          <span style={{ fontSize: '0.6rem', fontWeight: 400, color: 'var(--text-muted)', marginInlineStart: '0.3rem' }}>
+                            {(stat as { sub?: string }).sub}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Member Cards — moved above heatmap */}
+                {/* Weekly Trend */}
+                <div style={{
+                  padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      {t('settings.activity.weeklyTrend')}
+                    </span>
+                    {usersDelta !== 0 && (
+                      <span style={{
+                        fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem',
+                        borderRadius: '8px',
+                        background: usersDelta > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                        color: usersDelta > 0 ? '#10B981' : '#ef4444',
+                      }}>
+                        {usersDelta > 0 ? '▲' : '▼'} {Math.abs(usersDelta)} {t('settings.activity.vsLastWeek')}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '48px' }}>
+                    {weeklyTrend.map((week, i) => {
+                      const barH = Math.max(4, (week.users / trendMaxUsers) * 44);
+                      const isCurrent = i === weeklyTrend.length - 1;
+                      const weekLabel = week.start.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' });
+                      return (
+                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                          <div
+                            title={`${weekLabel}: ${week.users} ${t('settings.activity.users')}, ${week.sessions} ${t('settings.activity.sessionsLabel')}`}
+                            style={{
+                              width: '100%', height: `${barH}px`, borderRadius: '3px',
+                              background: isCurrent
+                                ? 'linear-gradient(180deg, #6366f1, #818cf8)'
+                                : `rgba(99, 102, 241, ${0.2 + (week.users / trendMaxUsers) * 0.4})`,
+                              transition: 'height 0.3s ease',
+                            }}
+                          />
+                          <span style={{ fontSize: '0.45rem', color: 'var(--text-muted)', lineHeight: 1 }}>
+                            {week.start.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                    <span>{t('settings.activity.trendUsers')}: {thisWeekUsers}</span>
+                    <span>{t('settings.activity.trendSessions')}: {weeklyTrend[weeklyTrend.length - 1]?.sessions ?? 0}</span>
+                  </div>
+                </div>
+
+                {/* Top Screens: visits + time */}
+                {(() => {
+                  const screenVisits: Record<string, number> = {};
+                  const screenTime: Record<string, number> = {};
+                  for (const entry of activityLog) {
+                    const screens = entry.screensVisited || [];
+                    const perScreenMin = screens.length > 0 ? (entry.sessionDuration || 0) / screens.length : 0;
+                    for (const s of screens) {
+                      screenVisits[s] = (screenVisits[s] || 0) + 1;
+                      screenTime[s] = (screenTime[s] || 0) + perScreenMin;
+                    }
+                  }
+                  const allScreens = Object.keys(screenVisits);
+                  const byVisits = [...allScreens].sort((a, b) => screenVisits[b] - screenVisits[a]);
+                  const byTime = [...allScreens].sort((a, b) => screenTime[b] - screenTime[a]);
+                  const maxVisits = screenVisits[byVisits[0]] || 1;
+                  const maxTime = screenTime[byTime[0]] || 1;
+                  const totalTime = Object.values(screenTime).reduce((a, b) => a + b, 0);
+                  const totalVisits = Object.values(screenVisits).reduce((a, b) => a + b, 0);
+
+                  return (
+                    <div style={{
+                      padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                    }}>
+                      <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+                        📱 {language === 'he' ? 'מסכים פופולריים' : 'Popular Screens'}
+                      </div>
+                      {allScreens.length === 0 ? (
+                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.3rem', opacity: 0.6 }}>
+                          {language === 'he' ? 'נתונים יתעדכנו בכניסות הבאות' : 'Data will populate from new sessions'}
+                        </div>
+                      ) : <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {/* By visits */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                            {language === 'he' ? 'לפי כניסות' : 'By visits'} ({totalVisits})
+                          </div>
+                          {byVisits.slice(0, 5).map((screen, i) => {
+                            const pct = Math.round((screenVisits[screen] / maxVisits) * 100);
+                            return (
+                              <div key={screen} style={{ marginBottom: '0.2rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text)' }}>
+                                  <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  '} {screen}</span>
+                                  <span style={{ color: '#818cf8', fontWeight: 600 }}>{screenVisits[screen]}</span>
+                                </div>
+                                <div style={{ height: '3px', borderRadius: '2px', background: 'var(--background)', overflow: 'hidden', marginTop: '1px' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#818cf8' }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* By time */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                            {language === 'he' ? 'לפי זמן' : 'By time'} ({Math.round(totalTime)} {language === 'he' ? 'דק׳' : 'min'})
+                          </div>
+                          {byTime.slice(0, 5).map((screen, i) => {
+                            const pct = Math.round((screenTime[screen] / maxTime) * 100);
+                            const mins = Math.round(screenTime[screen]);
+                            return (
+                              <div key={screen} style={{ marginBottom: '0.2rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text)' }}>
+                                  <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  '} {screen}</span>
+                                  <span style={{ color: '#10B981', fontWeight: 600 }}>{mins}{language === 'he' ? 'ד׳' : 'm'}</span>
+                                </div>
+                                <div style={{ height: '3px', borderRadius: '2px', background: 'var(--background)', overflow: 'hidden', marginTop: '1px' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#10B981' }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>}
+                    </div>
+                  );
+                })()}
+
+                {/* Post-Game Engagement */}
+                {postGameEngagement.length > 0 && (
+                  <div style={{
+                    padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                  }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                      {t('settings.activity.postGameEngagement')}
+                    </div>
+                    {postGameEngagement.map(({ game, visitedCount }) => {
+                      const d = new Date(game.date);
+                      const label = d.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short' });
+                      const total = activeMemberCount;
+                      const pct = Math.round((visitedCount / total) * 100);
+                      return (
+                        <div key={game.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
+                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', minWidth: '50px' }}>{label}</span>
+                          <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'var(--background)', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${pct}%`, height: '100%', borderRadius: '3px',
+                              background: pct > 70 ? '#10B981' : pct > 40 ? '#f59e0b' : '#ef4444',
+                            }} />
+                          </div>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', minWidth: '55px', textAlign: isRTL ? 'left' : 'right' }}>
+                            {visitedCount}/{total} ({pct}%)
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Feature Adoption */}
+                {(() => {
+                  const featureUsers = new Map<string, Set<string>>();
+                  for (const entry of activityLog) {
+                    const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
+                    for (const s of (entry.screensVisited || [])) {
+                      if (!featureUsers.has(s)) featureUsers.set(s, new Set());
+                      featureUsers.get(s)!.add(name);
+                    }
+                  }
+                  const totalMembers = players.length || userMap.size || 1;
+                  const features = [...featureUsers.entries()]
+                    .map(([name, users]) => ({ name, count: users.size }))
+                    .sort((a, b) => b.count - a.count);
+                  if (features.length === 0) return null;
+                  return (
+                    <div style={{
+                      padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                    }}>
+                      <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                        🧩 {language === 'he' ? 'אימוץ פיצ׳רים' : 'Feature Adoption'}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        {features.map(f => {
+                          const pct = Math.round((f.count / totalMembers) * 100);
+                          const color = pct >= 75 ? '#10B981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+                          return (
+                            <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span style={{ fontSize: '0.62rem', color: 'var(--text)', minWidth: '70px' }}>{f.name}</span>
+                              <div style={{ flex: 1, height: '5px', borderRadius: '3px', background: 'var(--background)', overflow: 'hidden' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: color }} />
+                              </div>
+                              <span style={{ fontSize: '0.6rem', color, fontWeight: 600, minWidth: '48px', textAlign: isRTL ? 'left' : 'right' }}>
+                                {f.count}/{totalMembers}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Training Engagement */}
+                {trainingPlayers.length > 0 && (() => {
+                  const now = new Date();
+                  const weekAgoMs = now.getTime() - 7 * 86400000;
+                  const trainers = trainingPlayers.map(p => {
+                    type TSession = TrainingPlayerData['sessions'][0];
+                    const weekSessions = p.sessions.filter((s: TSession) => new Date(s.date).getTime() > weekAgoMs);
+                    const weekQs = weekSessions.reduce((sum: number, s: TSession) => sum + s.questionsAnswered, 0);
+                    const lastSession = p.sessions.length > 0
+                      ? p.sessions.reduce((latest: TSession, s: TSession) => new Date(s.date) > new Date(latest.date) ? s : latest)
+                      : null;
+                    return { name: p.playerName, totalSessions: p.sessions.length, weekQs, accuracy: p.accuracy, lastSession };
+                  }).sort((a, b) => b.weekQs - a.weekQs);
+
+                  const activeThisWeek = trainers.filter(t => t.weekQs > 0);
+
+                  return (
+                    <div style={{
+                      padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                          🎯 {language === 'he' ? 'אימון השבוע' : 'Training This Week'}
+                        </span>
+                        <span style={{ fontSize: '0.58rem', color: '#818cf8', fontWeight: 600 }}>
+                          {activeThisWeek.length}/{trainers.length} {language === 'he' ? 'פעילים' : 'active'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: '0.15rem 0.5rem', alignItems: 'center' }}>
+                        {trainers.map(tr => {
+                          const daysSince = tr.lastSession
+                            ? Math.floor((now.getTime() - new Date(tr.lastSession.date).getTime()) / 86400000)
+                            : null;
+                          const isActive = tr.weekQs > 0;
+                          return (
+                            <Fragment key={tr.name}>
+                              <span style={{ fontSize: '0.64rem', fontWeight: isActive ? 600 : 400, color: isActive ? 'var(--text)' : 'var(--text-muted)' }}>
+                                {tr.name}
+                              </span>
+                              <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)' }}>
+                                {isActive
+                                  ? `${Math.round(tr.accuracy)}% · ${tr.totalSessions} ${language === 'he' ? 'סשנים' : 'sess'}`
+                                  : ''
+                                }
+                              </span>
+                              <span style={{
+                                fontSize: '0.6rem', fontWeight: 600, textAlign: 'end',
+                                color: isActive ? '#818cf8' : 'var(--text-muted)',
+                              }}>
+                                {isActive
+                                  ? `${tr.weekQs} ${language === 'he' ? 'שאלות' : 'Q'}`
+                                  : daysSince !== null
+                                    ? `${daysSince} ${language === 'he' ? 'ימים' : 'd ago'}`
+                                    : '—'
+                                }
+                              </span>
+                            </Fragment>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Member Cards */}
                 <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.3rem', marginTop: '0.3rem' }}>
                   {t('settings.activity.membersSection', { count: userStats.length })}
                 </div>
@@ -2764,15 +3112,6 @@ const SettingsScreen = () => {
                   const borderColor = isActive ? 'rgba(16, 185, 129, 0.4)' : user.daysSince > 7 ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)';
                   const maxSessions = userStats[0]?.sessions30d || 1;
                   const barPct = Math.round((user.sessions30d / maxSessions) * 100);
-                  const topScreen = (() => {
-                    const counts: Record<string, number> = {};
-                    for (const e of user.entries) {
-                      for (const s of e.screensVisited) { counts[s] = (counts[s] || 0) + 1; }
-                    }
-                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-                    return sorted[0]?.[0] || null;
-                  })();
-
                   return (
                     <div key={user.name}>
                       <div
@@ -2825,12 +3164,25 @@ const SettingsScreen = () => {
                           </span>
                         </div>
 
-                        {/* Row 3: quick stats */}
+                        {/* Row 3: total time + screens visited */}
                         <div style={{
                           display: 'flex', gap: '0.6rem', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.25rem', flexWrap: 'wrap',
                         }}>
-                          <span>{t('settings.activity.avgMin', { mins: user.avgDuration < 1 ? '<1' : String(Math.round(user.avgDuration)) })}</span>
-                          {topScreen && <span>📱 {topScreen}</span>}
+                          {(() => {
+                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+                            const allScreens = new Set<string>();
+                            for (const e of user.entries) {
+                              for (const s of e.screensVisited) allScreens.add(s);
+                            }
+                            return (
+                              <>
+                                <span>⏱️ {totalMin < 1 ? '<1' : Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
+                                {allScreens.size > 0 && (
+                                  <span style={{ wordBreak: 'break-word' }}>📱 {[...allScreens].join(', ')}</span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -2842,45 +3194,48 @@ const SettingsScreen = () => {
                           border: `1px solid ${borderColor}`, borderTop: '1px solid var(--border)',
                         }}>
                           {(() => {
-                            const meaningful = user.entries
-                              .filter(e => e.screensVisited.length > 0 || e.sessionDuration > 0)
-                              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                              .slice(0, 5);
-
-                            if (meaningful.length === 0) {
-                              return (
-                                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.3rem' }}>
-                                  {t('settings.activity.noSessionDetail')}
-                                </div>
-                              );
+                            // Screen visit counts across all sessions
+                            const screenCounts: Record<string, number> = {};
+                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+                            for (const e of user.entries) {
+                              for (const s of e.screensVisited) {
+                                screenCounts[s] = (screenCounts[s] || 0) + 1;
+                              }
                             }
-                            return meaningful.map((entry, i) => (
-                              <div
-                                key={`${entry.timestamp}-${i}`}
-                                style={{
-                                  padding: '0.3rem 0.4rem', borderRadius: '6px',
-                                  background: 'var(--background)', fontSize: '0.68rem',
-                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  flexWrap: 'wrap', marginBottom: '0.2rem',
-                                }}
-                              >
-                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'baseline', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
-                                  {entry.sessionDuration > 0 && (
-                                    <span style={{ color: '#818cf8', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                                      {entry.sessionDuration < 1 ? '<1' : Math.round(entry.sessionDuration)}m
-                                    </span>
-                                  )}
-                                  {entry.screensVisited.length > 0 && (
-                                    <span style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
-                                      {entry.screensVisited.join(' > ')}
-                                    </span>
-                                  )}
+                            const screensSorted = Object.entries(screenCounts).sort((a, b) => b[1] - a[1]);
+
+                            return (
+                              <>
+                                {/* Summary: total time + total visits */}
+                                <div style={{
+                                  display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem',
+                                  color: 'var(--text)', fontWeight: 600, marginBottom: '0.4rem',
+                                  padding: '0.25rem 0.3rem', borderRadius: '6px', background: 'var(--background)',
+                                }}>
+                                  <span>⏱️ {totalMin < 1 ? '<1' : Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
+                                  <span>{user.entries.length} {language === 'he' ? 'כניסות' : 'visits'}</span>
                                 </div>
-                                <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginLeft: '0.5rem', opacity: 0.7 }}>
-                                  {formatRelativeTime(entry.timestamp)}
-                                </span>
-                              </div>
-                            ));
+
+                                {/* Screens visited with frequency */}
+                                {screensSorted.length > 0 ? (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginBottom: '0.15rem' }}>
+                                    {screensSorted.map(([screen, count]) => (
+                                      <span key={screen} style={{
+                                        fontSize: '0.62rem', padding: '0.15rem 0.4rem', borderRadius: '10px',
+                                        background: 'var(--background)', color: 'var(--text-muted)',
+                                        border: '1px solid var(--border)',
+                                      }}>
+                                        {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
+                                    {language === 'he' ? 'אין נתוני מסכים (כניסות קצרות)' : 'No screen data (brief visits)'}
+                                  </div>
+                                )}
+                              </>
+                            );
                           })()}
                         </div>
                       )}
@@ -2923,38 +3278,6 @@ const SettingsScreen = () => {
                     ))}
                   </div>
                 </div>
-
-                {/* Post-Game Engagement */}
-                {postGameEngagement.length > 0 && (
-                  <div style={{
-                    padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                  }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                      {t('settings.activity.postGameEngagement')}
-                    </div>
-                    {postGameEngagement.map(({ game, visitedCount }) => {
-                      const d = new Date(game.date);
-                      const label = d.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short' });
-                      const total = memberNames.length || 1;
-                      const pct = Math.round((visitedCount / total) * 100);
-                      return (
-                        <div key={game.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.25rem' }}>
-                          <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', minWidth: '50px' }}>{label}</span>
-                          <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'var(--background)', overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${pct}%`, height: '100%', borderRadius: '3px',
-                              background: pct > 70 ? '#10B981' : pct > 40 ? '#f59e0b' : '#ef4444',
-                            }} />
-                          </div>
-                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', minWidth: '55px', textAlign: isRTL ? 'left' : 'right' }}>
-                            {visitedCount}/{total} ({pct}%)
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
 
                 <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                   {t('settings.activity.recordsWithCount', { count: activityLog.length })}
@@ -3327,6 +3650,43 @@ const SettingsScreen = () => {
         </div>
       )}
 
+      {/* Group Setup Overlay (create/join) */}
+      {groupSetupMode && multiGroup && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          background: 'var(--background)',
+        }}>
+          <GroupSetupScreen
+            userEmail={multiGroup.userEmail}
+            onCreateGroup={async (name) => {
+              const result = await multiGroup.createGroup(name);
+              if (!result.error) setGroupJustCreated(true);
+              return result;
+            }}
+            onJoinGroup={async (code) => {
+              const result = await multiGroup.joinGroup(code);
+              if (!result.error) setGroupSetupMode(null);
+              return result;
+            }}
+            onJoinByPlayerInvite={async (code) => {
+              const result = await multiGroup.joinByPlayerInvite(code);
+              if (!result.error) setGroupSetupMode(null);
+              return result;
+            }}
+            onSignOut={() => setGroupSetupMode(null)}
+            onContinue={() => {
+              multiGroup.refreshMembership();
+              if (groupJustCreated) {
+                multiGroup.triggerGroupWizard();
+                setGroupJustCreated(false);
+              }
+              setGroupSetupMode(null);
+            }}
+            onClose={() => setGroupSetupMode(null)}
+            initialMode={groupSetupMode}
+          />
+        </div>
+      )}
     </div>
   );
 };

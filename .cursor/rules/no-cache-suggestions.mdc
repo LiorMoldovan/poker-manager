@@ -1,0 +1,24 @@
+---
+description: Never suggest cache clearing or hard refresh as a fix
+alwaysApply: true
+---
+
+# No Cache/Refresh Suggestions
+
+NEVER suggest the following as solutions to deployment or version issues:
+
+- Clearing browser cache
+- Hard refresh
+- Clearing site data
+- Waiting for cache to expire
+- Service worker cache issues
+
+The user always tries these first. More importantly, if other users would also need to do this, then the fix is broken — it must work automatically without any manual user action.
+
+When a new version isn't appearing after deploy, investigate the ACTUAL root cause:
+
+1. Check if Vercel build succeeded (GitHub API or Vercel CLI)
+2. Check if the service worker / auto-update mechanism is broken
+3. Check if `vercel.json` or build config is misconfigured
+4. Check if there's a build error preventing deployment
+5. Check the actual deployed files vs what was committed

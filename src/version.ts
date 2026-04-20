@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.18.0';
+export const APP_VERSION = '5.19.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.19.0',
+    date: '2026-04-20',
+    changes: [
+      'Training system refactor: direct Supabase writes, realtime sync, removed GitHub-era workarounds',
+      'Activity tracking: reduced cooldown to 2min, immediate screen push on navigation',
+      'Activity tab: popular screens card, training engagement card, feature adoption card',
+      'Activity tab: show today active user names, weekly trend, improved member cards with screen data',
+      'Super admin dashboard: premium redesign, per-group activity/training/feature adoption stats',
+      'Super admin: weekly trainers from actual session dates, auto-scroll expanded groups',
+      'Supabase optimizations: parallel player_traits loading, batched game child sync, scoped realtime refresh',
+      'Training pool: replaced localStorage cache with in-memory cache',
+      'Training writes: only upsert changed rows, delete removed players',
+      'Group management: removed redundant member count badge, consistent role alignment',
+      'SQL migrations 015-018: training realtime, group member counts, global stats with activity data',
+    ],
+  },
   {
     version: '5.18.0',
     date: '2026-04-20',

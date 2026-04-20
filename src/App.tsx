@@ -1,4 +1,4 @@
-﻿import { Component, useEffect, useState, useRef, useCallback, createContext, useContext } from 'react';
+﻿import { Component, useEffect, useState, useRef, useCallback, useMemo, createContext, useContext, Suspense, lazy } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PermissionRole } from './types';
@@ -10,22 +10,41 @@ import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, un
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
+import GroupWizard from './components/GroupWizard';
+import { ToastContainer } from './components/Toast';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
-import NewGameScreen from './screens/NewGameScreen';
-import LiveGameScreen from './screens/LiveGameScreen';
-import ChipEntryScreen from './screens/ChipEntryScreen';
-import GameSummaryScreen from './screens/GameSummaryScreen';
-import HistoryScreen from './screens/HistoryScreen';
 
-import StatisticsScreen from './screens/StatisticsScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import GraphsScreen from './screens/GraphsScreen';
-import TrainingScreen from './screens/TrainingScreen';
-import TrainingHandScreen from './screens/TrainingHandScreen';
-import QuickTrainingScreen from './screens/QuickTrainingScreen';
-import SharedTrainingScreen from './screens/SharedTrainingScreen';
-import SharedQuickPlayScreen from './screens/SharedQuickPlayScreen';
+const NewGameScreen = lazy(() => import('./screens/NewGameScreen'));
+const LiveGameScreen = lazy(() => import('./screens/LiveGameScreen'));
+const ChipEntryScreen = lazy(() => import('./screens/ChipEntryScreen'));
+const GameSummaryScreen = lazy(() => import('./screens/GameSummaryScreen'));
+const HistoryScreen = lazy(() => import('./screens/HistoryScreen'));
+const StatisticsScreen = lazy(() => import('./screens/StatisticsScreen'));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen'));
+const GraphsScreen = lazy(() => import('./screens/GraphsScreen'));
+const TrainingScreen = lazy(() => import('./screens/TrainingScreen'));
+const TrainingHandScreen = lazy(() => import('./screens/TrainingHandScreen'));
+const QuickTrainingScreen = lazy(() => import('./screens/QuickTrainingScreen'));
+const SharedTrainingScreen = lazy(() => import('./screens/SharedTrainingScreen'));
+const SharedQuickPlayScreen = lazy(() => import('./screens/SharedQuickPlayScreen'));
+
+function ScreenSkeleton() {
+  return (
+    <div className="skeleton-screen" style={{ direction: 'rtl' }}>
+      <div className="skeleton-pulse" style={{ height: '2rem', width: '45%', borderRadius: '8px', marginBottom: '0.5rem' }} />
+      <div className="skeleton-pulse" style={{ height: '0.9rem', width: '30%', borderRadius: '6px', marginBottom: '1.5rem' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} className="skeleton-pulse" style={{ height: '4rem', borderRadius: '10px' }} />
+        ))}
+      </div>
+      <div className="skeleton-pulse" style={{ height: '8rem', borderRadius: '12px', marginBottom: '1rem' }} />
+      <div className="skeleton-pulse" style={{ height: '5rem', borderRadius: '12px', marginBottom: '1rem' }} />
+      <div className="skeleton-pulse" style={{ height: '5rem', borderRadius: '12px' }} />
+    </div>
+  );
+}
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
@@ -94,11 +113,15 @@ interface PermissionContextType {
   groupMgmt?: GroupManagementFns;
   multiGroup?: {
     memberships: import('./hooks/useSupabaseAuth').GroupMembership[];
+    activeGroupId: string | null;
     switchGroup: (groupId: string) => void;
     createGroup: (name: string) => Promise<{ data: unknown; error: unknown }>;
     joinGroup: (code: string) => Promise<{ data: unknown; error: unknown }>;
     joinByPlayerInvite: (code: string) => Promise<{ data: unknown; error: unknown }>;
+    deleteGroup: (groupId: string) => Promise<{ error: unknown }>;
+    leaveGroup: (groupId: string) => Promise<{ error: unknown }>;
     refreshMembership: () => void;
+    triggerGroupWizard: () => void;
     userEmail: string;
   };
 }
@@ -212,6 +235,7 @@ function SupabaseApp() {
   const [addMemberMsg, setAddMemberMsg] = useState('');
   const [notifCount, setNotifCount] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [showGroupWizard, setShowGroupWizard] = useState(false);
 
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
@@ -336,8 +360,9 @@ function SupabaseApp() {
   useEffect(() => {
     if (isTrackingRef.current) {
       screensVisitedRef.current.add(getScreenName(location.pathname));
+      pushSessionUpdate();
     }
-  }, [location.pathname]);
+  }, [location.pathname, pushSessionUpdate]);
 
   // Detect ?addMember=email deep link
   useEffect(() => {
@@ -366,14 +391,36 @@ function SupabaseApp() {
     }
   };
 
-  const permissionValue: PermissionContextType = {
+  const signOut = useCallback(() => {
+    unsubscribeFromRealtime(); resetCache(); setDataReady(false); auth.signOut();
+  }, [auth]);
+
+  const switchGroup = useCallback((gid: string) => {
+    unsubscribeFromRealtime(); resetCache(); setDataReady(false); auth.switchGroup(gid);
+  }, [auth]);
+
+  const deleteGroupCb = useCallback(async (gid: string) => {
+    const result = await auth.deleteGroup(gid);
+    if (!result.error) { unsubscribeFromRealtime(); resetCache(); setDataReady(false); }
+    return result;
+  }, [auth]);
+
+  const leaveGroupCb = useCallback(async (gid: string) => {
+    const result = await auth.leaveGroup(gid);
+    if (!result.error) { unsubscribeFromRealtime(); resetCache(); setDataReady(false); }
+    return result;
+  }, [auth]);
+
+  const triggerGroupWizard = useCallback(() => setShowGroupWizard(true), []);
+
+  const permissionValue: PermissionContextType = useMemo(() => ({
     role,
     isOwner,
     isSuperAdmin,
     trainingEnabled,
     playerName,
     hasPermission: (permission) => isSuperAdmin || hasPermission(role, permission),
-    signOut: () => { unsubscribeFromRealtime(); resetCache(); setDataReady(false); auth.signOut(); },
+    signOut,
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
       inviteCode: auth.membership.inviteCode,
@@ -389,19 +436,18 @@ function SupabaseApp() {
     } : undefined,
     multiGroup: {
       memberships: auth.memberships,
-      switchGroup: (gid: string) => {
-        unsubscribeFromRealtime();
-        resetCache();
-        setDataReady(false);
-        auth.switchGroup(gid);
-      },
+      activeGroupId: groupId,
+      switchGroup,
       createGroup: auth.createGroup,
       joinGroup: auth.joinGroup,
       joinByPlayerInvite: auth.joinByPlayerInvite,
+      deleteGroup: deleteGroupCb,
+      leaveGroup: leaveGroupCb,
       refreshMembership: auth.refreshMembership,
+      triggerGroupWizard,
       userEmail: auth.user?.email ?? '',
     },
-  };
+  }), [role, isOwner, isSuperAdmin, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard]);
 
   if (auth.loading) {
     return (
@@ -425,7 +471,11 @@ function SupabaseApp() {
     return (
       <GroupSetupScreen
         userEmail={auth.user.email ?? ''}
-        onCreateGroup={auth.createGroup}
+        onCreateGroup={async (name) => {
+          const result = await auth.createGroup(name);
+          if (!result.error) setShowGroupWizard(true);
+          return result;
+        }}
         onJoinGroup={auth.joinGroup}
         onJoinByPlayerInvite={auth.joinByPlayerInvite}
         onSignOut={auth.signOut}
@@ -474,6 +524,17 @@ function SupabaseApp() {
           )}
         </div>
       </div>
+    );
+  }
+
+  if (showGroupWizard && playerName) {
+    return (
+      <GroupWizard
+        ownerPlayerName={playerName}
+        onComplete={() => setShowGroupWizard(false)}
+        createPlayerInvite={auth.createPlayerInvite}
+        groupInviteCode={auth.membership?.inviteCode ?? null}
+      />
     );
   }
 
@@ -652,26 +713,29 @@ function SupabaseApp() {
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
           <main className="main-content">
-            <Routes>
-              <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />
-              <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
-              <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
-              <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
-              <Route path="/history" element={<HistoryScreen />} />
-              <Route path="/game/:gameId" element={<GameSummaryScreen />} />
-              <Route path="/statistics" element={<StatisticsScreen />} />
-              <Route path="/settings" element={<SettingsScreen />} />
-              <Route path="/graphs" element={<GraphsScreen />} />
-              {isSuperAdmin && <Route path="/training" element={<TrainingScreen />} />}
-              {isSuperAdmin && <Route path="/training/play" element={<TrainingHandScreen />} />}
-              {isSuperAdmin && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
-              {trainingEnabled && <Route path="/shared-training" element={<SharedTrainingScreen />} />}
-              {trainingEnabled && <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />}
-              <Route path="*" element={<Navigate to={defaultRoute} replace />} />
-            </Routes>
+            <Suspense fallback={<ScreenSkeleton />}>
+              <Routes>
+                <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />
+                <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
+                <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
+                <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />
+                <Route path="/history" element={<HistoryScreen />} />
+                <Route path="/game/:gameId" element={<GameSummaryScreen />} />
+                <Route path="/statistics" element={<StatisticsScreen />} />
+                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/graphs" element={<GraphsScreen />} />
+                {isSuperAdmin && <Route path="/training" element={<TrainingScreen />} />}
+                {isSuperAdmin && <Route path="/training/play" element={<TrainingHandScreen />} />}
+                {isSuperAdmin && <Route path="/training/quick" element={<QuickTrainingScreen />} />}
+                {trainingEnabled && <Route path="/shared-training" element={<SharedTrainingScreen />} />}
+                {trainingEnabled && <Route path="/shared-training/play" element={<SharedQuickPlayScreen />} />}
+                <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+              </Routes>
+            </Suspense>
           </main>
           {!hideNav && <Navigation />}
         </div>
+        <ToastContainer />
       </PermissionContext.Provider>
     </ErrorBoundary>
   );

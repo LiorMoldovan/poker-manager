@@ -253,68 +253,49 @@ async function pushToSupabase(key: string) {
         const { error } = await supabase.from('games').upsert(rows, { onConflict: 'id' });
         if (error) { logSyncError('games', 'upsert', error); break; }
       }
+
+      // Collect all child rows across all games for batch operations
+      const allGameIds = games.map(g => g.id);
+      const allExpRows: Record<string, unknown>[] = [];
+      const allExpIds = new Set<string>();
+      const allFcRows: Record<string, unknown>[] = [];
+      const allPsRows: Record<string, unknown>[] = [];
+      const allPmRows: Record<string, unknown>[] = [];
+      const gamesWithMarkers = new Set<string>();
+
       for (const game of games) {
         if (game.sharedExpenses && game.sharedExpenses.length > 0) {
-          const currentExpIds = new Set(game.sharedExpenses.map(e => e.id));
-          const { data: existingExps } = await supabase.from('shared_expenses').select('id').eq('game_id', game.id);
-          const expToDelete = (existingExps || []).filter(r => !currentExpIds.has(r.id)).map(r => r.id);
-          if (expToDelete.length > 0) {
-            const { error: de } = await supabase.from('shared_expenses').delete().in('id', expToDelete);
-            if (de) logSyncError('shared_expenses', 'delete', de);
+          for (const e of game.sharedExpenses) {
+            allExpIds.add(e.id);
+            allExpRows.push({
+              id: e.id, game_id: game.id, description: e.description,
+              paid_by: e.paidBy, paid_by_name: e.paidByName, amount: e.amount,
+              participants: e.participants, participant_names: e.participantNames,
+              created_at: e.createdAt,
+            });
           }
-          const expRows = game.sharedExpenses.map(e => ({
-            id: e.id,
-            game_id: game.id,
-            description: e.description,
-            paid_by: e.paidBy,
-            paid_by_name: e.paidByName,
-            amount: e.amount,
-            participants: e.participants,
-            participant_names: e.participantNames,
-            created_at: e.createdAt,
-          }));
-          const { error: ue } = await supabase.from('shared_expenses').upsert(expRows, { onConflict: 'id' });
-          if (ue) logSyncError('shared_expenses', 'upsert', ue);
-        } else {
-          const { error: de } = await supabase.from('shared_expenses').delete().eq('game_id', game.id);
-          if (de) logSyncError('shared_expenses', 'delete', de);
         }
         if (game.forecasts && game.forecasts.length > 0) {
-          const { error: de } = await supabase.from('game_forecasts').delete().eq('game_id', game.id);
-          if (de) logSyncError('game_forecasts', 'delete', de);
-          const fcRows = game.forecasts.map(f => ({
-            game_id: game.id,
-            player_name: f.playerName,
-            expected_profit: f.expectedProfit,
-            highlight: f.highlight || null,
-            sentence: f.sentence || null,
-            is_surprise: f.isSurprise || false,
-          }));
-          const { error: ie } = await supabase.from('game_forecasts').insert(fcRows);
-          if (ie) logSyncError('game_forecasts', 'insert', ie);
-        } else {
-          const { error: de } = await supabase.from('game_forecasts').delete().eq('game_id', game.id);
-          if (de) logSyncError('game_forecasts', 'delete', de);
+          for (const f of game.forecasts) {
+            allFcRows.push({
+              game_id: game.id, player_name: f.playerName,
+              expected_profit: f.expectedProfit, highlight: f.highlight || null,
+              sentence: f.sentence || null, is_surprise: f.isSurprise || false,
+            });
+          }
         }
         if (game.paidSettlements && game.paidSettlements.length > 0) {
-          const { error: de } = await supabase.from('paid_settlements').delete().eq('game_id', game.id);
-          if (de) logSyncError('paid_settlements', 'delete', de);
-          const psRows = game.paidSettlements.map(ps => ({
-            game_id: game.id,
-            from_player: ps.from,
-            to_player: ps.to,
-            paid_at: ps.paidAt,
-            amount: ps.amount ?? null,
-            auto_closed: ps.autoClosed ?? false,
-          }));
-          const { error: ie } = await supabase.from('paid_settlements').insert(psRows);
-          if (ie) logSyncError('paid_settlements', 'insert', ie);
-        } else {
-          const { error: de } = await supabase.from('paid_settlements').delete().eq('game_id', game.id);
-          if (de) logSyncError('paid_settlements', 'delete', de);
+          for (const ps of game.paidSettlements) {
+            allPsRows.push({
+              game_id: game.id, from_player: ps.from, to_player: ps.to,
+              paid_at: ps.paidAt, amount: ps.amount ?? null,
+              auto_closed: ps.autoClosed ?? false,
+            });
+          }
         }
         if (game.periodMarkers) {
-          const { error: ue } = await supabase.from('period_markers').upsert({
+          gamesWithMarkers.add(game.id);
+          allPmRows.push({
             game_id: game.id,
             is_first_game_of_month: game.periodMarkers.isFirstGameOfMonth,
             is_last_game_of_month: game.periodMarkers.isLastGameOfMonth,
@@ -325,13 +306,73 @@ async function pushToSupabase(key: string) {
             month_name: game.periodMarkers.monthName,
             half_label: game.periodMarkers.halfLabel,
             year: game.periodMarkers.year,
-          }, { onConflict: 'game_id' });
-          if (ue) logSyncError('period_markers', 'upsert', ue);
-        } else {
-          const { error: de } = await supabase.from('period_markers').delete().eq('game_id', game.id);
-          if (de) logSyncError('period_markers', 'delete', de);
+          });
         }
       }
+
+      // Batch sync all child tables in parallel
+      const UPSERT_BATCH = 200;
+      await Promise.all([
+        // Shared expenses: upsert all + delete orphans
+        (async () => {
+          if (allExpRows.length > 0) {
+            for (let i = 0; i < allExpRows.length; i += UPSERT_BATCH) {
+              const { error: ue } = await supabase.from('shared_expenses').upsert(allExpRows.slice(i, i + UPSERT_BATCH), { onConflict: 'id' });
+              if (ue) logSyncError('shared_expenses', 'upsert', ue);
+            }
+          }
+          if (allGameIds.length > 0) {
+            const { data: existingExps } = await supabase.from('shared_expenses').select('id').in('game_id', allGameIds);
+            const orphanIds = (existingExps || []).filter(r => !allExpIds.has(r.id)).map(r => r.id);
+            if (orphanIds.length > 0) {
+              const { error: de } = await supabase.from('shared_expenses').delete().in('id', orphanIds);
+              if (de) logSyncError('shared_expenses', 'delete', de);
+            }
+          }
+        })(),
+        // Forecasts: delete all for group games, then bulk insert
+        (async () => {
+          if (allGameIds.length > 0) {
+            const { error: de } = await supabase.from('game_forecasts').delete().in('game_id', allGameIds);
+            if (de) logSyncError('game_forecasts', 'delete', de);
+          }
+          if (allFcRows.length > 0) {
+            for (let i = 0; i < allFcRows.length; i += UPSERT_BATCH) {
+              const { error: ie } = await supabase.from('game_forecasts').insert(allFcRows.slice(i, i + UPSERT_BATCH));
+              if (ie) logSyncError('game_forecasts', 'insert', ie);
+            }
+          }
+        })(),
+        // Paid settlements: delete all for group games, then bulk insert
+        (async () => {
+          if (allGameIds.length > 0) {
+            const { error: de } = await supabase.from('paid_settlements').delete().in('game_id', allGameIds);
+            if (de) logSyncError('paid_settlements', 'delete', de);
+          }
+          if (allPsRows.length > 0) {
+            for (let i = 0; i < allPsRows.length; i += UPSERT_BATCH) {
+              const { error: ie } = await supabase.from('paid_settlements').insert(allPsRows.slice(i, i + UPSERT_BATCH));
+              if (ie) logSyncError('paid_settlements', 'insert', ie);
+            }
+          }
+        })(),
+        // Period markers: upsert all with markers, delete orphans without
+        (async () => {
+          if (allPmRows.length > 0) {
+            for (let i = 0; i < allPmRows.length; i += UPSERT_BATCH) {
+              const { error: ue } = await supabase.from('period_markers').upsert(allPmRows.slice(i, i + UPSERT_BATCH), { onConflict: 'game_id' });
+              if (ue) logSyncError('period_markers', 'upsert', ue);
+            }
+          }
+          const noMarkerIds = allGameIds.filter(id => !gamesWithMarkers.has(id));
+          if (noMarkerIds.length > 0) {
+            const { error: de } = await supabase.from('period_markers').delete().in('game_id', noMarkerIds);
+            if (de) logSyncError('period_markers', 'delete', de);
+          }
+        })(),
+      ]);
+
+      // Delete removed games
       const { data: existing, error: selErr } = await supabase.from('games').select('id').eq('group_id', gid);
       if (selErr) { logSyncError('games', 'select', selErr); break; }
       const currentIds = new Set(games.map(g => g.id));
@@ -511,23 +552,38 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   const players = playersRows.map(r => toPlayer(r));
   data.set(STORAGE_KEYS.PLAYERS, players);
 
+  // Build game ID set for child table filtering
+  const games = gamesRows.map(r => toGame(r));
+  const groupGameIds = new Set(games.map(g => g.id));
+  const gameIds = Array.from(groupGameIds);
+  const playerIds = players.map(p => p.id);
+
+  // Phase 2: fetch child tables AND player traits in parallel
+  const [
+    gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows,
+    traitsRows,
+  ] = await Promise.all([
+    fetchByGameIds('game_players', gameIds),
+    fetchByGameIds('shared_expenses', gameIds),
+    fetchByGameIds('game_forecasts', gameIds),
+    fetchByGameIds('paid_settlements', gameIds),
+    fetchByGameIds('period_markers', gameIds),
+    playerIds.length > 0 ? fetchByGameIds('player_traits', playerIds, 'player_id') : Promise.resolve([]),
+  ]);
+
   // Player traits (keyed by player name for quick lookup)
   const playerTraits = new Map<string, PlayerTraits>();
-  const playerIds = players.map(p => p.id);
-  if (playerIds.length > 0) {
-    const traitsRows = await fetchByGameIds('player_traits', playerIds, 'player_id');
-    const idToName = new Map(players.map(p => [p.id, p.name]));
-    for (const row of traitsRows) {
-      const name = idToName.get(row.player_id as string);
-      if (name) {
-        playerTraits.set(name, {
-          nickname: (row.nickname as string) || undefined,
-          job: (row.job as string) || undefined,
-          team: (row.team as string) || undefined,
-          style: (row.style as string[]) || [],
-          quirks: (row.quirks as string[]) || [],
-        });
-      }
+  const idToName = new Map(players.map(p => [p.id, p.name]));
+  for (const row of traitsRows) {
+    const name = idToName.get(row.player_id as string);
+    if (name) {
+      playerTraits.set(name, {
+        nickname: (row.nickname as string) || undefined,
+        job: (row.job as string) || undefined,
+        team: (row.team as string) || undefined,
+        style: (row.style as string[]) || [],
+        quirks: (row.quirks as string[]) || [],
+      });
     }
   }
 
@@ -560,22 +616,6 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
       console.warn('Trait seed import failed:', err);
     }
   }
-
-  // Build game ID set for child table filtering
-  const games = gamesRows.map(r => toGame(r));
-  const groupGameIds = new Set(games.map(g => g.id));
-
-  // Phase 2: fetch essential child tables by game_id in batches
-  const gameIds = Array.from(groupGameIds);
-  const [
-    gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows,
-  ] = await Promise.all([
-    fetchByGameIds('game_players', gameIds),
-    fetchByGameIds('shared_expenses', gameIds),
-    fetchByGameIds('game_forecasts', gameIds),
-    fetchByGameIds('paid_settlements', gameIds),
-    fetchByGameIds('period_markers', gameIds),
-  ]);
 
   // Games (with embedded shared_expenses, forecasts, paidSettlements, periodMarkers)
   const sharedExpByGame = new Map<string, SharedExpense[]>();
@@ -909,16 +949,16 @@ export async function getPlayerEmailForNotification(groupId: string, playerName:
 
 // ── Realtime subscriptions ──
 
-type RefreshGroup = 'players' | 'games' | 'game_players' | 'settings' | 'forecast' | 'ai' | 'tts' | 'notifications';
+type RefreshGroup = 'players' | 'games' | 'game_players' | 'game_children' | 'settings' | 'forecast' | 'ai' | 'tts' | 'notifications' | 'training';
 
 const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   players: 'players',
   games: 'games',
   game_players: 'game_players',
   shared_expenses: 'game_players',
-  game_forecasts: 'games',
-  paid_settlements: 'games',
-  period_markers: 'games',
+  game_forecasts: 'game_children',
+  paid_settlements: 'game_children',
+  period_markers: 'game_children',
   settings: 'settings',
   chip_values: 'settings',
   pending_forecasts: 'forecast',
@@ -929,6 +969,9 @@ const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   groups: 'settings',
   notifications: 'notifications',
   player_traits: 'players',
+  training_answers: 'training',
+  training_pool: 'training',
+  training_insights: 'training',
 };
 
 const pendingGroups = new Set<RefreshGroup>();
@@ -1001,6 +1044,57 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
     }
   }
 
+  // Lightweight refresh: only forecasts/settlements/markers changed (no game_players refetch)
+  if (groups.has('game_children') && !groups.has('games')) {
+    const existingGames = (state.data.get(STORAGE_KEYS.GAMES) as Game[]) || [];
+    const gameIds = existingGames.map(g => g.id);
+    if (gameIds.length > 0) {
+      const [fcRows, psRows, pmRows] = await Promise.all([
+        fetchByGameIds('game_forecasts', gameIds),
+        fetchByGameIds('paid_settlements', gameIds),
+        fetchByGameIds('period_markers', gameIds),
+      ]);
+      const fcByGame = new Map<string, GameForecast[]>();
+      for (const row of fcRows) {
+        const id = row.game_id as string;
+        if (!fcByGame.has(id)) fcByGame.set(id, []);
+        fcByGame.get(id)!.push(toForecast(row));
+      }
+      const psByGame = new Map<string, PaidSettlement[]>();
+      for (const row of psRows) {
+        const id = row.game_id as string;
+        if (!psByGame.has(id)) psByGame.set(id, []);
+        psByGame.get(id)!.push({
+          from: row.from_player as string,
+          to: row.to_player as string,
+          paidAt: row.paid_at as string,
+          amount: row.amount != null ? Number(row.amount) : undefined,
+          autoClosed: row.auto_closed === true,
+        });
+      }
+      const pmByGame = new Map<string, Game['periodMarkers']>();
+      for (const row of pmRows) {
+        pmByGame.set(row.game_id as string, {
+          isFirstGameOfMonth: !!row.is_first_game_of_month,
+          isLastGameOfMonth: !!row.is_last_game_of_month,
+          isFirstGameOfHalf: !!row.is_first_game_of_half,
+          isLastGameOfHalf: !!row.is_last_game_of_half,
+          isFirstGameOfYear: !!row.is_first_game_of_year,
+          isLastGameOfYear: !!row.is_last_game_of_year,
+          monthName: (row.month_name as string) || '',
+          halfLabel: (row.half_label as string) || '',
+          year: Number(row.year) || 0,
+        });
+      }
+      for (const game of existingGames) {
+        game.forecasts = fcByGame.get(game.id) || undefined;
+        game.paidSettlements = psByGame.get(game.id) || undefined;
+        game.periodMarkers = pmByGame.get(game.id);
+      }
+    }
+  }
+
+  // Full game refresh: games table changed (new/deleted/status transition)
   if (groups.has('games')) {
     const gamesRows = await fetchAllRows('games', { column: 'group_id', value: gid });
     const games = gamesRows.map(r => toGame(r));

@@ -3,10 +3,10 @@ import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 
 const DEVICE_ID_KEY = 'poker_device_id';
-const MAX_LOG_ENTRIES = 200;
+const MAX_LOG_ENTRIES = 1000;
 const ACTIVITY_BUFFER_KEY = 'poker_activity_buffer';
 const ACTIVITY_LAST_PUSH_KEY = 'poker_activity_last_push';
-const ACTIVITY_PUSH_COOLDOWN_MS = 15 * 60 * 1000; // throttle session row updates
+const ACTIVITY_PUSH_COOLDOWN_MS = 2 * 60 * 1000; // throttle session row updates (2 min)
 
 let currentSessionTimestamp: string | null = null;
 let lastPushedScreens: string[] = [];
@@ -219,7 +219,8 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
     fingerprint: null,
     player_name: entry.playerName || null,
   });
-  markPushed();
+  // Don't markPushed here — let the first updateSessionActivity push immediately
+  // so screen data reaches Supabase without waiting for cooldown
 };
 
 export const updateSessionActivity = async (
@@ -252,14 +253,18 @@ export const updateSessionActivity = async (
   }
 };
 
-export const fetchActivityLog = async (): Promise<ActivityLogEntry[]> => {
+export const fetchActivityLog = async (excludeUserId?: string): Promise<ActivityLogEntry[]> => {
   const gid = getGroupId();
   if (!gid) return [];
-  const { data } = await supabase.from('activity_log')
+  let query = supabase.from('activity_log')
     .select('*')
     .eq('group_id', gid)
     .order('timestamp', { ascending: false })
     .limit(MAX_LOG_ENTRIES);
+  if (excludeUserId) {
+    query = query.neq('user_id', excludeUserId);
+  }
+  const { data } = await query;
   return (data || []).map(row => ({
     deviceId: row.device_id as string,
     role: row.role as PermissionRole,

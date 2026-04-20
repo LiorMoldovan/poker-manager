@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
-import html2canvas from 'html2canvas';
+import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
 import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
@@ -114,7 +114,7 @@ async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
   }
 }
 
-const DEFAULT_LOCATIONS = ['ליאור', 'סגל', 'ליכטר', 'מקלט ליכטר', 'אייל'];
+const DEFAULT_LOCATIONS: string[] = [];
 
 const getNextGameNightDate = (gameNightDays: number[]): Date => {
   const now = new Date();
@@ -263,6 +263,7 @@ const NewGameScreen = () => {
   const guestPlayers = players.filter(p => p.type === 'guest');
 
   const togglePlayer = (id: string) => {
+    hapticTap();
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -383,6 +384,7 @@ const NewGameScreen = () => {
   const [generatingTTS, setGeneratingTTS] = useState(false);
 
   const startGameWithForecast = async (forecasts?: GameForecast[]) => {
+    hapticSuccess();
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     const game = createGame(Array.from(selectedIds), location || undefined, forecasts);
     
@@ -1075,6 +1077,7 @@ const NewGameScreen = () => {
     setIsSharing(true);
 
     try {
+      const { default: html2canvas } = await import('html2canvas');
       const PLAYERS_PER_PAGE = 4;
       const files: File[] = [];
 
@@ -1926,7 +1929,7 @@ const NewGameScreen = () => {
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>{t('newGame.location')}</span>
-          {(getSettings().locations || DEFAULT_LOCATIONS).map(loc => (
+          {(getSettings().locations ?? DEFAULT_LOCATIONS).map(loc => (
             <button
               key={loc}
               onClick={() => { setGameLocation(gameLocation === loc ? '' : loc); setCustomLocation(''); }}

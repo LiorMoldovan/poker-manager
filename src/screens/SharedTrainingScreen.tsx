@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { usePermissions, LEGACY_NAME_CORRECTIONS } from '../App';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { TrainingPlayerData, SharedTrainingProgress } from '../types';
 import {
   SCENARIO_CATEGORIES,
@@ -14,11 +15,12 @@ import {
   CATEGORY_TIPS,
   normalizeTrainingPlayers,
   getPoolCounts,
+  updatePoolCache,
   getTrainingSessionCounts,
   resetSharedTrainingProgress,
   clearPendingUploadsForPlayer,
 } from '../utils/pokerTraining';
-import { fetchTrainingAnswers, fetchTrainingInsights } from '../database/githubSync';
+import { fetchTrainingAnswers, fetchTrainingInsights, fetchTrainingPool } from '../database/trainingData';
 
 type LeaderboardRow = TrainingPlayerData & { neutral: number };
 
@@ -45,7 +47,7 @@ const SharedTrainingScreen = () => {
   const leaderboardRef = useRef<HTMLDivElement>(null);
   const insightRef = useRef<HTMLDivElement>(null);
 
-  const poolCounts = useMemo(() => getPoolCounts(), []);
+  const [poolCounts, setPoolCounts] = useState(() => getPoolCounts());
   const localProgress = getSharedProgress(name);
   const progress = useMemo(() => {
     if (!remoteProgress) return localProgress;
@@ -57,10 +59,15 @@ const SharedTrainingScreen = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [raw, insightsData] = await Promise.all([
+      const [raw, insightsData, poolData] = await Promise.all([
         fetchTrainingAnswers(),
         fetchTrainingInsights(),
+        fetchTrainingPool(),
       ]);
+      if (poolData) {
+        updatePoolCache(poolData);
+        setPoolCounts(getPoolCounts());
+      }
       const answersData = raw ? normalizeTrainingPlayers(raw) : null;
       if (answersData) {
         setLeaderboard(answersData.players);
@@ -93,6 +100,8 @@ const SharedTrainingScreen = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useRealtimeRefresh(loadData);
 
   const handleStart = () => {
     const params = new URLSearchParams();
