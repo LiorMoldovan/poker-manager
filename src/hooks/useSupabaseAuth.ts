@@ -302,36 +302,21 @@ export function useSupabaseAuth() {
   const fetchMembers = useCallback(async (): Promise<GroupMember[]> => {
     const groupId = membership?.groupId;
     if (!groupId) return [];
-    const isAdmin = membership?.role === 'admin';
-    if (isAdmin) {
-      const { data, error } = await supabase.rpc('fetch_group_members_with_email', {
-        p_group_id: groupId,
-      });
-      if (!error && Array.isArray(data)) {
-        return (data as Array<{ user_id: string; display_name: string | null; role: string; player_id: string | null; player_name: string | null; email: string | null }>).map(row => ({
-          userId: row.user_id,
-          displayName: row.display_name,
-          role: row.role,
-          playerId: row.player_id,
-          playerName: row.player_name,
-          email: row.email,
-        }));
-      }
+    const { data, error } = await supabase.rpc('fetch_group_members_with_email', {
+      p_group_id: groupId,
+    });
+    if (!error && Array.isArray(data)) {
+      return (data as Array<{ user_id: string; display_name: string | null; role: string; player_id: string | null; player_name: string | null; email: string | null }>).map(row => ({
+        userId: row.user_id,
+        displayName: row.display_name,
+        role: row.role,
+        playerId: row.player_id,
+        playerName: row.player_name,
+        email: row.email,
+      }));
     }
-    const { data, error } = await supabase
-      .from('group_members')
-      .select('user_id, display_name, role, player_id, players ( name )')
-      .eq('group_id', groupId);
-    if (error || !data) return [];
-    return data.map(row => ({
-      userId: row.user_id,
-      displayName: row.display_name,
-      role: row.role,
-      playerId: row.player_id,
-      playerName: (row.players as unknown as { name: string } | null)?.name ?? null,
-      email: null,
-    }));
-  }, [membership?.groupId, membership?.role]);
+    return [];
+  }, [membership?.groupId]);
 
   return {
     user: state.user,

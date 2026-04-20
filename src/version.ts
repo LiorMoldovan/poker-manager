@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.17.3';
+export const APP_VERSION = '5.17.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.4',
+    date: '2026-04-20',
+    changes: [
+      '👥 Fix: group members can now see all other members (was only showing self)',
+      '🔒 Members see names and roles but not emails — admin controls remain restricted',
+    ],
+  },
   {
     version: '5.17.3',
     date: '2026-04-20',

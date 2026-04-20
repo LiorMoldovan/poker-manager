@@ -1,5 +1,3 @@
-import { verifySupabaseAuth } from './_auth';
-
 export const config = {
   api: {
     bodyParser: {
@@ -9,10 +7,36 @@ export const config = {
   maxDuration: 60,
 };
 
+const SUPABASE_URL = 'https://ursjltxklmxmapfvkttj.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_TzhEQmU6mX2n-utnOUAtwQ_zkGTR13j';
 const GH_OWNER = 'LiorMoldovan';
 const GH_REPO = 'poker-manager';
 const GH_BRANCH = 'main';
 const MAX_BACKUPS = 3;
+
+async function verifyAuth(
+  authHeader: string | undefined,
+): Promise<{ error: string; status: number } | null> {
+  if (!authHeader?.startsWith('Bearer ')) {
+    return { error: 'Missing authentication', status: 401 };
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    });
+    if (res.ok) return null;
+    const body = await res.text();
+    return { error: `Auth failed (${res.status}): ${body}`, status: 401 };
+  } catch (e) {
+    return { error: `Auth check error: ${e instanceof Error ? e.message : String(e)}`, status: 500 };
+  }
+}
 
 function ghHeaders(token: string): Record<string, string> {
   return {
@@ -29,7 +53,6 @@ async function ghApi(token: string, path: string, init?: RequestInit): Promise<R
   });
 }
 
-// Node.js Serverless Function (not Edge) — allows larger body and Buffer-based encoding
 export default async function handler(
   req: { method?: string; headers: Record<string, string | string[] | undefined>; body: Record<string, unknown> },
   res: { status(code: number): { json(data: unknown): void; send(data: string): void } },
@@ -38,14 +61,11 @@ export default async function handler(
     return res.status(405).send('Method not allowed');
   }
 
-  // Reuse shared auth by constructing a Web API Request from Node.js headers
-  const webHeaders = new Headers();
-  const authVal = req.headers.authorization;
-  if (typeof authVal === 'string') webHeaders.set('Authorization', authVal);
-  const authError = await verifySupabaseAuth(new Request('http://localhost', { headers: webHeaders }));
-  if (authError) {
-    const errBody = await authError.json() as { error?: { message?: string } };
-    return res.status(authError.status).json(errBody);
+  const rawAuth = req.headers.authorization;
+  const authHeader = typeof rawAuth === 'string' ? rawAuth : Array.isArray(rawAuth) ? rawAuth[0] : undefined;
+  const authResult = await verifyAuth(authHeader);
+  if (authResult) {
+    return res.status(authResult.status).json({ error: { message: authResult.error } });
   }
 
   const token = process.env.GITHUB_TOKEN;
