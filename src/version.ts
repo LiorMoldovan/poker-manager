@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.17.1';
+export const APP_VERSION = '5.17.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.2',
+    date: '2026-04-20',
+    changes: [
+      '🔐 Fix auth: use JWKS for ES256 JWT verification (was failing with raw bytes)',
+      '🔄 Unified auth across all API routes (github-backup now uses shared JWKS auth)',
+      '🔑 Robust token refresh in backup and proxy auth headers',
+      '🩺 Added /api/health diagnostic endpoint with selftest mode',
+    ],
+  },
   {
     version: '5.17.1',
     date: '2026-04-20',

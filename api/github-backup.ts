@@ -1,4 +1,4 @@
-import { jwtVerify } from 'jose';
+import { verifySupabaseAuth } from './_auth';
 
 export const config = {
   api: {
@@ -29,39 +29,6 @@ async function ghApi(token: string, path: string, init?: RequestInit): Promise<R
   });
 }
 
-function base64Decode(str: string): Uint8Array | null {
-  try {
-    const bin = atob(str);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
-async function verifyAuth(authHeader: string | undefined): Promise<{ error: string; status: number } | null> {
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
-  if (!jwtSecret) return { error: 'Server authentication not configured', status: 500 };
-
-  if (!authHeader?.startsWith('Bearer ')) return { error: 'Missing authentication', status: 401 };
-
-  const token = authHeader.slice(7);
-  const candidates: Uint8Array[] = [new TextEncoder().encode(jwtSecret)];
-  const decoded = base64Decode(jwtSecret);
-  if (decoded) candidates.push(decoded);
-
-  for (const secret of candidates) {
-    try {
-      await jwtVerify(token, secret);
-      return null;
-    } catch {
-      // try next candidate
-    }
-  }
-  return { error: 'Invalid authentication token', status: 401 };
-}
-
 // Node.js Serverless Function (not Edge) — allows larger body and Buffer-based encoding
 export default async function handler(
   req: { method?: string; headers: Record<string, string | string[] | undefined>; body: Record<string, unknown> },
@@ -71,11 +38,14 @@ export default async function handler(
     return res.status(405).send('Method not allowed');
   }
 
-  const rawAuth = req.headers.authorization;
-  const authHeader = typeof rawAuth === 'string' ? rawAuth : Array.isArray(rawAuth) ? rawAuth[0] : undefined;
-  const authResult = await verifyAuth(authHeader);
-  if (authResult) {
-    return res.status(authResult.status).json({ error: { message: authResult.error } });
+  // Reuse shared auth by constructing a Web API Request from Node.js headers
+  const webHeaders = new Headers();
+  const authVal = req.headers.authorization;
+  if (typeof authVal === 'string') webHeaders.set('Authorization', authVal);
+  const authError = await verifySupabaseAuth(new Request('http://localhost', { headers: webHeaders }));
+  if (authError) {
+    const errBody = await authError.json() as { error?: { message?: string } };
+    return res.status(authError.status).json(errBody);
   }
 
   const token = process.env.GITHUB_TOKEN;
