@@ -1,6 +1,9 @@
-import { jwtVerify } from 'jose';
+import { jwtVerify, createRemoteJWKSet } from 'jose';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ursjltxklmxmapfvkttj.supabase.co';
+const JWKS = createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`));
 
 function base64Decode(str: string): Uint8Array | null {
   try {
@@ -14,14 +17,6 @@ function base64Decode(str: string): Uint8Array | null {
 }
 
 export async function verifySupabaseAuth(req: Request): Promise<Response | null> {
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
-  if (!jwtSecret) {
-    return new Response(JSON.stringify({ error: { message: 'Server authentication not configured' } }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
-  }
-
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: { message: 'Missing authentication' } }), {
@@ -32,22 +27,28 @@ export async function verifySupabaseAuth(req: Request): Promise<Response | null>
 
   const token = authHeader.slice(7);
 
-  // Try the secret as raw UTF-8 bytes first, then as base64-decoded bytes
-  const candidates: Uint8Array[] = [new TextEncoder().encode(jwtSecret)];
-  const decoded = base64Decode(jwtSecret);
-  if (decoded) candidates.push(decoded);
+  // 1. Try JWKS verification (handles ES256, RS256, etc. automatically)
+  try {
+    await jwtVerify(token, JWKS);
+    return null;
+  } catch { /* JWKS failed — fall through to symmetric secret */ }
 
-  let lastError = '';
-  for (const secret of candidates) {
-    try {
-      await jwtVerify(token, secret);
-      return null;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
+  // 2. Fallback: try symmetric HS256 verification with SUPABASE_JWT_SECRET
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
+  if (jwtSecret) {
+    const candidates: Uint8Array[] = [new TextEncoder().encode(jwtSecret)];
+    const decoded = base64Decode(jwtSecret);
+    if (decoded) candidates.push(decoded);
+
+    for (const secret of candidates) {
+      try {
+        await jwtVerify(token, secret);
+        return null;
+      } catch { /* try next */ }
     }
   }
 
-  return new Response(JSON.stringify({ error: { message: `Invalid authentication token: ${lastError}` } }), {
+  return new Response(JSON.stringify({ error: { message: 'Invalid authentication token' } }), {
     status: 401,
     headers: JSON_HEADERS,
   });

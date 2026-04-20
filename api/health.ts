@@ -109,17 +109,26 @@ const log = (msg, color) => {
       } catch { checks['token_decode'] = 'failed'; }
     }
     try {
-      const { jwtVerify } = await import('jose');
-      const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
-      if (jwtSecret) {
-        const candidates = [new TextEncoder().encode(jwtSecret)];
-        try { const b = atob(jwtSecret); const u = new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); candidates.push(u); } catch {/* */}
-        let verified = false; let lastErr = '';
-        for (const secret of candidates) {
-          try { await jwtVerify(token, secret); verified = true; break; } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
+      const { jwtVerify, createRemoteJWKSet } = await import('jose');
+      const supabaseUrl = process.env.SUPABASE_URL || 'https://ursjltxklmxmapfvkttj.supabase.co';
+      const JWKS = createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
+
+      // Try JWKS first (handles ES256, RS256, etc.)
+      let verified = false; let lastErr = '';
+      try { await jwtVerify(token, JWKS); verified = true; } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
+
+      // Fallback: try symmetric HS256 with SUPABASE_JWT_SECRET
+      if (!verified) {
+        const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
+        if (jwtSecret) {
+          const candidates = [new TextEncoder().encode(jwtSecret)];
+          try { const b = atob(jwtSecret); const u = new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); candidates.push(u); } catch {/* */}
+          for (const secret of candidates) {
+            try { await jwtVerify(token, secret); verified = true; break; } catch (e) { lastErr = e instanceof Error ? e.message : String(e); }
+          }
         }
-        checks['jwt_verify'] = verified ? 'PASS' : `FAIL: ${lastErr}`;
       }
+      checks['jwt_verify'] = verified ? 'PASS' : `FAIL: ${lastErr}`;
     } catch (e) { checks['jwt_verify'] = `error: ${e}`; }
   } else {
     checks['auth_header'] = authHeader ? 'present but not Bearer' : 'NOT SENT';
