@@ -1,4 +1,4 @@
-var CACHE_VERSION = 'v1';
+var CACHE_VERSION = 'v2';
 
 // On install: skip waiting so the new SW activates immediately
 self.addEventListener('install', function(event) {
@@ -31,6 +31,9 @@ self.addEventListener('push', function(event) {
       tag: payload.tag || 'poker-notification',
       data: { url: payload.url || '/' },
       dir: 'rtl',
+      vibrate: [200, 100, 200],
+      requireInteraction: false,
+      renotify: true,
     };
     event.waitUntil(self.registration.showNotification(title, options));
   } catch (e) {
