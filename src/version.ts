@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.17.2';
+export const APP_VERSION = '5.17.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.3',
+    date: '2026-04-20',
+    changes: [
+      '🔔 Fix push notifications: VAPID key consistency, JWK import, detailed error reporting',
+      '🎯 Test Push button now respects player selection',
+      '📝 Dynamic helper text reflects send target',
+    ],
+  },
   {
     version: '5.17.2',
     date: '2026-04-20',

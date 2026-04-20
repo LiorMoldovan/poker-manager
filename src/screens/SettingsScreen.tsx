@@ -2257,6 +2257,7 @@ const SettingsScreen = () => {
                         groupId: gid,
                         title: '🧪 Test Notification',
                         body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
+                        targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
                       });
                       if (result) {
                         if (result.total === 0) {
@@ -2330,7 +2331,9 @@ const SettingsScreen = () => {
                 </button>
               </div>
               <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem', textAlign: 'center' }}>
-                {language === 'he' ? 'Push נשלח לכל המנויים, מייל נשלח לחשבון שלך' : 'Push sent to all subscribers, email sent to your account'}
+                {language === 'he'
+                  ? `Push נשלח ל${pushTarget === 'select' ? 'שחקנים שנבחרו' : 'כל המנויים'}, מייל נשלח לחשבון שלך`
+                  : `Push sent to ${pushTarget === 'select' ? 'selected players' : 'all subscribers'}, email sent to your account`}
               </p>
             </div>
           </div>
