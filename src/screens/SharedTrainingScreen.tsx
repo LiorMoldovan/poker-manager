@@ -231,7 +231,7 @@ const SharedTrainingScreen = () => {
       <div style={{
         padding: '0.5rem 0.75rem', borderRadius: '8px', marginBottom: '0.5rem',
         background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
-        fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6, direction: 'rtl',
+        fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.6,
         display: 'flex', gap: '0.35rem',
       }}>
         <span style={{ flexShrink: 0 }}>💡</span>
@@ -248,8 +248,8 @@ const SharedTrainingScreen = () => {
             <button
               key={n}
               onClick={() => setSessionCount(n)}
-              className={`btn btn-sm ${sessionCount === n ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem' }}
+              className="btn btn-sm btn-secondary"
+              style={{ flex: 1, padding: '0.45rem', fontSize: '0.8rem', ...(sessionCount === n ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
             >
               {n === 0 ? 'ללא הגבלה' : n}
             </button>
@@ -268,8 +268,8 @@ const SharedTrainingScreen = () => {
             <button
               key={mode}
               onClick={() => { setTrainingMode(mode); if (mode === 'specific') { setShowCategoryPicker(true); } else { setSelectedCategories([]); setShowCategoryPicker(false); } }}
-              className={`btn btn-sm ${trainingMode === mode ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ flex: 1, padding: '0.4rem 0.3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', lineHeight: 1.2 }}
+              className="btn btn-sm btn-secondary"
+              style={{ flex: 1, padding: '0.4rem 0.3rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem', lineHeight: 1.2, ...(trainingMode === mode ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
             >
               <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>{icon}{count > 0 ? ` (${count})` : ''}</span>
               <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{text}</span>
@@ -302,8 +302,8 @@ const SharedTrainingScreen = () => {
                     <button
                       key={cat.id}
                       onClick={() => toggleCategory(cat.id)}
-                      className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem' }}
+                      className="btn btn-sm btn-secondary"
+                      style={{ padding: '0.25rem 0.5rem', fontSize: '0.65rem', ...(isSelected ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
                     >
                       {cat.icon} {cat.name} ({catCount})
                     </button>
@@ -366,11 +366,11 @@ const SharedTrainingScreen = () => {
           </div>
         ) : (
           <>
-            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', direction: 'ltr' }}>
+            <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '0.3rem 0.15rem', width: '20px' }}>#</th>
-                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'left' }}>שחקן</th>
+                  <th style={{ padding: '0.3rem 0.15rem', textAlign: 'start' }}>שחקן</th>
                   <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center' }}>ענו</th>
                   <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#22c55e' }}>✓</th>
                   <th style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: '#f59e0b' }}>~</th>
@@ -387,12 +387,12 @@ const SharedTrainingScreen = () => {
                   return (
                     <tr key={player.playerName} style={{
                       borderBottom: '1px solid rgba(255,255,255,0.03)',
-                      ...(isMe ? { background: 'rgba(59,130,246,0.14)', borderRight: '3px solid #3b82f6' } : {}),
+                      ...(isMe ? { background: 'rgba(59,130,246,0.14)', borderInlineStart: '3px solid #3b82f6' } : {}),
                     }}>
                       <td style={{ padding: '0.3rem 0.15rem', whiteSpace: 'nowrap' }}>
                         {i + 1}
                       </td>
-                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'left', fontWeight: isMe ? 700 : 500, ...(isMe ? { color: '#60a5fa' } : {}) }}>
+                      <td style={{ padding: '0.3rem 0.15rem', textAlign: 'start', fontWeight: isMe ? 700 : 500, ...(isMe ? { color: '#60a5fa' } : {}) }}>
                         {displayName}
                       </td>
                       <td style={{ padding: '0.3rem 0.15rem', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -418,7 +418,7 @@ const SharedTrainingScreen = () => {
                 })}
               </tbody>
             </table>
-            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.4rem', direction: 'rtl', lineHeight: 1.5 }}>
+            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.5 }}>
               <span style={{ color: '#22c55e' }}>✓</span> נכון
               {' · '}
               <span style={{ color: '#f59e0b' }}>~</span> ניטרלי (תקף לפוקר מקצועי)
@@ -462,7 +462,7 @@ const SharedTrainingScreen = () => {
 
         return (
           <>
-            <div ref={insightRef} className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+            <div ref={insightRef} className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                 <span style={{ fontWeight: 700, fontSize: '0.8rem', color: '#a855f7' }}>
                   🎯 המאמן האישי שלך
@@ -503,7 +503,7 @@ const SharedTrainingScreen = () => {
 
       {/* Player insights — below table */}
       {hasProgress && !hasInsights && (
-        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
           <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', color: 'var(--primary)' }}>
             📋 תובנות אימון
           </div>
@@ -513,7 +513,7 @@ const SharedTrainingScreen = () => {
         </div>
       )}
       {hasProgress && hasInsights && (
-        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+        <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
           <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.5rem', color: 'var(--primary)' }}>
             📋 תובנות אימון
           </div>
@@ -561,12 +561,12 @@ const SharedTrainingScreen = () => {
           {bestCatTip && (
             <div style={{
               padding: '0.4rem 0.5rem', borderRadius: '8px', marginBottom: '0.4rem',
-              background: 'rgba(34,197,94,0.04)', borderRight: '3px solid var(--success)',
+              background: 'rgba(34,197,94,0.04)', borderInlineStart: '3px solid var(--success)',
             }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.15rem' }}>
                 {bestCat?.icon} {bestCat?.name}
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text)', lineHeight: 1.6, paddingRight: '0.1rem' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text)', lineHeight: 1.6, paddingInlineEnd: '0.1rem' }}>
                 {bestCatTip}
               </div>
             </div>
@@ -576,13 +576,13 @@ const SharedTrainingScreen = () => {
           {weakCats.map(wc => (
             <div key={wc.catId} style={{
               padding: '0.4rem 0.5rem', borderRadius: '8px', marginBottom: '0.4rem',
-              background: 'rgba(239,68,68,0.04)', borderRight: '3px solid var(--danger)',
+              background: 'rgba(239,68,68,0.04)', borderInlineStart: '3px solid var(--danger)',
             }}>
               <div style={{ fontSize: '0.65rem', color: 'var(--danger)', fontWeight: 600, marginBottom: '0.15rem' }}>
                 {wc.cat?.icon} {wc.cat?.name} — {wc.wrong} טעויות מ-{wc.total}
               </div>
               {wc.tip && (
-                <div style={{ fontSize: '0.7rem', color: 'var(--text)', lineHeight: 1.6, paddingRight: '0.1rem' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text)', lineHeight: 1.6, paddingInlineEnd: '0.1rem' }}>
                   {wc.tip}
                 </div>
               )}
@@ -597,7 +597,7 @@ const SharedTrainingScreen = () => {
         const totalPossible = TRAINING_BADGES.length + catExpert.length;
         const lockedCount = unearnedBadges.length + unearnedCatBadges.length;
         return (
-          <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem', direction: 'rtl' }}>
+          <div className="card" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
               <span style={{ fontWeight: 700, fontSize: '0.8rem' }}>🏅 הישגים</span>
               <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>

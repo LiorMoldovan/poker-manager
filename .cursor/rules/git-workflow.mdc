@@ -59,15 +59,17 @@ vX.Y.Z - Brief description of changes
 
 - **Host**: GitHub
 - **Repo**: `LiorMoldovan/poker-manager`
-- **Branch**: `main` (only branch)
+- **Branches**: `main` (production), `supabase-migration` (active feature branch)
 - **User refers to GitHub as**: "BB" (push to BB = push to GitHub)
 
 ## Vercel Deployment
 
-- **Auto-deploy**: Every push to `main` triggers Vercel build
+- **Auto-deploy**: Every push to `main` triggers Vercel build (production)
+- **Preview deploys**: `supabase-migration` branch also has Vercel preview enabled (`vercel.json` → `deploymentEnabled`)
 - **SPA routing**: `vercel.json` has rewrite rule `/(.*) → /index.html`
 - **Skip deploy**: `vercel.json` has `ignoreCommand` that skips deploy if only non-source files changed
 - **Cache**: `index.html` is `no-cache`, assets are `immutable` with 1-year cache
+- **Env vars**: `GEMINI_API_KEY`, `ELEVENLABS_API_KEY`, `SUPABASE_JWT_SECRET` set in Vercel dashboard (used as fallback; per-group keys take priority)
 
 ## Do NOT
 

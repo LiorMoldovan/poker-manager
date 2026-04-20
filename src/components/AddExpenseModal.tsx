@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GamePlayer, SharedExpense } from '../types';
 import { generateId } from '../database/storage';
+import { useTranslation } from '../i18n';
 
 interface AddExpenseModalProps {
   players: GamePlayer[];
@@ -10,6 +11,7 @@ interface AddExpenseModalProps {
 }
 
 const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpenseModalProps) => {
+  const { t, isRTL } = useTranslation();
   const [description, setDescription] = useState(existingExpense?.description || 'פיצה');
   const [amount, setAmount] = useState(existingExpense?.amount?.toString() || '');
   const [paidBy, setPaidBy] = useState(existingExpense?.paidBy || '');
@@ -74,6 +76,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         justifyContent: 'center',
         zIndex: 1000,
         padding: '0.5rem',
+        animation: 'backdropFadeIn 0.2s ease-out',
       }}
       onClick={onClose}
     >
@@ -84,32 +87,34 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
           maxWidth: '360px',
           padding: '0.75rem',
           background: '#1a1a2e',
+          animation: 'modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <h2 style={{ fontSize: '1.1rem', marginBottom: '0.75rem', textAlign: 'center' }}>
-          🍕 {isEditing ? 'עריכת הוצאה' : 'הוצאה משותפת'}
+          {isEditing ? t('expense.editTitle') : t('expense.title')}
         </h2>
 
         {/* Description + Amount Row */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem' }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              תיאור
+              {t('expense.description')}
             </label>
             <input
               type="text"
               value={description}
               onChange={e => setDescription(e.target.value)}
-              placeholder="פיצה"
+              placeholder={t('expense.descPlaceholder')}
               className="input"
-              style={{ width: '100%', direction: 'rtl', padding: '0.4rem', fontSize: '0.85rem' }}
+              dir={isRTL ? 'rtl' : 'ltr'}
+              style={{ width: '100%', padding: '0.4rem', fontSize: '0.85rem' }}
             />
           </div>
           <div style={{ width: '100px' }}>
             <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              סכום
+              {t('expense.amount')}
             </label>
             <input
               type="number"
@@ -127,7 +132,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         {/* Who Paid */}
         <div style={{ marginBottom: '0.6rem' }}>
           <label style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-            מי שילם?
+            {t('expense.whoPaid')}
           </label>
           <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
             {players.map(player => (
@@ -148,7 +153,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
         <div style={{ marginBottom: '0.6rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
             <label style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              משתתפים ({participants.length}/{players.length})
+              {t('expense.participants', { selected: participants.length, total: players.length })}
             </label>
             <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button 
@@ -157,7 +162,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
                 onClick={handleSelectAll}
                 style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem' }}
               >
-                כולם
+                {t('expense.all')}
               </button>
               <button 
                 type="button" 
@@ -165,7 +170,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
                 onClick={handleDeselectAll}
                 style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem' }}
               >
-                נקה
+                {t('common.clear')}
               </button>
             </div>
           </div>
@@ -199,9 +204,8 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
             justifyContent: 'center',
             alignItems: 'center',
             gap: '0.5rem',
-            direction: 'rtl',
           }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>לכל אחד:</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('expense.perPerson')}</span>
             <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>
               {perPersonCost.toFixed(0)}
             </span>
@@ -219,7 +223,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
             style={{ flex: 1, padding: '0.5rem' }}
             onClick={onClose}
           >
-            ביטול
+            {t('common.cancel')}
           </button>
           <button 
             type="button"
@@ -228,7 +232,7 @@ const AddExpenseModal = ({ players, onClose, onAdd, existingExpense }: AddExpens
             onClick={handleSubmit}
             disabled={!isValid}
           >
-            {isEditing ? 'עדכן' : 'הוסף'}
+            {isEditing ? t('expense.update') : t('common.add')}
           </button>
         </div>
       </div>

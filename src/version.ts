@@ -1,10 +1,10 @@
 /**
  * App Version Management
  * Increment version with each change for tracking purposes
- * Last deploy trigger: 2026-02-05
+ * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.12.6';
+export const APP_VERSION = '5.17.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,108 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.2',
+    date: '2026-04-20',
+    changes: [
+      '🔐 Fix auth: use JWKS for ES256 JWT verification (was failing with raw bytes)',
+      '🔄 Unified auth across all API routes (github-backup now uses shared JWKS auth)',
+      '🔑 Robust token refresh in backup and proxy auth headers',
+      '🩺 Added /api/health diagnostic endpoint with selftest mode',
+    ],
+  },
+  {
+    version: '5.17.1',
+    date: '2026-04-20',
+    changes: [
+      '🔧 Fix push notifications: corrected VAPID JWT signature format (P1363 instead of DER)',
+      '📧 Fix email: added EmailJS private key (accessToken) for server-side calls',
+      '🗄️ Fix push subscription upsert: added missing UPDATE RLS policy',
+      '✏️ Fix player traits editor: commas and spaces now work in style/quirks fields',
+    ],
+  },
+  {
+    version: '5.17.0',
+    date: '2026-04-19',
+    changes: [
+      '🔔 Push notifications — admins can send real push notifications to players (even when app is closed)',
+      '📧 Settlement email switched from Resend to EmailJS (free, no domain needed)',
+      '🔧 Service Worker + Web Push API with zero third-party dependencies',
+      '💬 Notification templates: poker night, pay reminder, game cancelled, game starting',
+      '🎯 Recipient picker: send to all players or select specific ones',
+    ],
+  },
+  {
+    version: '5.16.1',
+    date: '2026-04-19',
+    changes: [
+      '🔧 Fix Vercel build — remove invalid toolbar property from vercel.json',
+    ],
+  },
+  {
+    version: '5.16.0',
+    date: '2026-04-19',
+    changes: [
+      '✅ Multi-group support — switch between groups, create/join new groups without leaving current one',
+      '📦 Full backup & restore — download all 19 tables as JSON, auto-push to GitHub (keeps 3 per group)',
+      '📦 Backup tab in Settings — status indicator, restore from file or GitHub, 30-day reminder banner',
+      '🌐 i18n audit — fixed 50+ hardcoded Hebrew strings across all screens for proper bilingual support',
+      '🤖 AI features restricted to group owner only (forecasts, summaries, chronicles, insights)',
+      '🔧 TTS pool auto-cleanup — free DB space by deleting voice data when game ends',
+      '🔧 Enhanced auto game-end backup — now includes chronicle profiles and graph insights',
+      '🔧 Vercel toolbar disabled — removed floating debug icon from deployed site',
+    ]
+  },
+  {
+    version: '5.15.1',
+    date: '2026-04-19',
+    changes: [
+      '✅ Cache isolation fix — reset cache on logout, prevent stale data across sessions',
+      '✅ Graphs & Statistics preserve player selection on realtime data refresh',
+      '✅ Game summary share button Hebrew localization',
+      '✅ Removed legacy storage event listeners',
+    ]
+  },
+  {
+    version: '5.15.0',
+    date: '2026-04-19',
+    changes: [
+      '✅ Permissions overhaul — removed viewer role, simplified to admin + member',
+      '✅ Super Admin dashboard — global stats, training toggle, orphaned group detection',
+      '✅ New group setup wizard for owners — guided players + API key setup',
+      '✅ AI key onboarding guide for group owners',
+      '✅ Member read-only views on all game screens (live, chip entry, summary)',
+      '✅ Training access control — per-group training_enabled flag',
+      '✅ Removed backup tab — Supabase handles all data storage',
+      '✅ Settlement toggle now works for admins + participants',
+      '✅ Permission hardening — members cannot undo rebuys, edit expenses, or abandon games',
+      '✅ Hebrew localization fixes across activity log and settings',
+    ]
+  },
+  {
+    version: '5.14.0',
+    date: '2026-04-18',
+    changes: [
+      '✅ Personal player invites — send unique invite codes that auto-link players on join',
+      '✅ Add member by email — owner can add registered users directly from Group tab',
+      '✅ Nice shareable invite messages with WhatsApp support',
+      '✅ Join flow supports both personal (8-char) and generic (6-char) invite codes',
+    ]
+  },
+  {
+    version: '5.13.0',
+    date: '2026-04-17',
+    changes: [
+      '✅ Group Management tab in Settings — view members, change roles, invite code, transfer ownership',
+      '✅ Per-group API keys — each group configures its own Gemini & ElevenLabs keys',
+      '✅ Post-creation invite code screen with copy/share',
+      '✅ Self-create player flow for new users not in the player list',
+      '🔧 Owner-aware security in all management RPCs — admins cannot modify the owner',
+      '🔧 Player delete guard — blocks deletion if player has game history',
+      '🔧 Player linking uniqueness — prevents two members linking to the same player',
+      '🔧 Removed deprecated memberSync role',
+    ]
+  },
   {
     version: '5.12.6',
     date: '2026-04-12',

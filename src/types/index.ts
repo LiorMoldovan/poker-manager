@@ -1,7 +1,7 @@
 export type PlayerType = 'permanent' | 'permanent_guest' | 'guest';
 
 // Permission system
-export type PermissionRole = 'admin' | 'member' | 'memberSync' | 'viewer';
+export type PermissionRole = 'admin' | 'member';
 
 export type Permission = 
   // Game management
@@ -20,8 +20,6 @@ export type Permission =
   | 'chips:edit'
   // Settings
   | 'settings:edit'
-  // Backup (all roles have this)
-  | 'backup:all'
   // View (all roles have this)
   | 'view:all';
 
@@ -33,6 +31,14 @@ export interface Player {
   createdAt: string;
   type: PlayerType;
   gender: PlayerGender;
+}
+
+export interface PlayerTraits {
+  team?: string;
+  job?: string;
+  nickname?: string;
+  style: string[];
+  quirks: string[];
 }
 
 export interface GameForecast {
@@ -100,7 +106,27 @@ export interface Game {
   aiSummaryModel?: string; // Model used to generate the AI summary
   preGameTeaser?: string; // AI-generated pre-game teaser text
   periodMarkers?: PeriodMarkers; // Period context stored at game creation
-  paidSettlements?: { from: string; to: string; paidAt: string }[];
+  paidSettlements?: PaidSettlement[];
+}
+
+export interface PaidSettlement {
+  from: string;
+  to: string;
+  paidAt: string;
+  amount?: number;
+  autoClosed?: boolean;
+}
+
+export interface AppNotification {
+  id: string;
+  groupId: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  read: boolean;
+  createdAt: string;
 }
 
 export interface GamePlayer {
@@ -134,6 +160,9 @@ export interface Settings {
   gameNightDays?: number[]; // Days of week for game nights (0=Sun..6=Sat), default [4,6]
   locations?: string[];
   blockedTransfers?: BlockedTransferPair[];
+  geminiApiKey?: string;
+  elevenlabsApiKey?: string;
+  language?: 'he' | 'en';
 }
 
 export interface Settlement {
@@ -220,6 +249,7 @@ export interface ActivityLogEntry {
   lastActive: string;
   fingerprint?: DeviceFingerprint;
   playerName?: string;
+  userId?: string;
 }
 
 // --- Live Game AI TTS Pool ---

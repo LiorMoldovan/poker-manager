@@ -7,7 +7,7 @@ alwaysApply: true
 
 ## Dev Server
 
-The app runs on **http://localhost:3000**. NEVER use port 3001. This is configured in `vite.config.ts`.
+The app runs on **http://localhost:3000** by default (configured in `vite.config.ts`). If port 3000 is busy, use `npx vite --port <PORT>` to start on an alternate port — the user may request this.
 
 ## No Automated Tests
 
@@ -20,6 +20,7 @@ This project has no test suite. All testing is manual by the user.
 3. **Imports**: Verify all new imports exist and are correctly pathed
 4. **Logic trace**: Walk through the code mentally for edge cases
 5. **Unused variables**: TypeScript strict mode catches "declared but never read" — always clean up
+6. **Supabase column audit** (when touching database code): Cross-reference every column name, type, and constraint against `supabase/schema.sql`. Verify `onConflict` matches UNIQUE constraints. Verify NOT NULL columns have fallbacks. Verify delete sync for removable items.
 
 ## Algorithm Validation
 
@@ -39,14 +40,20 @@ When modifying the forecast algorithm or any data-driven logic:
 - Native `<select>` may show blank text with CSS variables on PC
 - `navigator.share()` unavailable on desktop
 
-### LocalStorage
-- ~5-10MB per origin; `canWriteToStorage()` checks before large writes
-- Activity logger caps at 200 entries
-
-### Cloud Sync
-- `writeWithRetry()` handles GitHub API 409 conflicts
-- Always use fresh `lastUpdated` timestamp when pushing
-- `keepalive: true` on fetch for `visibilitychange` handlers
+### Supabase
+- `getGroupId()` can return `null` — always guard with early return
+- Supabase `.insert()` / `.upsert()` / `.delete()` can fail silently — check `{ error }` return (note: `pushToSupabase` now has `logSyncError` handling for all operations)
+- JSONB columns accept objects/arrays directly — no JSON.stringify needed
+- Timestamps should be ISO strings for TIMESTAMPTZ columns
+- `onConflict` must match exact UNIQUE constraint columns from schema
+- PostgREST default limit is 1000 rows — use pagination (`fetchAllRows`) for large tables
+- RPCs with `SECURITY DEFINER` bypass RLS — they must manually verify permissions
+- Group management RPCs must check `groups.created_by` for owner-only operations
+- Player linking: partial unique index prevents duplicate links — handle the constraint error gracefully
+- `initSupabaseCache` uses 3-phase loading: essential data first, deferred data (chronicles, insights, TTS) loads in background after UI renders
+- New SQL RPCs must be run manually in Supabase dashboard — they are NOT auto-applied
+- SQL migrations go in `supabase/` directory (current: schema.sql, 002 through 008)
+- Only 2 roles exist: `admin` and `member` — viewer was removed in migration 007
 
 ### TypeScript Strict Mode
 - `noUnusedLocals: true` — remove unused variables

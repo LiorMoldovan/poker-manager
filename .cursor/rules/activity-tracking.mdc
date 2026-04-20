@@ -1,5 +1,5 @@
 ---
-description: Activity tracking system — device fingerprinting, session tracking, admin UI
+description: Activity tracking system — device fingerprinting, session tracking, owner-only UI
 globs: src/utils/activityLogger.ts
 alwaysApply: false
 ---
@@ -8,13 +8,14 @@ alwaysApply: false
 
 ## Overview
 
-Silent, transparent tracking of non-admin user activity. Admin sessions are excluded. Data stored in `public/activity-log.json` on GitHub via embedded token.
+Silent, transparent tracking of all user sessions (both admin and member).
+Data stored in `activity_log` table with `group_id` isolation via RLS. Only the group owner can view activity in Settings > Activity tab.
 
 ## Files
 
-- **Logger**: `src/utils/activityLogger.ts` — session init, updates, fingerprinting, GitHub read/write
-- **Hooks**: `src/App.tsx` — starts tracking on `handleUnlock`, updates on navigation + `visibilitychange`
-- **UI**: `src/screens/SettingsScreen.tsx` — admin-only "Activity" tab with device cards
+- **Logger**: `src/utils/activityLogger.ts` — session init, updates, fingerprinting, Supabase writes
+- **Hooks**: `src/App.tsx` — starts tracking on login, updates on navigation + `visibilitychange`
+- **UI**: `src/screens/SettingsScreen.tsx` — owner-only "Activity" tab with device cards
 - **Type**: `ActivityLogEntry` + `DeviceFingerprint` in `src/types/index.ts`
 
 ## Device Identification
@@ -34,12 +35,20 @@ Admin labels devices with player names in Activity tab (`poker_device_labels` in
 
 ## Session Lifecycle
 
-1. **Start**: `logActivity(role)` on PIN unlock (non-admin only)
+1. **Start**: `logActivity(role)` on login (all roles)
 2. **Updates**: `updateSessionActivity(screens, duration)` every 5 minutes + on navigation; skips if unchanged
 3. **Tab close**: `visibilitychange` fires with `keepalive: true`
 4. **Sign out**: Final update + `resetSession()`
 
-## Limits
+## Functions (all Supabase-only)
 
-- Max 200 entries (oldest trimmed)
-- `writeWithRetry()` handles GitHub 409 conflicts with one retry
+- `logActivity` → INSERT into `activity_log`
+- `updateSessionActivity` → UPDATE by `device_id` + `timestamp`
+- `fetchActivityLog` → SELECT with group_id filter, ORDER BY timestamp DESC, LIMIT 200
+- `deleteActivityEntry` → DELETE by `device_id` + `timestamp`
+- `deleteDeviceEntries` → DELETE by `device_id`
+- `clearActivityLog` → DELETE by `group_id`
+
+## Cleanup
+
+`cleanup_old_activity(days)` RPC in `006-supabase-improvements.sql` — owner-only, scoped to own group.

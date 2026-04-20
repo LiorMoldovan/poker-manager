@@ -1,5 +1,4 @@
 import { getAllPlayers, getAllGames, getPlayerStats, saveGraphInsights, saveChronicleProfiles } from '../database/storage';
-import { syncToCloud } from '../database/githubSync';
 import { generateGraphInsights, generatePlayerChronicle, ChroniclePlayerData, getGeminiApiKey, getLastUsedModel, getModelDisplayName } from './geminiAI';
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from './milestones';
 import { formatHebrewHalf } from './calculations';
@@ -166,10 +165,4 @@ export async function regenerateAIInBackground(): Promise<void> {
     console.warn('Background chronicles failed:', e);
   }
 
-  try {
-    await syncToCloud();
-    console.log('Background: synced AI content to cloud');
-  } catch (e) {
-    console.warn('Background cloud sync after AI regen failed:', e);
-  }
 }

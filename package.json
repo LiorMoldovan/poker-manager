@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@kingdanx/edge-tts-browser": "^1.0.0",
+    "@supabase/supabase-js": "^2.103.2",
     "html2canvas": "^1.4.1",
+    "jose": "^6.2.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.1.1",
@@ -21,6 +23,7 @@
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.4",
     "@vitejs/plugin-react": "^4.4.1",
+    "pg": "^8.20.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "xlsx": "^0.18.5"

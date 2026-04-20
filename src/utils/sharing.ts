@@ -23,16 +23,14 @@ export const generateGameSummary = (
   _rebuyValue?: number,
   chipValues?: ChipValue[]
 ): string => {
-  const gameDate = new Date(date).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
+  const d = new Date(date);
+  const gameDate = `${d.getDate()}/${d.getMonth() + 1}`;
+  const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
 
   // LTR mark to force left-to-right display in WhatsApp
   const LTR = '\u200E';
 
-  let summary = `🃏 *Poker Night* | ${gameDate}\n`;
+  let summary = `🃏 *ערב פוקר* | ${weekday} ${gameDate}\n`;
   summary += `━━━━━━━━━━━━━━━━━━━━\n\n`;
 
   // Sort players by profit (winners first)

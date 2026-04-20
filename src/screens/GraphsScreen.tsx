@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import {
   LineChart,
@@ -11,12 +12,12 @@ import {
 } from 'recharts';
 import { Player, Game, GamePlayer } from '../types';
 import { getAllPlayers, getAllGames, getAllGamePlayers, getPlayerStats, getGraphInsights, saveGraphInsights } from '../database/storage';
-import { cleanNumber } from '../utils/calculations';
+import { cleanNumber, formatHebrewHalf } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey, generateGraphInsights, getLastUsedModel, getModelDisplayName } from '../utils/geminiAI';
-import { syncToCloud } from '../database/githubSync';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
+import { useTranslation } from '../i18n';
 
 type ViewMode = 'cumulative' | 'headToHead' | 'impact';
 type TimePeriod = 'all' | 'h1' | 'h2' | 'year' | 'month' | 'custom';
@@ -56,6 +57,7 @@ interface HeadToHeadStat {
 }
 
 const GraphsScreen = () => {
+  const { t, isRTL, language } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('cumulative');
   const [players, setPlayers] = useState<Player[]>([]);
   const [allGames, setAllGames] = useState<Game[]>([]);
@@ -75,13 +77,23 @@ const GraphsScreen = () => {
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
 
-  const formatCustomRange = useCallback(() => {
+  /** Hebrew-only range text for `getInsightsPeriodLabel` (AI prompts). */
+  const formatCustomRangeHebrewForAI = useCallback(() => {
     if (!customStartDate && !customEndDate) return 'בחר תאריכים';
     const fmt = (d: string) => new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
     if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
     if (customStartDate) return `מ-${fmt(customStartDate)}`;
     return `עד ${fmt(customEndDate)}`;
   }, [customStartDate, customEndDate]);
+
+  const formatCustomRange = useCallback(() => {
+    if (!customStartDate && !customEndDate) return t('stats.selectDates');
+    const locale = language === 'he' ? 'he-IL' : 'en-US';
+    const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: '2-digit' });
+    if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
+    if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
+    return `${t('stats.to')} ${fmt(customEndDate)}`;
+  }, [customStartDate, customEndDate, t, language]);
 
   // Head-to-head specific state
   const [player1Id, setPlayer1Id] = useState<string>('');
@@ -93,7 +105,7 @@ const GraphsScreen = () => {
   const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
   // AI Graph Insights state
-  const { role } = usePermissions();
+  const { role, isOwner } = usePermissions();
   const [insightsText, setInsightsText] = useState<string>('');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -127,9 +139,12 @@ const GraphsScreen = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadData = () => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadData(true), []));
+
+  const loadData = (preserveSelection = false) => {
     const allPlayersData = getAllPlayers();
     const allGamesData = getAllGames()
       .filter(g => g.status === 'completed')
@@ -140,20 +155,20 @@ const GraphsScreen = () => {
     setAllGames(allGamesData);
     setGamePlayers(allGamePlayersData);
     
-    // Default: select all permanent players
-    const permanentPlayerIds = allPlayersData
-      .filter(p => p.type === 'permanent')
-      .map(p => p.id);
-    setSelectedPlayers(new Set(permanentPlayerIds));
-    
-    // Set default head-to-head players
-    if (permanentPlayerIds.length >= 2) {
-      setPlayer1Id(permanentPlayerIds[0]);
-      setPlayer2Id(permanentPlayerIds[1]);
-    }
-    
-    if (permanentPlayerIds.length >= 1) {
-      setImpactPlayerId(permanentPlayerIds[0]);
+    if (!preserveSelection) {
+      const permanentPlayerIds = allPlayersData
+        .filter(p => p.type === 'permanent')
+        .map(p => p.id);
+      setSelectedPlayers(new Set(permanentPlayerIds));
+      
+      if (permanentPlayerIds.length >= 2) {
+        setPlayer1Id(permanentPlayerIds[0]);
+        setPlayer2Id(permanentPlayerIds[1]);
+      }
+      
+      if (permanentPlayerIds.length >= 1) {
+        setImpactPlayerId(permanentPlayerIds[0]);
+      }
     }
   };
 
@@ -174,13 +189,13 @@ const GraphsScreen = () => {
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `חציון ראשון ${selectedYear}`;
     if (timePeriod === 'h2') return `חציון שני ${selectedYear}`;
-    if (timePeriod === 'custom') return formatCustomRange();
+    if (timePeriod === 'custom') return formatCustomRangeHebrewForAI();
     if (timePeriod === 'month') {
       const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
       return `${months[selectedMonth - 1]} ${selectedYear}`;
     }
     return '';
-  }, [timePeriod, selectedYear, selectedMonth, formatCustomRange]);
+  }, [timePeriod, selectedYear, selectedMonth, formatCustomRangeHebrewForAI]);
 
   const getDateFilter = useCallback((): { start?: Date; end?: Date } | undefined => {
     const year = selectedYear;
@@ -263,9 +278,9 @@ const GraphsScreen = () => {
     });
   }, [allGames, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
 
-  // Auto-generate insights for admin only when cache is empty for this period
+  // Auto-generate insights for owner only when cache is empty for this period
   useEffect(() => {
-    if (role !== 'admin') return;
+    if (!isOwner) return;
     if (insightsGenRef.current || insightsLoading) return;
     if (!getGeminiApiKey()) return;
     if (filteredGames.length === 0) return;
@@ -306,21 +321,20 @@ const GraphsScreen = () => {
         setInsightsText(text);
         setInsightsGeneratedAt(new Date().toISOString());
         setInsightsModelName(modelDisplay);
-        syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
       } catch (err) {
         console.error('Graph insights auto-generation failed:', err);
-        setInsightsError(err instanceof Error ? err.message : 'שגיאה ביצירת תובנות');
+        setInsightsError(err instanceof Error ? err.message : t('graphs.errorInsights'));
       } finally {
         setInsightsLoading(false);
       }
     })();
-  }, [role, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [isOwner, filteredGames, insightsLoading, getInsightsKey, getDateFilter, getInsightsPeriodLabel, players, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
 
   const handleGenerateInsights = useCallback(async () => {
     if (insightsLoading) return;
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      setInsightsError('לא הוגדר מפתח API של Gemini');
+      setInsightsError(t('graphs.noApiKey'));
       return;
     }
 
@@ -336,7 +350,7 @@ const GraphsScreen = () => {
         .sort((a, b) => b.totalProfit - a.totalProfit);
 
       if (stats.length === 0) {
-        setInsightsError('אין מספיק נתונים לתקופה זו');
+        setInsightsError(t('graphs.notEnoughData'));
         setInsightsLoading(false);
         return;
       }
@@ -356,14 +370,13 @@ const GraphsScreen = () => {
       setInsightsText(text);
       setInsightsGeneratedAt(new Date().toISOString());
       setInsightsModelName(modelDisplay);
-      syncToCloud().catch(err => console.warn('Graph insights cloud sync failed:', err));
     } catch (err) {
       console.error('Graph insights generation failed:', err);
-      setInsightsError(err instanceof Error ? err.message : 'שגיאה ביצירת תובנות');
+      setInsightsError(err instanceof Error ? err.message : t('graphs.errorInsights'));
     } finally {
       setInsightsLoading(false);
     }
-  }, [insightsLoading, players, filteredGames, getDateFilter, getInsightsPeriodLabel, getInsightsKey, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [insightsLoading, players, filteredGames, getDateFilter, getInsightsPeriodLabel, getInsightsKey, timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate, t]);
 
   const getPlayerName = useCallback((playerId: string): string => {
     const player = players.find(p => p.id === playerId);
@@ -386,7 +399,7 @@ const GraphsScreen = () => {
 
     filteredGames.forEach((game, gameIndex) => {
       const gameDate = new Date(game.date);
-      const dateStr = gameDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+      const dateStr = gameDate.toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
       
       const dataPoint: CumulativeDataPoint = {
         gameIndex: gameIndex + 1,
@@ -410,7 +423,7 @@ const GraphsScreen = () => {
     });
 
     return data;
-  }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName]);
+  }, [filteredGames, gamePlayers, selectedPlayers, getPlayerName, isRTL]);
 
   // Head-to-head comparison data
   const headToHeadData = useMemo(() => {
@@ -512,7 +525,7 @@ const GraphsScreen = () => {
         else p2Distribution.bigLoss++;
         
         // Recent games
-        const dateStr = new Date(game.date).toLocaleDateString('en-GB', { 
+        const dateStr = new Date(game.date).toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { 
           day: '2-digit', 
           month: '2-digit' 
         });
@@ -558,7 +571,7 @@ const GraphsScreen = () => {
       if (p1Game) p1Cumulative += p1Game.profit;
       if (p2Game) p2Cumulative += p2Game.profit;
 
-      const dateStr = new Date(game.date).toLocaleDateString('en-GB', { 
+      const dateStr = new Date(game.date).toLocaleDateString(isRTL ? 'he-IL' : 'en-GB', { 
         day: '2-digit', 
         month: '2-digit', 
         year: '2-digit' 
@@ -586,7 +599,7 @@ const GraphsScreen = () => {
       distribution: { p1: p1Distribution, p2: p2Distribution },
       volatility: { p1: p1Volatility, p2: p2Volatility },
     };
-  }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName]);
+  }, [player1Id, player2Id, filteredGames, gamePlayers, getPlayerName, isRTL]);
 
   // Toggle player selection
   const togglePlayer = (playerId: string) => {
@@ -690,23 +703,29 @@ const GraphsScreen = () => {
     return results;
   }, [impactPlayerId, filteredGames, gamePlayers, players, getPlayerColor]);
 
-  // Get timeframe label
   const getTimeframeLabel = () => {
-    if (timePeriod === 'all') return 'All Time';
+    const locale = language === 'he' ? 'he-IL' : 'en-US';
+    if (timePeriod === 'all') return t('stats.allTimeLabel');
+    if (timePeriod === 'custom') {
+      if (!customStartDate && !customEndDate) return t('stats.custom');
+      const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: '2-digit' });
+      if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
+      if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
+      return `${t('stats.to')} ${fmt(customEndDate)}`;
+    }
+    if (timePeriod === 'month') {
+      const monthName = new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(2024, selectedMonth - 1, 1));
+      return `${monthName} ${selectedYear}`;
+    }
+    if (language === 'he') {
+      if (timePeriod === 'year') return `שנת ${selectedYear}`;
+      if (timePeriod === 'h1') return formatHebrewHalf(1, selectedYear);
+      if (timePeriod === 'h2') return formatHebrewHalf(2, selectedYear);
+      return '';
+    }
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
-    if (timePeriod === 'custom') {
-      if (!customStartDate && !customEndDate) return 'Custom';
-      const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' });
-      if (customStartDate && customEndDate) return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
-      if (customStartDate) return `From ${fmt(customStartDate)}`;
-      return `Until ${fmt(customEndDate)}`;
-    }
-    if (timePeriod === 'month') {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
-    }
     return '';
   };
 
@@ -747,15 +766,15 @@ const GraphsScreen = () => {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">Analysis</h1>
-        <p className="page-subtitle">Trends, comparisons and player chemistry</p>
+        <h1 className="page-title">{t('graphs.title')}</h1>
+        <p className="page-subtitle">{t('graphs.subtitle')}</p>
       </div>
 
       {/* View Mode Toggle */}
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
-            className={`btn btn-sm ${viewMode === 'cumulative' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode === 'impact' && prevTimePeriodRef.current) {
                 setTimePeriod(prevTimePeriodRef.current.period);
@@ -764,12 +783,12 @@ const GraphsScreen = () => {
               }
               setViewMode('cumulative');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'cumulative' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            📈 Trends
+            {t('graphs.trends')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'headToHead' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode === 'impact' && prevTimePeriodRef.current) {
                 setTimePeriod(prevTimePeriodRef.current.period);
@@ -778,12 +797,12 @@ const GraphsScreen = () => {
               }
               setViewMode('headToHead');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'headToHead' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            🆚 Head-to-Head
+            {t('graphs.headToHead')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'impact' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => {
               if (viewMode !== 'impact') {
                 prevTimePeriodRef.current = { period: timePeriod, year: selectedYear };
@@ -791,9 +810,9 @@ const GraphsScreen = () => {
               }
               setViewMode('impact');
             }}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'impact' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            🎯 Impact
+            {t('graphs.impact')}
           </button>
         </div>
       </div>
@@ -816,7 +835,7 @@ const GraphsScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
           </button>
@@ -838,7 +857,7 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  הכל
+                  {t('stats.allTime')}
                 </button>
                 <button
                   type="button"
@@ -855,7 +874,7 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  שנה
+                  {t('stats.year')}
                 </button>
                 <button
                   type="button"
@@ -872,7 +891,7 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  H1
+                  {t('stats.h1Label')}
                 </button>
                 <button
                   type="button"
@@ -889,7 +908,7 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  H2
+                  {t('stats.h2Label')}
                 </button>
                 <button
                   type="button"
@@ -906,7 +925,7 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  חודש
+                  {t('stats.month')}
                 </button>
                 <button
                   type="button"
@@ -923,13 +942,13 @@ const GraphsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  חופשי
+                  {t('stats.custom')}
                 </button>
               </div>
               {/* Year Selector - only when not "all" and not custom range */}
               {timePeriod !== 'all' && timePeriod !== 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.yearLabel')}</span>
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -950,7 +969,7 @@ const GraphsScreen = () => {
                   </select>
                   {timePeriod === 'month' && (
                     <>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>{t('stats.monthLabel')}</span>
                       <select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -965,34 +984,25 @@ const GraphsScreen = () => {
                           minWidth: '70px'
                         }}
                       >
-                        {[
-                          { value: 1, label: 'ינואר' },
-                          { value: 2, label: 'פברואר' },
-                          { value: 3, label: 'מרץ' },
-                          { value: 4, label: 'אפריל' },
-                          { value: 5, label: 'מאי' },
-                          { value: 6, label: 'יוני' },
-                          { value: 7, label: 'יולי' },
-                          { value: 8, label: 'אוגוסט' },
-                          { value: 9, label: 'ספטמבר' },
-                          { value: 10, label: 'אוקטובר' },
-                          { value: 11, label: 'נובמבר' },
-                          { value: 12, label: 'דצמבר' },
-                        ].map(month => (
-                          <option key={month.value} value={month.value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{month.label}</option>
-                        ))}
+                        {Array.from({ length: 12 }, (_, monthIndex) => {
+                          const value = monthIndex + 1;
+                          const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
+                          return (
+                            <option key={value} value={value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{label}</option>
+                          );
+                        })}
                       </select>
                     </>
                   )}
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
-                    {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
+                    {timePeriod === 'h1' && t('stats.h1Hint')}
+                    {timePeriod === 'h2' && t('stats.h2Hint')}
                   </span>
                 </div>
               )}
               {timePeriod === 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>מ:</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>{t('stats.from')}</span>
                   <input
                     type="date"
                     value={customStartDate}
@@ -1009,7 +1019,7 @@ const GraphsScreen = () => {
                       colorScheme: 'dark',
                     }}
                   />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>עד:</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>{t('stats.to')}</span>
                   <input
                     type="date"
                     value={customEndDate}
@@ -1037,7 +1047,7 @@ const GraphsScreen = () => {
                         color: 'var(--text-muted)', cursor: 'pointer',
                       }}
                     >
-                      ✕ נקה
+                      {t('stats.clearDates')}
                     </button>
                   )}
                 </div>
@@ -1066,7 +1076,10 @@ const GraphsScreen = () => {
               }}
             >
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                FILTER PLAYERS ({selectedPlayers.size}/{players.filter(p => p.type === 'permanent').length})
+                {t('graphs.filterPlayers', {
+                  selected: selectedPlayers.size,
+                  total: players.filter(p => p.type === 'permanent').length,
+                })}
               </span>
               <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
                 {showPlayerSelector ? '▲' : '▼'}
@@ -1089,7 +1102,7 @@ const GraphsScreen = () => {
                       cursor: 'pointer'
                     }}
                   >
-                    Select All
+                    {t('common.selectAll')}
                   </button>
                   <button
                     type="button"
@@ -1108,7 +1121,7 @@ const GraphsScreen = () => {
                       cursor: 'pointer'
                     }}
                   >
-                    Clear
+                    {t('common.clear')}
                   </button>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -1153,7 +1166,7 @@ const GraphsScreen = () => {
       {viewMode === 'headToHead' && (
         <div className="card" style={{ padding: '0.75rem' }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '0.5rem' }}>
-            SELECT 2 PLAYERS TO COMPARE
+            {t('graphs.select2Players')}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <select
@@ -1199,15 +1212,15 @@ const GraphsScreen = () => {
 
       {/* CUMULATIVE PROFIT CHART */}
       {viewMode === 'cumulative' && cumulativeData.length > 0 && (
-        <div ref={chartRef} className="card">
-          <h2 className="card-title mb-2">📈 Cumulative Profit Over Time</h2>
+        <div ref={chartRef} className="card" style={{ animation: 'scaleIn 0.3s ease-out' }}>
+          <h2 className="card-title mb-2">{t('graphs.cumulativeProfit')}</h2>
           <div style={{ 
             fontSize: '0.7rem', 
             color: 'var(--text-muted)',
             textAlign: 'center',
             marginBottom: '0.5rem' 
           }}>
-            {getTimeframeLabel()} • {filteredGames.length} games
+            {getTimeframeLabel()} • {filteredGames.length} {t('common.games')}
           </div>
           <div style={{ 
             width: '100%', 
@@ -1258,17 +1271,17 @@ const GraphsScreen = () => {
             disabled={isSharingChart}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
           >
-            {isSharingChart ? '📸...' : '📤 שתף גרף'}
+            {isSharingChart ? t('common.capturing') : t('graphs.shareGraph')}
           </button>
         </div>
       )}
 
       {/* 🤖 AI GRAPH INSIGHTS */}
-      {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin') && (
-        <div ref={insightsRef} className="card">
+      {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin' || role === 'member') && (
+        <div ref={insightsRef} className="card" style={{ animation: 'contentFadeIn 0.3s ease-out 0.15s backwards' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <h2 className="card-title" style={{ margin: 0 }}>🤖 תובנות AI</h2>
-            {role === 'admin' && !insightsLoading && filteredGames.length > 0 && (
+            <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.aiInsights')}</h2>
+            {isOwner && !insightsLoading && filteredGames.length > 0 && (
               <button
                 onClick={handleGenerateInsights}
                 style={{
@@ -1282,7 +1295,7 @@ const GraphsScreen = () => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {insightsText ? 'יצירה מחדש' : 'יצירת תובנות'}
+                {insightsText ? t('graphs.recreateInsights') : t('graphs.createInsights')}
               </button>
             )}
           </div>
@@ -1294,7 +1307,7 @@ const GraphsScreen = () => {
               color: 'var(--text-muted)',
               fontSize: '0.8rem',
             }}>
-              ⏳ יוצר תובנות AI לתקופה...
+              {t('graphs.generatingInsights')}
               <AIProgressBar operationKey="graph_insights" />
             </div>
           )}
@@ -1315,8 +1328,7 @@ const GraphsScreen = () => {
           {insightsText && !insightsLoading && (
             <>
               <div style={{
-                direction: 'rtl',
-                textAlign: 'right',
+                textAlign: 'start',
                 fontSize: '0.85rem',
                 lineHeight: '1.7',
                 color: 'var(--text-primary)',
@@ -1334,7 +1346,7 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   marginTop: '0.4rem',
                 }}>
-                  נוצר: {new Date(insightsGeneratedAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {t('graphs.generatedLabel')} {new Date(insightsGeneratedAt).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   {insightsModelName && ` · model: ${insightsModelName}`}
                 </div>
               )}
@@ -1348,7 +1360,7 @@ const GraphsScreen = () => {
               color: 'var(--text-muted)',
               fontSize: '0.75rem',
             }}>
-              אין תובנות AI לתקופה זו עדיין
+              {t('graphs.noInsights')}
             </div>
           )}
         </div>
@@ -1360,7 +1372,7 @@ const GraphsScreen = () => {
             disabled={isSharingInsights}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
           >
-            {isSharingInsights ? '📸...' : '📤 שתף תובנות'}
+            {isSharingInsights ? t('common.capturing') : t('graphs.shareInsights')}
           </button>
         </div>
       )}
@@ -1370,14 +1382,18 @@ const GraphsScreen = () => {
         <>
           {/* Stats Comparison */}
           <div className="card">
-            <h2 className="card-title mb-2">📊 Stats Comparison</h2>
+            <h2 className="card-title mb-2">{t('graphs.statsComparison')}</h2>
             <div style={{ 
               fontSize: '0.75rem', 
               color: 'var(--text-muted)', 
               marginBottom: '0.75rem',
               textAlign: 'center' 
             }}>
-              {getTimeframeLabel()} • {headToHeadData.sharedGamesCount} shared games (out of {headToHeadData.totalGamesInPeriod})
+              {t('graphs.sharedGames', {
+                label: getTimeframeLabel(),
+                shared: headToHeadData.sharedGamesCount,
+                total: headToHeadData.totalGamesInPeriod,
+              })}
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1391,7 +1407,7 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'right',
+                  textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '700',
                   fontSize: '1rem',
                   color: headToHeadData.player1Stats.totalProfit >= headToHeadData.player2Stats.totalProfit 
@@ -1408,12 +1424,12 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   minWidth: '80px',
                 }}>
-                  Total Profit
-                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>סה״כ במשחקים משותפים</div>
+                  {t('graphs.totalProfit')}
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>{t('graphs.totalInShared')}</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'left',
+                  textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '700',
                   fontSize: '1rem',
                   color: headToHeadData.player2Stats.totalProfit >= headToHeadData.player1Stats.totalProfit 
@@ -1434,7 +1450,7 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'right',
+                  textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '600',
                   color: headToHeadData.player1Stats.wins >= headToHeadData.player2Stats.wins 
                     ? 'var(--success)' 
@@ -1450,12 +1466,12 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   minWidth: '80px',
                 }}>
-                  Wins
-                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>משחקים שסיימו ברווח</div>
+                  {t('graphs.winsLabel')}
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>{t('graphs.winsInShared')}</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'left',
+                  textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '600',
                   color: headToHeadData.player2Stats.wins >= headToHeadData.player1Stats.wins 
                     ? 'var(--success)' 
@@ -1475,7 +1491,7 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'right',
+                  textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '600',
                   color: headToHeadData.player1Stats.avgProfit >= headToHeadData.player2Stats.avgProfit 
                     ? 'var(--success)' 
@@ -1491,12 +1507,12 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   minWidth: '80px',
                 }}>
-                  Avg/Game
-                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>ממוצע למשחק משותף</div>
+                  {t('graphs.avgPerGame')}
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>{t('graphs.avgSharedGame')}</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'left',
+                  textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '600',
                   color: headToHeadData.player2Stats.avgProfit >= headToHeadData.player1Stats.avgProfit 
                     ? 'var(--success)' 
@@ -1516,7 +1532,7 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'right',
+                  textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '600',
                   color: headToHeadData.player1Stats.biggestWin >= headToHeadData.player2Stats.biggestWin 
                     ? 'var(--success)' 
@@ -1532,12 +1548,12 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   minWidth: '80px',
                 }}>
-                  Biggest Win
-                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>שיא רווח במשחק בודד</div>
+                  {t('graphs.biggestWin')}
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>{t('graphs.bigWinDesc')}</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'left',
+                  textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '600',
                   color: headToHeadData.player2Stats.biggestWin >= headToHeadData.player1Stats.biggestWin 
                     ? 'var(--success)' 
@@ -1557,7 +1573,7 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'right',
+                  textAlign: isRTL ? 'left' : 'right',
                   fontWeight: '600',
                   color: headToHeadData.player1Stats.biggestLoss >= headToHeadData.player2Stats.biggestLoss 
                     ? 'var(--text)' 
@@ -1573,12 +1589,12 @@ const GraphsScreen = () => {
                   textAlign: 'center',
                   minWidth: '80px',
                 }}>
-                  Biggest Loss
-                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>שיא הפסד במשחק בודד</div>
+                  {t('graphs.biggestLoss')}
+                  <div style={{ fontSize: '0.55rem', fontWeight: '400', opacity: 0.7, marginTop: '1px' }}>{t('graphs.bigLossDesc')}</div>
                 </div>
                 <div style={{ 
                   flex: 1, 
-                  textAlign: 'left',
+                  textAlign: isRTL ? 'right' : 'left',
                   fontWeight: '600',
                   color: headToHeadData.player2Stats.biggestLoss >= headToHeadData.player1Stats.biggestLoss 
                     ? 'var(--text)' 
@@ -1608,14 +1624,14 @@ const GraphsScreen = () => {
 
           {/* 🏆 DIRECT BATTLES */}
           <div className="card">
-            <h2 className="card-title mb-2">🏆 Direct Battles</h2>
+            <h2 className="card-title mb-2">{t('graphs.directBattles')}</h2>
             <div style={{ 
               fontSize: '0.7rem', 
               color: 'var(--text-muted)',
               textAlign: 'center',
               marginBottom: '0.75rem' 
             }}>
-              Who outperformed the other in shared games?
+              {t('graphs.whoOutperformed')}
             </div>
             
             {/* Battle bar visualization */}
@@ -1625,7 +1641,7 @@ const GraphsScreen = () => {
               gap: '0.5rem',
               marginBottom: '0.75rem',
             }}>
-              <span style={{ fontWeight: '700', color: '#10B981', minWidth: '30px', textAlign: 'right' }}>
+              <span style={{ fontWeight: '700', color: '#10B981', minWidth: '30px', textAlign: isRTL ? 'left' : 'right' }}>
                 {headToHeadData.directBattles.player1Wins}
               </span>
               <div style={{ 
@@ -1656,7 +1672,7 @@ const GraphsScreen = () => {
                   </>
                 )}
               </div>
-              <span style={{ fontWeight: '700', color: '#3B82F6', minWidth: '30px' }}>
+              <span style={{ fontWeight: '700', color: '#3B82F6', minWidth: '30px', textAlign: isRTL ? 'right' : 'left' }}>
                 {headToHeadData.directBattles.player2Wins}
               </span>
             </div>
@@ -1682,11 +1698,11 @@ const GraphsScreen = () => {
                     <div style={{ color: '#10B981', fontWeight: '700', fontSize: '1.1rem' }}>
                       {fmt(p1Pct)}%
                     </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{t('graphs.winRateLabel')}</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>
-                      {headToHeadData.directBattles.ties} Ties
+                      {t('graphs.ties', { count: headToHeadData.directBattles.ties })}
                     </div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>
                       ({Math.round(tiesPct)}%)
@@ -1696,7 +1712,7 @@ const GraphsScreen = () => {
                     <div style={{ color: '#3B82F6', fontWeight: '700', fontSize: '1.1rem' }}>
                       {fmt(p2Pct)}%
                     </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>Win Rate</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>{t('graphs.winRateLabel')}</div>
                   </div>
                 </div>
               );
@@ -1706,14 +1722,14 @@ const GraphsScreen = () => {
           {/* 🔥 RECENT FORM */}
           {headToHeadData.recentForm.length > 0 && (
             <div className="card">
-              <h2 className="card-title mb-2">🔥 Recent Form</h2>
+              <h2 className="card-title mb-2">{t('graphs.recentForm')}</h2>
               <div style={{ 
                 fontSize: '0.7rem', 
                 color: 'var(--text-muted)',
                 textAlign: 'center',
                 marginBottom: '0.75rem' 
               }}>
-                Last {headToHeadData.recentForm.length} shared games
+                {t('graphs.lastShared', { n: headToHeadData.recentForm.length })}
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -1727,7 +1743,7 @@ const GraphsScreen = () => {
                   }}>
                     <div style={{ 
                       flex: 1, 
-                      textAlign: 'right',
+                      textAlign: isRTL ? 'left' : 'right',
                       fontWeight: '600',
                       fontSize: '0.85rem',
                       color: game.p1Profit >= 0 ? 'var(--success)' : 'var(--danger)',
@@ -1750,7 +1766,7 @@ const GraphsScreen = () => {
                     </div>
                     <div style={{ 
                       flex: 1, 
-                      textAlign: 'left',
+                      textAlign: isRTL ? 'right' : 'left',
                       fontWeight: '600',
                       fontSize: '0.85rem',
                       color: game.p2Profit >= 0 ? 'var(--success)' : 'var(--danger)',
@@ -1772,15 +1788,15 @@ const GraphsScreen = () => {
               }}>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ color: '#10B981', fontWeight: '700' }}>
-                    {headToHeadData.recentForm.filter(g => g.winner === 'p1').length} wins
+                    {t('graphs.winsCount', { n: headToHeadData.recentForm.filter(g => g.winner === 'p1').length })}
                   </div>
                 </div>
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                  Last {headToHeadData.recentForm.length}
+                  {t('graphs.lastShared', { n: headToHeadData.recentForm.length })}
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ color: '#3B82F6', fontWeight: '700' }}>
-                    {headToHeadData.recentForm.filter(g => g.winner === 'p2').length} wins
+                    {t('graphs.winsCount', { n: headToHeadData.recentForm.filter(g => g.winner === 'p2').length })}
                   </div>
                 </div>
               </div>
@@ -1789,7 +1805,7 @@ const GraphsScreen = () => {
 
           {/* 📊 SESSION DISTRIBUTION & VOLATILITY */}
           <div className="card">
-            <h2 className="card-title mb-2">📊 Play Style Comparison</h2>
+            <h2 className="card-title mb-2">{t('graphs.playStyle')}</h2>
             
             {/* Session Distribution */}
             <div style={{ marginBottom: '1rem' }}>
@@ -1799,7 +1815,7 @@ const GraphsScreen = () => {
                 marginBottom: '0.5rem',
                 fontWeight: '600',
               }}>
-                Session Results Distribution
+                {t('graphs.sessionDist')}
               </div>
               
               {/* Legend */}
@@ -1814,10 +1830,10 @@ const GraphsScreen = () => {
                 fontSize: '0.55rem',
                 color: 'var(--text-muted)',
               }}>
-                <span><span style={{ color: '#10B981' }}>■</span> Big Win &gt;150</span>
-                <span><span style={{ color: '#6EE7B7' }}>■</span> Win 1-150</span>
-                <span><span style={{ color: '#FCA5A5' }}>■</span> Loss 1-150</span>
-                <span><span style={{ color: '#EF4444' }}>■</span> Big Loss &gt;150</span>
+                <span><span style={{ color: '#10B981' }}>■</span> {t('graphs.bigWin')}</span>
+                <span><span style={{ color: '#6EE7B7' }}>■</span> {t('graphs.win')}</span>
+                <span><span style={{ color: '#FCA5A5' }}>■</span> {t('graphs.lossRange')}</span>
+                <span><span style={{ color: '#EF4444' }}>■</span> {t('graphs.bigLoss')}</span>
               </div>
               
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1942,7 +1958,7 @@ const GraphsScreen = () => {
                 fontWeight: '600',
                 textAlign: 'center',
               }}>
-                🎲 Volatility (Consistency)
+                {t('graphs.volatility')}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-around' }}>
                 <div style={{ textAlign: 'center' }}>
@@ -1954,7 +1970,7 @@ const GraphsScreen = () => {
                     {cleanNumber(headToHeadData.volatility.p1)}
                   </div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                    {headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? '🎯 More Consistent' : '🎲 More Volatile'}
+                    {headToHeadData.volatility.p1 <= headToHeadData.volatility.p2 ? t('graphs.moreConsistent') : t('graphs.moreVolatile')}
                   </div>
                 </div>
                 <div style={{ 
@@ -1971,7 +1987,7 @@ const GraphsScreen = () => {
                     {cleanNumber(headToHeadData.volatility.p2)}
                   </div>
                   <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                    {headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? '🎯 More Consistent' : '🎲 More Volatile'}
+                    {headToHeadData.volatility.p2 <= headToHeadData.volatility.p1 ? t('graphs.moreConsistent') : t('graphs.moreVolatile')}
                   </div>
                 </div>
               </div>
@@ -1981,7 +1997,7 @@ const GraphsScreen = () => {
                 textAlign: 'center',
                 marginTop: '0.4rem',
               }}>
-                Lower = more consistent results (standard deviation)
+                {t('graphs.volatilityDesc')}
               </div>
             </div>
           </div>
@@ -1989,7 +2005,7 @@ const GraphsScreen = () => {
           {/* Cumulative Comparison Chart */}
           {headToHeadData.cumulativeComparison.length > 0 && (
             <div className="card">
-              <h2 className="card-title mb-2">📈 Cumulative Comparison</h2>
+              <h2 className="card-title mb-2">{t('graphs.cumulativeComparison')}</h2>
               <div style={{ 
                 width: '100%', 
                 height: '280px',
@@ -2061,7 +2077,7 @@ const GraphsScreen = () => {
                 color: 'var(--text-muted)',
                 marginTop: '0.25rem' 
               }}>
-                Only includes games where both players participated
+                {t('graphs.onlySharedGames')}
               </div>
             </div>
           )}
@@ -2074,7 +2090,7 @@ const GraphsScreen = () => {
           {/* Player Selector */}
           <div className="card" style={{ padding: '0.75rem' }}>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '0.5rem' }}>
-              SELECT A PLAYER
+              {t('graphs.selectPlayer')}
             </div>
             <select
               value={impactPlayerId}
@@ -2280,7 +2296,7 @@ const GraphsScreen = () => {
                   {rowInsightLines && (
                     <div style={{ marginBottom: '0.5rem' }}>
                       {rowInsightLines.map((line, li) => (
-                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4', direction: 'rtl', textAlign: 'right' }}>
+                        <div key={li} style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: li === 0 ? 0 : '0.12rem', lineHeight: '1.4', textAlign: 'start' }}>
                           {li === 0 ? '💡' : '📊'} {line}
                         </div>
                       ))}
@@ -2305,7 +2321,7 @@ const GraphsScreen = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px',
                       }}>
-                        With ({row.withGames})
+                        {t('graphs.withCount', { n: row.withGames })}
                       </div>
                       <div style={{ 
                         fontWeight: '700', 
@@ -2319,7 +2335,7 @@ const GraphsScreen = () => {
                         fontSize: '0.7rem', 
                         color: 'var(--text-muted)',
                       }}>
-                        {Math.round(row.winRateWith)}% win rate
+                        {t('graphs.winRatePct', { n: Math.round(row.winRateWith) })}
                       </div>
                     </div>
                     
@@ -2339,7 +2355,7 @@ const GraphsScreen = () => {
                         textTransform: 'uppercase',
                         letterSpacing: '0.5px',
                       }}>
-                        Without ({row.withoutGames})
+                        {t('graphs.withoutCount', { n: row.withoutGames })}
                       </div>
                       <div style={{ 
                         fontWeight: '700', 
@@ -2353,7 +2369,7 @@ const GraphsScreen = () => {
                         fontSize: '0.7rem', 
                         color: 'var(--text-muted)',
                       }}>
-                        {Math.round(row.winRateWithout)}% win rate
+                        {t('graphs.winRatePct', { n: Math.round(row.winRateWithout) })}
                       </div>
                     </div>
                   </div>
@@ -2394,8 +2410,8 @@ const GraphsScreen = () => {
                     marginTop: '0.25rem',
                     opacity: 0.7,
                   }}>
-                    <span>{row.withGames} games together</span>
-                    <span>{row.withoutGames} games apart</span>
+                    <span>{t('graphs.gamesTogether', { n: row.withGames })}</span>
+                    <span>{t('graphs.gamesApart', { n: row.withoutGames })}</span>
                   </div>
                 </div>
               );
@@ -2403,14 +2419,14 @@ const GraphsScreen = () => {
 
             return (
               <div className="card">
-                <h2 className="card-title mb-2">🎯 With vs Without</h2>
+                <h2 className="card-title mb-2">{t('graphs.withVsWithout')}</h2>
                 <div style={{ 
                   fontSize: '0.7rem', 
                   color: 'var(--text-muted)',
                   textAlign: 'center',
                   marginBottom: '0.75rem' 
                 }}>
-                  How does {getPlayerName(impactPlayerId)}'s average change when each player is at the table?
+                  {t('graphs.howAvgChanges', { name: getPlayerName(impactPlayerId) })}
                 </div>
 
                 {/* Reliable results */}
@@ -2439,7 +2455,7 @@ const GraphsScreen = () => {
                         cursor: 'pointer',
                       }}
                     >
-                      <span>Rarely Apart ({limited.length})</span>
+                      <span>{t('graphs.rarelyApart', { n: limited.length })}</span>
                       <span>{showLimitedData ? '▲' : '▼'}</span>
                     </button>
                     {showLimitedData && (
@@ -2708,14 +2724,14 @@ const GraphsScreen = () => {
 
             return (
               <div className="card">
-                <h2 className="card-title mb-2">🧪 {selectedName}'s Chemistry</h2>
+                <h2 className="card-title mb-2">{t('graphs.chemistry', { name: selectedName })}</h2>
                 <div style={{ 
                   fontSize: '0.7rem', 
                   color: 'var(--text-muted)',
                   textAlign: 'center',
                   marginBottom: headlineInsights.length > 0 ? '0.35rem' : '0.75rem',
                 }}>
-                  Based on balanced samples only ({minGamesThreshold}+ games on each side)
+                  {t('graphs.balancedSamples', { min: minGamesThreshold })}
                 </div>
                 {headlineInsights.length > 0 && (
                   <div style={{ marginBottom: '0.75rem' }}>
@@ -2725,14 +2741,13 @@ const GraphsScreen = () => {
                       color: '#A78BFA', 
                       marginBottom: '0.4rem',
                     }}>
-                      🔍 Key Insights
+                      {t('graphs.keyInsights')}
                     </div>
                     <div style={{
                       padding: '0.4rem 0.5rem',
                       background: 'rgba(139, 92, 246, 0.08)',
                       borderRadius: '6px',
                       fontSize: '0.75rem',
-                      direction: 'rtl',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.2rem',
@@ -2760,7 +2775,7 @@ const GraphsScreen = () => {
                     color: '#10B981', 
                     marginBottom: '0.4rem',
                   }}>
-                    🍀 Lucky Charms
+                    {t('graphs.luckyCharms')}
                   </div>
                   {luckyCharms.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -2777,7 +2792,7 @@ const GraphsScreen = () => {
                             <div>
                               <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
                               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                                {' '}({row.withGames} games together)
+                                {' '}({t('graphs.gamesTogether', { n: row.withGames })})
                               </span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -2792,7 +2807,7 @@ const GraphsScreen = () => {
                             </div>
                           </div>
                           {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', lineHeight: '1.4' }}>
                               <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                               <span>{line}</span>
                             </div>
@@ -2811,13 +2826,13 @@ const GraphsScreen = () => {
                       textAlign: 'center',
                       fontStyle: 'italic',
                     }}>
-                      No standout lucky charm — {selectedName} performs consistently regardless of company
+                      {t('graphs.noLuckyCharm', { name: selectedName })}
                     </div>
                   )}
                   {rareLuckyCharms.length > 0 && (
                     <div style={{ marginTop: '0.45rem' }}>
                       <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                        Rarely Apart (מדגם קטן)
+                        {t('graphs.smallSample')}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         {rareLuckyCharms.map((row, idx) => {
@@ -2828,7 +2843,7 @@ const GraphsScreen = () => {
                                 <div>
                                   <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
                                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                                    {' '}({row.withGames} games together)
+                                    {' '}({t('graphs.gamesTogether', { n: row.withGames })})
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -2843,7 +2858,7 @@ const GraphsScreen = () => {
                                 </div>
                               </div>
                               {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', lineHeight: '1.4' }}>
                                   <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                                   <span>{line}</span>
                                 </div>
@@ -2863,7 +2878,7 @@ const GraphsScreen = () => {
                     color: '#EF4444', 
                     marginBottom: '0.4rem',
                   }}>
-                    💀 Kryptonite
+                    {t('graphs.kryptonite')}
                   </div>
                   {kryptonite.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -2880,7 +2895,7 @@ const GraphsScreen = () => {
                             <div>
                               <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
                               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                                {' '}({row.withGames} games together)
+                                {' '}({t('graphs.gamesTogether', { n: row.withGames })})
                               </span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -2895,7 +2910,7 @@ const GraphsScreen = () => {
                             </div>
                           </div>
                           {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
+                            <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', lineHeight: '1.4' }}>
                               <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                               <span>{line}</span>
                             </div>
@@ -2914,13 +2929,13 @@ const GraphsScreen = () => {
                       textAlign: 'center',
                       fontStyle: 'italic',
                     }}>
-                      No clear kryptonite — {selectedName} holds strong against everyone
+                      {t('graphs.noKryptonite', { name: selectedName })}
                     </div>
                   )}
                   {rareKryptonite.length > 0 && (
                     <div style={{ marginTop: '0.45rem' }}>
                       <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                        Rarely Apart (מדגם קטן)
+                        {t('graphs.smallSample')}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         {rareKryptonite.map((row, idx) => {
@@ -2931,7 +2946,7 @@ const GraphsScreen = () => {
                                 <div>
                                   <span style={{ fontWeight: '700', color: row.otherColor }}>{row.otherPlayerName}</span>
                                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>
-                                    {' '}({row.withGames} games together)
+                                    {' '}({t('graphs.gamesTogether', { n: row.withGames })})
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -2946,7 +2961,7 @@ const GraphsScreen = () => {
                                 </div>
                               </div>
                               {chemistryInsights(row, headlineMentionedIds).map((line, li) => (
-                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', direction: 'rtl', lineHeight: '1.4' }}>
+                                <div key={li} style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', fontSize: '0.7rem', color: 'var(--text)', marginTop: li === 0 ? '0.3rem' : '0.12rem', lineHeight: '1.4' }}>
                                   <span style={{ flexShrink: 0 }}>{li === 0 ? '💡' : '📊'}</span>
                                   <span>{line}</span>
                                 </div>
@@ -2978,8 +2993,8 @@ const GraphsScreen = () => {
         <div className="card">
           <div className="empty-state">
             <div className="empty-icon">📊</div>
-            <p>No data for this period</p>
-            <p className="text-muted">Try a different time filter</p>
+            <p>{t('graphs.noDataForPeriod')}</p>
+            <p className="text-muted">{t('graphs.tryDifferentFilter')}</p>
           </div>
         </div>
       )}

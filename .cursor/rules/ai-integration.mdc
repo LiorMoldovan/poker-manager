@@ -1,14 +1,44 @@
 ---
-description: Gemini AI integration — forecasts, summaries, chronicles, prompt rules, prediction algorithm
-globs: src/utils/geminiAI.ts
+description: Gemini AI integration — forecasts, summaries, chronicles, prompt rules, prediction algorithm, API proxy
+globs: "{src/utils/geminiAI.ts,src/utils/tts.ts,src/utils/apiProxy.ts,api/**}"
 alwaysApply: false
 ---
 
-# AI Integration (Gemini)
+# AI Integration (Gemini + ElevenLabs)
 
 ## Overview
 
-All AI lives in `src/utils/geminiAI.ts`. Uses Google Gemini API (`gemini-2.0-flash`). API key stored per-device in localStorage (`gemini_api_key`), managed by admin only. Non-admin users see cached AI content synced from cloud.
+All AI text generation lives in `src/utils/geminiAI.ts`. TTS (text-to-speech) lives in `src/utils/tts.ts`. Training AI in `src/utils/pokerTraining.ts`.
+
+Per-group API keys stored in `settings` table (`gemini_api_key`, `elevenlabs_api_key`), mapped via `toSettings`/`settingsToRow` in `supabaseCache.ts`. All calls routed through Vercel Edge Functions via `src/utils/apiProxy.ts`. Key priority: (1) group settings key sent in request body, (2) Vercel env var fallback (`GEMINI_API_KEY`, `ELEVENLABS_API_KEY`), (3) error. Owner manages keys in Settings > AI tab. `getGeminiApiKey()` and `getElevenLabsApiKey()` return the group key or `'server-managed'`.
+
+## API Proxy Architecture
+
+All external API calls are centralized through `src/utils/apiProxy.ts`:
+- `proxyGeminiGenerate(version, model, apiKey, payload)` → `/api/gemini` or direct Google URL
+- `proxyGeminiGenerateWithSignal(...)` → same with AbortSignal support (for TTS timeouts)
+- `proxyGeminiModels(apiKey, version)` → `/api/gemini-models` or direct Google URL
+- `proxyElevenLabsTTS(apiKey, voiceId, payload, format, signal)` → `/api/elevenlabs-tts` or direct ElevenLabs
+- `proxyElevenLabsUsage(apiKey)` → `/api/elevenlabs-usage` or direct ElevenLabs
+
+**NEVER add direct `generativelanguage.googleapis.com` or `api.elevenlabs.io` URLs in `src/` files.** Always use the proxy functions.
+
+## Vercel Edge Functions (`api/` directory)
+
+| Route | Method | Key Source | Proxies To |
+|-------|--------|-----------|-----------|
+| `/api/gemini` | POST | Body `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../generateContent` |
+| `/api/gemini-models` | POST | Body `apiKey` → env `GEMINI_API_KEY` | `generativelanguage.googleapis.com/.../models` |
+| `/api/elevenlabs-tts` | POST | Body `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/text-to-speech` |
+| `/api/elevenlabs-usage` | POST | Body `apiKey` → env `ELEVENLABS_API_KEY` | `api.elevenlabs.io/v1/user/subscription` |
+
+All Edge Functions verify Supabase JWT (`api/_auth.ts`) and accept per-group API keys in the request. Non-admin users see cached AI content via Supabase Realtime sync.
+
+### Thinking Model Token Limits
+Gemini 3 Flash (thinking model) uses tokens from `maxOutputTokens` for internal reasoning. Allocate generous limits:
+- `generateGraphInsights`: 4096 tokens
+- `generateForecastComparison`: 1024 tokens
+- Standard generation: keep defaults reasonable (~1024-2048)
 
 ## AI Features
 
@@ -47,7 +77,7 @@ Uses **Game Shape Sampling** — NOT simple score-based sorting:
 ## Background AI Generation
 
 After game completion in ChipEntryScreen:
-1. Navigate to GameSummaryScreen with `state: { autoAI: true }`
-2. GameSummaryScreen auto-triggers AI summary + forecast comparison
-3. After generation, `syncToCloud()` pushes results to GitHub
-4. All users then see fresh AI content on next sync
+1. Navigate to GameSummaryScreen with `state: { autoAI: true }` (only if owner with API key)
+2. GameSummaryScreen auto-triggers AI summary + forecast comparison via `backgroundAI.ts`
+3. Results are stored directly to Supabase via the cache layer
+4. All group members see fresh AI content via Realtime subscriptions

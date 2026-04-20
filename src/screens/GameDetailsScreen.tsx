@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
 import { getComboHistory, ComboHistory } from '../utils/comboHistory';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { useTranslation } from '../i18n';
 
 const GameDetailsScreen = () => {
+  const { t } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -65,19 +68,7 @@ const GameDetailsScreen = () => {
     return Math.round(value).toString();
   };
 
-  useEffect(() => {
-    // Scroll to top when page loads
-    window.scrollTo(0, 0);
-    
-    if (gameId) {
-      loadData();
-    } else {
-      setGameNotFound(true);
-      setIsLoading(false);
-    }
-  }, [gameId]);
-
-  const loadData = () => {
+  const loadData = useCallback(() => {
     if (!gameId) {
       setGameNotFound(true);
       setIsLoading(false);
@@ -131,7 +122,20 @@ const GameDetailsScreen = () => {
     }
     
     setIsLoading(false);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    if (gameId) {
+      loadData();
+    } else {
+      setGameNotFound(true);
+      setIsLoading(false);
+    }
+  }, [gameId, loadData]);
+
+  useRealtimeRefresh(loadData);
   
   // Calculate expense total
   const totalExpenseAmount = sharedExpenses.reduce((sum, e) => sum + e.amount, 0);
@@ -167,7 +171,7 @@ const GameDetailsScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
-        <p className="text-muted">Loading game...</p>
+        <p className="text-muted">{t('gameDetails.loading')}</p>
       </div>
     );
   }
@@ -177,9 +181,9 @@ const GameDetailsScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/history')}>Go to History</button>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('gameDetails.notFound')}</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{t('gameDetails.notFoundDesc')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/history')}>{t('gameDetails.goToHistory')}</button>
       </div>
     );
   }
@@ -365,9 +369,9 @@ const GameDetailsScreen = () => {
                       <span style={{ fontSize: '0.9rem' }}>🍕</span> {expense.description} - {cleanNumber(expense.amount)}
                     </div>
                     <div style={{ marginRight: '1.2rem', fontSize: '0.7rem' }}>
-                      שילם: <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
+                      {t('gameDetails.expensePaidBy')} <span style={{ color: 'var(--primary)' }}>{expense.paidByName}</span>
                       {' • '}
-                      אכלו: {expense.participantNames.join(', ')}
+                      {t('gameDetails.expenseParticipants')} {expense.participantNames.join(', ')}
                     </div>
                   </div>
                 ))}
@@ -447,7 +451,7 @@ const GameDetailsScreen = () => {
         {comboHistory && !comboHistory.isFirstTime && (
           <div className="card">
             <h2 className="card-title" style={{ marginBottom: '0.75rem' }}>
-              🔄 הרכב חוזר
+              {t('gameDetails.returningCombo')}
             </h2>
             <div style={{ direction: 'rtl', textAlign: 'right' }}>
               <div style={{

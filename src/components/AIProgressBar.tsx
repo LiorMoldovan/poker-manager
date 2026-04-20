@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { getEstimatedDuration } from '../utils/aiTiming';
+import { useTranslation } from '../i18n';
 
 const AIProgressBar = ({ operationKey }: { operationKey: string }) => {
+  const { t, isRTL } = useTranslation();
   const [progress, setProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const startRef = useRef(Date.now());
@@ -44,8 +46,10 @@ const AIProgressBar = ({ operationKey }: { operationKey: string }) => {
           width: `${progress}%`,
           height: '100%',
           borderRadius: '2px',
-          background: 'linear-gradient(90deg, #A855F7, #EC4899)',
+          background: 'linear-gradient(90deg, #A855F7, #EC4899, #A855F7)',
+          backgroundSize: '200% 100%',
           transition: 'width 0.3s ease-out',
+          animation: 'shimmer 1.5s ease-in-out infinite',
         }} />
       </div>
       <div style={{
@@ -53,9 +57,9 @@ const AIProgressBar = ({ operationKey }: { operationKey: string }) => {
         fontSize: '0.7rem',
         color: 'var(--text-muted)',
         marginTop: '0.35rem',
-        direction: 'rtl',
+        direction: isRTL ? 'rtl' : 'ltr',
       }}>
-        {timeLeft > 0 ? `~${timeLeft} שניות` : 'כמעט שם...'}
+        {timeLeft > 0 ? t('aiProgress.secondsLeft', { n: timeLeft }) : t('aiProgress.almostDone')}
       </div>
     </div>
   );

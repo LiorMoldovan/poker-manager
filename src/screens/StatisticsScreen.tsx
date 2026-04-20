@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate, useLocation } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
@@ -8,7 +9,7 @@ import { formatCurrency, getProfitColor, cleanNumber, formatHebrewHalf } from '.
 import { generateMilestones, adaptPlayerStats, MilestoneOptions } from '../utils/milestones';
 import { generatePlayerChronicle, ChroniclePlayerData, getModelDisplayName } from '../utils/geminiAI';
 import { usePermissions } from '../App';
-import { syncToCloud } from '../database/githubSync';
+import { useTranslation } from '../i18n';
 import AIProgressBar from '../components/AIProgressBar';
 import { withAITiming } from '../utils/aiTiming';
 
@@ -25,7 +26,8 @@ const meNameStyle = { color: ME_NAME_COLOR } as const;
 const StatisticsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, playerName: identityName } = usePermissions();
+  const { playerName: identityName, isOwner } = usePermissions();
+  const { t, isRTL, language } = useTranslation();
   const locationState = location.state as { 
     viewMode?: ViewMode;
     recordInfo?: { title: string; playerId: string; recordType: string };
@@ -102,25 +104,31 @@ const StatisticsScreen = () => {
 
   const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-  // Get formatted timeframe string for display
   const formatCustomRange = () => {
-    if (!customStartDate && !customEndDate) return 'בחר תאריכים';
-    const fmt = (d: string) => new Date(d).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' });
+    if (!customStartDate && !customEndDate) return t('stats.selectDates');
+    const locale = language === 'he' ? 'he-IL' : 'en-US';
+    const fmt = (d: string) => new Date(d).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: '2-digit' });
     if (customStartDate && customEndDate) return `${fmt(customStartDate)} — ${fmt(customEndDate)}`;
-    if (customStartDate) return `מ-${fmt(customStartDate)}`;
-    return `עד ${fmt(customEndDate)}`;
+    if (customStartDate) return `${t('stats.from')} ${fmt(customStartDate)}`;
+    return `${t('stats.to')} ${fmt(customEndDate)}`;
   };
 
   const getTimeframeLabel = () => {
+    if (language === 'he') {
+      if (timePeriod === 'all') return 'כל הזמנים';
+      if (timePeriod === 'year') return `שנת ${selectedYear}`;
+      if (timePeriod === 'h1') return formatHebrewHalf(1, selectedYear);
+      if (timePeriod === 'h2') return formatHebrewHalf(2, selectedYear);
+      if (timePeriod === 'custom') return formatCustomRange();
+      if (timePeriod === 'month') return `${HEBREW_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+      return '';
+    }
     if (timePeriod === 'all') return 'All Time';
     if (timePeriod === 'year') return `${selectedYear}`;
     if (timePeriod === 'h1') return `H1 ${selectedYear}`;
     if (timePeriod === 'h2') return `H2 ${selectedYear}`;
     if (timePeriod === 'custom') return formatCustomRange();
-    if (timePeriod === 'month') {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[selectedMonth - 1]} ${selectedYear}`;
-    }
+    if (timePeriod === 'month') return `${new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear}`;
     return '';
   };
 
@@ -149,7 +157,7 @@ const StatisticsScreen = () => {
     setIsSharing(true);
     try {
       const files = await captureAndSplit(tableRef.current, 'poker-statistics');
-      await shareFiles(files, 'Poker Statistics');
+      await shareFiles(files, t('stats.title'));
     } catch (e) { console.error('Error sharing:', e); }
     finally { setIsSharing(false); }
   };
@@ -159,7 +167,7 @@ const StatisticsScreen = () => {
     setIsSharingTop20(true);
     try {
       const files = await captureAndSplit(top20Ref.current, 'poker-top20-wins');
-      await shareFiles(files, 'Top 20 Single Night Wins');
+      await shareFiles(files, t('stats.top20'));
     } catch (e) { console.error('Error sharing top 20:', e); }
     finally { setIsSharingTop20(false); }
   };
@@ -169,7 +177,7 @@ const StatisticsScreen = () => {
     setIsSharingTop10(true);
     try {
       const files = await captureAndSplit(top10Ref.current, 'poker-top10-wins');
-      await shareFiles(files, 'Top 10 Single Night Wins');
+      await shareFiles(files, t('stats.top10'));
     } catch (e) { console.error('Error sharing top 10:', e); }
     finally { setIsSharingTop10(false); }
   };
@@ -179,7 +187,7 @@ const StatisticsScreen = () => {
     setIsSharingRebuyStats(true);
     try {
       const files = await captureAndSplit(rebuyStatsRef.current, 'poker-rebuy-stats');
-      await shareFiles(files, 'Poker Rebuy Stats');
+      await shareFiles(files, t('stats.rebuyStats'));
     } catch (e) { console.error('Error sharing rebuy stats:', e); }
     finally { setIsSharingRebuyStats(false); }
   };
@@ -189,7 +197,7 @@ const StatisticsScreen = () => {
     setIsSharingPodium(true);
     try {
       const files = await captureAndSplit(podiumRef.current, 'poker-podium');
-      await shareFiles(files, 'Poker Podium');
+      await shareFiles(files, t('stats.seasonPodium', { year: podiumData.year }));
     } catch (e) { console.error('Error sharing podium:', e); }
     finally { setIsSharingPodium(false); }
   };
@@ -199,7 +207,7 @@ const StatisticsScreen = () => {
     setIsSharingHallOfFame(true);
     try {
       const files = await captureAndSplit(hallOfFameRef.current, 'poker-hall-of-fame');
-      await shareFiles(files, 'Poker Hall of Fame');
+      await shareFiles(files, t('stats.hallOfFame'));
     } catch (e) { console.error('Error sharing hall of fame:', e); }
     finally { setIsSharingHallOfFame(false); }
   };
@@ -231,7 +239,7 @@ const StatisticsScreen = () => {
           <div style="text-align: center; margin-bottom: 1.25rem;">
             <div style="font-size: 2rem; margin-bottom: 0.25rem;">📜</div>
             <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #f1f5f9;">
-              הכרוניקה — ${titleLabel}${pageNum}
+              ${t('stats.chronicle')} — ${titleLabel}${pageNum}
             </h3>
             <div style="font-size: 0.75rem; color: #A855F7; margin-top: 0.25rem;">Powered by Gemini ✨</div>
             ${chronicleModelName ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${chronicleModelName}</div>` : ''}
@@ -258,7 +266,7 @@ const StatisticsScreen = () => {
 
       if (navigator.share && navigator.canShare({ files })) {
         try {
-          await navigator.share({ files, title: 'Poker Chronicle' });
+          await navigator.share({ files, title: t('stats.chronicle') });
         } catch {
           for (const file of files) {
             const url = URL.createObjectURL(file);
@@ -644,25 +652,17 @@ const StatisticsScreen = () => {
     return { h1, h2, yearly, year: currentYear, history };
   }, [players]); // Recalculate when player data changes (name updates, syncs, etc.)
 
-  // Load initial data on mount
   useEffect(() => {
     loadStats();
-    
-    // Listen for storage changes (e.g., from GitHub sync)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'poker_players' || e.key === 'poker_games' || e.key === 'poker_game_players') {
-        loadStats();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Reload data when filters change
   useEffect(() => {
     loadStats();
   }, [timePeriod, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadStats(true), []));
 
   // Restore record details modal when coming back from game details - only once on mount
   const hasRestoredRecordRef = useRef(false);
@@ -699,20 +699,21 @@ const StatisticsScreen = () => {
     }
   }, [savedPlayerInfo, viewMode, stats]);
 
-  const loadStats = () => {
+  const loadStats = (preserveSelection = false) => {
     const dateFilter = getDateFilter();
     const playerStats = getPlayerStats(dateFilter);
     const allPlayers = getAllPlayers();
     setStats(playerStats);
     setPlayers(allPlayers);
-    // By default, select only permanent players
-    const permanentPlayerIds = allPlayers
-      .filter(p => p.type === 'permanent')
-      .map(p => p.id);
-    const permanentStatsIds = playerStats
-      .filter(s => permanentPlayerIds.includes(s.playerId))
-      .map(s => s.playerId);
-    setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
+    if (!preserveSelection) {
+      const permanentPlayerIds = allPlayers
+        .filter(p => p.type === 'permanent')
+        .map(p => p.id);
+      const permanentStatsIds = playerStats
+        .filter(s => permanentPlayerIds.includes(s.playerId))
+        .map(s => s.playerId);
+      setSelectedPlayers(new Set(permanentStatsIds.length > 0 ? permanentStatsIds : playerStats.map(p => p.playerId)));
+    }
   };
 
   // Get player type - memoized
@@ -1213,36 +1214,38 @@ const StatisticsScreen = () => {
 
   const records = getRecords();
 
+  const timePeriodChip = `(${getTimeframeLabel()})`;
+
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 className="page-title">Statistics</h1>
-        <p className="page-subtitle">Player performance over time</p>
+        <h1 className="page-title">{t('stats.title')}</h1>
+        <p className="page-subtitle">{t('stats.subtitle')}</p>
       </div>
 
       {/* View Mode Toggle - Always visible */}
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button 
-            className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('table')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'table' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            📊 Table
+            {t('stats.tableView')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'records' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('records')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'records' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            🏆 Records
+            {t('stats.recordsView')}
           </button>
           <button 
-            className={`btn btn-sm ${viewMode === 'players' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-sm btn-secondary"
             onClick={() => setViewMode('players')}
-            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem' }}
+            style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.25rem', fontSize: '0.75rem', ...(viewMode === 'players' ? { background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' } : {}) }}
           >
-            👤 Players
+            {t('stats.playersView')}
           </button>
         </div>
       </div>
@@ -1263,14 +1266,14 @@ const StatisticsScreen = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>🎮</span>
               <span style={{ fontSize: '0.7rem', color: filterActiveOnly ? 'var(--primary)' : 'var(--text-muted)', fontWeight: '500' }}>
-                שחקנים פעילים בלבד
+                {t('stats.activeOnly')}
               </span>
               <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>
-                ({activeThreshold}+ משחקים)
+                {t('stats.minGames', { threshold: activeThreshold })}
               </span>
             </div>
             <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginLeft: '1.1rem' }}>
-              מינימום השתתפויות נדרשות: {activeThreshold}/{totalGamesInPeriod}
+              {t('stats.minRequired', { threshold: activeThreshold, total: totalGamesInPeriod })}
             </span>
           </div>
           <button
@@ -1318,7 +1321,7 @@ const StatisticsScreen = () => {
                 }}
               >
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                  📅 TIME PERIOD {timePeriod === 'all' ? '(הכל)' : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'][selectedMonth - 1]} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+                  {t('stats.timePeriod')} {timePeriodChip}
                 </span>
                 <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
               </button>
@@ -1340,7 +1343,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  הכל
+                  {t('stats.allTime')}
                 </button>
                 <button
                   type="button"
@@ -1357,7 +1360,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  שנה
+                  {t('stats.year')}
                 </button>
                 <button
                   type="button"
@@ -1374,7 +1377,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  H1
+                  {t('stats.h1Label')}
                 </button>
                 <button
                   type="button"
@@ -1391,7 +1394,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  H2
+                  {t('stats.h2Label')}
                 </button>
                 <button
                   type="button"
@@ -1408,7 +1411,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  חודש
+                  {t('stats.month')}
                 </button>
                 <button
                   type="button"
@@ -1425,13 +1428,13 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  חופשי
+                  {t('stats.custom')}
                 </button>
               </div>
               {/* Year Selector - show when not "all" and not "custom" */}
               {timePeriod !== 'all' && timePeriod !== 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>שנה:</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{t('stats.yearLabel')}</span>
                   <select
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -1452,7 +1455,7 @@ const StatisticsScreen = () => {
                   </select>
                   {timePeriod === 'month' && (
                     <>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>חודש:</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>{t('stats.monthLabel')}</span>
                       <select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -1467,35 +1470,26 @@ const StatisticsScreen = () => {
                           minWidth: '70px'
                         }}
                       >
-                        {[
-                          { value: 1, label: 'ינואר' },
-                          { value: 2, label: 'פברואר' },
-                          { value: 3, label: 'מרץ' },
-                          { value: 4, label: 'אפריל' },
-                          { value: 5, label: 'מאי' },
-                          { value: 6, label: 'יוני' },
-                          { value: 7, label: 'יולי' },
-                          { value: 8, label: 'אוגוסט' },
-                          { value: 9, label: 'ספטמבר' },
-                          { value: 10, label: 'אוקטובר' },
-                          { value: 11, label: 'נובמבר' },
-                          { value: 12, label: 'דצמבר' },
-                        ].map(month => (
-                          <option key={month.value} value={month.value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{month.label}</option>
-                        ))}
+                        {Array.from({ length: 12 }, (_, monthIndex) => {
+                          const value = monthIndex + 1;
+                          const label = new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'long' }).format(new Date(2024, monthIndex, 1));
+                          return (
+                            <option key={value} value={value} style={{ background: '#1a1a2e', color: '#ffffff' }}>{label}</option>
+                          );
+                        })}
                       </select>
                     </>
                   )}
                   <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {timePeriod === 'h1' && `(ינו׳-יוני׳)`}
-                    {timePeriod === 'h2' && `(יולי׳-דצמ׳)`}
+                    {timePeriod === 'h1' && t('stats.h1Hint')}
+                    {timePeriod === 'h2' && t('stats.h2Hint')}
                   </span>
               </div>
             )}
               {/* Custom date range pickers */}
               {timePeriod === 'custom' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>מ:</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>{t('stats.from')}</span>
                   <input
                     type="date"
                     value={customStartDate}
@@ -1512,7 +1506,7 @@ const StatisticsScreen = () => {
                       colorScheme: 'dark',
                     }}
                   />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>עד:</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 600 }}>{t('stats.to')}</span>
                   <input
                     type="date"
                     value={customEndDate}
@@ -1540,7 +1534,7 @@ const StatisticsScreen = () => {
                         color: 'var(--text-muted)', cursor: 'pointer',
                       }}
                     >
-                      ✕ נקה
+                      {t('stats.clearDates')}
                     </button>
                   )}
                 </div>
@@ -1566,7 +1560,7 @@ const StatisticsScreen = () => {
               }}
             >
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-                FILTER PLAYERS ({selectedPlayers.size}/{availableStats.length})
+                {t('stats.filterPlayers', { selected: selectedPlayers.size, total: availableStats.length })}
               </span>
               <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>
                 {showPlayerFilter ? '▲' : '▼'}
@@ -1588,7 +1582,7 @@ const StatisticsScreen = () => {
                   cursor: 'pointer'
                 }}
               >
-                {selectedPlayers.size === availableStats.length ? 'Clear' : 'Select All'}
+                {selectedPlayers.size === availableStats.length ? t('common.clear') : t('common.selectAll')}
               </button>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -1627,8 +1621,8 @@ const StatisticsScreen = () => {
         <div className="card">
           <div className="empty-state">
             <div className="empty-icon">📈</div>
-            <p>אין סטטיסטיקות לתקופה הנבחרת</p>
-            <p className="text-muted">נסה לבחור תקופה אחרת למעלה</p>
+            <p>{t('stats.noStatsForPeriod')}</p>
+            <p className="text-muted">{t('stats.tryDifferent')}</p>
           </div>
         </div>
       ) : (
@@ -1660,7 +1654,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  🏆 Hall of Fame
+                  {t('stats.hallOfFame')}
                 </button>
                 <button
                   onClick={() => setRecordsSubTab('playerRecords')}
@@ -1677,7 +1671,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  👑 Personal Records
+                  {t('stats.personalRecords')}
                 </button>
               </div>
 
@@ -1696,7 +1690,7 @@ const StatisticsScreen = () => {
                   fontWeight: '600',
                   color: '#fbbf24'
                 }}>
-                  🏆 Season Podium {podiumData.year}
+                  {t('stats.seasonPodium', { year: podiumData.year })}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <div style={{ 
@@ -1717,7 +1711,7 @@ const StatisticsScreen = () => {
                     background: 'rgba(59, 130, 246, 0.15)',
                     borderRadius: '4px'
                   }}>
-                    H1 (Jan-Jun)
+                    {t('stats.h1Col')}
                   </div>
                   {podiumData.h1.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -1750,7 +1744,7 @@ const StatisticsScreen = () => {
                       })}
                     </div>
                   ) : (
-                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>{t('stats.noDataShort')}</div>
                   )}
                 </div>
                 <div style={{ 
@@ -1771,7 +1765,7 @@ const StatisticsScreen = () => {
                     background: 'rgba(139, 92, 246, 0.15)',
                     borderRadius: '4px'
                   }}>
-                    H2 (Jul-Dec)
+                    {t('stats.h2Col')}
                   </div>
                   {podiumData.h2.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -1798,7 +1792,7 @@ const StatisticsScreen = () => {
                       })}
                     </div>
                   ) : (
-                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>{t('stats.noDataShort')}</div>
                   )}
                 </div>
                 <div style={{ 
@@ -1819,7 +1813,7 @@ const StatisticsScreen = () => {
                     background: 'rgba(16, 185, 129, 0.15)',
                     borderRadius: '4px'
                   }}>
-                    Full Year
+                    {t('stats.fullYear')}
                   </div>
                   {podiumData.yearly.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -1846,7 +1840,7 @@ const StatisticsScreen = () => {
                       })}
                     </div>
                   ) : (
-                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>No data</div>
+                    <div style={{ textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.5rem' }}>{t('stats.noDataShort')}</div>
                   )}
                 </div>
                 </div>
@@ -1857,7 +1851,7 @@ const StatisticsScreen = () => {
                   disabled={isSharingPodium}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                 >
-                  {isSharingPodium ? '📸...' : '📤 שתף פודיום'}
+                  {isSharingPodium ? t('common.capturing') : t('stats.sharePodium')}
                 </button>
               </div>
 
@@ -1874,7 +1868,7 @@ const StatisticsScreen = () => {
                     fontWeight: '600',
                     color: '#a855f7'
                   }}>
-                    🏅 Hall of Fame
+                    {t('stats.hallOfFame')}
                   </div>
                   <div style={{ 
                     display: 'grid', 
@@ -1889,10 +1883,10 @@ const StatisticsScreen = () => {
                     color: 'var(--text-muted)',
                     textAlign: 'center'
                   }}>
-                    <div>Year</div>
-                    <div style={{ color: '#3b82f6' }}>H1</div>
-                    <div style={{ color: '#8b5cf6' }}>H2</div>
-                    <div style={{ color: 'var(--primary)' }}>Year</div>
+                    <div>{t('stats.yearColShort')}</div>
+                    <div style={{ color: '#3b82f6' }}>{t('stats.h1Label')}</div>
+                    <div style={{ color: '#8b5cf6' }}>{t('stats.h2Label')}</div>
+                    <div style={{ color: 'var(--primary)' }}>{t('stats.yearColShort')}</div>
                   </div>
                   {podiumData.history.map((yearData) => (
                     <div 
@@ -1948,7 +1942,7 @@ const StatisticsScreen = () => {
                     disabled={isSharingHallOfFame}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingHallOfFame ? '📸...' : '📤 שתף היכל התהילה'}
+                    {isSharingHallOfFame ? t('common.capturing') : t('stats.shareHallOfFame')}
                   </button>
                 </div>
               )}
@@ -1957,16 +1951,16 @@ const StatisticsScreen = () => {
               {top20WinsAllTime.length > 0 && (
                 <div ref={top20Ref} className="card" style={{ padding: '0.5rem', marginBottom: '1rem' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
-                    🏆 Top 20 Single Night Wins
+                    {t('stats.top20')}
                   </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>All Time</div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{t('stats.allTimeLabel')}</div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>Player</th>
-                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>Profit</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>Date</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.profitCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.dateCol')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1978,8 +1972,8 @@ const StatisticsScreen = () => {
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
                           onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
                         >
-                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>{'\u200E'}+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
@@ -1996,7 +1990,7 @@ const StatisticsScreen = () => {
                     disabled={isSharingTop20}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingTop20 ? '📸...' : '📤 שתף Top 20'}
+                    {isSharingTop20 ? t('common.capturing') : `${t('common.share')} Top 20`}
                   </button>
                 </div>
               )}
@@ -2016,12 +2010,12 @@ const StatisticsScreen = () => {
                 color: 'var(--primary)',
                 fontWeight: '500'
               }}>
-                👑 Personal Records ({getTimeframeLabel()})
+                {t('stats.personalRecords')} ({getTimeframeLabel()})
               </div>
 
               {/* Current Streaks */}
               <div className="card">
-                <h2 className="card-title mb-2">🔥 Current Streaks</h2>
+                <h2 className="card-title mb-2">{t('stats.currentStreaks')}</h2>
                 <div className="grid grid-2">
                   <div style={{ 
                     padding: '0.75rem', 
@@ -2029,15 +2023,15 @@ const StatisticsScreen = () => {
                     borderRadius: '12px',
                     border: '1px solid rgba(249, 115, 22, 0.3)'
                   }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>🔥 On Fire</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>{t('stats.onFire')}</div>
                     {records.onFirePlayers.length > 0 ? (
                       renderRecord(
                         'onFire',
                         records.onFirePlayers,
-                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--success)', whiteSpace: 'nowrap' }}>{p.currentStreak} Wins</span>,
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--success)', whiteSpace: 'nowrap' }}>{t('graphs.winsCount', { n: p.currentStreak })}</span>,
                         { fontSize: '1rem', color: '#f97316' },
                         'currentWinStreak',
-                        '🔥 רצף נצחונות נוכחי'
+                        t('stats.recordCurrentStreak')
                       )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</div>
@@ -2049,15 +2043,15 @@ const StatisticsScreen = () => {
                     borderRadius: '12px',
                     border: '1px solid rgba(239, 68, 68, 0.3)'
                   }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>❄️ Cold Streak</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>{t('stats.coldStreak')}</div>
                     {records.iceColdPlayers.length > 0 ? (
                       renderRecord(
                         'iceCold',
                         records.iceColdPlayers,
-                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{Math.abs(p.currentStreak)} Losses</span>,
+                        (p) => <span style={{ fontSize: '0.85rem', color: 'var(--danger)', whiteSpace: 'nowrap' }}>{t('stats.nLosses', { n: Math.abs(p.currentStreak) })}</span>,
                         { fontSize: '1rem', color: '#ef4444' },
                         'currentLossStreak',
-                        '❄️ רצף הפסדים נוכחי'
+                        t('stats.recordCurrentLossStreak')
                       )
                     ) : (
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</div>
@@ -2068,28 +2062,28 @@ const StatisticsScreen = () => {
 
               {/* All-Time Leaders */}
               <div className="card">
-                <h2 className="card-title mb-2">👑 Leaders</h2>
+                <h2 className="card-title mb-2">{t('stats.leaders')}</h2>
                 <div className="grid grid-2">
                   <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🥇 Top Earner</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.topEarner')}</div>
                     {renderRecord(
                       'leader',
                       records.leaders,
                       (p) => <div className="profit" style={{ fontWeight: '700' }}>{'\u200E'}+{formatCurrency(p.totalProfit)}</div>,
                       undefined,
                       'all',
-                      '🥇 כל המשחקים'
+                      t('stats.recordAllGamesWin')
                     )}
                   </div>
                   <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Biggest Loser</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.biggestLoser')}</div>
                     {renderRecord(
                       'biggestLoser',
                       records.biggestLosers,
                       (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.totalProfit)}</div>,
                       undefined,
                       'all',
-                      '📉 כל המשחקים'
+                      t('stats.recordAllGamesLoss')
                     )}
                   </div>
                 </div>
@@ -2097,28 +2091,28 @@ const StatisticsScreen = () => {
 
               {/* Single Game Records */}
               <div className="card">
-                <h2 className="card-title mb-2">🎰 Single Game Records</h2>
+                <h2 className="card-title mb-2">{t('stats.singleGameRecords')}</h2>
                 <div className="grid grid-2">
                   <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💰 Biggest Win</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.biggestWinRecord')}</div>
                     {renderRecord(
                       'biggestWin',
                       records.biggestWinPlayers,
                       (p) => <div className="profit" style={{ fontWeight: '700' }}>{'\u200E'}+{formatCurrency(p.biggestWin)}</div>,
                       undefined,
                       'biggestWin',
-                      '💰 הניצחון הגדול'
+                      t('stats.recordBiggestWin')
                     )}
                   </div>
                   <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💸 Biggest Loss</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.biggestLossRecord')}</div>
                     {renderRecord(
                       'biggestLoss',
                       records.biggestLossPlayers,
                       (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.biggestLoss)}</div>,
                       undefined,
                       'biggestLoss',
-                      '💸 ההפסד הגדול'
+                      t('stats.recordBiggestLoss')
                     )}
                   </div>
                 </div>
@@ -2127,31 +2121,31 @@ const StatisticsScreen = () => {
               {/* Streak Records - only show if there are meaningful streaks */}
               {(records.longestWinStreakPlayers[0]?.longestWinStreak > 1 || records.longestLossStreakPlayers[0]?.longestLossStreak > 1) && (
                 <div className="card">
-                  <h2 className="card-title mb-2">📈 Streak Records</h2>
+                  <h2 className="card-title mb-2">{t('stats.streakRecords')}</h2>
                   <div className="grid grid-2">
                     {records.longestWinStreakPlayers[0]?.longestWinStreak > 1 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>🏆 Longest Win Streak</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.longestWinRecord')}</div>
                         {renderRecord(
                           'longestWinStreak',
                           records.longestWinStreakPlayers.filter(p => p.longestWinStreak > 1),
-                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{p.longestWinStreak} wins</div>,
+                          (p) => <div style={{ color: 'var(--success)', fontWeight: '700' }}>{t('graphs.winsCount', { n: p.longestWinStreak })}</div>,
                           undefined,
                           'longestWinStreak',
-                          '🏆 רצף נצחונות ארוך'
+                          t('stats.recordLongestWinStreak')
                         )}
                       </div>
                     )}
                     {records.longestLossStreakPlayers[0]?.longestLossStreak > 1 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>💔 Longest Loss Streak</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.longestLossRecord')}</div>
                         {renderRecord(
                           'longestLossStreak',
                           records.longestLossStreakPlayers.filter(p => p.longestLossStreak > 1),
-                          (p) => <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{p.longestLossStreak} losses</div>,
+                          (p) => <div style={{ color: 'var(--danger)', fontWeight: '700' }}>{t('stats.nLosses', { n: p.longestLossStreak })}</div>,
                           undefined,
                           'longestLossStreak',
-                          '💔 רצף הפסדים ארוך'
+                          t('stats.recordLongestLossStreak')
                         )}
                       </div>
                     )}
@@ -2162,31 +2156,31 @@ const StatisticsScreen = () => {
               {/* Average Performance Records */}
               {(records.highestAvgProfits.length > 0 || records.lowestAvgProfits.length > 0) && (
                 <div className="card">
-                  <h2 className="card-title mb-2">📊 Average Performance</h2>
+                  <h2 className="card-title mb-2">{t('stats.averagePerf')}</h2>
                   <div className="grid grid-2">
                     {records.highestAvgProfits.length > 0 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📈 Best Avg/Game</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.bestAvg')}</div>
                         {renderRecord(
                           'highestAvgProfit',
                           records.highestAvgProfits,
                           (p) => <div className="profit" style={{ fontWeight: '700' }}>{p.avgProfit >= 0 ? '\u200E+' : ''}{formatCurrency(p.avgProfit)}</div>,
                           undefined,
                           'all',
-                          '📈 ממוצע למשחק'
+                          t('stats.recordBestAvg')
                         )}
                       </div>
                     )}
                     {records.lowestAvgProfits.length > 0 && (
                       <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>📉 Worst Avg/Game</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('stats.worstAvg')}</div>
                         {renderRecord(
                           'lowestAvgProfit',
                           records.lowestAvgProfits,
                           (p) => <div className="loss" style={{ fontWeight: '700' }}>{formatCurrency(p.avgProfit)}</div>,
                           undefined,
                           'all',
-                          '📉 ממוצע למשחק'
+                          t('stats.recordWorstAvg')
                         )}
                       </div>
                     )}
@@ -2196,90 +2190,90 @@ const StatisticsScreen = () => {
 
               {/* Other Records */}
               <div className="card">
-                <h2 className="card-title mb-2">🎖️ Other Records</h2>
+                <h2 className="card-title mb-2">{t('stats.otherRecords')}</h2>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>🎮 Most Games</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('stats.mostGames')}</span>
                     {renderRecord(
                       'mostGames',
                       records.mostDedicatedPlayers,
                       (p) => <span style={{ fontWeight: '600' }}>({p.gamesPlayed})</span>,
                       undefined,
                       'all',
-                      '🎮 כל המשחקים'
+                      t('stats.recordAllGames')
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>🏆 Most Wins</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('stats.mostWins')}</span>
                     {renderRecord(
                       'mostWins',
                       records.mostWinsPlayers,
                       (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winCount})</span>,
                       undefined,
                       'wins',
-                      '🏆 ניצחונות'
+                        t('stats.recordWins')
                     )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>💔 Most Losses</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{t('stats.mostLosses')}</span>
                     {renderRecord(
                       'mostLosses',
                       records.mostLossesPlayers,
                       (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.lossCount})</span>,
                       undefined,
                       'losses',
-                      '💔 הפסדים'
+                      t('stats.recordLosses')
                     )}
                   </div>
                   {records.sharpshooters.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎯 Best Win Rate</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.bestWinRate')}</span>
                       {renderRecord(
                         'sharpshooter',
                         records.sharpshooters,
                         (p) => <span style={{ fontWeight: '600', color: 'var(--success)' }}>({p.winPercentage.toFixed(0)}%)</span>,
                         undefined,
                         'wins',
-                        '🎯 ניצחונות'
+                        t('stats.recordWinRate')
                       )}
                     </div>
                   )}
                   {records.worstWinRates.length > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎲 Worst Win Rate</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.worstWinRate')}</span>
                       {renderRecord(
                         'worstWinRate',
                         records.worstWinRates,
                         (p) => <span style={{ fontWeight: '600', color: 'var(--danger)' }}>({p.winPercentage.toFixed(0)}%)</span>,
                         undefined,
                         'losses',
-                        '🎲 הפסדים'
+                        t('stats.recordLossRate')
                       )}
                     </div>
                   )}
                   {records.rebuyKings[0]?.totalRebuys > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>🎰 Buyin King</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.buyinKing')}</span>
                       {renderRecord(
                         'rebuyKing',
                         records.rebuyKings.filter(p => p.totalRebuys > 0),
-                        (p) => <span style={{ fontWeight: '600' }}>({p.totalRebuys} total)</span>,
+                        (p) => <span style={{ fontWeight: '600' }}>{t('stats.parenTotal', { n: p.totalRebuys })}</span>,
                         undefined,
                         'all',
-                        '🎰 רכישות'
+                        t('stats.recordBuyins')
                       )}
                   </div>
                   )}
                   {records.avgBuyinKings[0]?.avgRebuysPerGame > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0.5rem 0' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>💸 Avg Buyin King</span>
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.avgBuyinKing')}</span>
                       {renderRecord(
                         'avgBuyinKing',
                         records.avgBuyinKings.filter(p => p.avgRebuysPerGame > 0),
-                        (p) => <span style={{ fontWeight: '600' }}>({p.avgRebuysPerGame.toFixed(1)} avg)</span>,
+                        (p) => <span style={{ fontWeight: '600' }}>{t('stats.parenAvg', { n: p.avgRebuysPerGame.toFixed(1) })}</span>,
                         undefined,
                         'all',
-                        '💸 ממוצע רכישות'
+                        t('stats.recordAvgBuyins')
                       )}
                   </div>
                   )}
@@ -2306,9 +2300,9 @@ const StatisticsScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>💰 Profit</option>
-                <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>🎮 Games</option>
-                <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>📊 Win%</option>
+                <option value="profit" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortProfit')}</option>
+                <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
+                <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
               </select>
               {viewMode === 'table' && (
                 <button
@@ -2324,7 +2318,7 @@ const StatisticsScreen = () => {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  📊 Gain/Loss
+                  {t('stats.gainLoss')}
                 </button>
               )}
             </div>
@@ -2342,28 +2336,28 @@ const StatisticsScreen = () => {
                   paddingBottom: '0.3rem',
                   borderBottom: '1px solid var(--border)'
                 }}>
-                  📊 {getHebrewTimeframeLabel()}
-                  {' • '}{totalGamesInPeriod} משחקים
-                  {filterActiveOnly && ' • שחקנים פעילים'}
+                  📊 {getTimeframeLabel()}
+                  {' • '}{t('stats.gamesCount', { count: totalGamesInPeriod })}
+                  {filterActiveOnly && t('stats.activePlayersNote')}
                 </div>
                 <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px' }}>#</th>
-                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: 'left' }}>Player</th>
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.rankCol')}</th>
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.playerCol')}</th>
                       {tableMode === 'profit' ? (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Profit</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>Avg</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>{t('stats.profitCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>{t('stats.avgCol')}</th>
                         </>
                       ) : (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>Gain</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>Loss</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>{t('stats.gainCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>{t('stats.lossCol')}</th>
                         </>
                       )}
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>G</th>
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>W%</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{t('stats.gamesCol')}</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.winRateCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2377,11 +2371,16 @@ const StatisticsScreen = () => {
                       <tr 
                         key={player.playerId}
                         onClick={() => showPlayerGames(player)}
-                        style={{ cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
+                        style={{
+                          cursor: 'pointer',
+                          ...(isMe ? meRowStyle : {}),
+                          animation: index < 15 ? 'contentFadeIn 0.25s ease-out backwards' : undefined,
+                          animationDelay: index < 15 ? `${index * 0.03}s` : undefined,
+                        }}
                         onMouseEnter={(e) => e.currentTarget.style.background = isMe ? 'rgba(59, 130, 246, 0.22)' : 'var(--surface)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = isMe ? ME_BG : ''}
                       >
-                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px' }}>
+                        <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '40px', textAlign: isRTL ? 'right' : 'left' }}>
                           {currentRank}
                           {getMedal(index, sortBy === 'profit' ? player.totalProfit : 
                             sortBy === 'games' ? player.gamesPlayed : player.winPercentage)}
@@ -2395,7 +2394,7 @@ const StatisticsScreen = () => {
                         </span>
                           )}
                       </td>
-                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', ...(isMe ? meNameStyle : {}) }}>
+                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>
                           {player.playerName}
                       </td>
                         {tableMode === 'profit' ? (
@@ -2451,7 +2450,7 @@ const StatisticsScreen = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {isSharing ? '📸...' : '📤 שתף'}
+                  {isSharing ? t('common.capturing') : t('common.share')}
                 </button>
               </div>
 
@@ -2459,7 +2458,7 @@ const StatisticsScreen = () => {
               {rebuyStats.length > 0 && (
                 <div ref={rebuyStatsRef} className="card" style={{ padding: '0.5rem', marginTop: '1rem' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
-                    🎰 Rebuy Stats
+                    {t('stats.rebuyStats')}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
                   {rebuyDataCoverage.gamesWithoutRebuys > 0 && (
@@ -2473,18 +2472,18 @@ const StatisticsScreen = () => {
                       marginBottom: '0.4rem',
                       textAlign: 'center'
                     }}>
-                      ⚠️ {rebuyDataCoverage.gamesWithoutRebuys} of {rebuyDataCoverage.totalGames} games have no rebuy data — averages may be lower than actual
+                      {t('stats.rebuyWarning', { missing: rebuyDataCoverage.gamesWithoutRebuys, total: rebuyDataCoverage.totalGames })}
                     </div>
                   )}
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>Player</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Average buyins per game">Avg</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Total buyins">Total</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Max buyins in a single game">Max</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title="Games played">G</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyAvg')}>{t('stats.rebuyAvg')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyTotal')}>{t('stats.rebuyTotal')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.rebuyMax')}>{t('stats.rebuyMax')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem', whiteSpace: 'nowrap' }} title={t('stats.gamesCol')}>{t('stats.gamesCol')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2496,13 +2495,14 @@ const StatisticsScreen = () => {
                             key={index}
                             style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', ...(isMe ? meRowStyle : {}) }}
                           >
-                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>
+                            <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>
                               {index + 1}
                             </td>
                             <td style={{ 
                               padding: '0.3rem 0.2rem', 
                               whiteSpace: 'nowrap',
                               fontWeight: '500',
+                              textAlign: isRTL ? 'right' : 'left',
                               ...(isMe ? meNameStyle : {})
                             }}>
                               {player.playerName}
@@ -2560,7 +2560,7 @@ const StatisticsScreen = () => {
                       cursor: 'pointer'
                     }}
                   >
-                    {isSharingRebuyStats ? '📸...' : '📤 שתף'}
+                    {isSharingRebuyStats ? t('common.capturing') : t('common.share')}
                   </button>
                 </div>
               )}
@@ -2569,16 +2569,16 @@ const StatisticsScreen = () => {
               {top20Wins.length > 0 && (
                 <div ref={top10Ref} className="card" style={{ padding: '0.5rem', marginTop: '0.5rem' }}>
                   <div style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text)', marginBottom: '0.5rem' }}>
-                    🏆 Top 10 Single Night Wins
+                    {t('stats.top10')}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>{getTimeframeLabel()}</div>
                   <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>#</th>
-                        <th style={{ textAlign: 'left', padding: '0.25rem 0.2rem' }}>Player</th>
-                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>Profit</th>
-                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>Date</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.rankCol')}</th>
+                        <th style={{ textAlign: isRTL ? 'right' : 'left', padding: '0.25rem 0.2rem' }}>{t('stats.playerCol')}</th>
+                        <th style={{ textAlign: 'right', padding: '0.25rem 0.2rem' }}>{t('stats.profitCol')}</th>
+                        <th style={{ textAlign: 'center', padding: '0.25rem 0.2rem' }}>{t('stats.dateCol')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2590,8 +2590,8 @@ const StatisticsScreen = () => {
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
                           onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'table', timePeriod, selectedYear, selectedMonth } })}
                         >
-                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
-                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
+                          <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'right', color: 'var(--success)', fontWeight: '600' }}>{'\u200E'}+{formatCurrency(entry.profit)}</td>
                           <td style={{ padding: '0.3rem 0.2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.65rem' }}>{new Date(entry.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                         </tr>
@@ -2608,7 +2608,7 @@ const StatisticsScreen = () => {
                     disabled={isSharingTop10}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', fontSize: '0.75rem', padding: '0.4rem 0.8rem', background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer' }}
                   >
-                    {isSharingTop10 ? '📸...' : '📤 שתף Top 10'}
+                    {isSharingTop10 ? t('common.capturing') : `${t('common.share')} Top 10`}
                   </button>
                 </div>
               )}
@@ -2642,7 +2642,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  📊 Stats
+                  {t('stats.playerStats')}
                 </button>
                 <button
                   onClick={() => setPlayerSubTab('stories')}
@@ -2659,7 +2659,7 @@ const StatisticsScreen = () => {
                     transition: 'all 0.2s ease'
                   }}
                 >
-                  🤖 AI Stories
+                  {t('stats.aiStories')}
                 </button>
               </div>
 
@@ -2676,13 +2676,13 @@ const StatisticsScreen = () => {
                     color: 'var(--primary)',
                     fontWeight: '500'
                   }}>
-                    👤 Player Stats ({getTimeframeLabel()})
+                    {t('stats.playerStats')} ({getTimeframeLabel()})
                   </div>
 
                   {sortedStats.map((player, index) => {
                     const isMe = identityName && player.playerName === identityName;
                     return (
-            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}) }}>
+            <div key={player.playerId} id={`player-card-${player.playerId}`} className="card" style={{ transition: 'box-shadow 0.3s ease', ...(isMe ? { border: '1.5px solid #3b82f6', boxShadow: '0 0 8px rgba(59, 130, 246, 0.2)' } : {}), animation: index < 10 ? 'contentFadeIn 0.25s ease-out backwards' : undefined, animationDelay: index < 10 ? `${index * 0.05}s` : undefined }}>
               <div className="card-header">
                 <h3 className="card-title" style={isMe ? meNameStyle : undefined}>
                   {player.playerName}
@@ -2713,7 +2713,9 @@ const StatisticsScreen = () => {
                 }}>
                   <span>{player.currentStreak > 0 ? '🔥' : '❄️'}</span>
                   <span style={{ color: player.currentStreak > 0 ? 'var(--success)' : 'var(--danger)' }}>
-                    {Math.abs(player.currentStreak)} {player.currentStreak > 0 ? 'Wins' : 'Losses'}
+                    {player.currentStreak > 0
+                      ? t('graphs.winsCount', { n: Math.abs(player.currentStreak) })
+                      : t('stats.nLosses', { n: Math.abs(player.currentStreak) })}
                   </span>
                 </div>
               )}
@@ -2721,7 +2723,7 @@ const StatisticsScreen = () => {
               {/* Last 6 Games */}
               {player.lastGameResults && player.lastGameResults.length > 0 && (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>Last {Math.min(6, player.lastGameResults.length)} games (latest on right, click for details)</div>
+                  <div className="text-muted" style={{ fontSize: '0.7rem', marginBottom: '0.35rem' }}>{t('stats.lastGames', { n: Math.min(6, player.lastGameResults.length) })}</div>
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start' }}>
                     {player.lastGameResults.slice(0, 6).reverse().map((game, i) => {
                       const gameDate = new Date(game.date);
@@ -2773,13 +2775,13 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: 'pointer' }}
-                  onClick={() => showPlayerStatDetails(player, 'allGames', `🎮 All Games`)}
+                  onClick={() => showPlayerStatDetails(player, 'allGames', t('stats.allGamesModal'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎮 Games</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.gamesPlayed')}</div>
                   <div className="stat-value">{player.gamesPlayed} <span style={{ color: 'var(--text-muted)' }}>❯</span></div>
                 </div>
                 <div className="stat-card" style={{ background: player.winPercentage >= 50 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.winPercentage >= 50 ? '📈' : '📉'} Win Rate</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.winPercentage >= 50 ? '📈' : '📉'} {t('stats.winRate')}</div>
                   <div className="stat-value" style={{ color: player.winPercentage >= 50 ? 'var(--success)' : 'var(--danger)' }}>
                     {player.winPercentage.toFixed(0)}%
                   </div>
@@ -2787,9 +2789,9 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.winCount > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
-                  onClick={() => player.winCount > 0 && showPlayerStatDetails(player, 'wins', `🏆 Wins`)}
+                  onClick={() => player.winCount > 0 && showPlayerStatDetails(player, 'wins', t('stats.winsCount'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Wins</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.winsCount')}</div>
                   <div className="stat-value" style={{ color: player.winCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.winCount}{player.winCount > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
@@ -2797,9 +2799,9 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.lossCount > 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.lossCount > 0 && showPlayerStatDetails(player, 'losses', `💔 Losses`)}
+                  onClick={() => player.lossCount > 0 && showPlayerStatDetails(player, 'losses', t('stats.lossesCount'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Losses</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.lossesCount')}</div>
                   <div className="stat-value" style={{ color: player.lossCount > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.lossCount}{player.lossCount > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
@@ -2811,9 +2813,9 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.biggestWin > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
-                  onClick={() => player.biggestWin > 0 && showPlayerStatDetails(player, 'biggestWin', `💰 Biggest Win`)}
+                  onClick={() => player.biggestWin > 0 && showPlayerStatDetails(player, 'biggestWin', t('stats.biggestWin'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💰 Biggest Win</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.biggestWin')}</div>
                   <div className="stat-value" style={{ color: 'var(--success)' }}>
                     {player.biggestWin > 0 ? `\u200E+${cleanNumber(player.biggestWin)}` : '-'}{player.biggestWin > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
@@ -2821,9 +2823,9 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.biggestLoss < 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.biggestLoss < 0 && showPlayerStatDetails(player, 'biggestLoss', `💸 Biggest Loss`)}
+                  onClick={() => player.biggestLoss < 0 && showPlayerStatDetails(player, 'biggestLoss', t('stats.biggestLoss'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💸 Biggest Loss</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.biggestLoss')}</div>
                   <div className="stat-value" style={{ color: 'var(--danger)' }}>
                     {player.biggestLoss < 0 ? `\u200E-${cleanNumber(Math.abs(player.biggestLoss))}` : '-'}{player.biggestLoss < 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
@@ -2835,21 +2837,21 @@ const StatisticsScreen = () => {
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.longestWinStreak > 0 ? 'pointer' : 'default', background: 'rgba(34, 197, 94, 0.1)' }}
-                  onClick={() => player.longestWinStreak > 0 && showPlayerStatDetails(player, 'longestWinStreak', `🏆 Longest Win Streak`)}
+                  onClick={() => player.longestWinStreak > 0 && showPlayerStatDetails(player, 'longestWinStreak', t('stats.longestWinStreak'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🏆 Longest Win Streak</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.longestWinStreak')}</div>
                   <div className="stat-value" style={{ color: player.longestWinStreak > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {player.longestWinStreak > 0 ? `${player.longestWinStreak} wins` : '-'}{player.longestWinStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                    {player.longestWinStreak > 0 ? t('graphs.winsCount', { n: player.longestWinStreak }) : '-'}{player.longestWinStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
                 <div 
                   className="stat-card" 
                   style={{ cursor: player.longestLossStreak > 0 ? 'pointer' : 'default', background: 'rgba(239, 68, 68, 0.1)' }}
-                  onClick={() => player.longestLossStreak > 0 && showPlayerStatDetails(player, 'longestLossStreak', `💔 Longest Loss Streak`)}
+                  onClick={() => player.longestLossStreak > 0 && showPlayerStatDetails(player, 'longestLossStreak', t('stats.longestLossStreak'))}
                 >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>💔 Longest Loss Streak</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.longestLossStreak')}</div>
                   <div className="stat-value" style={{ color: player.longestLossStreak > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {player.longestLossStreak > 0 ? `${player.longestLossStreak} losses` : '-'}{player.longestLossStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
+                    {player.longestLossStreak > 0 ? t('stats.nLosses', { n: player.longestLossStreak }) : '-'}{player.longestLossStreak > 0 && <span style={{ color: 'var(--text-muted)' }}> ❯</span>}
                   </div>
                 </div>
               </div>
@@ -2857,13 +2859,13 @@ const StatisticsScreen = () => {
               {/* Averages Row */}
               <div className="grid grid-2" style={{ marginBottom: '0.5rem' }}>
                 <div className="stat-card" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📈 Avg Win</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.avgWin')}</div>
                   <div className="stat-value" style={{ color: player.avgWin > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {player.avgWin > 0 ? `\u200E+${cleanNumber(player.avgWin)}` : '-'}
                   </div>
                 </div>
                 <div className="stat-card" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>📉 Avg Loss</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.avgLoss')}</div>
                   <div className="stat-value" style={{ color: player.avgLoss > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                     {player.avgLoss > 0 ? `\u200E-${cleanNumber(player.avgLoss)}` : '-'}
                   </div>
@@ -2873,13 +2875,13 @@ const StatisticsScreen = () => {
               {/* Additional Stats Row */}
               <div className="grid grid-2">
                 <div className="stat-card" style={{ background: player.avgProfit >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.avgProfit >= 0 ? '📈' : '📉'} Avg/Game</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{player.avgProfit >= 0 ? '📈' : '📉'} {t('stats.avgPerGame')}</div>
                   <div className="stat-value" style={{ color: player.avgProfit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                     {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                   </div>
                 </div>
                 <div className="stat-card">
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>🎰 Total Buyins</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{t('stats.totalBuyins')}</div>
                   <div className="stat-value" style={{ color: 'var(--text)' }}>{player.totalRebuys}</div>
                 </div>
                   </div>
@@ -2895,7 +2897,7 @@ const StatisticsScreen = () => {
                   {/* Timeframe Header */}
                   <div className="card" style={{ padding: '0.75rem', textAlign: 'center' }}>
                     <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>
-                      🤖 AI Stories — {getTimeframeLabel()}
+                      {t('stats.aiStories')} — {getTimeframeLabel()}
                     </span>
                   </div>
 
@@ -2943,16 +2945,16 @@ const StatisticsScreen = () => {
             // ===== ARCHETYPE ENGINE =====
             type Arch = { id: string; title: string; icon: string; color: string };
             const A: Record<string, Arch> = {
-              dominator: { id: 'dominator', title: 'השולט', icon: '👑', color: '#f59e0b' },
-              shark:     { id: 'shark', title: 'הכריש', icon: '🦈', color: '#3b82f6' },
-              sniper:    { id: 'sniper', title: 'הצלף', icon: '🎯', color: '#14b8a6' },
-              gambler:   { id: 'gambler', title: 'המהמר', icon: '🎰', color: '#ef4444' },
-              rock:      { id: 'rock', title: 'הסלע', icon: '🪨', color: '#64748b' },
-              phoenix:   { id: 'phoenix', title: 'הפניקס', icon: '🐦', color: '#a855f7' },
-              streaker:  { id: 'streaker', title: 'ברצף', icon: '⚡', color: '#f97316' },
-              coaster:   { id: 'coaster', title: 'רכבת הרים', icon: '🎢', color: '#ec4899' },
-              fighter:   { id: 'fighter', title: 'הלוחם', icon: '⚔️', color: '#d97706' },
-              newcomer:  { id: 'newcomer', title: 'החדש', icon: '🌱', color: '#22c55e' },
+              dominator: { id: 'dominator', title: t('stats.archDominator'), icon: '👑', color: '#f59e0b' },
+              shark:     { id: 'shark', title: t('stats.archShark'), icon: '🦈', color: '#3b82f6' },
+              sniper:    { id: 'sniper', title: t('stats.archSniper'), icon: '🎯', color: '#14b8a6' },
+              gambler:   { id: 'gambler', title: t('stats.archGambler'), icon: '🎰', color: '#ef4444' },
+              rock:      { id: 'rock', title: t('stats.archRock'), icon: '🪨', color: '#64748b' },
+              phoenix:   { id: 'phoenix', title: t('stats.archPhoenix'), icon: '🐦', color: '#a855f7' },
+              streaker:  { id: 'streaker', title: t('stats.archStreaker'), icon: '⚡', color: '#f97316' },
+              coaster:   { id: 'coaster', title: t('stats.archCoaster'), icon: '🎢', color: '#ec4899' },
+              fighter:   { id: 'fighter', title: t('stats.archFighter'), icon: '⚔️', color: '#d97706' },
+              newcomer:  { id: 'newcomer', title: t('stats.archNewcomer'), icon: '🌱', color: '#22c55e' },
             };
 
             const getArch = (p: typeof rankedByProfit[0]): Arch => {
@@ -3029,14 +3031,14 @@ const StatisticsScreen = () => {
               return items.map(m => `${m.emoji} ${m.title}: ${m.description}`);
             };
 
-            // ===== AUTO-GENERATE AI STORIES (admin only) =====
+            // ===== AUTO-GENERATE AI STORIES (owner only) =====
             const periodKey = getChronicleKey();
-            const isAdmin = role === 'admin';
+            const canGenerateAI = isOwner;
             const cached = getChronicleProfiles(periodKey);
             // Only auto-generate if there are games newer than the cached chronicle
             const hasNewData = latestGameDate && (!cached || latestGameDate.getTime() > new Date(cached.generatedAt).getTime());
 
-            if (isAdmin && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
+            if (canGenerateAI && hasNewData && !chronicleLoading && !chronicleGenRef.current && totalPeriodGames > 0) {
               chronicleGenRef.current = true;
               const latestGD = latestGameDate as Date;
 
@@ -3091,7 +3093,6 @@ const StatisticsScreen = () => {
                   setChronicleModelName(modelDisplay);
                   setChronicleGeneratedAt(genTime);
 
-                  syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
                 } catch (err) {
                   console.error('Chronicle generation failed:', err);
                   setChronicleError(err instanceof Error ? err.message : 'Generation failed');
@@ -3156,7 +3157,6 @@ const StatisticsScreen = () => {
                 setChronicleModelName(modelDisplay);
                 setChronicleGeneratedAt(genTime);
 
-                syncToCloud().catch(err => console.warn('Chronicle cloud sync failed:', err));
               } catch (err) {
                 console.error('Chronicle regeneration failed:', err);
                 setChronicleError(err instanceof Error ? err.message : 'Generation failed');
@@ -3241,10 +3241,10 @@ const StatisticsScreen = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <h3 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        הכרוניקה — {getTimeframeLabel()}
+                        {t('stats.chronicle')} — {getTimeframeLabel()}
                       </h3>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                        {totalPeriodGames} משחקים | {numPlayers} שחקנים פעילים
+                        {t('stats.periodGamesPlayers', { games: totalPeriodGames, players: numPlayers })}
                       </div>
                       {hasAiStories && (chronicleModelName || chronicleGeneratedAt) && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.15rem', opacity: 0.6 }}>
@@ -3254,7 +3254,7 @@ const StatisticsScreen = () => {
                         </div>
                       )}
                     </div>
-                    {isAdmin && !chronicleLoading && totalPeriodGames > 0 && (
+                    {canGenerateAI && !chronicleLoading && totalPeriodGames > 0 && (
                       <button
                         onClick={handleRegenerate}
                         style={{
@@ -3263,18 +3263,18 @@ const StatisticsScreen = () => {
                           border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap',
                         }}
                       >
-                        {hasAiStories ? 'יצירה מחדש' : 'יצירת סיפורים'}
+                        {hasAiStories ? t('stats.recreateChronicle') : t('stats.createChronicle')}
                       </button>
                     )}
                   </div>
                   {totalPeriodGames > 0 && totalPeriodGames <= 3 && (
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontStyle: 'italic' }}>
-                      התקופה רק התחילה — הסיפורים יתעדכנו עם כל משחק חדש
+                      {t('stats.periodJustStarted')}
                     </div>
                   )}
                   {chronicleError && (
                     <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.3rem' }}>
-                      שגיאה: {chronicleError}
+                      {t('common.errorDetail', { detail: chronicleError })}
                     </div>
                   )}
                 </div>
@@ -3282,7 +3282,7 @@ const StatisticsScreen = () => {
                 {chronicleLoading && (
                   <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-muted)' }}>
                     <div style={{ fontSize: '0.85rem', animation: 'pulse 1.5s ease-in-out infinite' }}>
-                      מייצר סיפורים...
+                      {t('stats.generatingChronicle')}
                     </div>
                     <AIProgressBar operationKey="chronicle" />
                   </div>
@@ -3290,9 +3290,9 @@ const StatisticsScreen = () => {
 
                 {!chronicleLoading && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {!hasAiStories && !isAdmin && totalPeriodGames > 0 && (
+                    {!hasAiStories && !canGenerateAI && totalPeriodGames > 0 && (
                       <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                        הסיפורים טרם נוצרו לתקופה זו
+                        {t('stats.chronicleNotCreated')}
                       </div>
                     )}
                     {rankedByProfit.map((player, idx) => {
@@ -3302,7 +3302,7 @@ const StatisticsScreen = () => {
                       return (
                         <div key={player.playerId} data-chronicle-player style={{
                           padding: '0.85rem', background: 'var(--surface)',
-                          borderRadius: '12px', direction: 'rtl',
+                          borderRadius: '12px',
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -3313,14 +3313,14 @@ const StatisticsScreen = () => {
                               {player.totalProfit >= 0 ? '\u200E+' : ''}{formatCurrency(player.totalProfit)}
                             </span>
                           </div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.4rem', paddingRight: '1.7rem' }}>
-                            {player.gamesPlayed} משחקים | {Math.round(player.winPercentage)}% נצחונות | ממוצע {player.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(player.avgProfit)}
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.4rem', paddingInlineEnd: '1.7rem' }}>
+                            {t('stats.playerDetailLine', { games: player.gamesPlayed, winPct: Math.round(player.winPercentage), avg: `${player.avgProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(player.avgProfit)}` })}
                           </div>
 
                           {buildSparkline(player)}
 
                           {aiStory && (
-                            <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text)', textAlign: 'right' }}>
+                            <p style={{ margin: 0, fontSize: '0.8rem', lineHeight: 1.7, color: 'var(--text)', textAlign: isRTL ? 'right' : 'left' }}>
                               {aiStory}
                             </p>
                           )}
@@ -3351,7 +3351,7 @@ const StatisticsScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                {isSharingChronicle ? '📸...' : '📤 שתף'}
+                {isSharingChronicle ? t('common.capturing') : t('common.share')}
               </button>
             </div>
           )}
@@ -3412,7 +3412,7 @@ const StatisticsScreen = () => {
                 </div>
             
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              {recordDetails.games.length} משחקים
+              {t('stats.gamesCount', { count: recordDetails.games.length })}
               </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -3446,7 +3446,7 @@ const StatisticsScreen = () => {
                     padding: '0.5rem 0.75rem',
                     background: 'var(--surface)',
                     borderRadius: '6px',
-                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+                    borderInlineEnd: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                   }}
@@ -3455,7 +3455,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
-                      {new Date(game.date).toLocaleDateString('en-GB', { 
+                      {new Date(game.date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-GB', { 
                         day: '2-digit', 
                         month: '2-digit',
                         year: 'numeric'
@@ -3475,7 +3475,7 @@ const StatisticsScreen = () => {
             
             {recordDetails.games.length === 0 && (
               <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
-                אין נתונים להצגה
+                {t('common.noData')}
               </div>
             )}
           </div>
@@ -3516,7 +3516,7 @@ const StatisticsScreen = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>🎮 Game History</h3>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>{t('stats.gameHistory')}</h3>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{playerAllGames.playerName}</div>
               </div>
               <button 
@@ -3535,7 +3535,7 @@ const StatisticsScreen = () => {
             </div>
             
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-              {playerAllGames.games.length} משחקים
+              {t('stats.gamesCount', { count: playerAllGames.games.length })}
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '60vh', overflowY: 'auto' }}>
@@ -3561,7 +3561,7 @@ const StatisticsScreen = () => {
                     padding: '0.5rem 0.75rem',
                     background: 'var(--surface)',
                     borderRadius: '6px',
-                    borderRight: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
+                    borderInlineEnd: `3px solid ${game.profit > 0 ? 'var(--success)' : game.profit < 0 ? 'var(--danger)' : 'var(--border)'}`,
                     cursor: 'pointer',
                     transition: 'background 0.2s'
                   }}
@@ -3570,7 +3570,7 @@ const StatisticsScreen = () => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
-                      {new Date(game.date).toLocaleDateString('en-GB', { 
+                      {new Date(game.date).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-GB', { 
                         day: '2-digit', 
                         month: '2-digit',
                         year: 'numeric'
@@ -3588,14 +3588,14 @@ const StatisticsScreen = () => {
               ))}
               {playerAllGames.games.length > 20 && (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '0.5rem', fontSize: '0.75rem' }}>
-                  + {playerAllGames.games.length - 20} more games
+                  {t('stats.moreGames', { count: playerAllGames.games.length - 20 })}
                 </div>
               )}
             </div>
             
             {playerAllGames.games.length === 0 && (
               <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
-                אין נתונים להצגה
+                {t('common.noData')}
               </div>
             )}
           </div>

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { cleanNumber } from '../utils/calculations';
 import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
@@ -9,10 +10,12 @@ import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
+import { useTranslation } from '../i18n';
 
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { role } = usePermissions();
   const isAdmin = role === 'admin';
   const [players, setPlayers] = useState<GamePlayer[]>([]);
@@ -40,7 +43,7 @@ const LiveGameScreen = () => {
   // Track "last man standing" so it's only announced once per game
   const lastManAnnouncedRef = useRef(false);
 
-  // AI TTS pool (loaded from localStorage on mount)
+  // AI TTS pool (loaded from cache on mount)
   const ttsPoolRef = useRef<LiveGameTTSPool | null>(null);
   const isSpeakingRef = useRef(false);
   const lastTTSActivityRef = useRef(Date.now());
@@ -229,6 +232,8 @@ const LiveGameScreen = () => {
     }
   }, [gameId]);
 
+  useRealtimeRefresh(useCallback(() => { if (gameId) loadData(); }, [gameId]));
+
   // Pre-load voices (they may not be immediately available)
   useEffect(() => {
     if ('speechSynthesis' in window) {
@@ -300,7 +305,7 @@ const LiveGameScreen = () => {
   const handleRemovePlayer = (player: GamePlayer) => {
     if (player.rebuys > 1) {
       // Player has already rebought, can't remove
-      alert('לא ניתן להסיר שחקן שכבר עשה ריביי. אפשר להמשיך עם 0 ג\'יפים בסוף המשחק.');
+      alert(t('live.cantRemove'));
       return;
     }
     setPlayerToRemove(player);
@@ -320,7 +325,7 @@ const LiveGameScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
-        <p className="text-muted">Loading game...</p>
+        <p className="text-muted">{t('common.loading')}</p>
       </div>
     );
   }
@@ -330,9 +335,9 @@ const LiveGameScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('live.gameNotFound')}</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{t('live.gameNotFoundDesc')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('live.goHome')}</button>
       </div>
     );
   }
@@ -1789,7 +1794,7 @@ const LiveGameScreen = () => {
     <div className="fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 className="page-title" style={{ margin: 0 }}>Live Game</h1>
+          <h1 className="page-title" style={{ margin: 0 }}>{t('live.title')}</h1>
           {isAdmin && (
             <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
               <button
@@ -1817,7 +1822,7 @@ const LiveGameScreen = () => {
           )}
         </div>
         <p className="page-subtitle" style={{ margin: 0 }}>
-          Track buyins during the game
+          {t('live.subtitle')}
           {ttsModelName && (
             <span style={{ marginLeft: '0.5rem', fontSize: '0.6rem', background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 500 }}>
               🤖 {ttsModelName}
@@ -1828,19 +1833,19 @@ const LiveGameScreen = () => {
 
       <div className="summary-card" style={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center' }}>
         <div>
-          <div className="summary-title">Total Pot</div>
+          <div className="summary-title">{t('live.totalPot')}</div>
           <div className="summary-value">{cleanNumber(totalPot)}</div>
         </div>
         <div>
-          <div className="summary-title">Total Buyins</div>
+          <div className="summary-title">{t('live.totalBuyins')}</div>
           <div className="summary-value">{totalRebuys % 1 !== 0 ? totalRebuys.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : cleanNumber(totalRebuys)}</div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">Players</h2>
-          <span className="text-muted">{players.length} playing</span>
+          <h2 className="card-title">{t('live.playersSection')}</h2>
+          <span className="text-muted">{players.length} {t('live.playing')}</span>
         </div>
 
           {players.map(player => (
@@ -1864,7 +1869,7 @@ const LiveGameScreen = () => {
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
                 onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-                title="הסר שחקן (לא הגיע)"
+                title={t('live.removePlayer')}
               >
                 ✕
               </button>
@@ -1872,26 +1877,28 @@ const LiveGameScreen = () => {
             <div>
               <div className="player-name">{player.playerName}</div>
               <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                {cleanNumber(player.rebuys * rebuyValue)} invested
+                {cleanNumber(player.rebuys * rebuyValue)} {t('live.invested')}
               </div>
             </div>
             <div className="player-rebuys">
-              <span className="rebuy-count">{Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <button 
-                  className="btn btn-primary btn-sm"
-                  onClick={() => handleRebuy(player, 1)}
-                >
-                  +1 Buyin
-                </button>
-                <button 
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => handleRebuy(player, 0.5)}
-                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                >
-                  +0.5
-                </button>
-              </div>
+              <span key={player.rebuys} className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out' }}>{Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}</span>
+              {isAdmin && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <button 
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleRebuy(player, 1)}
+                  >
+                    {t('live.buyin')}
+                  </button>
+                  <button 
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleRebuy(player, 0.5)}
+                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                  >
+                    {t('live.halfBuyin')}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -1900,16 +1907,18 @@ const LiveGameScreen = () => {
       {actions.length > 0 && (
         <div className="card">
           <div className="card-header">
-            <h2 className="card-title">Recent Actions</h2>
-            <button className="btn btn-sm btn-secondary" onClick={handleUndo}>
-              ↩ Undo
-            </button>
+            <h2 className="card-title">{t('live.recentActions')}</h2>
+            {isAdmin && (
+              <button className="btn btn-sm btn-secondary" onClick={handleUndo}>
+                {t('live.undo')}
+              </button>
+            )}
           </div>
           <div className="list">
             {actions.slice(0, 5).map((action, index) => (
               <div key={index} className="list-item">
                 <span>
-                  {action.playerName} {action.amount === 0.5 ? '+0.5 buyin' : '+1 buyin'}
+                  {action.playerName} {action.amount === 0.5 ? t('live.halfBuyinAction') : t('live.fullBuyin')}
                 </span>
                 <span className="text-muted">
                   {new Date(action.timestamp).toLocaleTimeString()}
@@ -1923,19 +1932,21 @@ const LiveGameScreen = () => {
       {/* Shared Expenses Section - Compact */}
       <div className="card" style={{ padding: '0.6rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>🍕 Expenses</span>
-          <button 
-            className="btn btn-sm btn-primary"
-            onClick={() => setShowExpenseModal(true)}
-            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-          >
-            + Add
-          </button>
+          <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>{t('live.expenses')}</span>
+          {isAdmin && (
+            <button 
+              className="btn btn-sm btn-primary"
+              onClick={() => setShowExpenseModal(true)}
+              style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
+            >
+              {t('live.addExpense')}
+            </button>
+          )}
         </div>
         
         {sharedExpenses.length === 0 ? (
           <div className="text-muted" style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem' }}>
-            No expenses yet
+            {t('live.noExpenses')}
           </div>
         ) : (
           <>
@@ -1956,27 +1967,29 @@ const LiveGameScreen = () => {
                         {cleanNumber(expense.amount)}
                       </span>
                       <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: '0.65rem' }}>
-                        ({cleanNumber(perPerson)}/person)
+                        ({cleanNumber(perPerson)}{t('live.perPerson')})
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '0.15rem' }}>
-                      <button 
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => handleEditExpense(expense)}
-                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => handleRemoveExpense(expense.id)}
-                        style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    {isAdmin && (
+                      <div style={{ display: 'flex', gap: '0.15rem' }}>
+                        <button 
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleEditExpense(expense)}
+                          style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleRemoveExpense(expense.id)}
+                          style={{ padding: '0.15rem 0.3rem', fontSize: '0.65rem' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-muted" style={{ fontSize: '0.65rem', marginTop: '0.2rem', direction: 'rtl' }}>
+                  <div className="text-muted" style={{ fontSize: '0.65rem', marginTop: '0.2rem' }}>
                     <span style={{ fontSize: '0.8rem' }}>🍕</span> {expense.paidByName}
                     {' • '}
                     <span style={{ fontSize: '0.55rem' }}>🍕</span> {expense.participantNames.join(', ')}
@@ -1991,7 +2004,7 @@ const LiveGameScreen = () => {
               textAlign: 'center',
               fontSize: '0.75rem',
             }}>
-              Total: <span style={{ fontWeight: '600' }}>{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
+              {t('live.expenseTotal')} <span style={{ fontWeight: '600' }}>{cleanNumber(sharedExpenses.reduce((sum, e) => sum + e.amount, 0))}</span>
             </div>
           </>
         )}
@@ -2013,7 +2026,7 @@ const LiveGameScreen = () => {
             onClick={e => e.stopPropagation()}
           >
             <h3 style={{ marginBottom: '1rem' }}>
-              {socialAction === 'bad_beat' ? '💔 יד כואבת — מי?' : '🔥 יד ענקית — מי?'}
+              {socialAction === 'bad_beat' ? t('live.badHand') : t('live.bigHand')}
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', justifyContent: 'center' }}>
               {players.map(p => (
@@ -2032,18 +2045,20 @@ const LiveGameScreen = () => {
               style={{ marginTop: '1rem', color: 'var(--text-muted, #aaa)' }}
               onClick={() => setSocialAction(null)}
             >
-              ביטול
+              {t('common.cancel')}
             </button>
           </div>
         </div>
       )}
 
-      <button 
-        className="btn btn-primary btn-lg btn-block mt-3"
-        onClick={handleEndGame}
-      >
-        🏁 End Game & Count Chips
-      </button>
+      {isAdmin && (
+        <button 
+          className="btn btn-primary btn-lg btn-block mt-3"
+          onClick={handleEndGame}
+        >
+          {t('live.endGame')}
+        </button>
+      )}
 
       {/* Expense Modal */}
       {showExpenseModal && (
@@ -2084,25 +2099,25 @@ const LiveGameScreen = () => {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>👋</div>
-            <h3 style={{ marginBottom: '0.5rem' }}>הסרת שחקן</h3>
+            <h3 style={{ marginBottom: '0.5rem' }}>{t('live.removeTitle')}</h3>
             <p className="text-muted" style={{ marginBottom: '1.5rem' }}>
-              להסיר את <strong>{playerToRemove.playerName}</strong> מהמשחק?
+              {t('live.removeConfirm', { name: playerToRemove.playerName })}
               <br />
-              <span style={{ fontSize: '0.875rem' }}>(השחקן לא הגיע)</span>
+              <span style={{ fontSize: '0.875rem' }}>{t('live.removeNote')}</span>
             </p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
               <button 
                 className="btn btn-secondary"
                 onClick={() => setPlayerToRemove(null)}
               >
-                ביטול
+                {t('common.cancel')}
               </button>
               <button 
                 className="btn btn-danger"
                 onClick={confirmRemovePlayer}
                 style={{ background: '#dc3545', borderColor: '#dc3545' }}
               >
-                הסר שחקן
+                {t('live.removeTitle')}
               </button>
             </div>
           </div>

@@ -10,12 +10,14 @@ import {
   updateGameStatus,
   updateGameChipGap,
   createGameEndBackup,
-  invalidateAICaches
+  invalidateAICaches,
+  deleteTTSPool,
 } from '../database/storage';
-import { syncToCloud } from '../database/githubSync';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { useTranslation } from '../i18n';
 
 // Numpad Modal Component with auto-advance
 interface NumpadModalProps {
@@ -48,6 +50,7 @@ const NumpadModal = ({
   nextChipDisplayColor,
   isLastChip
 }: NumpadModalProps) => {
+  const { t } = useTranslation();
   const [value, setValue] = useState(currentValue.toString());
   
   useEffect(() => {
@@ -104,7 +107,7 @@ const NumpadModal = ({
                 border: chipDisplayColor === '#FFFFFF' || chipDisplayColor === '#EAB308' ? '2px solid #888' : 'none'
               }} 
             />
-            <h3 className="modal-title">{chipColor} Chips</h3>
+            <h3 className="modal-title">{chipColor}{t('chips.chipsSuffix')}</h3>
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
@@ -181,10 +184,10 @@ const NumpadModal = ({
           }}
         >
           {isLastChip ? (
-            <>✓ Done with Player</>
+            <>{t('chips.numpadDone')}</>
           ) : (
             <>
-              Next →
+              {t('chips.numpadNext')}
               {nextChipDisplayColor && (
                 <div 
                   style={{ 
@@ -206,9 +209,11 @@ const NumpadModal = ({
 };
 
 const ChipEntryScreen = () => {
+  const { t } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
-  const { role } = usePermissions();
+  const { role, isSuperAdmin, isOwner } = usePermissions();
+  const isAdmin = role === 'admin' || isSuperAdmin;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
@@ -216,7 +221,6 @@ const ChipEntryScreen = () => {
   const [chipsPerRebuy, setChipsPerRebuy] = useState(10000);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   
   // Numpad state - track by chip index for auto-advance
   const [numpadOpen, setNumpadOpen] = useState(false);
@@ -244,6 +248,8 @@ const ChipEntryScreen = () => {
     }
   }, [gameId]);
 
+  useRealtimeRefresh(useCallback(() => { if (gameId) loadData(); }, [gameId]));
+
   // Save chip counts to storage
   const saveChipCounts = useCallback(() => {
     if (isLoading || Object.keys(chipCounts).length === 0) return;
@@ -255,7 +261,7 @@ const ChipEntryScreen = () => {
     });
   }, [chipCounts, players, isLoading]);
 
-  // Auto-save chip counts to localStorage whenever they change (debounced)
+  // Auto-save chip counts whenever they change (debounced)
   // Also flush immediately on unmount to prevent data loss
   useEffect(() => {
     if (isLoading || Object.keys(chipCounts).length === 0) return;
@@ -322,11 +328,9 @@ const ChipEntryScreen = () => {
     setSelectedPlayerId(playerId);
   };
 
-  // Select a player and auto-open numpad for first chip
   const selectPlayer = (playerId: string) => {
     setSelectedPlayerId(playerId);
-    // Auto-open numpad for first chip
-    if (chipValues.length > 0) {
+    if (isAdmin && chipValues.length > 0) {
       setNumpadPlayerId(playerId);
       setNumpadChipIndex(0);
       setNumpadOpen(true);
@@ -341,7 +345,7 @@ const ChipEntryScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🃏</div>
-        <p className="text-muted">Loading game...</p>
+        <p className="text-muted">{t('chips.loadingGame')}</p>
       </div>
     );
   }
@@ -351,9 +355,9 @@ const ChipEntryScreen = () => {
     return (
       <div className="fade-in" style={{ textAlign: 'center', padding: '3rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😕</div>
-        <h2 style={{ marginBottom: '0.5rem' }}>Game Not Found</h2>
-        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>This game may have been deleted or doesn't exist.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>Go Home</button>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('chips.gameNotFound')}</h2>
+        <p className="text-muted" style={{ marginBottom: '1.5rem' }}>{t('chips.gameNotFoundDesc')}</p>
+        <button className="btn btn-primary" onClick={() => navigate('/')}>{t('chips.goHome')}</button>
       </div>
     );
   }
@@ -369,8 +373,8 @@ const ChipEntryScreen = () => {
     }));
   };
 
-  // Open numpad for a specific chip by index
   const openNumpad = (playerId: string, chipIndex: number) => {
+    if (!isAdmin) return;
     setNumpadPlayerId(playerId);
     setNumpadChipIndex(chipIndex);
     setNumpadOpen(true);
@@ -483,55 +487,20 @@ const ChipEntryScreen = () => {
     
     // Create auto backup after game ends
     createGameEndBackup();
-    
-    // Upload to GitHub if admin or memberSync
-    if (role === 'admin' || role === 'memberSync') {
-      setUploadStatus('Syncing to cloud...');
-      const useMemberSyncToken = role === 'memberSync';
-      syncToCloud(useMemberSyncToken).then(result => {
-        if (result.success) {
-          setUploadStatus('✅ Synced!');
-        } else {
-          setUploadStatus('⚠️ Sync failed');
-          console.error('Sync failed:', result.message);
-        }
-        setTimeout(() => {
-          navigate(`/game-summary/${gameId}`, { state: { from: 'chip-entry', autoAI: !!getGeminiApiKey() } });
-        }, 1000);
-      });
-    } else {
-      navigate(`/game-summary/${gameId}`, { state: { from: 'chip-entry' } });
-    }
-  };
 
-  // Upload status overlay
-  if (uploadStatus) {
-    return (
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0, 0, 0, 0.9)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-      }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
-          {uploadStatus.includes('Syncing') ? '☁️' : uploadStatus.includes('✅') ? '✅' : '⚠️'}
-        </div>
-        <div style={{ fontSize: '1.2rem', color: 'white', fontWeight: '600' }}>
-          {uploadStatus}
-        </div>
-      </div>
-    );
-  }
+    // TTS pool served its purpose during the live game — free up DB space
+    deleteTTSPool(gameId);
+    
+    navigate(`/game-summary/${gameId}`, {
+      state: { from: 'chip-entry', autoAI: isOwner && !!getGeminiApiKey() },
+    });
+  };
 
   return (
     <div className="fade-in" style={{ paddingBottom: '115px' }}>
       <div className="page-header">
-        <h1 className="page-title">Count Chips</h1>
-        <p className="page-subtitle">Tap Done when finished with each player</p>
+        <h1 className="page-title">{t('chips.title')}</h1>
+        <p className="page-subtitle">{t('chips.subtitle')}</p>
       </div>
 
       {/* Live Summary Card */}
@@ -547,9 +516,9 @@ const ChipEntryScreen = () => {
           marginBottom: '0.75rem'
         }}>
           {/* Expected */}
-          <div style={{ textAlign: 'left' }}>
+          <div style={{ textAlign: 'start' }}>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase' }}>
-              Expected
+              {t('chips.expected')}
             </div>
             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text)' }}>
               {expectedChipPoints.toLocaleString()}
@@ -568,9 +537,9 @@ const ChipEntryScreen = () => {
           </div>
           
           {/* Counted */}
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'end' }}>
             <div style={{ fontSize: '0.7rem', color: getProgressColor(progressPercentage), fontWeight: '600', textTransform: 'uppercase' }}>
-              Counted
+              {t('chips.counted')}
             </div>
             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: getProgressColor(progressPercentage) }}>
               {totalChipPoints.toLocaleString()}
@@ -591,17 +560,17 @@ const ChipEntryScreen = () => {
         }}>
           {totalChipPoints === 0 ? (
             <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              Start counting chips below
+              {t('chips.startCounting')}
             </span>
           ) : isBalanced ? (
             <span style={{ color: getProgressColor(progressPercentage), fontWeight: '700', fontSize: '0.9rem' }}>
-              ✓ Balanced!
+              {t('chips.balanced')}
             </span>
           ) : (
             <span style={{ color: getProgressColor(progressPercentage), fontWeight: '600', fontSize: '0.85rem' }}>
               {totalChipPoints > expectedChipPoints 
-                ? `\u200E+${(totalChipPoints - expectedChipPoints).toLocaleString()} over` 
-                : `${(expectedChipPoints - totalChipPoints).toLocaleString()} remaining`}
+                ? t('chips.over', { amount: `\u200E+${(totalChipPoints - expectedChipPoints).toLocaleString()}` }) 
+                : t('chips.remaining', { amount: (expectedChipPoints - totalChipPoints).toLocaleString() })}
             </span>
           )}
         </div>
@@ -610,7 +579,7 @@ const ChipEntryScreen = () => {
       {/* Player Selector */}
       <div className="card" style={{ padding: '0.75rem' }}>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: '600' }}>
-          SELECT PLAYER ({completedPlayersCount}/{players.length} done)
+          {t('chips.selectPlayer', { done: `${completedPlayersCount}/${players.length}` })}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
           {players.map(player => {
@@ -669,7 +638,7 @@ const ChipEntryScreen = () => {
           </div>
           
           <div className="text-muted mb-1" style={{ fontSize: '0.875rem' }}>
-            {cleanNumber(selectedPlayer.rebuys)} buy-in{selectedPlayer.rebuys !== 1 ? 's' : ''} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()} chips expected)
+            {cleanNumber(selectedPlayer.rebuys)}{selectedPlayer.rebuys !== 1 ? t('chips.buyinPlural') : t('chips.buyinSingle')} ({cleanNumber(selectedPlayer.rebuys * rebuyValue)} = {cleanNumber(selectedPlayer.rebuys * chipsPerRebuy).toLocaleString()}{t('chips.chipsExpected')})
           </div>
 
           {/* Chip Grid */}
@@ -694,28 +663,32 @@ const ChipEntryScreen = () => {
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>×{chip.value}</span>
                 </div>
                 <div className="chip-entry-controls">
-                  <button 
-                    className="chip-btn chip-btn-minus"
-                    onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) - 1)}
-                  >
-                    −
-                  </button>
+                  {isAdmin && (
+                    <button 
+                      className="chip-btn chip-btn-minus"
+                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) - 1)}
+                    >
+                      −
+                    </button>
+                  )}
                   <input
                     type="number"
                     className="chip-count-input"
                     value={chipCounts[selectedPlayer.id]?.[chip.id] || 0}
-                    onChange={e => updateChipCount(selectedPlayer.id, chip.id, parseInt(e.target.value) || 0)}
-                    onClick={() => openNumpad(selectedPlayer.id, chipIndex)}
+                    onChange={e => isAdmin && updateChipCount(selectedPlayer.id, chip.id, parseInt(e.target.value) || 0)}
+                    onClick={() => isAdmin && openNumpad(selectedPlayer.id, chipIndex)}
                     readOnly
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: isAdmin ? 'pointer' : 'default', opacity: isAdmin ? 1 : 0.7 }}
                     min="0"
                   />
-                  <button 
-                    className="chip-btn chip-btn-plus"
-                    onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) + 1)}
-                  >
-                    +
-                  </button>
+                  {isAdmin && (
+                    <button 
+                      className="chip-btn chip-btn-plus"
+                      onClick={() => updateChipCount(selectedPlayer.id, chip.id, (chipCounts[selectedPlayer.id]?.[chip.id] || 0) + 1)}
+                    >
+                      +
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -732,7 +705,7 @@ const ChipEntryScreen = () => {
           }}>
             <div>
               <div style={{ fontWeight: '700', fontSize: '1.1rem' }}>
-                {getPlayerChipPoints(selectedPlayer.id).toLocaleString()} chips
+                {getPlayerChipPoints(selectedPlayer.id).toLocaleString()}{t('chips.chipsSuffix')}
               </div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                 = {cleanNumber(getPlayerMoneyValue(selectedPlayer.id))}
@@ -755,7 +728,7 @@ const ChipEntryScreen = () => {
                 boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)'
               }}
             >
-              ✓ Done
+              {t('chips.done')}
             </button>
           </div>
         </div>
@@ -765,8 +738,8 @@ const ChipEntryScreen = () => {
       {!selectedPlayer && completedPlayersCount === players.length && players.length > 0 && (
         <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
           <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
-          <h3 style={{ marginBottom: '0.5rem' }}>All Players Counted!</h3>
-          <p className="text-muted">Click Calculate Results below to finish</p>
+          <h3 style={{ marginBottom: '0.5rem' }}>{t('chips.allCounted')}</h3>
+          <p className="text-muted">{t('chips.clickCalculate')}</p>
         </div>
       )}
 
@@ -802,14 +775,14 @@ const ChipEntryScreen = () => {
         {/* Stats row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {completedPlayersCount}/{players.length} done
+            {t('chips.doneCount', { done: `${completedPlayersCount}/${players.length}` })}
           </span>
           <span style={{ 
             fontSize: '0.9rem', 
             fontWeight: '700', 
             color: isBalanced && totalChipPoints > 0 ? '#22c55e' : getProgressColor(progressPercentage)
           }}>
-            {isBalanced && totalChipPoints > 0 ? '✓ Balanced!' : `${totalChipPoints.toLocaleString()} / ${expectedChipPoints.toLocaleString()}`}
+            {isBalanced && totalChipPoints > 0 ? t('chips.balanced') : `${totalChipPoints.toLocaleString()} / ${expectedChipPoints.toLocaleString()}`}
           </span>
           <span style={{ 
             fontSize: '0.8rem', 
@@ -835,15 +808,16 @@ const ChipEntryScreen = () => {
             color: '#f59e0b',
             textAlign: 'center'
           }}>
-            ⚠️ {players.length - completedPlayers.size} players not marked as counted. Tap again to confirm.
+            {t('chips.warningUncounted', { count: players.length - completedPlayers.size })}
           </div>
         )}
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
-          style={{ padding: '0.6rem' }}
+          disabled={!isAdmin}
+          style={{ padding: '0.6rem', opacity: isAdmin ? 1 : 0.5 }}
         >
-          {showUncountedWarning ? '⚠️ Confirm Calculate' : '🧮 Calculate Results'}
+          {!isAdmin ? t('common.viewOnly') : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
         </button>
       </div>
 

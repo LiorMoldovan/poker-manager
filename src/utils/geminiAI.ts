@@ -5,12 +5,14 @@
 
 import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
-import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry } from '../types';
-import { playerTraitsByName } from './playerTraits';
-import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
+import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits } from '../types';
+import { getTraitsForPlayer } from './playerTraits';
+import { getAllPlayerTraits } from '../database/storage';
+import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/githubSync';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
+import { proxyGeminiGenerate, proxyGeminiModels } from './apiProxy';
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
@@ -59,9 +61,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
   let fallbackFrom: string | undefined;
 
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-
     console.log(`   ${label}: trying ${config.model}...`);
 
     try {
@@ -70,13 +69,9 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
       if (topK !== undefined) genConfig.topK = topK;
       if (responseMimeType) genConfig.responseMimeType = responseMimeType;
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: genConfig,
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: genConfig,
       });
 
       if (!response.ok) {
@@ -118,7 +113,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
         if (text.length >= 60) {
           console.warn(`   ${label}: ${config.model} MAX_TOKENS — נשמר טקסט חלקי (${text.length} תווים)`);
           lastUsedModel = config.model;
-          localStorage.setItem('gemini_working_config', JSON.stringify(config));
           const usage = data?.usageMetadata ? {
             promptTokens: data.usageMetadata.promptTokenCount || 0,
             outputTokens: data.usageMetadata.candidatesTokenCount || 0,
@@ -142,7 +136,6 @@ const callWithFallback = async (opts: FallbackCallOptions): Promise<{ text: stri
 
       console.log(`   ${label}: ✅ ${config.model} responded (${text.length} chars)`);
       lastUsedModel = config.model;
-      localStorage.setItem('gemini_working_config', JSON.stringify(config));
 
       const usage = data?.usageMetadata ? {
         promptTokens: data.usageMetadata.promptTokenCount || 0,
@@ -177,6 +170,26 @@ export interface RunGeminiTextOptions {
   topK?: number;
 }
 
+/** Build a compact trait block for AI prompts. Returns empty string if no traits exist. */
+function buildTraitBlock(playerNames: string[]): string {
+  const allTraits = getAllPlayerTraits();
+  if (allTraits.size === 0) return '';
+  const lines: string[] = [];
+  for (const name of playerNames) {
+    const t = allTraits.get(name);
+    if (!t) continue;
+    const parts: string[] = [];
+    if (t.nickname) parts.push(`כינוי "${t.nickname}"`);
+    if (t.job) parts.push(t.job);
+    if (t.team) parts.push(`אוהד ${t.team}`);
+    if (t.style.length > 0) parts.push(`סגנון: ${t.style.join('/')}`);
+    if (t.quirks.length > 0) parts.push(`תכונות: ${t.quirks.join(', ')}`);
+    if (parts.length > 0) lines.push(`${name}: ${parts.join(', ')}`);
+  }
+  if (lines.length === 0) return '';
+  return `\n--- תכונות השחקנים (השתמש בזה להעשרת התוכן) ---\n${lines.join('\n')}\n---\n`;
+}
+
 /** Plain-text Gemini call with model fallback (used by training admin, coaching, etc.). */
 export async function runGeminiTextPrompt(
   apiKey: string,
@@ -196,21 +209,11 @@ export async function runGeminiTextPrompt(
   return result.text;
 }
 
-// Store API key in localStorage
-const API_KEY_STORAGE = 'gemini_api_key';
-
 export const isOnline = (): boolean => navigator.onLine;
 
 export const getGeminiApiKey = (): string | null => {
-  return localStorage.getItem(API_KEY_STORAGE);
-};
-
-export const setGeminiApiKey = (key: string): void => {
-  localStorage.setItem(API_KEY_STORAGE, key);
-};
-
-export const clearGeminiApiKey = (): void => {
-  localStorage.removeItem(API_KEY_STORAGE);
+  const key = getSettings()?.geminiApiKey;
+  return key || 'server-managed';
 };
 
 export interface PlayerForecastData {
@@ -920,11 +923,11 @@ export const generateAIForecasts = async (
 
   const n = players.length;
 
-  // STEP 1: Collect game templates from localStorage (full game shapes, not just tonight's players)
+  // STEP 1: Collect game templates from all completed games
   let templates: number[][] = [];
   try {
-    const storedGames: Game[] = JSON.parse(localStorage.getItem('poker_games') || '[]');
-    const storedGPs: { gameId: string; profit: number }[] = JSON.parse(localStorage.getItem('poker_game_players') || '[]');
+    const storedGames = getAllGames();
+    const storedGPs = getAllGamePlayers();
     const completedIds = new Set(storedGames.filter(g => g.status === 'completed').map(g => g.id));
     const gameProfits = new Map<string, number[]>();
     for (const gp of storedGPs) {
@@ -1412,6 +1415,7 @@ export const generateAIForecasts = async (
   const chosenStyle = teaserStyles[Math.floor(Math.random() * teaserStyles.length)];
 
   const rosterImpactText = buildTonightRosterImpactLines(players.map(p => p.name));
+  const traitBlock = buildTraitBlock(players.map(p => p.name));
 
   const prompt = `אתה ${chosenStyle}. התפקיד שלך: ליצור חוויה מהנה ומרגשת לפני ערב פוקר בין חברים.
 💰 כל הסכומים בשקלים (₪). כשאתה מזכיר סכומים בטקסט, כתוב "שקל/שקלים" — זה כסף אמיתי, לא נקודות.
@@ -1426,7 +1430,7 @@ ${milestonesText ? `\n🎯 אבני דרך ועובדות מעניינות:\n${m
 ${locationInsightsText ? `\n${locationInsightsText}` : ''}
 ${comboHistoryText ? `\n${comboHistoryText}` : ''}
 ${rosterImpactText}
-${surpriseText}
+${traitBlock}${surpriseText}
 
 📤 פלט JSON בפורמט הבא:
 {"preGameTeaser":"טיזר טרום-משחק","players":[{"name":"שם","highlight":"כותרת","sentence":"משפט"}]}
@@ -1489,29 +1493,20 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
   // Try each model until one works
   let forecastFallbackFrom: string | undefined;
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    
     console.log(`   Trying: ${config.version}/${config.model}...`);
     
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 12288,
-            responseMimeType: 'application/json',
-          }
-        })
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 12288,
+          responseMimeType: 'application/json',
+        }
       });
 
       if (!response.ok) {
@@ -1532,10 +1527,8 @@ ${periodMarkers?.isFirstGameOfHalf || periodMarkers?.isFirstGameOfYear ? `• מ
         throw new Error(`API_ERROR: ${response.status} - ${errorMsg}`);
       }
       
-      // Success! Save this working model
       console.log(`   ✅ ${config.model} responded!`);
       lastUsedModel = config.model;
-      localStorage.setItem('gemini_working_config', JSON.stringify(config));
       const forecastRlHeaders = readRateLimitHeaders(response);
 
       const data = await response.json();
@@ -1979,10 +1972,9 @@ const listAvailableModels = async (apiKey: string): Promise<string[]> => {
   
   for (const version of ['v1beta', 'v1']) {
     try {
-      const url = `https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`;
       console.log(`📋 Listing models with ${version}...`);
       
-      const response = await fetch(url);
+      const response = await proxyGeminiModels(apiKey, version);
       if (response.ok) {
         const data = await response.json();
         const foundModels = data.models?.map((m: {name: string}) => `${version}: ${m.name}`) || [];
@@ -2040,36 +2032,25 @@ export const testGeminiApiKey = async (apiKey: string): Promise<boolean> => {
   
   // Try all configs
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
-    
     console.log(`\n🧪 Trying ${config.version} / ${config.model}...`);
     
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say: OK' }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 5 }
-        })
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: 'Say: OK' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 }
       });
 
       if (response.ok) {
         console.log(`✅ SUCCESS! ${config.version}/${config.model} works!`);
-        localStorage.setItem('gemini_working_config', JSON.stringify(config));
         return true;
       }
       
       const errorData = await response.json().catch(() => ({}));
       const errorMsg = errorData?.error?.message || `Status ${response.status}`;
       
-      // 429 = rate limited but key is valid! Save config and return success
       if (response.status === 429) {
         console.log(`⚠️ ${config.version}/${config.model}: Rate limited but KEY IS VALID!`);
-        console.log('   Wait a minute and try the forecast again.');
-        localStorage.setItem('gemini_working_config', JSON.stringify(config));
-        return true; // Key works, just rate limited
+        return true;
       }
       
       console.log(`❌ ${config.version}/${config.model}: ${errorMsg}`);
@@ -2108,18 +2089,12 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
   const results: ModelTestResult[] = [];
 
   for (const config of API_CONFIGS) {
-    const modelPath = config.model.startsWith('models/') ? config.model : `models/${config.model}`;
-    const url = `https://generativelanguage.googleapis.com/${config.version}/${modelPath}:generateContent?key=${apiKey}`;
     const start = Date.now();
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Say: OK' }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 5 },
-        }),
+      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+        contents: [{ parts: [{ text: 'Say: OK' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 5 },
       });
 
       const elapsed = Date.now() - start;
@@ -2137,9 +2112,12 @@ export const testModelAvailability = async (): Promise<ModelTestResult[]> => {
         recordRateLimit(config.model, rlHeaders, errMsg);
         results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'rate_limited', responseTimeMs: elapsed, remaining, limit });
       } else {
+        const errBody = await response.text().catch(() => '');
+        console.warn(`AI test ${config.model}: HTTP ${response.status}`, errBody.substring(0, 300));
         results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error', responseTimeMs: elapsed });
       }
-    } catch {
+    } catch (err) {
+      console.warn(`AI test ${config.model}: exception`, err);
       results.push({ model: config.model, displayName: getModelDisplayName(config.model), status: 'error' });
     }
   }
@@ -2201,7 +2179,7 @@ export const generateForecastComparison = async (
 - החטאה (פער >60): ${missed}/${total}
 - תחזית מדויקת ביותר: ${bestPrediction.name} (פער ${bestPrediction.gap})
 - תחזית רחוקה ביותר: ${worstPrediction.name} (פער ${worstPrediction.gap})
-
+${buildTraitBlock(comparisons.map(c => c.name))}
 כתוב משפט סיכום שכולל את אחוז הכיוון (${directionHits}/${total}) ותובנה על התחזית. לא להיות מצחיק. כתוב רק את המשפט.`;
 
   try {
@@ -2209,7 +2187,7 @@ export const generateForecastComparison = async (
       prompt,
       apiKey,
       temperature: 0.7,
-      maxOutputTokens: 100,
+      maxOutputTokens: 1024,
       label: 'Forecast comparison',
     });
     return result.text;
@@ -2358,8 +2336,7 @@ ${style.desc}
 ${tonightLines}
 
 טבלת ${periodLabel} (מעודכנת כולל הערב):
-${standingsLines}${contextBlock}${periodEndingBlock}
-
+${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.map(p => p.name))}
 ✍️ הנחיות:
 - עברית טבעית וזורמת. הזכר את כל ${tonight.length} השחקנים בשמם
 - 2-3 פסקאות קצרות (שורה ריקה ביניהן), כל פסקה 2-4 משפטים. סה״כ 60-120 מילים${periodEndingLines.length > 0 ? ` (+ פסקאות תקופתיות נוספות)` : ''}
@@ -2372,7 +2349,7 @@ ${standingsLines}${contextBlock}${periodEndingBlock}
 ⚠️ דיוק עובדתי:
 - כל מספר, רווח, הפסד, רצף, שיא ודירוג חייבים להגיע ישירות מהנתונים למעלה
 - שינויי דירוג מופיעים ב"שינויים בטבלה" — אם לא מופיע שם, אל תטען שמישהו עלה/ירד/עקף
-- אל תמציא עובדות ביוגרפיות (מוצא, מקצוע, גיל). אתה יודע רק את הנתונים
+- אל תמציא עובדות ביוגרפיות. מותר להשתמש רק בתכונות שחקנים שסופקו למעלה (אם סופקו)
 - אל תמציא שיאים או הישגים שלא מופיעים בנתונים
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
@@ -2497,8 +2474,7 @@ ${style.desc}
 ${playerLines}${milestones.length > 0 ? `
 
 🏆 אבני דרך ואירועים בולטים בתקופה:
-${milestones.join('\n')}` : ''}
-
+${milestones.join('\n')}` : ''}${buildTraitBlock(players.map(p => p.name))}
 ✍️ כללי כתיבה:
 - כתוב פסקה אחת (2-4 משפטים) לכל שחקן
 - עברית טבעית, זורמת, מעניינת — לא רובוטית, לא טמפלייט
@@ -2512,7 +2488,7 @@ ${milestones.join('\n')}` : ''}
 
 ⚠️ דיוק עובדתי (חובה מוחלטת):
 - כל מספר, דירוג, רצף ותוצאה חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות, כינויים קבועים, תארים או הישגים
+- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
 - אם לא בטוח — השמט. עדיף קצר ומדויק מאשר ארוך עם המצאות
 
 📤 פורמט הפלט:
@@ -2629,7 +2605,7 @@ export const generateGraphInsights = async (
 
 📊 טבלת השחקנים (${totalGames} משחקים${isEarlyPeriod ? ', התקופה רק התחילה' : ''}):
 ${playerLines}
-
+${buildTraitBlock(sorted.map(p => p.playerName))}
 ✍️ מה לכלול:
 - מגמות: מי שולט? מי עולה? מי בנפילה?
 - יריבויות ומרדפים: מי רודף את מי בטבלה? מהם הפערים?
@@ -2640,7 +2616,7 @@ ${playerLines}
 ⚠️ כללים:
 - פסקה אחת זורמת, לא רשימה עם נקודות
 - כל מספר, רצף ודירוג חייבים להגיע מהנתונים שלמעלה בלבד
-- אל תמציא עובדות, כינויים קבועים, או הישגים
+- אל תמציא עובדות. מותר להשתמש רק בתכונות שחקנים שסופקו (אם סופקו)
 - "רווח כולל" = סך כל הרווח של השחקן. "פער" = ההפרש בין שני שחקנים סמוכים בטבלה. אלו מספרים שונים! אל תבלבל ביניהם
 - כשמציין פער בטבלה, השתמש במספר מ"פער מהבא" או "פער מלמעלה", לא מהרווח הכולל
 - אם לא בטוח — השמט${isEarlyPeriod ? '\n- התקופה רק התחילה, היזהר ממסקנות גורפות' : ''}
@@ -2651,7 +2627,7 @@ ${playerLines}
     prompt,
     apiKey,
     temperature: 0.9,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 4096,
     topP: 0.95,
     label: 'Graph insights',
   });
@@ -2675,7 +2651,7 @@ interface TTSPlayerInput {
   id: string;
   name: string;
   stats: PlayerStats | null;
-  traits: typeof playerTraitsByName[string] | undefined;
+  traits: PlayerTraits | undefined;
   training: TTSPlayerTraining | null;
 }
 
@@ -2710,7 +2686,7 @@ export const generateLiveGameTTSPool = async (
     id,
     name: playerNames[i],
     stats: allStats.find(s => s.playerId === id) || null,
-    traits: playerTraitsByName[playerNames[i]],
+    traits: getTraitsForPlayer(playerNames[i]),
     training: trainingByName[playerNames[i]] || null,
   }));
 

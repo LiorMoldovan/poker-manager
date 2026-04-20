@@ -11,10 +11,10 @@ alwaysApply: true
 
 - **Stack**: React 19 + TypeScript 5 (strict) + Vite 6
 - **Styling**: Inline React styles + CSS variables (dark theme in `src/styles/index.css`)
-- **Data**: LocalStorage (no backend/database)
-- **Cloud**: GitHub Pages repo as storage via GitHub API
+- **Data**: **Supabase PostgreSQL** via in-memory cache (`supabaseCache.ts`)
+- **Cloud**: Supabase direct DB with Realtime subscriptions
 - **Deployment**: Vercel (auto-deploys from `main` branch)
-- **Dev server**: `npm run dev` → **http://localhost:3000** (NEVER use port 3001)
+- **Dev server**: `npm run dev` → **http://localhost:3000** (default; use `npx vite --port <PORT>` if 3000 is busy)
 - **AI**: Google Gemini API for narratives, forecasts, summaries, chronicles
 - **Language**: Hebrew (RTL) — all user-facing text in Hebrew
 - **Target**: Mobile-first, must also work on desktop
@@ -24,42 +24,61 @@ alwaysApply: true
 
 ```
 src/
-├── App.tsx                    # Root: routing, auth (PinLock), permission context, activity tracking
+├── App.tsx                    # Root: routing, Supabase auth, PlayerPicker, PermissionContext, activity tracking
 ├── main.tsx                   # Entry point (renders App into #root)
 ├── version.ts                 # APP_VERSION constant + CHANGELOG array
-├── permissions.ts             # Role system: admin | member | memberSync | viewer (PIN-based)
+├── permissions.ts             # Role system: admin | member
 ├── types/index.ts             # ALL TypeScript interfaces and types
 ├── styles/index.css           # CSS variables, dark theme, global styles
 ├── components/
 │   ├── Navigation.tsx         # Bottom tab bar (New Game, History, Stats, Graphs, Settings)
-│   ├── PinLock.tsx            # PIN entry screen with 4-digit keypad
-│   └── AddExpenseModal.tsx    # Modal for shared expenses (pizza etc.) during live games
+│   ├── GroupManagementTab.tsx  # Group management UI: members, roles, invite code, ownership transfer
+│   ├── GroupSwitcher.tsx       # Multi-group switcher UI for users in multiple groups
+│   ├── TrainingAdminTab.tsx    # Training admin panel (super admin)
+│   ├── AIProgressBar.tsx       # Animated progress bar for AI generation
+│   └── AddExpenseModal.tsx     # Modal for shared expenses (pizza etc.) during live games
 ├── screens/
 │   ├── NewGameScreen.tsx      # Game setup: player selection, AI forecast, pre-game teaser, period indicators
 │   ├── LiveGameScreen.tsx     # Active game: rebuys, timer, voice announcements, shared expenses
 │   ├── ChipEntryScreen.tsx    # End-of-game chip counting, profit calculation, triggers background AI
-│   ├── GameSummaryScreen.tsx  # Post-game: results, settlements, AI summary, forecast comparison, collapsible sections
+│   ├── GameSummaryScreen.tsx  # Post-game: results, settlements, AI summary, forecast comparison
 │   ├── HistoryScreen.tsx      # Completed games list with search/filter
-│   ├── GameDetailsScreen.tsx  # Individual game details (legacy — not routed, GameSummaryScreen used instead)
 │   ├── StatisticsScreen.tsx   # Player stats table, records, AI-generated Chronicle per player
 │   ├── GraphsScreen.tsx       # Charts (Recharts): cumulative profit, head-to-head, impact analysis + AI insights
-│   ├── SettingsScreen.tsx     # Tabs: Players, Game, Chips, Backup, Activity (admin), About
-│   ├── TrainingScreen.tsx     # Poker training hub with category selection
-│   ├── QuickTrainingScreen.tsx# Quick poker scenario drills
-│   └── TrainingHandScreen.tsx # Full hand-by-hand training with AI analysis
+│   ├── SettingsScreen.tsx      # Tabs: Group, Players, Chips, Game, AI (owner), Training (super admin), Activity (owner), About, SuperAdmin
+│   ├── GameDetailsScreen.tsx   # Detailed view of a single completed game (with realtime refresh)
+│   ├── TrainingScreen.tsx      # Poker training hub with category selection
+│   ├── QuickTrainingScreen.tsx # Quick poker scenario drills
+│   ├── TrainingHandScreen.tsx  # Full hand-by-hand training with AI analysis
+│   ├── SharedTrainingScreen.tsx# Shared training scenarios (public links)
+│   └── SharedQuickPlayScreen.tsx # Shared quick-play training (public links)
+├── hooks/
+│   ├── useSupabaseAuth.ts     # Supabase auth: session, group membership, login/signup, group management RPCs
+│   └── useRealtimeRefresh.ts  # Listens for 'supabase-cache-updated' events to trigger screen re-renders
 ├── database/
-│   ├── storage.ts             # All LocalStorage CRUD: players, games, gamePlayers, settings, forecasts, backups, chronicles
-│   ├── githubSync.ts          # GitHub API: sync data, backups, training data, activity log
-│   └── embeddedToken.ts       # Obfuscated GitHub token for non-admin users (read sync + activity writes)
+│   ├── storage.ts             # Data access API — delegates to supabaseCache
+│   ├── supabaseClient.ts      # Supabase client initialization (anon key)
+│   ├── supabaseCache.ts       # In-memory cache syncing to Supabase (denormalize/normalize mappers)
+│   ├── migrateToSupabase.ts   # Chip repair (fixChipCountIds) + training import (migrateTrainingFromCloud)
+│   └── githubSync.ts          # Training data helpers (Supabase-backed)
+├── i18n/
+│   ├── index.ts               # i18n initialization and useTranslation hook
+│   ├── translations.ts        # Hebrew + English translation strings
+│   └── LanguageContext.tsx     # Language context provider
 └── utils/
     ├── geminiAI.ts            # ALL Gemini AI: forecasts, summaries, chronicles, graph insights, comparison
+    ├── backgroundAI.ts        # Background AI generation after game completion
+    ├── apiProxy.ts            # Vercel Edge Function proxy (all POST, per-group API key support)
+    ├── aiTiming.ts            # AI generation timing utilities
+    ├── aiUsageTracker.ts      # AI usage tracking per group
     ├── calculations.ts        # Currency formatting, Hebrew dates, formatHebrewHalf, utility math
     ├── milestones.ts          # Player milestone detection (streaks, records, comebacks, etc.)
+    ├── playerTraits.ts        # AI-generated player personality traits
     ├── comboHistory.ts        # Recurring player combo analysis (who played together before)
     ├── activityLogger.ts      # Silent user activity tracking + device fingerprinting
     ├── sharing.ts             # Text-based game summary generation + WhatsApp sharing
     ├── pokerTraining.ts       # Training scenario generation, progress tracking, categories
-    ├── tts.ts                 # Hebrew text-to-speech (browser speechSynthesis + Google Cloud TTS)
+    ├── tts.ts                 # Hebrew text-to-speech (browser speechSynthesis + ElevenLabs TTS)
     └── validatePlayerData.ts  # Console-based data validation (window.validateAllPlayers)
 ```
 
@@ -77,14 +96,15 @@ NewGameScreen → LiveGameScreen → ChipEntryScreen → GameSummaryScreen
 
 ## Auth & Permissions
 
-PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
+Supabase Auth (email/password + Google OAuth). Group-based multi-tenancy with invite codes.
+Hook: `useSupabaseAuth.ts`. Auth flow: `AuthScreen.tsx` → `GroupSetupScreen.tsx` (create/join) → `PlayerPicker` (self-create player) → app.
 
-| Role | PIN | Can Do |
-|------|-----|--------|
-| `admin` | 2351 | Everything: games, players, settings, AI, sync, training |
-| `member` | 2580 | View + manage games + add players |
-| `memberSync` | 0852 | Same as member + cloud sync via embedded token |
-| `viewer` | 9876 | View only + backup |
+| Role | Can Do |
+|------|--------|
+| `admin` | Everything: games, players, settings, AI |
+| `member` | View all data |
+
+**Owner vs Admin**: The group creator (`groups.created_by`) is the **owner** — a special admin who can modify other admins, transfer ownership, regenerate invite codes, manage per-group API keys, and access training/activity tabs. Regular admins cannot touch the owner or other admins. Enforced in SQL RPCs (`supabase/004-group-management.sql`) and UI (`isOwner` boolean in PermissionContext). **Super Admin** is a platform-level role (`super_admins` table, migration 007) for cross-group visibility.
 
 ## Key Patterns
 
@@ -93,4 +113,4 @@ PIN-based authentication via `PinLock.tsx`. Roles stored in `sessionStorage`.
 - **Dark theme**: Use CSS variables (`var(--surface)`, `var(--text)`, etc.)
 - **Native elements**: Use explicit hex colors for `<select>`/`<option>` on PC compatibility
 - **Audio**: Shared `AudioContext` (max ~6 per page), `speechSynthesis` for Hebrew TTS
-- **Zero-sum**: Game profits across all players must always sum to exactly zero
+- **Zero-sum**: Game profits across all players must always sum to exactly zero (two DB triggers: on `games` status + on `game_players` profit)

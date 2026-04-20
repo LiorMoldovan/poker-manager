@@ -1,10 +1,11 @@
 {
   "git": {
     "deploymentEnabled": {
-      "main": true
+      "main": true,
+      "supabase-migration": true
     }
   },
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src/ index.html package.json vite.config.ts tsconfig.json vercel.json",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- src/ api/ index.html package.json vite.config.ts tsconfig.json vercel.json",
   "rewrites": [
     {
       "source": "/(.*)",

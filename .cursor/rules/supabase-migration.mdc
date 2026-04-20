@@ -1,0 +1,73 @@
+---
+description: Supabase standards — validation checklist, column mapping, group management RPCs, API key flow
+globs: "{src/database/**,src/utils/activityLogger.ts,src/hooks/useSupabaseAuth.ts,src/components/GroupManagementTab.tsx,supabase/**,api/**}"
+alwaysApply: false
+---
+
+# Supabase Standards
+
+## Migration Status: COMPLETE
+
+The app is fully Supabase-backed. There is no `USE_SUPABASE` flag, no `config.ts`, no localStorage fallback, and no `PinLock`. All data goes through `supabaseCache.ts`.
+
+| Phase | Status |
+|-------|--------|
+| Schema + RLS | DONE — 24 tables with RLS policies |
+| Auth + Groups | DONE — Supabase Auth + group management RPCs |
+| Core Data Layer | DONE — `supabaseCache.ts` + `storage.ts` (single path, with error handling) |
+| Training + Activity | DONE — `githubSync.ts` + `activityLogger.ts` (Supabase-only) |
+| Server-side AI | DONE — 4 Vercel Edge Functions (all POST) + `apiProxy.ts` |
+| Realtime | DONE — 15-table subscription + publication, `useRealtimeRefresh` on all screens |
+| Group Management | DONE — 13+ RPCs with owner-aware security, multi-group support (008) |
+| Per-Group API Keys | DONE — `settings.gemini_api_key` + `elevenlabs_api_key`, mapped in cache |
+| Security Hardening | DONE — RLS fixes, search_path, membership checks in RPCs, JWT auth returns 500 if misconfigured |
+| Permissions Overhaul | DONE — Viewer role removed (007), `super_admins` table, `training_enabled` per group |
+| Zero-Sum Hardening | DONE — Two DB triggers: `check_game_zero_sum` on games + `check_game_players_zero_sum` on game_players (008) |
+| Legacy Cleanup | DONE — No dual branches remain, dead migration code removed |
+
+## Cache Architecture
+
+`supabaseCache.ts` provides synchronous read/write via an in-memory `Map`. Writes debounce (300ms) and push to Supabase asynchronously via `pushToSupabase` (which includes `logSyncError` error handling for all operations). Realtime subscriptions on 15 tables auto-refresh the cache on remote changes (500ms debounce).
+
+### ID Strategy
+All new IDs use `crypto.randomUUID()`. Legacy timestamp IDs may exist in migrated data.
+
+### Multi-Tenancy
+Every table has `group_id`. RLS policies enforce isolation. `getGroupId()` from `supabaseCache.ts` provides the current group.
+
+## Group Management SQL RPCs (`supabase/004-group-management.sql` + `008-multi-group.sql`)
+
+13+ RPCs with owner-aware security. All sensitive operations check `groups.created_by`. Multi-group RPCs (008) accept optional `p_group_id` parameter with `DEFAULT NULL` for backward compatibility.
+
+| RPC | Who Can Call | Purpose |
+|-----|-------------|---------|
+| `create_group(name, display_name)` | Any authenticated | Creates group + owner player + default settings |
+| `join_group_by_invite(code, display_name)` | Any authenticated | Joins via invite code as `member` |
+| `link_member_to_player(target_player_id)` | Any member | Links own account to existing player |
+| `self_create_and_link(player_name)` | Any member | Creates player and links self |
+| `update_member_role(target_user_id, new_role)` | Admin (owner for admin targets) | Changes role |
+| `remove_group_member(target_user_id)` | Admin (owner for admin targets) | Removes member |
+| `transfer_ownership(new_owner_id)` | Owner only | Transfers ownership |
+| `regenerate_invite_code()` | Owner only | New invite code |
+| `create_player_invite(target_player_id)` | Admin | Personal invite tied to player |
+| `join_group_by_player_invite(code, display_name)` | Any authenticated | Joins via personal invite |
+| `unlink_member_player(target_user_id)` | Admin | Unlinks member from player |
+| `add_member_by_email(target_email, target_player_id)` | Admin | Adds user by email |
+| `fetch_group_members_with_email()` | Admin | Member list with emails |
+
+## API Key Flow
+
+```
+Owner sets keys in Settings > AI tab
+  → Saved to `settings` table (gemini_api_key / elevenlabs_api_key)
+  → Cache maps via toSettings/settingsToRow (includes API key fields)
+  → Client reads via getSettings()?.geminiApiKey
+  → Sent in proxy request body to Vercel Edge Functions
+  → Edge Function: request body key > env var fallback > error
+```
+
+## Supabase Project Details
+- **Region**: Europe (Frankfurt)
+- **Project URL**: `https://ursjltxklmxmapfvkttj.supabase.co`
+- **Client**: Initialized in `src/database/supabaseClient.ts`
+- **Google OAuth**: Configured in Google Cloud Console (project: Poker-Manager)

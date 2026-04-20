@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation, type TranslationKey } from '../i18n';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
@@ -11,8 +13,6 @@ import AIProgressBar from '../components/AIProgressBar';
 import { getSharedProgress } from '../utils/pokerTraining';
 import { formatCurrency } from '../utils/calculations';
 import { withAITiming } from '../utils/aiTiming';
-import { syncToCloud } from '../database/githubSync';
-
 import { PeriodMarkers } from '../types';
 
 /** קצת מתחת ל-2 — פחות פיקסלים להעלאה לווטסאפ, עדיין חד מספיק לטלפון */
@@ -128,14 +128,14 @@ const getNextGameNightDate = (gameNightDays: number[]): Date => {
   return now;
 };
 
-const PERIOD_OPTIONS: { value: string; label: string; getMarkerOverrides: () => Partial<PeriodMarkers> }[] = [
-  { value: 'regular', label: '🎮 משחק רגיל', getMarkerOverrides: () => ({ isFirstGameOfMonth: false, isLastGameOfMonth: false, isFirstGameOfHalf: false, isLastGameOfHalf: false, isFirstGameOfYear: false, isLastGameOfYear: false }) },
-  { value: 'firstMonth', label: '🗓️ ראשון בחודש', getMarkerOverrides: () => ({ isFirstGameOfMonth: true, isLastGameOfMonth: false }) },
-  { value: 'lastMonth', label: '🗓️ אחרון בחודש', getMarkerOverrides: () => ({ isLastGameOfMonth: true, isFirstGameOfMonth: false }) },
-  { value: 'firstHalf', label: '🚀 פתיחת מחצית', getMarkerOverrides: () => ({ isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfHalf: false }) },
-  { value: 'lastHalf', label: '🏁 סגירת מחצית', getMarkerOverrides: () => ({ isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfHalf: false }) },
-  { value: 'firstYear', label: '🎆 פתיחת שנה', getMarkerOverrides: () => ({ isFirstGameOfYear: true, isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfYear: false }) },
-  { value: 'lastYear', label: '🎇 סגירת שנה', getMarkerOverrides: () => ({ isLastGameOfYear: true, isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfYear: false }) },
+const PERIOD_OPTIONS: { value: string; getMarkerOverrides: () => Partial<PeriodMarkers> }[] = [
+  { value: 'regular', getMarkerOverrides: () => ({ isFirstGameOfMonth: false, isLastGameOfMonth: false, isFirstGameOfHalf: false, isLastGameOfHalf: false, isFirstGameOfYear: false, isLastGameOfYear: false }) },
+  { value: 'firstMonth', getMarkerOverrides: () => ({ isFirstGameOfMonth: true, isLastGameOfMonth: false }) },
+  { value: 'lastMonth', getMarkerOverrides: () => ({ isLastGameOfMonth: true, isFirstGameOfMonth: false }) },
+  { value: 'firstHalf', getMarkerOverrides: () => ({ isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfHalf: false }) },
+  { value: 'lastHalf', getMarkerOverrides: () => ({ isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfHalf: false }) },
+  { value: 'firstYear', getMarkerOverrides: () => ({ isFirstGameOfYear: true, isFirstGameOfHalf: true, isFirstGameOfMonth: true, isLastGameOfYear: false }) },
+  { value: 'lastYear', getMarkerOverrides: () => ({ isLastGameOfYear: true, isLastGameOfHalf: true, isLastGameOfMonth: true, isFirstGameOfYear: false }) },
 ];
 
 const getAutoDetectedPeriodValue = (markers: PeriodMarkers): string => {
@@ -157,8 +157,11 @@ const applyPeriodOverride = (base: PeriodMarkers, override: string | null): Peri
 
 const NewGameScreen = () => {
   const navigate = useNavigate();
-  const { role, signOut, playerName } = usePermissions();
+  const { t, isRTL } = useTranslation();
+  const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
+  const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin';
+  const isMember = role === 'member' && !isSuperAdmin;
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddPlayer, setShowAddPlayer] = useState(false);
@@ -168,8 +171,6 @@ const NewGameScreen = () => {
   const [showPermanentGuests, setShowPermanentGuests] = useState(false);
   const [showGuests, setShowGuests] = useState(false);
   const [showForecast, setShowForecast] = useState(false);
-  const [showSharePrompt, _setShowSharePrompt] = useState(false);
-  const [pendingGameId, _setPendingGameId] = useState<string | null>(null);
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([]);
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
@@ -253,6 +254,9 @@ const NewGameScreen = () => {
     setPlayerStats(getPlayerStats());
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useRealtimeRefresh(useCallback(() => loadPlayers(), []));
+
   // Separate players by type
   const permanentPlayers = players.filter(p => p.type === 'permanent');
   const permanentGuestPlayers = players.filter(p => p.type === 'permanent_guest');
@@ -296,12 +300,12 @@ const NewGameScreen = () => {
   const handleAddPlayer = () => {
     const trimmedName = newPlayerName.trim();
     if (!trimmedName) {
-      setError('Please enter a name');
+      setError(t('newGame.emptyName'));
       return;
     }
     
     if (getPlayerByName(trimmedName)) {
-      setError('Player already exists');
+      setError(t('newGame.duplicateName'));
       return;
     }
 
@@ -322,19 +326,19 @@ const NewGameScreen = () => {
 
   const handleStartGame = () => {
     if (selectedIds.size < 2) {
-      setError('Select at least 2 players');
+      setError(t('newGame.minPlayers'));
       return;
     }
 
     if (getActiveGame()) {
-      setError('There is already an active game. Resume or abandon it first.');
+      setError(t('newGame.activeGameExists'));
       return;
     }
     
     // Validate location is selected
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
     if (!location) {
-      setError('Please select a game location');
+      setError(t('newGame.selectLocation'));
       return;
     }
     
@@ -393,7 +397,7 @@ const NewGameScreen = () => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (apiKey) {
+    if (apiKey && isOwner) {
       setGeneratingTTS(true);
       try {
         const stats2026 = getPlayerStats({ start: new Date('2026-01-01') });
@@ -443,19 +447,16 @@ const NewGameScreen = () => {
   const handlePublishForecast = () => {
     publishPendingForecast(true);
     setPublishedForecast(getPendingForecast());
-    syncToCloud().catch(e => console.warn('Auto-sync after publish failed:', e));
   };
 
   const handleUnpublishForecast = () => {
     publishPendingForecast(false);
     setPublishedForecast(getPendingForecast());
-    syncToCloud().catch(e => console.warn('Auto-sync after unpublish failed:', e));
   };
 
   const handleDeleteForecast = () => {
     clearPendingForecast();
     setPublishedForecast(null);
-    syncToCloud().catch(e => console.warn('Auto-sync after delete failed:', e));
   };
 
   const handleSharePublished = () => {
@@ -471,19 +472,6 @@ const NewGameScreen = () => {
     setAiForecasts(restored);
     if (publishedForecast.aiModel) setAiModelName(publishedForecast.aiModel);
     setShowForecast(true);
-  };
-
-  const handleShareAndStart = async () => {
-    await shareForecast();
-    if (pendingGameId) {
-      navigate(`/live-game/${pendingGameId}`);
-    }
-  };
-  
-  const handleSkipShare = () => {
-    if (pendingGameId) {
-      navigate(`/live-game/${pendingGameId}`);
-    }
   };
 
   // Get stats for a player
@@ -1096,7 +1084,7 @@ const NewGameScreen = () => {
       const buildComboScreenshotHtml = (): string => {
         if (!comboSnapshot) return '';
         if (comboSnapshot.isFirstTime) {
-          return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); text-align: right; direction: rtl; font-size: 0.85rem; color: #e2e8f0;">
+          return `<div style="padding: 0.75rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08)); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 0.85rem; color: #e2e8f0;">
             <span style="font-size: 1rem;">🆕</span> <strong style="color: #4ade80;">הרכב חדש!</strong> זו הפעם הראשונה שבדיוק ${comboSnapshot.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
           </div>`;
         }
@@ -1129,7 +1117,7 @@ const NewGameScreen = () => {
             insightsHtml.push(`<div style="font-size: 0.76rem; color: #f87171;">😱 ${game.loserName} הפסיד הכי הרבה עם רק קנייה אחת</div>`);
           }
 
-          return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
+          return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3);">
             ${headerHtml}
             <div style="padding: 0.4rem 0.55rem; border-radius: 8px; background: rgba(255,255,255,0.04); margin-bottom: 0.5rem;">
               <div style="color: #64748b; font-size: 0.7rem; margin-bottom: 0.2rem;">${dateStr} (${timeAgoStr})</div>
@@ -1166,7 +1154,7 @@ const NewGameScreen = () => {
           </div>`;
         }).join('');
 
-        return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: right; direction: rtl;">
+        return `<div style="padding: 0.85rem 1rem; margin-top: 1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08)); border: 1px solid rgba(251, 191, 36, 0.3);">
           ${headerHtml}
           <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.04); font-size: 0.8rem; color: #e2e8f0;">
             <div>👑 <span style="color: #fbbf24; font-weight: 600;">מוביל ההרכב:</span> ${top.playerName} <span style="color: ${top.totalProfit >= 0 ? '#4ade80' : '#f87171'};">(${top.totalProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.totalProfit)})</span> <span style="color: #64748b; font-size: 0.72rem;">ממוצע ${top.avgProfit >= 0 ? '\u200E+' : '\u200E'}${Math.round(top.avgProfit)} • ${top.wins}/${comboSnapshot.totalGamesWithCombo} נצחונות</span></div>
@@ -1192,8 +1180,8 @@ const NewGameScreen = () => {
             ${modelLabel ? `<div style="font-size: 0.55rem; color: #64748b; margin-top: 0.1rem; opacity: 0.7;">model: ${modelLabel}</div>` : ''}
             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">${today}</div>
           </div>
-          <div style="padding: 1rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10)); border: 1px solid rgba(139, 92, 246, 0.35); text-align: right; direction: rtl;">
-            <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; flex-direction: row-reverse; justify-content: center;">
+          <div style="padding: 1rem 1.1rem; border-radius: 12px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10)); border: 1px solid rgba(139, 92, 246, 0.35);">
+            <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.6rem; flex-direction: ${isRTL ? 'row-reverse' : 'row'}; justify-content: center;">
               <span style="font-size: 1.2rem;">🎙️</span>
               <span style="font-size: 0.85rem; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">טיזר המשחק</span>
             </div>
@@ -1258,7 +1246,7 @@ const NewGameScreen = () => {
               }
               
               return `
-                <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: ${bgColor}; border-right: 4px solid ${borderColor};">
+                <div style="padding: 0.75rem 0.85rem; margin-bottom: 0.5rem; border-radius: 10px; background: ${bgColor}; ${isRTL ? `border-right: 4px solid ${borderColor}` : `border-left: 4px solid ${borderColor}`};">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                     <span style="font-weight: 700; font-size: 1rem; color: #f1f5f9;">
                       ${isFirst && expected > 0 ? '👑 ' : ''}${name}${isSurprise ? ' ⚡' : ''}
@@ -1267,8 +1255,8 @@ const NewGameScreen = () => {
                       ${expected >= 0 ? '\u200E+' : '\u200E-'}${Math.abs(Math.round(expected)).toLocaleString()}
                     </span>
                   </div>
-                  ${highlight ? `<div style="font-size: 0.78rem; color: #f1f5f9; opacity: 0.8; margin-bottom: 0.4rem; direction: rtl; line-height: 1.4;">${highlight}</div>` : ''}
-                  <div style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; direction: rtl; font-style: italic;">
+                  ${highlight ? `<div style="font-size: 0.78rem; color: #f1f5f9; opacity: 0.8; margin-bottom: 0.4rem; line-height: 1.4;">${highlight}</div>` : ''}
+                  <div style="font-size: 0.85rem; color: #94a3b8; line-height: 1.45; font-style: italic;">
                     ${sentence}
                   </div>
                 </div>
@@ -1415,7 +1403,7 @@ const NewGameScreen = () => {
   const handleShowForecast = async (overrideIds?: Set<string>, overrideLocation?: string) => {
     const ids = overrideIds || selectedIds;
     if (ids.size < 2) {
-      setError('Select at least 2 players');
+      setError(t('newGame.minPlayers'));
       return;
     }
     if (overrideIds) setSelectedIds(overrideIds);
@@ -1502,7 +1490,7 @@ const NewGameScreen = () => {
         setIsLoadingAI(false);
         
         if (err.message === 'NO_API_KEY') {
-          setAiError('No API key configured. Using static forecasts.');
+          setAiError(t('newGame.noApiKey'));
           setCachedForecasts(generateForecasts());
         } else if (err.message?.includes('rate limit') || err.message?.includes('Rate limit') || err.message?.includes('unavailable')) {
           // Start countdown timer for rate limit
@@ -1549,7 +1537,7 @@ const NewGameScreen = () => {
   };
 
 
-  const renderPlayerTile = (player: Player) => (
+  const renderPlayerTile = (player: Player, index: number) => (
     <div
       key={player.id}
       onClick={() => togglePlayer(player.id)}
@@ -1563,7 +1551,9 @@ const NewGameScreen = () => {
         background: selectedIds.has(player.id) ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
         color: selectedIds.has(player.id) ? 'var(--primary)' : 'var(--text)',
         transition: 'all 0.15s ease',
-        textAlign: 'center'
+        textAlign: 'center',
+        animation: 'scaleIn 0.2s ease-out backwards',
+        animationDelay: `${index * 0.03}s`,
       }}
     >
       {selectedIds.has(player.id) && '✓ '}{player.name}
@@ -1585,10 +1575,10 @@ const NewGameScreen = () => {
             <span style={{ fontSize: '1.5rem' }}>⚠️</span>
             <div>
               <div style={{ fontWeight: '700', color: 'white', fontSize: '1rem' }}>
-                משחק פעיל נמצא!
+                {t('newGame.activeGame')}
               </div>
               <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.8rem' }}>
-                {activeGame.status === 'live' ? 'שלב: משחק חי (buyins)' : 'שלב: ספירת צ\'יפים'}
+                {activeGame.status === 'live' ? t('newGame.stageLive') : t('newGame.stageChips')}
               </div>
             </div>
           </div>
@@ -1621,30 +1611,32 @@ const NewGameScreen = () => {
                 gap: '0.5rem'
               }}
             >
-              ▶️ המשך משחק
+              {t('newGame.resumeGame')}
             </button>
-            <button
-              onClick={() => setShowAbandonConfirm(true)}
-              style={{
-                flex: 1,
-                background: 'rgba(255,255,255,0.2)',
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.3)',
-                borderRadius: '8px',
-                padding: '0.6rem',
-                fontWeight: '600',
-                fontSize: '0.8rem',
-                cursor: 'pointer'
-              }}
-            >
-              🗑️ בטל
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowAbandonConfirm(true)}
+                style={{
+                  flex: 1,
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: '8px',
+                  padding: '0.6rem',
+                  fontWeight: '600',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {t('newGame.abandonGame')}
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Training Banner */}
-      {(() => {
+      {/* Training Banner — visible when training is enabled for the group */}
+      {trainingEnabled && (() => {
         const tp = playerName ? getSharedProgress(playerName) : null;
         const myStats = playerName ? playerStats.find(s => s.playerName === playerName) : null;
         const hasTraining = tp && tp.totalQuestions > 0;
@@ -1758,7 +1750,6 @@ const NewGameScreen = () => {
               padding: '0.6rem 0.8rem',
               marginBottom: '0.5rem',
               cursor: 'pointer',
-              direction: 'rtl',
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
@@ -1769,17 +1760,26 @@ const NewGameScreen = () => {
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
               {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
             </div>
-            <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> אימון פוקר ←</button>
+            <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> {t('newGame.training')}</button>
           </div>
         );
       })()}
 
+      {isMember && !trainingEnabled && (
+        <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👀</div>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            צפייה בלבד — רק מנהלים יכולים ליצור משחקים
+          </p>
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>New Game</h1>
+        <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>{t('newGame.title')}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {permanentPlayers.length > 0 && (
+          {isAdmin && permanentPlayers.length > 0 && (
             <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
-              {permanentPlayers.every(p => selectedIds.has(p.id)) ? 'Deselect All' : 'Select All'}
+              {permanentPlayers.every(p => selectedIds.has(p.id)) ? t('newGame.deselectAll') : t('newGame.selectAll')}
             </button>
           )}
           <button
@@ -1793,7 +1793,7 @@ const NewGameScreen = () => {
               padding: '0.2rem 0.4rem',
               opacity: 0.7,
             }}
-            title="Sign Out"
+            title={t('common.signOut')}
           >
             🔓
           </button>
@@ -1806,12 +1806,13 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Permanent Players */}
+      {/* Game Creation — admin only */}
+      {!isMember && (<>
       <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
         {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
             <div style={{ fontSize: '1.3rem' }}>👥</div>
-            <p style={{ margin: '0.2rem 0', fontWeight: '500', fontSize: '0.8rem' }}>No players yet</p>
+            <p style={{ margin: '0.2rem 0', fontWeight: '500', fontSize: '0.8rem' }}>{t('newGame.noPlayers')}</p>
           </div>
         ) : (
           <>
@@ -1841,7 +1842,7 @@ const NewGameScreen = () => {
             cursor: 'pointer'
           }}
         >
-          + Add Player
+          {t('newGame.addPlayer')}
         </button>
       </div>
 
@@ -1863,7 +1864,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              🏠 אורח ({permanentGuestPlayers.length})
+              {t('newGame.guestPlayers', { count: permanentGuestPlayers.length })}
             </span>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {showPermanentGuests ? '▲' : '▼'}
@@ -1901,7 +1902,7 @@ const NewGameScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-muted)' }}>
-              👤 מזדמן ({guestPlayers.length})
+              {t('newGame.occasionalPlayers', { count: guestPlayers.length })}
             </span>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               {showGuests ? '▲' : '▼'}
@@ -1924,7 +1925,7 @@ const NewGameScreen = () => {
       {/* Location Selector */}
       <div className="card" style={{ padding: '0.6rem', marginBottom: '0.6rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>📍 מיקום:</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '0.2rem' }}>{t('newGame.location')}</span>
           {(getSettings().locations || DEFAULT_LOCATIONS).map(loc => (
             <button
               key={loc}
@@ -1956,7 +1957,7 @@ const NewGameScreen = () => {
               whiteSpace: 'nowrap',
             }}
           >
-            אחר
+            {t('newGame.other')}
           </button>
         </div>
         {gameLocation === 'other' && (
@@ -1964,7 +1965,7 @@ const NewGameScreen = () => {
             type="text"
             value={customLocation}
             onChange={(e) => setCustomLocation(e.target.value)}
-            placeholder="הזן מיקום..."
+            placeholder={t('newGame.locationPlaceholder')}
             style={{
               marginTop: '0.4rem',
               width: '100%',
@@ -1980,20 +1981,21 @@ const NewGameScreen = () => {
       </div>
 
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem', alignItems: 'stretch' }}>
-        {isAdmin && (
-          <>
+        {isOwner && (
             <button 
               className="btn btn-secondary"
               onClick={() => handleShowForecast()}
               disabled={selectedIds.size < 2}
               style={{ padding: '0.5rem 0.4rem', fontSize: '0.7rem', minWidth: '0', flex: '0 0 auto' }}
             >
-              🔮 Forecast
+              {t('newGame.forecast')}
             </button>
+        )}
+        {isAdmin && (
+          <>
             {periodMarkers && isAdmin && (() => {
               const autoValue = getAutoDetectedPeriodValue(periodMarkers);
               const activeValue = periodOverride || autoValue;
-              const activeOption = PERIOD_OPTIONS.find(o => o.value === activeValue) || PERIOD_OPTIONS[0];
               const isOverridden = periodOverride !== null && periodOverride !== autoValue;
               return (
                 <div style={{ position: 'relative', flex: '1 1 0', minWidth: '0' }}>
@@ -2017,11 +2019,10 @@ const NewGameScreen = () => {
                       justifyContent: 'center',
                       gap: '0.2rem',
                       whiteSpace: 'nowrap',
-                      direction: 'rtl',
                     }}
                   >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeOption.label}</span>
-                    {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>(ידני)</span>}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{periodLabel(activeValue)}</span>
+                    {isOverridden && <span style={{ fontSize: '0.5rem', opacity: 0.6, flexShrink: 0 }}>{t('newGame.manual')}</span>}
                     <span style={{ fontSize: '0.55rem', opacity: 0.5, flexShrink: 0 }}>▼</span>
                   </button>
                   {showPeriodDropdown && (
@@ -2044,8 +2045,8 @@ const NewGameScreen = () => {
                         zIndex: 100,
                         overflow: 'hidden',
                       }}>
-                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', direction: 'rtl', textAlign: 'right' }}>
-                          זוהה אוטומטית: {PERIOD_OPTIONS.find(o => o.value === autoValue)?.label}
+                        <div style={{ padding: '0.4rem 0.6rem', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textAlign: isRTL ? 'right' : 'left' }}>
+                          {t('newGame.autoDetected', { period: periodLabel(autoValue) })}
                         </div>
                         {PERIOD_OPTIONS.map(opt => (
                           <button
@@ -2065,16 +2066,15 @@ const NewGameScreen = () => {
                               color: activeValue === opt.value ? '#a78bfa' : 'var(--text)',
                               fontSize: '0.78rem',
                               cursor: 'pointer',
-                              textAlign: 'right',
-                              direction: 'rtl',
+                              textAlign: isRTL ? 'right' : 'left',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'flex-start',
                               gap: '0.4rem',
                             }}
                           >
-                            <span style={{ flex: 1, textAlign: 'right' }}>{opt.label}</span>
-                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', flexShrink: 0 }}>(אוטומטי)</span>}
+                            <span style={{ flex: 1, textAlign: isRTL ? 'right' : 'left' }}>{periodLabel(opt.value)}</span>
+                            {opt.value === autoValue && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', flexShrink: 0 }}>{t('newGame.auto')}</span>}
                             {activeValue === opt.value && <span style={{ fontSize: '0.7rem', flexShrink: 0 }}>✓</span>}
                           </button>
                         ))}
@@ -2092,7 +2092,7 @@ const NewGameScreen = () => {
           disabled={selectedIds.size < 2 || generatingTTS}
           style={{ padding: '0.5rem 0.6rem', flex: isAdmin ? '1.2 1 0' : '1', fontSize: '0.8rem', minWidth: '0' }}
         >
-          {generatingTTS ? '🎙️ מכין את הערב...' : `🎰 Start Game (${selectedIds.size})`}
+          {generatingTTS ? t('newGame.preparingEvening') : t('newGame.startGame', { count: selectedIds.size })}
         </button>
       </div>
       {generatingTTS && (
@@ -2100,6 +2100,7 @@ const NewGameScreen = () => {
           <AIProgressBar operationKey="tts_pool" />
         </div>
       )}
+      </>)}
 
       {/* Published Forecast - visible to all roles when published, admin can see hidden */}
       {publishedForecast && !publishedForecast.linkedGameId && (
@@ -2117,7 +2118,7 @@ const NewGameScreen = () => {
               border: '1px solid rgba(234, 179, 8, 0.25)',
             }}>
               <span style={{ fontSize: '0.75rem', color: '#eab308' }}>
-                🔒 התחזית מוסתרת מהשחקנים
+                {t('newGame.forecastHidden')}
               </span>
               <button
                 onClick={handlePublishForecast}
@@ -2132,7 +2133,7 @@ const NewGameScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                📢 פרסם
+                {t('newGame.publishForecast')}
               </button>
             </div>
           )}
@@ -2143,7 +2144,7 @@ const NewGameScreen = () => {
           >
             <div style={{ fontSize: '1.5rem', marginBottom: '0.2rem' }}>🔮</div>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: 'var(--text)' }}>
-              {publishedForecast.aiModel ? 'תחזית AI' : 'תחזית'}
+              {publishedForecast.aiModel ? t('newGame.forecastTitle') : t('newGame.plainForecast')}
             </h3>
             {publishedForecast.aiModel && (
               <div style={{ fontSize: '0.65rem', color: '#A855F7', marginTop: '0.15rem' }}>
@@ -2174,13 +2175,13 @@ const NewGameScreen = () => {
                     opacity: isSharing ? 0.8 : 1,
                   }}
                 >
-                  {isSharing ? '⏳ מכין לשיתוף...' : '📤 שתף תחזית לקבוצה'}
+                  {isSharing ? t('newGame.sharingForecast') : t('newGame.shareForecast')}
                 </button>
               </div>
             )}
             {!publishedExpanded && (
               <div style={{ fontSize: '0.7rem', color: '#a78bfa', marginTop: '0.4rem' }}>
-                לחץ לצפייה בתחזית ▾
+                {t('newGame.showForecast')}
               </div>
             )}
           </div>
@@ -2192,10 +2193,9 @@ const NewGameScreen = () => {
               borderRadius: '10px',
               background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.08))',
               border: '1px solid rgba(139, 92, 246, 0.25)',
-              textAlign: 'right',
-              direction: 'rtl',
+              textAlign: isRTL ? 'right' : 'left',
             }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa', marginBottom: '0.3rem' }}>🎙️ טיזר המשחק</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#a78bfa', marginBottom: '0.3rem' }}>{t('newGame.teaserTitle')}</div>
               <div style={{ fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.6 }}>
                 {publishedForecast.preGameTeaser}
               </div>
@@ -2215,7 +2215,7 @@ const NewGameScreen = () => {
                   padding: '0.65rem 0.75rem',
                   borderRadius: '10px',
                   background: s.bg,
-                  borderRight: `4px solid ${s.border}`,
+                  ...(isRTL ? { borderRight: `4px solid ${s.border}` } : { borderLeft: `4px solid ${s.border}` }),
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: f.highlight || f.sentence ? '0.3rem' : 0 }}>
                     <span style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -2228,12 +2228,12 @@ const NewGameScreen = () => {
                     </span>
                   </div>
                   {f.highlight && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8, marginBottom: '0.3rem', direction: 'rtl', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text)', opacity: 0.8, marginBottom: '0.3rem', lineHeight: 1.4 }}>
                       {f.highlight}
                     </div>
                   )}
                   {f.sentence && (
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', direction: 'rtl', lineHeight: 1.45, fontStyle: 'italic' }}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.45, fontStyle: 'italic' }}>
                       {f.sentence}
                     </div>
                   )}
@@ -2256,7 +2256,7 @@ const NewGameScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                📤 שתף
+                {t('common.share')}
               </button>
               <button
                 onClick={() => handleShowForecast(new Set(publishedForecast!.playerIds), publishedForecast!.location)}
@@ -2270,7 +2270,7 @@ const NewGameScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                🔄 רענן
+                {t('newGame.refresh')}
               </button>
               {publishedForecast.published ? (
                 <button
@@ -2285,7 +2285,7 @@ const NewGameScreen = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  🔒 הסתר
+                  {t('newGame.hideForecast')}
                 </button>
               ) : (
                 <button
@@ -2300,7 +2300,7 @@ const NewGameScreen = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  📢 פרסם
+                  {t('newGame.publishForecast')}
                 </button>
               )}
               <button
@@ -2315,7 +2315,7 @@ const NewGameScreen = () => {
                   cursor: 'pointer',
                 }}
               >
-                🗑️ מחק
+                {t('newGame.deleteForecast')}
               </button>
             </div>
           )}
@@ -2327,15 +2327,15 @@ const NewGameScreen = () => {
         <div className="modal-overlay" onClick={() => setShowAddPlayer(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Add New Player</h3>
+              <h3 className="modal-title">{t('newGame.addPlayerTitle')}</h3>
               <button className="modal-close" onClick={() => setShowAddPlayer(false)}>×</button>
             </div>
             <div className="input-group">
-              <label className="label">Player Name</label>
+              <label className="label">{t('newGame.playerName')}</label>
               <input
                 type="text"
                 className="input"
-                placeholder="Enter name"
+                placeholder={t('newGame.enterName')}
                 value={newPlayerName}
                 onChange={e => setNewPlayerName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
@@ -2345,7 +2345,7 @@ const NewGameScreen = () => {
             
             {/* Player Type Toggle */}
             <div className="input-group">
-              <label className="label">Player Type</label>
+              <label className="label">{t('newGame.playerType')}</label>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button
                   type="button"
@@ -2363,7 +2363,7 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  ⭐ Permanent
+                  {t('newGame.permanent')}
                 </button>
                 <button
                   type="button"
@@ -2381,7 +2381,7 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  🏠 אורח
+                  {t('settings.players.guest')}
                 </button>
                 <button
                   type="button"
@@ -2399,22 +2399,22 @@ const NewGameScreen = () => {
                     fontSize: '0.75rem'
                   }}
                 >
-                  👤 מזדמן
+                  {t('settings.players.occasional')}
                 </button>
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                {newPlayerType === 'permanent' && 'רשימה ראשית - חברי הקבוצה הקבועים'}
-                {newPlayerType === 'permanent_guest' && 'אורח קבוע שמגיע לעתים קרובות'}
-                {newPlayerType === 'guest' && 'שחקן מזדמן שמגיע לפעמים'}
+                {newPlayerType === 'permanent' && t('settings.players.permanentDesc')}
+                {newPlayerType === 'permanent_guest' && t('settings.players.guestDesc')}
+                {newPlayerType === 'guest' && t('settings.players.occasionalDesc')}
               </p>
             </div>
 
             <div className="actions">
               <button className="btn btn-secondary" onClick={() => setShowAddPlayer(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button className="btn btn-primary" onClick={handleAddPlayer}>
-                Add Player
+                {t('newGame.addPlayer')}
               </button>
             </div>
           </div>
@@ -2429,8 +2429,8 @@ const NewGameScreen = () => {
             {isLoadingAI && (
               <div style={{ padding: '3rem 2rem', textAlign: 'center' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'pulse 1.5s ease-in-out infinite' }}>🤖</div>
-                <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>AI מנתח נתונים...</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>יוצר תחזית מותאמת אישית</p>
+                <h3 style={{ margin: '0 0 0.5rem', color: 'var(--text)' }}>{t('newGame.aiAnalyzing')}</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{t('newGame.creatingForecast')}</p>
                 <AIProgressBar operationKey="forecast" />
               </div>
             )}
@@ -2451,7 +2451,7 @@ const NewGameScreen = () => {
                     <div style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
                       ⏳ {retryCountdown}s
                     </div>
-                    <div>Rate limit - waiting to retry...</div>
+                    <div>{t('newGame.rateLimit')}</div>
                     <div style={{ marginTop: '0.5rem' }}>
                       <button
                         onClick={() => { 
@@ -2475,7 +2475,7 @@ const NewGameScreen = () => {
                           cursor: 'pointer'
                         }}
                       >
-                        Generate Local Forecast Instead
+                        {t('newGame.localForecast')}
                       </button>
                     </div>
                   </div>
@@ -2492,7 +2492,7 @@ const NewGameScreen = () => {
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🤖</div>
                   <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
-                    תחזית AI
+                    {t('newGame.forecastTitle')}
                   </h3>
                   <div style={{ fontSize: '0.75rem', color: '#A855F7', marginTop: '0.25rem' }}>
                     Powered by Gemini ✨
@@ -2515,12 +2515,11 @@ const NewGameScreen = () => {
                     borderRadius: '14px',
                     background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(59, 130, 246, 0.10))',
                     border: '1px solid rgba(139, 92, 246, 0.35)',
-                    textAlign: 'right',
-                    direction: 'rtl',
+                    textAlign: isRTL ? 'right' : 'left',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', flexDirection: 'row-reverse', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'center' }}>
                       <span style={{ fontSize: '1.1rem' }}>🎙️</span>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', letterSpacing: '0.5px' }}>טיזר המשחק</span>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#a78bfa', letterSpacing: '0.5px' }}>{t('newGame.teaserTitle')}</span>
                     </div>
                     <div style={{ fontSize: '0.92rem', color: '#e2e8f0', lineHeight: 1.7, fontWeight: 400 }}>
                       {aiForecasts[0].preGameTeaser}
@@ -2538,13 +2537,13 @@ const NewGameScreen = () => {
                       ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(16, 185, 129, 0.08))'
                       : 'linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(245, 158, 11, 0.08))',
                     border: `1px solid ${comboHistory.isFirstTime ? 'rgba(34, 197, 94, 0.3)' : 'rgba(251, 191, 36, 0.3)'}`,
-                    textAlign: 'right',
-                    direction: 'rtl',
+                    textAlign: isRTL ? 'right' : 'left',
                   }}>
                     {comboHistory.isFirstTime ? (
                       <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>
                         <span style={{ fontSize: '1rem' }}>🆕</span>{' '}
-                        <strong style={{ color: '#4ade80' }}>הרכב חדש!</strong> זו הפעם הראשונה שבדיוק {comboHistory.playerCount} השחקנים האלה משחקים יחד. מה יקרה?
+                        <strong style={{ color: '#4ade80' }}>{t('newGame.newCombo')}</strong>{' '}
+                        {t('newGame.newComboIntro', { count: comboHistory.playerCount })}
                       </div>
                     ) : (
                       <div>
@@ -2552,10 +2551,10 @@ const NewGameScreen = () => {
                         <div style={{ marginBottom: '0.75rem' }}>
                           <div style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>
                             <span style={{ fontSize: '1rem' }}>🔄</span>{' '}
-                            <strong style={{ color: '#fbbf24' }}>הרכב חוזר!</strong>
+                            <strong style={{ color: '#fbbf24' }}>{t('newGame.returningCombo')}</strong>
                           </div>
                           <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                            פעם {comboHistory.totalGamesWithCombo + 1} שאותם {comboHistory.playerCount} שחקנים נפגשים
+                            {t('newGame.comboTimes', { count: comboHistory.totalGamesWithCombo + 1, players: comboHistory.playerCount })}
                           </div>
                         </div>
 
@@ -2619,9 +2618,9 @@ const NewGameScreen = () => {
                               const top = comboHistory.playerStats[0];
                               const bottom = comboHistory.playerStats[comboHistory.playerStats.length - 1];
                               return (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', direction: 'rtl', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.75rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', textAlign: isRTL ? 'right' : 'left' }}>
                                   <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                    👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>מוביל ההרכב:</span>{' '}
+                                    👑 <span style={{ color: '#fbbf24', fontWeight: 600 }}>{t('newGame.comboLeader')}</span>{' '}
                                     {top.playerName}{' '}
                                     <span style={{ color: top.totalProfit >= 0 ? '#4ade80' : '#f87171' }}>
                                       ({top.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.totalProfit)})
@@ -2629,7 +2628,7 @@ const NewGameScreen = () => {
                                     <span style={{ color: '#64748b', fontSize: '0.72rem' }}>{' '}ממוצע {top.avgProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(top.avgProfit)} • {top.wins}/{comboHistory.totalGamesWithCombo} נצחונות</span>
                                   </div>
                                   <div style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-                                    📉 <span style={{ fontWeight: 600 }}>תחתית ההרכב:</span>{' '}
+                                    📉 <span style={{ fontWeight: 600 }}>{t('newGame.comboBottom')}</span>{' '}
                                     {bottom.playerName}{' '}
                                     <span style={{ color: '#f87171' }}>
                                       ({bottom.totalProfit >= 0 ? '\u200E+' : '\u200E'}{Math.round(bottom.totalProfit)})
@@ -2642,25 +2641,28 @@ const NewGameScreen = () => {
 
                             {/* Patterns */}
                             {(comboHistory.playerStats.some(p => p.alwaysWon) || comboHistory.playerStats.some(p => p.alwaysLost) || (comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo) || comboHistory.repeatWinners.length > 0) && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', direction: 'rtl', textAlign: 'right' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.75rem', textAlign: isRTL ? 'right' : 'left' }}>
                                 {comboHistory.playerStats.filter(p => p.alwaysWon).length > 0 && (
                                   <div style={{ fontSize: '0.78rem', color: '#4ade80' }}>
-                                    ⭐ תמיד ברווח: {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
+                                    {t('newGame.alwaysProfit')}{' '}
+                                    {comboHistory.playerStats.filter(p => p.alwaysWon).map(p => `${p.playerName} (${p.wins}/${comboHistory.totalGamesWithCombo})`).join(', ')}
                                   </div>
                                 )}
                                 {comboHistory.playerStats.filter(p => p.alwaysLost).length > 0 && (
                                   <div style={{ fontSize: '0.78rem', color: '#f87171' }}>
-                                    ⚠️ תמיד בהפסד: {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
+                                    {t('newGame.alwaysLoss')}{' '}
+                                    {comboHistory.playerStats.filter(p => p.alwaysLost).map(p => p.playerName).join(', ')}
                                   </div>
                                 )}
                                 {comboHistory.uniqueWinners.length === comboHistory.totalGamesWithCombo && (
                                   <div style={{ fontSize: '0.78rem', color: '#a78bfa' }}>
-                                    🎲 מנצח שונה בכל משחק — מי הפעם?
+                                    {t('newGame.differentWinner')}
                                   </div>
                                 )}
                                 {comboHistory.repeatWinners.length > 0 && (
                                   <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
-                                    🏆 ניצחו יותר מפעם: {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
+                                    {t('newGame.multiWinners')}{' '}
+                                    {comboHistory.repeatWinners.map(w => `${w.name} (${w.count}/${comboHistory.totalGamesWithCombo})`).join(', ')}
                                   </div>
                                 )}
                               </div>
@@ -2680,7 +2682,7 @@ const NewGameScreen = () => {
 
                               if (insights.length === 0) return null;
                               return (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem', direction: 'rtl', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.6rem', textAlign: isRTL ? 'right' : 'left' }}>
                                   {insights.map((insight, i) => (
                                     <div key={i} style={{ fontSize: '0.76rem', color: '#94a3b8' }}>{insight}</div>
                                   ))}
@@ -2689,14 +2691,14 @@ const NewGameScreen = () => {
                             })()}
 
                             {/* Previous games */}
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', direction: 'rtl', textAlign: 'right' }}>
-                              📅 משחקים קודמים:
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '0.3rem', textAlign: isRTL ? 'right' : 'left' }}>
+                              {t('newGame.previousGames')}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.6rem' }}>
                               {comboHistory.previousGames.slice(-3).map((game, i) => {
                                 const dateStr = (() => { try { return new Date(game.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: '2-digit' }); } catch { return game.date; } })();
                                 return (
-                                  <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', direction: 'rtl', textAlign: 'right' }}>
+                                  <div key={i} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.03)', fontSize: '0.76rem', color: '#94a3b8', textAlign: isRTL ? 'right' : 'left' }}>
                                     <div style={{ color: '#64748b', fontSize: '0.7rem', marginBottom: '0.15rem' }}>{dateStr}</div>
                                     <div>
                                       <span style={{ color: '#4ade80' }}>👑 {game.winnerName} ({'\u200E'}+{Math.round(game.winnerProfit)})</span>
@@ -2735,7 +2737,7 @@ const NewGameScreen = () => {
                           marginBottom: '0.5rem',
                           borderRadius: '10px',
                           background: style.bg,
-                          borderRight: `4px solid ${style.border}`,
+                          ...(isRTL ? { borderRight: `4px solid ${style.border}` } : { borderLeft: `4px solid ${style.border}` }),
                         }}
                       >
                         {/* Name and amount */}
@@ -2774,7 +2776,6 @@ const NewGameScreen = () => {
                             color: 'var(--text)',
                             opacity: 0.8,
                             marginBottom: '0.4rem',
-                            direction: 'rtl',
                             fontFamily: 'system-ui',
                             lineHeight: '1.4'
                           }}>
@@ -2787,7 +2788,6 @@ const NewGameScreen = () => {
                           fontSize: '0.85rem', 
                           color: 'var(--text-muted)',
                           lineHeight: '1.45',
-                          direction: 'rtl',
                           fontStyle: 'italic'
                         }}>
                           {sentence}
@@ -2817,7 +2817,7 @@ const NewGameScreen = () => {
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>🔮</div>
                   <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'var(--text)' }}>
-                    תחזית המשחק
+                    {t('newGame.staticForecastHeading')}
                   </h3>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                     {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -2845,7 +2845,7 @@ const NewGameScreen = () => {
                           marginBottom: '0.5rem',
                           borderRadius: '10px',
                           background: style.bg,
-                          borderRight: `4px solid ${style.border}`,
+                          ...(isRTL ? { borderRight: `4px solid ${style.border}` } : { borderLeft: `4px solid ${style.border}` }),
                         }}
                       >
                         {/* Name and amount */}
@@ -2883,7 +2883,6 @@ const NewGameScreen = () => {
                             color: 'var(--text)',
                             opacity: 0.8,
                             marginBottom: '0.4rem',
-                            direction: 'rtl',
                             fontFamily: 'system-ui',
                             lineHeight: '1.4'
                           }}>
@@ -2896,7 +2895,6 @@ const NewGameScreen = () => {
                           fontSize: '0.85rem', 
                           color: 'var(--text-muted)',
                           lineHeight: '1.45',
-                          direction: 'rtl',
                           fontStyle: 'italic'
                         }}>
                           {sentence}
@@ -2918,15 +2916,15 @@ const NewGameScreen = () => {
                 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#22c55e' }}></span>
-                    רווח צפוי
+                    {t('newGame.expectedProfit')}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#ef4444' }}></span>
-                    הפסד צפוי
+                    {t('newGame.expectedLoss')}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                     <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: '#a855f7' }}></span>
-                    ⚡ הפתעה
+                    {t('newGame.surprise')}
                   </span>
                 </div>
 
@@ -2951,14 +2949,14 @@ const NewGameScreen = () => {
                     className="btn btn-secondary" 
                     onClick={() => { setShowForecast(false); setCachedForecasts(null); setAiForecasts(null); setAiError(null); }}
                   >
-                    סגור
+                    {t('common.close')}
                   </button>
                   <button 
                     className="btn btn-primary" 
                     onClick={() => void shareForecast()}
                     disabled={isSharing}
                 >
-                  {isSharing ? '📸...' : '📤 שתף'}
+                  {isSharing ? t('common.capturing') : t('common.share')}
                 </button>
                   {role === 'admin' && (() => {
                     const alreadyPublished = !!publishedForecast?.published;
@@ -2974,7 +2972,7 @@ const NewGameScreen = () => {
                           cursor: alreadyPublished ? 'default' : 'pointer',
                         }}
                       >
-                        {alreadyPublished ? '✅ התחזית פורסמה' : '📢 פרסם תחזית לכולם'}
+                        {alreadyPublished ? t('newGame.forecastPublished') : t('newGame.publishForAll')}
                       </button>
                     );
                   })()}
@@ -3007,12 +3005,11 @@ const NewGameScreen = () => {
             maxWidth: '380px',
             width: '100%',
             textAlign: 'center',
-            direction: 'rtl'
           }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⚠️</div>
-            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>השחקנים השתנו</h3>
+            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>{t('newGame.playersChanged')}</h3>
             <p style={{ marginBottom: '0.75rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              קיימת תחזית מ-{mismatchInfo.pendingDate} עם שחקנים שונים
+              {t('newGame.mismatchDesc', { date: mismatchInfo.pendingDate })}
             </p>
             
             {/* Changes summary */}
@@ -3022,16 +3019,16 @@ const NewGameScreen = () => {
               padding: '0.75rem',
               marginBottom: '1rem',
               fontSize: '0.85rem',
-              textAlign: 'right'
+              textAlign: isRTL ? 'right' : 'left'
             }}>
               {mismatchInfo.removedPlayers.length > 0 && (
                 <div style={{ marginBottom: '0.5rem', color: '#ef4444' }}>
-                  <strong>ביטלו:</strong> {mismatchInfo.removedPlayers.join(', ')}
+                  <strong>{t('newGame.removed')}</strong> {mismatchInfo.removedPlayers.join(', ')}
                 </div>
               )}
               {mismatchInfo.addedPlayers.length > 0 && (
                 <div style={{ color: '#22c55e' }}>
-                  <strong>הצטרפו:</strong> {mismatchInfo.addedPlayers.join(', ')}
+                  <strong>{t('newGame.joined')}</strong> {mismatchInfo.addedPlayers.join(', ')}
                 </div>
               )}
             </div>
@@ -3042,16 +3039,16 @@ const NewGameScreen = () => {
                 onClick={handleUpdateForecast}
                 style={{ width: '100%' }}
               >
-                🤖 צור תחזית חדשה
+                {t('newGame.newForecast')}
               </button>
               <button 
                 className="btn btn-secondary"
                 onClick={handleKeepOldForecast}
                 style={{ width: '100%' }}
               >
-                📊 המשך עם התחזית הקיימת
+                {t('newGame.keepForecast')}
                 <div style={{ fontSize: '0.7rem', opacity: 0.7, marginTop: '0.2rem' }}>
-                  (רק שחקנים שבשניהם יושוו)
+                  {t('newGame.onlyMatched')}
                 </div>
               </button>
               <button 
@@ -3065,62 +3062,13 @@ const NewGameScreen = () => {
                   padding: '0.5rem'
                 }}
               >
-                התחל ללא תחזית
+                {t('newGame.noForecast')}
               </button>
             </div>
           </div>
         </div>
       )}
       
-      {/* Share Forecast Prompt Modal */}
-      {showSharePrompt && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '1rem'
-        }}>
-          <div style={{
-            background: 'var(--card-bg)',
-            borderRadius: '16px',
-            padding: '1.5rem',
-            maxWidth: '320px',
-            width: '100%',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🎲</div>
-            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>המשחק התחיל!</h3>
-            <p style={{ marginBottom: '1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              לשתף את התחזית בקבוצה לפני שמתחילים?
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-              <button 
-                className="btn btn-secondary"
-                onClick={handleSkipShare}
-                style={{ flex: 1 }}
-              >
-                דלג
-              </button>
-              <button 
-                className="btn btn-primary"
-                onClick={handleShareAndStart}
-                disabled={isSharing}
-                style={{ flex: 1 }}
-              >
-                {isSharing ? '📸...' : '📤 שתף'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Abandon Game Confirmation Modal */}
       {showAbandonConfirm && (
         <div style={{
@@ -3145,9 +3093,9 @@ const NewGameScreen = () => {
             textAlign: 'center'
           }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🗑️</div>
-            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>לבטל את המשחק?</h3>
+            <h3 style={{ marginBottom: '0.5rem', color: 'var(--text)' }}>{t('newGame.abandonConfirm')}</h3>
             <p style={{ marginBottom: '1.25rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              כל הנתונים של המשחק הזה יימחקו לצמיתות.
+              {t('newGame.abandonWarning')}
             </p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
               <button 
@@ -3155,14 +3103,14 @@ const NewGameScreen = () => {
                 onClick={() => setShowAbandonConfirm(false)}
                 style={{ flex: 1 }}
               >
-                חזור
+                {t('newGame.abandonBack')}
               </button>
               <button 
                 className="btn btn-danger"
                 onClick={handleAbandonGame}
                 style={{ flex: 1 }}
               >
-                🗑️ בטל משחק
+                {t('newGame.abandonDelete')}
               </button>
             </div>
           </div>
