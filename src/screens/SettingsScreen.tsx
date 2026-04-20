@@ -31,7 +31,7 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendEmail } from '../utils/apiProxy';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog, clearActivityLog } from '../utils/activityLogger';
 import { ActivityLogEntry } from '../types';
@@ -2290,28 +2290,26 @@ const SettingsScreen = () => {
                     setPushSending(true);
                     setPushResult(null);
                     try {
-                      const auth = await (await import('../database/supabaseClient')).supabase.auth.getSession();
-                      const token = auth.data.session?.access_token;
-                      const res = await fetch('/api/send-email', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-                        body: JSON.stringify({
-                          to: auth.data.session?.user?.email || '',
-                          subject: '🧪 Poker Manager - Test Email',
-                          playerName: 'Test Player',
-                          reporterName: 'Admin',
-                          amount: '100',
-                          gameDate: new Date().toLocaleDateString('he-IL'),
-                          payLink: '',
-                        }),
+                      const { supabase: sb } = await import('../database/supabaseClient');
+                      const { data: { user } } = await sb.auth.getUser();
+                      const email = user?.email;
+                      if (!email) {
+                        setPushResult(`❌ ${language === 'he' ? 'לא נמצא מייל בחשבון' : 'No email found in account'}`);
+                        return;
+                      }
+                      const ok = await proxySendEmail({
+                        to: email,
+                        subject: '🧪 Poker Manager - Test Email',
+                        playerName: 'Test Player',
+                        reporterName: 'Admin',
+                        amount: 100,
+                        gameDate: new Date().toLocaleDateString('he-IL'),
+                        payLink: '',
                       });
-                      if (res.ok) {
+                      if (ok) {
                         setPushResult(`✅ ${language === 'he' ? 'מייל נשלח לחשבון שלך' : 'Email sent to your account'}`);
                       } else {
-                        const text = await res.text();
-                        let msg = `HTTP ${res.status}`;
-                        try { const j = JSON.parse(text); msg = j.error?.message || msg; } catch { msg = text || msg; }
-                        setPushResult(`❌ Email: ${msg}`);
+                        setPushResult(`❌ ${language === 'he' ? 'שליחת מייל נכשלה - בדוק הגדרות EmailJS' : 'Email send failed - check EmailJS settings'}`);
                       }
                     } catch (err) {
                       setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);

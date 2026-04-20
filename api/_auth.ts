@@ -37,16 +37,17 @@ export async function verifySupabaseAuth(req: Request): Promise<Response | null>
   const decoded = base64Decode(jwtSecret);
   if (decoded) candidates.push(decoded);
 
+  let lastError = '';
   for (const secret of candidates) {
     try {
       await jwtVerify(token, secret);
       return null;
-    } catch {
-      // try next candidate
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
     }
   }
 
-  return new Response(JSON.stringify({ error: { message: 'Invalid authentication token' } }), {
+  return new Response(JSON.stringify({ error: { message: `Invalid authentication token: ${lastError}` } }), {
     status: 401,
     headers: JSON_HEADERS,
   });

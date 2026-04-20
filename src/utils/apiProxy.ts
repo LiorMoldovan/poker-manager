@@ -5,9 +5,25 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
+      const parts = session.access_token.split('.');
+      if (parts.length === 3) {
+        try {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          if (payload.exp && payload.exp * 1000 < Date.now() + 60_000) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed.session?.access_token) {
+              return { 'Authorization': `Bearer ${refreshed.session.access_token}` };
+            }
+          }
+        } catch { /* token decode failed, use as-is */ }
+      }
       return { 'Authorization': `Bearer ${session.access_token}` };
     }
-  } catch { /* session unavailable — proceed without auth */ }
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session?.access_token) {
+      return { 'Authorization': `Bearer ${refreshed.session.access_token}` };
+    }
+  } catch { /* session unavailable */ }
   return {};
 }
 
