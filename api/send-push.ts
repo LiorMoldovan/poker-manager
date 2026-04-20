@@ -237,9 +237,14 @@ export default async function handler(req: Request): Promise<Response> {
         sub, payload, vapidPublicKey, vapidPrivateKey, vapidSubject
       );
       if (result.success) sent++;
-      if (result.gone) gone.push(sub.endpoint);
-      if (!result.success && result.error) {
-        errors.push(`${sub.endpoint.slice(0, 60)}...: ${result.status || 'ERR'} ${result.error.slice(0, 200)}`);
+      if (!result.success) {
+        // Clean up any subscription the push service rejects (410 Gone, 404 Not Found, 403 Forbidden)
+        if (result.status && [404, 410, 403].includes(result.status)) {
+          gone.push(sub.endpoint);
+        }
+        if (result.error) {
+          errors.push(`${sub.player_name || 'unknown'}: ${result.status || 'ERR'} ${result.error.slice(0, 200)}`);
+        }
       }
     }
 

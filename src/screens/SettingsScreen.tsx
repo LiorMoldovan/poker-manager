@@ -189,12 +189,15 @@ const SettingsScreen = () => {
     loadData();
   }, []);
 
-  // Load push subscriber count when tab is active
+  const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
+
+  // Load push subscribers when tab is active
   useEffect(() => {
     const gid = getGroupId();
     if (activeTab === 'push' && gid) {
       getGroupPushSubscribers(gid).then(subs => {
         setPushSubscriberCount(subs.length);
+        setPushSubscribers(subs);
       });
     }
   }, [activeTab]);
@@ -2085,9 +2088,27 @@ const SettingsScreen = () => {
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>
               🔔 {t('push.title')}
             </h3>
-            <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
             </p>
+            {pushSubscribers.length > 0 && (
+              <div style={{ margin: '0 0 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                {pushSubscribers.map((s, i) => {
+                  const isFCM = s.endpoint.includes('fcm.googleapis.com') || s.endpoint.includes('firebase');
+                  const isMozilla = s.endpoint.includes('mozilla');
+                  const icon = isFCM ? '📱' : isMozilla ? '🦊' : '💻';
+                  return (
+                    <span key={i} style={{
+                      fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
+                      background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                      color: '#10B981',
+                    }}>
+                      {icon} {s.playerName || '?'}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Templates */}
             <div style={{ marginBottom: '1rem' }}>
@@ -2208,7 +2229,8 @@ const SettingsScreen = () => {
                     targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
                   });
                   if (result) {
-                    setPushResult(t('push.sent', { sent: String(result.sent), total: String(result.total) }));
+                    const detail = result.errors?.length ? `\n${result.errors[0]}` : '';
+                    setPushResult(`${result.sent > 0 ? '✅' : '❌'} ${t('push.sent', { sent: String(result.sent), total: String(result.total) })}${detail}`);
                     if (result.sent > 0) setPushMsg('');
                   } else {
                     setPushResult(t('push.error'));
