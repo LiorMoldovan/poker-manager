@@ -292,27 +292,22 @@ function SupabaseApp() {
     const subscribe = async () => {
       try {
         const reg = await navigator.serviceWorker.ready;
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) {
-          const existingKey = existing.options?.applicationServerKey;
-          const expectedKey = Uint8Array.from(atob(VAPID_PUBLIC.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-          const keyMatches = existingKey && new Uint8Array(existingKey).length === expectedKey.length &&
-            new Uint8Array(existingKey).every((b, i) => b === expectedKey[i]);
-          if (keyMatches) {
-            await savePushSubscription(groupId, playerName, existing);
-            return;
-          }
-          await existing.unsubscribe();
-        }
         if (Notification.permission === 'default') {
           const perm = await Notification.requestPermission();
           if (perm !== 'granted') return;
+        }
+        if (Notification.permission !== 'granted') return;
+
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          await existing.unsubscribe();
         }
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: VAPID_PUBLIC,
         });
         await savePushSubscription(groupId, playerName, sub);
+        console.log('[Push] Subscribed:', sub.endpoint.slice(0, 60));
       } catch (err) { console.warn('Push subscription failed:', err); }
     };
     subscribe();
