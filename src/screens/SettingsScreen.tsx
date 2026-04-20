@@ -183,6 +183,7 @@ const SettingsScreen = () => {
   const [pushSelectedPlayers, setPushSelectedPlayers] = useState<string[]>([]);
   const [pushSending, setPushSending] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
+  const [pushDetails, setPushDetails] = useState<{ player: string; type: string; status: number | string; ok: boolean; log?: string[] }[] | null>(null);
   const [pushSubscriberCount, setPushSubscriberCount] = useState(0);
 
   useEffect(() => {
@@ -643,7 +644,6 @@ const SettingsScreen = () => {
           removeMember={groupMgmt.removeMember}
           transferOwnership={groupMgmt.transferOwnership}
           regenerateInviteCode={groupMgmt.regenerateInviteCode}
-          unlinkMemberPlayer={groupMgmt.unlinkMemberPlayer}
           createPlayerInvite={groupMgmt.createPlayerInvite}
           addMemberByEmail={groupMgmt.addMemberByEmail}
           appUrl={window.location.origin}
@@ -2221,6 +2221,7 @@ const SettingsScreen = () => {
                 if (!gid || !pushMsg.trim()) return;
                 setPushSending(true);
                 setPushResult(null);
+                setPushDetails(null);
                 try {
                   const result = await proxySendPush({
                     groupId: gid,
@@ -2229,8 +2230,8 @@ const SettingsScreen = () => {
                     targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
                   });
                   if (result) {
-                    const detail = result.errors?.length ? `\n${result.errors[0]}` : '';
-                    setPushResult(`${result.sent > 0 ? '✅' : '❌'} ${t('push.sent', { sent: String(result.sent), total: String(result.total) })}${detail}`);
+                    setPushResult(`${result.sent > 0 ? '✅' : '❌'} ${t('push.sent', { sent: String(result.sent), total: String(result.total) })}`);
+                    if (result.details) setPushDetails(result.details);
                     if (result.sent > 0) setPushMsg('');
                   } else {
                     setPushResult(t('push.error'));
@@ -2262,6 +2263,44 @@ const SettingsScreen = () => {
               </p>
             )}
 
+            {/* Per-subscription diagnostic details */}
+            {pushDetails && pushDetails.length > 0 && (
+              <div style={{
+                marginTop: '0.5rem', padding: '0.5rem', borderRadius: '0.5rem',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                fontSize: '0.72rem', direction: 'ltr',
+              }}>
+                {pushDetails.map((d, i) => (
+                  <div key={i} style={{
+                    padding: '0.4rem 0',
+                    borderBottom: i < pushDetails.length - 1 ? '1px solid rgba(255,255,255,0.05)' : undefined,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600 }}>{d.player} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({d.type})</span></span>
+                      <span style={{
+                        padding: '0.1rem 0.4rem', borderRadius: '0.3rem',
+                        background: d.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: d.ok ? '#10B981' : '#EF4444',
+                        fontWeight: 600,
+                      }}>
+                        {d.ok ? '✓' : '✗'} {d.status}
+                      </span>
+                    </div>
+                    {d.log && d.log.length > 0 && (
+                      <pre style={{
+                        margin: '0.2rem 0 0', padding: '0.3rem', borderRadius: '0.3rem',
+                        background: 'rgba(0,0,0,0.3)', color: 'var(--text-muted)',
+                        fontSize: '0.62rem', lineHeight: 1.4, whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all', fontFamily: 'monospace',
+                      }}>
+                        {d.log.join('\n')}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Test section */}
             <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -2274,6 +2313,7 @@ const SettingsScreen = () => {
                     if (!gid) return;
                     setPushSending(true);
                     setPushResult(null);
+                    setPushDetails(null);
                     try {
                       const result = await proxySendPush({
                         groupId: gid,
@@ -2282,13 +2322,13 @@ const SettingsScreen = () => {
                         targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
                       });
                       if (result) {
+                        if (result.details) setPushDetails(result.details);
                         if (result.total === 0) {
                           setPushResult(`⚠️ ${language === 'he' ? 'אין מנויים - פתח את האפליקציה במכשיר אחר ואשר התראות' : 'No subscribers - open app on another device and allow notifications'}`);
                         } else if (result.sent > 0) {
                           setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
                         } else {
-                          const detail = result.errors?.[0] || '';
-                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}${detail ? `\n${detail}` : ''}`);
+                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
                         }
                       } else {
                         setPushResult(`❌ ${language === 'he' ? 'שגיאה - בדוק הגדרות' : 'Error - check settings'}`);
@@ -2356,6 +2396,118 @@ const SettingsScreen = () => {
                 {language === 'he'
                   ? `Push נשלח ל${pushTarget === 'select' ? 'שחקנים שנבחרו' : 'כל המנויים'}, מייל נשלח לחשבון שלך`
                   : `Push sent to ${pushTarget === 'select' ? 'selected players' : 'all subscribers'}, email sent to your account`}
+              </p>
+            </div>
+
+            {/* Client-side diagnostics */}
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                🔍 {language === 'he' ? 'אבחון מכשיר נוכחי' : 'This Device Diagnostics'}
+              </h4>
+              <button
+                onClick={async () => {
+                  const lines: string[] = [];
+                  const he = language === 'he';
+
+                  // 1. Check Notification API
+                  if (!('Notification' in window)) {
+                    lines.push('❌ Notification API: ' + (he ? 'לא נתמך בדפדפן' : 'Not supported'));
+                    setPushResult(lines.join('\n'));
+                    return;
+                  }
+                  lines.push(`${Notification.permission === 'granted' ? '✅' : '❌'} Permission: ${Notification.permission}`);
+
+                  // 2. Check Service Worker
+                  if (!('serviceWorker' in navigator)) {
+                    lines.push('❌ Service Worker: ' + (he ? 'לא נתמך' : 'Not supported'));
+                    setPushResult(lines.join('\n'));
+                    return;
+                  }
+                  const reg = await navigator.serviceWorker.getRegistration();
+                  if (!reg) {
+                    lines.push('❌ Service Worker: ' + (he ? 'לא רשום' : 'Not registered'));
+                    setPushResult(lines.join('\n'));
+                    return;
+                  }
+                  const swState = reg.active ? 'active' : reg.waiting ? 'waiting' : reg.installing ? 'installing' : 'none';
+                  lines.push(`${swState === 'active' ? '✅' : '⚠️'} Service Worker: ${swState}`);
+
+                  // 3. Check PushManager
+                  if (!('PushManager' in window)) {
+                    lines.push('❌ PushManager: ' + (he ? 'לא נתמך' : 'Not supported'));
+                    setPushResult(lines.join('\n'));
+                    return;
+                  }
+                  lines.push('✅ PushManager: ' + (he ? 'נתמך' : 'Supported'));
+
+                  // 4. Check existing subscription
+                  try {
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub) {
+                      const ep = sub.endpoint;
+                      const type = ep.includes('fcm.googleapis.com') ? 'FCM'
+                        : ep.includes('mozilla') ? 'Mozilla'
+                        : ep.includes('notify.windows.com') ? 'WNS'
+                        : ep.includes('push.apple.com') ? 'APNs'
+                        : 'Other';
+                      lines.push(`✅ Subscription: ${type}`);
+                      lines.push(`📡 Endpoint: ...${ep.slice(-40)}`);
+                      const keys = sub.toJSON().keys;
+                      lines.push(`🔑 Keys: p256dh=${keys?.p256dh ? '✓' : '✗'} auth=${keys?.auth ? '✓' : '✗'}`);
+                    } else {
+                      lines.push('❌ Subscription: ' + (he ? 'לא קיים - צריך לאשר התראות' : 'None - need to allow notifications'));
+                    }
+                  } catch (err) {
+                    lines.push(`❌ Subscription error: ${err instanceof Error ? err.message : String(err)}`);
+                  }
+
+                  setPushResult(lines.join('\n'));
+                }}
+                style={{
+                  width: '100%', padding: '0.5rem', borderRadius: '0.5rem', marginBottom: '0.5rem',
+                  border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.1)',
+                  color: '#FBBF24', cursor: 'pointer', fontSize: '0.8rem',
+                  fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                }}
+              >
+                🔍 {language === 'he' ? 'בדוק מכשיר נוכחי' : 'Check This Device'}
+              </button>
+              <button
+                onClick={async () => {
+                  const he = language === 'he';
+                  try {
+                    if (Notification.permission !== 'granted') {
+                      const perm = await Notification.requestPermission();
+                      if (perm !== 'granted') {
+                        setPushResult('❌ ' + (he ? 'הרשאת התראות נדחתה' : 'Notification permission denied'));
+                        return;
+                      }
+                    }
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.showNotification('🧪 Local Test', {
+                      body: he ? 'אם אתה רואה את זה - התראות עובדות במכשיר!' : 'If you see this - notifications work on this device!',
+                      icon: '/poker.svg',
+                      tag: 'local-test',
+                      dir: 'rtl',
+                    });
+                    setPushResult('✅ ' + (he ? 'התראה מקומית נשלחה - בדוק אם אתה רואה אותה!' : 'Local notification sent - check if you see it!'));
+                  } catch (err) {
+                    setPushResult(`❌ ${err instanceof Error ? err.message : String(err)}`);
+                  }
+                }}
+                style={{
+                  width: '100%', padding: '0.5rem', borderRadius: '0.5rem',
+                  border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)',
+                  color: '#10B981', cursor: 'pointer', fontSize: '0.8rem',
+                  fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                }}
+              >
+                🔔 {language === 'he' ? 'בדיקת התראה מקומית (ללא שרת)' : 'Test Local Notification (no server)'}
+              </button>
+              <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.3rem', textAlign: 'center' }}>
+                {language === 'he'
+                  ? 'בדיקה מקומית עוקפת את השרת - בודקת הרשאות והתראות ישירות במכשיר'
+                  : 'Local test bypasses the server - tests permissions and notifications directly on device'}
               </p>
             </div>
           </div>

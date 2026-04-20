@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import html2canvas from 'html2canvas';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
 import { GamePlayer, Settlement, SkippedTransfer, SharedExpense } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues } from '../database/storage';
 import { calculateSettlement, formatCurrency, getProfitColor, cleanNumber, calculateCombinedSettlement } from '../utils/calculations';
@@ -194,49 +194,10 @@ const GameDetailsScreen = () => {
     setIsSharing(true);
     
     try {
-      // Capture the summary section as an image
-      const canvas = await html2canvas(summaryRef.current, {
-        backgroundColor: '#1a1a2e',
-        scale: 2, // Higher quality
-        useCORS: true,
-        logging: false,
-      });
-      
-      // Convert to blob
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/png', 1.0);
-      });
-      
-      const file = new File([blob], 'poker-summary.png', { type: 'image/png' });
-      
-      // Try native share first (works on mobile)
-      if (navigator.share && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Poker Game Summary',
-        });
-      } else {
-        // Fallback: open WhatsApp with a message to share the image manually
-        // First download the image
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'poker-summary.png';
-        a.click();
-        URL.revokeObjectURL(url);
-        
-        // Then open WhatsApp
-        const dateStr = new Date(gameDate).toLocaleDateString('en-US', { 
-          weekday: 'short', 
-          month: 'short', 
-          day: 'numeric' 
-        });
-        const text = `🃏 Poker Night Results - ${dateStr}\n\n(Image downloaded - attach it to this message)`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-      }
+      const files = await captureAndSplit(summaryRef.current, 'poker-summary');
+      await shareFiles(files, 'Poker Game Summary');
     } catch (error) {
       console.error('Error sharing:', error);
-      alert('Could not share. Please try again.');
     } finally {
       setIsSharing(false);
     }

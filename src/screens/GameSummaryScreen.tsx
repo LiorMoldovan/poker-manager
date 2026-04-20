@@ -78,6 +78,7 @@ const GameSummaryScreen = () => {
   const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [paidSettlements, setPaidSettlements] = useState<PaidSettlement[]>([]);
   const [paymentModal, setPaymentModal] = useState<{ from: string; to: string; amount: number } | null>(null);
+  const [settlementToast, setSettlementToast] = useState<{ message: string; type: 'success' | 'warn' } | null>(null);
   const settlementsSectionRef = useRef<HTMLDivElement>(null);
   const isPayMode = new URLSearchParams(location.search).get('pay') === '1';
 
@@ -119,6 +120,49 @@ const GameSummaryScreen = () => {
     }
     setPaidSettlements(updated);
     updateGame(gameId, { paidSettlements: updated });
+  };
+
+  const notifySettlementChange = async (from: string, to: string, amount: number, markedAsPaid: boolean) => {
+    if (!gameId || !identityName) return;
+    const groupId = getGroupId();
+    if (!groupId) return;
+
+    const targetPlayer = identityName === from ? to : from;
+
+    setDisputeSending(`${from}-${to}`);
+    try {
+      const info = await getPlayerEmailForNotification(groupId, targetPlayer);
+      const gameDateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
+      const notifType = markedAsPaid ? 'settlement_paid' : 'settlement_dispute';
+      const title = markedAsPaid ? t('notification.paidTitle') : t('notification.settlementTitle');
+      const body = markedAsPaid
+        ? t('notification.paidBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel })
+        : t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel });
+      const subject = markedAsPaid ? t('notification.paidEmailSubject') : t('notification.emailSubject');
+      const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
+
+      if (info) {
+        await createNotification(groupId, info.userId, notifType, title, body, { gameId, from, to, amount, gameDate });
+        const emailOk = await proxySendEmail({
+          to: info.email, subject, playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+        });
+        setSettlementToast({ message: emailOk ? `✅ הודעה נשלחה ל-${targetPlayer}` : `⚠️ הודעה נוצרה, מייל נכשל`, type: emailOk ? 'success' : 'warn' });
+      } else {
+        const actorInfo = await getPlayerEmailForNotification(groupId, identityName);
+        if (actorInfo) {
+          await proxySendEmail({
+            to: actorInfo.email, subject, playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+          });
+          setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר — המייל נשלח אליך`, type: 'warn' });
+        } else {
+          setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר למשתמש — לא נשלחה הודעה`, type: 'warn' });
+        }
+      }
+    } catch (err) {
+      console.warn('Settlement notification failed:', err);
+      setSettlementToast({ message: `❌ שליחת הודעה נכשלה`, type: 'warn' });
+    }
+    setDisputeSending(null);
   };
 
   const [disputeSending, setDisputeSending] = useState<string | null>(null);
@@ -2279,20 +2323,24 @@ const GameSummaryScreen = () => {
                 );
               }
 
+              const isPaid = isSettlementPaid(paymentModal.from, paymentModal.to);
               return (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     toggleSettlementPaid(paymentModal.from, paymentModal.to, paymentModal.amount);
+                    await notifySettlementChange(paymentModal.from, paymentModal.to, paymentModal.amount, !isPaid);
                     setPaymentModal(null);
                   }}
+                  disabled={isSending}
                   style={{
                     width: '100%', padding: '0.6rem', borderRadius: '10px',
                     border: '1px solid var(--border)', background: 'transparent',
                     color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer',
                     marginBottom: '0.5rem',
+                    opacity: isSending ? 0.6 : 1,
                   }}
                 >
-                  {isSettlementPaid(paymentModal.from, paymentModal.to) ? t('summary.markUnpaid') : t('summary.markPaid')}
+                  {isSending ? t('summary.disputeSending') : (isPaid ? t('summary.markUnpaid') : t('summary.markPaid'))}
                 </button>
               );
             })()}
@@ -2308,6 +2356,23 @@ const GameSummaryScreen = () => {
               {t('common.close')}
             </button>
           </div>
+        </div>
+      )}
+
+      {settlementToast && (
+        <div
+          onClick={() => setSettlementToast(null)}
+          style={{
+            position: 'fixed', bottom: '5rem', left: '50%', transform: 'translateX(-50%)',
+            background: settlementToast.type === 'success' ? '#065f46' : '#78350f',
+            color: 'white', padding: '0.75rem 1.25rem', borderRadius: '12px',
+            fontSize: '0.85rem', fontWeight: '600', zIndex: 9999,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)', cursor: 'pointer',
+            animation: 'contentFadeIn 0.25s ease-out', maxWidth: '90vw', textAlign: 'center',
+          }}
+          ref={(el) => { if (el) setTimeout(() => setSettlementToast(null), 5000); }}
+        >
+          {settlementToast.message}
         </div>
       )}
     </div>

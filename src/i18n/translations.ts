@@ -417,6 +417,9 @@ const he = {
   // ── Notifications ──
   'notification.settlementTitle': 'תשלום לא התקבל',
   'notification.settlementBody': '{reporter} מדווח שתשלום של {amount} מערב {date} לא התקבל',
+  'notification.paidTitle': 'תשלום סומן כשולם',
+  'notification.paidBody': '{reporter} סימן תשלום של {amount} מערב {date} כשולם',
+  'notification.paidEmailSubject': 'אישור תשלום — Poker Manager',
   'notification.open': 'פתח',
   'notification.dismiss': 'קראתי',
   'notification.emailSubject': 'תזכורת תשלום — Poker Manager',
@@ -1436,6 +1439,9 @@ const en: Record<keyof typeof he, string> = {
   // ── Notifications ──
   'notification.settlementTitle': 'Payment not received',
   'notification.settlementBody': '{reporter} reports that payment of {amount} from {date} was not received',
+  'notification.paidTitle': 'Payment marked as paid',
+  'notification.paidBody': '{reporter} marked payment of {amount} from {date} as paid',
+  'notification.paidEmailSubject': 'Payment Confirmation — Poker Manager',
   'notification.open': 'Open',
   'notification.dismiss': 'Dismiss',
   'notification.emailSubject': 'Payment Reminder — Poker Manager',

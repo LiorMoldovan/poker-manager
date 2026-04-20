@@ -256,7 +256,7 @@ const StatisticsScreen = () => {
         }
 
         document.body.appendChild(container);
-        const canvas = await html2canvas(container, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true });
+        const canvas = await html2canvas(container, { backgroundColor: '#0f172a', scale: 2, logging: false, useCORS: true });
         document.body.removeChild(container);
 
         const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0); });

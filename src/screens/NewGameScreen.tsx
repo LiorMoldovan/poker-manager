@@ -1192,7 +1192,7 @@ const NewGameScreen = () => {
         `;
         document.body.appendChild(teaserContainer);
         const teaserCanvas = await html2canvas(teaserContainer, {
-          backgroundColor: '#1a1a2e',
+          backgroundColor: '#0f172a',
           scale: FORECAST_SHARE_CAPTURE_SCALE,
           logging: false,
           useCORS: true,
@@ -1272,7 +1272,7 @@ const NewGameScreen = () => {
         
         // Capture screenshot
         const canvas = await html2canvas(container, {
-          backgroundColor: '#1a1a2e',
+          backgroundColor: '#0f172a',
           scale: FORECAST_SHARE_CAPTURE_SCALE,
           useCORS: true,
           logging: false,

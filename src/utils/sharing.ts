@@ -100,6 +100,37 @@ export const shareToWhatsApp = (text: string): void => {
 const MAX_SLICE_HEIGHT = 1200;
 
 /**
+ * Temporarily disables all CSS animations/transitions on an element tree
+ * so html2canvas captures the final rendered state (not mid-animation opacity:0).
+ * Returns a cleanup function that restores original styles.
+ */
+function freezeAnimations(root: HTMLElement): () => void {
+  const saved: { el: HTMLElement; animation: string; transition: string; opacity: string }[] = [];
+  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))];
+  for (const el of elements) {
+    const cs = getComputedStyle(el);
+    if (cs.animation !== 'none' || cs.opacity !== '1' || cs.transition !== 'all 0s ease 0s') {
+      saved.push({
+        el,
+        animation: el.style.animation,
+        transition: el.style.transition,
+        opacity: el.style.opacity,
+      });
+      el.style.animation = 'none';
+      el.style.transition = 'none';
+      el.style.opacity = '1';
+    }
+  }
+  return () => {
+    for (const { el, animation, transition, opacity } of saved) {
+      el.style.animation = animation;
+      el.style.transition = transition;
+      el.style.opacity = opacity;
+    }
+  };
+}
+
+/**
  * Captures a DOM element as screenshot(s), splitting vertically if too tall.
  * Returns an array of File objects ready for navigator.share or download.
  */
@@ -110,14 +141,21 @@ export const captureAndSplit = async (
 ): Promise<File[]> => {
   const { default: html2canvas } = await import('html2canvas');
   const scale = options?.scale ?? 2;
-  const bg = options?.backgroundColor ?? '#1a1a2e';
+  const bg = options?.backgroundColor ?? '#0f172a';
 
-  const canvas = await html2canvas(element, {
-    backgroundColor: bg,
-    scale,
-    useCORS: true,
-    logging: false,
-  });
+  const restore = freezeAnimations(element);
+
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await html2canvas(element, {
+      backgroundColor: bg,
+      scale,
+      useCORS: true,
+      logging: false,
+    });
+  } finally {
+    restore();
+  }
 
   const realHeight = canvas.height / scale;
   if (realHeight <= MAX_SLICE_HEIGHT) {

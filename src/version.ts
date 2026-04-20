@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.17.4';
+export const APP_VERSION = '5.18.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.18.0',
+    date: '2026-04-20',
+    changes: [
+      '✨ Premium UI animations: smooth page transitions, card entrances, button feedback, shimmer loading',
+      '👥 Redesigned group members list with avatars, staggered animations, inline controls',
+      '🔔 Settlement notifications: email + in-app alerts when payments are marked or disputed',
+      '🔧 Push notifications: DER-to-P1363 signature fix, per-device diagnostics, stale subscription cleanup',
+      '📸 Screenshot fix: freeze animations before html2canvas capture for correct rendering',
+      '🧹 Removed redundant "Unlink Player" button — use Remove for cleaner group management',
+    ],
+  },
   {
     version: '5.17.4',
     date: '2026-04-20',

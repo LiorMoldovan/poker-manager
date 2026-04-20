@@ -15,7 +15,6 @@ interface GroupManagementTabProps {
   removeMember: (userId: string) => Promise<{ error: unknown }>;
   transferOwnership: (userId: string) => Promise<{ error: unknown }>;
   regenerateInviteCode: () => Promise<{ data: string | null; error: unknown }>;
-  unlinkMemberPlayer: (userId: string) => Promise<{ error: unknown }>;
   createPlayerInvite: (playerId: string) => Promise<{ data: { invite_code: string; player_name: string; already_existed: boolean } | null; error: unknown }>;
   addMemberByEmail: (email: string, playerId?: string) => Promise<{ data: { user_id: string; display_name: string; player_id: string | null } | null; error: unknown }>;
   appUrl: string;
@@ -32,7 +31,6 @@ export default function GroupManagementTab({
   removeMember,
   transferOwnership,
   regenerateInviteCode,
-  unlinkMemberPlayer,
   createPlayerInvite,
   addMemberByEmail,
   appUrl,
@@ -112,16 +110,6 @@ export default function GroupManagementTab({
     } else if (data) {
       setInviteCode(data);
       showMsg('success', t('groupMgmt.regenSuccess'));
-    }
-  };
-
-  const handleUnlink = async (userId: string) => {
-    const { error } = await unlinkMemberPlayer(userId);
-    if (error) {
-      showMsg('error', (error as { message?: string })?.message || t('groupMgmt.errorUnlink'));
-    } else {
-      showMsg('success', t('groupMgmt.unlinkSuccess'));
-      loadMembers();
     }
   };
 
@@ -208,113 +196,174 @@ export default function GroupManagementTab({
         </div>
       </div>
 
-      {/* Member List — at the top */}
+      {/* Member List */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-        <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>{t('groupMgmt.members')}</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <h2 className="card-title" style={{ margin: 0 }}>{t('groupMgmt.members')}</h2>
+          <span style={{
+            fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--surface-light)',
+            padding: '0.2rem 0.6rem', borderRadius: '10px', fontWeight: 600,
+          }}>
+            {members.length}
+          </span>
+        </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('common.loading')}</p>
+          <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+            <div style={{ fontSize: '1.5rem', animation: 'pulse 1.5s ease-in-out infinite', marginBottom: '0.5rem' }}>👥</div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('common.loading')}</p>
+          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {members.map(m => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {members.map((m, idx) => {
               const isMe = m.userId === currentUserId;
               const isMemberOwner = members.length > 0 && isOwner && isMe;
+              const displayName = m.playerName || m.displayName || t('groupMgmt.noName');
+              const initials = displayName.slice(0, 2);
+
+              const avatarColors = [
+                ['#10B981', 'rgba(16,185,129,0.15)'],
+                ['#6366F1', 'rgba(99,102,241,0.15)'],
+                ['#EC4899', 'rgba(236,72,153,0.15)'],
+                ['#F59E0B', 'rgba(245,158,11,0.15)'],
+                ['#8B5CF6', 'rgba(139,92,246,0.15)'],
+                ['#14B8A6', 'rgba(20,184,166,0.15)'],
+                ['#F97316', 'rgba(249,115,22,0.15)'],
+                ['#06B6D4', 'rgba(6,182,212,0.15)'],
+              ];
+              const [avatarColor, avatarBg] = avatarColors[idx % avatarColors.length];
+
               return (
                 <div key={m.userId} style={{
-                  padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--border)',
+                  padding: '0.65rem 0.75rem', borderRadius: '10px',
                   background: isMe ? 'rgba(16,185,129,0.05)' : 'var(--background)',
-                  overflow: 'hidden',
+                  border: isMe ? '1px solid rgba(16,185,129,0.2)' : '1px solid var(--border)',
+                  transition: 'all 0.2s ease',
+                  animation: `contentFadeIn 0.3s ease-out ${idx * 0.04}s both`,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem', flexWrap: 'wrap', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0 }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {m.displayName || m.playerName || t('groupMgmt.noName')}
-                      </span>
-                      {isMe && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(16,185,129,0.15)', color: '#10B981', padding: '0.1rem 0.4rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                          {t('groupMgmt.you')}
-                        </span>
-                      )}
-                      {isMemberOwner && (
-                        <span style={{ fontSize: '0.65rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308', padding: '0.1rem 0.4rem', borderRadius: '6px', whiteSpace: 'nowrap' }}>
-                          {t('groupMgmt.owner')}
-                        </span>
-                      )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    {/* Avatar */}
+                    <div style={{
+                      width: 34, height: 34, borderRadius: '50%',
+                      background: avatarBg, color: avatarColor,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.75rem', fontWeight: 700, flexShrink: 0,
+                      border: `1.5px solid ${avatarColor}30`,
+                    }}>
+                      {initials}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-                      {m.email && (
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', direction: 'ltr', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
-                          {m.email}
-                        </span>
-                      )}
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                        {roleLabel(m.role)}
-                      </span>
-                    </div>
-                  </div>
 
-                  {m.playerName && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
-                      {t('groupMgmt.linkedPlayer', { name: m.playerName })}
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {displayName}
+                        </span>
+                        {isMe && (
+                          <span style={{
+                            fontSize: '0.6rem', background: 'rgba(16,185,129,0.15)', color: '#10B981',
+                            padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600,
+                          }}>
+                            {t('groupMgmt.you')}
+                          </span>
+                        )}
+                        {isMemberOwner && (
+                          <span style={{
+                            fontSize: '0.6rem', background: 'rgba(234,179,8,0.15)', color: '#EAB308',
+                            padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600,
+                          }}>
+                            {t('groupMgmt.owner')}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.15rem' }}>
+                        {m.email && (
+                          <span style={{
+                            fontSize: '0.68rem', color: 'var(--text-muted)', direction: 'ltr',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px',
+                          }}>
+                            {m.email}
+                          </span>
+                        )}
+                        {m.email && <span style={{ fontSize: '0.5rem', color: 'var(--border)' }}>•</span>}
+                        <span style={{
+                          fontSize: '0.68rem', whiteSpace: 'nowrap', fontWeight: 500,
+                          color: m.role === 'admin' ? '#A855F7' : 'var(--text-muted)',
+                        }}>
+                          {roleLabel(m.role)}
+                        </span>
+                      </div>
+                      {!m.playerName && m.playerId === null && (
+                        <div style={{
+                          fontSize: '0.68rem', color: '#F59E0B', marginTop: '0.2rem',
+                          display: 'flex', alignItems: 'center', gap: '0.3rem',
+                        }}>
+                          <span style={{ fontSize: '0.6rem' }}>⚠</span> {t('groupMgmt.notLinked')}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {!m.playerName && m.playerId === null && (
-                    <div style={{ fontSize: '0.75rem', color: '#F59E0B' }}>
-                      {t('groupMgmt.notLinked')}
-                    </div>
-                  )}
 
-                  {/* Admin Controls — owner can manage all, non-owner admins can manage non-admins */}
-                  {isAdmin && !isMe && !isMemberOwner && (isOwner || (m.role !== 'admin')) && (
-                    <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                      {(isOwner || m.role !== 'admin') && (
+                    {/* Inline actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}>
+                      {isAdmin && !isMe && (isOwner || m.role !== 'admin') && (
                         <select
                           value={m.role}
                           onChange={e => handleRoleChange(m.userId, e.target.value)}
                           style={{
-                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)',
-                            background: '#1a1a2e', color: 'var(--text)', fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif',
-                            cursor: 'pointer',
+                            padding: '0.25rem 0.35rem', borderRadius: '6px', border: '1px solid var(--border)',
+                            background: '#1a1a2e', color: 'var(--text)', fontSize: '0.7rem',
+                            fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
                           }}
                         >
                           <option value="admin" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleAdmin')}</option>
                           <option value="member" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('groupMgmt.roleMember')}</option>
                         </select>
                       )}
-                      {m.playerName && (
+                      {isAdmin && !isMe && (isOwner || m.role !== 'admin') && (
                         <button
-                          onClick={() => handleUnlink(m.userId)}
+                          onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.playerName || m.displayName || '' })}
                           style={{
-                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)',
-                            background: 'rgba(245,158,11,0.08)', color: '#F59E0B', fontSize: '0.7rem',
-                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                            width: 28, height: 28, borderRadius: '6px',
+                            border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.06)',
+                            color: '#EF4444', cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem',
+                            transition: 'all 0.15s ease', flexShrink: 0,
                           }}
+                          title={t('groupMgmt.removeMember')}
                         >
-                          {t('groupMgmt.unlinkPlayer')}
+                          ✕
                         </button>
                       )}
-                      {isOwner && (
-                        <button
-                          onClick={() => setConfirmAction({ type: 'transfer', userId: m.userId, name: m.displayName || m.playerName || '' })}
-                          style={{
-                            padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(168,85,247,0.3)',
-                            background: 'rgba(168,85,247,0.08)', color: '#A855F7', fontSize: '0.7rem',
-                            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
-                          }}
-                        >
-                          {t('groupMgmt.transferOwnership')}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setConfirmAction({ type: 'remove', userId: m.userId, name: m.displayName || m.playerName || '' })}
+                    </div>
+                  </div>
+
+                  {/* Owner transfer dropdown */}
+                  {isMemberOwner && members.filter(x => x.userId !== currentUserId).length > 0 && (
+                    <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
+                      <select
+                        value=""
+                        onChange={e => {
+                          const target = members.find(x => x.userId === e.target.value);
+                          if (target) {
+                            setConfirmAction({ type: 'transfer', userId: target.userId, name: target.playerName || target.displayName || '' });
+                          }
+                        }}
                         style={{
-                          padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
-                          background: 'rgba(239,68,68,0.08)', color: '#EF4444', fontSize: '0.7rem',
-                          cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                          padding: '0.3rem 0.5rem', borderRadius: '6px',
+                          border: '1px solid rgba(168,85,247,0.3)', background: '#1a1a2e',
+                          color: '#A855F7', fontSize: '0.72rem', fontFamily: 'Outfit, sans-serif',
+                          cursor: 'pointer',
                         }}
                       >
-                        {t('groupMgmt.removeMember')}
-                      </button>
+                        <option value="" style={{ background: '#1a1a2e', color: '#A855F7' }}>
+                          👑 {t('groupMgmt.transferOwnership')}
+                        </option>
+                        {members.filter(x => x.userId !== currentUserId).map(x => (
+                          <option key={x.userId} value={x.userId} style={{ background: '#1a1a2e', color: '#ffffff' }}>
+                            {x.playerName || x.displayName || x.email || '?'}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
                 </div>
