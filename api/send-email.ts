@@ -18,6 +18,7 @@ export default async function handler(req: Request): Promise<Response> {
     const serviceId = process.env.EMAILJS_SERVICE_ID || 'service_9r3sap5';
     const templateId = process.env.EMAILJS_TEMPLATE_ID || 'template_vbxffkb';
     const publicKey = process.env.EMAILJS_PUBLIC_KEY || 'Yv-mOZmcYpLll4olj';
+    const privateKey = process.env.EMAILJS_PRIVATE_KEY || '';
 
     if (!serviceId || !templateId || !publicKey) {
       return new Response(JSON.stringify({ error: { message: 'EmailJS not configured (missing env vars)' } }), {
@@ -31,23 +32,26 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    const emailPayload: Record<string, unknown> = {
+      service_id: serviceId,
+      template_id: templateId,
+      user_id: publicKey,
+      template_params: {
+        to_email: to,
+        subject,
+        player_name: playerName || '',
+        reporter_name: reporterName || 'שחקן',
+        amount: amount || '?',
+        game_date: gameDate || '',
+        pay_link: payLink || '',
+      },
+    };
+    if (privateKey) emailPayload.accessToken = privateKey;
+
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        service_id: serviceId,
-        template_id: templateId,
-        user_id: publicKey,
-        template_params: {
-          to_email: to,
-          subject,
-          player_name: playerName || '',
-          reporter_name: reporterName || 'שחקן',
-          amount: amount || '?',
-          game_date: gameDate || '',
-          pay_link: payLink || '',
-        },
-      }),
+      headers: { 'Content-Type': 'application/json', 'origin': 'https://poker-manager-blond.vercel.app' },
+      body: JSON.stringify(emailPayload),
     });
 
     if (!res.ok) {

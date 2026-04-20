@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20
  */
 
-export const APP_VERSION = '5.17.0';
+export const APP_VERSION = '5.17.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.17.1',
+    date: '2026-04-20',
+    changes: [
+      '🔧 Fix push notifications: corrected VAPID JWT signature format (P1363 instead of DER)',
+      '📧 Fix email: added EmailJS private key (accessToken) for server-side calls',
+      '🗄️ Fix push subscription upsert: added missing UPDATE RLS policy',
+      '✏️ Fix player traits editor: commas and spaces now work in style/quirks fields',
+    ],
+  },
   {
     version: '5.17.0',
     date: '2026-04-19',

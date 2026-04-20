@@ -46,8 +46,10 @@ const AIProgressBar = ({ operationKey }: { operationKey: string }) => {
           width: `${progress}%`,
           height: '100%',
           borderRadius: '2px',
-          background: 'linear-gradient(90deg, #A855F7, #EC4899)',
+          background: 'linear-gradient(90deg, #A855F7, #EC4899, #A855F7)',
+          backgroundSize: '200% 100%',
           transition: 'width 0.3s ease-out',
+          animation: 'shimmer 1.5s ease-in-out infinite',
         }} />
       </div>
       <div style={{

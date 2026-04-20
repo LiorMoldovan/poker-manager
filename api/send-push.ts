@@ -60,15 +60,9 @@ async function createVapidJwt(
     new TextEncoder().encode(unsignedToken)
   );
 
-  const sigBytes = new Uint8Array(sig);
-  let r = sigBytes.slice(0, 32);
-  let s = sigBytes.slice(32, 64);
-  while (r.length > 1 && r[0] === 0) r = r.slice(1);
-  while (s.length > 1 && s[0] === 0) s = s.slice(1);
-  if (r[0] & 0x80) { const t = new Uint8Array(r.length + 1); t[0] = 0; t.set(r, 1); r = t; }
-  if (s[0] & 0x80) { const t = new Uint8Array(s.length + 1); t[0] = 0; t.set(s, 1); s = t; }
-
-  const signature = base64UrlEncode(concatBuffers(r.buffer, s.buffer).buffer);
+  // WebCrypto ECDSA P-256 returns P1363 format (64 bytes: r || s) which is
+  // exactly what JWS ES256 requires — do NOT convert to DER
+  const signature = base64UrlEncode(sig);
   return `${unsignedToken}.${signature}`;
 }
 
@@ -128,7 +122,7 @@ async function encryptPayload(
   );
 
   const recordSize = new Uint8Array(4);
-  new DataView(recordSize.buffer).setUint32(0, padded.byteLength + 16 + 1);
+  new DataView(recordSize.buffer).setUint32(0, padded.byteLength + 16);
 
   const header = concatBuffers(
     salt.buffer,

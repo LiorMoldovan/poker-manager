@@ -100,6 +100,8 @@ const SettingsScreen = () => {
   // Player traits editor state
   const [editingTraitsPlayer, setEditingTraitsPlayer] = useState<Player | null>(null);
   const [traitsForm, setTraitsForm] = useState<PlayerTraits>({ style: [], quirks: [] });
+  const [traitsStyleText, setTraitsStyleText] = useState('');
+  const [traitsQuirksText, setTraitsQuirksText] = useState('');
   const [traitsSaving, setTraitsSaving] = useState(false);
 
   // Super Admin dashboard state
@@ -1014,6 +1016,8 @@ const SettingsScreen = () => {
                           onClick={() => {
                             const existing = getAllPlayerTraits().get(player.name);
                             setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
+                            setTraitsStyleText(existing?.style.join(', ') || '');
+                            setTraitsQuirksText(existing?.quirks.join(', ') || '');
                             setEditingTraitsPlayer(player);
                           }}
                           title={t('settings.traits.button')}
@@ -1083,8 +1087,8 @@ const SettingsScreen = () => {
               <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.style')}</label>
               <input
                 type="text"
-                value={traitsForm.style.join(', ')}
-                onChange={e => setTraitsForm(f => ({ ...f, style: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                value={traitsStyleText}
+                onChange={e => setTraitsStyleText(e.target.value)}
                 placeholder={t('settings.traits.stylePlaceholder')}
                 style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
               />
@@ -1092,8 +1096,8 @@ const SettingsScreen = () => {
               <label style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('settings.traits.quirks')}</label>
               <input
                 type="text"
-                value={traitsForm.quirks.join(', ')}
-                onChange={e => setTraitsForm(f => ({ ...f, quirks: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }))}
+                value={traitsQuirksText}
+                onChange={e => setTraitsQuirksText(e.target.value)}
                 placeholder={t('settings.traits.quirksPlaceholder')}
                 style={{ background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.5rem 0.75rem', direction: 'rtl' }}
               />
@@ -1117,7 +1121,12 @@ const SettingsScreen = () => {
                 disabled={traitsSaving}
                 onClick={async () => {
                   setTraitsSaving(true);
-                  await savePlayerTraits(editingTraitsPlayer.id, editingTraitsPlayer.name, traitsForm);
+                  const finalTraits = {
+                    ...traitsForm,
+                    style: traitsStyleText.split(',').map(s => s.trim()).filter(Boolean),
+                    quirks: traitsQuirksText.split(',').map(s => s.trim()).filter(Boolean),
+                  };
+                  await savePlayerTraits(editingTraitsPlayer.id, editingTraitsPlayer.name, finalTraits);
                   setTraitsSaving(false);
                   setEditingTraitsPlayer(null);
                   setSaved(true);

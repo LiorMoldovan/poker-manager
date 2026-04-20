@@ -1,12 +1,18 @@
-import { verifySupabaseAuth } from './_auth';
+import { jwtVerify } from 'jose';
 
-export const config = { runtime: 'edge' };
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '20mb',
+    },
+  },
+  maxDuration: 60,
+};
 
 const GH_OWNER = 'LiorMoldovan';
 const GH_REPO = 'poker-manager';
 const GH_BRANCH = 'main';
 const MAX_BACKUPS = 3;
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function ghHeaders(token: string): Record<string, string> {
   return {
@@ -23,48 +29,83 @@ async function ghApi(token: string, path: string, init?: RequestInit): Promise<R
   });
 }
 
-export default async function handler(req: Request): Promise<Response> {
+function base64Decode(str: string): Uint8Array | null {
+  try {
+    const bin = atob(str);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+async function verifyAuth(authHeader: string | undefined): Promise<{ error: string; status: number } | null> {
+  const jwtSecret = process.env.SUPABASE_JWT_SECRET?.trim();
+  if (!jwtSecret) return { error: 'Server authentication not configured', status: 500 };
+
+  if (!authHeader?.startsWith('Bearer ')) return { error: 'Missing authentication', status: 401 };
+
+  const token = authHeader.slice(7);
+  const candidates: Uint8Array[] = [new TextEncoder().encode(jwtSecret)];
+  const decoded = base64Decode(jwtSecret);
+  if (decoded) candidates.push(decoded);
+
+  for (const secret of candidates) {
+    try {
+      await jwtVerify(token, secret);
+      return null;
+    } catch {
+      // try next candidate
+    }
+  }
+  return { error: 'Invalid authentication token', status: 401 };
+}
+
+// Node.js Serverless Function (not Edge) — allows larger body and Buffer-based encoding
+export default async function handler(
+  req: { method?: string; headers: Record<string, string | string[] | undefined>; body: Record<string, unknown> },
+  res: { status(code: number): { json(data: unknown): void; send(data: string): void } },
+) {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return res.status(405).send('Method not allowed');
   }
 
-  const authError = await verifySupabaseAuth(req);
-  if (authError) return authError;
+  const rawAuth = req.headers.authorization;
+  const authHeader = typeof rawAuth === 'string' ? rawAuth : Array.isArray(rawAuth) ? rawAuth[0] : undefined;
+  const authResult = await verifyAuth(authHeader);
+  if (authResult) {
+    return res.status(authResult.status).json({ error: { message: authResult.error } });
+  }
 
   const token = process.env.GITHUB_TOKEN;
   if (!token) {
-    return new Response(JSON.stringify({ error: { message: 'GITHUB_TOKEN not configured' } }), {
-      status: 500, headers: JSON_HEADERS,
-    });
+    return res.status(500).json({ error: { message: 'GITHUB_TOKEN not configured' } });
   }
 
   try {
-    const { action, groupName, fileName, content } = await req.json();
+    const { action, groupName, fileName, content, contentBase64 } = req.body || {};
 
     if (!action || !groupName) {
-      return new Response(JSON.stringify({ error: { message: 'Missing action or groupName' } }), {
-        status: 400, headers: JSON_HEADERS,
-      });
+      return res.status(400).json({ error: { message: 'Missing action or groupName' } });
     }
 
-    const safeName = groupName.replace(/[^a-zA-Z0-9\u0590-\u05FF_-]/g, '_');
+    const safeName = (groupName as string).replace(/[^a-zA-Z0-9\u0590-\u05FF_-]/g, '_');
     const dir = `backups/${safeName}`;
 
     if (action === 'push') {
-      if (!fileName || !content) {
-        return new Response(JSON.stringify({ error: { message: 'Missing fileName or content' } }), {
-          status: 400, headers: JSON_HEADERS,
-        });
+      if (!fileName || (!content && !contentBase64)) {
+        return res.status(400).json({ error: { message: 'Missing fileName or content' } });
       }
 
       const filePath = `${dir}/${fileName}`;
-      const encoded = btoa(unescape(encodeURIComponent(content)));
+      const encoded = (contentBase64 as string) || Buffer.from(content as string, 'utf-8').toString('base64');
 
       let sha: string | undefined;
       const existing = await ghApi(token, filePath);
       if (existing.ok) {
         const data = await existing.json();
-        sha = data.sha;
+        sha = (data as { sha: string }).sha;
       }
 
       const body: Record<string, unknown> = {
@@ -95,13 +136,13 @@ export default async function handler(req: Request): Promise<Response> {
         }
       }
 
-      return new Response(JSON.stringify({ success: true }), { headers: JSON_HEADERS });
+      return res.status(200).json({ success: true });
     }
 
     if (action === 'list') {
       const listRes = await ghApi(token, dir);
       if (!listRes.ok) {
-        if (listRes.status === 404) return new Response(JSON.stringify({ files: [] }), { headers: JSON_HEADERS });
+        if (listRes.status === 404) return res.status(200).json({ files: [] });
         throw new Error(`GitHub list failed (${listRes.status})`);
       }
       const files = (await listRes.json()) as { name: string; size: number }[];
@@ -109,29 +150,23 @@ export default async function handler(req: Request): Promise<Response> {
         .filter((f: { name: string }) => f.name.endsWith('.json'))
         .sort((a: { name: string }, b: { name: string }) => b.name.localeCompare(a.name))
         .map((f: { name: string; size: number }) => ({ name: f.name, size: f.size }));
-      return new Response(JSON.stringify({ files: result }), { headers: JSON_HEADERS });
+      return res.status(200).json({ files: result });
     }
 
     if (action === 'fetch') {
       if (!fileName) {
-        return new Response(JSON.stringify({ error: { message: 'Missing fileName' } }), {
-          status: 400, headers: JSON_HEADERS,
-        });
+        return res.status(400).json({ error: { message: 'Missing fileName' } });
       }
       const fetchRes = await ghApi(token, `${dir}/${fileName}`);
       if (!fetchRes.ok) throw new Error(`GitHub fetch failed (${fetchRes.status})`);
       const data = await fetchRes.json();
-      const decoded = decodeURIComponent(escape(atob((data.content as string).replace(/\n/g, ''))));
-      return new Response(JSON.stringify({ content: decoded }), { headers: JSON_HEADERS });
+      const decoded = Buffer.from((data as { content: string }).content.replace(/\n/g, ''), 'base64').toString('utf-8');
+      return res.status(200).json({ content: decoded });
     }
 
-    return new Response(JSON.stringify({ error: { message: `Unknown action: ${action}` } }), {
-      status: 400, headers: JSON_HEADERS,
-    });
+    return res.status(400).json({ error: { message: `Unknown action: ${action}` } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Backup proxy error';
-    return new Response(JSON.stringify({ error: { message } }), {
-      status: 502, headers: JSON_HEADERS,
-    });
+    return res.status(502).json({ error: { message } });
   }
 }

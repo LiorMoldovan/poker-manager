@@ -35,5 +35,10 @@ CREATE POLICY push_subs_select ON push_subscriptions FOR SELECT
 CREATE POLICY push_subs_insert ON push_subscriptions FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY push_subs_update ON push_subscriptions FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY push_subs_delete ON push_subscriptions FOR DELETE
   USING (auth.uid() = user_id);
+
