@@ -54,19 +54,41 @@ export default async function handler(req: Request): Promise<Response> {
           pay_link: body.payLink || '',
         };
 
-    const emailPayload: Record<string, unknown> = {
-      service_id: serviceId,
-      template_id: templateId,
-      user_id: publicKey,
-      template_params: templateParams,
+    const buildPayload = (tplId: string, params: Record<string, string>) => {
+      const p: Record<string, unknown> = {
+        service_id: serviceId,
+        template_id: tplId,
+        user_id: publicKey,
+        template_params: params,
+      };
+      if (privateKey) p.accessToken = privateKey;
+      return p;
     };
-    if (privateKey) emailPayload.accessToken = privateKey;
 
-    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'origin': 'https://poker-manager-blond.vercel.app' },
-      body: JSON.stringify(emailPayload),
-    });
+    const sendEmail = async (payload: Record<string, unknown>) => {
+      return fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'origin': 'https://poker-manager-blond.vercel.app' },
+        body: JSON.stringify(payload),
+      });
+    };
+
+    let res = await sendEmail(buildPayload(templateId, templateParams));
+
+    // If broadcast template fails, retry with settlement template using message as content
+    if (!res.ok && isBroadcast) {
+      const fallbackId = process.env.EMAILJS_TEMPLATE_ID || 'template_vbxffkb';
+      const fallbackParams: Record<string, string> = {
+        to_email: to,
+        subject,
+        player_name: body.senderName || 'Poker Manager',
+        reporter_name: body.message || '',
+        amount: '',
+        game_date: '',
+        pay_link: '',
+      };
+      res = await sendEmail(buildPayload(fallbackId, fallbackParams));
+    }
 
     if (!res.ok) {
       const errText = await res.text();

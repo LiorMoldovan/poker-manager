@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.22.2';
+export const APP_VERSION = '5.22.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,10 +14,10 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '5.22.2',
+    version: '5.22.3',
     date: '2026-04-21',
     changes: [
-      '🔧 Report email: on-screen debug info shows exactly what happened with the email',
+      '🔧 Fix email: broadcast template fallback to settlement template when missing',
     ]
   },
   {
