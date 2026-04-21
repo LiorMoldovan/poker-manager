@@ -422,7 +422,7 @@ const HistoryScreen = () => {
                 animation: i < 15 ? 'contentFadeIn 0.25s ease-out backwards' : undefined,
                 animationDelay: i < 15 ? `${i * 0.04}s` : undefined,
               }}
-              onClick={() => { hapticTap(); navigate(`/game-summary/${game.id}`, { state: { from: 'history' } }); }}
+              onClick={() => { hapticTap(); navigate(`/game/${game.id}`, { state: { from: 'history' } }); }}
             >
                 <div className="card-header">
                 <div>
@@ -489,7 +489,7 @@ const HistoryScreen = () => {
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/game-summary/${game.id}`, { state: { from: 'history' } });
+                    navigate(`/game/${game.id}`, { state: { from: 'history' } });
                   }}
                 >
                   {t('history.details')}

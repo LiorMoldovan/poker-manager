@@ -335,7 +335,6 @@ function SupabaseApp() {
         });
 
         if (isDead(sub.endpoint)) {
-          console.warn('[Push] Dead endpoint, nuking all SWs...');
           await sub.unsubscribe();
           const allRegs = await navigator.serviceWorker.getRegistrations();
           for (const r of allRegs) {
@@ -350,15 +349,11 @@ function SupabaseApp() {
             userVisibleOnly: true,
             applicationServerKey: VAPID_PUBLIC,
           });
-          if (isDead(sub.endpoint)) {
-            console.warn('[Push] Still dead after full nuke:', sub.endpoint.slice(0, 80));
-            return;
-          }
+          if (isDead(sub.endpoint)) return;
         }
 
         await savePushSubscription(groupId, playerName, sub);
-        console.log('[Push] Subscribed:', sub.endpoint.slice(0, 60));
-      } catch (err) { console.warn('Push subscription failed:', err); }
+      } catch (_err) { /* push subscription not available */ }
     };
     subscribe();
   }, [dataReady, groupId, playerName]);

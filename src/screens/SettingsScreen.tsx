@@ -28,7 +28,6 @@ import {
   getAllPlayerTraits,
   savePlayerTraits,
   getGroupPushSubscribers,
-  deletePushSubscription,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
@@ -211,9 +210,8 @@ const SettingsScreen = () => {
   }, []);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
-  const [devicePushStatus, setDevicePushStatus] = useState<string | null>(null);
 
-  // Load push subscribers + check this device's push status
+  // Load push subscribers when tab is active
   useEffect(() => {
     const gid = getGroupId();
     if (activeTab === 'push' && gid) {
@@ -221,34 +219,6 @@ const SettingsScreen = () => {
         setPushSubscriberCount(subs.length);
         setPushSubscribers(subs);
       });
-      (async () => {
-        const lines: string[] = [];
-        if (!('serviceWorker' in navigator)) { setDevicePushStatus('❌ Service Worker not supported'); return; }
-        if (!('PushManager' in window)) { setDevicePushStatus('❌ PushManager not supported'); return; }
-        const perm = Notification.permission;
-        lines.push(`Permission: ${perm}`);
-        if (perm === 'denied') { setDevicePushStatus(`❌ Permission denied`); return; }
-        if (perm === 'default') { lines.push('⚠️ Not yet requested'); }
-        try {
-          const reg = await navigator.serviceWorker.ready;
-          const sw = reg.active;
-          lines.push(`SW: ${sw ? 'active' : 'not active'}`);
-          const sub = await reg.pushManager.getSubscription();
-          if (sub) {
-            const ep = sub.endpoint;
-            const isFCM = ep.includes('fcm.googleapis.com');
-            lines.push(`Endpoint: ${isFCM ? 'FCM' : 'Other'} ${ep.slice(0, 70)}...`);
-            const subs = await getGroupPushSubscribers(gid);
-            const inDB = subs.some(s => s.endpoint === ep);
-            lines.push(inDB ? '✅ Endpoint found in DB' : '❌ Endpoint NOT in DB — subscription not saved!');
-          } else {
-            lines.push('❌ No push subscription on this device');
-          }
-        } catch (err) {
-          lines.push(`Error: ${err instanceof Error ? err.message : String(err)}`);
-        }
-        setDevicePushStatus(lines.join('\n'));
-      })();
     }
   }, [activeTab]);
 
@@ -2397,54 +2367,6 @@ const SettingsScreen = () => {
             <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
             </p>
-            {devicePushStatus && (
-              <div style={{ margin: '0 0 0.75rem' }}>
-                <pre style={{
-                  margin: 0, padding: '0.5rem', borderRadius: '8px',
-                  fontSize: '0.68rem', lineHeight: 1.5, direction: 'ltr',
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace',
-                  background: devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
-                  border: `1px solid ${devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
-                  color: 'var(--text)',
-                }}>
-                  <span style={{ fontWeight: 600 }}>📱 {language === 'he' ? 'מצב מכשיר זה:' : 'This device:'}</span>{'\n'}{devicePushStatus}
-                </pre>
-                {devicePushStatus.includes('permanently-removed') && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        const regs = await navigator.serviceWorker.getRegistrations();
-                        for (const r of regs) {
-                          const sub = await r.pushManager.getSubscription();
-                          if (sub) {
-                            if (sub.endpoint.includes('permanently-removed') || sub.endpoint.includes('invalid')) {
-                              await deletePushSubscription(sub.endpoint);
-                            }
-                            await sub.unsubscribe();
-                          }
-                          await r.unregister();
-                        }
-                        const keys = await caches.keys();
-                        await Promise.all(keys.map(k => caches.delete(k)));
-                        alert(language === 'he'
-                          ? 'נוקה בהצלחה! העמוד ייטען מחדש. אם עדיין לא עובד, לך להגדרות Chrome > אתרים > poker-manager.vercel.app > נקה ואפס'
-                          : 'Cleaned! Page will reload. If still broken, go to Chrome Settings > Sites > poker-manager.vercel.app > Clear & Reset');
-                        window.location.reload();
-                      } catch (err) {
-                        alert(`Error: ${err instanceof Error ? err.message : String(err)}`);
-                      }
-                    }}
-                    style={{
-                      width: '100%', marginTop: '0.5rem', padding: '0.6rem', borderRadius: '8px',
-                      border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer',
-                      fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
-                    }}
-                  >
-                    🔧 {language === 'he' ? 'תקן התראות במכשיר זה' : 'Fix Push on This Device'}
-                  </button>
-                )}
-              </div>
-            )}
             {pushSubscribers.length > 0 && (
               <div style={{ margin: '0 0 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                 {pushSubscribers.map((s, i) => {
@@ -2655,30 +2577,6 @@ const SettingsScreen = () => {
               </div>
             )}
 
-            {/* Diagnostic info */}
-            {isSuperAdmin && (
-              <div style={{
-                marginTop: '0.75rem', padding: '0.5rem', borderRadius: '0.5rem',
-                background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-                fontSize: '0.68rem', direction: 'ltr', color: 'var(--text-muted)',
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>📋 Subscription Debug</div>
-                {pushSubscribers.map((s, i) => {
-                  const isFCM = s.endpoint.includes('fcm.googleapis.com');
-                  const isMoz = s.endpoint.includes('mozilla');
-                  return (
-                    <div key={i} style={{ padding: '0.15rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <span style={{ color: isFCM ? '#10B981' : isMoz ? '#F59E0B' : '#3B82F6' }}>
-                        {isFCM ? 'FCM' : isMoz ? 'Mozilla' : 'Other'}
-                      </span>
-                      {' '}{s.playerName || '?'} — {s.endpoint.slice(0, 80)}...
-                    </div>
-                  );
-                })}
-                {pushSubscribers.length === 0 && <div>No subscriptions in DB</div>}
-              </div>
-            )}
-
             {/* Test section */}
             <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -2695,16 +2593,15 @@ const SettingsScreen = () => {
                     try {
                       const result = await proxySendPush({
                         groupId: gid,
-                        title: '🧪 Test — ' + authPlayerName,
-                        body: language === 'he' ? 'בדיקת התראה למכשיר זה' : 'Test notification for this device',
-                        targetPlayerNames: [authPlayerName],
+                        title: '🧪 Test Notification',
+                        body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
                       });
                       if (result) {
                         if (result.details) setPushDetails(result.details);
                         if (result.total === 0) {
-                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנוי עבורך — סגור ופתח מחדש את האפליקציה' : 'No subscription for you — close and reopen the app'}`);
+                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנויים' : 'No subscribers'}`);
                         } else if (result.sent > 0) {
-                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total} — ${language === 'he' ? 'אם לא קיבלת, מזער את האפליקציה ונסה שוב' : 'If not received, minimize the app and try again'}`);
+                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
                         } else {
                           setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
                         }
@@ -2725,7 +2622,7 @@ const SettingsScreen = () => {
                     fontFamily: 'Outfit, sans-serif', fontWeight: 500, minWidth: '140px',
                   }}
                 >
-                  🔔 {language === 'he' ? 'בדיקה למכשיר שלי' : 'Test My Device'}
+                  🔔 {language === 'he' ? 'בדיקת Push' : 'Test Push'}
                 </button>
                 <button
                   onClick={async () => {

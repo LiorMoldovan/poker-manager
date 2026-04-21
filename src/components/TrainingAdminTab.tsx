@@ -34,10 +34,97 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
 import { proxyGeminiGenerate } from '../utils/apiProxy';
-import { shareToWhatsApp } from '../utils/sharing';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 const RATE_LIMIT_DELAY = 7500;
+
+async function shareAnalysisAsImage(messageText: string): Promise<void> {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const lines = messageText.split('\n');
+
+  let greeting = '';
+  const contextLines: string[] = [];
+  const bodyLines: string[] = [];
+  let section: 'greeting' | 'context' | 'body' = 'greeting';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (section === 'greeting') {
+      if (trimmed.startsWith('היי') || trimmed.startsWith('לגבי')) {
+        greeting += (greeting ? '<br>' : '') + esc(trimmed);
+      } else if (trimmed.startsWith('🃏') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
+        section = 'context';
+        contextLines.push(trimmed);
+      } else if (trimmed === '') {
+        continue;
+      } else {
+        section = 'body';
+        bodyLines.push(trimmed);
+      }
+    } else if (section === 'context') {
+      if (trimmed.startsWith('🃏') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
+        contextLines.push(trimmed);
+      } else if (trimmed === '') {
+        section = 'body';
+      } else {
+        section = 'body';
+        bodyLines.push(trimmed);
+      }
+    } else {
+      if (trimmed === '— Poker Manager 🃏' || trimmed === '') continue;
+      bodyLines.push(trimmed);
+    }
+  }
+
+  const contextHtml = contextLines.map(l => {
+    const escaped = esc(l);
+    const emoji = l.substring(0, 2);
+    const rest = escaped.substring(escaped.indexOf(' ') + 1);
+    return `<div style="display:flex;align-items:flex-start;gap:0.4rem;margin-bottom:0.35rem;">
+      <span style="flex-shrink:0;font-size:1rem;">${emoji}</span>
+      <span>${rest}</span>
+    </div>`;
+  }).join('');
+
+  const container = document.createElement('div');
+  container.style.cssText = `
+    position: fixed; left: -9999px; top: 0; width: 380px;
+    background: #0f172a; font-family: Outfit, sans-serif; direction: rtl;
+  `;
+  container.innerHTML = `
+    <div style="padding: 1.25rem 1.25rem 1rem;">
+      <div style="font-size: 1.05rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.15rem;">${greeting}</div>
+    </div>
+    <div style="margin: 0 1.25rem; padding: 0.75rem; background: #1e293b; border-radius: 10px; border-right: 3px solid #6366f1; font-size: 0.82rem; color: #e2e8f0; line-height: 1.6;">
+      ${contextHtml}
+    </div>
+    <div style="padding: 1rem 1.25rem; font-size: 0.88rem; color: #f8fafc; line-height: 1.75; word-break: break-word;">
+      ${bodyLines.map(l => `<p style="margin:0 0 0.5rem;">${esc(l)}</p>`).join('')}
+    </div>
+    <div style="text-align: center; padding: 0.5rem 1.25rem 1rem; font-size: 0.6rem; color: #475569;">Poker Manager 🎲</div>
+  `;
+  document.body.appendChild(container);
+
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#0f172a', scale: 2, logging: false, useCORS: true,
+    });
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(b => resolve(b!), 'image/png', 1.0));
+    const file = new File([blob], 'training-analysis.png', { type: 'image/png' });
+
+    if (navigator.share && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url; a.download = file.name; a.click();
+      URL.revokeObjectURL(url);
+    }
+  } finally {
+    document.body.removeChild(container);
+  }
+}
 
 /** קלפים בצבעי חליפה (כמו במסכי אימון) — לתצוגה בניהול */
 const TrainingColoredCards = ({ text }: { text: string }) => {
@@ -2566,14 +2653,14 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                             {fullWhatsApp}
                           </div>
                           <button
-                            onClick={() => shareToWhatsApp(fullWhatsApp)}
+                            onClick={() => shareAnalysisAsImage(fullWhatsApp)}
                             style={{
                               fontSize: '0.65rem', padding: '0.3rem 0.6rem', borderRadius: '6px',
                               background: '#25D366', color: 'white', border: 'none',
                               cursor: 'pointer', fontWeight: 600, width: '100%',
                             }}
                           >
-                            📤 שלח בוואטסאפ
+                            📤 שתף כתמונה
                           </button>
                         </div>
                       );

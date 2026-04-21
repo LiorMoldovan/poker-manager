@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.19.0';
+export const APP_VERSION = '5.20.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.20.0',
+    date: '2026-04-20',
+    changes: [
+      'Setup wizard: chip values step, invite players step, welcome summary modal, About tab shortcut',
+      'Setup wizard: RTL-correct navigation arrows, step descriptions, skip optional steps',
+      'Push notifications: aggressive cleanup for dead endpoints, auto-recover stale subscriptions',
+      'Push tab: cleaned up debug UI, simplified test button',
+      'Training analysis: share as image instead of text (html2canvas)',
+      'Game navigation: fixed route paths for game details (/game/:id)',
+      'ElevenLabs TTS card: super admin only, graceful fallback on API error',
+    ],
+  },
   {
     version: '5.19.0',
     date: '2026-04-20',

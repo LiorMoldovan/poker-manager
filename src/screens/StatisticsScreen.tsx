@@ -1972,7 +1972,7 @@ const StatisticsScreen = () => {
                         <tr 
                           key={idx}
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
-                          onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
+                          onClick={() => navigate(`/game/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'records', timePeriod, selectedYear, selectedMonth } })}
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
                           <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
@@ -2590,7 +2590,7 @@ const StatisticsScreen = () => {
                         <tr 
                           key={idx}
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', ...(isMe ? meRowStyle : {}) }}
-                          onClick={() => navigate(`/game-summary/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'table', timePeriod, selectedYear, selectedMonth } })}
+                          onClick={() => navigate(`/game/${entry.gameId}`, { state: { from: 'statistics', viewMode: 'table', timePeriod, selectedYear, selectedMonth } })}
                         >
                           <td style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{idx + 1}{idx < 3 ? ` ${['🥇', '🥈', '🥉'][idx]}` : ''}</td>
                           <td style={{ padding: '0.3rem 0.2rem', fontWeight: '500', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>{entry.playerName}</td>
@@ -2735,7 +2735,7 @@ const StatisticsScreen = () => {
                         key={i}
                           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
                           onClick={() => {
-                            navigate(`/game-summary/${game.gameId}`, { state: { from: 'players', viewMode: 'players', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
+                            navigate(`/game/${game.gameId}`, { state: { from: 'players', viewMode: 'players', playerInfo: { playerId: player.playerId, playerName: player.playerName }, timePeriod, selectedYear, selectedMonth } });
                             window.scrollTo(0, 0);
                           }}
                         >
@@ -3428,7 +3428,7 @@ const StatisticsScreen = () => {
                       recordType: recordDetails.recordType
                     } : null;
                     setRecordDetails(null);
-                    navigate(`/game-summary/${game.gameId}`, { 
+                    navigate(`/game/${game.gameId}`, { 
                       state: { 
                         from: viewMode === 'players' ? 'players' : 'records', 
                         viewMode: viewMode,
@@ -3546,7 +3546,7 @@ const StatisticsScreen = () => {
                   key={idx}
                   onClick={() => {
                     setPlayerAllGames(null);
-                    navigate(`/game-summary/${game.gameId}`, { 
+                    navigate(`/game/${game.gameId}`, { 
                       state: { 
                         from: 'statistics', 
                         viewMode: viewMode,
