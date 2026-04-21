@@ -210,8 +210,9 @@ const SettingsScreen = () => {
   }, []);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
+  const [devicePushStatus, setDevicePushStatus] = useState<string | null>(null);
 
-  // Load push subscribers when tab is active
+  // Load push subscribers + check this device's push status
   useEffect(() => {
     const gid = getGroupId();
     if (activeTab === 'push' && gid) {
@@ -219,6 +220,34 @@ const SettingsScreen = () => {
         setPushSubscriberCount(subs.length);
         setPushSubscribers(subs);
       });
+      (async () => {
+        const lines: string[] = [];
+        if (!('serviceWorker' in navigator)) { setDevicePushStatus('❌ Service Worker not supported'); return; }
+        if (!('PushManager' in window)) { setDevicePushStatus('❌ PushManager not supported'); return; }
+        const perm = Notification.permission;
+        lines.push(`Permission: ${perm}`);
+        if (perm === 'denied') { setDevicePushStatus(`❌ Permission denied`); return; }
+        if (perm === 'default') { lines.push('⚠️ Not yet requested'); }
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sw = reg.active;
+          lines.push(`SW: ${sw ? 'active' : 'not active'}`);
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            const ep = sub.endpoint;
+            const isFCM = ep.includes('fcm.googleapis.com');
+            lines.push(`Endpoint: ${isFCM ? 'FCM' : 'Other'} ${ep.slice(0, 70)}...`);
+            const subs = await getGroupPushSubscribers(gid);
+            const inDB = subs.some(s => s.endpoint === ep);
+            lines.push(inDB ? '✅ Endpoint found in DB' : '❌ Endpoint NOT in DB — subscription not saved!');
+          } else {
+            lines.push('❌ No push subscription on this device');
+          }
+        } catch (err) {
+          lines.push(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        setDevicePushStatus(lines.join('\n'));
+      })();
     }
   }, [activeTab]);
 
@@ -2367,6 +2396,18 @@ const SettingsScreen = () => {
             <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
             </p>
+            {devicePushStatus && (
+              <pre style={{
+                margin: '0 0 0.75rem', padding: '0.5rem', borderRadius: '8px',
+                fontSize: '0.68rem', lineHeight: 1.5, direction: 'ltr',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace',
+                background: devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
+                border: `1px solid ${devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+                color: 'var(--text)',
+              }}>
+                <span style={{ fontWeight: 600 }}>📱 {language === 'he' ? 'מצב מכשיר זה:' : 'This device:'}</span>{'\n'}{devicePushStatus}
+              </pre>
+            )}
             {pushSubscribers.length > 0 && (
               <div style={{ margin: '0 0 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                 {pushSubscribers.map((s, i) => {
