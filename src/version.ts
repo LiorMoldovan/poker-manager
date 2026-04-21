@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.22.4';
+export const APP_VERSION = '5.22.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,10 +14,12 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '5.22.4',
+    version: '5.22.5',
     date: '2026-04-21',
     changes: [
-      '🔧 Fix resolve email notification, improved email messages, removed debug info',
+      '🔧 Exclude super admin from activity dashboard',
+      '🔧 Activity member table sorted by last login (most recent first)',
+      '🔧 Fix resolve email notification, improved email messages',
     ]
   },
   {

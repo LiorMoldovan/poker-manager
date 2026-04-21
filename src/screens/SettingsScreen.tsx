@@ -437,7 +437,7 @@ const SettingsScreen = () => {
     setActivityError(null);
     try {
       const [entries, trainingData] = await Promise.all([
-        fetchActivityLog(),
+        fetchActivityLog(isSuperAdmin ? groupMgmt?.currentUserId : undefined),
         fetchTrainingAnswers(),
       ]);
       setActivityLog(entries.reverse());
@@ -3326,7 +3326,7 @@ const SettingsScreen = () => {
               const member = activityMembers.find(m => m.playerName === name || m.displayName === name);
               const memberRole = member?.role || latest.role || 'member';
               return { name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, entries, memberRole };
-            }).sort((a, b) => b.sessions30d - a.sessions30d);
+            }).sort((a, b) => a.daysSince - b.daysSince);
 
             const activeMemberCount = Math.max(1, activityMembers.length || userMap.size);
 
