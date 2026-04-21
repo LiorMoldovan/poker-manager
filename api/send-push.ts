@@ -180,7 +180,6 @@ type SubDetail = {
   type: string;
   status: number | string;
   ok: boolean;
-  log: string[];
 };
 
 function classifyEndpoint(ep: string): string {
@@ -199,24 +198,13 @@ async function sendPushToSubscription(
   vapidSubject: string
 ): Promise<SubDetail> {
   const type = classifyEndpoint(sub.endpoint);
-  const log: string[] = [];
-  const t0 = Date.now();
 
   try {
     const url = new URL(sub.endpoint);
     const audience = `${url.protocol}//${url.host}`;
-    log.push(`aud=${audience}`);
-    log.push(`p256dh=${sub.keys_p256dh.length}ch auth=${sub.keys_auth.length}ch`);
-
-    log.push('jwt...');
     const jwt = await createVapidJwt(audience, vapidSubject, vapidPrivateKey, vapidPublicKey);
-    log.push(`jwt=${jwt.length}ch sig_part=${jwt.split('.')[2].length}ch`);
-
-    log.push('encrypt...');
     const encrypted = await encryptPayload(payload, sub.keys_p256dh, sub.keys_auth);
-    log.push(`body=${encrypted.byteLength}B`);
 
-    log.push('fetch...');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -235,27 +223,11 @@ async function sendPushToSubscription(
     });
     clearTimeout(timeout);
 
-    const resBody = await res.text().catch(() => '');
-    const elapsed = Date.now() - t0;
-    log.push(`${res.status} ${elapsed}ms`);
-    if (resBody) log.push(`resp=${resBody.slice(0, 150)}`);
-
-    const resLocation = res.headers.get('location');
-    if (resLocation) log.push(`location=${resLocation}`);
-
     const ok = res.status >= 200 && res.status < 300;
-    return {
-      player: sub.player_name || '?',
-      type,
-      status: res.status,
-      ok,
-      log,
-    };
+    return { player: sub.player_name || '?', type, status: res.status, ok };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    const elapsed = Date.now() - t0;
-    log.push(`ERR ${elapsed}ms: ${msg}`);
-    return { player: sub.player_name || '?', type, status: msg.slice(0, 50), ok: false, log };
+    return { player: sub.player_name || '?', type, status: msg.slice(0, 50), ok: false };
   }
 }
 
@@ -313,7 +285,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     for (const ep of invalidEndpoints) {
       const sub = subs.find(s => s.endpoint === ep);
-      details.push({ player: sub?.player_name || '?', type: 'Invalid', status: 'stale endpoint', ok: false, log: [`Removed: ${ep.slice(0, 60)}`] });
+      details.push({ player: sub?.player_name || '?', type: 'Invalid', status: 'removed', ok: false });
     }
 
     for (const sub of validSubs) {

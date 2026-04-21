@@ -31,7 +31,7 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendEmail } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail } from '../utils/apiProxy';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog } from '../utils/activityLogger';
 import { fetchTrainingAnswers } from '../database/trainingData';
@@ -198,12 +198,13 @@ const SettingsScreen = () => {
 
   // Push notification state
   const [pushMsg, setPushMsg] = useState('');
-  const [pushTarget, setPushTarget] = useState<'all' | 'select'>('all');
+  const [pushTarget, setPushTarget] = useState<'all' | 'permanent' | 'permanent_guest' | 'guest' | 'select'>('all');
   const [pushSelectedPlayers, setPushSelectedPlayers] = useState<string[]>([]);
   const [pushSending, setPushSending] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
-  const [pushDetails, setPushDetails] = useState<{ player: string; type: string; status: number | string; ok: boolean; log?: string[] }[] | null>(null);
+  const [pushDetails, setPushDetails] = useState<{ player: string; type: string; status: number | string; ok: boolean }[] | null>(null);
   const [pushSubscriberCount, setPushSubscriberCount] = useState(0);
+  const [sendVia, setSendVia] = useState<'push' | 'email' | 'both'>('push');
 
   useEffect(() => {
     loadData();
@@ -211,23 +212,24 @@ const SettingsScreen = () => {
 
   const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
 
-  // Load push subscribers when tab is active
-  useEffect(() => {
+  const refreshPushSubscribers = useCallback(() => {
     const gid = getGroupId();
-    if (activeTab === 'push' && gid) {
-      getGroupPushSubscribers(gid).then(subs => {
-        setPushSubscriberCount(subs.length);
-        setPushSubscribers(subs);
-      });
-    }
-  }, [activeTab]);
+    if (!gid) return;
+    getGroupPushSubscribers(gid).then(subs => {
+      setPushSubscriberCount(subs.length);
+      setPushSubscribers(subs);
+    });
+  }, []);
 
-  // Auto-load activity log + group members when tab is selected
   useEffect(() => {
-    if (isOwner && groupMgmt && activityMembers.length === 0) {
+    if (activeTab === 'push') refreshPushSubscribers();
+  }, [activeTab, refreshPushSubscribers]);
+
+  useEffect(() => {
+    if ((isOwner || activeTab === 'push') && groupMgmt && activityMembers.length === 0) {
       groupMgmt.fetchMembers().then(m => setActivityMembers(m));
     }
-  }, [isOwner, groupMgmt]);
+  }, [isOwner, groupMgmt, activeTab]);
 
   useEffect(() => {
     if (activeTab === 'activity' && isOwner && activityLog.length === 0 && !activityLoading) {
@@ -2438,31 +2440,28 @@ const SettingsScreen = () => {
               <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
                 {t('push.recipients')}
               </label>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <button
-                  onClick={() => { setPushTarget('all'); setPushSelectedPlayers([]); }}
-                  style={{
-                    padding: '0.35rem 0.8rem', borderRadius: '0.5rem',
-                    border: pushTarget === 'all' ? '2px solid #10B981' : '1px solid var(--border)',
-                    background: pushTarget === 'all' ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
-                    color: 'var(--text)', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', fontWeight: pushTarget === 'all' ? 600 : 400,
-                  }}
-                >
-                  {t('push.allPlayers')}
-                </button>
-                <button
-                  onClick={() => setPushTarget('select')}
-                  style={{
-                    padding: '0.35rem 0.8rem', borderRadius: '0.5rem',
-                    border: pushTarget === 'select' ? '2px solid #10B981' : '1px solid var(--border)',
-                    background: pushTarget === 'select' ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
-                    color: 'var(--text)', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', fontWeight: pushTarget === 'select' ? 600 : 400,
-                  }}
-                >
-                  {t('push.selectPlayers')}
-                </button>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                {([
+                  { key: 'all' as const, label: language === 'he' ? 'כולם' : 'All' },
+                  { key: 'permanent' as const, label: language === 'he' ? '⭐ קבועים' : '⭐ Permanent' },
+                  { key: 'permanent_guest' as const, label: language === 'he' ? '🏠 אורחים' : '🏠 Guests' },
+                  { key: 'guest' as const, label: language === 'he' ? '👤 מזדמנים' : '👤 Occasional' },
+                  { key: 'select' as const, label: language === 'he' ? 'בחירה ידנית' : 'Manual' },
+                ]).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => { setPushTarget(opt.key); if (opt.key !== 'select') setPushSelectedPlayers([]); }}
+                    style={{
+                      padding: '0.3rem 0.65rem', borderRadius: '0.5rem',
+                      border: pushTarget === opt.key ? '2px solid #10B981' : '1px solid var(--border)',
+                      background: pushTarget === opt.key ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                      color: 'var(--text)', cursor: 'pointer', fontSize: '0.75rem',
+                      fontFamily: 'Outfit, sans-serif', fontWeight: pushTarget === opt.key ? 600 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
               {pushTarget === 'select' && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
@@ -2487,11 +2486,57 @@ const SettingsScreen = () => {
                   ))}
                 </div>
               )}
+              {(['permanent', 'permanent_guest', 'guest'] as const).includes(pushTarget as 'permanent' | 'permanent_guest' | 'guest') && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                  {players.filter(p => p.type === pushTarget).map(p => (
+                    <span key={p.id} style={{
+                      fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
+                      background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                      color: '#10B981',
+                    }}>
+                      {p.name}
+                    </span>
+                  ))}
+                  {players.filter(p => p.type === pushTarget).length === 0 && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {language === 'he' ? 'אין שחקנים מסוג זה' : 'No players of this type'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Send via toggle */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.4rem' }}>
+                {language === 'he' ? 'שליחה דרך' : 'Send via'}
+              </label>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                {([
+                  { key: 'push' as const, label: '🔔 Push', icon: '' },
+                  { key: 'email' as const, label: '📧 Email', icon: '' },
+                  { key: 'both' as const, label: language === 'he' ? '🔔+📧 שניהם' : '🔔+📧 Both', icon: '' },
+                ]).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setSendVia(opt.key)}
+                    style={{
+                      padding: '0.3rem 0.65rem', borderRadius: '0.5rem',
+                      border: sendVia === opt.key ? '2px solid #10B981' : '1px solid var(--border)',
+                      background: sendVia === opt.key ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                      color: 'var(--text)', cursor: 'pointer', fontSize: '0.75rem',
+                      fontFamily: 'Outfit, sans-serif', fontWeight: sendVia === opt.key ? 600 : 400,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Send button */}
             <button
-              disabled={pushSending || !pushMsg.trim() || (pushTarget === 'select' && pushSelectedPlayers.length === 0)}
+              disabled={pushSending || !pushMsg.trim() || (pushTarget === 'select' && pushSelectedPlayers.length === 0) || (['permanent', 'permanent_guest', 'guest'].includes(pushTarget) && players.filter(p => p.type === pushTarget).length === 0)}
               onClick={async () => {
                 const gid = getGroupId();
                 if (!gid || !pushMsg.trim()) return;
@@ -2499,23 +2544,57 @@ const SettingsScreen = () => {
                 setPushResult(null);
                 setPushDetails(null);
                 try {
-                  const result = await proxySendPush({
-                    groupId: gid,
-                    title: '🃏 Poker Manager',
-                    body: pushMsg.trim(),
-                    targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
-                  });
-                  if (result) {
-                    setPushResult(`${result.sent > 0 ? '✅' : '❌'} ${t('push.sent', { sent: String(result.sent), total: String(result.total) })}`);
-                    if (result.details) setPushDetails(result.details);
-                    if (result.sent > 0) setPushMsg('');
-                  } else {
-                    setPushResult(t('push.error'));
+                  let targetNames: string[] | undefined;
+                  if (pushTarget === 'select') {
+                    targetNames = pushSelectedPlayers;
+                  } else if (['permanent', 'permanent_guest', 'guest'].includes(pushTarget)) {
+                    targetNames = players.filter(p => p.type === pushTarget).map(p => p.name);
                   }
+
+                  const results: string[] = [];
+
+                  if (sendVia === 'push' || sendVia === 'both') {
+                    const result = await proxySendPush({
+                      groupId: gid,
+                      title: '🃏 Poker Manager',
+                      body: pushMsg.trim(),
+                      targetPlayerNames: targetNames,
+                    });
+                    if (result) {
+                      if (result.details) setPushDetails(result.details);
+                      results.push(`🔔 ${result.sent}/${result.total}`);
+                    } else {
+                      results.push(`🔔 ❌`);
+                    }
+                  }
+
+                  if (sendVia === 'email' || sendVia === 'both') {
+                    const targetSet = targetNames ? new Set(targetNames) : null;
+                    const emails = activityMembers
+                      .filter(m => m.email && (targetSet ? targetSet.has(m.playerName || '') : true))
+                      .map(m => ({ email: m.email!, name: m.playerName || m.displayName || '' }));
+
+                    let emailSent = 0;
+                    for (const { email } of emails) {
+                      const ok = await proxySendBroadcastEmail({
+                        to: email,
+                        subject: '🃏 Poker Manager',
+                        message: pushMsg.trim(),
+                        senderName: authPlayerName || 'Poker Manager',
+                      });
+                      if (ok) emailSent++;
+                    }
+                    results.push(`📧 ${emailSent}/${emails.length}`);
+                  }
+
+                  const allOk = results.every(r => !r.includes('❌') && !r.includes(' 0/'));
+                  setPushResult(`${allOk ? '✅' : '⚠️'} ${results.join('  ')}`);
+                  if (allOk) setPushMsg('');
                 } catch (err) {
                   setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
                 } finally {
                   setPushSending(false);
+                  refreshPushSubscribers();
                 }
               }}
               style={{
@@ -2539,139 +2618,71 @@ const SettingsScreen = () => {
               </p>
             )}
 
-            {/* Per-subscription diagnostic details */}
             {pushDetails && pushDetails.length > 0 && (
               <div style={{
-                marginTop: '0.5rem', padding: '0.5rem', borderRadius: '0.5rem',
-                background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
-                fontSize: '0.72rem', direction: 'ltr',
+                marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
               }}>
                 {pushDetails.map((d, i) => (
-                  <div key={i} style={{
-                    padding: '0.4rem 0',
-                    borderBottom: i < pushDetails.length - 1 ? '1px solid rgba(255,255,255,0.05)' : undefined,
+                  <span key={i} style={{
+                    fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
+                    background: d.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                    border: `1px solid ${d.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                    color: d.ok ? '#10B981' : '#EF4444',
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600 }}>{d.player} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({d.type})</span></span>
-                      <span style={{
-                        padding: '0.1rem 0.4rem', borderRadius: '0.3rem',
-                        background: d.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                        color: d.ok ? '#10B981' : '#EF4444',
-                        fontWeight: 600,
-                      }}>
-                        {d.ok ? '✓' : '✗'} {d.status}
-                      </span>
-                    </div>
-                    {d.log && d.log.length > 0 && (
-                      <pre style={{
-                        margin: '0.2rem 0 0', padding: '0.3rem', borderRadius: '0.3rem',
-                        background: 'rgba(0,0,0,0.3)', color: 'var(--text-muted)',
-                        fontSize: '0.62rem', lineHeight: 1.4, whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all', fontFamily: 'monospace',
-                      }}>
-                        {d.log.join('\n')}
-                      </pre>
-                    )}
-                  </div>
+                    {d.ok ? '✓' : '✗'} {d.player}
+                  </span>
                 ))}
               </div>
             )}
 
-            {/* Test section */}
-            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                🧪 {language === 'he' ? 'בדיקה' : 'Test'}
-              </h4>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  onClick={async () => {
-                    const gid = getGroupId();
-                    if (!gid || !authPlayerName) return;
-                    setPushSending(true);
-                    setPushResult(null);
-                    setPushDetails(null);
-                    try {
-                      const result = await proxySendPush({
-                        groupId: gid,
-                        title: '🧪 Test Notification',
-                        body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
+            {/* Quick self-test */}
+            <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+              <button
+                onClick={async () => {
+                  const gid = getGroupId();
+                  if (!gid || !authPlayerName) return;
+                  setPushSending(true);
+                  setPushResult(null);
+                  setPushDetails(null);
+                  try {
+                    const results: string[] = [];
+                    const pushRes = await proxySendPush({
+                      groupId: gid,
+                      title: '🧪 בדיקה',
+                      body: language === 'he' ? 'הודעת בדיקה' : 'Test notification',
+                      targetPlayerNames: [authPlayerName],
+                    });
+                    results.push(pushRes && pushRes.sent > 0 ? '🔔 ✅' : '🔔 ❌');
+
+                    const { supabase: sb } = await import('../database/supabaseClient');
+                    const { data: { user } } = await sb.auth.getUser();
+                    if (user?.email) {
+                      const ok = await proxySendBroadcastEmail({
+                        to: user.email,
+                        subject: '🧪 Poker Manager - בדיקה',
+                        message: language === 'he' ? 'הודעת בדיקה' : 'Test message',
+                        senderName: authPlayerName,
                       });
-                      if (result) {
-                        if (result.details) setPushDetails(result.details);
-                        if (result.total === 0) {
-                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנויים' : 'No subscribers'}`);
-                        } else if (result.sent > 0) {
-                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
-                        } else {
-                          setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
-                        }
-                      } else {
-                        setPushResult(`❌ ${language === 'he' ? 'שגיאה - בדוק הגדרות' : 'Error - check settings'}`);
-                      }
-                    } catch (err) {
-                      setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
-                    } finally {
-                      setPushSending(false);
+                      results.push(ok ? '📧 ✅' : '📧 ❌');
                     }
-                  }}
-                  disabled={pushSending}
-                  style={{
-                    flex: 1, padding: '0.5rem', borderRadius: '0.5rem',
-                    border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.1)',
-                    color: '#3B82F6', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', fontWeight: 500, minWidth: '140px',
-                  }}
-                >
-                  🔔 {language === 'he' ? 'בדיקת Push' : 'Test Push'}
-                </button>
-                <button
-                  onClick={async () => {
-                    setPushSending(true);
-                    setPushResult(null);
-                    try {
-                      const { supabase: sb } = await import('../database/supabaseClient');
-                      const { data: { user } } = await sb.auth.getUser();
-                      const email = user?.email;
-                      if (!email) {
-                        setPushResult(`❌ ${language === 'he' ? 'לא נמצא מייל בחשבון' : 'No email found in account'}`);
-                        return;
-                      }
-                      const ok = await proxySendEmail({
-                        to: email,
-                        subject: '🧪 Poker Manager - Test Email',
-                        playerName: 'Test Player',
-                        reporterName: 'Admin',
-                        amount: 100,
-                        gameDate: new Date().toLocaleDateString('he-IL'),
-                        payLink: '',
-                      });
-                      if (ok) {
-                        setPushResult(`✅ ${language === 'he' ? 'מייל נשלח לחשבון שלך' : 'Email sent to your account'}`);
-                      } else {
-                        setPushResult(`❌ ${language === 'he' ? 'שליחת מייל נכשלה - בדוק הגדרות EmailJS' : 'Email send failed - check EmailJS settings'}`);
-                      }
-                    } catch (err) {
-                      setPushResult(`❌ ${err instanceof Error ? err.message : 'Unknown error'}`);
-                    } finally {
-                      setPushSending(false);
-                    }
-                  }}
-                  disabled={pushSending}
-                  style={{
-                    flex: 1, padding: '0.5rem', borderRadius: '0.5rem',
-                    border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.1)',
-                    color: '#A855F7', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', fontWeight: 500,
-                  }}
-                >
-                  📧 {language === 'he' ? 'בדיקת מייל' : 'Test Email'}
-                </button>
-              </div>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.4rem', textAlign: 'center' }}>
-                {language === 'he'
-                  ? `Push נשלח ל${pushTarget === 'select' ? 'שחקנים שנבחרו' : 'כל המנויים'}, מייל נשלח לחשבון שלך`
-                  : `Push sent to ${pushTarget === 'select' ? 'selected players' : 'all subscribers'}, email sent to your account`}
-              </p>
+                    setPushResult(results.join('  '));
+                  } catch (err) {
+                    setPushResult(`❌ ${err instanceof Error ? err.message : 'Error'}`);
+                  } finally {
+                    setPushSending(false);
+                    refreshPushSubscribers();
+                  }
+                }}
+                disabled={pushSending}
+                style={{
+                  width: '100%', padding: '0.45rem', borderRadius: '0.5rem',
+                  border: '1px solid var(--border)', background: 'var(--surface)',
+                  color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem',
+                  fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                }}
+              >
+                🧪 {language === 'he' ? 'בדיקה אלי' : 'Test to me'} (Push + Email)
+              </button>
             </div>
 
           </div>

@@ -126,13 +126,32 @@ export async function proxySendEmail(payload: {
   }
 }
 
+export async function proxySendBroadcastEmail(payload: {
+  to: string;
+  subject: string;
+  message: string;
+  senderName?: string;
+}): Promise<boolean> {
+  try {
+    const auth = await getAuthHeaders();
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function proxySendPush(payload: {
   groupId: string;
   title: string;
   body: string;
   targetPlayerNames?: string[];
   url?: string;
-}): Promise<{ sent: number; total: number; details?: { player: string; type: string; status: number | string; ok: boolean; log?: string[] }[] } | null> {
+}): Promise<{ sent: number; total: number; details?: { player: string; type: string; status: number | string; ok: boolean }[] } | null> {
   try {
     const auth = await getAuthHeaders();
     const res = await fetch('/api/send-push', {

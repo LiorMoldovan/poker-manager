@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.20.0';
+export const APP_VERSION = '5.21.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.21.0',
+    date: '2026-04-21',
+    changes: [
+      'Push notifications: recipient filter by player type (permanent, guests, occasional, manual)',
+      'Push notifications: send via Push, Email, or both channels',
+      'Push notifications: self-test button (Push + Email to yourself)',
+      'Push notifications: auto-refresh subscriber list after send, stale endpoint cleanup',
+      'Push API: removed verbose debug logs, clean per-player result chips',
+      'Email API: broadcast mode for generic messages (separate from settlement emails)',
+      'Fixed player type label mapping in push filter to match Players tab',
+    ],
+  },
   {
     version: '5.20.0',
     date: '2026-04-20',

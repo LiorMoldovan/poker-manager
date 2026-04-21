@@ -125,6 +125,8 @@ const GameSummaryScreen = () => {
 
   const notifySettlementChange = async (from: string, to: string, amount: number, markedAsPaid: boolean) => {
     if (!gameId || !identityName) return;
+    if (markedAsPaid) return;
+
     const groupId = getGroupId();
     if (!groupId) return;
 
@@ -132,32 +134,42 @@ const GameSummaryScreen = () => {
 
     setDisputeSending(`${from}-${to}`);
     try {
-      const info = await getPlayerEmailForNotification(groupId, targetPlayer);
+      const targetInfo = await getPlayerEmailForNotification(groupId, targetPlayer);
+      const actorInfo = await getPlayerEmailForNotification(groupId, identityName);
       const gameDateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
-      const notifType = markedAsPaid ? 'settlement_paid' : 'settlement_dispute';
-      const title = markedAsPaid ? t('notification.paidTitle') : t('notification.settlementTitle');
-      const body = markedAsPaid
-        ? t('notification.paidBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel })
-        : t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel });
-      const subject = markedAsPaid ? t('notification.paidEmailSubject') : t('notification.emailSubject');
       const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
 
-      if (info) {
-        await createNotification(groupId, info.userId, notifType, title, body, { gameId, from, to, amount, gameDate });
-        const emailOk = await proxySendEmail({
-          to: info.email, subject, playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+      if (targetInfo) {
+        await createNotification(groupId, targetInfo.userId, 'settlement_dispute',
+          t('notification.settlementTitle'),
+          t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel }),
+          { gameId, from, to, amount, gameDate });
+        await proxySendEmail({
+          to: targetInfo.email, subject: t('notification.emailSubject'), playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
         });
-        setSettlementToast({ message: emailOk ? `✅ הודעה נשלחה ל-${targetPlayer}` : `⚠️ הודעה נוצרה, מייל נכשל`, type: emailOk ? 'success' : 'warn' });
+      }
+
+      if (actorInfo) {
+        const selfTitle = targetInfo
+          ? t('notification.selfDisputeTitle')
+          : t('notification.unlinkedDisputeTitle', { target: targetPlayer });
+        const selfBody = targetInfo
+          ? t('notification.selfDisputeBody', { amount: cleanNumber(amount), target: targetPlayer, date: gameDateLabel })
+          : t('notification.unlinkedDisputeBody', { amount: cleanNumber(amount), target: targetPlayer, date: gameDateLabel });
+        await createNotification(groupId, actorInfo.userId, 'settlement_dispute_self', selfTitle, selfBody, { gameId, from, to, amount, gameDate });
+        await proxySendEmail({
+          to: actorInfo.email, subject: t('notification.selfDisputeEmailSubject'), playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+        });
+      }
+
+      if (targetInfo && actorInfo) {
+        setSettlementToast({ message: `✅ הודעה נשלחה ל-${targetPlayer} ואליך`, type: 'success' });
+      } else if (targetInfo) {
+        setSettlementToast({ message: `✅ הודעה נשלחה ל-${targetPlayer}`, type: 'success' });
+      } else if (actorInfo) {
+        setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר — המייל נשלח אליך`, type: 'warn' });
       } else {
-        const actorInfo = await getPlayerEmailForNotification(groupId, identityName);
-        if (actorInfo) {
-          await proxySendEmail({
-            to: actorInfo.email, subject, playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
-          });
-          setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר — המייל נשלח אליך`, type: 'warn' });
-        } else {
-          setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר למשתמש — לא נשלחה הודעה`, type: 'warn' });
-        }
+        setSettlementToast({ message: `⚠️ ${targetPlayer} לא מקושר למשתמש — לא נשלחה הודעה`, type: 'warn' });
       }
     } catch (err) {
       console.warn('Settlement notification failed:', err);
@@ -167,44 +179,6 @@ const GameSummaryScreen = () => {
   };
 
   const [disputeSending, setDisputeSending] = useState<string | null>(null);
-
-  const handleDispute = async (from: string, to: string, amount: number) => {
-    if (!gameId || !identityName) return;
-    const groupId = getGroupId();
-    if (!groupId) return;
-
-    setDisputeSending(`${from}-${to}`);
-    try {
-      const updated = paidSettlements.filter(p => !(p.from === from && p.to === to));
-      setPaidSettlements(updated);
-      updateGame(gameId, { paidSettlements: updated });
-
-      const info = await getPlayerEmailForNotification(groupId, from);
-      if (info) {
-        const gameDateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
-        await createNotification(
-          groupId, info.userId,
-          'settlement_dispute',
-          t('notification.settlementTitle'),
-          t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel }),
-          { gameId, from, to, amount, gameDate }
-        );
-        const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
-        await proxySendEmail({
-          to: info.email,
-          subject: t('notification.emailSubject'),
-          playerName: from,
-          reporterName: identityName,
-          amount,
-          gameDate: gameDateLabel,
-          payLink,
-        });
-      }
-    } catch (err) {
-      console.warn('Dispute notification failed:', err);
-    }
-    setDisputeSending(null);
-  };
 
   const [amountCopied, setAmountCopied] = useState(false);
 
@@ -2304,28 +2278,8 @@ const GameSummaryScreen = () => {
               const isReceiver = identityName === paymentModal.to;
               const isSending = disputeSending === `${paymentModal.from}-${paymentModal.to}`;
 
-              if (isAutoClosed && isReceiver) {
-                return (
-                  <button
-                    onClick={async () => {
-                      await handleDispute(paymentModal.from, paymentModal.to, paymentModal.amount);
-                      setPaymentModal(null);
-                    }}
-                    disabled={isSending}
-                    style={{
-                      width: '100%', padding: '0.6rem', borderRadius: '10px',
-                      border: '1px solid #EAB308', background: 'rgba(234, 179, 8, 0.1)',
-                      color: '#EAB308', fontSize: '0.85rem', cursor: 'pointer',
-                      marginBottom: '0.5rem', fontFamily: 'Outfit, sans-serif',
-                      opacity: isSending ? 0.6 : 1,
-                    }}
-                  >
-                    {isSending ? t('summary.disputeSending') : t('summary.disputeButton')}
-                  </button>
-                );
-              }
-
               const isPaid = isSettlementPaid(paymentModal.from, paymentModal.to);
+              const isDispute = isAutoClosed && isReceiver && isPaid;
               return (
                 <button
                   onClick={async () => {
@@ -2336,13 +2290,16 @@ const GameSummaryScreen = () => {
                   disabled={isSending}
                   style={{
                     width: '100%', padding: '0.6rem', borderRadius: '10px',
-                    border: '1px solid var(--border)', background: 'transparent',
-                    color: 'var(--text)', fontSize: '0.85rem', cursor: 'pointer',
+                    border: isDispute ? '1px solid #EAB308' : '1px solid var(--border)',
+                    background: isDispute ? 'rgba(234, 179, 8, 0.1)' : 'transparent',
+                    color: isDispute ? '#EAB308' : 'var(--text)',
+                    fontSize: '0.85rem', cursor: 'pointer',
                     marginBottom: '0.5rem',
+                    fontFamily: isDispute ? 'Outfit, sans-serif' : undefined,
                     opacity: isSending ? 0.6 : 1,
                   }}
                 >
-                  {isSending ? t('summary.disputeSending') : (isPaid ? t('summary.markUnpaid') : t('summary.markPaid'))}
+                  {isSending ? t('summary.disputeSending') : isDispute ? t('summary.disputeButton') : (isPaid ? t('summary.markUnpaid') : t('summary.markPaid'))}
                 </button>
               );
             })()}

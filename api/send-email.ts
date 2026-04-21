@@ -13,14 +13,14 @@ export default async function handler(req: Request): Promise<Response> {
   if (authError) return authError;
 
   try {
-    const { to, subject, playerName, reporterName, amount, gameDate, payLink } = await req.json();
+    const body = await req.json();
+    const { to, subject } = body;
 
     const serviceId = process.env.EMAILJS_SERVICE_ID || 'service_9r3sap5';
-    const templateId = process.env.EMAILJS_TEMPLATE_ID || 'template_vbxffkb';
     const publicKey = process.env.EMAILJS_PUBLIC_KEY || 'Yv-mOZmcYpLll4olj';
     const privateKey = process.env.EMAILJS_PRIVATE_KEY || '';
 
-    if (!serviceId || !templateId || !publicKey) {
+    if (!serviceId || !publicKey) {
       return new Response(JSON.stringify({ error: { message: 'EmailJS not configured (missing env vars)' } }), {
         status: 500, headers: JSON_HEADERS,
       });
@@ -32,19 +32,33 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
+    const isBroadcast = !!body.message;
+    const templateId = isBroadcast
+      ? (process.env.EMAILJS_BROADCAST_TEMPLATE_ID || 'template_broadcast')
+      : (process.env.EMAILJS_TEMPLATE_ID || 'template_vbxffkb');
+
+    const templateParams: Record<string, string> = isBroadcast
+      ? {
+          to_email: to,
+          subject,
+          message: body.message || '',
+          sender_name: body.senderName || 'Poker Manager',
+        }
+      : {
+          to_email: to,
+          subject,
+          player_name: body.playerName || '',
+          reporter_name: body.reporterName || 'שחקן',
+          amount: String(body.amount || '?'),
+          game_date: body.gameDate || '',
+          pay_link: body.payLink || '',
+        };
+
     const emailPayload: Record<string, unknown> = {
       service_id: serviceId,
       template_id: templateId,
       user_id: publicKey,
-      template_params: {
-        to_email: to,
-        subject,
-        player_name: playerName || '',
-        reporter_name: reporterName || 'שחקן',
-        amount: amount || '?',
-        game_date: gameDate || '',
-        pay_link: payLink || '',
-      },
+      template_params: templateParams,
     };
     if (privateKey) emailPayload.accessToken = privateKey;
 

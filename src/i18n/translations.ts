@@ -438,6 +438,11 @@ const he = {
   'notification.open': 'פתח',
   'notification.dismiss': 'קראתי',
   'notification.emailSubject': 'תזכורת תשלום — Poker Manager',
+  'notification.selfDisputeTitle': 'דיווחת על תשלום שלא התקבל',
+  'notification.selfDisputeBody': 'דיווחת שתשלום של {amount} מ-{target} מערב {date} לא התקבל',
+  'notification.selfDisputeEmailSubject': 'אישור — דיווחת על תשלום חסר — Poker Manager',
+  'notification.unlinkedDisputeTitle': '{target} לא מקושר — דיווחת על תשלום חסר',
+  'notification.unlinkedDisputeBody': 'דיווחת שתשלום של {amount} מ-{target} מערב {date} לא התקבל, אך {target} לא מקושר למערכת',
 
   // ── Push Notifications ──
   'push.tabLabel': '🔔 התראות',
@@ -1577,6 +1582,11 @@ const en: Record<keyof typeof he, string> = {
   'notification.open': 'Open',
   'notification.dismiss': 'Dismiss',
   'notification.emailSubject': 'Payment Reminder — Poker Manager',
+  'notification.selfDisputeTitle': 'You reported an unpaid settlement',
+  'notification.selfDisputeBody': 'You reported that payment of {amount} from {target} on {date} was not received',
+  'notification.selfDisputeEmailSubject': 'Confirmation — Unpaid Settlement Reported — Poker Manager',
+  'notification.unlinkedDisputeTitle': '{target} not linked — unpaid reported',
+  'notification.unlinkedDisputeBody': 'You reported that payment of {amount} from {target} on {date} was not received, but {target} is not linked to the system',
 
   // ── Push Notifications ──
   'push.tabLabel': '🔔 Notifications',
