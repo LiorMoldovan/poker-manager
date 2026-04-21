@@ -6,7 +6,7 @@ import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
-import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription } from './database/supabaseCache';
+import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
@@ -15,19 +15,40 @@ import { ToastContainer } from './components/Toast';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
 
-const NewGameScreen = lazy(() => import('./screens/NewGameScreen'));
+const navImports = {
+  NewGameScreen: () => import('./screens/NewGameScreen'),
+  HistoryScreen: () => import('./screens/HistoryScreen'),
+  StatisticsScreen: () => import('./screens/StatisticsScreen'),
+  GraphsScreen: () => import('./screens/GraphsScreen'),
+  SettingsScreen: () => import('./screens/SettingsScreen'),
+};
+
+const NewGameScreen = lazy(navImports.NewGameScreen);
+const HistoryScreen = lazy(navImports.HistoryScreen);
+const StatisticsScreen = lazy(navImports.StatisticsScreen);
+const GraphsScreen = lazy(navImports.GraphsScreen);
+const SettingsScreen = lazy(navImports.SettingsScreen);
+
 const LiveGameScreen = lazy(() => import('./screens/LiveGameScreen'));
 const ChipEntryScreen = lazy(() => import('./screens/ChipEntryScreen'));
 const GameSummaryScreen = lazy(() => import('./screens/GameSummaryScreen'));
-const HistoryScreen = lazy(() => import('./screens/HistoryScreen'));
-const StatisticsScreen = lazy(() => import('./screens/StatisticsScreen'));
-const SettingsScreen = lazy(() => import('./screens/SettingsScreen'));
-const GraphsScreen = lazy(() => import('./screens/GraphsScreen'));
 const TrainingScreen = lazy(() => import('./screens/TrainingScreen'));
 const TrainingHandScreen = lazy(() => import('./screens/TrainingHandScreen'));
 const QuickTrainingScreen = lazy(() => import('./screens/QuickTrainingScreen'));
 const SharedTrainingScreen = lazy(() => import('./screens/SharedTrainingScreen'));
 const SharedQuickPlayScreen = lazy(() => import('./screens/SharedQuickPlayScreen'));
+
+function prefetchNavScreens() {
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => {
+      Object.values(navImports).forEach(fn => fn());
+    });
+  } else {
+    setTimeout(() => {
+      Object.values(navImports).forEach(fn => fn());
+    }, 100);
+  }
+}
 
 function ScreenSkeleton() {
   return (
@@ -264,6 +285,7 @@ function SupabaseApp() {
         if (!isCacheForGroup(targetGroupId)) return;
         setDataReady(true);
         subscribeToRealtime();
+        prefetchNavScreens();
       })
       .catch(err => {
         if (!isCacheForGroup(targetGroupId)) return;
@@ -289,9 +311,10 @@ function SupabaseApp() {
     if (Notification.permission === 'denied') return;
 
     const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
+    const DEAD_PATTERNS = ['permanently-removed', 'invalid'];
     const subscribe = async () => {
       try {
-        const reg = await navigator.serviceWorker.ready;
+        let reg = await navigator.serviceWorker.ready;
         if (Notification.permission === 'default') {
           const perm = await Notification.requestPermission();
           if (perm !== 'granted') return;
@@ -300,12 +323,23 @@ function SupabaseApp() {
 
         const existing = await reg.pushManager.getSubscription();
         if (existing) {
+          const isDead = DEAD_PATTERNS.some(p => existing.endpoint.includes(p));
           await existing.unsubscribe();
+          if (isDead) {
+            deletePushSubscription(existing.endpoint);
+            await reg.unregister();
+            await navigator.serviceWorker.register('/sw.js');
+            reg = await navigator.serviceWorker.ready;
+          }
         }
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: VAPID_PUBLIC,
         });
+        if (DEAD_PATTERNS.some(p => sub.endpoint.includes(p))) {
+          console.warn('[Push] Got dead endpoint again after re-register:', sub.endpoint.slice(0, 80));
+          return;
+        }
         await savePushSubscription(groupId, playerName, sub);
         console.log('[Push] Subscribed:', sub.endpoint.slice(0, 60));
       } catch (err) { console.warn('Push subscription failed:', err); }
@@ -662,7 +696,7 @@ function SupabaseApp() {
                   onClick={() => {
                     markNotificationRead(n.id).then(() => setNotifCount(getUnreadNotificationCount()));
                     setShowNotifPanel(false);
-                    navigate(`/game-summary/${String(n.data!.gameId)}`);
+                    navigate(`/game/${String(n.data!.gameId)}`);
                   }}
                   style={{
                     padding: '0.35rem 0.75rem', borderRadius: '6px', border: 'none',
