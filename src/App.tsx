@@ -311,7 +311,7 @@ function SupabaseApp() {
     if (Notification.permission === 'denied') return;
 
     const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
-    const DEAD_PATTERNS = ['permanently-removed', 'invalid'];
+    const isDead = (ep: string) => ep.includes('permanently-removed') || ep.includes('.invalid');
     const subscribe = async () => {
       try {
         let reg = await navigator.serviceWorker.ready;
@@ -323,23 +323,39 @@ function SupabaseApp() {
 
         const existing = await reg.pushManager.getSubscription();
         if (existing) {
-          const isDead = DEAD_PATTERNS.some(p => existing.endpoint.includes(p));
-          await existing.unsubscribe();
-          if (isDead) {
+          if (isDead(existing.endpoint)) {
             deletePushSubscription(existing.endpoint);
-            await reg.unregister();
-            await navigator.serviceWorker.register('/sw.js');
-            reg = await navigator.serviceWorker.ready;
           }
+          await existing.unsubscribe();
         }
-        const sub = await reg.pushManager.subscribe({
+
+        let sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: VAPID_PUBLIC,
         });
-        if (DEAD_PATTERNS.some(p => sub.endpoint.includes(p))) {
-          console.warn('[Push] Got dead endpoint again after re-register:', sub.endpoint.slice(0, 80));
-          return;
+
+        if (isDead(sub.endpoint)) {
+          console.warn('[Push] Dead endpoint, nuking all SWs...');
+          await sub.unsubscribe();
+          const allRegs = await navigator.serviceWorker.getRegistrations();
+          for (const r of allRegs) {
+            const s = await r.pushManager.getSubscription();
+            if (s) await s.unsubscribe();
+            await r.unregister();
+          }
+          await new Promise(r => setTimeout(r, 1500));
+          await navigator.serviceWorker.register('/sw.js');
+          reg = await navigator.serviceWorker.ready;
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: VAPID_PUBLIC,
+          });
+          if (isDead(sub.endpoint)) {
+            console.warn('[Push] Still dead after full nuke:', sub.endpoint.slice(0, 80));
+            return;
+          }
         }
+
         await savePushSubscription(groupId, playerName, sub);
         console.log('[Push] Subscribed:', sub.endpoint.slice(0, 60));
       } catch (err) { console.warn('Push subscription failed:', err); }

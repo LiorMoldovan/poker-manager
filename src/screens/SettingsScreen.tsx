@@ -28,6 +28,7 @@ import {
   getAllPlayerTraits,
   savePlayerTraits,
   getGroupPushSubscribers,
+  deletePushSubscription,
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
@@ -2397,16 +2398,52 @@ const SettingsScreen = () => {
               {t('push.subscriberCount', { count: String(pushSubscriberCount) })}
             </p>
             {devicePushStatus && (
-              <pre style={{
-                margin: '0 0 0.75rem', padding: '0.5rem', borderRadius: '8px',
-                fontSize: '0.68rem', lineHeight: 1.5, direction: 'ltr',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace',
-                background: devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
-                border: `1px solid ${devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
-                color: 'var(--text)',
-              }}>
-                <span style={{ fontWeight: 600 }}>📱 {language === 'he' ? 'מצב מכשיר זה:' : 'This device:'}</span>{'\n'}{devicePushStatus}
-              </pre>
+              <div style={{ margin: '0 0 0.75rem' }}>
+                <pre style={{
+                  margin: 0, padding: '0.5rem', borderRadius: '8px',
+                  fontSize: '0.68rem', lineHeight: 1.5, direction: 'ltr',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace',
+                  background: devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
+                  border: `1px solid ${devicePushStatus.includes('❌') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+                  color: 'var(--text)',
+                }}>
+                  <span style={{ fontWeight: 600 }}>📱 {language === 'he' ? 'מצב מכשיר זה:' : 'This device:'}</span>{'\n'}{devicePushStatus}
+                </pre>
+                {devicePushStatus.includes('permanently-removed') && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        for (const r of regs) {
+                          const sub = await r.pushManager.getSubscription();
+                          if (sub) {
+                            if (sub.endpoint.includes('permanently-removed') || sub.endpoint.includes('invalid')) {
+                              await deletePushSubscription(sub.endpoint);
+                            }
+                            await sub.unsubscribe();
+                          }
+                          await r.unregister();
+                        }
+                        const keys = await caches.keys();
+                        await Promise.all(keys.map(k => caches.delete(k)));
+                        alert(language === 'he'
+                          ? 'נוקה בהצלחה! העמוד ייטען מחדש. אם עדיין לא עובד, לך להגדרות Chrome > אתרים > poker-manager.vercel.app > נקה ואפס'
+                          : 'Cleaned! Page will reload. If still broken, go to Chrome Settings > Sites > poker-manager.vercel.app > Clear & Reset');
+                        window.location.reload();
+                      } catch (err) {
+                        alert(`Error: ${err instanceof Error ? err.message : String(err)}`);
+                      }
+                    }}
+                    style={{
+                      width: '100%', marginTop: '0.5rem', padding: '0.6rem', borderRadius: '8px',
+                      border: 'none', background: '#EF4444', color: '#fff', cursor: 'pointer',
+                      fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                    }}
+                  >
+                    🔧 {language === 'he' ? 'תקן התראות במכשיר זה' : 'Fix Push on This Device'}
+                  </button>
+                )}
+              </div>
             )}
             {pushSubscribers.length > 0 && (
               <div style={{ margin: '0 0 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
