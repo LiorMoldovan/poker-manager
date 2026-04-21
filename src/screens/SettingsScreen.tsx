@@ -120,7 +120,7 @@ const SettingsScreen = () => {
   const [reportCategory, setReportCategory] = useState('');
   const [reportText, setReportText] = useState('');
   const [reportSending, setReportSending] = useState(false);
-  const [reportResult, setReportResult] = useState<'success' | 'error' | null>(null);
+  const [reportResult, setReportResult] = useState<{ status: 'success' | 'error'; emailInfo?: string } | null>(null);
   const [reports, setReports] = useState<IssueReport[]>([]);
   const [reportsLoaded, setReportsLoaded] = useState(false);
 
@@ -501,23 +501,26 @@ const SettingsScreen = () => {
 
       if (error) throw error;
 
-      // Email the group owner
+      // Email the group owner — track status for on-screen display
+      let emailInfo = '';
       try {
         let ownerEmail: string | null = null;
+        let method = '';
 
-        // Method 1: dedicated RPC (works for all roles)
+        // Method 1: dedicated RPC
         const { data: rpcEmail, error: rpcErr } = await supabase.rpc('get_group_owner_email', { p_group_id: gid });
         if (rpcEmail && !rpcErr) {
           ownerEmail = rpcEmail as string;
+          method = 'rpc';
         } else {
-          console.warn('[Report] RPC get_group_owner_email failed:', rpcErr?.message || 'no data');
-          // Method 2: fallback via fetch_group_members_with_email (works for admins)
+          // Method 2: fallback via existing members RPC
           const { data: members } = await supabase.rpc('fetch_group_members_with_email', { p_group_id: gid });
           const { data: group } = await supabase.from('groups').select('created_by').eq('id', gid).single();
           if (members && group?.created_by) {
             const owner = (members as { user_id: string; email: string | null }[])
               .find(m => m.user_id === group.created_by);
             ownerEmail = owner?.email || null;
+            method = 'fallback';
           }
         }
 
@@ -529,21 +532,21 @@ const SettingsScreen = () => {
             message: `${authPlayerName || 'משתמש'}: ${catLabel}\n\n${reportText.trim() || '(ללא פירוט)'}`,
             senderName: authPlayerName || 'Poker Manager',
           });
-          if (!sent) console.warn('[Report] Email API returned false');
+          emailInfo = sent ? `📧 נשלח ל-${ownerEmail}` : `📧 שליחה נכשלה (${method}, ${ownerEmail})`;
         } else {
-          console.warn('[Report] Could not resolve owner email');
+          emailInfo = `📧 לא נמצא מייל (rpc: ${rpcErr?.message || 'N/A'})`;
         }
       } catch (err) {
-        console.error('[Report] Email notification failed:', err);
+        emailInfo = `📧 שגיאה: ${err instanceof Error ? err.message : String(err)}`;
       }
 
       setReportCategory('');
       setReportText('');
-      setReportResult('success');
+      setReportResult({ status: 'success', emailInfo });
       loadReports();
-      setTimeout(() => setReportResult(null), 4000);
+      setTimeout(() => setReportResult(null), 8000);
     } catch {
-      setReportResult('error');
+      setReportResult({ status: 'error' });
     } finally {
       setReportSending(false);
     }
@@ -2201,10 +2204,15 @@ const SettingsScreen = () => {
                 borderRadius: '8px',
                 textAlign: 'center',
                 fontSize: '0.85rem',
-                background: reportResult === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                color: reportResult === 'success' ? '#34d399' : '#ef4444',
+                background: reportResult.status === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                color: reportResult.status === 'success' ? '#34d399' : '#ef4444',
               }}>
-                {reportResult === 'success' ? t('report.success') : t('report.error')}
+                <div>{reportResult.status === 'success' ? t('report.success') : t('report.error')}</div>
+                {reportResult.emailInfo && (
+                  <div style={{ fontSize: '0.72rem', marginTop: '0.25rem', opacity: 0.85 }}>
+                    {reportResult.emailInfo}
+                  </div>
+                )}
               </div>
             )}
           </div>
