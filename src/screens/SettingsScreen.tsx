@@ -501,20 +501,40 @@ const SettingsScreen = () => {
 
       if (error) throw error;
 
-      // Email the group owner (works on deployed Vercel — /api/send-email is an Edge Function)
+      // Email the group owner
       try {
-        const { data: ownerEmail } = await supabase.rpc('get_group_owner_email', { p_group_id: gid });
+        let ownerEmail: string | null = null;
+
+        // Method 1: dedicated RPC (works for all roles)
+        const { data: rpcEmail, error: rpcErr } = await supabase.rpc('get_group_owner_email', { p_group_id: gid });
+        if (rpcEmail && !rpcErr) {
+          ownerEmail = rpcEmail as string;
+        } else {
+          console.warn('[Report] RPC get_group_owner_email failed:', rpcErr?.message || 'no data');
+          // Method 2: fallback via fetch_group_members_with_email (works for admins)
+          const { data: members } = await supabase.rpc('fetch_group_members_with_email', { p_group_id: gid });
+          const { data: group } = await supabase.from('groups').select('created_by').eq('id', gid).single();
+          if (members && group?.created_by) {
+            const owner = (members as { user_id: string; email: string | null }[])
+              .find(m => m.user_id === group.created_by);
+            ownerEmail = owner?.email || null;
+          }
+        }
+
         if (ownerEmail) {
           const catLabel = t(`report.categories.${reportCategory}` as 'report.categories.bug');
-          await proxySendBroadcastEmail({
-            to: ownerEmail as string,
+          const sent = await proxySendBroadcastEmail({
+            to: ownerEmail,
             subject: `📩 דיווח חדש - ${catLabel}`,
             message: `${authPlayerName || 'משתמש'}: ${catLabel}\n\n${reportText.trim() || '(ללא פירוט)'}`,
             senderName: authPlayerName || 'Poker Manager',
           });
+          if (!sent) console.warn('[Report] Email API returned false');
+        } else {
+          console.warn('[Report] Could not resolve owner email');
         }
-      } catch {
-        // best-effort — report is already saved in Supabase
+      } catch (err) {
+        console.error('[Report] Email notification failed:', err);
       }
 
       setReportCategory('');

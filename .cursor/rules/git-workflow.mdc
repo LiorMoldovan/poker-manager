@@ -11,20 +11,33 @@ alwaysApply: true
 
 When the user says "merge" or "push" or "upload" or "push to BB", they mean the full deployment pipeline:
 
-1. **Bump version** in `src/version.ts` — increment `APP_VERSION` and add a `CHANGELOG` entry
-2. **Commit** all changes to git
-3. **Push** to GitHub `main` branch (pull --rebase first if needed)
-4. **Verify** Vercel deployment will trigger (it auto-deploys from `main`)
+1. **Run pre-merge validation** (see checklist below)
+2. **Bump version** in `src/version.ts` — increment `APP_VERSION` and add a `CHANGELOG` entry
+3. **Commit** all changes to git (exclude temp files, .env, secrets)
+4. **Push** to GitHub `main` branch (pull --rebase first if needed)
+5. **Remind** the user of any pending SQL migrations or manual steps
+
+## Pre-Merge Validation Checklist
+
+Run ALL of these BEFORE committing. Do not skip any:
+
+1. `npx tsc --noEmit` — zero errors
+2. ReadLints on all modified files
+3. Review `git diff --stat` — make sure no temp files, secrets, or unintended changes are staged
+4. If new Supabase tables/RPCs/policies were added: remind user which SQL to run
+5. If feature uses Vercel Edge Functions: note it only works after deploy
 
 ## Step-by-Step Merge Process
 
 ```
-1. Update APP_VERSION and CHANGELOG in src/version.ts
-2. git add .
-3. git status                          # Review what's being committed
-4. git pull --rebase                   # Sync with remote first
-5. git commit -m "vX.Y.Z - description"
-6. git push                            # Triggers Vercel auto-deploy
+1. Run pre-merge validation checklist
+2. Update APP_VERSION and CHANGELOG in src/version.ts
+3. git add -A
+4. git status                          # Review — unstage temp files
+5. git pull --rebase                   # Sync with remote first
+6. git commit -m "vX.Y.Z - description"
+7. git push                            # Triggers Vercel auto-deploy
+8. Remind user of any pending SQL migrations
 ```
 
 If push fails with "non-fast-forward":
@@ -76,6 +89,7 @@ vX.Y.Z - Brief description of changes
 - Force push to main
 - Amend commits that have been pushed
 - Change git config
-- Commit `.env` files or secrets
+- Commit `.env` files, secrets, `temp-*.json` files
 - Commit without explicit user request
 - Push without bumping version
+- Claim "done" without running pre-merge validation

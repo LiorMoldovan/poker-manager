@@ -45,8 +45,8 @@ Not in `package.json`. Always bump as part of merge process.
 ### 8. Windows PowerShell
 Dev environment is Windows. No bash syntax (`&&`, heredocs, `cat`, `grep`). Use Cursor tools or PowerShell.
 
-### 9. No Automated Tests
-Validate with `npx tsc --noEmit` and ReadLints. For algorithm changes, use `node -e` scripts against `public/full-backup.json`.
+### 9. No Automated Tests — But Self-Validation Is Mandatory
+Validate with `npx tsc --noEmit` and ReadLints on ALL modified files. For algorithm changes, use `node -e` scripts against `public/full-backup.json`. **Never claim "done" without running these checks.** The user should never have to ask "are you sure?" — if they do, you failed. Always trace the full data flow (client → API → DB → response → UI) and check all roles (member, admin, owner, super admin).
 
 ### 10. Roles: 2 Roles, Owner vs Admin Distinction
 Roles are `admin` and `member` (the `viewer` role was removed in migration 007). The **owner** (group creator, `groups.created_by`) has extra powers beyond a regular admin — only the owner can modify other admins, transfer ownership, regenerate invite codes, manage API keys, and access training/activity tabs. This is enforced in SQL RPCs via `groups.created_by` checks and in the UI via `isOwner` boolean.
@@ -132,6 +132,7 @@ These are learned from extensive conversation history:
 - Likes **surprising insights** — mention all players, find interesting correlations
 - Dislikes **redundancy** — don't repeat data shown elsewhere
 - Expects **one-shot quality** — "I want amazing solution in one try, not ping pong"
+- **HATES ping-pong debugging** — validate thoroughly BEFORE claiming done, not after
 - Wants to **review before merge** — never auto-commit
 - Refers to GitHub as **"BB"** (push to BB = push to GitHub)
 - Game nights are typically **Thursday or Saturday**
@@ -139,3 +140,14 @@ These are learned from extensive conversation history:
 - When fixing bugs, **fix root cause** not symptoms
 - For UI, prefers **compact, readable cards** — not long scrollable lists
 - Wants **perfect group management** — this was the main motivation for the Supabase migration
+
+## Lessons Learned (Anti-Patterns to Avoid)
+
+These are real mistakes from past conversations. Do NOT repeat them:
+
+1. **Don't confirm then backtrack**: If you say "it works", it must actually work. Never say "done" then find issues when the user asks to double-check.
+2. **Check all roles upfront**: When adding tables/RLS, always include super admin policies from the start. Don't wait for the user to point out "I'm super admin and can't see cross-group data."
+3. **Localhost vs Production**: Vercel Edge Functions (`/api/*`) don't exist on localhost. If a feature depends on them (email, AI proxy), say so immediately when presenting the feature — not after the user tests and it fails.
+4. **Silent error swallowing**: `catch {}` hides bugs. At minimum log to console during development. Don't ship empty catch blocks for features that need debugging.
+5. **Test the data flow, not just the types**: `tsc` passing doesn't mean the feature works. Trace: where does the data come from? Who has permission to read it? Does the query return what the UI expects?
+6. **Pre-merge: exclude temp files**: Always check `git status` before committing and unstage `temp-*.json`, `.env`, and other non-source files.
