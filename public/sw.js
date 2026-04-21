@@ -1,11 +1,9 @@
-var CACHE_VERSION = 'v2';
+var CACHE_VERSION = 'v3';
 
-// On install: skip waiting so the new SW activates immediately
 self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-// On activate: clear all old caches and take control of all clients
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(names) {
@@ -21,31 +19,28 @@ self.addEventListener('activate', function(event) {
 self.addEventListener('push', function(event) {
   if (!event.data) return;
 
+  var payload;
   try {
-    var payload = event.data.json();
-    var title = payload.title || 'Poker Manager';
-    var options = {
-      body: payload.body || '',
-      icon: '/poker.svg',
-      badge: '/poker.svg',
-      tag: payload.tag || 'poker-notification',
-      data: { url: payload.url || '/' },
-      dir: 'rtl',
-      vibrate: [200, 100, 200],
-      requireInteraction: false,
-      renotify: true,
-    };
-    event.waitUntil(self.registration.showNotification(title, options));
+    payload = event.data.json();
   } catch (e) {
-    var text = event.data.text();
-    event.waitUntil(
-      self.registration.showNotification('Poker Manager', {
-        body: text,
-        icon: '/poker.svg',
-        dir: 'rtl',
-      })
-    );
+    payload = { title: 'Poker Manager', body: event.data.text() };
   }
+
+  var title = payload.title || 'Poker Manager';
+  var options = {
+    body: payload.body || '',
+    icon: '/poker.svg',
+    badge: '/poker.svg',
+    tag: payload.tag || 'poker-notification',
+    data: { url: payload.url || '/' },
+    dir: 'rtl',
+    vibrate: [200, 100, 200],
+    requireInteraction: false,
+    renotify: true,
+    silent: false,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', function(event) {

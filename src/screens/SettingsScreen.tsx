@@ -184,6 +184,9 @@ const SettingsScreen = () => {
   const getDefaultTab = (): TabId => 'group';
   
   const [activeTab, setActiveTab] = useState<TabId>(getDefaultTab());
+  const [wizardStepIdx, setWizardStepIdx] = useState<number | null>(null);
+  const [wizardDismissed, setWizardDismissed] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   // Backup state
   const [backupLoading, setBackupLoading] = useState(false);
@@ -221,11 +224,14 @@ const SettingsScreen = () => {
 
   // Auto-load activity log + group members when tab is selected
   useEffect(() => {
+    if (isOwner && groupMgmt && activityMembers.length === 0) {
+      groupMgmt.fetchMembers().then(m => setActivityMembers(m));
+    }
+  }, [isOwner, groupMgmt]);
+
+  useEffect(() => {
     if (activeTab === 'activity' && isOwner && activityLog.length === 0 && !activityLoading) {
       loadActivityLog();
-      if (groupMgmt) {
-        groupMgmt.fetchMembers().then(m => setActivityMembers(m));
-      }
     }
   }, [activeTab]);
 
@@ -254,7 +260,7 @@ const SettingsScreen = () => {
     setAiStatus(getAIStatus());
     const savedElKey = getElevenLabsApiKey();
     if (savedElKey) {
-      getElevenLabsUsageLive(savedElKey).then(u => { if (u) setElUsageLive(u); });
+      getElevenLabsUsageLive(savedElKey).then(u => setElUsageLive(u ?? { used: 0, limit: 10000, remaining: 10000, resetDate: '' }));
     }
     const interval = setInterval(() => {
       setAiStatus(getAIStatus());
@@ -516,17 +522,22 @@ const SettingsScreen = () => {
       {/* Setup Wizard Banner — shown for group owners when setup is incomplete */}
       {isOwner && (() => {
         const hasPlayers = players.length > 1;
-        const hasLocations = (settings.locations ?? []).length > 0;
+        const hasGameSettings = (settings.locations ?? []).length > 0 || getAllGames().length > 0;
+        const hasChips = chipValues.length > 0 || getAllGames().length > 0;
         const aiWorking = !!settings.geminiApiKey || getAllGames().some(g => g.aiSummary);
+        const hasInvited = (activityMembers.length > 1) || getAllGames().length > 0;
         const steps = [
-          { done: true, label: t('settings.setup.stepGroup'), icon: '✅' },
-          { done: hasPlayers, label: t('settings.setup.stepPlayers'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
-          { done: hasLocations, label: t('settings.setup.stepLocations'), icon: hasLocations ? '✅' : '📍', tab: 'game' as TabId },
-          { done: aiWorking, label: t('settings.setup.stepAi'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
+          { done: hasPlayers, label: t('settings.setup.stepPlayers'), desc: t('settings.setup.stepPlayersDesc'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
+          { done: hasGameSettings, label: t('settings.setup.stepLocations'), desc: t('settings.setup.stepLocationsDesc'), icon: hasGameSettings ? '✅' : '⚙️', tab: 'game' as TabId },
+          { done: hasChips, label: t('settings.setup.stepChips'), desc: t('settings.setup.stepChipsDesc'), icon: hasChips ? '✅' : '🎰', tab: 'chips' as TabId },
+          { done: aiWorking, label: t('settings.setup.stepAi'), desc: t('settings.setup.stepAiDesc'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
+          { done: hasInvited, label: t('settings.setup.stepInvite'), desc: t('settings.setup.stepInviteDesc'), icon: hasInvited ? '✅' : '📨', tab: 'group' as TabId },
         ];
         const allDone = steps.every(s => s.done);
-        if (allDone) return null;
-        const nextStep = steps.find(s => !s.done);
+        if (allDone || wizardDismissed) return null;
+        const navigableSteps = steps.filter(s => s.tab);
+        const firstIncomplete = navigableSteps.findIndex(s => !s.done);
+        const defaultIdx = firstIncomplete >= 0 ? firstIncomplete : 0;
         return (
           <div style={{
             background: 'linear-gradient(135deg, rgba(99,102,241,0.08), rgba(168,85,247,0.08))',
@@ -535,32 +546,77 @@ const SettingsScreen = () => {
             padding: '0.75rem 1rem',
             marginBottom: '0.75rem',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa' }}>{t('settings.setup.bannerTitle')}</span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                {steps.filter(s => s.done).length}/{steps.length}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
-              {steps.map((s, i) => (
-                <div key={i} style={{
-                  flex: 1, height: '4px', borderRadius: '2px',
-                  background: s.done ? '#10B981' : 'rgba(100,100,100,0.3)',
-                }} />
-              ))}
-            </div>
-            {nextStep?.tab && (
-              <button
-                onClick={() => setActiveTab(nextStep.tab!)}
-                style={{
-                  width: '100%', padding: '0.5rem', borderRadius: '8px', border: 'none',
-                  background: 'rgba(99,102,241,0.15)', color: '#818cf8', cursor: 'pointer',
-                  fontSize: '0.8rem', fontWeight: 600, fontFamily: 'Outfit, sans-serif',
-                }}
-              >
-                {nextStep.icon} {nextStep.label} →
-              </button>
-            )}
+            {(() => {
+              const wizardIdx = wizardStepIdx ?? defaultIdx;
+              const current = navigableSteps[wizardIdx];
+              if (!current) return null;
+              const activeStepIndex = steps.indexOf(current);
+              const isFirst = wizardIdx === 0;
+              const isLast = wizardIdx === navigableSteps.length - 1;
+              const arrowStyle: React.CSSProperties = {
+                background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer',
+                fontSize: '1.1rem', padding: '0.3rem 0.5rem', opacity: 1,
+              };
+              const disabledArrow: React.CSSProperties = { ...arrowStyle, opacity: 0.25, cursor: 'default' };
+              return (<>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#a78bfa' }}>{t('settings.setup.bannerTitle')}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      {wizardIdx + 1}/{navigableSteps.length}
+                    </span>
+                    <button
+                      onClick={() => setWizardDismissed(true)}
+                      style={{
+                        background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                        fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px',
+                        opacity: 0.7,
+                      }}
+                    >{language === 'he' ? 'סגור' : 'Close'}</button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                  {steps.map((s, i) => (
+                    <div key={i} style={{
+                      flex: 1, height: '4px', borderRadius: '2px',
+                      background: i === activeStepIndex
+                        ? (s.done ? '#10B981' : '#818cf8')
+                        : (s.done ? 'rgba(16,185,129,0.3)' : 'rgba(100,100,100,0.2)'),
+                    }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', direction: 'rtl' }}>
+                  <button
+                    onClick={() => { if (!isFirst) { const ni = wizardIdx - 1; setWizardStepIdx(ni); setActiveTab(navigableSteps[ni].tab!); } }}
+                    style={isFirst ? disabledArrow : arrowStyle}
+                    disabled={isFirst}
+                  >→</button>
+                  <button
+                    onClick={() => setActiveTab(current.tab!)}
+                    style={{
+                      flex: 1, padding: '0.5rem', borderRadius: '8px', border: 'none',
+                      background: 'rgba(99,102,241,0.15)', color: '#818cf8', cursor: 'pointer',
+                      fontSize: '0.8rem', fontWeight: 600, fontFamily: 'Outfit, sans-serif',
+                    }}
+                  >
+                    {current.icon} {current.label}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (isLast) { setWizardDismissed(true); setShowWelcome(true); }
+                      else { const ni = wizardIdx + 1; setWizardStepIdx(ni); setActiveTab(navigableSteps[ni].tab!); }
+                    }}
+                    style={isLast ? {
+                      background: '#10B981', border: 'none', color: '#fff', cursor: 'pointer',
+                      fontSize: '0.9rem', fontWeight: 700, padding: '0.3rem 0.6rem', borderRadius: '6px',
+                    } : arrowStyle}
+                  >{isLast ? '✓' : '←'}</button>
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.35rem' }}>
+                  {current.desc}
+                </div>
+              </>);
+            })()}
           </div>
         );
       })()}
@@ -1894,6 +1950,16 @@ const SettingsScreen = () => {
       {/* About Tab */}
       {activeTab === 'about' && (
         <>
+        {/* App Guide button */}
+        <button
+          onClick={() => setShowWelcome(true)}
+          style={{
+            width: '100%', padding: '0.7rem', marginBottom: '0.75rem', borderRadius: '10px',
+            border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.08)',
+            color: '#818cf8', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+            fontFamily: 'Outfit, sans-serif',
+          }}
+        >{t('settings.setup.aboutApp')}</button>
         {/* Identity section */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
           <div>
@@ -2511,32 +2577,56 @@ const SettingsScreen = () => {
               </div>
             )}
 
+            {/* Diagnostic info */}
+            {isSuperAdmin && (
+              <div style={{
+                marginTop: '0.75rem', padding: '0.5rem', borderRadius: '0.5rem',
+                background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                fontSize: '0.68rem', direction: 'ltr', color: 'var(--text-muted)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.3rem' }}>📋 Subscription Debug</div>
+                {pushSubscribers.map((s, i) => {
+                  const isFCM = s.endpoint.includes('fcm.googleapis.com');
+                  const isMoz = s.endpoint.includes('mozilla');
+                  return (
+                    <div key={i} style={{ padding: '0.15rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span style={{ color: isFCM ? '#10B981' : isMoz ? '#F59E0B' : '#3B82F6' }}>
+                        {isFCM ? 'FCM' : isMoz ? 'Mozilla' : 'Other'}
+                      </span>
+                      {' '}{s.playerName || '?'} — {s.endpoint.slice(0, 80)}...
+                    </div>
+                  );
+                })}
+                {pushSubscribers.length === 0 && <div>No subscriptions in DB</div>}
+              </div>
+            )}
+
             {/* Test section */}
             <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                 🧪 {language === 'he' ? 'בדיקה' : 'Test'}
               </h4>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button
                   onClick={async () => {
                     const gid = getGroupId();
-                    if (!gid) return;
+                    if (!gid || !authPlayerName) return;
                     setPushSending(true);
                     setPushResult(null);
                     setPushDetails(null);
                     try {
                       const result = await proxySendPush({
                         groupId: gid,
-                        title: '🧪 Test Notification',
-                        body: language === 'he' ? 'זוהי הודעת בדיקה מ-Poker Manager' : 'This is a test notification from Poker Manager',
-                        targetPlayerNames: pushTarget === 'select' ? pushSelectedPlayers : undefined,
+                        title: '🧪 Test — ' + authPlayerName,
+                        body: language === 'he' ? 'בדיקת התראה למכשיר זה' : 'Test notification for this device',
+                        targetPlayerNames: [authPlayerName],
                       });
                       if (result) {
                         if (result.details) setPushDetails(result.details);
                         if (result.total === 0) {
-                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנויים - פתח את האפליקציה במכשיר אחר ואשר התראות' : 'No subscribers - open app on another device and allow notifications'}`);
+                          setPushResult(`⚠️ ${language === 'he' ? 'אין מנוי עבורך — סגור ופתח מחדש את האפליקציה' : 'No subscription for you — close and reopen the app'}`);
                         } else if (result.sent > 0) {
-                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total}`);
+                          setPushResult(`✅ ${language === 'he' ? 'נשלח' : 'Sent'}: ${result.sent}/${result.total} — ${language === 'he' ? 'אם לא קיבלת, מזער את האפליקציה ונסה שוב' : 'If not received, minimize the app and try again'}`);
                         } else {
                           setPushResult(`❌ ${language === 'he' ? 'שגיאה בשליחה' : 'Send failed'}: 0/${result.total}`);
                         }
@@ -2554,10 +2644,10 @@ const SettingsScreen = () => {
                     flex: 1, padding: '0.5rem', borderRadius: '0.5rem',
                     border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.1)',
                     color: '#3B82F6', cursor: 'pointer', fontSize: '0.8rem',
-                    fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                    fontFamily: 'Outfit, sans-serif', fontWeight: 500, minWidth: '140px',
                   }}
                 >
-                  🔔 {language === 'he' ? 'בדיקת Push' : 'Test Push'}
+                  🔔 {language === 'he' ? 'בדיקה למכשיר שלי' : 'Test My Device'}
                 </button>
                 <button
                   onClick={async () => {
@@ -3685,6 +3775,54 @@ const SettingsScreen = () => {
             onClose={() => setGroupSetupMode(null)}
             initialMode={groupSetupMode}
           />
+        </div>
+      )}
+      {/* Welcome Summary Modal */}
+      {showWelcome && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }} onClick={() => setShowWelcome(false)}>
+          <div style={{
+            background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
+            maxWidth: '400px', width: '100%', maxHeight: '85vh', overflowY: 'auto',
+            border: '1px solid var(--border)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text)' }}>{t('settings.setup.welcomeTitle')}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>{t('settings.setup.welcomeSubtitle')}</div>
+            </div>
+            {[
+              { icon: '🎮', text: t('settings.setup.welcomeNewGame') },
+              { icon: '📡', text: t('settings.setup.welcomeLive') },
+              { icon: '🧮', text: t('settings.setup.welcomeEnd') },
+              { icon: '💰', text: t('settings.setup.welcomeSettlements') },
+              { icon: '📜', text: t('settings.setup.welcomeHistory') },
+              { icon: '📊', text: t('settings.setup.welcomeStats') },
+              { icon: '📈', text: t('settings.setup.welcomeGraphs') },
+              { icon: '🏋️', text: t('settings.setup.welcomeTraining') },
+              { icon: '📤', text: t('settings.setup.welcomeShare') },
+              { icon: '🔔', text: t('settings.setup.welcomeNotify') },
+            ].map((item, i, arr) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'flex-start', gap: '0.6rem',
+                padding: '0.5rem 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+              }}>
+                <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{item.icon}</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text)', lineHeight: 1.5 }}>{item.text}</span>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowWelcome(false)}
+              style={{
+                width: '100%', marginTop: '1rem', padding: '0.7rem', borderRadius: '10px',
+                border: 'none', background: '#10B981', color: '#fff', cursor: 'pointer',
+                fontSize: '0.9rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+              }}
+            >{t('settings.setup.welcomeClose')}</button>
+          </div>
         </div>
       )}
     </div>
