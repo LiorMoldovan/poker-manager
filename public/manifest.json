@@ -1,14 +1,17 @@
 {
   "name": "Poker Manager",
   "short_name": "Poker",
-  "description": "ניהול ערבי פוקר",
+  "description": "ניהול ערבי פוקר — מעקב משחקים, סיכומים, סטטיסטיקות ו-AI",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "he",
   "background_color": "#0a0a0f",
   "theme_color": "#0a0a0f",
+  "categories": ["games", "entertainment", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/poker.svg",

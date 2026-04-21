@@ -69,7 +69,7 @@ export interface PeriodMarkers {
   isFirstGameOfYear: boolean;
   isLastGameOfYear: boolean;
   monthName: string;       // Hebrew month name
-  halfLabel: string;       // e.g. "H1 2026"
+  halfLabel: string;       // e.g. "חציון ראשון 2026"
   year: number;
 }
 

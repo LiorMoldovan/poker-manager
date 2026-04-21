@@ -257,6 +257,9 @@ function SupabaseApp() {
   const [notifCount, setNotifCount] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [showGroupWizard, setShowGroupWizard] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showPushNudge, setShowPushNudge] = useState(false);
 
   const groupId = auth.membership?.groupId ?? null;
   const role = auth.membership?.role ?? null;
@@ -305,64 +308,71 @@ function SupabaseApp() {
     return () => window.removeEventListener('supabase-cache-updated', handler);
   }, [dataReady]);
 
-  // Push notification subscription
-  useEffect(() => {
-    if (!dataReady || !groupId || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if (Notification.permission === 'denied') return;
+  // Push notification subscription — only when permission is already granted
+  const subscribeToPush = useCallback(async () => {
+    if (!groupId || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'granted') return;
 
     const VAPID_PUBLIC = 'BIyHc2Q3XXbAYl1DgPRpqHZGJVM4i38ElcKYpeBib5RXVAUKSiG7IxZ-ZJPyt1UWokY_saRldY-CY54UXnvZbH8';
     const isDead = (ep: string) => ep.includes('permanently-removed') || ep.includes('.invalid');
-    const subscribe = async () => {
-      try {
-        let reg = await navigator.serviceWorker.ready;
-        if (Notification.permission === 'default') {
-          const perm = await Notification.requestPermission();
-          if (perm !== 'granted') return;
+    try {
+      let reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) {
+        if (isDead(existing.endpoint)) {
+          deletePushSubscription(existing.endpoint);
         }
-        if (Notification.permission !== 'granted') return;
+        await existing.unsubscribe();
+      }
 
-        const existing = await reg.pushManager.getSubscription();
-        if (existing) {
-          if (isDead(existing.endpoint)) {
-            deletePushSubscription(existing.endpoint);
-          }
-          await existing.unsubscribe();
+      let sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: VAPID_PUBLIC,
+      });
+
+      if (isDead(sub.endpoint)) {
+        await sub.unsubscribe();
+        const allRegs = await navigator.serviceWorker.getRegistrations();
+        for (const r of allRegs) {
+          const s = await r.pushManager.getSubscription();
+          if (s) await s.unsubscribe();
+          await r.unregister();
         }
-
-        let sub = await reg.pushManager.subscribe({
+        await new Promise(r => setTimeout(r, 1500));
+        await navigator.serviceWorker.register('/sw.js');
+        reg = await navigator.serviceWorker.ready;
+        sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: VAPID_PUBLIC,
         });
+        if (isDead(sub.endpoint)) return;
+      }
 
-        if (isDead(sub.endpoint)) {
-          await sub.unsubscribe();
-          const allRegs = await navigator.serviceWorker.getRegistrations();
-          for (const r of allRegs) {
-            const s = await r.pushManager.getSubscription();
-            if (s) await s.unsubscribe();
-            await r.unregister();
-          }
-          await new Promise(r => setTimeout(r, 1500));
-          await navigator.serviceWorker.register('/sw.js');
-          reg = await navigator.serviceWorker.ready;
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: VAPID_PUBLIC,
-          });
-          if (isDead(sub.endpoint)) return;
-        }
+      await savePushSubscription(groupId, playerName, sub);
+    } catch (_err) { /* push subscription not available */ }
+  }, [groupId, playerName]);
 
-        await savePushSubscription(groupId, playerName, sub);
-      } catch (_err) { /* push subscription not available */ }
-    };
-    subscribe();
-  }, [dataReady, groupId, playerName]);
+  useEffect(() => {
+    if (!dataReady) return;
+    subscribeToPush();
+  }, [dataReady, subscribeToPush]);
 
-  // Activity tracking
+  const handleEnablePush = useCallback(async () => {
+    setShowPushNudge(false);
+    if (!('Notification' in window)) return;
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      subscribeToPush();
+    }
+  }, [subscribeToPush]);
+
+  // Activity tracking — one session per app load, screens accumulated via navigation effect
   const sessionStartRef = useRef<number | null>(null);
   const screensVisitedRef = useRef<Set<string>>(new Set());
   const isTrackingRef = useRef(false);
   const activityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationRef = useRef(location.pathname);
+  locationRef.current = location.pathname;
 
   const pushSessionUpdate = useCallback((keepalive = false) => {
     if (!isTrackingRef.current || !sessionStartRef.current) return;
@@ -374,10 +384,11 @@ function SupabaseApp() {
   useEffect(() => {
     if (!dataReady || !role || !auth.user) return;
     sessionStartRef.current = Date.now();
-    screensVisitedRef.current = new Set([getScreenName(location.pathname)]);
+    screensVisitedRef.current = new Set([getScreenName(locationRef.current)]);
     isTrackingRef.current = true;
 
-    logActivity(role, playerName || undefined, auth.user.id).catch(() => {});
+    const initialScreen = getScreenName(locationRef.current);
+    logActivity(role, playerName || undefined, auth.user.id, [initialScreen]).catch(() => {});
 
     activityIntervalRef.current = setInterval(() => pushSessionUpdate(), 5 * 60 * 1000);
 
@@ -395,7 +406,7 @@ function SupabaseApp() {
       if (activityIntervalRef.current) clearInterval(activityIntervalRef.current);
       document.removeEventListener('visibilitychange', handleVisChange);
     };
-  }, [dataReady, role, auth.user, playerName, pushSessionUpdate, location.pathname]);
+  }, [dataReady, role, auth.user, playerName, pushSessionUpdate]);
 
   useEffect(() => {
     if (isTrackingRef.current) {
@@ -403,6 +414,44 @@ function SupabaseApp() {
       pushSessionUpdate();
     }
   }, [location.pathname, pushSessionUpdate]);
+
+  // Install prompt — capture beforeinstallprompt for Android/Chrome
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as unknown as Record<string, boolean>).standalone === true;
+    if (isStandalone) return;
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      const dismissed = localStorage.getItem('install-banner-dismissed');
+      if (dismissed && Date.now() - Number(dismissed) < 7 * 86400000) return;
+      setTimeout(() => setShowInstallBanner(true), 3000);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // iOS Safari — no beforeinstallprompt, show manual instructions
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as Record<string, unknown>).MSStream;
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS/.test(navigator.userAgent);
+    if (isIOS && isSafari) {
+      const dismissed = localStorage.getItem('install-banner-dismissed');
+      if (!dismissed || Date.now() - Number(dismissed) >= 7 * 86400000) {
+        setTimeout(() => setShowInstallBanner(true), 4000);
+      }
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Push permission nudge — show friendly modal instead of cold browser prompt
+  useEffect(() => {
+    if (!dataReady || !('Notification' in window)) return;
+    if (Notification.permission !== 'default') return;
+    const dismissed = localStorage.getItem('push-nudge-dismissed');
+    if (dismissed && Date.now() - Number(dismissed) < 3 * 86400000) return;
+    const timer = setTimeout(() => setShowPushNudge(true), 5000);
+    return () => clearTimeout(timer);
+  }, [dataReady]);
 
   // Detect ?addMember=email deep link
   useEffect(() => {
@@ -744,12 +793,118 @@ function SupabaseApp() {
   const isAdmin = role === 'admin';
   const defaultRoute = isAdmin ? '/' : '/statistics';
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as Record<string, unknown>).MSStream;
+
+  const installBanner = showInstallBanner && (
+    <div style={{
+      position: 'fixed', bottom: 70, left: 12, right: 12, zIndex: 9997,
+      background: 'linear-gradient(135deg, #1a2332, #0f1923)',
+      border: '1px solid rgba(16,185,129,0.25)', borderRadius: '14px',
+      padding: '1rem 1.1rem', direction: 'rtl',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      animation: 'contentFadeIn 0.3s ease-out',
+    }}>
+      <button
+        onClick={() => { setShowInstallBanner(false); localStorage.setItem('install-banner-dismissed', String(Date.now())); }}
+        style={{ position: 'absolute', top: 8, left: 10, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem' }}
+      >✕</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{ fontSize: '2rem', flexShrink: 0 }}>🃏</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)', marginBottom: '0.2rem' }}>
+            {t('install.title')}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            {isIOS ? t('install.iosHint') : t('install.hint')}
+          </div>
+        </div>
+        {!isIOS && installPrompt && (
+          <button
+            onClick={async () => {
+              const prompt = installPrompt as unknown as { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+              await prompt.prompt();
+              const choice = await prompt.userChoice;
+              if (choice.outcome === 'accepted') {
+                setShowInstallBanner(false);
+              }
+              setInstallPrompt(null);
+            }}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: '10px', border: 'none',
+              background: '#10B981', color: 'white', fontWeight: 700,
+              fontSize: '0.85rem', cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            {t('install.button')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const pushNudge = showPushNudge && (
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10001,
+        background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '1rem', animation: 'backdropFadeIn 0.2s ease-out',
+      }}
+      onClick={() => { setShowPushNudge(false); localStorage.setItem('push-nudge-dismissed', String(Date.now())); }}
+    >
+      <div
+        style={{
+          background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem',
+          maxWidth: '340px', width: '100%', direction: 'rtl',
+          border: '1px solid var(--border)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          animation: 'contentFadeIn 0.3s ease-out',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔔</div>
+          <h3 style={{ margin: '0 0 0.4rem', color: 'var(--text)', fontSize: '1.1rem' }}>
+            {t('pushNudge.title')}
+          </h3>
+          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {t('pushNudge.body')}
+          </p>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button
+            onClick={handleEnablePush}
+            style={{
+              width: '100%', padding: '0.7rem', borderRadius: '10px', border: 'none',
+              background: '#10B981', color: 'white', fontWeight: 700, fontSize: '0.9rem',
+              cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+            }}
+          >
+            {t('pushNudge.enable')}
+          </button>
+          <button
+            onClick={() => { setShowPushNudge(false); localStorage.setItem('push-nudge-dismissed', String(Date.now())); }}
+            style={{
+              width: '100%', padding: '0.5rem', borderRadius: '10px',
+              border: '1px solid var(--border)', background: 'none',
+              color: 'var(--text-muted)', fontSize: '0.8rem',
+              cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+            }}
+          >
+            {t('pushNudge.later')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <ErrorBoundary>
       <PermissionContext.Provider value={permissionValue}>
         {addMemberBanner}
         {notificationBanner}
         {notificationPanel}
+        {installBanner}
+        {pushNudge}
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
           <main className="main-content">

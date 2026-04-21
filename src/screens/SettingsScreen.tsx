@@ -104,6 +104,26 @@ const SettingsScreen = () => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
 
+  // Issue reports state
+  interface IssueReport {
+    id: string;
+    group_id: string;
+    reporter_name: string;
+    reporter_user_id: string | null;
+    category: string;
+    description: string;
+    device: string | null;
+    status: string;
+    created_at: string;
+    group_name?: string;
+  }
+  const [reportCategory, setReportCategory] = useState('');
+  const [reportText, setReportText] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportResult, setReportResult] = useState<'success' | 'error' | null>(null);
+  const [reports, setReports] = useState<IssueReport[]>([]);
+  const [reportsLoaded, setReportsLoaded] = useState(false);
+
   // Player traits editor state
   const [editingTraitsPlayer, setEditingTraitsPlayer] = useState<Player | null>(null);
   const [traitsForm, setTraitsForm] = useState<PlayerTraits>({ style: [], quirks: [] });
@@ -180,7 +200,7 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push';
+  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
   const getDefaultTab = (): TabId => 'group';
   
   const [activeTab, setActiveTab] = useState<TabId>(getDefaultTab());
@@ -232,7 +252,7 @@ const SettingsScreen = () => {
   }, [isOwner, groupMgmt, activeTab]);
 
   useEffect(() => {
-    if (activeTab === 'activity' && isOwner && activityLog.length === 0 && !activityLoading) {
+    if (activeTab === 'activity' && isOwner && !activityLoading) {
       loadActivityLog();
     }
   }, [activeTab]);
@@ -416,9 +436,8 @@ const SettingsScreen = () => {
     setActivityLoading(true);
     setActivityError(null);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       const [entries, trainingData] = await Promise.all([
-        fetchActivityLog(user?.id),
+        fetchActivityLog(),
         fetchTrainingAnswers(),
       ]);
       setActivityLog(entries.reverse());
@@ -430,8 +449,91 @@ const SettingsScreen = () => {
     }
   };
 
-  // handleClearActivityLog removed — trash button was removed from Activity tab
+  const loadReports = async () => {
+    const gid = getGroupId();
+    if (!gid && !isSuperAdmin) return;
 
+    let query = supabase
+      .from('issue_reports')
+      .select('id, group_id, reporter_name, reporter_user_id, category, description, device, status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (!isSuperAdmin && gid) {
+      query = query.eq('group_id', gid);
+    }
+
+    const { data } = await query;
+    if (data) {
+      let items = data as IssueReport[];
+      // For super admin: resolve group names
+      if (isSuperAdmin && items.length > 0) {
+        const groupIds = [...new Set(items.map(r => r.group_id))];
+        const { data: groups } = await supabase
+          .from('groups').select('id, name').in('id', groupIds);
+        if (groups) {
+          const nameMap = Object.fromEntries(groups.map((g: { id: string; name: string }) => [g.id, g.name]));
+          items = items.map(r => ({ ...r, group_name: nameMap[r.group_id] || '?' }));
+        }
+      }
+      setReports(items);
+      setReportsLoaded(true);
+    }
+  };
+
+  const submitReport = async () => {
+    if (!reportCategory || !reportText.trim() || reportSending) return;
+    setReportSending(true);
+    setReportResult(null);
+    try {
+      const gid = getGroupId();
+      const { data: { user } } = await supabase.auth.getUser();
+      const deviceInfo = `${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop'} / ${navigator.platform}`;
+
+      const { error } = await supabase.from('issue_reports').insert({
+        group_id: gid,
+        reporter_name: authPlayerName || 'Unknown',
+        reporter_user_id: user?.id || null,
+        category: reportCategory,
+        description: reportText.trim(),
+        device: deviceInfo,
+      });
+
+      if (error) throw error;
+
+      // Email the group owner (works on deployed Vercel — /api/send-email is an Edge Function)
+      try {
+        const { data: ownerEmail } = await supabase.rpc('get_group_owner_email', { p_group_id: gid });
+        if (ownerEmail) {
+          const catLabel = t(`report.categories.${reportCategory}` as 'report.categories.bug');
+          await proxySendBroadcastEmail({
+            to: ownerEmail as string,
+            subject: `📩 דיווח חדש - ${catLabel}`,
+            message: `${authPlayerName || 'משתמש'}: ${catLabel}\n\n${reportText.trim() || '(ללא פירוט)'}`,
+            senderName: authPlayerName || 'Poker Manager',
+          });
+        }
+      } catch {
+        // best-effort — report is already saved in Supabase
+      }
+
+      setReportCategory('');
+      setReportText('');
+      setReportResult('success');
+      loadReports();
+      setTimeout(() => setReportResult(null), 4000);
+    } catch {
+      setReportResult('error');
+    } finally {
+      setReportSending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'report' && !reportsLoaded) {
+      loadReports();
+    }
+  }, [activeTab, reportsLoaded]);
 
   const getRoleInfo = (r: string) => {
     switch (r) {
@@ -453,6 +555,7 @@ const SettingsScreen = () => {
     { id: 'push', label: t('push.tabLabel'), icon: '🔔', requiresPermission: null, ownerOnly: false, adminOnly: true, superAdminOnly: false },
     { id: 'activity', label: t('settings.tabActivity'), icon: '📊', requiresPermission: null, ownerOnly: true, adminOnly: false, superAdminOnly: false },
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
+    { id: 'report', label: t('settings.tabReport'), icon: '📩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
   ];
   
@@ -744,69 +847,75 @@ const SettingsScreen = () => {
       {/* Game Settings Tab */}
       {activeTab === 'game' && (
         <div className="card">
-          <h2 className="card-title mb-2">{t('settings.game.title')}</h2>
-          
-          {!canEditSettings && (
-            <div style={{ 
-              padding: '0.5rem 0.75rem', 
-              marginBottom: '1rem',
-              borderRadius: '8px',
-              background: 'rgba(234, 179, 8, 0.1)',
-              borderLeft: '4px solid #EAB308'
-            }}>
-              <p style={{ color: '#EAB308', margin: 0, fontSize: '0.85rem' }}>
-                {t('settings.game.adminOnly')}
-              </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>{t('settings.game.title')}</h2>
+            {!canEditSettings && (
+              <span style={{
+                padding: '0.25rem 0.6rem', borderRadius: '6px',
+                background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.25)',
+                color: '#EAB308', fontSize: '0.7rem', fontWeight: 600,
+              }}>
+                🔒 {t('settings.game.adminOnly')}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1rem' }}>
+            <div className="settings-row" style={{ animation: 'contentFadeIn 0.25s ease-out both' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('settings.game.buyinValue')}</div>
+              </div>
+              <input
+                type="number"
+                className="input"
+                style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
+                value={settings.rebuyValue}
+                onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
+                min="1"
+                disabled={!canEditSettings}
+              />
             </div>
-          )}
-          
-          <div className="input-group">
-            <label className="label">{t('settings.game.buyinValue')}</label>
-            <input
-              type="number"
-              className="input"
-              value={settings.rebuyValue}
-              onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
-              min="1"
-              disabled={!canEditSettings}
-            />
+
+            <div className="settings-row" style={{ animation: 'contentFadeIn 0.25s ease-out 0.03s both' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('settings.game.chipsPerBuyin')}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                  {t('settings.game.buyinHelper', { value: cleanNumber(settings.rebuyValue), chips: (settings.chipsPerRebuy || 10000).toLocaleString() })}
+                </div>
+              </div>
+              <input
+                type="number"
+                className="input"
+                style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
+                value={settings.chipsPerRebuy}
+                onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
+                min="1"
+                disabled={!canEditSettings}
+              />
+            </div>
+
+            <div className="settings-row" style={{ animation: 'contentFadeIn 0.25s ease-out 0.06s both' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('settings.game.minTransfer')}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                  {t('settings.game.minTransferHelper')}
+                </div>
+              </div>
+              <input
+                type="number"
+                className="input"
+                style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
+                value={settings.minTransfer}
+                onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
+                min="0"
+                disabled={!canEditSettings}
+              />
+            </div>
           </div>
 
-          <div className="input-group">
-            <label className="label">{t('settings.game.chipsPerBuyin')}</label>
-            <input
-              type="number"
-              className="input"
-              value={settings.chipsPerRebuy}
-              onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
-              min="1"
-              disabled={!canEditSettings}
-            />
-            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              {t('settings.game.buyinHelper', { value: cleanNumber(settings.rebuyValue), chips: (settings.chipsPerRebuy || 10000).toLocaleString() })}
-              <br />
-              {t('settings.game.chipValueHelper', { value: String(Math.round((settings.rebuyValue / (settings.chipsPerRebuy || 10000)) * 1000)) })}
-            </p>
-          </div>
-
-          <div className="input-group">
-            <label className="label">{t('settings.game.minTransfer')}</label>
-            <input
-              type="number"
-              className="input"
-              value={settings.minTransfer}
-              onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
-              min="0"
-              disabled={!canEditSettings}
-            />
-            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              {t('settings.game.minTransferHelper')}
-            </p>
-          </div>
-
-          <div className="input-group">
-            <label className="label">{t('settings.game.gameNightDays')}</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.09s both' }}>
+            <label className="label" style={{ marginBottom: '0.4rem', display: 'block' }}>{t('settings.game.gameNightDays')}</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {[
                 { day: 0, label: t('settings.game.sun') },
                 { day: 1, label: t('settings.game.mon') },
@@ -832,15 +941,16 @@ const SettingsScreen = () => {
                       }
                     }}
                     style={{
-                      padding: '0.35rem 0.6rem',
-                      borderRadius: '6px',
+                      padding: '0.4rem 0.7rem',
+                      borderRadius: '8px',
                       fontSize: '0.8rem',
                       fontWeight: isSelected ? '600' : '400',
-                      background: isSelected ? 'var(--primary)' : 'var(--surface)',
+                      background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
                       color: isSelected ? 'white' : 'var(--text-muted)',
-                      border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                      border: `1px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.06)'}`,
                       cursor: canEditSettings ? 'pointer' : 'default',
                       opacity: canEditSettings ? 1 : 0.6,
+                      transition: 'all 0.15s ease',
                     }}
                   >
                     {label}
@@ -848,14 +958,16 @@ const SettingsScreen = () => {
                 );
               })}
             </div>
-            <p className="text-muted" style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', marginBottom: 0 }}>
               {t('settings.game.daysHelper')}
             </p>
           </div>
 
-          <div className="input-group">
-            <label className="label">{t('settings.game.locations')}</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+          <div style={{ marginBottom: '1rem', animation: 'contentFadeIn 0.25s ease-out 0.12s both' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="label" style={{ margin: 0 }}>{t('settings.game.locations')}</label>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {(settings.locations ?? []).length === 0 && (
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                   {t('settings.game.noLocations')}
@@ -864,9 +976,10 @@ const SettingsScreen = () => {
               {(settings.locations ?? []).map(loc => (
                 <div key={loc} style={{
                   display: 'flex', alignItems: 'center', gap: '0.3rem',
-                  padding: '0.3rem 0.5rem', borderRadius: '6px',
-                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  padding: '0.3rem 0.6rem', borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
                   fontSize: '0.8rem', color: 'var(--text)',
+                  transition: 'all 0.15s ease',
                 }}>
                   <span>{loc}</span>
                   {canEditSettings && (
@@ -905,7 +1018,6 @@ const SettingsScreen = () => {
                   }}
                 />
                 <button
-                  className="btn btn-sm"
                   disabled={!newLocation.trim()}
                   onClick={() => {
                     const current = settings.locations ?? [];
@@ -915,7 +1027,8 @@ const SettingsScreen = () => {
                     setNewLocation('');
                   }}
                   style={{
-                    fontSize: '0.8rem', padding: '0.35rem 0.7rem',
+                    padding: '0.35rem 0.7rem', borderRadius: '8px',
+                    fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                     background: 'rgba(16,185,129,0.12)', color: '#10B981',
                     border: '1px solid rgba(16,185,129,0.3)', cursor: 'pointer',
                   }}
@@ -925,41 +1038,44 @@ const SettingsScreen = () => {
           </div>
 
           {/* Blocked Transfers */}
-          <div className="setting-group" style={{ marginTop: '1rem' }}>
-            <label className="label">{t('settings.game.blockedTransfers')}</label>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+          <div style={{ animation: 'contentFadeIn 0.25s ease-out 0.15s both' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="label" style={{ margin: 0 }}>{t('settings.game.blockedTransfers')}</label>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
               {t('settings.game.blockedDesc')}
             </div>
-            {(settings.blockedTransfers || []).map((pair, idx) => (
-              <div key={idx} style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                padding: '0.4rem 0.6rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px',
-                marginBottom: '0.3rem', fontSize: '0.8rem'
-              }}>
-                <span style={{ flex: 1 }}>
-                  {pair.playerA} ↔ {pair.playerB}
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem', marginRight: '0.5rem' }}>
-                    (מ-{new Date(pair.after).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')})
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              {(settings.blockedTransfers || []).map((pair, idx) => (
+                <div key={idx} className="settings-row" style={{
+                  background: 'rgba(239, 68, 68, 0.06)',
+                  borderColor: 'rgba(239, 68, 68, 0.12)',
+                }}>
+                  <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 500 }}>
+                    {pair.playerA} ↔ {pair.playerB}
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', marginRight: '0.5rem' }}>
+                      (מ-{new Date(pair.after).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US')})
+                    </span>
                   </span>
-                </span>
-                {canEditSettings && (
-                  <button
-                    onClick={() => {
-                      const updated = (settings.blockedTransfers || []).filter((_, i) => i !== idx);
-                      handleSettingsChange('blockedTransfers', updated);
-                    }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '0.9rem' }}
-                  >✕</button>
-                )}
-              </div>
-            ))}
+                  {canEditSettings && (
+                    <button
+                      className="row-action row-action-danger"
+                      onClick={() => {
+                        const updated = (settings.blockedTransfers || []).filter((_, i) => i !== idx);
+                        handleSettingsChange('blockedTransfers', updated);
+                      }}
+                    >✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
             {canEditSettings && (
-              <div style={{ marginTop: '0.4rem' }}>
+              <div style={{ marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.3rem' }}>
                   <select
                     value={newBlockedA}
                     onChange={e => setNewBlockedA(e.target.value)}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.15)', background: '#1a1a2e', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
                   >
                     <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerA')}</option>
                     {players.filter(p => p.type === 'permanent').map(p => (
@@ -969,7 +1085,7 @@ const SettingsScreen = () => {
                   <select
                     value={newBlockedB}
                     onChange={e => setNewBlockedB(e.target.value)}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.15)', background: '#1a1a2e', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
+                    style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem 0.5rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', fontFamily: 'Outfit, sans-serif', cursor: 'pointer' }}
                   >
                     <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>{t('settings.game.playerB')}</option>
                     {players.filter(p => p.type === 'permanent' && p.name !== newBlockedA).map(p => (
@@ -983,7 +1099,7 @@ const SettingsScreen = () => {
                     value={newBlockedDate}
                     onChange={e => setNewBlockedDate(e.target.value)}
                     className="input"
-                    style={{ flex: 1, fontSize: '0.75rem', background: '#1a1a2e', color: '#e2e8f0' }}
+                    style={{ flex: 1, fontSize: '0.75rem', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0' }}
                   />
                   <button
                     disabled={!newBlockedA || !newBlockedB || newBlockedA === newBlockedB}
@@ -999,8 +1115,12 @@ const SettingsScreen = () => {
                       setNewBlockedA('');
                       setNewBlockedB('');
                     }}
-                    className="btn btn-sm"
-                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem', background: 'rgba(16,185,129,0.12)', color: '#10B981', border: '1px solid rgba(16,185,129,0.3)', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                    style={{
+                      padding: '0.35rem 0.7rem', borderRadius: '8px',
+                      fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                      background: 'rgba(16,185,129,0.12)', color: '#10B981',
+                      border: '1px solid rgba(16,185,129,0.3)', whiteSpace: 'nowrap', cursor: 'pointer',
+                    }}
                   >{t('settings.game.addBlocked')}</button>
                 </div>
               </div>
@@ -1012,46 +1132,68 @@ const SettingsScreen = () => {
       {/* Chip Values Tab */}
       {activeTab === 'chips' && (
         <div className="card">
-          <div className="card-header">
-            <h2 className="card-title">{t('settings.chips.title')}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <h2 className="card-title" style={{ margin: 0 }}>{t('settings.chips.title')}</h2>
             {canEditChips && (
-              <button className="btn btn-sm btn-outline" onClick={() => setShowAddChip(true)}>
-                {t('settings.chips.add')}
+              <button
+                onClick={() => setShowAddChip(true)}
+                style={{
+                  padding: '0.35rem 0.75rem', borderRadius: '8px',
+                  border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.12)',
+                  color: '#10B981', cursor: 'pointer',
+                  fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                }}
+              >
+                + {t('settings.chips.add')}
               </button>
             )}
           </div>
 
-          {chipValues.map(chip => (
-            <div key={chip.id} className="chip-input-row">
-              <div 
-                className="chip-circle" 
-                style={{ 
-                  backgroundColor: chip.displayColor,
-                  border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none'
-                }} 
-              />
-              <span style={{ flex: 1, fontWeight: '500' }}>{chip.color}</span>
-              <span className="text-muted">×</span>
-              <input
-                type="number"
-                className="input"
-                style={{ width: '80px', textAlign: 'center' }}
-                value={chip.value}
-                onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
-                min="1"
-                disabled={!canEditChips}
-              />
-              {canEditChips && (
-                <button 
-                  className="row-action row-action-danger"
-                  onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
-                  title={t('settings.chips.deleteTitle')}
-                >
-                  🗑️
-                </button>
-              )}
+          {chipValues.length === 0 ? (
+            <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+              <div className="empty-icon">🎰</div>
+              <p>{t('settings.chips.title')}</p>
             </div>
-          ))}
+          ) : (
+            <div>
+              {chipValues.map((chip, idx) => (
+                <div
+                  key={chip.id}
+                  className="settings-row"
+                  style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
+                >
+                  <div
+                    className="chip-circle"
+                    style={{
+                      backgroundColor: chip.displayColor,
+                      border: chip.displayColor === '#FFFFFF' ? '2px solid #ccc' : 'none',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>{chip.color}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>=</span>
+                  <input
+                    type="number"
+                    className="input"
+                    style={{ width: '80px', textAlign: 'center', fontSize: '0.85rem' }}
+                    value={chip.value}
+                    onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
+                    min="1"
+                    disabled={!canEditChips}
+                  />
+                  {canEditChips && (
+                    <button
+                      className="row-action row-action-danger"
+                      onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
+                      title={t('settings.chips.deleteTitle')}
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1949,6 +2091,242 @@ const SettingsScreen = () => {
         );
       })()}
 
+      {/* Report Tab */}
+      {activeTab === 'report' && (
+        <>
+          {/* Report Form */}
+          <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', textAlign: 'center' }}>
+              {t('report.title')}
+            </h3>
+
+            {/* Category Selector */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                {t('report.categoryLabel')}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                {(['bug', 'feature', 'display', 'data', 'other'] as const).map(cat => {
+                  const label = t(`report.categories.${cat}`);
+                  const selected = reportCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      onClick={() => setReportCategory(cat)}
+                      style={{
+                        padding: '0.45rem 0.7rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        border: selected ? '1.5px solid #10b981' : '1px solid var(--border)',
+                        background: selected ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                        color: selected ? '#34d399' : 'var(--text)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Description */}
+            <textarea
+              value={reportText}
+              onChange={e => setReportText(e.target.value)}
+              placeholder={t('report.descriptionPlaceholder')}
+              maxLength={500}
+              style={{
+                width: '100%',
+                minHeight: '100px',
+                padding: '0.65rem',
+                borderRadius: '10px',
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                fontSize: '0.85rem',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                direction: 'rtl',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ textAlign: 'left', fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+              {reportText.length}/500
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={submitReport}
+              disabled={!reportCategory || !reportText.trim() || reportSending}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                marginTop: '0.5rem',
+                padding: '0.6rem',
+                fontSize: '0.9rem',
+                borderRadius: '10px',
+                opacity: (!reportCategory || !reportText.trim() || reportSending) ? 0.5 : 1,
+              }}
+            >
+              {reportSending ? t('report.sending') : t('report.submit')}
+            </button>
+
+            {/* Result feedback */}
+            {reportResult && (
+              <div style={{
+                marginTop: '0.5rem',
+                padding: '0.5rem',
+                borderRadius: '8px',
+                textAlign: 'center',
+                fontSize: '0.85rem',
+                background: reportResult === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                color: reportResult === 'success' ? '#34d399' : '#ef4444',
+              }}>
+                {reportResult === 'success' ? t('report.success') : t('report.error')}
+              </div>
+            )}
+          </div>
+
+          {/* Report History — separated by status */}
+          {(() => {
+            const openReports = reports.filter(r => r.status === 'open');
+            const resolvedReports = reports.filter(r => r.status !== 'open');
+
+            const renderReport = (r: IssueReport) => (
+              <div key={r.id} style={{
+                padding: '0.55rem 0.7rem',
+                borderRadius: '8px',
+                background: 'var(--surface)',
+                border: `1px solid ${r.status === 'open' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(16, 185, 129, 0.2)'}`,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                    {t(`report.categories.${r.category}` as 'report.categories.bug')}
+                  </span>
+                  {(isOwner || isSuperAdmin) && (
+                    <button
+                      onClick={async () => {
+                        const newStatus = r.status === 'open' ? 'resolved' : 'open';
+                        await supabase.from('issue_reports').update({ status: newStatus }).eq('id', r.id);
+                        loadReports();
+                        if (newStatus === 'resolved' && r.reporter_user_id) {
+                          try {
+                            const { data: members } = await supabase.rpc('fetch_group_members_with_email', { p_group_id: r.group_id });
+                            const reporter = (members as { user_id: string; email: string | null }[] | null)
+                              ?.find(m => m.user_id === r.reporter_user_id);
+                            if (reporter?.email) {
+                              const catLabel = t(`report.categories.${r.category}` as 'report.categories.bug');
+                              await proxySendBroadcastEmail({
+                                to: reporter.email,
+                                subject: '✅ הדיווח שלך טופל',
+                                message: `הדיווח "${catLabel}" טופל.\n\n${r.description || ''}`,
+                                senderName: authPlayerName || 'Poker Manager',
+                              });
+                            }
+                          } catch { /* best-effort */ }
+                        }
+                      }}
+                      className="btn btn-sm"
+                      style={{
+                        padding: '0.15rem 0.5rem',
+                        fontSize: '0.65rem',
+                        borderRadius: '12px',
+                        background: r.status === 'open' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                        border: `1px solid ${r.status === 'open' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                        color: r.status === 'open' ? '#10b981' : '#f59e0b',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {r.status === 'open' ? '✓ ' + t('report.resolve') : '↩ ' + t('report.reopen')}
+                    </button>
+                  )}
+                </div>
+                {r.description && (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                    {r.description}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                  <span>
+                    {(isOwner || isSuperAdmin) ? `${r.reporter_name} · ` : ''}
+                    {isSuperAdmin && r.group_name ? `${r.group_name} · ` : ''}
+                    {new Date(r.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(t('common.confirm'))) return;
+                      await supabase.from('issue_reports').delete().eq('id', r.id);
+                      loadReports();
+                    }}
+                    style={{
+                      background: 'none', border: 'none', color: '#ef4444',
+                      fontSize: '0.65rem', cursor: 'pointer', padding: '0.1rem 0.25rem',
+                      opacity: 0.7,
+                    }}
+                  >✕</button>
+                </div>
+              </div>
+            );
+
+            return (
+              <>
+                {/* Open Reports */}
+                {openReports.length > 0 && (
+                  <div className="card" style={{ padding: '0.75rem', marginBottom: '0.5rem' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem',
+                      marginBottom: '0.5rem', paddingBottom: '0.4rem',
+                      borderBottom: '1px solid rgba(245, 158, 11, 0.2)',
+                    }}>
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '50%',
+                        background: '#f59e0b', display: 'inline-block',
+                      }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f59e0b' }}>
+                        {t('report.statusOpen')} ({openReports.length})
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {openReports.map(renderReport)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Resolved Reports */}
+                {resolvedReports.length > 0 && (
+                  <div className="card" style={{ padding: '0.75rem' }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '0.4rem',
+                      marginBottom: '0.5rem', paddingBottom: '0.4rem',
+                      borderBottom: '1px solid rgba(16, 185, 129, 0.2)',
+                    }}>
+                      <span style={{
+                        width: '8px', height: '8px', borderRadius: '50%',
+                        background: '#10b981', display: 'inline-block',
+                      }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#10b981' }}>
+                        {t('report.statusResolved')} ({resolvedReports.length})
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {resolvedReports.map(renderReport)}
+                    </div>
+                  </div>
+                )}
+
+                {reports.length === 0 && reportsLoaded && (
+                  <div className="card" style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    {t('report.noReports')}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </>
+      )}
+
       {/* About Tab */}
       {activeTab === 'about' && (
         <>
@@ -1963,13 +2341,14 @@ const SettingsScreen = () => {
           }}
         >{t('settings.setup.aboutApp')}</button>
         {/* Identity section */}
-        <div className="card" style={{ marginBottom: '0.75rem' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.about.identifiedAs')}</div>
-            <div style={{ fontSize: '1rem', fontWeight: '600', color: 'var(--text)' }}>
-              {authPlayerName || '—'}
-            </div>
-          </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.4rem',
+          marginBottom: '0.5rem', padding: '0.4rem 0.75rem',
+          borderRadius: '8px', background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('settings.about.identifiedAs')}</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)' }}>{authPlayerName || '—'}</span>
         </div>
         {/* Language toggle */}
         <div className="card" style={{ marginBottom: '0.75rem' }}>
@@ -1985,12 +2364,13 @@ const SettingsScreen = () => {
                   style={{
                     padding: '0.4rem 1rem',
                     borderRadius: '0.5rem',
-                    border: language === lang ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: language === lang ? 'var(--primary)' : 'var(--surface)',
-                    color: language === lang ? 'white' : 'var(--text)',
+                    border: language === lang ? '2px solid #10B981' : '1px solid var(--border)',
+                    background: language === lang ? 'rgba(16,185,129,0.15)' : 'var(--surface)',
+                    color: language === lang ? '#10B981' : 'var(--text)',
                     cursor: 'pointer',
-                    fontWeight: '600',
+                    fontWeight: language === lang ? 600 : 400,
                     fontSize: '0.875rem',
+                    fontFamily: 'Outfit, sans-serif',
                   }}
                 >
                   {lang === 'he' ? t('settings.lang.he') : t('settings.lang.en')}
@@ -2052,12 +2432,12 @@ const SettingsScreen = () => {
                   width: '100%'
                 }}
               >
-                {showFullChangelog ? t('settings.about.hideHistory') : t('settings.about.showHistory', { count: CHANGELOG.length - 1 })}
+                {showFullChangelog ? t('settings.about.hideHistory') : t('settings.about.showHistory', { count: Math.min(CHANGELOG.length - 1, 9) })}
               </button>
             )}
 
-            {/* Full changelog history */}
-            {showFullChangelog && CHANGELOG.slice(1).map((entry, index) => (
+            {/* Full changelog history (show up to 10 total) */}
+            {showFullChangelog && CHANGELOG.slice(1, 10).map((entry, index) => (
               <div key={entry.version} style={{ 
                 marginTop: index === 0 ? '1rem' : '0.75rem',
                 paddingTop: '0.75rem',
@@ -2609,7 +2989,7 @@ const SettingsScreen = () => {
             </button>
 
             {/* Result */}
-            {pushResult && (
+            {pushResult && !pushDetails?.length && (
               <p style={{
                 marginTop: '0.5rem', fontSize: '0.8rem', textAlign: 'center',
                 color: pushResult.includes('❌') || pushResult === t('push.error') ? '#EF4444' : '#10B981',
@@ -2618,22 +2998,98 @@ const SettingsScreen = () => {
               </p>
             )}
 
-            {pushDetails && pushDetails.length > 0 && (
-              <div style={{
-                marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem',
-              }}>
-                {pushDetails.map((d, i) => (
-                  <span key={i} style={{
-                    fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
-                    background: d.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                    border: `1px solid ${d.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                    color: d.ok ? '#10B981' : '#EF4444',
+            {pushDetails && pushDetails.length > 0 && (() => {
+              const statusLabel = (s: number | string): string => {
+                if (typeof s === 'number') {
+                  if (s === 410) return language === 'he' ? 'מנוי פג תוקף — המכשיר הוסר' : 'Subscription expired — device removed';
+                  if (s === 404) return language === 'he' ? 'מנוי לא נמצא — המכשיר הוסר' : 'Subscription not found — device removed';
+                  if (s === 403) return language === 'he' ? 'גישה נדחתה — בעיית הרשאות' : 'Access denied — permission issue';
+                  if (s === 429) return language === 'he' ? 'יותר מדי בקשות — נסה שוב מאוחר יותר' : 'Too many requests — try again later';
+                  if (s >= 500) return language === 'he' ? `שגיאת שרת (${s})` : `Server error (${s})`;
+                  return `HTTP ${s}`;
+                }
+                if (s === 'removed') return language === 'he' ? 'מנוי לא תקין — הוסר' : 'Invalid subscription — removed';
+                if (s.includes('AbortError') || s.includes('timeout')) return language === 'he' ? 'זמן תגובה חרג — הרשת איטית' : 'Timed out — slow network';
+                if (s.includes('fetch') || s.includes('network') || s.includes('Failed')) return language === 'he' ? 'שגיאת רשת' : 'Network error';
+                return s.slice(0, 40);
+              };
+
+              const byPlayer = new Map<string, { subs: { ok: boolean; status: number | string; type: string }[] }>();
+              for (const d of pushDetails) {
+                const existing = byPlayer.get(d.player);
+                if (existing) {
+                  existing.subs.push({ ok: d.ok, status: d.status, type: d.type });
+                } else {
+                  byPlayer.set(d.player, { subs: [{ ok: d.ok, status: d.status, type: d.type }] });
+                }
+              }
+
+              const entries = Array.from(byPlayer.entries());
+              const successCount = entries.filter(([, v]) => v.subs.some(s => s.ok)).length;
+              const failCount = entries.length - successCount;
+
+              return (
+                <div style={{
+                  marginTop: '0.75rem', borderRadius: '10px',
+                  border: '1px solid var(--border)', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    padding: '0.5rem 0.75rem',
+                    background: failCount === 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.06)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    borderBottom: '1px solid var(--border)',
                   }}>
-                    {d.ok ? '✓' : '✗'} {d.player}
-                  </span>
-                ))}
-              </div>
-            )}
+                    <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                      {pushResult}
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem' }}>
+                      {successCount > 0 && (
+                        <span style={{ color: '#10B981' }}>✓ {successCount}</span>
+                      )}
+                      {failCount > 0 && (
+                        <span style={{ color: '#EF4444' }}>✗ {failCount}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {entries.map(([player, info], idx) => {
+                      const anyOk = info.subs.some(s => s.ok);
+                      const failedSubs = info.subs.filter(s => !s.ok);
+                      return (
+                        <div key={player} style={{
+                          padding: '0.5rem 0.75rem',
+                          borderBottom: idx < entries.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                          display: 'flex', flexDirection: 'column', gap: '0.2rem',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{
+                              width: 18, height: 18, borderRadius: '50%', display: 'flex',
+                              alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', flexShrink: 0,
+                              background: anyOk ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                              color: anyOk ? '#10B981' : '#EF4444',
+                            }}>
+                              {anyOk ? '✓' : '✗'}
+                            </span>
+                            <span style={{ fontWeight: 600, fontSize: '0.82rem', flex: 1 }}>{player}</span>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                              {[...new Set(info.subs.map(s => s.type))].join(', ')}
+                              {info.subs.length > 1 ? ` (${info.subs.length})` : ''}
+                            </span>
+                          </div>
+                          {!anyOk && failedSubs.length > 0 && (
+                            <div style={{ paddingRight: '1.6rem', fontSize: '0.72rem', color: '#EF4444', lineHeight: 1.4 }}>
+                              {[...new Set(failedSubs.map(s => statusLabel(s.status)))].map((reason, ri) => (
+                                <div key={ri}>{reason}</div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Quick self-test */}
             <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
@@ -2693,8 +3149,20 @@ const SettingsScreen = () => {
       {activeTab === 'activity' && isOwner && (
         <div>
           {/* Header */}
-          <div style={{ marginBottom: '0.6rem' }}>
+          <div style={{ marginBottom: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)' }}>{t('settings.activity.title')}</h2>
+            <button
+              onClick={() => { if (!activityLoading) loadActivityLog(); }}
+              disabled={activityLoading}
+              style={{
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
+                padding: '0.3rem 0.6rem', cursor: activityLoading ? 'default' : 'pointer',
+                fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem',
+                opacity: activityLoading ? 0.5 : 1,
+              }}
+            >
+              🔄 {language === 'he' ? 'רענן' : 'Refresh'}
+            </button>
           </div>
 
           {activityError && (
@@ -2735,31 +3203,46 @@ const SettingsScreen = () => {
               entries.some(e => new Date(e.lastActive || e.timestamp) > tenMinAgo)
             );
 
+            const hasScreenData = activityLog.some(e => e.screensVisited && e.screensVisited.length > 0);
+            const hasDurationData = activityLog.some(e => e.sessionDuration && e.sessionDuration > 0);
+
             const games = getAllGames();
 
-            const memberNames = activityMembers.map(m => m.playerName || m.displayName || '').filter(n => n && n !== authPlayerName);
-
+            const todayStr = now.toDateString();
             const todayUniqueNames = [...new Set(
-              activityLog.filter(e => new Date(e.timestamp).toDateString() === now.toDateString())
+              activityLog.filter(e => {
+                const lastTime = new Date(e.lastActive || e.timestamp);
+                return lastTime.toDateString() === todayStr;
+              })
                 .map(e => e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8))
             )];
             const todayUniqueUsers = todayUniqueNames.length;
 
             const weekAgo = new Date(now.getTime() - sevenDaysMs);
-            
 
-            const weekSessions = activityLog.filter(e => new Date(e.timestamp) > weekAgo).length;
+            const weekUserDays = new Set(
+              activityLog
+                .filter(e => new Date(e.lastActive || e.timestamp) > weekAgo)
+                .map(e => {
+                  const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
+                  const day = new Date(e.lastActive || e.timestamp).toDateString();
+                  return `${n}|${day}`;
+                })
+            );
+            const weekSessions = weekUserDays.size;
 
             const mostActiveThisWeek = (() => {
-              const counts = new Map<string, number>();
+              const userDays = new Map<string, Set<string>>();
               for (const e of activityLog) {
-                if (new Date(e.timestamp) <= weekAgo) continue;
+                const lastTime = new Date(e.lastActive || e.timestamp);
+                if (lastTime <= weekAgo) continue;
                 const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
-                counts.set(n, (counts.get(n) || 0) + 1);
+                if (!userDays.has(n)) userDays.set(n, new Set());
+                userDays.get(n)!.add(lastTime.toDateString());
               }
               let best = '';
               let max = 0;
-              for (const [n, c] of counts) { if (c > max) { max = c; best = n; } }
+              for (const [n, days] of userDays) { if (days.size > max) { max = days.size; best = n; } }
               return best;
             })();
 
@@ -2776,12 +3259,16 @@ const SettingsScreen = () => {
 
 
             const heatmap: number[][] = Array.from({ length: 7 }, () => [0, 0, 0, 0]);
+            const heatmapSeen = new Set<string>();
             for (const entry of activityLog) {
-              const d = new Date(entry.timestamp);
+              const d = new Date(entry.lastActive || entry.timestamp);
               if (now.getTime() - d.getTime() > sevenDaysMs) continue;
+              const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
+              const key = `${name}|${d.toDateString()}|${d.getHours() < 6 ? 0 : d.getHours() < 12 ? 1 : d.getHours() < 18 ? 2 : 3}`;
+              if (heatmapSeen.has(key)) continue;
+              heatmapSeen.add(key);
               const day = d.getDay();
-              const hour = d.getHours();
-              const slot = hour < 6 ? 0 : hour < 12 ? 1 : hour < 18 ? 2 : 3;
+              const slot = d.getHours() < 6 ? 0 : d.getHours() < 12 ? 1 : d.getHours() < 18 ? 2 : 3;
               heatmap[day][slot]++;
             }
             const maxHeat = Math.max(1, ...heatmap.flat());
@@ -2804,21 +3291,20 @@ const SettingsScreen = () => {
             });
 
             const userStats = Array.from(userMap.entries()).map(([name, entries]) => {
-              const last30 = entries.filter(e => now.getTime() - new Date(e.timestamp).getTime() < thirtyDaysMs);
-              const avgDuration = last30.length > 0
-                ? last30.reduce((s, e) => s + (e.sessionDuration || 0), 0) / last30.length
-                : 0;
+              const last30 = entries.filter(e => now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs);
+              const uniqueDays30d = new Set(last30.map(e => new Date(e.lastActive || e.timestamp).toDateString())).size;
+              const totalMin = last30.reduce((s, e) => s + (e.sessionDuration || 0), 0);
               const latest = entries.reduce((a, b) => new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a);
-              const daysSince = Math.floor((now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime()) / oneDayMs);
+              const latestDate = new Date(latest.lastActive || latest.timestamp);
+              const latestDay = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate());
+              const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const daysSince = Math.round((todayDay.getTime() - latestDay.getTime()) / oneDayMs);
               const member = activityMembers.find(m => m.playerName === name || m.displayName === name);
               const memberRole = member?.role || latest.role || 'member';
-              return { name, sessions30d: last30.length, avgDuration, daysSince, latestEntry: latest, entries, memberRole };
+              return { name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, entries, memberRole };
             }).sort((a, b) => b.sessions30d - a.sessions30d);
 
-            const activeMemberCount = memberNames.filter(name => {
-              const entries = userMap.get(name);
-              return entries && entries.length > 0;
-            }).length || 1;
+            const activeMemberCount = Math.max(1, activityMembers.length || userMap.size);
 
             
 
@@ -2826,13 +3312,18 @@ const SettingsScreen = () => {
               const weekEnd = new Date(now.getTime() - i * 7 * oneDayMs);
               const weekStart = new Date(weekEnd.getTime() - 7 * oneDayMs);
               const entries = activityLog.filter(e => {
-                const ts = new Date(e.timestamp).getTime();
+                const ts = new Date(e.lastActive || e.timestamp).getTime();
                 return ts >= weekStart.getTime() && ts < weekEnd.getTime();
               });
               const users = new Set(entries.map(e =>
                 e.playerName || deviceLabels[e.deviceId] || e.deviceId
               ));
-              return { start: weekStart, users: users.size, sessions: entries.length };
+              const userDays = new Set(entries.map(e => {
+                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId;
+                const day = new Date(e.lastActive || e.timestamp).toDateString();
+                return `${n}|${day}`;
+              }));
+              return { start: weekStart, users: users.size, sessions: userDays.size };
             }).reverse();
 
             const trendMaxUsers = Math.max(1, ...weeklyTrend.map(w => w.users));
@@ -2956,21 +3447,31 @@ const SettingsScreen = () => {
                   </div>
                 </div>
 
-                {/* Top Screens: visits + time */}
-                {(() => {
-                  const screenVisits: Record<string, number> = {};
+                {/* Top Screens: only render when screen data exists */}
+                {hasScreenData && (() => {
+                  const screenUsers: Record<string, Set<string>> = {};
                   const screenTime: Record<string, number> = {};
+                  const seenUserScreen = new Set<string>();
                   for (const entry of activityLog) {
                     const screens = entry.screensVisited || [];
+                    const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
                     const perScreenMin = screens.length > 0 ? (entry.sessionDuration || 0) / screens.length : 0;
                     for (const s of screens) {
-                      screenVisits[s] = (screenVisits[s] || 0) + 1;
-                      screenTime[s] = (screenTime[s] || 0) + perScreenMin;
+                      if (!screenUsers[s]) screenUsers[s] = new Set();
+                      screenUsers[s].add(name);
+                      const key = `${name}|${s}|${new Date(entry.lastActive || entry.timestamp).toDateString()}`;
+                      if (!seenUserScreen.has(key)) {
+                        seenUserScreen.add(key);
+                        screenTime[s] = (screenTime[s] || 0) + perScreenMin;
+                      }
                     }
                   }
+                  const screenVisits: Record<string, number> = {};
+                  for (const [s, users] of Object.entries(screenUsers)) screenVisits[s] = users.size;
                   const allScreens = Object.keys(screenVisits);
+                  if (allScreens.length === 0) return null;
                   const byVisits = [...allScreens].sort((a, b) => screenVisits[b] - screenVisits[a]);
-                  const byTime = [...allScreens].sort((a, b) => screenTime[b] - screenTime[a]);
+                  const byTime = [...allScreens].sort((a, b) => (screenTime[b] || 0) - (screenTime[a] || 0));
                   const maxVisits = screenVisits[byVisits[0]] || 1;
                   const maxTime = screenTime[byTime[0]] || 1;
                   const totalTime = Object.values(screenTime).reduce((a, b) => a + b, 0);
@@ -2984,15 +3485,10 @@ const SettingsScreen = () => {
                       <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                         📱 {language === 'he' ? 'מסכים פופולריים' : 'Popular Screens'}
                       </div>
-                      {allScreens.length === 0 ? (
-                        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.3rem', opacity: 0.6 }}>
-                          {language === 'he' ? 'נתונים יתעדכנו בכניסות הבאות' : 'Data will populate from new sessions'}
-                        </div>
-                      ) : <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {/* By visits */}
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
-                            {language === 'he' ? 'לפי כניסות' : 'By visits'} ({totalVisits})
+                            {language === 'he' ? 'לפי משתמשים' : 'By users'} ({totalVisits})
                           </div>
                           {byVisits.slice(0, 5).map((screen, i) => {
                             const pct = Math.round((screenVisits[screen] / maxVisits) * 100);
@@ -3009,28 +3505,29 @@ const SettingsScreen = () => {
                             );
                           })}
                         </div>
-                        {/* By time */}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
-                            {language === 'he' ? 'לפי זמן' : 'By time'} ({Math.round(totalTime)} {language === 'he' ? 'דק׳' : 'min'})
+                        {hasDurationData && (
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginBottom: '0.25rem', fontWeight: 600 }}>
+                              {language === 'he' ? 'לפי זמן' : 'By time'} ({Math.round(totalTime)} {language === 'he' ? 'דק׳' : 'min'})
+                            </div>
+                            {byTime.slice(0, 5).map((screen, i) => {
+                              const pct = Math.round((screenTime[screen] / maxTime) * 100);
+                              const mins = Math.round(screenTime[screen]);
+                              return (
+                                <div key={screen} style={{ marginBottom: '0.2rem' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text)' }}>
+                                    <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  '} {screen}</span>
+                                    <span style={{ color: '#10B981', fontWeight: 600 }}>{mins}{language === 'he' ? 'ד׳' : 'm'}</span>
+                                  </div>
+                                  <div style={{ height: '3px', borderRadius: '2px', background: 'var(--background)', overflow: 'hidden', marginTop: '1px' }}>
+                                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#10B981' }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          {byTime.slice(0, 5).map((screen, i) => {
-                            const pct = Math.round((screenTime[screen] / maxTime) * 100);
-                            const mins = Math.round(screenTime[screen]);
-                            return (
-                              <div key={screen} style={{ marginBottom: '0.2rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.58rem', color: 'var(--text)' }}>
-                                  <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  '} {screen}</span>
-                                  <span style={{ color: '#10B981', fontWeight: 600 }}>{mins}{language === 'he' ? 'ד׳' : 'm'}</span>
-                                </div>
-                                <div style={{ height: '3px', borderRadius: '2px', background: 'var(--background)', overflow: 'hidden', marginTop: '1px' }}>
-                                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: '2px', background: '#10B981' }} />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>}
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -3067,8 +3564,8 @@ const SettingsScreen = () => {
                   </div>
                 )}
 
-                {/* Feature Adoption */}
-                {(() => {
+                {/* Feature Adoption — only render when screen data exists */}
+                {hasScreenData && (() => {
                   const featureUsers = new Map<string, Set<string>>();
                   for (const entry of activityLog) {
                     const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
@@ -3077,7 +3574,7 @@ const SettingsScreen = () => {
                       featureUsers.get(s)!.add(name);
                     }
                   }
-                  const totalMembers = players.length || userMap.size || 1;
+                  const totalMembers = activityMembers.length || userMap.size || 1;
                   const features = [...featureUsers.entries()]
                     .map(([name, users]) => ({ name, count: users.size }))
                     .sort((a, b) => b.count - a.count);
@@ -3240,11 +3737,13 @@ const SettingsScreen = () => {
                           </span>
                         </div>
 
-                        {/* Row 3: total time + screens visited */}
+                        {/* Row 3: last seen + screens or duration */}
                         <div style={{
                           display: 'flex', gap: '0.6rem', fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: '0.25rem', flexWrap: 'wrap',
                         }}>
                           {(() => {
+                            const lastDate = new Date(user.latestEntry.lastActive || user.latestEntry.timestamp);
+                            const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
                             const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
                             const allScreens = new Set<string>();
                             for (const e of user.entries) {
@@ -3252,7 +3751,8 @@ const SettingsScreen = () => {
                             }
                             return (
                               <>
-                                <span>⏱️ {totalMin < 1 ? '<1' : Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
+                                <span>🕐 {lastStr}</span>
+                                {totalMin >= 1 && <span>⏱️ {Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>}
                                 {allScreens.size > 0 && (
                                   <span style={{ wordBreak: 'break-word' }}>📱 {[...allScreens].join(', ')}</span>
                                 )}
@@ -3262,7 +3762,7 @@ const SettingsScreen = () => {
                         </div>
                       </div>
 
-                      {/* Expanded: recent sessions */}
+                      {/* Expanded: screens visited */}
                       {isExpanded && (
                         <div style={{
                           padding: '0.5rem 0.65rem', borderRadius: '0 0 10px 10px',
@@ -3270,9 +3770,7 @@ const SettingsScreen = () => {
                           border: `1px solid ${borderColor}`, borderTop: '1px solid var(--border)',
                         }}>
                           {(() => {
-                            // Screen visit counts across all sessions
                             const screenCounts: Record<string, number> = {};
-                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
                             for (const e of user.entries) {
                               for (const s of e.screensVisited) {
                                 screenCounts[s] = (screenCounts[s] || 0) + 1;
@@ -3280,37 +3778,22 @@ const SettingsScreen = () => {
                             }
                             const screensSorted = Object.entries(screenCounts).sort((a, b) => b[1] - a[1]);
 
-                            return (
-                              <>
-                                {/* Summary: total time + total visits */}
-                                <div style={{
-                                  display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem',
-                                  color: 'var(--text)', fontWeight: 600, marginBottom: '0.4rem',
-                                  padding: '0.25rem 0.3rem', borderRadius: '6px', background: 'var(--background)',
-                                }}>
-                                  <span>⏱️ {totalMin < 1 ? '<1' : Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
-                                  <span>{user.entries.length} {language === 'he' ? 'כניסות' : 'visits'}</span>
-                                </div>
-
-                                {/* Screens visited with frequency */}
-                                {screensSorted.length > 0 ? (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginBottom: '0.15rem' }}>
-                                    {screensSorted.map(([screen, count]) => (
-                                      <span key={screen} style={{
-                                        fontSize: '0.62rem', padding: '0.15rem 0.4rem', borderRadius: '10px',
-                                        background: 'var(--background)', color: 'var(--text-muted)',
-                                        border: '1px solid var(--border)',
-                                      }}>
-                                        {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
-                                    {language === 'he' ? 'אין נתוני מסכים (כניסות קצרות)' : 'No screen data (brief visits)'}
-                                  </div>
-                                )}
-                              </>
+                            return screensSorted.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                {screensSorted.map(([screen, count]) => (
+                                  <span key={screen} style={{
+                                    fontSize: '0.62rem', padding: '0.15rem 0.4rem', borderRadius: '10px',
+                                    background: 'var(--background)', color: 'var(--text-muted)',
+                                    border: '1px solid var(--border)',
+                                  }}>
+                                    {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
+                                {language === 'he' ? 'נתוני מסכים יופיעו מהביקור הבא' : 'Screen data will appear from next visit'}
+                              </div>
                             );
                           })()}
                         </div>
@@ -3356,7 +3839,7 @@ const SettingsScreen = () => {
                 </div>
 
                 <div style={{ marginTop: '0.5rem', fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                  {t('settings.activity.recordsWithCount', { count: activityLog.length })}
+                  {userStats.length} {language === 'he' ? 'משתמשים מזוהים' : 'identified users'}
                 </div>
               </div>
             );

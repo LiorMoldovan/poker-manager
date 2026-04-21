@@ -12,7 +12,7 @@ function getCurrentHalfPeriod(): { key: string; label: string; dateFilter: { sta
   const half = now.getMonth() < 6 ? 1 : 2;
   return {
     key: `H${half}-${year}`,
-    label: half === 1 ? `H1 ${year}` : `H2 ${year}`,
+    label: formatHebrewHalf(half, year),
     dateFilter: half === 1
       ? { start: new Date(year, 0, 1), end: new Date(year, 5, 30, 23, 59, 59) }
       : { start: new Date(year, 6, 1), end: new Date(year, 11, 31, 23, 59, 59) },

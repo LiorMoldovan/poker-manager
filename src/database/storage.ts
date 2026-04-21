@@ -1061,6 +1061,19 @@ export async function downloadFullBackup(groupName: string): Promise<string> {
   return json;
 }
 
+async function compressToBase64(str: string): Promise<string> {
+  const blob = new Blob([str]);
+  const stream = blob.stream().pipeThrough(new CompressionStream('gzip'));
+  const compressed = await new Response(stream).arrayBuffer();
+  const bytes = new Uint8Array(compressed);
+  const chunks: string[] = [];
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + CHUNK)));
+  }
+  return btoa(chunks.join(''));
+}
+
 export async function pushBackupToGitHub(
   groupName: string,
   content: string,
@@ -1070,10 +1083,12 @@ export async function pushBackupToGitHub(
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `poker-backup-${dateStr}.json`;
 
+    const contentCompressed = await compressToBase64(content);
+
     const res = await fetch('/api/github-backup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
-      body: JSON.stringify({ action: 'push', groupName, fileName, content }),
+      body: JSON.stringify({ action: 'push', groupName, fileName, contentCompressed }),
     });
 
     if (!res.ok) {

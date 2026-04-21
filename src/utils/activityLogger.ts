@@ -185,14 +185,14 @@ const markPushed = (): void => {
   localStorage.setItem(ACTIVITY_LAST_PUSH_KEY, Date.now().toString());
 };
 
-export const logActivity = async (role: PermissionRole, playerName?: string, userId?: string): Promise<void> => {
+export const logActivity = async (role: PermissionRole, playerName?: string, userId?: string, initialScreens: string[] = []): Promise<void> => {
   const entry: ActivityLogEntry = {
     deviceId: getDeviceId(),
     role,
     timestamp: new Date().toISOString(),
     device: getDeviceInfo(),
     screenSize: `${window.screen.width}x${window.screen.height}`,
-    screensVisited: [],
+    screensVisited: initialScreens,
     sessionDuration: 0,
     lastActive: new Date().toISOString(),
     fingerprint: undefined,
@@ -201,7 +201,7 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
   };
 
   currentSessionTimestamp = entry.timestamp;
-  lastPushedScreens = [];
+  lastPushedScreens = [...initialScreens];
   saveSessionBuffer(entry);
 
   const gid = getGroupId();
@@ -219,8 +219,6 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
     fingerprint: null,
     player_name: entry.playerName || null,
   });
-  // Don't markPushed here — let the first updateSessionActivity push immediately
-  // so screen data reaches Supabase without waiting for cooldown
 };
 
 export const updateSessionActivity = async (

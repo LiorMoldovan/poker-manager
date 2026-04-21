@@ -1,3 +1,5 @@
+import { gunzipSync } from 'zlib';
+
 export const config = {
   api: {
     bodyParser: {
@@ -74,7 +76,7 @@ export default async function handler(
   }
 
   try {
-    const { action, groupName, fileName, content, contentBase64 } = req.body || {};
+    const { action, groupName, fileName, content, contentBase64, contentCompressed } = req.body || {};
 
     if (!action || !groupName) {
       return res.status(400).json({ error: { message: 'Missing action or groupName' } });
@@ -84,12 +86,22 @@ export default async function handler(
     const dir = `backups/${safeName}`;
 
     if (action === 'push') {
-      if (!fileName || (!content && !contentBase64)) {
+      if (!fileName || (!content && !contentBase64 && !contentCompressed)) {
         return res.status(400).json({ error: { message: 'Missing fileName or content' } });
       }
 
       const filePath = `${dir}/${fileName}`;
-      const encoded = (contentBase64 as string) || Buffer.from(content as string, 'utf-8').toString('base64');
+
+      let encoded: string;
+      if (contentCompressed) {
+        const compressed = Buffer.from(contentCompressed as string, 'base64');
+        const decompressed = gunzipSync(compressed);
+        encoded = decompressed.toString('base64');
+      } else if (contentBase64) {
+        encoded = contentBase64 as string;
+      } else {
+        encoded = Buffer.from(content as string, 'utf-8').toString('base64');
+      }
 
       let sha: string | undefined;
       const existing = await ghApi(token, filePath);

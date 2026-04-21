@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.21.0';
+export const APP_VERSION = '5.22.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.22.0',
+    date: '2026-04-21',
+    changes: [
+      '✅ דיווח בעיה: new Settings tab for members to report bugs/issues with categories and free text',
+      '✅ Owner gets email notification on new reports, reporter gets email when resolved',
+      '✅ Super admin sees reports from all groups with group name labels',
+      '🔧 Activity monitoring center: fixed inflated session counts, accurate unique user-day metrics',
+      '🔧 Activity monitoring: calendar-date "active today", screen visit data in member cards',
+      '🔧 Activity monitoring: owner included in dashboard, accurate identified user counts',
+    ]
+  },
   {
     version: '5.21.0',
     date: '2026-04-21',

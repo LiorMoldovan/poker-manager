@@ -835,7 +835,7 @@ const GraphsScreen = () => {
             }}
           >
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${timePeriod.toUpperCase()} ${selectedYear})`}
+              {t('stats.timePeriod')} {timePeriod === 'all' ? `(${t('stats.allTime')})` : timePeriod === 'custom' ? `(${formatCustomRange()})` : timePeriod === 'year' ? `(${selectedYear})` : timePeriod === 'month' ? `(${new Intl.DateTimeFormat(language === 'he' ? 'he-IL' : 'en-US', { month: 'short' }).format(new Date(2024, selectedMonth - 1, 1))} ${selectedYear})` : `(${language === 'he' ? formatHebrewHalf(timePeriod === 'h1' ? 1 : 2, selectedYear) : `${timePeriod.toUpperCase()} ${selectedYear}`})`}
             </span>
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>{showTimePeriod ? '▲' : '▼'}</span>
           </button>
