@@ -52,7 +52,7 @@ async function shareAnalysisAsImage(messageText: string): Promise<void> {
     if (section === 'greeting') {
       if (trimmed.startsWith('היי') || trimmed.startsWith('לגבי')) {
         greeting += (greeting ? '<br>' : '') + esc(trimmed);
-      } else if (trimmed.startsWith('🃏') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
+      } else if (trimmed.startsWith('🃏') || trimmed.startsWith('🂠') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
         section = 'context';
         contextLines.push(trimmed);
       } else if (trimmed === '') {
@@ -62,7 +62,7 @@ async function shareAnalysisAsImage(messageText: string): Promise<void> {
         bodyLines.push(trimmed);
       }
     } else if (section === 'context') {
-      if (trimmed.startsWith('🃏') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
+      if (trimmed.startsWith('🃏') || trimmed.startsWith('🂠') || trimmed.startsWith('📋') || trimmed.startsWith('✅') || trimmed.startsWith('💬')) {
         contextLines.push(trimmed);
       } else if (trimmed === '') {
         section = 'body';
@@ -2631,6 +2631,7 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                       const reporterComment = f.reports[0]?.comment || '';
                       const questionContext = [
                         f.scenario?.yourCards ? `🃏 קלפים: ${f.scenario.yourCards}` : '',
+                        f.scenario?.boardCards?.trim() ? `🂠 בורד: ${f.scenario.boardCards.trim()}` : '',
                         f.scenario?.situation ? `📋 ${f.scenario.situation}` : '',
                         correctOpt2 ? `✅ תשובה: ${correctOpt2.text}` : '',
                       ].filter(Boolean).join('\n');

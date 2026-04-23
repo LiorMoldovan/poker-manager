@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getAllPlayers } from '../database/storage';
+import { getAllPlayers, getAllGames, getAllGamePlayers } from '../database/storage';
 import { useTranslation } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
@@ -179,6 +179,15 @@ export default function GroupManagementTab({
   };
 
   const allPlayers = getAllPlayers();
+  const allGames = getAllGames();
+  const completedGames = allGames.filter(g => g.status === 'completed');
+  const activePlayers = new Set(getAllGamePlayers().filter(gp => {
+    const g = allGames.find(ga => ga.id === gp.gameId);
+    return g && g.status === 'completed';
+  }).map(gp => gp.playerId)).size;
+  const firstGameDate = completedGames.length > 0
+    ? completedGames.map(g => new Date(g.date || g.createdAt).getTime()).reduce((a, b) => Math.min(a, b))
+    : null;
   const playerTypeMap = new Map(allPlayers.map(p => [p.id, p.type]));
   const linkedPlayerIds = new Set(members.map(m => m.playerId).filter(Boolean));
   const typeOrder: Record<string, number> = { permanent: 0, permanent_guest: 1, guest: 2 };
@@ -209,17 +218,67 @@ export default function GroupManagementTab({
         </div>
       )}
 
-      {/* Group Info */}
+      {/* Group Info + Invite Code */}
       <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
         <h2 className="card-title" style={{ margin: '0 0 0.75rem 0' }}>{t('groupMgmt.details')}</h2>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.name')}</span>
           <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{groupName}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.memberCount')}</span>
           <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{members.length}</span>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.activePlayers')}</span>
+          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{activePlayers}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.totalGames')}</span>
+          <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{completedGames.length}</span>
+        </div>
+        {firstGameDate && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isAdmin && inviteCode ? '0.5rem' : 0 }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.since')}</span>
+            <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{new Date(firstGameDate).toLocaleDateString(isRTL ? 'he-IL' : 'en-US', { month: 'short', year: 'numeric' })}</span>
+          </div>
+        )}
+        {isAdmin && inviteCode && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{t('groupMgmt.inviteCode')}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', direction: 'ltr' }}>
+              <span style={{
+                fontSize: '0.95rem', fontWeight: 700, fontFamily: 'monospace',
+                color: 'var(--text)', letterSpacing: '2px',
+              }}>{inviteCode}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteCode);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                style={{
+                  padding: '0.15rem 0.4rem', borderRadius: '5px', border: '1px solid var(--border)',
+                  background: copied ? '#10B981' : 'transparent', color: copied ? 'white' : 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'Outfit, sans-serif',
+                }}
+              >
+                {copied ? '✓' : '📋'}
+              </button>
+              {isOwner && (
+                <button
+                  onClick={() => setConfirmAction({ type: 'regenerate' })}
+                  style={{
+                    padding: '0.15rem 0.4rem', borderRadius: '5px',
+                    border: '1px solid rgba(239,68,68,0.3)', background: 'transparent',
+                    color: '#EF4444', cursor: 'pointer', fontSize: '0.65rem', fontFamily: 'Outfit, sans-serif',
+                  }}
+                  title={t('groupMgmt.regenerateTooltip')}
+                >🔄</button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Member List */}
@@ -235,7 +294,19 @@ export default function GroupManagementTab({
           </div>
         ) : (
           <div>
-            {members.map((m, idx) => {
+            {[...members].sort((a, b) => {
+              const aIsOwner = isOwner && a.userId === currentUserId ? 1 : 0;
+              const bIsOwner = isOwner && b.userId === currentUserId ? 1 : 0;
+              if (aIsOwner !== bIsOwner) return bIsOwner - aIsOwner;
+              const roleOrder: Record<string, number> = { admin: 0, member: 1 };
+              const aRole = roleOrder[a.role] ?? 2;
+              const bRole = roleOrder[b.role] ?? 2;
+              if (aRole !== bRole) return aRole - bRole;
+              const aType = a.playerId ? (playerTypeMap.get(a.playerId) || 'guest') : 'zzz';
+              const bType = b.playerId ? (playerTypeMap.get(b.playerId) || 'guest') : 'zzz';
+              const tOrder: Record<string, number> = { permanent: 0, permanent_guest: 1, guest: 2, zzz: 3 };
+              return (tOrder[aType] ?? 9) - (tOrder[bType] ?? 9);
+            }).map((m, idx) => {
               const isMe = m.userId === currentUserId;
               const isMemberOwner = members.length > 0 && isOwner && isMe;
               const displayName = m.playerName || m.displayName || t('groupMgmt.noName');
@@ -354,68 +425,6 @@ export default function GroupManagementTab({
         )}
       </div>
 
-      {/* Invite Code — visible to admins */}
-      {isAdmin && inviteCode && (
-        <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-          <h2 className="card-title" style={{ margin: '0 0 0.5rem 0' }}>{t('groupMgmt.inviteCode')}</h2>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            {t('groupMgmt.inviteCodeHelp')}
-          </p>
-          <div style={{
-            background: 'var(--background)', border: '2px dashed var(--border)', borderRadius: '10px',
-            padding: '0.6rem', textAlign: 'center', letterSpacing: '5px', fontSize: '1.4rem',
-            fontWeight: 700, fontFamily: 'monospace', color: 'var(--text)', direction: 'ltr', marginBottom: '0.75rem',
-          }}>
-            {inviteCode}
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(inviteCode);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              style={{
-                flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)',
-                background: copied ? '#10B981' : 'var(--surface)', color: copied ? 'white' : 'var(--text)',
-                cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-              }}
-            >
-              {copied ? t('groupMgmt.codeCopied') : t('groupMgmt.copyCode')}
-            </button>
-            {typeof navigator.share === 'function' && (
-              <button
-                onClick={() => {
-                  navigator.share({
-                    title: t('groupMgmt.shareGroupTitle', { name: groupName }),
-                    text: t('groupMgmt.shareGroupText', { code: inviteCode }),
-                  }).catch(() => {});
-                }}
-                style={{
-                  flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--border)',
-                  background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer',
-                  fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                }}
-              >
-                {t('common.share')}
-              </button>
-            )}
-            {isOwner && (
-              <button
-                onClick={() => setConfirmAction({ type: 'regenerate' })}
-                style={{
-                  padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.3)',
-                  background: 'rgba(239,68,68,0.08)', color: '#EF4444', cursor: 'pointer',
-                  fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif',
-                }}
-                title={t('groupMgmt.regenerateTooltip')}
-              >
-                🔄
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Personal Player Invites — available to all admins */}
       {isAdmin && unlinkedPlayers.length > 0 && (

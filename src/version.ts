@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.22.5';
+export const APP_VERSION = '5.22.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.22.6',
+    date: '2026-04-21',
+    changes: [
+      '🎨 Split push/email test into separate buttons',
+      '🎨 Group info card: added total players, games count, active since date',
+      '🎨 Members sorting: owner first, then admins, then by player type',
+      '🎨 Invite code merged into group info card with LTR layout fix',
+      '🎨 Game flow guide modal with 5 steps + AI disclaimer',
+      '🎨 Settings cleanup: removed unused cards, compacted heatmap & member cards',
+      '🎨 Buyin value setting now shows helper explanation',
+      '🃏 Board cards visible in training issue reports and shared screenshots',
+    ]
+  },
   {
     version: '5.22.5',
     date: '2026-04-21',
