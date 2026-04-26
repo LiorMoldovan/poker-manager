@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.23.3';
+export const APP_VERSION = '5.23.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.23.4',
+    date: '2026-04-26',
+    changes: [
+      '📱 Group wizard: mobile-first layout — centered column (26rem), safe-area padding, aligned header/footer',
+      '📱 Add-players step: full-width name field, gender + add row below, hint card, improved empty/chips spacing',
+    ],
+  },
   {
     version: '5.23.3',
     date: '2026-04-26',

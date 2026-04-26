@@ -211,11 +211,12 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
     }}>
       {/* Header */}
       <div style={{
-        padding: '1rem 1.25rem 0.75rem',
+        padding: 'max(0.65rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) 0.65rem max(0.75rem, env(safe-area-inset-left))',
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
         flexShrink: 0,
       }}>
+        <div style={{ maxWidth: '26rem', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
         {(() => {
           const contentSteps = STEPS.filter(s => s !== 'welcome' && s !== 'done');
           const contentIdx = contentSteps.indexOf(currentStep as typeof contentSteps[number]);
@@ -244,6 +245,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
             )}
           </>);
         })()}
+        </div>
       </div>
 
       {/* Content — minHeight:0 so this region can shrink and scroll; otherwise footer is pushed below the viewport */}
@@ -252,12 +254,21 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
         minHeight: 0,
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
-        padding: '1rem 1.25rem',
+        paddingTop: '0.75rem',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+        paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.25rem' }}>{info.icon}</div>
-          <h2 style={{ color: 'var(--text)', fontSize: '1.15rem', margin: '0 0 0.25rem' }}>{info.title}</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>{info.desc}</p>
+        <div style={{
+          maxWidth: '26rem',
+          margin: '0 auto',
+          width: '100%',
+          boxSizing: 'border-box',
+        }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.1rem', paddingInline: '0.15rem' }}>
+          <div style={{ fontSize: 'clamp(2rem, 9vw, 2.6rem)', lineHeight: 1, marginBottom: '0.35rem' }}>{info.icon}</div>
+          <h2 style={{ color: 'var(--text)', fontSize: 'clamp(1.02rem, 4.2vw, 1.15rem)', margin: '0 0 0.3rem', lineHeight: 1.35 }}>{info.title}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: 0, lineHeight: 1.5 }}>{info.desc}</p>
         </div>
 
         {/* ===== WELCOME STEP ===== */}
@@ -372,10 +383,8 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                 </div>
               </div>
             ) : (
-              <>
-                <div style={{
-                  display: 'flex', gap: '0.4rem', marginBottom: '0.75rem',
-                }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
                   <input
                     ref={playerInputRef}
                     type="text"
@@ -384,47 +393,54 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                     placeholder={t('wizard.playerPlaceholder')}
                     onKeyDown={e => e.key === 'Enter' && handleAddPlayer()}
                     style={{
-                      flex: 1, padding: '0.6rem 0.75rem', borderRadius: '8px',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '0.5rem 0.65rem', borderRadius: '8px',
                       border: '1px solid var(--border)', background: 'var(--surface)',
-                      color: 'var(--text)', fontSize: '0.9rem', fontFamily: 'Outfit, sans-serif',
+                      color: 'var(--text)', fontSize: '0.88rem', fontFamily: 'Outfit, sans-serif',
                     }}
                   />
-                  <select
-                    value={newGender}
-                    onChange={e => setNewGender(e.target.value as PlayerGender)}
-                    style={{
-                      padding: '0.5rem', borderRadius: '8px',
-                      border: '1px solid var(--border)', background: 'var(--surface)',
-                      color: 'var(--text)', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
-                    }}
-                  >
-                    <option value="male">{t('wizard.male')}</option>
-                    <option value="female">{t('wizard.female')}</option>
-                  </select>
-                  <button
-                    onClick={handleAddPlayer}
-                    disabled={!newName.trim()}
-                    style={{
-                      padding: '0.5rem 0.85rem', borderRadius: '8px', border: 'none',
-                      background: newName.trim() ? 'var(--primary)' : 'rgba(100,100,100,0.3)',
-                      color: 'white', cursor: newName.trim() ? 'pointer' : 'default',
-                      fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                    }}
-                  >
-                    +
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <select
+                      value={newGender}
+                      onChange={e => setNewGender(e.target.value as PlayerGender)}
+                      style={{
+                        padding: '0.42rem 0.55rem', borderRadius: '8px',
+                        border: '1px solid var(--border)', background: 'var(--surface)',
+                        color: 'var(--text)', fontSize: '0.8rem', fontFamily: 'Outfit, sans-serif', cursor: 'pointer',
+                        minHeight: '2.25rem',
+                      }}
+                    >
+                      <option value="male">{t('wizard.male')}</option>
+                      <option value="female">{t('wizard.female')}</option>
+                    </select>
+                    <button
+                      onClick={handleAddPlayer}
+                      disabled={!newName.trim()}
+                      style={{
+                        padding: '0.45rem 1rem', borderRadius: '8px', border: 'none',
+                        background: newName.trim() ? 'var(--primary)' : 'rgba(100,100,100,0.3)',
+                        color: 'white', cursor: newName.trim() ? 'pointer' : 'default',
+                        fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
+                        minHeight: '2.25rem',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
-                {error && <p style={{ color: '#ef4444', fontSize: '0.8rem', marginBottom: '0.5rem' }}>{error}</p>}
+                {error && <p style={{ color: '#ef4444', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>{error}</p>}
 
                 {otherPlayers.length === 0 ? (
                   <div style={{
-                    textAlign: 'center', padding: '1.5rem', borderRadius: '10px',
-                    border: '2px dashed var(--border)', color: 'var(--text-muted)', fontSize: '0.85rem',
+                    textAlign: 'center', padding: '1.15rem 0.85rem', borderRadius: '10px',
+                    border: '2px dashed var(--border)', color: 'var(--text-muted)', fontSize: '0.82rem',
+                    lineHeight: 1.55,
                   }}>
                     {t('wizard.noPlayersYet')}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', justifyContent: 'center' }}>
                     {otherPlayers.map(p => (
                       <span key={p.id} style={{
                         padding: '0.35rem 0.65rem', borderRadius: '8px',
@@ -437,13 +453,20 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                   </div>
                 )}
 
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem', textAlign: 'center' }}>
-                  {t('wizard.playersHint', { name: ownerPlayerName || '' })}
-                </p>
-                <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.4rem', textAlign: 'center', opacity: 0.7 }}>
-                  {t('wizard.traitsHint')}
-                </p>
-              </>
+                <div style={{
+                  padding: '0.65rem 0.75rem',
+                  borderRadius: '10px',
+                  background: 'rgba(99,102,241,0.06)',
+                  border: '1px solid rgba(99,102,241,0.12)',
+                }}>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, textAlign: 'center', lineHeight: 1.55 }}>
+                    {t('wizard.playersHint', { name: ownerPlayerName || '' })}
+                  </p>
+                  <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', margin: '0.5rem 0 0', textAlign: 'center', lineHeight: 1.5, opacity: 0.85 }}>
+                    {t('wizard.traitsHint')}
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1054,14 +1077,20 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
             </button>
           </div>
         )}
+        </div>
       </div>
 
       {/* Footer — hidden on done step */}
       {currentStep !== 'done' && <div style={{
-        padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border)',
-        background: 'var(--surface)', display: 'flex', gap: '0.5rem',
+        paddingTop: '0.65rem',
+        paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+        paddingRight: 'max(0.75rem, env(safe-area-inset-right))',
+        paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom))',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--surface)',
         flexShrink: 0,
       }}>
+        <div style={{ maxWidth: '26rem', margin: '0 auto', width: '100%', display: 'flex', gap: '0.5rem', boxSizing: 'border-box' }}>
         {currentIdx > 0 && (
           <button
             onClick={() => setCurrentStep(STEPS[currentIdx - 1])}
@@ -1087,6 +1116,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
         >
           {currentIdx === 0 ? t('wizard.letsGo') : t('wizard.next')}
         </button>
+        </div>
       </div>}
       {/* Welcome / Features Modal — same as SettingsScreen */}
       {showWelcomeModal && (
