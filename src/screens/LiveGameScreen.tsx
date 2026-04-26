@@ -1884,7 +1884,7 @@ const LiveGameScreen = () => {
         {players.map(player => (
           <div key={player.id} className="player-card" style={{ position: 'relative', padding: '0.25rem 0.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: '1 1 auto', minWidth: 0 }}>
-              <span className="player-name" style={{ fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.playerName}</span>
+              <span className="player-name" style={{ flex: '1 1 auto', minWidth: 0, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.playerName}</span>
               {isAdmin && player.rebuys <= 1 && (
                 <button
                   onClick={() => handleRemovePlayer(player)}
@@ -1898,10 +1898,24 @@ const LiveGameScreen = () => {
                   ✕
                 </button>
               )}
-              <span className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out', fontSize: '1rem' }}>
-                {Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}
-              </span>
-              <span className="text-muted" style={{ fontSize: '0.7rem' }}>{player.rebuys === 1 ? t('chips.buyinSingle') : t('chips.buyinPlural')}</span>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  minWidth: '3.25rem',
+                  gap: '0.05rem',
+                }}
+              >
+                <span className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out', fontSize: '1rem', lineHeight: 1.1 }}>
+                  {Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}
+                </span>
+                <span className="text-muted" style={{ fontSize: '0.7rem', lineHeight: 1.1, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  {player.rebuys === 1 ? t('chips.buyinSingle') : t('chips.buyinPlural')}
+                </span>
+              </div>
             </div>
             {isAdmin && (
               <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
