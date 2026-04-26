@@ -2288,13 +2288,13 @@ const StatisticsScreen = () => {
 
           {/* TABLE Options - Sort dropdown + Table Mode toggle */}
           {viewMode === 'table' && (
-            <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            <div className="card" style={{ padding: '0.4rem', display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'profit' | 'games' | 'winRate')}
                 style={{
-                  padding: '0.35rem 0.5rem',
-                  fontSize: '0.75rem',
+                  padding: '0.3rem 0.4rem',
+                  fontSize: '0.7rem',
                   borderRadius: '6px',
                   border: '1px solid rgba(16,185,129,0.3)',
                   background: 'rgba(16,185,129,0.08)',
@@ -2311,8 +2311,8 @@ const StatisticsScreen = () => {
                   key={mode}
                   onClick={() => setTableMode(mode)}
                   style={{
-                    padding: '0.35rem 0.6rem',
-                    fontSize: '0.75rem',
+                    padding: '0.3rem 0.45rem',
+                    fontSize: '0.7rem',
                     borderRadius: '6px',
                     border: tableMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)',
                     background: tableMode === mode ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
