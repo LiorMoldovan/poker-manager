@@ -917,6 +917,150 @@ JSON בלבד:`;
     }
   };
 
+  // ── Combined: Analyze report + generate fix in one AI call ──
+  const handleAnalyzeAndFix = async (poolId: string, scenario: PoolScenario, reports: TrainingFlagReport[]) => {
+    const apiKey = getGeminiApiKey();
+    if (!apiKey || !pool) return;
+
+    clearFixLog();
+    setFixingFlagged(poolId);
+    setAnalyzingReport(poolId);
+    setFlagMsg('AI מנתח דיווח ומייצר תיקון...');
+    pushFixLog('שלב 1/4: בניית פרומפט משולב (ניתוח + תיקון)', 'info');
+
+    const reportSummary = reports.map(r => {
+      const reasonLabel: Record<string, string> = {
+        wrong_answer: 'התשובה הנכונה שגויה',
+        unclear_question: 'השאלה לא ברורה',
+        wrong_for_home_game: 'מתאים למקצועי אבל לא למשחק ביתי',
+        other: 'אחר',
+      };
+      return `- ${r.playerName}: ${reasonLabel[r.reason] || r.reason}${r.comment ? ` — "${r.comment}"` : ''}`;
+    }).join('\n');
+
+    const playerStylesList = Object.entries(PLAYER_STYLES)
+      .map(([name, style]) => `- ${name}: ${style}`)
+      .join('\n');
+
+    const prompt = `אתה עורך שאלות אימון פוקר ומנהל משחק ביתי. שחקנים דיווחו על בעיה בשאלה.
+בצע שתי משימות בבת אחת:
+1. נתח את הדיווח — האם מוצדק?
+2. אם הדיווח מוצדק (verdict = accept או partial) — תקן את השאלה.
+
+${GAME_CONTEXT}
+
+${TRAINING_SCENARIO_FIX_FORMAT_RULES}
+
+שחקנים קבועים (ניתן לדייק שמות בסיטואציה):
+${playerStylesList}
+
+שאלה נוכחית (JSON):
+${JSON.stringify({
+  poolId: scenario.poolId,
+  situation: scenario.situation,
+  yourCards: scenario.yourCards,
+  boardCards: scenario.boardCards || '',
+  options: scenario.options.map(o => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, explanation: o.explanation, nearMiss: o.nearMiss })),
+  category: scenario.category,
+  categoryId: scenario.categoryId,
+})}
+
+דיווחי שחקנים:
+${reportSummary}
+
+החזר אובייקט JSON יחיד בפורמט הבא (בלי markdown, בלי טקסט לפני/אחרי):
+{
+  "verdict": "accept" | "reject" | "partial",
+  "explanation": "ניתוח קצר 2-3 משפטים — האם הדיווח מוצדק ולמה",
+  "rejectText": "הודעה ידידותית למדווח אם דוחים (חובה ב-reject/partial)",
+  "acceptText": "הודעה ידידותית למדווח שמודה על הדיווח (חובה ב-accept/partial)",
+  "fixedScenario": { ...שאלה מתוקנת עם כל השדות... } | null
+}
+
+כללים:
+- אם verdict = "reject": fixedScenario חייב להיות null (השאלה תקינה, אין מה לתקן).
+- אם verdict = "accept" או "partial": fixedScenario חייב להיות אובייקט מלא עם poolId, situation, yourCards, boardCards, options (3 אופציות), category, categoryId — בהתאם לכל כללי הפורמט למעלה.
+- שמור poolId="${scenario.poolId}", categoryId ו-category כמו במקור.
+
+דוגמת מבנה (ערכים לדוגמה בלבד):
+{"verdict":"accept","explanation":"הדיווח מוצדק — התשובה הנכונה לא מתאימה למשחק ביתי.","rejectText":"","acceptText":"תודה על הדיווח! תיקנו את השאלה.","fixedScenario":{"poolId":"${scenario.poolId}","situation":"3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"קריאה 800","isCorrect":true,"explanation":"מחיר נכון מול ההימור."},{"id":"B","text":"העלאה ל-2,500","isCorrect":false,"nearMiss":true,"explanation":"בטורניר הגיוני — כאן פחות."},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"ויתור שגוי מול סכום כזה."}],"category":"${scenario.category.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}","categoryId":"${scenario.categoryId}"}}`;
+
+    try {
+      pushFixLog('שלב 2/4: שליחת בקשה ל-Gemini (ניתוח + תיקון ביחד)', 'info');
+      const responseText = await callGemini(apiKey, prompt, 4096, { jsonMode: true });
+      pushFixLog(`שלב 3/4: התקבלה תשובה (${responseText.length.toLocaleString('he-IL')} תווים) — מנתחים JSON`, 'info');
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = safeParseJSON(responseText) as Record<string, unknown>;
+      } catch (parseErr) {
+        const hint = responseText.length > 400
+          ? `${responseText.slice(0, 200)} … ${responseText.slice(-120)}`
+          : responseText;
+        pushFixLog(`כשל בפענוח JSON: ${parseErr instanceof Error ? parseErr.message : 'לא ידוע'}`, 'error');
+        pushFixLog(`תחילת/סוף תשובה גולמית:\n${hint}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg('❌ לא הצלחנו לפענח את תשובת ה-AI — פתח "פירוט שלבים" לפרטים');
+        return;
+      }
+
+      const verdict = String(parsed.verdict || '').trim();
+      const explanation = String(parsed.explanation || '').trim();
+      const rejectText = String(parsed.rejectText || '').trim();
+      const acceptText = String(parsed.acceptText || '').trim();
+
+      setAnalyses(prev => ({ ...prev, [poolId]: { verdict, explanation, rejectText, acceptText } }));
+
+      if (verdict === 'reject') {
+        pushFixLog('שלב 4/4: הדיווח נדחה — השאלה תקינה, אין תיקון', 'info');
+        setFlagMsg('✅ AI קבע שהשאלה תקינה — אפשר לדחות הדיווח');
+        return;
+      }
+
+      const rawFixed = parsed.fixedScenario as PoolScenario | null;
+      if (!rawFixed || typeof rawFixed !== 'object') {
+        pushFixLog('שלב 4/4: verdict = accept/partial אבל fixedScenario חסר — מנסה תיקון נפרד', 'error');
+        setFlagMsg('⚠️ הניתוח התקבל אבל ללא תיקון — לחץ "תקן עם AI" ליצירת תיקון');
+        return;
+      }
+
+      let fixedScenario: PoolScenario;
+      try {
+        fixedScenario = normalizeAIFixedScenario(rawFixed, poolId, scenario);
+      } catch (normErr) {
+        pushFixLog(`כשל בנרמול השאלה המתוקנת: ${normErr instanceof Error ? normErr.message : 'לא ידוע'}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg('⚠️ הניתוח התקבל אבל התיקון לא תקין — לחץ "תקן עם AI" ליצירת תיקון חדש');
+        return;
+      }
+
+      const validationError = validateAIFixedScenario(fixedScenario);
+      if (validationError) {
+        pushFixLog(`שלב 4/4: אימות התיקון נכשל — ${validationError}`, 'error');
+        setShowFixStepDetails(true);
+        setFlagMsg(`⚠️ הניתוח התקבל אבל התיקון לא עבר אימות — לחץ "תקן עם AI"`);
+        return;
+      }
+
+      pushFixLog('שלב 4/4: ניתוח + תיקון הושלמו בהצלחה', 'success');
+      setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
+      setFixFeedback('');
+      setFixHistory([]);
+      setFlagMsg(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown';
+      pushFixLog(`שגיאה: ${msg}`, 'error');
+      if (msg.includes('ALL_MODELS_FAILED') || msg.includes('אין חיבור')) {
+        pushFixLog('רמז: בדוק מפתח API, מכסת בקשות (429), או חיבור אינטרנט', 'info');
+      }
+      setShowFixStepDetails(true);
+      setFlagMsg(`❌ שגיאת AI: ${msg}`);
+    } finally {
+      setFixingFlagged(null);
+      setAnalyzingReport(null);
+    }
+  };
+
   // ── AI Fix flagged question (generates preview) ──
   const handleAIFix = async (poolId: string, reports: TrainingFlagReport[]) => {
     const apiKey = getGeminiApiKey();
@@ -978,7 +1122,7 @@ ${reportSummary}
 
     try {
       pushFixLog('שלב 2/4: שליחת בקשה ל-Gemini (JSON mode + מודל עם נפילה אוטומטית)', 'info');
-      const fixedText = await callGemini(apiKey, prompt, 8192, { jsonMode: true });
+      const fixedText = await callGemini(apiKey, prompt, 4096, { jsonMode: true });
       pushFixLog(`שלב 3/4: התקבלה תשובה (${fixedText.length.toLocaleString('he-IL')} תווים) — מנתחים JSON`, 'info');
 
       let fixedScenario: PoolScenario;
@@ -1053,7 +1197,7 @@ ${historyContext}
 
     pushFixLog('תיקון חוזר: שליחה ל-Gemini (JSON mode)', 'info');
     try {
-      const fixedText = await callGemini(apiKey, prompt, 8192, { jsonMode: true });
+      const fixedText = await callGemini(apiKey, prompt, 4096, { jsonMode: true });
       pushFixLog(`תיקון חוזר: התקבלו ${fixedText.length.toLocaleString('he-IL')} תווים`, 'info');
 
       let fixedScenario: PoolScenario;
@@ -1110,7 +1254,7 @@ ${historyContext}
     pushFixLog(`שמירה 1/3: בניית מאגר מקומי — ${poolId}`, 'info');
 
     try {
-      const updatedScenarios = pool.scenarios.map(s => s.poolId === poolId ? fixed : s);
+      const updatedScenarios = pool.scenarios.map(s => s.poolId === poolId ? { ...fixed, reviewedAt: new Date().toISOString() } : s);
       const newPool = buildPoolObject(updatedScenarios);
       pushFixLog('שמירה 2/3: העלאת מאגר...', 'info');
       const result = await uploadTrainingPool(newPool);
@@ -2744,20 +2888,32 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                   </div>
                 )}
 
-                {/* Action buttons — before analysis: analyze is primary, dismiss + remove as quick actions */}
+                {/* Action buttons — before analysis: analyze+fix is primary, analyze-only + dismiss + remove as secondary */}
                 {!analyses[f.poolId] && (
                   <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => handleAnalyzeAndFix(f.poolId, f.scenario, f.reports)}
+                      disabled={isBusy || fixingFlagged === f.poolId}
+                      style={{
+                        flex: 1, fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                        background: 'rgba(168,85,247,0.15)', color: '#a855f7',
+                        border: '1px solid rgba(168,85,247,0.3)', cursor: isBusy ? 'wait' : 'pointer',
+                        fontWeight: 600, opacity: isBusy ? 0.5 : 1,
+                      }}
+                    >
+                      {fixingFlagged === f.poolId ? '⏳ מנתח ומתקן...' : '✨ נתח + תקן'}
+                    </button>
                     <button
                       onClick={() => handleAnalyzeReport(f.poolId, f.scenario, f.reports)}
                       disabled={isBusy || analyzingReport === f.poolId}
                       style={{
-                        flex: 1, fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
-                        background: 'rgba(99,102,241,0.15)', color: '#6366f1',
-                        border: '1px solid rgba(99,102,241,0.3)', cursor: isBusy ? 'wait' : 'pointer',
-                        fontWeight: 600, opacity: isBusy ? 0.5 : 1,
+                        fontSize: '0.65rem', padding: '0.35rem 0.5rem', borderRadius: '6px',
+                        background: 'rgba(99,102,241,0.08)', color: '#6366f1',
+                        border: '1px solid rgba(99,102,241,0.15)', cursor: isBusy ? 'wait' : 'pointer',
+                        fontWeight: 500, opacity: isBusy ? 0.5 : 1,
                       }}
                     >
-                      {analyzingReport === f.poolId ? '⏳ מנתח...' : '🔍 נתח עם AI'}
+                      {analyzingReport === f.poolId ? '⏳' : '🔍 נתח'}
                     </button>
                     <button
                       onClick={() => handleDismissFlagged(f.poolId)}
@@ -2815,6 +2971,22 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
               <div style={{ fontSize: '0.65rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.3rem' }}>מקור:</div>
               <div style={{ fontSize: '0.75rem', lineHeight: 1.5, marginBottom: '0.2rem' }}>{fixPreview.original.situation}</div>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>קלפים: {fixPreview.original.yourCards}</div>
+              {fixPreview.original.boardCards?.trim() && (
+                <div style={{
+                  fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem',
+                  display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem',
+                }}>
+                  <span style={{ fontWeight: 600, color: '#94a3b8' }}>בורד:</span>
+                  <span style={{
+                    display: 'inline-flex', flexWrap: 'wrap', gap: '0.2rem', alignItems: 'center',
+                    padding: '0.15rem 0.4rem', borderRadius: '6px',
+                    background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(148, 163, 184, 0.28)',
+                    fontSize: '0.72rem', lineHeight: 1.35,
+                  }}>
+                    <TrainingColoredCards text={fixPreview.original.boardCards.trim()} />
+                  </span>
+                </div>
+              )}
               {fixPreview.original.options.map(o => (
                 <div key={o.id} style={{
                   fontSize: '0.65rem', padding: '0.15rem 0.3rem', marginBottom: '0.1rem',
@@ -2833,6 +3005,22 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
               <div style={{ fontSize: '0.65rem', color: '#22c55e', fontWeight: 600, marginBottom: '0.3rem' }}>תיקון:</div>
               <div style={{ fontSize: '0.75rem', lineHeight: 1.5, marginBottom: '0.2rem' }}>{fixPreview.fixed.situation}</div>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>קלפים: {fixPreview.fixed.yourCards}</div>
+              {fixPreview.fixed.boardCards?.trim() && (
+                <div style={{
+                  fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '0.2rem',
+                  display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.35rem',
+                }}>
+                  <span style={{ fontWeight: 600, color: '#94a3b8' }}>בורד:</span>
+                  <span style={{
+                    display: 'inline-flex', flexWrap: 'wrap', gap: '0.2rem', alignItems: 'center',
+                    padding: '0.15rem 0.4rem', borderRadius: '6px',
+                    background: 'rgba(15, 23, 42, 0.55)', border: '1px solid rgba(148, 163, 184, 0.28)',
+                    fontSize: '0.72rem', lineHeight: 1.35,
+                  }}>
+                    <TrainingColoredCards text={fixPreview.fixed.boardCards.trim()} />
+                  </span>
+                </div>
+              )}
               {fixPreview.fixed.options.map(o => (
                 <div key={o.id} style={{ marginBottom: '0.25rem' }}>
                   <div style={{

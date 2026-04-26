@@ -4,7 +4,7 @@ import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useNavigate } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
@@ -41,10 +41,7 @@ async function canvasToForecastShareFile(canvas: HTMLCanvasElement, baseName: st
  * שיתוף מרובה קבצים לווטסאפ: ניסיון מרובד → אם לא נתמך/נכשל, תמונה אחר תמונה (יציב יותר במכשירים מסוימים) → הורדה.
  */
 async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
-  const caption =
-    files.length > 1
-      ? `🔮 תחזית פוקר — ${files.length} תמונות לפי הסדר`
-      : '🔮 תחזית פוקר';
+  const caption = '🔮 תחזית פוקר';
 
   const downloadAllAndOpenWa = () => {
     for (const file of files) {
@@ -79,7 +76,7 @@ async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
         downloadAllAndOpenWa();
         return;
       }
-      const text = files.length > 1 ? `${caption} — חלק ${i + 1}/${files.length}` : caption;
+      const text = files.length > 1 ? `${caption} (${i + 1}/${files.length})` : caption;
       await navigator.share({ files: [f], title: 'תחזית פוקר', text });
       if (i < files.length - 1) await sleepForecastShare(520);
     }
@@ -160,7 +157,7 @@ const NewGameScreen = () => {
   const { t, isRTL } = useTranslation();
   const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
   const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
-  const isAdmin = role === 'admin';
+  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const isMember = role === 'member' && !isSuperAdmin;
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -204,7 +201,7 @@ const NewGameScreen = () => {
     checkForActiveGame();
     // Load forecast if exists (published for all, unpublished for admin)
     const pending = getPendingForecast();
-    if (pending && !pending.linkedGameId && (pending.published || role === 'admin')) {
+    if (pending && !pending.linkedGameId && (pending.published || isAdmin)) {
       setPublishedForecast(pending);
     }
     // Auto-detect period markers
@@ -336,9 +333,9 @@ const NewGameScreen = () => {
       return;
     }
     
-    // Validate location is selected
     const location = gameLocation === 'other' ? customLocation.trim() : gameLocation;
-    if (!location) {
+    const hasLocations = (getSettings().locations ?? DEFAULT_LOCATIONS).length > 0;
+    if (hasLocations && !location) {
       setError(t('newGame.selectLocation'));
       return;
     }
@@ -397,6 +394,8 @@ const NewGameScreen = () => {
     if (periodMarkers) {
       updateGame(game.id, { periodMarkers });
     }
+
+    flushGameCreation().catch(err => console.warn('Game creation flush failed:', err));
 
     const apiKey = getGeminiApiKey();
     if (apiKey && isOwner) {
@@ -2109,7 +2108,7 @@ const NewGameScreen = () => {
       {publishedForecast && !publishedForecast.linkedGameId && (
         <div className="card" style={{ padding: '1rem', marginTop: '0.5rem', opacity: publishedForecast.published ? 1 : 0.7 }}>
           {/* Hidden state banner for admin */}
-          {!publishedForecast.published && role === 'admin' && (
+          {!publishedForecast.published && isAdmin && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -2245,7 +2244,7 @@ const NewGameScreen = () => {
             })}
           </div>}
 
-          {publishedExpanded && role === 'admin' && (
+          {publishedExpanded && isAdmin && (
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={handleSharePublished}
@@ -2961,7 +2960,7 @@ const NewGameScreen = () => {
                 >
                   {isSharing ? t('common.capturing') : t('common.share')}
                 </button>
-                  {role === 'admin' && (() => {
+                  {isAdmin && (() => {
                     const alreadyPublished = !!publishedForecast?.published;
                     return (
                       <button

@@ -49,7 +49,7 @@ export default async function handler(req: Request): Promise<Response> {
           subject,
           player_name: body.playerName || '',
           reporter_name: body.reporterName || 'שחקן',
-          amount: String(body.amount || '?'),
+          amount: body.amount != null ? String(Math.round(Number(body.amount))) : '?',
           game_date: body.gameDate || '',
           pay_link: body.payLink || '',
         };

@@ -4,6 +4,7 @@ import {
   cacheGetItem, cacheSetItem, cacheRemoveItem,
   cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
   getGroupId, resetCache, initSupabaseCache,
+  flushSync,
   fetchNotifications, getCachedNotifications, getUnreadNotificationCount,
   markNotificationRead, createNotification,
   resolvePlayerUserId, getPlayerEmailForNotification,
@@ -207,6 +208,16 @@ export const updateGameStatus = (gameId: string, status: Game['status']): void =
   }
 };
 
+export async function flushGameCompletion(): Promise<void> {
+  await flushSync(STORAGE_KEYS.GAME_PLAYERS);
+  await flushSync(STORAGE_KEYS.GAMES);
+}
+
+export async function flushGameCreation(): Promise<void> {
+  await flushSync(STORAGE_KEYS.GAMES);
+  await flushSync(STORAGE_KEYS.GAME_PLAYERS);
+}
+
 export const updateGameChipGap = (gameId: string, chipGap: number, chipGapPerPlayer: number): void => {
   const games = getAllGames();
   const gameIndex = games.findIndex(g => g.id === gameId);
@@ -282,6 +293,32 @@ export const getGamePlayers = (gameId: string): GamePlayer[] => {
 
 export const getAllGamePlayers = (): GamePlayer[] => {
   return getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+};
+
+// Add a player to an active game mid-game
+export const addPlayerToGame = (gameId: string, playerId: string): GamePlayer | null => {
+  const players = getAllPlayers();
+  const player = players.find(p => p.id === playerId);
+  if (!player) return null;
+
+  const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []);
+  const alreadyInGame = gamePlayers.some(gp => gp.gameId === gameId && gp.playerId === playerId);
+  if (alreadyInGame) return null;
+
+  const newGamePlayer: GamePlayer = {
+    id: generateId(),
+    gameId,
+    playerId,
+    playerName: player.name,
+    rebuys: 1,
+    chipCounts: {},
+    finalValue: 0,
+    profit: 0,
+  };
+
+  gamePlayers.push(newGamePlayer);
+  setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
+  return newGamePlayer;
 };
 
 // Remove a player from an active game (player didn't show up)

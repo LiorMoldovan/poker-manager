@@ -34,7 +34,7 @@ import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, 
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail } from '../utils/apiProxy';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog } from '../utils/activityLogger';
-import { fetchTrainingAnswers } from '../database/trainingData';
+import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingData';
 import { ActivityLogEntry, TrainingPlayerData } from '../types';
 import { APP_VERSION, CHANGELOG } from '../version';
 import { isEdgeBrowser } from '../utils/tts';
@@ -47,6 +47,7 @@ import GroupManagementTab from '../components/GroupManagementTab';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 import { useTranslation } from '../i18n';
+import { shareToWhatsApp } from '../utils/sharing';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
@@ -91,7 +92,6 @@ const SettingsScreen = () => {
 
   // Group setup overlay (create/join)
   const [groupSetupMode, setGroupSetupMode] = useState<'create' | 'join' | null>(null);
-  const [groupJustCreated, setGroupJustCreated] = useState(false);
 
   // Activity log state
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
@@ -100,6 +100,7 @@ const SettingsScreen = () => {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [activityMembers, setActivityMembers] = useState<GroupMember[]>([]);
   const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
+  const [trainingActionCount, setTrainingActionCount] = useState(0);
   const [deviceLabels] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
@@ -230,6 +231,31 @@ const SettingsScreen = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [pool, ans] = await Promise.all([fetchTrainingPool(), fetchTrainingAnswers()]);
+        if (cancelled || !pool || !ans) return;
+
+        const poolIdSet = new Set(pool.scenarios.map(s => s.poolId));
+        const flaggedIds = new Set<string>();
+        ans.players.forEach(p => p.sessions.forEach(s => {
+          (s.flaggedPoolIds || []).forEach(id => { if (poolIdSet.has(id)) flaggedIds.add(id); });
+          (s.flagReports || []).forEach(r => { if (poolIdSet.has(r.poolId)) flaggedIds.add(r.poolId); });
+        }));
+
+        const needsInsight = ans.players.filter(p =>
+          p.pendingReportMilestones && p.pendingReportMilestones.length > 0
+        ).length;
+
+        if (!cancelled) setTrainingActionCount(flaggedIds.size + needsInsight);
+      } catch { /* best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isSuperAdmin]);
 
   const [pushSubscribers, setPushSubscribers] = useState<{ playerName: string | null; endpoint: string }[]>([]);
 
@@ -577,7 +603,7 @@ const SettingsScreen = () => {
   const tabs = allTabs.filter(tab => {
     if (tab.superAdminOnly && !isSuperAdmin) return false;
     if (tab.ownerOnly && !isOwner) return false;
-    if (tab.adminOnly && role !== 'admin') return false;
+    if (tab.adminOnly && role !== 'admin' && !isSuperAdmin && !isOwner) return false;
     return tab.requiresPermission === null || hasPermission(tab.requiresPermission);
   }) as { id: TabId; label: string; icon: string }[];
 
@@ -642,18 +668,18 @@ const SettingsScreen = () => {
       {/* Setup Wizard Banner — shown for group owners when setup is incomplete */}
       {isOwner && (() => {
         const hasPlayers = players.length > 1;
-        const hasGameSettings = (settings.locations ?? []).length > 0 || getAllGames().length > 0;
+        const hasGameSettings = (settings.locations ?? []).length > 0 || settings.rebuyValue > 0 || getAllGames().length > 0;
         const hasChips = chipValues.length > 0 || getAllGames().length > 0;
         const aiWorking = !!settings.geminiApiKey || getAllGames().some(g => g.aiSummary);
         const hasInvited = (activityMembers.length > 1) || getAllGames().length > 0;
         const steps = [
-          { done: hasPlayers, label: t('settings.setup.stepPlayers'), desc: t('settings.setup.stepPlayersDesc'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
-          { done: hasGameSettings, label: t('settings.setup.stepLocations'), desc: t('settings.setup.stepLocationsDesc'), icon: hasGameSettings ? '✅' : '⚙️', tab: 'game' as TabId },
-          { done: hasChips, label: t('settings.setup.stepChips'), desc: t('settings.setup.stepChipsDesc'), icon: hasChips ? '✅' : '🎰', tab: 'chips' as TabId },
-          { done: aiWorking, label: t('settings.setup.stepAi'), desc: t('settings.setup.stepAiDesc'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
-          { done: hasInvited, label: t('settings.setup.stepInvite'), desc: t('settings.setup.stepInviteDesc'), icon: hasInvited ? '✅' : '📨', tab: 'group' as TabId },
+          { done: hasPlayers, optional: false, label: t('settings.setup.stepPlayers'), desc: t('settings.setup.stepPlayersDesc'), icon: hasPlayers ? '✅' : '👥', tab: 'players' as TabId },
+          { done: hasGameSettings, optional: false, label: t('settings.setup.stepLocations'), desc: t('settings.setup.stepLocationsDesc'), icon: hasGameSettings ? '✅' : '⚙️', tab: 'game' as TabId },
+          { done: hasChips, optional: false, label: t('settings.setup.stepChips'), desc: t('settings.setup.stepChipsDesc'), icon: hasChips ? '✅' : '🎰', tab: 'chips' as TabId },
+          { done: aiWorking, optional: true, label: t('settings.setup.stepAi'), desc: t('settings.setup.stepAiDesc'), icon: aiWorking ? '✅' : '🔑', tab: 'ai' as TabId },
+          { done: hasInvited, optional: false, label: t('settings.setup.stepInvite'), desc: t('settings.setup.stepInviteDesc'), icon: hasInvited ? '✅' : '📨', tab: 'group' as TabId },
         ];
-        const allDone = steps.every(s => s.done);
+        const allDone = steps.every(s => s.done || s.optional);
         if (allDone || wizardDismissed) return null;
         const navigableSteps = steps.filter(s => s.tab);
         const firstIncomplete = navigableSteps.findIndex(s => !s.done);
@@ -763,9 +789,22 @@ const SettingsScreen = () => {
                     border: '1px solid rgba(16, 185, 129, 0.4)',
                     color: '#34d399',
                   } : {}),
+                  ...(tab.id === 'training' && trainingActionCount > 0 && !isActive ? { position: 'relative' as const } : {}),
                 }}
               >
                 {tab.label}
+                {tab.id === 'training' && trainingActionCount > 0 && (
+                  <span style={{
+                    marginInlineStart: '0.3rem',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: '16px', height: '16px', padding: '0 4px',
+                    borderRadius: '8px', fontSize: '0.6rem', fontWeight: 700,
+                    background: '#f59e0b', color: '#0f172a',
+                    lineHeight: 1,
+                  }}>
+                    {trainingActionCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -846,7 +885,7 @@ const SettingsScreen = () => {
           groupName={groupMgmt.groupName}
           inviteCode={groupMgmt.inviteCode}
           isOwner={isOwner}
-          isAdmin={role === 'admin'}
+          isAdmin={role === 'admin' || isSuperAdmin || isOwner}
           currentUserId={groupMgmt.currentUserId}
           fetchMembers={groupMgmt.fetchMembers}
           updateMemberRole={groupMgmt.updateMemberRole}
@@ -2364,8 +2403,8 @@ const SettingsScreen = () => {
             onClick={() => setShowWelcome(true)}
             style={{
               flex: 1, padding: '0.7rem', borderRadius: '10px',
-              border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.08)',
-              color: '#818cf8', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--text)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
               fontFamily: 'Outfit, sans-serif',
             }}
           >{t('settings.setup.aboutApp')}</button>
@@ -2373,8 +2412,8 @@ const SettingsScreen = () => {
             onClick={() => setShowGameFlow(true)}
             style={{
               flex: 1, padding: '0.7rem', borderRadius: '10px',
-              border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.08)',
-              color: '#10B981', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--text)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
               fontFamily: 'Outfit, sans-serif',
             }}
           >{t('settings.setup.gameFlowBtn')}</button>
@@ -2422,10 +2461,7 @@ const SettingsScreen = () => {
           <div className="card-header">
             <h2 className="card-title">{t('settings.about.version')}</h2>
             <span style={{ 
-              background: 'var(--primary)', 
-              color: 'white', 
-              padding: '0.25rem 0.75rem', 
-              borderRadius: '1rem',
+              color: 'var(--text-muted)', 
               fontSize: '0.875rem',
               fontWeight: '600'
             }}>
@@ -4079,7 +4115,10 @@ const SettingsScreen = () => {
             userEmail={multiGroup.userEmail}
             onCreateGroup={async (name) => {
               const result = await multiGroup.createGroup(name);
-              if (!result.error) setGroupJustCreated(true);
+              if (!result.error) {
+                multiGroup.triggerGroupWizard();
+                setGroupSetupMode(null);
+              }
               return result;
             }}
             onJoinGroup={async (code) => {
@@ -4095,10 +4134,6 @@ const SettingsScreen = () => {
             onSignOut={() => setGroupSetupMode(null)}
             onContinue={() => {
               multiGroup.refreshMembership();
-              if (groupJustCreated) {
-                multiGroup.triggerGroupWizard();
-                setGroupJustCreated(false);
-              }
               setGroupSetupMode(null);
             }}
             onClose={() => setGroupSetupMode(null)}
@@ -4149,14 +4184,43 @@ const SettingsScreen = () => {
               background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)',
               lineHeight: 1.5,
             }}>{t('settings.setup.aiDisclaimer')}</div>
-            <button
-              onClick={() => setShowWelcome(false)}
-              style={{
-                width: '100%', marginTop: '0.75rem', padding: '0.7rem', borderRadius: '10px',
-                border: 'none', background: '#10B981', color: '#fff', cursor: 'pointer',
-                fontSize: '0.9rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
-              }}
-            >{t('settings.setup.welcomeClose')}</button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <button
+                onClick={() => {
+                  const items = [
+                    { icon: '🎮', key: 'settings.setup.welcomeNewGame' },
+                    { icon: '📡', key: 'settings.setup.welcomeLive' },
+                    { icon: '🧮', key: 'settings.setup.welcomeEnd' },
+                    { icon: '💰', key: 'settings.setup.welcomeSettlements' },
+                    { icon: '📜', key: 'settings.setup.welcomeHistory' },
+                    { icon: '📊', key: 'settings.setup.welcomeStats' },
+                    { icon: '📈', key: 'settings.setup.welcomeGraphs' },
+                    { icon: '🏋️', key: 'settings.setup.welcomeTraining' },
+                    { icon: '📤', key: 'settings.setup.welcomeShare' },
+                    { icon: '🔔', key: 'settings.setup.welcomeNotify' },
+                  ] as const;
+                  const lines = items.map(i => `${i.icon} ${t(i.key)}`).join('\n');
+                  shareToWhatsApp(`${t('settings.setup.welcomeTitle')}\n${t('settings.setup.welcomeSubtitle')}\n\n${lines}`);
+                }}
+                style={{
+                  flex: 1, padding: '0.7rem', borderRadius: '10px',
+                  border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.1)',
+                  color: '#25D366', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                }}
+              >
+                <span style={{ fontSize: '1rem' }}>📲</span> WhatsApp
+              </button>
+              <button
+                onClick={() => setShowWelcome(false)}
+                style={{
+                  flex: 1, padding: '0.7rem', borderRadius: '10px',
+                  border: 'none', background: '#10B981', color: '#fff', cursor: 'pointer',
+                  fontSize: '0.9rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                }}
+              >{t('settings.setup.welcomeClose')}</button>
+            </div>
           </div>
         </div>
       )}
@@ -4219,14 +4283,38 @@ const SettingsScreen = () => {
               background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
               lineHeight: 1.4,
             }}>{t('settings.setup.aiDisclaimer')}</div>
-            <button
-              onClick={() => setShowGameFlow(false)}
-              style={{
-                width: '100%', marginTop: '0.5rem', padding: '0.5rem', borderRadius: '8px',
-                border: 'none', background: '#10B981', color: '#fff', cursor: 'pointer',
-                fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
-              }}
-            >{t('settings.setup.gameFlowClose')}</button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  const steps = [
+                    { step: 1, icon: '🃏', titleKey: 'settings.setup.gameFlowStep1Title', descKey: 'settings.setup.gameFlowStep1Desc' },
+                    { step: 2, icon: '📡', titleKey: 'settings.setup.gameFlowStep2Title', descKey: 'settings.setup.gameFlowStep2Desc' },
+                    { step: 3, icon: '🧮', titleKey: 'settings.setup.gameFlowStep3Title', descKey: 'settings.setup.gameFlowStep3Desc' },
+                    { step: 4, icon: '🏆', titleKey: 'settings.setup.gameFlowStep4Title', descKey: 'settings.setup.gameFlowStep4Desc' },
+                    { step: 5, icon: '📊', titleKey: 'settings.setup.gameFlowStep5Title', descKey: 'settings.setup.gameFlowStep5Desc' },
+                  ] as const;
+                  const lines = steps.map(s => `${s.icon} ${s.step}. ${t(s.titleKey)}\n   ${t(s.descKey)}`).join('\n\n');
+                  shareToWhatsApp(`🎮 ${t('settings.setup.gameFlowTitle')}\n${t('settings.setup.gameFlowSubtitle')}\n\n${lines}`);
+                }}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '8px',
+                  border: '1px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.1)',
+                  color: '#25D366', cursor: 'pointer',
+                  fontSize: '0.75rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
+                }}
+              >
+                <span style={{ fontSize: '0.95rem' }}>📲</span> WhatsApp
+              </button>
+              <button
+                onClick={() => setShowGameFlow(false)}
+                style={{
+                  flex: 1, padding: '0.5rem', borderRadius: '8px',
+                  border: 'none', background: '#10B981', color: '#fff', cursor: 'pointer',
+                  fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
+                }}
+              >{t('settings.setup.gameFlowClose')}</button>
+            </div>
           </div>
         </div>
       )}

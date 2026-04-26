@@ -218,6 +218,15 @@ function debouncedSync(key: string) {
   }, 300));
 }
 
+export async function flushSync(key: string): Promise<void> {
+  const existing = syncTimers.get(key);
+  if (existing) {
+    clearTimeout(existing);
+    syncTimers.delete(key);
+  }
+  await pushToSupabase(key);
+}
+
 // ── Push changes to Supabase ──
 
 function logSyncError(table: string, op: string, error: { message: string }) {

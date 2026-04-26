@@ -31,6 +31,8 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/trainingData';
+import { proxySendBroadcastEmail } from '../utils/apiProxy';
+import { supabase } from '../database/supabaseClient';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -304,6 +306,26 @@ const SharedQuickPlayScreen = () => {
       : null;
 
     directWriteSession(name, session, crossedMilestone || undefined);
+
+    if (finalReports.length > 0) {
+      (async () => {
+        try {
+          const { data: emails } = await supabase.rpc('get_super_admin_emails');
+          if (!emails || !Array.isArray(emails) || emails.length === 0) return;
+          const reasons = finalReports.map(r => {
+            const labels: Record<string, string> = { wrong_answer: 'תשובה שגויה', unclear_question: 'שאלה לא ברורה', wrong_for_home_game: 'לא למשחק ביתי', other: 'אחר' };
+            return `- ${labels[r.reason] || r.reason}${r.comment ? `: ${r.comment}` : ''}`;
+          }).join('\n');
+          const subject = `🎯 ${finalReports.length} דיווח${finalReports.length > 1 ? 'ים' : ''} חדש${finalReports.length > 1 ? 'ים' : ''} על שאלות אימון`;
+          const message = `${name} דיווח/ה על ${finalReports.length} שאלה/ות באימון:\n\n${reasons}\n\nהיכנס/י ללשונית אימון בהגדרות כדי לבדוק ולטפל.`;
+          for (const email of emails) {
+            if (email) {
+              proxySendBroadcastEmail({ to: email, subject, message, senderName: 'Poker Training' }).catch(() => {});
+            }
+          }
+        } catch { /* best-effort */ }
+      })();
+    }
 
     if (!resultsToUse) {
       setShowSummary(true);

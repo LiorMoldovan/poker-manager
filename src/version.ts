@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.22.6';
+export const APP_VERSION = '5.23.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.23.0',
+    date: '2026-04-26',
+    changes: [
+      '✅ Add/remove players during live game (admin/owner/superadmin)',
+      '📱 Compact single-line player rows in live game — less scrolling with 7-8 players',
+      '📱 Player count added to live game summary card',
+      '📱 Recent actions collapsed by default with expand toggle',
+      '🔧 ROI division-by-zero guard in game summary highlights',
+      '✅ GroupWizard: editable chip values, flow arrows, auto-focus player input',
+      '✅ GroupWizard: features & game flow modals reused from Settings',
+      '📱 Wizard done step cleanup, WhatsApp share container styled consistently',
+      '📱 Settings: unified button styles, version badge simplified',
+      '📊 Statistics: reordered table mode buttons, fixed avg column label',
+      '🔧 SuperAdmin/Owner now inherit admin permissions across all screens',
+    ],
+  },
   {
     version: '5.22.6',
     date: '2026-04-21',

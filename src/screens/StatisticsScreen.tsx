@@ -49,7 +49,7 @@ const StatisticsScreen = () => {
   const [playerSubTab, setPlayerSubTab] = useState<PlayerSubTab>('stats');
   const [recordsSubTab, setRecordsSubTab] = useState<RecordsSubTab>('global');
   const [sortBy, setSortBy] = useState<'profit' | 'games' | 'winRate'>('profit');
-  const [tableMode, setTableMode] = useState<'profit' | 'gainLoss'>('profit');
+  const [tableMode, setTableMode] = useState<'profit' | 'gainLoss' | 'avgGainLoss'>('profit');
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
   const [selectedTypes] = useState<Set<PlayerType>>(new Set(['permanent', 'permanent_guest', 'guest']));
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(() => {
@@ -2306,30 +2306,31 @@ const StatisticsScreen = () => {
                 <option value="games" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortGames')}</option>
                 <option value="winRate" style={{ background: '#1a1a2e', color: '#ffffff' }}>{t('stats.sortWinRate')}</option>
               </select>
-              {viewMode === 'table' && (
+              {viewMode === 'table' && (['profit', 'avgGainLoss', 'gainLoss'] as const).map(mode => (
                 <button
-                  onClick={() => setTableMode(tableMode === 'profit' ? 'gainLoss' : 'profit')}
+                  key={mode}
+                  onClick={() => setTableMode(mode)}
                   style={{
                     padding: '0.35rem 0.6rem',
                     fontSize: '0.75rem',
                     borderRadius: '6px',
-                    border: tableMode === 'gainLoss' ? '2px solid var(--primary)' : '1px solid var(--border)',
-                    background: tableMode === 'gainLoss' ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
-                    color: tableMode === 'gainLoss' ? 'var(--primary)' : 'var(--text-muted)',
+                    border: tableMode === mode ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: tableMode === mode ? 'rgba(16, 185, 129, 0.15)' : 'var(--surface)',
+                    color: tableMode === mode ? 'var(--primary)' : 'var(--text-muted)',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {t('stats.gainLoss')}
+                  {mode === 'profit' ? t('stats.sortProfit') : mode === 'gainLoss' ? t('stats.gainLoss') : t('stats.avgGainLoss')}
                 </button>
-              )}
+              ))}
             </div>
           )}
 
           {/* TABLE VIEW */}
           {viewMode === 'table' && (
             <>
-              <div ref={tableRef} className="card" style={{ padding: '0.5rem' }}>
+              <div ref={tableRef} className="card" style={{ padding: '0.5rem', overflowX: 'auto' }}>
                 <div style={{ 
                   textAlign: 'center', 
                   fontSize: '0.7rem', 
@@ -2342,24 +2343,29 @@ const StatisticsScreen = () => {
                   {' • '}{t('stats.gamesCount', { count: totalGamesInPeriod })}
                   {filterActiveOnly && t('stats.activePlayersNote')}
                 </div>
-                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', fontSize: '0.8rem', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '24px', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.rankCol')}</th>
+                      <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '32px', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.rankCol')}</th>
                       <th style={{ padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left' }}>{t('stats.playerCol')}</th>
                       {tableMode === 'profit' ? (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>{t('stats.profitCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap' }}>{t('stats.avgCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '22%' }}>{t('stats.profitCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.4rem', whiteSpace: 'nowrap', width: '16%' }}>{t('stats.avgCol')}</th>
+                        </>
+                      ) : tableMode === 'gainLoss' ? (
+                        <>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--success)' }}>{t('stats.gainCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--danger)' }}>{t('stats.lossCol')}</th>
                         </>
                       ) : (
                         <>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>{t('stats.gainCol')}</th>
-                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>{t('stats.lossCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--success)' }}>{t('stats.avgWinCol')}</th>
+                          <th style={{ textAlign: 'right', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '19%', color: 'var(--danger)' }}>{t('stats.avgLossCol')}</th>
                         </>
                       )}
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap' }}>{t('stats.gamesCol')}</th>
-                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap' }}>{t('stats.winRateCol')}</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', width: '13%' }}>{t('stats.gamesCol')}</th>
+                      <th style={{ textAlign: 'center', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', width: '13%' }}>{t('stats.winRateCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2396,7 +2402,7 @@ const StatisticsScreen = () => {
                         </span>
                           )}
                       </td>
-                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>
+                        <td style={{ fontWeight: '600', padding: '0.3rem 0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: isRTL ? 'right' : 'left', ...(isMe ? meNameStyle : {}) }}>
                           {player.playerName}
                       </td>
                         {tableMode === 'profit' ? (
@@ -2408,13 +2414,22 @@ const StatisticsScreen = () => {
                               {player.avgProfit >= 0 ? '\u200E+' : '\u200E-'}{cleanNumber(Math.abs(player.avgProfit))}
                             </td>
                           </>
-                        ) : (
+                        ) : tableMode === 'gainLoss' ? (
                           <>
                             <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>
                               {'\u200E'}+{cleanNumber(player.totalGains)}
                             </td>
                             <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>
                               {'\u200E'}-{cleanNumber(player.totalLosses)}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--success)' }}>
+                              {player.avgWin > 0 ? `\u200E+${cleanNumber(player.avgWin)}` : '-'}
+                            </td>
+                            <td style={{ textAlign: 'right', fontWeight: '600', padding: '0.3rem 0.3rem', whiteSpace: 'nowrap', color: 'var(--danger)' }}>
+                              {player.avgLoss > 0 ? `\u200E-${cleanNumber(player.avgLoss)}` : '-'}
                             </td>
                           </>
                         )}

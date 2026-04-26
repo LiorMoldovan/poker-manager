@@ -9,7 +9,6 @@ export default function GroupSwitcher() {
   const { multiGroup } = usePermissions();
   const [modalOpen, setModalOpen] = useState(false);
   const [setupMode, setSetupMode] = useState<'create' | 'join' | null>(null);
-  const [justCreated, setJustCreated] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: 'leave' | 'delete';
@@ -74,7 +73,10 @@ export default function GroupSwitcher() {
           userEmail={multiGroup.userEmail}
           onCreateGroup={async (name) => {
             const result = await multiGroup.createGroup(name);
-            if (!result.error) setJustCreated(true);
+            if (!result.error) {
+              multiGroup.triggerGroupWizard();
+              setSetupMode(null);
+            }
             return result;
           }}
           onJoinGroup={async (code) => {
@@ -90,10 +92,6 @@ export default function GroupSwitcher() {
           onSignOut={() => setSetupMode(null)}
           onContinue={() => {
             multiGroup.refreshMembership();
-            if (justCreated) {
-              multiGroup.triggerGroupWizard();
-              setJustCreated(false);
-            }
             setSetupMode(null);
           }}
           onClose={() => setSetupMode(null)}

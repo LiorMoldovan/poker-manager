@@ -35,7 +35,8 @@ const GameSummaryScreen = () => {
   const cameFromTable = locationState?.from === 'statistics';
   const cameFromStatistics = cameFromRecords || cameFromPlayers || cameFromTable;
   const cameFromChipEntry = locationState?.from === 'chip-entry';
-  const { role, playerName: identityName, isOwner } = usePermissions();
+  const { role, playerName: identityName, isOwner, isSuperAdmin } = usePermissions();
+  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const highlightName = cameFromChipEntry ? null : identityName;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [settlements, setSettlements] = useState<Settlement[]>([]);
@@ -103,7 +104,7 @@ const GameSummaryScreen = () => {
     paidSettlements.some(p => p.from === from && p.to === to);
 
   const canToggleSettlement = (from: string, to: string) => {
-    if (role === 'admin') return true;
+    if (isAdmin) return true;
     return identityName === from || identityName === to;
   };
 
@@ -139,13 +140,15 @@ const GameSummaryScreen = () => {
       const gameDateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '';
       const payLink = `https://poker-manager-blond.vercel.app/game-summary/${gameId}?pay=1`;
 
+      const roundedAmount = Math.round(amount);
+
       if (targetInfo) {
         await createNotification(groupId, targetInfo.userId, 'settlement_dispute',
           t('notification.settlementTitle'),
           t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel }),
-          { gameId, from, to, amount, gameDate });
+          { gameId, from, to, amount: roundedAmount, gameDate });
         await proxySendEmail({
-          to: targetInfo.email, subject: t('notification.emailSubject'), playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+          to: targetInfo.email, subject: t('notification.emailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink,
         });
       }
 
@@ -156,9 +159,9 @@ const GameSummaryScreen = () => {
         const selfBody = targetInfo
           ? t('notification.selfDisputeBody', { amount: cleanNumber(amount), target: targetPlayer, date: gameDateLabel })
           : t('notification.unlinkedDisputeBody', { amount: cleanNumber(amount), target: targetPlayer, date: gameDateLabel });
-        await createNotification(groupId, actorInfo.userId, 'settlement_dispute_self', selfTitle, selfBody, { gameId, from, to, amount, gameDate });
+        await createNotification(groupId, actorInfo.userId, 'settlement_dispute_self', selfTitle, selfBody, { gameId, from, to, amount: roundedAmount, gameDate });
         await proxySendEmail({
-          to: actorInfo.email, subject: t('notification.selfDisputeEmailSubject'), playerName: targetPlayer, reporterName: identityName, amount, gameDate: gameDateLabel, payLink,
+          to: actorInfo.email, subject: t('notification.selfDisputeEmailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink,
         });
       }
 
@@ -398,13 +401,15 @@ const GameSummaryScreen = () => {
     // 4. Best ROI
     const winners = sortedPlayers.filter(p => p.profit > 0);
     if (winners.length >= 2) {
-      const withROI = winners.map(p => ({
+      const withROI = winners.filter(p => p.rebuys > 0).map(p => ({
         ...p,
         roi: (p.profit / (p.rebuys * settings2.rebuyValue)) * 100
       }));
-      const bestROI = [...withROI].sort((a, b) => b.roi - a.roi)[0];
-      if (bestROI.roi >= 30) {
-        bank.push({ emoji: '📈', label: 'תשואה הכי גבוהה', detail: `${bestROI.playerName} — ${Math.round(bestROI.roi)}%`, priority: 5 });
+      if (withROI.length > 0) {
+        const bestROI = [...withROI].sort((a, b) => b.roi - a.roi)[0];
+        if (bestROI.roi >= 30) {
+          bank.push({ emoji: '📈', label: 'תשואה הכי גבוהה', detail: `${bestROI.playerName} — ${Math.round(bestROI.roi)}%`, priority: 5 });
+        }
       }
     }
 
@@ -1297,7 +1302,7 @@ const GameSummaryScreen = () => {
                 const canOpenModal = canToggleSettlement(s.from, s.to);
                 const isClickable = !paid && canOpenModal;
                 const canDispute = paid && isAutoClosed && iAmTo;
-                const adminCanManage = paid && role === 'admin';
+                const adminCanManage = paid && isAdmin;
                 const rowClickable = isClickable || canDispute || adminCanManage;
                 return (
                   <div
@@ -2180,7 +2185,7 @@ const GameSummaryScreen = () => {
       </div>
 
       {/* Re-open chip entry - admin only, only from game flow */}
-      {role === 'admin' && cameFromChipEntry && (
+      {isAdmin && cameFromChipEntry && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
           {!showReopenConfirm ? (
             <button

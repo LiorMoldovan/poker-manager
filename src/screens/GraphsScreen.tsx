@@ -105,7 +105,7 @@ const GraphsScreen = () => {
   const prevTimePeriodRef = useRef<{ period: TimePeriod; year: number } | null>(null);
 
   // AI Graph Insights state
-  const { role, isOwner } = usePermissions();
+  const { role, isOwner, isSuperAdmin } = usePermissions();
   const [insightsText, setInsightsText] = useState<string>('');
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
@@ -1279,7 +1279,7 @@ const GraphsScreen = () => {
       )}
 
       {/* 🤖 AI GRAPH INSIGHTS */}
-      {viewMode === 'cumulative' && (insightsText || insightsLoading || role === 'admin' || role === 'member') && (
+      {viewMode === 'cumulative' && (insightsText || insightsLoading || !!role || isSuperAdmin) && (
         <div ref={insightsRef} className="card" style={{ animation: 'contentFadeIn 0.3s ease-out 0.15s backwards' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h2 className="card-title" style={{ margin: 0 }}>{t('graphs.aiInsights')}</h2>
@@ -1355,7 +1355,7 @@ const GraphsScreen = () => {
             </>
           )}
 
-          {!insightsText && !insightsLoading && !insightsError && role !== 'admin' && (
+          {!insightsText && !insightsLoading && !insightsError && role !== 'admin' && !isSuperAdmin && !isOwner && (
             <div style={{
               textAlign: 'center',
               padding: '1rem',

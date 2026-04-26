@@ -457,7 +457,7 @@ function SupabaseApp() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const email = params.get('addMember');
-    if (email && auth.membership && role === 'admin') {
+    if (email && auth.membership && (role === 'admin' || isSuperAdmin || isOwner)) {
       setAddMemberPrompt(email);
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -508,7 +508,7 @@ function SupabaseApp() {
     isSuperAdmin,
     trainingEnabled,
     playerName,
-    hasPermission: (permission) => isSuperAdmin || hasPermission(role, permission),
+    hasPermission: (permission) => isSuperAdmin || isOwner || hasPermission(role, permission),
     signOut,
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
@@ -573,19 +573,6 @@ function SupabaseApp() {
     );
   }
 
-  if (dataReady && !playerName) {
-    const displayName = auth.user?.user_metadata?.full_name
-      || auth.user?.user_metadata?.name
-      || auth.user?.email?.split('@')[0]
-      || '';
-    return (
-      <PlayerPicker
-        onSelfCreate={auth.selfCreateAndLink}
-        userDisplayName={displayName}
-      />
-    );
-  }
-
   if (!dataReady) {
     return (
       <div style={{
@@ -616,13 +603,28 @@ function SupabaseApp() {
     );
   }
 
-  if (showGroupWizard && playerName) {
+  if (showGroupWizard) {
     return (
       <GroupWizard
         ownerPlayerName={playerName}
+        groupName={auth.membership?.groupName ?? null}
         onComplete={() => setShowGroupWizard(false)}
+        onSelfCreate={!playerName ? auth.selfCreateAndLink : undefined}
         createPlayerInvite={auth.createPlayerInvite}
         groupInviteCode={auth.membership?.inviteCode ?? null}
+      />
+    );
+  }
+
+  if (dataReady && !playerName) {
+    const displayName = auth.user?.user_metadata?.full_name
+      || auth.user?.user_metadata?.name
+      || auth.user?.email?.split('@')[0]
+      || '';
+    return (
+      <PlayerPicker
+        onSelfCreate={auth.selfCreateAndLink}
+        userDisplayName={displayName}
       />
     );
   }
@@ -790,7 +792,7 @@ function SupabaseApp() {
     </div>
   );
 
-  const isAdmin = role === 'admin';
+  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const defaultRoute = isAdmin ? '/' : '/statistics';
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as Record<string, unknown>).MSStream;

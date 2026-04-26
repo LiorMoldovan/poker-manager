@@ -12,6 +12,7 @@ import {
   createGameEndBackup,
   invalidateAICaches,
   deleteTTSPool,
+  flushGameCompletion,
 } from '../database/storage';
 import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
@@ -213,7 +214,7 @@ const ChipEntryScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const { role, isSuperAdmin, isOwner } = usePermissions();
-  const isAdmin = role === 'admin' || isSuperAdmin;
+  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [chipValues, setChipValues] = useState<ChipValue[]>([]);
   const [chipCounts, setChipCounts] = useState<Record<string, Record<string, number>>>({});
@@ -231,6 +232,7 @@ const ChipEntryScreen = () => {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [completedPlayers, setCompletedPlayers] = useState<Set<string>>(new Set());
   const [showUncountedWarning, setShowUncountedWarning] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   // Value per chip point = rebuyValue / chipsPerRebuy (with fallback to prevent division by zero)
   const valuePerChip = rebuyValue / (chipsPerRebuy || 10000);
@@ -449,14 +451,15 @@ const ChipEntryScreen = () => {
 
   const allPlayersCounted = completedPlayers.size === players.length;
 
-  const handleCalculate = () => {
-    if (!gameId) return;
+  const handleCalculate = async () => {
+    if (!gameId || isFinalizing) return;
 
     if (!allPlayersCounted && !showUncountedWarning) {
       setShowUncountedWarning(true);
       return;
     }
     setShowUncountedWarning(false);
+    setIsFinalizing(true);
     
     // Calculate the gap between expected and actual chips (in money terms)
     const totalCountedMoney = players.reduce((sum, p) => sum + getPlayerMoneyValue(p.id), 0);
@@ -469,26 +472,26 @@ const ChipEntryScreen = () => {
       updateGamePlayerChips(player.id, playerChips);
       
       const moneyValue = getPlayerMoneyValue(player.id);
-      // Calculate base profit, then subtract player's share of the gap
-      // If there are extra chips (gap > 0), each player's profit is reduced
-      // If chips are missing (gap < 0), each player's loss is reduced (profit increased)
       const baseProfit = calculateProfitLoss(moneyValue, player.rebuys, rebuyValue);
       const adjustedProfit = baseProfit - gapPerPlayer;
-      updateGamePlayerResults(player.id, moneyValue, adjustedProfit); // No rounding
+      updateGamePlayerResults(player.id, moneyValue, adjustedProfit);
     });
     
     // Save gap info to the game
     if (Math.abs(gapInMoney) > 0.01) {
-      updateGameChipGap(gameId, gapInMoney, gapPerPlayer); // No rounding
+      updateGameChipGap(gameId, gapInMoney, gapPerPlayer);
     }
     
     updateGameStatus(gameId, 'completed');
     invalidateAICaches();
-    
-    // Create auto backup after game ends
-    createGameEndBackup();
 
-    // TTS pool served its purpose during the live game — free up DB space
+    try {
+      await flushGameCompletion();
+    } catch (err) {
+      console.warn('Game completion sync failed, will retry via debounce:', err);
+    }
+    
+    createGameEndBackup();
     deleteTTSPool(gameId);
     
     navigate(`/game-summary/${gameId}`, {
@@ -814,10 +817,10 @@ const ChipEntryScreen = () => {
         <button 
           className="btn btn-primary btn-block"
           onClick={handleCalculate}
-          disabled={!isAdmin}
-          style={{ padding: '0.6rem', opacity: isAdmin ? 1 : 0.5 }}
+          disabled={!isAdmin || isFinalizing}
+          style={{ padding: '0.6rem', opacity: isAdmin && !isFinalizing ? 1 : 0.5 }}
         >
-          {!isAdmin ? t('common.viewOnly') : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
+          {!isAdmin ? t('common.viewOnly') : isFinalizing ? '...' : showUncountedWarning ? t('chips.confirmCalculate') : t('chips.calculateResults')}
         </button>
       </div>
 

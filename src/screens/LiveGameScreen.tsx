@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory } from '../types';
-import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
+import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTSAnticipatedCategory, Player } from '../types';
+import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, addPlayerToGame, getAllPlayers, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { cleanNumber } from '../utils/calculations';
 import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
@@ -16,8 +16,8 @@ const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { role } = usePermissions();
-  const isAdmin = role === 'admin';
+  const { role, isSuperAdmin, isOwner } = usePermissions();
+  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [actions, setActions] = useState<GameAction[]>([]);
   const [rebuyValue, setRebuyValue] = useState(50);
@@ -27,6 +27,7 @@ const LiveGameScreen = () => {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<SharedExpense | null>(null);
   const [playerToRemove, setPlayerToRemove] = useState<GamePlayer | null>(null);
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [socialAction, setSocialAction] = useState<'bad_beat' | 'big_hand' | null>(null);
 
   
@@ -53,6 +54,7 @@ const LiveGameScreen = () => {
   // TTS debug overlay
   const [ttsLog, setTtsLog] = useState<Array<{ text: string; type: string; ts: number }>>([]);
   const [showTtsDebug, setShowTtsDebug] = useState(false);
+  const [showAllActions, setShowAllActions] = useState(false);
   const ttsDebugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -318,6 +320,21 @@ const LiveGameScreen = () => {
       setPlayers(prev => prev.filter(p => p.id !== playerToRemove.id));
     }
     setPlayerToRemove(null);
+  };
+
+  const getAvailablePlayers = (): Player[] => {
+    const allPlayers = getAllPlayers();
+    const currentPlayerIds = new Set(players.map(p => p.playerId));
+    return allPlayers.filter(p => !currentPlayerIds.has(p.id));
+  };
+
+  const handleAddPlayer = (playerId: string) => {
+    if (!gameId) return;
+    const newGamePlayer = addPlayerToGame(gameId, playerId);
+    if (newGamePlayer) {
+      setPlayers(prev => [...prev, newGamePlayer]);
+    }
+    setShowAddPlayer(false);
   };
 
   // Loading state
@@ -1840,66 +1857,70 @@ const LiveGameScreen = () => {
           <div className="summary-title">{t('live.totalBuyins')}</div>
           <div className="summary-value">{totalRebuys % 1 !== 0 ? totalRebuys.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : cleanNumber(totalRebuys)}</div>
         </div>
+        <div>
+          <div className="summary-title">{t('common.players')}</div>
+          <div className="summary-value">{players.length}</div>
+        </div>
       </div>
 
       <div className="card">
         <div className="card-header">
           <h2 className="card-title">{t('live.playersSection')}</h2>
-          <span className="text-muted">{players.length} {t('live.playing')}</span>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddPlayer(true)}
+              style={{
+                padding: '0.15rem 0.5rem', fontSize: '0.72rem', fontWeight: 600,
+                fontFamily: 'Outfit, sans-serif',
+                background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)',
+                borderRadius: '6px', color: '#10B981', cursor: 'pointer',
+              }}
+            >
+              {t('live.addPlayer')}
+            </button>
+          )}
         </div>
 
-          {players.map(player => (
-          <div key={player.id} className="player-card" style={{ position: 'relative' }}>
-            {/* Remove button - only show for players who haven't rebought yet */}
-            {isAdmin && player.rebuys <= 1 && (
-              <button
-                onClick={() => handleRemovePlayer(player)}
-                style={{
-                  position: 'absolute',
-                  top: '0.25rem',
-                  left: '0.25rem',
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  padding: '0.25rem',
-                  opacity: 0.6,
-                  transition: 'opacity 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
-                title={t('live.removePlayer')}
-              >
-                ✕
-              </button>
-            )}
-            <div>
-              <div className="player-name">{player.playerName}</div>
-              <div className="text-muted" style={{ fontSize: '0.875rem' }}>
-                {cleanNumber(player.rebuys * rebuyValue)} {t('live.invested')}
-              </div>
-            </div>
-            <div className="player-rebuys">
-              <span key={player.rebuys} className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out' }}>{Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}</span>
-              {isAdmin && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <button 
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleRebuy(player, 1)}
-                  >
-                    {t('live.buyin')}
-                  </button>
-                  <button 
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleRebuy(player, 0.5)}
-                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-                  >
-                    {t('live.halfBuyin')}
-                  </button>
-                </div>
+        {players.map(player => (
+          <div key={player.id} className="player-card" style={{ position: 'relative', padding: '0.25rem 0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: '1 1 auto', minWidth: 0 }}>
+              <span className="player-name" style={{ fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.playerName}</span>
+              {isAdmin && player.rebuys <= 1 && (
+                <button
+                  onClick={() => handleRemovePlayer(player)}
+                  style={{
+                    background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)',
+                    borderRadius: '6px', color: '#ef4444', cursor: 'pointer',
+                    fontSize: '0.6rem', padding: '0.05rem 0.3rem',
+                    fontFamily: 'Outfit, sans-serif', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                >
+                  ✕
+                </button>
               )}
+              <span className="rebuy-count" style={{ animation: 'popIn 0.2s ease-out', fontSize: '1rem' }}>
+                {Math.abs((player.rebuys % 1) - 0.5) < 0.01 ? player.rebuys.toFixed(1) : player.rebuys}
+              </span>
+              <span className="text-muted" style={{ fontSize: '0.7rem' }}>{player.rebuys === 1 ? t('chips.buyinSingle') : t('chips.buyinPlural')}</span>
             </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleRebuy(player, 1)}
+                  style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem', fontWeight: 600 }}
+                >
+                  {t('live.buyin')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleRebuy(player, 0.5)}
+                  style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem' }}
+                >
+                  {t('live.halfBuyin')}
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1908,14 +1929,28 @@ const LiveGameScreen = () => {
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">{t('live.recentActions')}</h2>
-            {isAdmin && (
-              <button className="btn btn-sm btn-secondary" onClick={handleUndo}>
-                {t('live.undo')}
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              {actions.length > 1 && (
+                <button
+                  onClick={() => setShowAllActions(prev => !prev)}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--text-muted)',
+                    cursor: 'pointer', fontSize: '0.7rem', fontFamily: 'Outfit, sans-serif',
+                    padding: '0.1rem 0.3rem',
+                  }}
+                >
+                  {showAllActions ? '▲' : `▼ ${actions.length}`}
+                </button>
+              )}
+              {isAdmin && (
+                <button className="btn btn-sm btn-secondary" onClick={handleUndo}>
+                  {t('live.undo')}
+                </button>
+              )}
+            </div>
           </div>
           <div className="list">
-            {actions.slice(0, 5).map((action, index) => (
+            {(showAllActions ? actions.slice(0, 5) : actions.slice(0, 1)).map((action, index) => (
               <div key={index} className="list-item">
                 <span>
                   {action.playerName} {action.amount === 0.5 ? t('live.halfBuyinAction') : t('live.fullBuyin')}
@@ -2120,6 +2155,100 @@ const LiveGameScreen = () => {
                 {t('live.removeTitle')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Player Modal */}
+      {showAddPlayer && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => setShowAddPlayer(false)}
+        >
+          <div
+            className="modal-content card"
+            style={{
+              maxWidth: '400px',
+              margin: '1rem',
+              padding: '1.5rem',
+              textAlign: 'center',
+              maxHeight: '70vh',
+              overflow: 'auto'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>➕</div>
+            <h3 style={{ marginBottom: '0.5rem' }}>{t('live.addPlayerTitle')}</h3>
+            <p className="text-muted" style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
+              {t('live.addPlayerDesc')}
+            </p>
+            {(() => {
+              const available = getAvailablePlayers();
+              if (available.length === 0) {
+                return (
+                  <p className="text-muted" style={{ padding: '1rem' }}>
+                    {t('live.noAvailablePlayers')}
+                  </p>
+                );
+              }
+              const permanent = available.filter(p => p.type === 'permanent');
+              const permanentGuests = available.filter(p => p.type === 'permanent_guest');
+              const guests = available.filter(p => p.type === 'guest');
+
+              const renderGroup = (label: string, groupPlayers: Player[]) => {
+                if (groupPlayers.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.4rem', textAlign: 'right' }}>
+                      {label}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {groupPlayers.map(player => (
+                        <button
+                          key={player.id}
+                          className="btn btn-secondary"
+                          onClick={() => handleAddPlayer(player.id)}
+                          style={{
+                            padding: '0.6rem 1rem',
+                            fontSize: '1rem',
+                            textAlign: 'right',
+                          }}
+                        >
+                          {player.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              };
+
+              return (
+                <div>
+                  {renderGroup(t('newGame.permanentPlayers'), permanent)}
+                  {renderGroup(t('newGame.guestPlayers', { count: permanentGuests.length }), permanentGuests)}
+                  {renderGroup(t('newGame.guest'), guests)}
+                </div>
+              );
+            })()}
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowAddPlayer(false)}
+              style={{ marginTop: '1rem' }}
+            >
+              {t('common.cancel')}
+            </button>
           </div>
         </div>
       )}

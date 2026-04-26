@@ -388,10 +388,10 @@ body {
 }
 
 .rebuy-count {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--primary);
-  min-width: 2rem;
+  min-width: 1.5rem;
   text-align: center;
 }
 
