@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.23.2';
+export const APP_VERSION = '5.23.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.23.3',
+    date: '2026-04-26',
+    changes: [
+      '📱 Group wizard: fix scroll so header/footer stay reachable on small screens (flex minHeight + iOS touch scroll)',
+    ],
+  },
   {
     version: '5.23.2',
     date: '2026-04-26',

@@ -214,6 +214,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
         padding: '1rem 1.25rem 0.75rem',
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
+        flexShrink: 0,
       }}>
         {(() => {
           const contentSteps = STEPS.filter(s => s !== 'welcome' && s !== 'done');
@@ -245,9 +246,13 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
         })()}
       </div>
 
-      {/* Content */}
+      {/* Content — minHeight:0 so this region can shrink and scroll; otherwise footer is pushed below the viewport */}
       <div style={{
-        flex: 1, overflowY: 'auto', padding: '1rem 1.25rem',
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        padding: '1rem 1.25rem',
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.25rem' }}>{info.icon}</div>
@@ -1055,6 +1060,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
       {currentStep !== 'done' && <div style={{
         padding: '0.75rem 1.25rem', borderTop: '1px solid var(--border)',
         background: 'var(--surface)', display: 'flex', gap: '0.5rem',
+        flexShrink: 0,
       }}>
         {currentIdx > 0 && (
           <button
