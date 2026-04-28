@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.24.0';
+export const APP_VERSION = '5.24.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.24.1',
+    date: '2026-04-28',
+    changes: [
+      '⚡ Pool generation: split into small batches (6 questions each) to avoid Vercel Edge timeout (was 35 in one call → 504)',
+      '🔄 Pool generation: prefer stable gemini-2.5-flash over preview models (avoid 503 high-demand errors)',
+      '🔁 Pool generation: retry on 504 too, shorter 5s backoff between retries',
+    ],
+  },
   {
     version: '5.24.0',
     date: '2026-04-28',

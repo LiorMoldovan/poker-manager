@@ -1682,25 +1682,31 @@ export interface PoolBatchResult {
   diagnostics: string[];
 }
 
-export const generatePoolBatch = async (
+// Pool generation uses small batches to fit within Vercel Edge timeout (~25s).
+// Stable gemini-2.5-flash is tried first for reliability; previews are slow/overloaded.
+const POOL_GEN_MODELS = [
+  { version: 'v1beta', model: 'gemini-2.5-flash' },
+  { version: 'v1beta', model: 'gemini-3.1-flash-lite-preview' },
+  { version: 'v1beta', model: 'gemini-3-flash-preview' },
+];
+const BATCH_SIZE = 6; // questions per single API call (fits comfortably in <20s)
+const MAX_BATCH_TOKENS = 4096; // ~6 questions ~ 2-3k tokens
+
+const generateSingleBatch = async (
   category: CategoryInfo,
-  count: number,
+  batchSize: number,
   existingScenarios: PoolScenario[],
   apiKey: string,
-): Promise<PoolBatchResult> => {
-  const diag: string[] = [];
-  const existing = existingScenarios
-    .filter(s => s.categoryId === category.id)
-    .slice(-15)
-    .map(s => `${s.yourCards}: ${s.situation.slice(0, 80)}`);
+  existingSummaries: string[],
+  diag: string[],
+  batchLabel: string,
+): Promise<PoolScenario[]> => {
+  const prompt = buildPoolBatchPrompt(category, batchSize, existingSummaries);
 
-  const requestCount = count + 5;
-  const prompt = buildPoolBatchPrompt(category, requestCount, existing);
-
-  for (const config of API_CONFIGS) {
+  for (const config of POOL_GEN_MODELS) {
     const MAX_RETRIES = 1;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const label = `[${config.model} #${attempt + 1}]`;
+      const label = `${batchLabel} [${config.model} #${attempt + 1}]`;
       try {
         diag.push(`${label} שולח בקשה...`);
         const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
@@ -1708,7 +1714,7 @@ export const generatePoolBatch = async (
           generationConfig: {
             temperature: 0.85,
             topP: 0.95,
-            maxOutputTokens: 16384,
+            maxOutputTokens: MAX_BATCH_TOKENS,
             responseMimeType: 'application/json',
           },
         });
@@ -1721,9 +1727,9 @@ export const generatePoolBatch = async (
           if (response.status === 404) {
             diag.push(`${label} 404 על /api/gemini — האם רצים מקומית עם vite במקום vercel dev?`);
           }
-          if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-            diag.push(`${label} ממתין 10s לפני ניסיון חוזר...`);
-            await new Promise(r => setTimeout(r, 10000));
+          if ((response.status === 429 || response.status === 503 || response.status === 504) && attempt < MAX_RETRIES) {
+            diag.push(`${label} ממתין 5s לפני ניסיון חוזר...`);
+            await new Promise(r => setTimeout(r, 5000));
             continue;
           }
           break; // move to next model
@@ -1740,7 +1746,7 @@ export const generatePoolBatch = async (
           break;
         }
 
-        diag.push(`${label} התקבלה תשובה (${text.length.toLocaleString('he-IL')} תווים, finishReason=${finishReason || '?'})`);
+        diag.push(`${label} התקבלה תשובה (${text.length.toLocaleString('he-IL')} תווים)`);
 
         let jsonText = text;
         if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
@@ -1749,30 +1755,23 @@ export const generatePoolBatch = async (
         let rawScenarios: unknown[];
         try {
           const parsed = JSON.parse(jsonText.trim());
-          if (!Array.isArray(parsed)) {
-            diag.push(`${label} JSON הוא לא מערך (type=${typeof parsed})`);
-            break;
-          }
+          if (!Array.isArray(parsed)) { diag.push(`${label} JSON לא מערך (type=${typeof parsed})`); break; }
           rawScenarios = parsed;
         } catch {
           const lastComplete = jsonText.lastIndexOf('}');
-          if (lastComplete === -1) {
-            diag.push(`${label} כשל בפענוח JSON — אין אובייקט שלם`);
-            break;
-          }
+          if (lastComplete === -1) { diag.push(`${label} כשל בפענוח JSON`); break; }
           const salvaged = jsonText.slice(0, lastComplete + 1).trim().replace(/,\s*$/, '') + ']';
           try {
             const parsed = JSON.parse(salvaged.startsWith('[') ? salvaged : '[' + salvaged);
-            if (!Array.isArray(parsed)) { diag.push(`${label} JSON חלקי — לא מערך`); break; }
+            if (!Array.isArray(parsed)) { diag.push(`${label} JSON חלקי לא מערך`); break; }
             rawScenarios = parsed;
             diag.push(`${label} JSON קטוע — חולצו ${parsed.length} אובייקטים`);
           } catch {
-            diag.push(`${label} כשל בפענוח JSON (גם אחרי ניסיון חילוץ)`);
+            diag.push(`${label} כשל בפענוח JSON (גם אחרי חילוץ)`);
             break;
           }
         }
 
-        diag.push(`${label} AI החזיר ${rawScenarios.length} שאלות גולמיות`);
         const existingIds = new Set(existingScenarios.map(s => s.poolId));
         const valid: PoolScenario[] = [];
         let invalidCount = 0;
@@ -1793,19 +1792,17 @@ export const generatePoolBatch = async (
           if (existingIds.has(scenario.poolId)) { dupCount++; continue; }
           existingIds.add(scenario.poolId);
           valid.push(scenario);
-          if (valid.length >= count) break;
         }
 
+        const stats: string[] = [];
         if (invalidCount > 0) {
           const reasons = Object.entries(failReasons).map(([r, n]) => `${r}(${n})`).join(', ');
-          diag.push(`${label} ${invalidCount} נפסלו: ${reasons}`);
+          stats.push(`${invalidCount} נפסלו: ${reasons}`);
         }
-        if (dupCount > 0) diag.push(`${label} ${dupCount} כפולות (כבר קיימות)`);
-        diag.push(`${label} ${valid.length} שאלות תקינות`);
+        if (dupCount > 0) stats.push(`${dupCount} כפולות`);
+        diag.push(`${label} ${valid.length}/${rawScenarios.length} תקינות${stats.length ? ' · ' + stats.join(' · ') : ''}`);
 
-        if (valid.length > 0) return { scenarios: valid, diagnostics: diag };
-
-        diag.push(`${label} 0 תקינות — עובר למודל הבא`);
+        if (valid.length > 0) return valid;
         break; // move to next model
       } catch (error) {
         if (error instanceof Error && error.message === 'INVALID_API_KEY') throw error;
@@ -1816,8 +1813,70 @@ export const generatePoolBatch = async (
     }
   }
 
-  diag.push('כל המודלים נכשלו — לא הופקו שאלות');
-  return { scenarios: [], diagnostics: diag };
+  return [];
+};
+
+export const generatePoolBatch = async (
+  category: CategoryInfo,
+  count: number,
+  existingScenarios: PoolScenario[],
+  apiKey: string,
+): Promise<PoolBatchResult> => {
+  const diag: string[] = [];
+  const existing = existingScenarios
+    .filter(s => s.categoryId === category.id)
+    .slice(-15)
+    .map(s => `${s.yourCards}: ${s.situation.slice(0, 80)}`);
+
+  const accumulated: PoolScenario[] = [];
+  const localPool = [...existingScenarios];
+  const numBatches = Math.ceil(count / BATCH_SIZE);
+  diag.push(`יעד: ${count} שאלות · ${numBatches} מנות של עד ${BATCH_SIZE} שאלות`);
+
+  let consecutiveEmptyBatches = 0;
+  for (let b = 0; b < numBatches; b++) {
+    if (accumulated.length >= count) break;
+    const remaining = count - accumulated.length;
+    const thisBatchSize = Math.min(BATCH_SIZE, remaining + 2);
+    const batchLabel = `מנה ${b + 1}/${numBatches}`;
+    diag.push(`${batchLabel} מבקש ${thisBatchSize} שאלות (יש ${accumulated.length}/${count})`);
+
+    // Include just-generated scenarios in summary to discourage near-duplicates within the same run
+    const summaries = [
+      ...existing,
+      ...accumulated.slice(-10).map(s => `${s.yourCards}: ${s.situation.slice(0, 80)}`),
+    ];
+
+    try {
+      const batch = await generateSingleBatch(
+        category, thisBatchSize, localPool, apiKey, summaries, diag, batchLabel
+      );
+      if (batch.length === 0) {
+        consecutiveEmptyBatches++;
+        if (consecutiveEmptyBatches >= 2) {
+          diag.push(`עצירה: 2 מנות רצופות החזירו 0 שאלות`);
+          break;
+        }
+      } else {
+        consecutiveEmptyBatches = 0;
+        accumulated.push(...batch);
+        localPool.push(...batch);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === 'INVALID_API_KEY') throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      diag.push(`${batchLabel} שגיאה לא צפויה: ${msg}`);
+      break;
+    }
+
+    // Brief pause between batches to ease rate limits
+    if (b < numBatches - 1 && accumulated.length < count) {
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+
+  diag.push(`סך הכל: ${accumulated.length}/${count} שאלות`);
+  return { scenarios: accumulated.slice(0, count), diagnostics: diag };
 };
 
 // ── Direct Supabase write (primary) + buffered fallback ──
