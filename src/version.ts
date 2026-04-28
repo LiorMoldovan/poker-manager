@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.24.4';
+export const APP_VERSION = '5.25.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.25.0',
+    date: '2026-04-28',
+    changes: [
+      '📅 Schedule (Next Game): full date-poll feature — admins propose dates, members RSVP, auto-confirm on target, expansion delay, WhatsApp share, proxy votes',
+      '⚙️ Schedule create-poll: removed 2–5 date limit — start with one auto-filled date (next game-night day from settings), add more as needed',
+      '🧭 Settings: moved “המשחק הבא” tab to the end (after “אודות”) for less prominent placement',
+      '🗓️ Activity heatmap: added date range header (e.g. 21/4–28/4) and highlight today\'s row for clarity',
+    ],
+  },
   {
     version: '5.24.4',
     date: '2026-04-28',

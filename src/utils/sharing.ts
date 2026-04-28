@@ -1,4 +1,4 @@
-import { GamePlayer, Settlement, SkippedTransfer, ChipValue } from '../types';
+import { GamePlayer, Settlement, SkippedTransfer, ChipValue, GamePoll, GamePollDate } from '../types';
 import { cleanNumber } from './calculations';
 
 // Calculate total chips for a player
@@ -95,6 +95,66 @@ export const generateGameSummary = (
 export const shareToWhatsApp = (text: string): void => {
   const encoded = encodeURIComponent(text);
   window.open(`https://wa.me/?text=${encoded}`, '_blank');
+};
+
+// ─── Game Scheduling Polls ───────────────────────────────────
+
+const formatHebrewDateForShare = (date: GamePollDate): string => {
+  try {
+    const d = new Date(`${date.proposedDate}T${date.proposedTime || '21:00'}`);
+    const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
+    const dd = d.getDate();
+    const mm = d.getMonth() + 1;
+    const time = date.proposedTime ? ` ${date.proposedTime.slice(0, 5)}` : '';
+    return `${weekday} ${dd}/${mm}${time}`;
+  } catch {
+    return date.proposedDate;
+  }
+};
+
+export const generatePollInvitationText = (poll: GamePoll, dates: GamePollDate[]): string => {
+  let text = `🃏 *ערב פוקר חדש* — נא להצביע!\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  text += `📅 *תאריכים מוצעים:*\n`;
+  for (const d of dates) {
+    const loc = d.location || poll.defaultLocation;
+    text += `• ${formatHebrewDateForShare(d)}${loc ? ` — ${loc}` : ''}\n`;
+  }
+  text += `\n🎯 יעד: ${poll.targetPlayerCount} שחקנים\n`;
+  if (poll.note) {
+    text += `\n📝 ${poll.note}\n`;
+  }
+  text += `\n_היכנסו לאפליקציה והצביעו_ 🎲`;
+  return text;
+};
+
+export const generatePollConfirmationText = (
+  poll: GamePoll,
+  confirmedDate: GamePollDate,
+  playerNames: string[],
+): string => {
+  const loc = confirmedDate.location || poll.defaultLocation;
+  let text = `✅ *המשחק נסגר!*\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  text += `🗓 ${formatHebrewDateForShare(confirmedDate)}\n`;
+  if (loc) text += `📍 ${loc}\n`;
+  text += `\n👥 *שחקנים מאושרים (${playerNames.length}):*\n`;
+  for (const name of playerNames) {
+    text += `• ${name}\n`;
+  }
+  text += `\n_נתראה ליד השולחן_ 🃏`;
+  return text;
+};
+
+export const generatePollCancellationText = (poll: GamePoll): string => {
+  let text = `❌ *ההצבעה בוטלה*\n`;
+  text += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+  if (poll.note) text += `📋 ${poll.note}\n`;
+  if (poll.cancellationReason) {
+    text += `\n💬 *סיבה:* ${poll.cancellationReason}\n`;
+  }
+  text += `\n_Poker Manager_ 🎲`;
+  return text;
 };
 
 const MAX_SLICE_HEIGHT = 1200;

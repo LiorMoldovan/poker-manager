@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits } from '../types';
 import { cleanNumber } from '../utils/calculations';
 import { 
@@ -44,6 +44,7 @@ import { supabase } from '../database/supabaseClient';
 import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import GroupManagementTab from '../components/GroupManagementTab';
+import ScheduleTab from '../components/ScheduleTab';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 import { useTranslation } from '../i18n';
@@ -201,10 +202,28 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
-  const getDefaultTab = (): TabId => 'group';
-  
+  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
+  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
+  const location = useLocation();
+  const getDefaultTab = (): TabId => {
+    // Honor ?tab=<id> URL param (used by deep links from push notifications)
+    const params = new URLSearchParams(location.search);
+    const t = params.get('tab');
+    if (t && (VALID_TAB_IDS as readonly string[]).includes(t)) return t as TabId;
+    return 'group';
+  };
+
   const [activeTab, setActiveTab] = useState<TabId>(getDefaultTab());
+
+  // Re-sync if URL changes while screen mounted (back/forward / re-deeplink)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const t = params.get('tab');
+    if (t && (VALID_TAB_IDS as readonly string[]).includes(t) && t !== activeTab) {
+      setActiveTab(t as TabId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
   const [wizardStepIdx, setWizardStepIdx] = useState<number | null>(null);
   const [wizardDismissed, setWizardDismissed] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -549,8 +568,8 @@ const SettingsScreen = () => {
           const catLabel = t(`report.categories.${reportCategory}` as 'report.categories.bug');
           await proxySendBroadcastEmail({
             to: ownerEmail,
-            subject: `📩 דיווח חדש מ${authPlayerName || 'משתמש'}`,
-            message: `סוג: ${catLabel}\n\n${reportText.trim()}\n\n— ${authPlayerName || 'משתמש'}`,
+            subject: `📩 ${authPlayerName || 'מישהו'} שלח/ה דיווח חדש`,
+            message: `היי 👋\n\n${authPlayerName || 'משתמש'} שלח/ה דיווח חדש:\n\n📌 ${catLabel}\n${reportText.trim()}\n\nאפשר לבדוק את זה בלשונית "דיווחים" בהגדרות כשנוח 🙏`,
             senderName: 'Poker Manager',
           });
         }
@@ -598,6 +617,7 @@ const SettingsScreen = () => {
     { id: 'superadmin', label: t('settings.tabSuperAdmin'), icon: '🛡️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
     { id: 'report', label: t('settings.tabReport'), icon: '📩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
+    { id: 'schedule', label: t('settings.tabSchedule'), icon: '📅', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
   ];
   
   const tabs = allTabs.filter(tab => {
@@ -898,6 +918,11 @@ const SettingsScreen = () => {
           leaveGroup={multiGroup ? () => multiGroup.leaveGroup(multiGroup.activeGroupId ?? '') : undefined}
           appUrl={window.location.origin}
         />
+      )}
+
+      {/* Schedule Tab (Game Polls) */}
+      {activeTab === 'schedule' && (
+        <ScheduleTab />
       )}
 
       {/* Game Settings Tab */}
@@ -2285,8 +2310,8 @@ const SettingsScreen = () => {
                               const catLabel = t(`report.categories.${r.category}` as 'report.categories.bug');
                               await proxySendBroadcastEmail({
                                 to: reporterEmail,
-                                subject: '✅ הדיווח שלך טופל',
-                                message: `הדיווח שלך טופל בהצלחה:\n\nסוג: ${catLabel}\n${r.description || ''}\n\n— ${authPlayerName || 'Poker Manager'}`,
+                                subject: '✅ הדיווח שלך טופל — תודה!',
+                                message: `היי 👋\n\nרק רצינו לעדכן שטיפלנו בדיווח שלך:\n\n📌 ${catLabel}\n${r.description || ''}\n\nתודה שעזרת לשפר את האפליקציה 🙏\n— ${authPlayerName || 'Poker Manager'}`,
                                 senderName: 'Poker Manager',
                               });
                             }
@@ -3038,7 +3063,7 @@ const SettingsScreen = () => {
                     for (const { email } of emails) {
                       const ok = await proxySendBroadcastEmail({
                         to: email,
-                        subject: '🃏 Poker Manager',
+                        subject: `🃏 הודעה מ${authPlayerName || 'הקבוצה'}`,
                         message: pushMsg.trim(),
                         senderName: authPlayerName || 'Poker Manager',
                       });
@@ -3373,6 +3398,7 @@ const SettingsScreen = () => {
             const maxHeat = Math.max(1, ...heatmap.flat());
             const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
             const slotNames = ['לילה', 'בוקר', 'צהריים', 'ערב'];
+            const slotHours = ['0–6', '6–12', '12–18', '18–24'];
             const slotDisplayOrder = [1, 2, 3, 0];
             const todayDayIdx = now.getDay();
             const heatmapStart = new Date(now.getTime() - sevenDaysMs);
@@ -3395,12 +3421,14 @@ const SettingsScreen = () => {
 
 
 
-            const weeklyTrend = Array.from({ length: 5 }, (_, i) => {
+            const weeklyTrend = Array.from({ length: 3 }, (_, i) => {
               const weekEnd = new Date(now.getTime() - i * 7 * oneDayMs);
-              const weekStart = new Date(weekEnd.getTime() - 7 * oneDayMs);
+              // weekStart is 6 days before end so that start..end inclusive = 7 days,
+              // and consecutive weeks don't visually overlap (e.g. 22-28, 15-21, 8-14).
+              const weekStart = new Date(weekEnd.getTime() - 6 * oneDayMs);
               const entries = activityLog.filter(e => {
                 const ts = new Date(e.lastActive || e.timestamp).getTime();
-                return ts >= weekStart.getTime() && ts < weekEnd.getTime();
+                return ts >= weekStart.getTime() && ts <= weekEnd.getTime();
               });
               const users = new Set(entries.map(e =>
                 e.playerName || deviceLabels[e.deviceId] || e.deviceId
@@ -3410,7 +3438,7 @@ const SettingsScreen = () => {
                 const day = new Date(e.lastActive || e.timestamp).toDateString();
                 return `${n}|${day}`;
               }));
-              return { start: weekStart, users: users.size, sessions: userDays.size };
+              return { start: weekStart, end: weekEnd, users: users.size, sessions: userDays.size };
             }).reverse();
 
             const trendMaxUsers = Math.max(1, ...weeklyTrend.map(w => w.users));
@@ -3504,15 +3532,32 @@ const SettingsScreen = () => {
                       </span>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '48px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '64px' }}>
                     {weeklyTrend.map((week, i) => {
                       const barH = Math.max(4, (week.users / trendMaxUsers) * 44);
                       const isCurrent = i === weeklyTrend.length - 1;
-                      const weekLabel = week.start.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' });
+                      const startD = week.start.getDate();
+                      const startM = week.start.getMonth() + 1;
+                      const endD = week.end.getDate();
+                      const endM = week.end.getMonth() + 1;
+                      const sameMonth = startM === endM;
+                      const rangeLabel = sameMonth
+                        ? `${startD}–${endD}.${endM}`
+                        : `${startD}.${startM}–${endD}.${endM}`;
+                      const tooltipFull = `${week.start.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' })} – ${week.end.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' })}`;
                       return (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', height: '100%', justifyContent: 'flex-end' }}>
+                          <span style={{
+                            fontSize: '0.65rem',
+                            fontWeight: isCurrent ? 700 : 600,
+                            color: isCurrent ? 'var(--primary)' : 'var(--text)',
+                            lineHeight: 1,
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>
+                            {week.users}
+                          </span>
                           <div
-                            title={`${weekLabel}: ${week.users} ${t('settings.activity.users')}, ${week.sessions} ${t('settings.activity.sessionsLabel')}`}
+                            title={`${tooltipFull}: ${week.users} ${t('settings.activity.users')}, ${week.sessions} ${t('settings.activity.sessionsLabel')}`}
                             style={{
                               width: '100%', height: `${barH}px`, borderRadius: '3px',
                               background: isCurrent
@@ -3521,8 +3566,8 @@ const SettingsScreen = () => {
                               transition: 'height 0.3s ease',
                             }}
                           />
-                          <span style={{ fontSize: '0.45rem', color: 'var(--text-muted)', lineHeight: 1 }}>
-                            {week.start.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'numeric' })}
+                          <span style={{ fontSize: '0.5rem', color: 'var(--text-muted)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                            {rangeLabel}
                           </span>
                         </div>
                       );
@@ -3710,14 +3755,17 @@ const SettingsScreen = () => {
                     <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                       {t('settings.activity.heatmapTitle')}
                     </div>
-                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
                       {heatmapRangeLabel}
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(4, 1fr)', gap: '2px', fontSize: '0.6rem' }}>
                     <div />
                     {slotDisplayOrder.map(si => (
-                      <div key={si} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.55rem', paddingBottom: '2px' }}>{slotNames[si]}</div>
+                      <div key={si} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.55rem', paddingBottom: '2px', lineHeight: 1.2 }}>
+                        <div>{slotNames[si]}</div>
+                        <div style={{ fontSize: '0.5rem', opacity: 0.7, fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>{slotHours[si]}</div>
+                      </div>
                     ))}
                     {dayNames.map((day, di) => {
                       const isToday = di === todayDayIdx;
@@ -3733,6 +3781,7 @@ const SettingsScreen = () => {
                           {slotDisplayOrder.map(si => {
                             const count = heatmap[di][si];
                             const intensity = count / maxHeat;
+                            const showHighContrast = intensity > 0.55;
                             return (
                               <div
                                 key={`${di}-${si}`}
@@ -3743,8 +3792,16 @@ const SettingsScreen = () => {
                                     ? 'var(--background)'
                                     : `rgba(99, 102, 241, ${0.15 + intensity * 0.7})`,
                                   outline: isToday ? '1px solid rgba(99,102,241,0.35)' : 'none',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  fontSize: '0.55rem', fontWeight: 600, lineHeight: 1,
+                                  fontVariantNumeric: 'tabular-nums',
+                                  color: count === 0
+                                    ? 'transparent'
+                                    : showHighContrast ? '#fff' : 'var(--text)',
                                 }}
-                              />
+                              >
+                                {count > 0 ? count : ''}
+                              </div>
                             );
                           })}
                         </>

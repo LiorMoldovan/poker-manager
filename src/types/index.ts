@@ -117,6 +117,75 @@ export interface PaidSettlement {
   autoClosed?: boolean;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Game Scheduling Polls (migration 022)
+// ─────────────────────────────────────────────────────────────
+
+export type GamePollStatus = 'open' | 'expanded' | 'confirmed' | 'cancelled' | 'expired';
+
+export type RsvpResponse = 'yes' | 'no' | 'maybe';
+
+export interface GamePollDate {
+  id: string;
+  pollId: string;
+  proposedDate: string;          // ISO date 'YYYY-MM-DD'
+  proposedTime?: string | null;  // 'HH:MM' or null
+  location?: string | null;
+  createdAt: string;
+}
+
+export interface GamePollVote {
+  id: string;
+  pollId: string;
+  dateId: string;
+  playerId: string;
+  userId: string | null;            // NULL when admin cast on behalf of an unregistered player
+  response: RsvpResponse;
+  comment?: string | null;
+  votedAt: string;
+  castByUserId?: string | null;     // auth.uid() of the user who last cast/edited this vote
+}
+
+export interface GamePoll {
+  id: string;
+  groupId: string;
+  createdBy: string;
+  createdAt: string;
+  status: GamePollStatus;
+  targetPlayerCount: number;
+  expansionDelayHours: number;
+  expandedAt?: string | null;
+  confirmedDateId?: string | null;
+  confirmedAt?: string | null;
+  confirmedGameId?: string | null;
+  note?: string | null;
+  defaultLocation?: string | null;
+  allowMaybe: boolean;
+  cancellationReason?: string | null;
+  creationNotificationsSentAt?: string | null;
+  expandedNotificationsSentAt?: string | null;
+  confirmedNotificationsSentAt?: string | null;
+  cancellationNotificationsSentAt?: string | null;
+  // Embedded children (populated by cache layer)
+  dates: GamePollDate[];
+  votes: GamePollVote[];
+}
+
+export interface CreatePollDateInput {
+  proposedDate: string;          // 'YYYY-MM-DD'
+  proposedTime?: string | null;  // 'HH:MM'
+  location?: string | null;
+}
+
+export interface CreatePollInput {
+  dates: CreatePollDateInput[];   // 2-5
+  targetPlayerCount?: number;     // default 8
+  expansionDelayHours?: number;   // default 48
+  defaultLocation?: string | null;
+  allowMaybe?: boolean;           // default true
+  note?: string | null;
+}
+
 export interface AppNotification {
   id: string;
   groupId: string;
@@ -163,6 +232,13 @@ export interface Settings {
   geminiApiKey?: string;
   elevenlabsApiKey?: string;
   language?: 'he' | 'en';
+  scheduleEmailsEnabled?: boolean; // Beta-period toggle: when false, schedule notifications skip email broadcasts
+  schedulePushEnabled?: boolean;   // Beta-period toggle: when false, schedule notifications skip push broadcasts (default true)
+  // Group-level defaults pre-filled in CreatePollModal (still editable per poll)
+  scheduleDefaultTarget?: number;          // 2..12, default 8
+  scheduleDefaultDelayHours?: number;      // 0..240, default 48
+  scheduleDefaultTime?: string;            // 'HH:MM' 24h, default '21:00'
+  scheduleDefaultAllowMaybe?: boolean;     // default true
 }
 
 export interface Settlement {

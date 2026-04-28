@@ -1,4 +1,4 @@
-import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense, AppNotification, PlayerTraits } from '../types';
+import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense, AppNotification, PlayerTraits, GamePoll, RsvpResponse, CreatePollInput } from '../types';
 import {
   cacheGet, cacheSet, cacheRemove,
   cacheGetItem, cacheSetItem, cacheRemoveItem,
@@ -10,6 +10,14 @@ import {
   resolvePlayerUserId, getPlayerEmailForNotification,
   getPlayerTraitsByName, getAllPlayerTraits, savePlayerTraits,
   savePushSubscription, deletePushSubscription, getGroupPushSubscribers,
+  getAllPolls as cacheGetAllPolls,
+  getPollById as cacheGetPollById,
+  getConfirmedPlayerIds as cacheGetConfirmedPlayerIds,
+  getAnyResponseVoterIds as cacheGetAnyResponseVoterIds,
+  createPollRpc, castPollVoteRpc, cancelPollRpc, manuallyClosePollRpc,
+  expandPollRpc, updatePollTargetRpc, updatePollExpansionDelayRpc,
+  claimPollNotificationsRpc, linkPollToGameRpc,
+  adminCastPollVoteRpc, adminDeletePollVoteRpc,
 } from './supabaseCache';
 import { supabase } from './supabaseClient';
 
@@ -1306,4 +1314,69 @@ export {
   getGroupPushSubscribers,
 };
 export type { AppNotification, PlayerTraits };
+
+// ── Game Scheduling Polls ──
+
+export const getAllPolls = (): GamePoll[] => cacheGetAllPolls();
+
+export const getPollById = (pollId: string): GamePoll | undefined => cacheGetPollById(pollId);
+
+export const getConfirmedPlayerIds = (pollId: string): string[] => cacheGetConfirmedPlayerIds(pollId);
+
+export const getAnyResponseVoterIds = (pollId: string): string[] => cacheGetAnyResponseVoterIds(pollId);
+
+export const createPoll = (input: CreatePollInput): Promise<GamePoll> =>
+  createPollRpc({
+    dates: input.dates.map(d => ({
+      proposedDate: d.proposedDate,
+      proposedTime: d.proposedTime ?? null,
+      location: d.location ?? null,
+    })),
+    targetPlayerCount: input.targetPlayerCount,
+    expansionDelayHours: input.expansionDelayHours,
+    defaultLocation: input.defaultLocation ?? null,
+    allowMaybe: input.allowMaybe,
+    note: input.note ?? null,
+  });
+
+export const castVote = (
+  dateId: string,
+  response: RsvpResponse,
+  comment?: string,
+): Promise<GamePoll> => castPollVoteRpc(dateId, response, comment ?? null);
+
+// Admin proxy-vote helpers — admin/owner/super_admin only.
+export const adminCastVote = (
+  dateId: string,
+  voterPlayerId: string,
+  response: RsvpResponse,
+  comment?: string,
+): Promise<GamePoll> => adminCastPollVoteRpc(dateId, voterPlayerId, response, comment ?? null);
+
+export const adminDeleteVote = (
+  dateId: string,
+  voterPlayerId: string,
+): Promise<GamePoll> => adminDeletePollVoteRpc(dateId, voterPlayerId);
+
+export const cancelPoll = (pollId: string, reason?: string): Promise<void> =>
+  cancelPollRpc(pollId, reason ?? null);
+
+export const manuallyClosePoll = (pollId: string, dateId: string): Promise<void> =>
+  manuallyClosePollRpc(pollId, dateId);
+
+export const expandPoll = (pollId: string): Promise<void> => expandPollRpc(pollId);
+
+export const updatePollTarget = (pollId: string, target: number): Promise<void> =>
+  updatePollTargetRpc(pollId, target);
+
+export const updatePollExpansionDelay = (pollId: string, hours: number): Promise<void> =>
+  updatePollExpansionDelayRpc(pollId, hours);
+
+export const claimPollNotifications = (
+  pollId: string,
+  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation',
+): Promise<boolean> => claimPollNotificationsRpc(pollId, kind);
+
+export const linkPollToGame = (pollId: string, gameId: string): Promise<void> =>
+  linkPollToGameRpc(pollId, gameId);
 

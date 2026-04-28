@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 
 // ── Cache state ──
@@ -81,6 +81,15 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.gemini_api_key) s.geminiApiKey = row.gemini_api_key as string;
   if (row.elevenlabs_api_key) s.elevenlabsApiKey = row.elevenlabs_api_key as string;
   if (row.language) s.language = row.language as 'he' | 'en';
+  if (row.schedule_emails_enabled != null) s.scheduleEmailsEnabled = row.schedule_emails_enabled === true;
+  // Default push to true if column is missing/null (matches DB default)
+  s.schedulePushEnabled = row.schedule_push_enabled == null ? true : row.schedule_push_enabled === true;
+  // Schedule defaults — fall back to hardcoded constants when columns are
+  // missing (older DB) so the UI never crashes during migration windows.
+  if (row.schedule_default_target != null) s.scheduleDefaultTarget = Number(row.schedule_default_target);
+  if (row.schedule_default_delay_hours != null) s.scheduleDefaultDelayHours = Number(row.schedule_default_delay_hours);
+  if (row.schedule_default_time != null) s.scheduleDefaultTime = String(row.schedule_default_time);
+  if (row.schedule_default_allow_maybe != null) s.scheduleDefaultAllowMaybe = row.schedule_default_allow_maybe === true;
   return s;
 }
 
@@ -104,6 +113,57 @@ function toForecast(row: Record<string, unknown>): GameForecast {
     highlight: row.highlight as string | undefined,
     sentence: row.sentence as string | undefined,
     isSurprise: row.is_surprise as boolean | undefined,
+  };
+}
+
+function toGamePollDate(row: Record<string, unknown>): GamePollDate {
+  return {
+    id: row.id as string,
+    pollId: row.poll_id as string,
+    proposedDate: row.proposed_date as string,
+    proposedTime: (row.proposed_time as string | null) ?? null,
+    location: (row.location as string | null) ?? null,
+    createdAt: row.created_at as string,
+  };
+}
+
+function toGamePollVote(row: Record<string, unknown>): GamePollVote {
+  return {
+    id: row.id as string,
+    pollId: row.poll_id as string,
+    dateId: row.date_id as string,
+    playerId: row.player_id as string,
+    userId: (row.user_id as string | null) ?? null,
+    response: row.response as RsvpResponse,
+    comment: (row.comment as string | null) ?? null,
+    votedAt: row.voted_at as string,
+    castByUserId: (row.cast_by_user_id as string | null) ?? null,
+  };
+}
+
+function toGamePoll(row: Record<string, unknown>): GamePoll {
+  return {
+    id: row.id as string,
+    groupId: row.group_id as string,
+    createdBy: row.created_by as string,
+    createdAt: row.created_at as string,
+    status: row.status as GamePollStatus,
+    targetPlayerCount: Number(row.target_player_count),
+    expansionDelayHours: Number(row.expansion_delay_hours),
+    expandedAt: (row.expanded_at as string | null) ?? null,
+    confirmedDateId: (row.confirmed_date_id as string | null) ?? null,
+    confirmedAt: (row.confirmed_at as string | null) ?? null,
+    confirmedGameId: (row.confirmed_game_id as string | null) ?? null,
+    note: (row.note as string | null) ?? null,
+    defaultLocation: (row.default_location as string | null) ?? null,
+    allowMaybe: row.allow_maybe !== false,
+    cancellationReason: (row.cancellation_reason as string | null) ?? null,
+    creationNotificationsSentAt: (row.creation_notifications_sent_at as string | null) ?? null,
+    expandedNotificationsSentAt: (row.expanded_notifications_sent_at as string | null) ?? null,
+    confirmedNotificationsSentAt: (row.confirmed_notifications_sent_at as string | null) ?? null,
+    cancellationNotificationsSentAt: (row.cancellation_notifications_sent_at as string | null) ?? null,
+    dates: [],
+    votes: [],
   };
 }
 
@@ -188,6 +248,12 @@ function settingsToRow(s: Settings, groupId: string) {
     gemini_api_key: s.geminiApiKey || null,
     elevenlabs_api_key: s.elevenlabsApiKey || null,
     language: s.language || 'he',
+    schedule_emails_enabled: s.scheduleEmailsEnabled ?? false,
+    schedule_push_enabled: s.schedulePushEnabled ?? true,
+    schedule_default_target: s.scheduleDefaultTarget ?? 8,
+    schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
+    schedule_default_time: s.scheduleDefaultTime ?? '21:00',
+    schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
   };
 }
 
@@ -200,6 +266,7 @@ const STORAGE_KEYS = {
   CHIP_VALUES: 'poker_chip_values',
   SETTINGS: 'poker_settings',
   PENDING_FORECAST: 'poker_pending_forecast',
+  GAME_POLLS: 'poker_game_polls',
 };
 
 const CHRONICLE_KEY = 'poker_chronicle_profiles';
@@ -515,6 +582,46 @@ async function fetchAllRows(
   return all;
 }
 
+// Fetch + assemble all polls for a group (with their dates and votes attached).
+// Returns sorted newest-first by created_at.
+async function loadGamePolls(groupId: string): Promise<GamePoll[]> {
+  try {
+    const pollsRows = await fetchAllRows('game_polls', { column: 'group_id', value: groupId });
+    if (pollsRows.length === 0) return [];
+    const polls = pollsRows.map(r => toGamePoll(r));
+    const pollIds = polls.map(p => p.id);
+
+    const [dateRows, voteRows] = await Promise.all([
+      fetchByGameIds('game_poll_dates', pollIds, 'poll_id'),
+      fetchByGameIds('game_poll_votes', pollIds, 'poll_id'),
+    ]);
+
+    const datesByPoll = new Map<string, GamePollDate[]>();
+    for (const row of dateRows) {
+      const pid = row.poll_id as string;
+      if (!datesByPoll.has(pid)) datesByPoll.set(pid, []);
+      datesByPoll.get(pid)!.push(toGamePollDate(row));
+    }
+    const votesByPoll = new Map<string, GamePollVote[]>();
+    for (const row of voteRows) {
+      const pid = row.poll_id as string;
+      if (!votesByPoll.has(pid)) votesByPoll.set(pid, []);
+      votesByPoll.get(pid)!.push(toGamePollVote(row));
+    }
+
+    for (const poll of polls) {
+      poll.dates = (datesByPoll.get(poll.id) || []).sort((a, b) =>
+        a.proposedDate.localeCompare(b.proposedDate));
+      poll.votes = votesByPoll.get(poll.id) || [];
+    }
+
+    return polls.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch (err) {
+    console.warn('loadGamePolls failed:', err);
+    return [];
+  }
+}
+
 // Fetch child rows by game_id in batches — avoids RLS subquery performance issues
 // and the 1000-row global limit for tables without a group_id column.
 async function fetchByGameIds(
@@ -567,10 +674,10 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   const gameIds = Array.from(groupGameIds);
   const playerIds = players.map(p => p.id);
 
-  // Phase 2: fetch child tables AND player traits in parallel
+  // Phase 2: fetch child tables AND player traits AND game polls in parallel
   const [
     gamePlayersRows, sharedExpRows, forecastsRows, settlementsRows, periodMarkersRows,
-    traitsRows,
+    traitsRows, polls,
   ] = await Promise.all([
     fetchByGameIds('game_players', gameIds),
     fetchByGameIds('shared_expenses', gameIds),
@@ -578,6 +685,7 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
     fetchByGameIds('paid_settlements', gameIds),
     fetchByGameIds('period_markers', gameIds),
     playerIds.length > 0 ? fetchByGameIds('player_traits', playerIds, 'player_id') : Promise.resolve([]),
+    loadGamePolls(groupId),
   ]);
 
   // Player traits (keyed by player name for quick lookup)
@@ -711,6 +819,9 @@ export async function initSupabaseCache(groupId: string): Promise<void> {
   if (pendingRes.data) {
     data.set(STORAGE_KEYS.PENDING_FORECAST, toPendingForecast(pendingRes.data as Record<string, unknown>));
   }
+
+  // Game polls (with embedded dates + votes)
+  data.set(STORAGE_KEYS.GAME_POLLS, polls);
 
   // Set empty defaults for deferred data so the cache is usable immediately
   data.set(CHRONICLE_KEY, {});
@@ -958,7 +1069,7 @@ export async function getPlayerEmailForNotification(groupId: string, playerName:
 
 // ── Realtime subscriptions ──
 
-type RefreshGroup = 'players' | 'games' | 'game_players' | 'game_children' | 'settings' | 'forecast' | 'ai' | 'tts' | 'notifications' | 'training';
+type RefreshGroup = 'players' | 'games' | 'game_players' | 'game_children' | 'settings' | 'forecast' | 'ai' | 'tts' | 'notifications' | 'training' | 'polls';
 
 const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   players: 'players',
@@ -981,6 +1092,9 @@ const TABLE_TO_GROUP: Record<string, RefreshGroup> = {
   training_answers: 'training',
   training_pool: 'training',
   training_insights: 'training',
+  game_polls: 'polls',
+  game_poll_dates: 'polls',
+  game_poll_votes: 'polls',
 };
 
 const pendingGroups = new Set<RefreshGroup>();
@@ -1239,6 +1353,11 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
   if (groups.has('notifications')) {
     await fetchNotifications();
   }
+
+  if (groups.has('polls')) {
+    const polls = await loadGamePolls(gid);
+    state.data.set(STORAGE_KEYS.GAME_POLLS, polls);
+  }
 }
 
 export function subscribeToRealtime(): void {
@@ -1272,6 +1391,192 @@ export function unsubscribeFromRealtime(): void {
     clearTimeout(realtimeRefreshTimer);
     realtimeRefreshTimer = null;
   }
+}
+
+// ─── Game Polls (RPC-driven) ───
+
+export function getAllPolls(): GamePoll[] {
+  return cacheGet<GamePoll[]>(STORAGE_KEYS.GAME_POLLS, []);
+}
+
+export function getPollById(pollId: string): GamePoll | undefined {
+  return getAllPolls().find(p => p.id === pollId);
+}
+
+export function getConfirmedPlayerIds(pollId: string): string[] {
+  const poll = getPollById(pollId);
+  if (!poll || !poll.confirmedDateId) return [];
+  return poll.votes
+    .filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes')
+    .map(v => v.playerId);
+}
+
+export function getAnyResponseVoterIds(pollId: string): string[] {
+  const poll = getPollById(pollId);
+  if (!poll) return [];
+  const ids = new Set<string>();
+  for (const v of poll.votes) ids.add(v.playerId);
+  return Array.from(ids);
+}
+
+async function refreshPollsNow(): Promise<void> {
+  if (!state) return;
+  const polls = await loadGamePolls(state.groupId);
+  state.data.set(STORAGE_KEYS.GAME_POLLS, polls);
+  window.dispatchEvent(new CustomEvent('supabase-cache-updated'));
+}
+
+export interface CreatePollRpcInput {
+  dates: { proposedDate: string; proposedTime?: string | null; location?: string | null }[];
+  targetPlayerCount?: number;
+  expansionDelayHours?: number;
+  defaultLocation?: string | null;
+  allowMaybe?: boolean;
+  note?: string | null;
+}
+
+export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll> {
+  if (!state) throw new Error('cache_not_initialized');
+  const datesPayload = input.dates.map(d => ({
+    proposed_date: d.proposedDate,
+    proposed_time: d.proposedTime || null,
+    location: d.location || null,
+  }));
+  const { data, error } = await supabase.rpc('create_game_poll', {
+    p_group_id: state.groupId,
+    p_dates: datesPayload,
+    p_target: input.targetPlayerCount ?? 8,
+    p_expansion_delay: input.expansionDelayHours ?? 48,
+    p_default_location: input.defaultLocation || null,
+    p_allow_maybe: input.allowMaybe ?? true,
+    p_note: input.note || null,
+  });
+  if (error) throw error;
+  const newId = data as string;
+  await refreshPollsNow();
+  const poll = getPollById(newId);
+  if (!poll) throw new Error('poll_not_loaded_after_create');
+  return poll;
+}
+
+export async function castPollVoteRpc(
+  dateId: string,
+  response: RsvpResponse,
+  comment?: string | null,
+): Promise<GamePoll> {
+  const { data, error } = await supabase.rpc('cast_poll_vote', {
+    p_date_id: dateId,
+    p_response: response,
+    p_comment: comment || null,
+  });
+  if (error) throw error;
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) throw new Error('poll_not_returned');
+  const poll = toGamePoll(rows[0]);
+  await refreshPollsNow();
+  // Return refreshed copy with dates+votes attached
+  return getPollById(poll.id) ?? poll;
+}
+
+// Admin / owner / super-admin: cast or edit a vote on behalf of any
+// player in the group's roster (typically used for unregistered players).
+export async function adminCastPollVoteRpc(
+  dateId: string,
+  voterPlayerId: string,
+  response: RsvpResponse,
+  comment?: string | null,
+): Promise<GamePoll> {
+  const { data, error } = await supabase.rpc('admin_cast_poll_vote', {
+    p_date_id: dateId,
+    p_voter_player_id: voterPlayerId,
+    p_response: response,
+    p_comment: comment || null,
+  });
+  if (error) throw error;
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) throw new Error('poll_not_returned');
+  const poll = toGamePoll(rows[0]);
+  await refreshPollsNow();
+  return getPollById(poll.id) ?? poll;
+}
+
+export async function adminDeletePollVoteRpc(
+  dateId: string,
+  voterPlayerId: string,
+): Promise<GamePoll> {
+  const { data, error } = await supabase.rpc('admin_delete_poll_vote', {
+    p_date_id: dateId,
+    p_voter_player_id: voterPlayerId,
+  });
+  if (error) throw error;
+  const rows = data as Record<string, unknown>[] | null;
+  if (!rows || rows.length === 0) throw new Error('poll_not_returned');
+  const poll = toGamePoll(rows[0]);
+  await refreshPollsNow();
+  return getPollById(poll.id) ?? poll;
+}
+
+export async function cancelPollRpc(pollId: string, reason?: string | null): Promise<void> {
+  const { error } = await supabase.rpc('cancel_game_poll', {
+    p_poll_id: pollId,
+    p_reason: reason || null,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+export async function manuallyClosePollRpc(pollId: string, dateId: string): Promise<void> {
+  const { error } = await supabase.rpc('manual_close_game_poll', {
+    p_poll_id: pollId,
+    p_date_id: dateId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+export async function expandPollRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('expand_game_poll', { p_poll_id: pollId });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+export async function updatePollTargetRpc(pollId: string, target: number): Promise<void> {
+  const { error } = await supabase.rpc('update_poll_target', {
+    p_poll_id: pollId,
+    p_new_target: target,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+export async function updatePollExpansionDelayRpc(pollId: string, hours: number): Promise<void> {
+  const { error } = await supabase.rpc('update_poll_expansion_delay', {
+    p_poll_id: pollId,
+    p_new_delay: hours,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+export async function claimPollNotificationsRpc(
+  pollId: string,
+  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation',
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('claim_poll_notifications', {
+    p_poll_id: pollId,
+    p_kind: kind,
+  });
+  if (error) { console.warn('claim_poll_notifications failed:', error); return false; }
+  return data === true;
+}
+
+export async function linkPollToGameRpc(pollId: string, gameId: string): Promise<void> {
+  const { error } = await supabase.rpc('link_poll_to_game', {
+    p_poll_id: pollId,
+    p_game_id: gameId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
 }
 
 // ─── Push Notification Subscriptions ───

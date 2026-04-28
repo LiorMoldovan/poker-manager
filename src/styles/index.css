@@ -1294,3 +1294,27 @@ th {
   }
 }
 
+/* Light up the native date/time picker icon on dark backgrounds.
+   Webkit (Chrome / Edge / Safari) renders the indicator dark by default. */
+/* Native date/time picker icons: rely on color-scheme: dark so the browser
+   renders a light indicator. Avoid an `invert` filter here — it would flip
+   the already-light glyph back to dark on Chromium. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+

@@ -314,10 +314,12 @@ const SharedQuickPlayScreen = () => {
           if (!emails || !Array.isArray(emails) || emails.length === 0) return;
           const reasons = finalReports.map(r => {
             const labels: Record<string, string> = { wrong_answer: 'תשובה שגויה', unclear_question: 'שאלה לא ברורה', wrong_for_home_game: 'לא למשחק ביתי', other: 'אחר' };
-            return `- ${labels[r.reason] || r.reason}${r.comment ? `: ${r.comment}` : ''}`;
+            return `• ${labels[r.reason] || r.reason}${r.comment ? `: ${r.comment}` : ''}`;
           }).join('\n');
-          const subject = `🎯 ${finalReports.length} דיווח${finalReports.length > 1 ? 'ים' : ''} חדש${finalReports.length > 1 ? 'ים' : ''} על שאלות אימון`;
-          const message = `${name} דיווח/ה על ${finalReports.length} שאלה/ות באימון:\n\n${reasons}\n\nהיכנס/י ללשונית אימון בהגדרות כדי לבדוק ולטפל.`;
+          const subject = finalReports.length > 1
+            ? `🎯 ${finalReports.length} דיווחים חדשים מאימון`
+            : `🎯 דיווח חדש מאימון`;
+          const message = `היי 👋\n\n${name} פתח/ה ${finalReports.length === 1 ? 'דיווח' : `${finalReports.length} דיווחים`} על שאלות אימון:\n\n${reasons}\n\nאפשר לראות ולטפל בלשונית "אימון" בהגדרות כשיש זמן 🙏`;
           for (const email of emails) {
             if (email) {
               proxySendBroadcastEmail({ to: email, subject, message, senderName: 'Poker Training' }).catch(() => {});
