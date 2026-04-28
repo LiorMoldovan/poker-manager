@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.24.1';
+export const APP_VERSION = '5.24.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.24.2',
+    date: '2026-04-28',
+    changes: [
+      '⚡ Quality scan: smaller batches (4 vs 10) and tokens (4096 vs 8192) to avoid Vercel Edge timeout (504)',
+      '🔄 Quality scan: prefer stable gemini-2.5-flash over preview models (avoid 503 high-demand errors)',
+      '🔁 Quality scan: retry once on 429/503/504 before falling back to next model',
+    ],
+  },
   {
     version: '5.24.1',
     date: '2026-04-28',

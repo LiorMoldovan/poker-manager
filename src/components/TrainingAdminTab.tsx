@@ -32,7 +32,7 @@ import {
   clearPendingUploadsForPlayer,
   updatePoolCache,
 } from '../utils/pokerTraining';
-import { getGeminiApiKey, API_CONFIGS, runGeminiTextPrompt } from '../utils/geminiAI';
+import { getGeminiApiKey, runGeminiTextPrompt } from '../utils/geminiAI';
 import { proxyGeminiGenerate } from '../utils/apiProxy';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
@@ -1304,7 +1304,9 @@ ${historyContext}
     setReviewLog([]);
     setReviewMsg(null);
 
-    const BATCH = 10;
+    // Batch size kept small to fit within Vercel Edge ~25s timeout.
+    // 10 questions × ~700 tokens output = ~7k tokens → often >25s. 4 questions is safer.
+    const BATCH = 4;
     const updatedScenarios = [...pool.scenarios];
     const unreviewedIndices = updatedScenarios
       .map((s, i) => ({ s, i }))
@@ -1360,46 +1362,58 @@ ${JSON.stringify(batch.map(s => ({ poolId: s.poolId, yourCards: s.yourCards, boa
 JSON בלבד, בלי markdown:`;
 
       try {
-        const models = API_CONFIGS.map(c => c.model);
+        // Try stable gemini-2.5-flash first (preview models often hit 503/504 under load)
+        const SCAN_MODELS = ['gemini-2.5-flash', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'];
         let result: unknown[] | null = null;
 
         let lastError = '';
-        for (const model of models) {
-          try {
-            const resp = await proxyGeminiGenerate('v1beta', model, apiKey, {
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-            });
-            if (!resp.ok) {
-              const errBody = await resp.text().catch(() => '');
-              const errMsg = errBody.includes('RESOURCE_EXHAUSTED') ? 'חריגה ממכסת API' :
-                errBody.includes('INVALID_ARGUMENT') ? 'בקשה לא תקינה' :
-                `HTTP ${resp.status}`;
-              lastError = `${model}: ${errMsg}`;
-              setReviewLog(prev => [...prev, `⚠️ ${model}: ${errMsg} — מנסה מודל הבא...`]);
-              continue;
-            }
-            const data = await resp.json();
-            const finishReason = data.candidates?.[0]?.finishReason;
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (!text) {
-              lastError = `${model}: תשובה ריקה (${finishReason || 'no content'})`;
-              setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
-              continue;
-            }
+        for (const model of SCAN_MODELS) {
+          let retried = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
             try {
-              result = safeParseJSON(text);
-            } catch (parseErr) {
-              const snippet = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim().slice(0, 80);
-              lastError = `${model}: JSON לא תקין — ${snippet}...`;
-              setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
-              continue;
+              const resp = await proxyGeminiGenerate('v1beta', model, apiKey, {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
+              });
+              if (!resp.ok) {
+                const errBody = await resp.text().catch(() => '');
+                const errMsg = errBody.includes('RESOURCE_EXHAUSTED') ? 'חריגה ממכסת API' :
+                  errBody.includes('INVALID_ARGUMENT') ? 'בקשה לא תקינה' :
+                  `HTTP ${resp.status}`;
+                lastError = `${model}: ${errMsg}`;
+                // Retry once on transient errors before giving up on this model
+                if ((resp.status === 429 || resp.status === 503 || resp.status === 504) && !retried) {
+                  retried = true;
+                  setReviewLog(prev => [...prev, `⏳ ${model}: ${errMsg} — ממתין 5s ומנסה שוב...`]);
+                  await new Promise(r => setTimeout(r, 5000));
+                  continue;
+                }
+                setReviewLog(prev => [...prev, `⚠️ ${model}: ${errMsg} — מנסה מודל הבא...`]);
+                break;
+              }
+              const data = await resp.json();
+              const finishReason = data.candidates?.[0]?.finishReason;
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (!text) {
+                lastError = `${model}: תשובה ריקה (${finishReason || 'no content'})`;
+                setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
+                break;
+              }
+              try {
+                result = safeParseJSON(text);
+              } catch {
+                const snippet = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim().slice(0, 80);
+                lastError = `${model}: JSON לא תקין — ${snippet}...`;
+                setReviewLog(prev => [...prev, `⚠️ ${lastError}`]);
+                break;
+              }
+              break;
+            } catch (fetchErr) {
+              lastError = `${model}: ${fetchErr instanceof Error ? fetchErr.message : 'network error'}`;
+              break;
             }
-            break;
-          } catch (fetchErr) {
-            lastError = `${model}: ${fetchErr instanceof Error ? fetchErr.message : 'network error'}`;
-            continue;
           }
+          if (result) break;
         }
 
         if (!result || !Array.isArray(result)) {
