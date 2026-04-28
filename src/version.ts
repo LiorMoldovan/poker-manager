@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.24.3';
+export const APP_VERSION = '5.24.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.24.4',
+    date: '2026-04-28',
+    changes: [
+      '🗓️ Activity heatmap: added date range header (e.g. 21/4–28/4) and highlight today\'s row for clarity',
+    ],
+  },
   {
     version: '5.24.3',
     date: '2026-04-28',

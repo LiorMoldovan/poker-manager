@@ -3374,6 +3374,10 @@ const SettingsScreen = () => {
             const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
             const slotNames = ['לילה', 'בוקר', 'צהריים', 'ערב'];
             const slotDisplayOrder = [1, 2, 3, 0];
+            const todayDayIdx = now.getDay();
+            const heatmapStart = new Date(now.getTime() - sevenDaysMs);
+            const fmtShort = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
+            const heatmapRangeLabel = `${fmtShort(heatmapStart)}–${fmtShort(now)}`;
 
             const userStats = Array.from(userMap.entries()).map(([name, entries]) => {
               const last30 = entries.filter(e => now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs);
@@ -3702,35 +3706,50 @@ const SettingsScreen = () => {
                   padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem', marginTop: '0.3rem',
                   background: 'var(--surface)', border: '1px solid var(--border)',
                 }}>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                    {t('settings.activity.heatmapTitle')}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.35rem', gap: '0.5rem' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      {t('settings.activity.heatmapTitle')}
+                    </div>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                      {heatmapRangeLabel}
+                    </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(4, 1fr)', gap: '2px', fontSize: '0.6rem' }}>
                     <div />
                     {slotDisplayOrder.map(si => (
                       <div key={si} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.55rem', paddingBottom: '2px' }}>{slotNames[si]}</div>
                     ))}
-                    {dayNames.map((day, di) => (
-                      <>
-                        <div key={`label-${di}`} style={{ color: 'var(--text-muted)', paddingLeft: '2px', display: 'flex', alignItems: 'center' }}>{day}</div>
-                        {slotDisplayOrder.map(si => {
-                          const count = heatmap[di][si];
-                          const intensity = count / maxHeat;
-                          return (
-                            <div
-                              key={`${di}-${si}`}
-                              title={`${dayNames[di]} ${slotNames[si]}: ${count} sessions`}
-                              style={{
-                                height: '18px', borderRadius: '3px',
-                                background: count === 0
-                                  ? 'var(--background)'
-                                  : `rgba(99, 102, 241, ${0.15 + intensity * 0.7})`,
-                              }}
-                            />
-                          );
-                        })}
-                      </>
-                    ))}
+                    {dayNames.map((day, di) => {
+                      const isToday = di === todayDayIdx;
+                      return (
+                        <>
+                          <div key={`label-${di}`} style={{
+                            color: isToday ? 'var(--primary)' : 'var(--text-muted)',
+                            fontWeight: isToday ? 700 : 400,
+                            paddingLeft: '2px', display: 'flex', alignItems: 'center',
+                          }}>
+                            {day}{isToday ? '·' : ''}
+                          </div>
+                          {slotDisplayOrder.map(si => {
+                            const count = heatmap[di][si];
+                            const intensity = count / maxHeat;
+                            return (
+                              <div
+                                key={`${di}-${si}`}
+                                title={`${dayNames[di]} ${slotNames[si]}: ${count} sessions`}
+                                style={{
+                                  height: '18px', borderRadius: '3px',
+                                  background: count === 0
+                                    ? 'var(--background)'
+                                    : `rgba(99, 102, 241, ${0.15 + intensity * 0.7})`,
+                                  outline: isToday ? '1px solid rgba(99,102,241,0.35)' : 'none',
+                                }}
+                              />
+                            );
+                          })}
+                        </>
+                      );
+                    })}
                   </div>
                 </div>
 
