@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.24.2';
+export const APP_VERSION = '5.24.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.24.3',
+    date: '2026-04-28',
+    changes: [
+      '🎯 Pool generation prompt: aligned with quality-scan checks (hand recognition, no spoilers in situation, bluff = wrong, unique cards, no placeholders)',
+      '✅ Generation now includes self-check checklist before returning JSON — fewer questions need fixing on scan',
+      '🛡 Local validation tightened: rejects scenarios with duplicate cards, placeholder text, or hand spoilers in situation',
+    ],
+  },
   {
     version: '5.24.2',
     date: '2026-04-28',

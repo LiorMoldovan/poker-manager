@@ -1622,6 +1622,29 @@ ${trueFalseInstructions}${oddsMathInstructions}
 - כל הסכומים בצ'יפים (לא שקלים)
 - כל שאלה חייבת להיות עצמאית — כל המידע הנדרש חייב להופיע
 
+═══ ⚠️ בדיקות איכות חובה — אלו בדיוק הבדיקות שיופעלו על השאלה אחר כך ═══
+לפני שאתה מחזיר שאלה, בדוק את עצמך:
+
+🃏 **תקפות קלפים**:
+- אסור קלפים כפולים: כל קלף ב-yourCards + boardCards חייב להיות ייחודי (אסור "K♠ K♠" או "K♠" גם ביד וגם בלוח)
+- פורמט קלף: דרגה (2-9, 10, J, Q, K, A) + סוג (♠ ♥ ♦ ♣). רק 2 קלפים ב-yourCards ו-0/3/4/5 ב-boardCards
+
+🧠 **לוגיקה פוקרית — קריטי**:
+- בדוק את היד הסופית האמיתית של השחקן (yourCards + boardCards): האם יש סטרייט/צבע/פול האוס/סט שלא זיהית?
+  דוגמה: yourCards="9♣ 8♣", boardCards="7♣ 6♣ 2♥" → יש לך פלאש דרו + סטרייט פתוח, לא רק "זוג"
+- האם הלוח עצמו יוצר סכנות שלא הוזכרו? (3 לאותו סוג = פלאש דרו; קלפים רצופים = סטרייט דרו)
+- "קריאה X" — X חייב להיות סכום ההימור הנוכחי, לא הקופה. אם הקופה=2,400 והיריב המר 800, "קריאה 800" (לא "קריאה 2,400")
+
+🏠 **התאמה למשחק ביתי**:
+- בלוף גדול לעולם לא יהיה תשובה נכונה — שחקנים ביתיים תמיד קוראים. אם תשובה היא "הימור גדול בלי ערך" — היא שגויה
+- אגרסיביות מוגזמת בלי יד חזקה = תשובה שגויה (אפשר לסמן nearMiss כי בפוקר מקצועי זה היה עובד)
+- ויתור ביד חזקה (סט+, פלאש מוכן, סטרייט מוכן) = תשובה שגויה ברורה
+
+✏️ **טקסט נקי**:
+- אסור טקסט placeholder: "...", "TODO", "הסבר", "טקסט לדוגמה", שדות ריקים
+- אסור לחזור על אותו טקסט בכמה שדות
+- אסור situation שמכיל את המילים "פלאש דרו", "סטרייט דרו", "סט", "זוג עליון" — השחקן מזהה לבד מהקלפים
+
 מונחי פוקר:
 - פלופ, טרן, ריבר (לא "נהר"), בליינד (לא "עיוור"), ביד (לא "בכיס"), כפתור (לא "מפיץ")
 - מונחים באנגלית עם תרגום בסוגריים בפעם הראשונה: Pot Odds (יחס קופה), EV (ערך צפוי), c-bet (הימור המשך) וכו'
@@ -1629,14 +1652,25 @@ ${trueFalseInstructions}${oddsMathInstructions}
 nearMiss:
 - "nearMiss": true לתשובות שהיו נכונות בפוקר מקצועי אבל לא למשחק ביתי
 - ~30-40% מהתשובות השגויות צריכות להיות nearMiss
+- דוגמאות nearMiss טיפוסיות: "העלאה גדולה כבלוף", "ויתור על יד בינונית מול הימור גדול", "סלואו פליי עם יד חזקה"
 
 הסברים:
 - קצרים (1-2 משפטים), ספציפיים לקלפים ולמצב
+- ההסבר חייב להזכיר את היד האמיתית של השחקן (אם רלוונטי): "יש לך זוג עליון עם קיקר טוב, מספיק כדי לקרוא"
 - בשפה של משחק ביתי, לא GTO: "בלוף לא יעבוד — תמיד מישהו קורא", "העלאה בונה קופה — הם ישלמו"
 - ❌ אסור: "תדלל/תבודד", "fold equity", לוגיקה מקצועית
 ${avoidContext}
+═══ סיכום בדיקה עצמית לפני שאתה מחזיר ═══
+1. כל הקלפים ייחודיים? ✓
+2. היד הסופית של השחקן זוהתה נכון (לא פספסת סטרייט/צבע)? ✓
+3. סכום "קריאה" = סכום ההימור (לא הקופה)? ✓
+4. בלוף גדול לא מסומן כתשובה נכונה? ✓
+5. situation לא מזכיר "פלאש דרו"/"סט"/"זוג עליון"? ✓
+6. אין טקסט placeholder או הסברים ריקים? ✓
+7. בדיוק 1 תשובה עם isCorrect=true מתוך 3? ✓
+
 JSON בלבד, מערך של ${count}:
-[{"id":1,"situation":"3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"קריאה 800","isCorrect":true,"explanation":"הסבר קצר"},{"id":"B","text":"העלאה ל-2,500","isCorrect":false,"nearMiss":true,"explanation":"הסבר קצר"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"הסבר קצר"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
+[{"id":1,"situation":"3 שחקנים בקופה של 2,400. חרדון מהמר 800. מה הפעולה?","yourCards":"K♣ J♣","boardCards":"10♦ 8♣ 2♣","options":[{"id":"A","text":"קריאה 800","isCorrect":true,"explanation":"זוג עליון עם קיקר טוב, מחיר נכון מול ההימור"},{"id":"B","text":"העלאה ל-2,500","isCorrect":false,"nearMiss":true,"explanation":"בפוקר מקצועי הגיוני — בבית חרדון יקרא עם כל זוג"},{"id":"C","text":"ויתור","isCorrect":false,"explanation":"זוג עליון חזק מדי לוויתור מול הימור של 1/3 קופה"}],"category":"${category.name}","categoryId":"${category.id}"}]`;
 };
 
 const hashScenario = (s: { situation: string; yourCards: string; options: { text: string }[] }): string => {
@@ -1649,6 +1683,36 @@ const hashScenario = (s: { situation: string; yourCards: string; options: { text
   return Math.abs(hash).toString(36);
 };
 
+// Extract individual cards from a string like "K♣ J♣" or "10♦ 8♣ 2♣"
+const extractCards = (s: string): string[] => {
+  if (!s || typeof s !== 'string') return [];
+  // Match rank (2-9, 10, T, J, Q, K, A) followed by a suit symbol
+  const matches = s.match(/(?:10|[2-9TJQKA])[♠♥♦♣]/gi);
+  return matches ? matches.map(c => c.toUpperCase().replace('T', '10')) : [];
+};
+
+const PLACEHOLDER_PATTERNS = [
+  /\.{3,}/,           // "..."
+  /\bTODO\b/i,
+  /\bplaceholder\b/i,
+  /^הסבר$/,
+  /^טקסט\s*לדוגמה$/,
+  /^\?+$/,
+];
+
+const hasPlaceholder = (s: string): boolean => {
+  if (!s || typeof s !== 'string') return false;
+  return PLACEHOLDER_PATTERNS.some(p => p.test(s.trim()));
+};
+
+const FORBIDDEN_SITUATION_PHRASES = [
+  /פלאש\s*דרו/,
+  /סטרייט\s*דרו/,
+  /\bסט\b/,
+  /זוג\s*עליון/,
+  /יש\s*לך\s+(?:סטרייט|פלאש|פול\s*האוס)/,
+];
+
 const validatePoolScenario = (s: unknown): s is PoolScenario => {
   const sc = s as Record<string, unknown>;
   if (!sc || typeof sc !== 'object') return false;
@@ -1659,6 +1723,22 @@ const validatePoolScenario = (s: unknown): s is PoolScenario => {
   if (!opts.every(o => o.id && typeof o.text === 'string' && o.text)) return false;
   const correctCount = opts.filter(o => o.isCorrect).length;
   if (correctCount !== 1) return false;
+
+  // Cards must be unique across yourCards + boardCards
+  const board = typeof sc.boardCards === 'string' ? sc.boardCards : '';
+  const allCards = [...extractCards(sc.yourCards), ...extractCards(board)];
+  if (allCards.length > 0) {
+    const uniq = new Set(allCards);
+    if (uniq.size !== allCards.length) return false;
+  }
+
+  // No placeholder text in user-visible fields
+  if (hasPlaceholder(sc.situation)) return false;
+  if (opts.some(o => hasPlaceholder(o.text!) || (o.explanation && hasPlaceholder(o.explanation)))) return false;
+
+  // situation must not spoil the player's hand
+  if (FORBIDDEN_SITUATION_PHRASES.some(p => p.test(sc.situation as string))) return false;
+
   return true;
 };
 
@@ -1669,11 +1749,22 @@ const describeValidationFailure = (s: unknown): string => {
   if (typeof sc.yourCards !== 'string' || !sc.yourCards) return 'missing/empty yourCards';
   if (!Array.isArray(sc.options)) return 'options is not an array';
   if (sc.options.length !== 3) return `options.length=${sc.options.length} (need 3)`;
-  const opts = sc.options as { id?: string; text?: string; isCorrect?: boolean }[];
+  const opts = sc.options as { id?: string; text?: string; isCorrect?: boolean; explanation?: string }[];
   const badOpt = opts.findIndex(o => !o.id || typeof o.text !== 'string' || !o.text);
   if (badOpt >= 0) return `options[${badOpt}] missing id or text`;
   const correctCount = opts.filter(o => o.isCorrect).length;
   if (correctCount !== 1) return `${correctCount} correct options (need 1)`;
+
+  const board = typeof sc.boardCards === 'string' ? sc.boardCards : '';
+  const allCards = [...extractCards(sc.yourCards), ...extractCards(board)];
+  if (allCards.length > 0 && new Set(allCards).size !== allCards.length) return 'duplicate cards';
+
+  if (hasPlaceholder(sc.situation)) return 'placeholder in situation';
+  const phOpt = opts.findIndex(o => hasPlaceholder(o.text!) || (o.explanation && hasPlaceholder(o.explanation)));
+  if (phOpt >= 0) return `placeholder in options[${phOpt}]`;
+
+  if (FORBIDDEN_SITUATION_PHRASES.some(p => p.test(sc.situation as string))) return 'situation spoils hand';
+
   return 'unknown';
 };
 
