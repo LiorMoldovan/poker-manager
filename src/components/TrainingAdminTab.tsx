@@ -285,7 +285,7 @@ const TrainingAdminTab = () => {
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ current: 0, total: 0, category: '' });
   const [genMessage, setGenMessage] = useState<string | null>(null);
-  const [genLog, setGenLog] = useState<{ cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number }[]>([]);
+  const [genLog, setGenLog] = useState<{ cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number; diagnostics?: string[] }[]>([]);
 
   // Expanded player
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
@@ -609,7 +609,7 @@ const TrainingAdminTab = () => {
       return;
     }
 
-    const log: { cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number }[] = [];
+    const log: { cat: string; icon: string; status: string; count: number; error?: string; elapsed?: number; diagnostics?: string[] }[] = [];
     const workIds = new Set(workItems.map(w => w.cat.id));
     SCENARIO_CATEGORIES.filter(c => !workIds.has(c.id)).forEach(c => {
       log.push({ cat: c.name, icon: c.icon, status: 'skip', count: existingPerCat[c.id] || 0 });
@@ -628,19 +628,22 @@ const TrainingAdminTab = () => {
       let batchCount = 0;
       let catStatus = 'fail';
       let catError: string | undefined;
+      let catDiag: string[] | undefined;
       const catStart = Date.now();
 
       try {
-        const batch = await generatePoolBatch(cat, needed, allScenarios, apiKey);
-        if (batch.length > 0) {
-          allScenarios.push(...batch);
-          batchCount = batch.length;
-          totalGenerated += batch.length;
-          catStatus = batch.length >= needed * 0.6 ? 'ok' : 'partial';
-          if (catStatus === 'partial') catError = `ביקשנו ${needed}, קיבלנו ${batch.length}`;
+        const result = await generatePoolBatch(cat, needed, allScenarios, apiKey);
+        catDiag = result.diagnostics;
+        if (result.scenarios.length > 0) {
+          allScenarios.push(...result.scenarios);
+          batchCount = result.scenarios.length;
+          totalGenerated += result.scenarios.length;
+          catStatus = result.scenarios.length >= needed * 0.6 ? 'ok' : 'partial';
+          if (catStatus === 'partial') catError = `ביקשנו ${needed}, קיבלנו ${result.scenarios.length}`;
         } else {
           totalFailed++;
-          catError = 'AI החזיר 0 שאלות תקינות';
+          const lastDiag = result.diagnostics[result.diagnostics.length - 1] || '';
+          catError = lastDiag || 'AI החזיר 0 שאלות תקינות';
         }
       } catch (err) {
         console.error(`Smart gen failed for ${cat.id} (${phase}):`, err);
@@ -649,7 +652,7 @@ const TrainingAdminTab = () => {
         if (errMsg === 'INVALID_API_KEY') {
           catStatus = 'key_error';
           catError = 'מפתח API לא תקין';
-          log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: 0, error: catError, elapsed: Date.now() - catStart });
+          log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: 0, error: catError, elapsed: Date.now() - catStart, diagnostics: catDiag });
           setGenLog([...log]);
           setGenMessage('מפתח API לא תקין — עצירה');
           break;
@@ -659,7 +662,7 @@ const TrainingAdminTab = () => {
       }
 
       const catElapsed = Date.now() - catStart;
-      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount, error: catError, elapsed: catElapsed });
+      log.push({ cat: cat.name, icon: cat.icon, status: catStatus, count: batchCount, error: catError, elapsed: catElapsed, diagnostics: catDiag });
       setGenLog([...log]);
       savePoolDraft(allScenarios);
 
@@ -1902,6 +1905,20 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                         {entry.error}
                       </div>
                     )}
+                    {entry.diagnostics && entry.diagnostics.length > 0 && (
+                      <details style={{ marginTop: '0.15rem', paddingRight: '1.2rem' }}>
+                        <summary style={{ fontSize: '0.58rem', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                          פירוט ({entry.diagnostics.length} שלבים)
+                        </summary>
+                        <div style={{ marginTop: '0.15rem' }}>
+                          {entry.diagnostics.map((d, di) => (
+                            <div key={di} style={{ fontSize: '0.55rem', lineHeight: 1.35, color: 'var(--text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              · {d}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2077,6 +2094,20 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                       <div style={{ fontSize: '0.6rem', color: entry.status === 'fail' || entry.status === 'key_error' ? '#ef4444' : '#f97316', paddingRight: '1.2rem', marginTop: '0.1rem' }}>
                         {entry.error}
                       </div>
+                    )}
+                    {entry.diagnostics && entry.diagnostics.length > 0 && (
+                      <details style={{ marginTop: '0.15rem', paddingRight: '1.2rem' }}>
+                        <summary style={{ fontSize: '0.58rem', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                          פירוט ({entry.diagnostics.length} שלבים)
+                        </summary>
+                        <div style={{ marginTop: '0.15rem' }}>
+                          {entry.diagnostics.map((d, di) => (
+                            <div key={di} style={{ fontSize: '0.55rem', lineHeight: 1.35, color: 'var(--text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              · {d}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
                     )}
                   </div>
                 ))}
@@ -3102,6 +3133,58 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
                 </div>
               </details>
             )}
+
+            {/* WhatsApp share to reporter */}
+            {(() => {
+              const a = fixPreview ? analyses[fixPreview.poolId] : null;
+              if (!a) return null;
+              const shareText = a.verdict === 'accept' ? a.acceptText :
+                a.verdict === 'reject' ? a.rejectText :
+                a.acceptText || a.rejectText;
+              if (!shareText) return null;
+              const fq = flagged.find(q => q.poolId === fixPreview.poolId);
+              const reporterName = fq?.reports[0]?.playerName || '';
+              const reporterComment = fq?.reports[0]?.comment || '';
+              const scenario = fixPreview.original;
+              const correctOpt = scenario?.options?.find(o => o.isCorrect);
+              const questionContext = [
+                scenario?.yourCards ? `🃏 קלפים: ${scenario.yourCards}` : '',
+                scenario?.boardCards?.trim() ? `🂠 בורד: ${scenario.boardCards.trim()}` : '',
+                scenario?.situation ? `📋 ${scenario.situation}` : '',
+                correctOpt ? `✅ תשובה: ${correctOpt.text}` : '',
+              ].filter(Boolean).join('\n');
+              const reportContext = reporterComment ? `\n💬 דיווחת: "${reporterComment}"` : '';
+              const fullWhatsApp = `היי ${reporterName}! 🎯\n\nלגבי הדיווח שלך על שאלת אימון:\n\n${questionContext}${reportContext}\n\n${shareText}\n\n— Poker Manager 🃏`;
+              return (
+                <div style={{
+                  marginBottom: '0.6rem', padding: '0.5rem',
+                  borderRadius: '8px',
+                  background: 'rgba(37,211,102,0.06)',
+                  border: '1px solid rgba(37,211,102,0.15)',
+                }}>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 600, marginBottom: '0.25rem', color: '#25D366' }}>
+                    💬 הודעה למדווח ({reporterName}):
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text)', padding: '0.3rem',
+                    borderRadius: '4px', background: 'rgba(255,255,255,0.03)',
+                    lineHeight: 1.5, marginBottom: '0.3rem', whiteSpace: 'pre-line',
+                    maxHeight: '6rem', overflowY: 'auto',
+                  }}>
+                    {fullWhatsApp}
+                  </div>
+                  <button
+                    onClick={() => shareAnalysisAsImage(fullWhatsApp)}
+                    style={{
+                      fontSize: '0.7rem', padding: '0.35rem 0.6rem', borderRadius: '6px',
+                      background: '#25D366', color: 'white', border: 'none',
+                      cursor: 'pointer', fontWeight: 600, width: '100%',
+                    }}
+                  >
+                    📤 שתף כתמונה בוואטסאפ
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>

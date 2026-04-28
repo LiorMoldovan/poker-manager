@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.23.4';
+export const APP_VERSION = '5.24.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.24.0',
+    date: '2026-04-28',
+    changes: [
+      '🤖 Pool generation: try all 3 Gemini models with fallback (was hard-coded to flash-3 only)',
+      '🔍 Per-category diagnostics: see exactly which model failed and why (HTTP status, JSON parse errors, validation reasons)',
+      '💬 Training fix preview: WhatsApp share to reporter now visible in fix preview modal (regression after AI flow migration)',
+    ],
+  },
   {
     version: '5.23.4',
     date: '2026-04-26',

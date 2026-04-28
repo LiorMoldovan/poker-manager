@@ -1662,12 +1662,33 @@ const validatePoolScenario = (s: unknown): s is PoolScenario => {
   return true;
 };
 
+const describeValidationFailure = (s: unknown): string => {
+  const sc = s as Record<string, unknown>;
+  if (!sc || typeof sc !== 'object') return 'not an object';
+  if (typeof sc.situation !== 'string' || !sc.situation) return 'missing/empty situation';
+  if (typeof sc.yourCards !== 'string' || !sc.yourCards) return 'missing/empty yourCards';
+  if (!Array.isArray(sc.options)) return 'options is not an array';
+  if (sc.options.length !== 3) return `options.length=${sc.options.length} (need 3)`;
+  const opts = sc.options as { id?: string; text?: string; isCorrect?: boolean }[];
+  const badOpt = opts.findIndex(o => !o.id || typeof o.text !== 'string' || !o.text);
+  if (badOpt >= 0) return `options[${badOpt}] missing id or text`;
+  const correctCount = opts.filter(o => o.isCorrect).length;
+  if (correctCount !== 1) return `${correctCount} correct options (need 1)`;
+  return 'unknown';
+};
+
+export interface PoolBatchResult {
+  scenarios: PoolScenario[];
+  diagnostics: string[];
+}
+
 export const generatePoolBatch = async (
   category: CategoryInfo,
   count: number,
   existingScenarios: PoolScenario[],
   apiKey: string,
-): Promise<PoolScenario[]> => {
+): Promise<PoolBatchResult> => {
+  const diag: string[] = [];
   const existing = existingScenarios
     .filter(s => s.categoryId === category.id)
     .slice(-15)
@@ -1676,89 +1697,127 @@ export const generatePoolBatch = async (
   const requestCount = count + 5;
   const prompt = buildPoolBatchPrompt(category, requestCount, existing);
 
-  // Pool generation uses only the best model (no fallback to lite) for consistent quality.
-  // On rate-limit (429/503), retry same model after a delay instead of downgrading.
-  const POOL_MODEL = API_CONFIGS[0];
-  const MAX_RETRIES = 2;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const config = POOL_MODEL;
-
-    try {
-      const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.85,
-          topP: 0.95,
-          maxOutputTokens: 16384,
-          responseMimeType: 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        const msg = (err as { error?: { message?: string } })?.error?.message || `HTTP ${response.status}`;
-        if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 10000 * (attempt + 1)));
-          continue;
-        }
-        if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
-        console.warn(`Pool gen [${config.model}] attempt ${attempt}: ${msg}`);
-        continue;
-      }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) continue;
-
-      let jsonText = text;
-      if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
-      else if (text.includes('```')) jsonText = text.split('```')[1].split('```')[0];
-
-      let rawScenarios: unknown[];
+  for (const config of API_CONFIGS) {
+    const MAX_RETRIES = 1;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const label = `[${config.model} #${attempt + 1}]`;
       try {
-        const parsed = JSON.parse(jsonText.trim());
-        if (!Array.isArray(parsed)) continue;
-        rawScenarios = parsed;
-      } catch {
-        // Truncated JSON — salvage complete objects before the cut-off
-        const lastComplete = jsonText.lastIndexOf('}');
-        if (lastComplete === -1) continue;
-        const salvaged = jsonText.slice(0, lastComplete + 1).trim().replace(/,\s*$/, '') + ']';
-        try {
-          const parsed = JSON.parse(salvaged.startsWith('[') ? salvaged : '[' + salvaged);
-          if (!Array.isArray(parsed)) continue;
-          rawScenarios = parsed;
-          console.warn(`Pool gen: salvaged ${parsed.length} scenarios from truncated response`);
-        } catch {
-          continue;
+        diag.push(`${label} שולח בקשה...`);
+        const response = await proxyGeminiGenerate(config.version, config.model, apiKey, {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.85,
+            topP: 0.95,
+            maxOutputTokens: 16384,
+            responseMimeType: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          const msg = (err as { error?: { message?: string } })?.error?.message || `HTTP ${response.status}`;
+          if (response.status === 400 && msg.includes('API key')) throw new Error('INVALID_API_KEY');
+          diag.push(`${label} HTTP ${response.status}: ${msg}`);
+          if (response.status === 404) {
+            diag.push(`${label} 404 על /api/gemini — האם רצים מקומית עם vite במקום vercel dev?`);
+          }
+          if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
+            diag.push(`${label} ממתין 10s לפני ניסיון חוזר...`);
+            await new Promise(r => setTimeout(r, 10000));
+            continue;
+          }
+          break; // move to next model
         }
+
+        const data = await response.json();
+        const candidate = data?.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+        const text = candidate?.content?.parts?.[0]?.text;
+
+        if (!text) {
+          diag.push(`${label} תשובה ריקה (finishReason=${finishReason || 'none'})`);
+          if (finishReason === 'SAFETY') diag.push(`${label} נחסם ע"י מסנן תוכן`);
+          break;
+        }
+
+        diag.push(`${label} התקבלה תשובה (${text.length.toLocaleString('he-IL')} תווים, finishReason=${finishReason || '?'})`);
+
+        let jsonText = text;
+        if (text.includes('```json')) jsonText = text.split('```json')[1].split('```')[0];
+        else if (text.includes('```')) jsonText = text.split('```')[1].split('```')[0];
+
+        let rawScenarios: unknown[];
+        try {
+          const parsed = JSON.parse(jsonText.trim());
+          if (!Array.isArray(parsed)) {
+            diag.push(`${label} JSON הוא לא מערך (type=${typeof parsed})`);
+            break;
+          }
+          rawScenarios = parsed;
+        } catch {
+          const lastComplete = jsonText.lastIndexOf('}');
+          if (lastComplete === -1) {
+            diag.push(`${label} כשל בפענוח JSON — אין אובייקט שלם`);
+            break;
+          }
+          const salvaged = jsonText.slice(0, lastComplete + 1).trim().replace(/,\s*$/, '') + ']';
+          try {
+            const parsed = JSON.parse(salvaged.startsWith('[') ? salvaged : '[' + salvaged);
+            if (!Array.isArray(parsed)) { diag.push(`${label} JSON חלקי — לא מערך`); break; }
+            rawScenarios = parsed;
+            diag.push(`${label} JSON קטוע — חולצו ${parsed.length} אובייקטים`);
+          } catch {
+            diag.push(`${label} כשל בפענוח JSON (גם אחרי ניסיון חילוץ)`);
+            break;
+          }
+        }
+
+        diag.push(`${label} AI החזיר ${rawScenarios.length} שאלות גולמיות`);
+        const existingIds = new Set(existingScenarios.map(s => s.poolId));
+        const valid: PoolScenario[] = [];
+        let invalidCount = 0;
+        let dupCount = 0;
+        const failReasons: Record<string, number> = {};
+
+        for (const raw of rawScenarios) {
+          if (!validatePoolScenario(raw)) {
+            invalidCount++;
+            const reason = describeValidationFailure(raw);
+            failReasons[reason] = (failReasons[reason] || 0) + 1;
+            continue;
+          }
+          const scenario = raw as PoolScenario;
+          scenario.poolId = hashScenario(scenario);
+          scenario.categoryId = category.id;
+          scenario.category = category.name;
+          if (existingIds.has(scenario.poolId)) { dupCount++; continue; }
+          existingIds.add(scenario.poolId);
+          valid.push(scenario);
+          if (valid.length >= count) break;
+        }
+
+        if (invalidCount > 0) {
+          const reasons = Object.entries(failReasons).map(([r, n]) => `${r}(${n})`).join(', ');
+          diag.push(`${label} ${invalidCount} נפסלו: ${reasons}`);
+        }
+        if (dupCount > 0) diag.push(`${label} ${dupCount} כפולות (כבר קיימות)`);
+        diag.push(`${label} ${valid.length} שאלות תקינות`);
+
+        if (valid.length > 0) return { scenarios: valid, diagnostics: diag };
+
+        diag.push(`${label} 0 תקינות — עובר למודל הבא`);
+        break; // move to next model
+      } catch (error) {
+        if (error instanceof Error && error.message === 'INVALID_API_KEY') throw error;
+        const msg = error instanceof Error ? error.message : String(error);
+        diag.push(`${label} שגיאה: ${msg}`);
+        break;
       }
-
-      const existingIds = new Set(existingScenarios.map(s => s.poolId));
-      const valid: PoolScenario[] = [];
-
-      for (const raw of rawScenarios) {
-        if (!validatePoolScenario(raw)) continue;
-        const scenario = raw as PoolScenario;
-        scenario.poolId = hashScenario(scenario);
-        scenario.categoryId = category.id;
-        scenario.category = category.name;
-        if (existingIds.has(scenario.poolId)) continue;
-        existingIds.add(scenario.poolId);
-        valid.push(scenario);
-        if (valid.length >= count) break;
-      }
-
-      return valid;
-    } catch (error) {
-      if (error instanceof Error && error.message === 'INVALID_API_KEY') throw error;
-      console.error(`Pool gen [${config.model}]:`, error);
-      continue;
     }
   }
 
-  return [];
+  diag.push('כל המודלים נכשלו — לא הופקו שאלות');
+  return { scenarios: [], diagnostics: diag };
 };
 
 // ── Direct Supabase write (primary) + buffered fallback ──
