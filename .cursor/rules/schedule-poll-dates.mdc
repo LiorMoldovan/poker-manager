@@ -1,0 +1,45 @@
+---
+description: Schedule polls — date count is unconstrained. Never reintroduce min/max date limits.
+globs: "{src/components/ScheduleTab.tsx,supabase/*-game-scheduling*.sql,supabase/*-schedule-*.sql}"
+alwaysApply: false
+---
+
+# Schedule polls — no min/max date constraint
+
+The organizer can propose **any number of dates** when creating a game-night poll
+(1, 2, 5, 10 — whatever they want). This is an explicit product decision per
+the user.
+
+## What is allowed
+
+- A poll with a single proposed date (no real "voting between dates" — just
+  yes/no/maybe on that one date).
+- A poll with many dates (e.g. 8+ across multiple weeks).
+
+## What MUST NOT be reintroduced
+
+Do **NOT** add any of the following without explicit user request:
+
+| Layer | Forbidden |
+|---|---|
+| Client (`CreatePollModal` in `src/components/ScheduleTab.tsx`) | `MIN_DATES`, `MAX_DATES`, `length >= N` guards on `addDate`, validation rejecting `length < N` or `length > N`, hint text mentioning "at least 2" or "up to 5" |
+| Server (`create_game_poll` RPC in `supabase/0**-schedule-*.sql`) | `IF v_date_count > N THEN RAISE EXCEPTION 'invalid_date_count'`, `BETWEEN n AND m` clauses, JSONB array length upper bounds |
+| Translations (`src/i18n/translations.ts`) | `schedule.dateRangeMin`, `schedule.dateRangeMax`, "between 2 and 5" copy |
+
+The **only** validation that may run on date count is "at least one date with
+a real `proposedDate` value". Past-date and duplicate-date validation are
+fine; a hard count cap is not.
+
+## Why this rule exists
+
+A previous implementation enforced "2 ≤ count ≤ 5" both in `CreatePollModal`
+and in `create_game_poll`. Migration `026-schedule-flexible-date-count.sql`
+removed the server-side cap; the client must remain consistent with that.
+The user explicitly asked for the constraint to be removed and **not be
+reintroduced**.
+
+## When tempted to add a cap "for safety"
+
+Don't. The trade-off has been considered and the answer is no.
+If a future ask requires a soft cap (e.g. "warn after 10 dates"), surface it
+as a non-blocking hint, never as a validation error or disabled button.

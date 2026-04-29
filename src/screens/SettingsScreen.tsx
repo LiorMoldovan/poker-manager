@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { usePendingVote } from '../hooks/usePendingVote';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Player, PlayerType, PlayerGender, ChipValue, Settings, BlockedTransferPair, PlayerTraits } from '../types';
 import { cleanNumber } from '../utils/calculations';
@@ -102,6 +103,9 @@ const SettingsScreen = () => {
   const [activityMembers, setActivityMembers] = useState<GroupMember[]>([]);
   const [trainingPlayers, setTrainingPlayers] = useState<TrainingPlayerData[]>([]);
   const [trainingActionCount, setTrainingActionCount] = useState(0);
+  // Pending-vote state — drives the small dot on the Schedule tab nav button.
+  // Hook handles realtime + minute-tick updates internally.
+  const pendingVote = usePendingVote();
   const [deviceLabels] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('poker_device_labels') || '{}'); } catch { return {}; }
   });
@@ -796,6 +800,13 @@ const SettingsScreen = () => {
         }}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
+            // Show a small alert dot on the Schedule tab when the current
+            // user has a pending vote they haven't cast yet.
+            const showScheduleDot = tab.id === 'schedule' && !!pendingVote && !isActive;
+            const scheduleDotColor =
+              pendingVote?.urgency === 'critical' ? '#ef4444' :
+              pendingVote?.urgency === 'time'     ? '#3b82f6' :
+              pendingVote?.urgency === 'spots'    ? '#eab308' : '#10b981';
             return (
               <button
                 key={tab.id}
@@ -824,6 +835,21 @@ const SettingsScreen = () => {
                   }}>
                     {trainingActionCount}
                   </span>
+                )}
+                {showScheduleDot && (
+                  <span
+                    title={t('voteReminder.tabBadgeTitle')}
+                    aria-label={t('voteReminder.tabBadgeTitle')}
+                    style={{
+                      marginInlineStart: '0.35rem',
+                      display: 'inline-block',
+                      width: 8, height: 8,
+                      borderRadius: '50%',
+                      background: scheduleDotColor,
+                      boxShadow: `0 0 0 2px rgba(0,0,0,0.0), 0 0 6px ${scheduleDotColor}`,
+                      verticalAlign: 'middle',
+                    }}
+                  />
                 )}
               </button>
             );
@@ -3270,11 +3296,33 @@ const SettingsScreen = () => {
       )}
 
       {/* Activity Tab - Owner Only - Enhanced Dashboard */}
-      {activeTab === 'activity' && isOwner && (
+      {activeTab === 'activity' && isOwner && (() => {
+        // Same Saturday-anchored "this week" range used by every weekly stat
+        // and the heatmap further down. Computed once here so the header can
+        // expose it next to the title — no need to wait for activityLog data.
+        const _now = new Date();
+        const _wkStart = (() => {
+          const r = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
+          r.setDate(r.getDate() - ((r.getDay() + 1) % 7));
+          return r;
+        })();
+        const _sameMonth = _wkStart.getMonth() === _now.getMonth();
+        const headerWeekRangeLabel = _sameMonth
+          ? `${_wkStart.getDate()}–${_now.getDate()}.${_now.getMonth() + 1}`
+          : `${_wkStart.getDate()}.${_wkStart.getMonth() + 1}–${_now.getDate()}.${_now.getMonth() + 1}`;
+        return (
         <div>
           {/* Header */}
-          <div style={{ marginBottom: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)' }}>{t('settings.activity.title')}</h2>
+          <div style={{ marginBottom: '0.6rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text)', display: 'inline-flex', alignItems: 'baseline', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {t('settings.activity.title')}
+              <span style={{
+                fontSize: '0.6rem', fontWeight: 500, color: 'var(--text-muted)',
+                fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate',
+              }}>
+                📆 {headerWeekRangeLabel}
+              </span>
+            </h2>
             <button
               onClick={() => { if (!activityLoading) loadActivityLog(); }}
               disabled={activityLoading}
@@ -3312,7 +3360,6 @@ const SettingsScreen = () => {
             const now = new Date();
             const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
             const oneDayMs = 86400000;
-            const sevenDaysMs = 7 * oneDayMs;
             const thirtyDaysMs = 30 * oneDayMs;
 
             const userMap = new Map<string, ActivityLogEntry[]>();
@@ -3339,11 +3386,21 @@ const SettingsScreen = () => {
             )];
             const todayUniqueUsers = todayUniqueNames.length;
 
-            const weekAgo = new Date(now.getTime() - sevenDaysMs);
+            // "This week" is anchored to Saturday — the local week starts on Sat
+            // and runs Sat→Fri. This matches the Israeli calendar convention used
+            // elsewhere in the app and makes the weekly trend bars line up with
+            // the summary stats below (same window, same key — see weeklyTrend).
+            const startOfSatWeek = (d: Date): Date => {
+              const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+              const offset = (r.getDay() + 1) % 7; // Sat→0, Sun→1, …, Fri→6
+              r.setDate(r.getDate() - offset);
+              return r;
+            };
+            const currentWeekStart = startOfSatWeek(now);
 
             const weekUserDays = new Set(
               activityLog
-                .filter(e => new Date(e.lastActive || e.timestamp) > weekAgo)
+                .filter(e => new Date(e.lastActive || e.timestamp).getTime() >= currentWeekStart.getTime())
                 .map(e => {
                   const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
                   const day = new Date(e.lastActive || e.timestamp).toDateString();
@@ -3357,7 +3414,7 @@ const SettingsScreen = () => {
               const userSessions = new Map<string, number>();
               for (const e of activityLog) {
                 const lastTime = new Date(e.lastActive || e.timestamp);
-                if (lastTime <= weekAgo) continue;
+                if (lastTime.getTime() < currentWeekStart.getTime()) continue;
                 const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
                 if (!userDays.has(n)) userDays.set(n, new Set());
                 userDays.get(n)!.add(lastTime.toDateString());
@@ -3382,11 +3439,14 @@ const SettingsScreen = () => {
             })();
 
 
+            // Heatmap shares the same Saturday-anchored window as the summary
+            // stats and the weekly trend's current bar — one source of truth
+            // for "this week" across the whole Activity tab.
             const heatmap: number[][] = Array.from({ length: 7 }, () => [0, 0, 0, 0]);
             const heatmapSeen = new Set<string>();
             for (const entry of activityLog) {
               const d = new Date(entry.lastActive || entry.timestamp);
-              if (now.getTime() - d.getTime() > sevenDaysMs) continue;
+              if (d.getTime() < currentWeekStart.getTime()) continue;
               const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
               const key = `${name}|${d.toDateString()}|${d.getHours() < 6 ? 0 : d.getHours() < 12 ? 1 : d.getHours() < 18 ? 2 : 3}`;
               if (heatmapSeen.has(key)) continue;
@@ -3401,9 +3461,6 @@ const SettingsScreen = () => {
             const slotHours = ['0–6', '6–12', '12–18', '18–24'];
             const slotDisplayOrder = [1, 2, 3, 0];
             const todayDayIdx = now.getDay();
-            const heatmapStart = new Date(now.getTime() - sevenDaysMs);
-            const fmtShort = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
-            const heatmapRangeLabel = `${fmtShort(heatmapStart)}–${fmtShort(now)}`;
 
             const userStats = Array.from(userMap.entries()).map(([name, entries]) => {
               const last30 = entries.filter(e => now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs);
@@ -3421,30 +3478,50 @@ const SettingsScreen = () => {
 
 
 
+            // Weekly trend buckets, Saturday-aligned. Each bucket is a half-open
+            // interval [weekStart, nextWeekStart) so consecutive weeks never
+            // double-count an entry that happens to fall on the boundary. The
+            // current (incomplete) week's label end is capped at "now" so the
+            // range reads e.g. "25–29.4" rather than the full Sat–Fri span.
             const weeklyTrend = Array.from({ length: 3 }, (_, i) => {
-              const weekEnd = new Date(now.getTime() - i * 7 * oneDayMs);
-              // weekStart is 6 days before end so that start..end inclusive = 7 days,
-              // and consecutive weeks don't visually overlap (e.g. 22-28, 15-21, 8-14).
-              const weekStart = new Date(weekEnd.getTime() - 6 * oneDayMs);
+              const weekStart = new Date(currentWeekStart);
+              weekStart.setDate(weekStart.getDate() - i * 7);
+              const nextWeekStart = new Date(weekStart);
+              nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+              const isCurrentBucket = i === 0;
+              const labelEnd = isCurrentBucket
+                ? now
+                : new Date(nextWeekStart.getTime() - oneDayMs);
               const entries = activityLog.filter(e => {
                 const ts = new Date(e.lastActive || e.timestamp).getTime();
-                return ts >= weekStart.getTime() && ts <= weekEnd.getTime();
+                return ts >= weekStart.getTime() && ts < nextWeekStart.getTime();
               });
               const users = new Set(entries.map(e =>
-                e.playerName || deviceLabels[e.deviceId] || e.deviceId
+                e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8)
               ));
               const userDays = new Set(entries.map(e => {
-                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId;
+                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
                 const day = new Date(e.lastActive || e.timestamp).toDateString();
                 return `${n}|${day}`;
               }));
-              return { start: weekStart, end: weekEnd, users: users.size, sessions: userDays.size };
+              return { start: weekStart, end: labelEnd, users: users.size, sessions: userDays.size };
             }).reverse();
 
             const trendMaxUsers = Math.max(1, ...weeklyTrend.map(w => w.users));
             const thisWeekUsers = weeklyTrend[weeklyTrend.length - 1]?.users ?? 0;
             const lastWeekUsers = weeklyTrend[weeklyTrend.length - 2]?.users ?? 0;
             const usersDelta = thisWeekUsers - lastWeekUsers;
+
+            // Date-range label for the *current* (Sat-anchored) week, reused by
+            // any sub-card that wants to clarify which days "this week" covers.
+            const currentWeekRangeLabel = (() => {
+              const s = currentWeekStart;
+              const e = now;
+              const sameMonth = s.getMonth() === e.getMonth();
+              return sameMonth
+                ? `${s.getDate()}–${e.getDate()}.${e.getMonth() + 1}`
+                : `${s.getDate()}.${s.getMonth() + 1}–${e.getDate()}.${e.getMonth() + 1}`;
+            })();
 
             return (
               <div>
@@ -3510,6 +3587,22 @@ const SettingsScreen = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* "This week" coverage caption — clarifies which dates every
+                    weekly stat below (and the heatmap) is computed over. */}
+                <div style={{
+                  fontSize: '0.55rem', color: 'var(--text-muted)',
+                  marginBottom: '0.5rem', marginTop: '-0.25rem',
+                  display: 'flex', alignItems: 'center', gap: '0.3rem',
+                }}>
+                  <span>📆 {language === 'he' ? 'השבוע' : 'This week'}:</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                    {currentWeekRangeLabel}
+                  </span>
+                  <span style={{ opacity: 0.7 }}>
+                    ({language === 'he' ? 'משבת אחרונה' : 'since last Sat'})
+                  </span>
                 </div>
 
                 {/* Weekly Trend */}
@@ -3584,10 +3677,13 @@ const SettingsScreen = () => {
                 {/* Training Engagement */}
                 {trainingPlayers.length > 0 && (() => {
                   const now = new Date();
-                  const weekAgoMs = now.getTime() - 7 * 86400000;
+                  // Saturday-anchored window — same semantics as the weekly trend
+                  // and "ביקורים השבוע" stat above so all "this week" numbers in
+                  // this card cover the exact same date range.
+                  const weekStartMs = currentWeekStart.getTime();
                   const trainers = trainingPlayers.map(p => {
                     type TSession = TrainingPlayerData['sessions'][0];
-                    const weekSessions = p.sessions.filter((s: TSession) => new Date(s.date).getTime() > weekAgoMs);
+                    const weekSessions = p.sessions.filter((s: TSession) => new Date(s.date).getTime() >= weekStartMs);
                     const weekQs = weekSessions.reduce((sum: number, s: TSession) => sum + s.questionsAnswered, 0);
                     const lastSession = p.sessions.length > 0
                       ? p.sessions.reduce((latest: TSession, s: TSession) => new Date(s.date) > new Date(latest.date) ? s : latest)
@@ -3602,9 +3698,12 @@ const SettingsScreen = () => {
                       padding: '0.5rem 0.65rem', borderRadius: '10px', marginBottom: '0.5rem',
                       background: 'var(--surface)', border: '1px solid var(--border)',
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', gap: '0.4rem' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'baseline', gap: '0.35rem', flexWrap: 'wrap' }}>
                           🎯 {language === 'he' ? 'אימון השבוע' : 'Training This Week'}
+                          <span style={{ fontSize: '0.55rem', fontWeight: 500, color: 'var(--text-muted)', opacity: 0.8, fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
+                            {currentWeekRangeLabel}
+                          </span>
                         </span>
                         <span style={{ fontSize: '0.58rem', color: '#818cf8', fontWeight: 600 }}>
                           {activeThisWeek.length}/{trainers.length} {language === 'he' ? 'פעילים' : 'active'}
@@ -3756,7 +3855,7 @@ const SettingsScreen = () => {
                       {t('settings.activity.heatmapTitle')}
                     </div>
                     <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
-                      {heatmapRangeLabel}
+                      {currentWeekRangeLabel}
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(4, 1fr)', gap: '2px', fontSize: '0.6rem' }}>
@@ -3817,7 +3916,8 @@ const SettingsScreen = () => {
             );
           })()}
         </div>
-      )}
+        );
+      })()}
 
       {/* Add Player Modal */}
       {showAddPlayer && (

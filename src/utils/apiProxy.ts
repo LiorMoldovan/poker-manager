@@ -67,6 +67,37 @@ export async function proxyGeminiGenerateWithSignal(
   });
 }
 
+/**
+ * Image-generation variant. The existing /api/gemini route is model-agnostic
+ * — it just forwards `payload` to `models/{model}:generateContent`, so the
+ * same JWT-protected proxy works for image models like
+ * `gemini-2.5-flash-image`. The response shape places the PNG bytes in
+ * `candidates[0].content.parts[].inline_data.data` (base64).
+ *
+ * This helper exists so callers can be explicit about intent (image vs text)
+ * and so we have a single seam to swap if Google ever splits image gen onto
+ * a different endpoint. Larger default timeout for the heavier image call.
+ */
+export async function proxyGeminiImage(
+  model: string,
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const auth = await getAuthHeaders();
+  const groupKey = getGroupGeminiKey();
+  return fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...auth },
+    body: JSON.stringify({
+      version: 'v1beta',
+      model,
+      payload,
+      ...(groupKey && { apiKey: groupKey }),
+    }),
+    signal,
+  });
+}
+
 export async function proxyGeminiModels(_apiKey: string, version = 'v1beta'): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();

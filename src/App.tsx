@@ -12,6 +12,7 @@ import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
 import GroupWizard from './components/GroupWizard';
 import { ToastContainer } from './components/Toast';
+import { VoteReminderBanner } from './components/VoteReminderBanner';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
 
@@ -910,6 +911,10 @@ function SupabaseApp() {
         <div className="app-container">
           {!hideNav && <GroupSwitcher />}
           <main className="main-content">
+            {/* Global vote-reminder banner. Hidden on no-nav screens
+                (live-game / chip-entry / game-summary) since the user is
+                mid-game and shouldn't be prompted to do scheduling actions. */}
+            {!hideNav && <VoteReminderBanner />}
             <Suspense fallback={<ScreenSkeleton />}>
               <Routes>
                 <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />

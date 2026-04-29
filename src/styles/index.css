@@ -464,6 +464,12 @@ th {
   justify-content: center;
   z-index: 200;
   padding: 1rem;
+  /* Respect iOS / Android safe areas (notch + home indicator) so modals
+     never get clipped by system UI or the browser URL bar. The bottom
+     reserve also keeps pinned modal footers comfortably above the iOS
+     home indicator on iPhone X-class devices. */
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
   animation: backdropFadeIn 0.25s ease-out;
 }
 
@@ -474,7 +480,14 @@ th {
   padding: 1.5rem;
   max-width: 400px;
   width: 100%;
+  /* `vh` on iOS Safari refers to the URL-bar-COLLAPSED viewport (large
+     vh). When the address bar is visible, 90vh exceeds the real visible
+     area and pushes pinned footers behind the browser chrome. `dvh`
+     tracks the dynamically-visible area so the modal always fits. The
+     `vh` line is kept as a fallback for browsers that don't support
+     dvh — they get the historical behavior. */
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   animation: modalSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03);
@@ -505,15 +518,24 @@ th {
   color: var(--text);
 }
 
-/* Animations */
+/* Animations
+   IMPORTANT: keyframes used with animation-fill-mode: both must NOT
+   leave a non-`none` transform on the final keyframe. A residual
+   `transform: translateY(0)` (or any non-none transform) on an
+   ancestor element promotes it to the containing block for
+   `position: fixed` descendants, which clips modal overlays to the
+   ancestor's box instead of the viewport. Drop `transform` from the
+   `to` frame so the animation interpolates from the from-state to
+   the underlying value (which is `none`, visually equivalent to
+   translateY(0)) and leaves no residue. */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; }
 }
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(100%); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; }
 }
 
 @keyframes pulse {
@@ -528,22 +550,22 @@ th {
 
 @keyframes modalSlideUp {
   from { opacity: 0; transform: translateY(40px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 1; }
 }
 
 @keyframes contentFadeIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; }
 }
 
 @keyframes scaleIn {
   from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  to { opacity: 1; }
 }
 
 @keyframes slideInRight {
   from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
+  to { opacity: 1; }
 }
 
 @keyframes popIn {
@@ -1316,5 +1338,194 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover,
 input[type="time"]::-webkit-calendar-picker-indicator:hover,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
+}
+
+/* ──────────────────────────────────────────────────────────
+   Schedule (Next-Game Poll) — premium polish
+   ──────────────────────────────────────────────────────────
+   Dedicated styles for the poll feature. Goal: subtle,
+   stylish motion that fits the rest of the app — never
+   bouncy or playful. All transitions stay under 400ms and
+   prefer transform/opacity for GPU smoothness. Honors
+   `prefers-reduced-motion` for accessibility.
+*/
+
+/* Easings — one shared "premium" curve for entrances + decel */
+:root {
+  --poll-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Card entrance — soft fade + slight upward translate */
+@keyframes pollCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; }
+}
+
+/* Confirmed banner ambient ring — very gentle, runs continuously */
+@keyframes pollConfirmedRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.0); }
+  50%      { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.10); }
+}
+
+/* Voter chip in — subtle scale + fade */
+@keyframes pollChipIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; }
+}
+
+/* Number/pill in — quicker, less travel */
+@keyframes pollPillIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; }
+}
+
+/* Soft attention pulse on the active RSVP button (the "your vote" state) */
+@keyframes pollActiveSheen {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+}
+
+/* Wrapper card */
+.poll-card {
+  animation: pollCardIn 0.42s var(--poll-ease-out) both;
+  transition:
+    transform 220ms var(--poll-ease-out),
+    box-shadow 220ms var(--poll-ease-out),
+    border-color 220ms var(--poll-ease-out);
+  will-change: transform;
+}
+.poll-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--card-shadow), 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+/* Status pill — refined typography + subtle gradient sheen */
+.poll-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+  border: 1px solid currentColor;
+  /* color/background overridden inline with the status color */
+}
+
+/* Confirmed banner — gradient + soft ring; below-target adds an amber stripe */
+.poll-confirmed-banner {
+  position: relative;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(16, 185, 129, 0.14) 0%,
+    rgba(16, 185, 129, 0.06) 100%
+  );
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  animation:
+    pollCardIn 0.42s var(--poll-ease-out) both,
+    pollConfirmedRing 4.2s ease-in-out 0.6s infinite;
+}
+.poll-confirmed-banner--below-target {
+  /* Replaces the steady green ring with an amber stripe at the top so a
+     dropping headcount visually warns without un-confirming the card. */
+  background: linear-gradient(
+    180deg,
+    rgba(234, 179, 8, 0.18) 0%,
+    rgba(234, 179, 8, 0.04) 14%,
+    rgba(16, 185, 129, 0.08) 14%,
+    rgba(16, 185, 129, 0.04) 100%
+  );
+  border-color: rgba(234, 179, 8, 0.45);
+  animation: pollCardIn 0.42s var(--poll-ease-out) both;
+}
+
+/* Per-date row — delicate entrance, gentle hover lift */
+.poll-date-row {
+  animation: pollCardIn 0.4s var(--poll-ease-out) both;
+  transition:
+    transform 200ms var(--poll-ease-out),
+    border-color 200ms var(--poll-ease-out),
+    background-color 200ms var(--poll-ease-out);
+}
+.poll-date-row:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--surface-light);
+}
+
+/* RSVP buttons — smooth color transition + gentle press */
+.poll-rsvp-btn {
+  transition:
+    background-color 180ms var(--poll-ease-out),
+    border-color 180ms var(--poll-ease-out),
+    color 180ms var(--poll-ease-out),
+    transform 120ms var(--poll-ease-out),
+    box-shadow 200ms var(--poll-ease-out);
+  will-change: transform;
+}
+.poll-rsvp-btn:not(:disabled):hover  { transform: translateY(-1px); }
+.poll-rsvp-btn:not(:disabled):active { transform: translateY(0) scale(0.97); }
+.poll-rsvp-btn--active {
+  animation: pollActiveSheen 3s ease-in-out infinite;
+}
+
+/* Voter chips */
+.poll-voter-chip {
+  animation: pollChipIn 0.32s var(--poll-ease-out) both;
+  transition: transform 180ms var(--poll-ease-out), border-color 180ms var(--poll-ease-out);
+}
+.poll-voter-chip:hover { transform: translateY(-1px); }
+
+/* Vote count pills */
+.poll-count-pill {
+  animation: pollPillIn 0.32s var(--poll-ease-out) both;
+  transition: transform 160ms var(--poll-ease-out);
+}
+.poll-count-pill:hover { transform: translateY(-1px); }
+
+/* Generic small ghost-button used for admin actions inside the card */
+.poll-ghost-btn {
+  transition:
+    color 180ms var(--poll-ease-out),
+    border-color 180ms var(--poll-ease-out),
+    background-color 180ms var(--poll-ease-out),
+    transform 120ms var(--poll-ease-out);
+}
+.poll-ghost-btn:not(:disabled):hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+}
+.poll-ghost-btn:not(:disabled):active { transform: scale(0.97); }
+
+/* Timer pill — subtle pulse when game is starting soon (within ~30min)
+   to draw attention without being noisy. Only applied via the
+   `--soon` modifier set inline by PollTimer. */
+@keyframes pollTimerSoon {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  50%      { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18); }
+}
+.poll-timer--soon {
+  animation: pollTimerSoon 2.4s ease-in-out infinite;
+}
+
+/* Reduce-motion respect: drop ambient/looping animations and keep
+   only short entrances */
+@media (prefers-reduced-motion: reduce) {
+  .poll-card,
+  .poll-confirmed-banner,
+  .poll-date-row,
+  .poll-voter-chip,
+  .poll-count-pill {
+    animation: none !important;
+  }
+  .poll-rsvp-btn--active,
+  .poll-timer--soon {
+    animation: none !important;
+  }
 }
 

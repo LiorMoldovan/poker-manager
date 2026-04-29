@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { captureAndSplit } from '../utils/sharing';
-import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, PaidSettlement } from '../types';
+import { captureAndSplit, shareComicImage } from '../utils/sharing';
+import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, PaidSettlement, ComicScript, ComicStyleKey } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame, createNotification, getPlayerEmailForNotification, getGroupId } from '../database/storage';
+import { generateGameComic, MAX_REGENERATIONS_PER_GAME } from '../utils/comicGeneration';
+import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
 import { generateForecastComparison, getGeminiApiKey, generateGameNightSummary, GameNightSummaryPayload, detectPeriodMarkers, buildLocationInsights, getModelDisplayName } from '../utils/geminiAI';
@@ -57,10 +59,35 @@ const GameSummaryScreen = () => {
   const [aiSummaryModel, setAiSummaryModel] = useState<string>('');
   const [isLoadingAiSummary, setIsLoadingAiSummary] = useState(false);
   const [aiSummaryError, setAiSummaryError] = useState<string | null>(null);
+  // ─── Comic state ───
+  const [comicUrl, setComicUrl] = useState<string | null>(null);
+  const [comicScript, setComicScript] = useState<ComicScript | null>(null);
+  const [comicStyle, setComicStyleState] = useState<ComicStyleKey | null>(null);
+  const [comicRegenCount, setComicRegenCount] = useState<number>(0);
+  const [isGeneratingComic, setIsGeneratingComic] = useState(false);
+  const [comicError, setComicError] = useState<string | null>(null);
+  const [comicProgress, setComicProgress] = useState<'script' | 'art' | 'bbox' | 'upload' | null>(null);
+  const [isSharingComic, setIsSharingComic] = useState(false);
+  const comicRef = useRef<HTMLDivElement>(null);
+  // Snapshot of the data needed to generate a comic — captured during loadData
+  // so the Generate button can fire without re-deriving state.
+  type ComicVibeSnapshot = {
+    tonight: { name: string; profit: number; rebuys: number }[];
+    recordsBroken: string[];
+    notableStreaks: string[];
+    upsets: string[];
+    rankingShifts: string[];
+    totalPot: number;
+    totalRebuys: number;
+    comboHistoryText?: string;
+    date: string;
+    weekday: string;
+  };
+  const [comicVibe, setComicVibe] = useState<ComicVibeSnapshot | null>(null);
   const [preGameTeaser, setPreGameTeaser] = useState<string | null>(null);
   const [showHistoricalForecast, setShowHistoricalForecast] = useState(false);
   const isPayModeInit = new URLSearchParams(location.search).get('pay') === '1';
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: !isPayModeInit, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: true, standings: true });
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({ settlements: !isPayModeInit, forecast: true, expenses: true, aiSummary: true, combo: true, monthly: true, standings: true, comic: true });
   const toggleSection = (key: string) => { hapticTap(); setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] })); };
   const forceGenerateRef = useRef(false);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -215,6 +242,88 @@ const GameSummaryScreen = () => {
     loadData();
   };
 
+  // ─── Comic handlers ─────────────────────────────────────────
+  const runComicGeneration = async (cycleStyle: boolean) => {
+    if (!gameId || !comicVibe || isGeneratingComic) return;
+    if (comicRegenCount >= MAX_REGENERATIONS_PER_GAME) {
+      setComicError(t('summary.comicLimitReached'));
+      return;
+    }
+    setIsGeneratingComic(true);
+    setComicError(null);
+    setComicProgress('script');
+    // Open the comic section so the progress is visible.
+    setCollapsedSections(prev => ({ ...prev, comic: false }));
+    try {
+      const result = await generateGameComic({
+        gameId,
+        vibe: {
+          tonight: comicVibe.tonight,
+          recordsBroken: comicVibe.recordsBroken,
+          notableStreaks: comicVibe.notableStreaks,
+          upsets: comicVibe.upsets,
+          rankingShifts: comicVibe.rankingShifts,
+        },
+        date: comicVibe.date,
+        weekday: comicVibe.weekday,
+        totalPot: comicVibe.totalPot,
+        totalRebuys: comicVibe.totalRebuys,
+        recordsBroken: comicVibe.recordsBroken,
+        notableStreaks: comicVibe.notableStreaks,
+        upsets: comicVibe.upsets,
+        rankingShifts: comicVibe.rankingShifts,
+        comboHistoryText: comicVibe.comboHistoryText,
+        cycleFromStyle: cycleStyle ? (comicStyle || undefined) : undefined,
+        onProgress: setComicProgress,
+      });
+      setComicUrl(result.url);
+      setComicStyleState(result.style);
+      // Re-read the script we just persisted (the orchestrator wrote it
+      // through saveGameComic — pull the fresh row to pick up bboxes).
+      const freshGame = getGame(gameId);
+      if (freshGame?.comicScript) setComicScript(freshGame.comicScript);
+      setComicRegenCount(c => c + 1);
+    } catch (err) {
+      console.error('Comic generation failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'NO_API_KEY') {
+        setComicError(t('summary.comicNoApiKey'));
+      } else if (msg === 'OFFLINE') {
+        setComicError(t('summary.aiQuotaError'));
+      } else if (msg.includes('429') || msg.includes('quota')) {
+        setComicError(t('summary.aiQuotaError'));
+      } else {
+        setComicError(t('summary.comicGenError'));
+      }
+    } finally {
+      setIsGeneratingComic(false);
+      setComicProgress(null);
+    }
+  };
+
+  const handleGenerateComic = () => { hapticTap(); runComicGeneration(false); };
+  const handleRegenerateComic = () => { hapticTap(); runComicGeneration(true); };
+
+  const handleShareComic = async () => {
+    if (!comicRef.current || isSharingComic) return;
+    setIsSharingComic(true);
+    try {
+      const dateLabel = gameDate ? new Date(gameDate).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' }) : 'comic';
+      await shareComicImage(comicRef.current, dateLabel);
+    } catch (err) {
+      console.error('Comic share failed:', err);
+    } finally {
+      setIsSharingComic(false);
+    }
+  };
+
+  // Keep regenerate counter accurate when the cached comic loads from the DB
+  // (e.g. another admin regenerated): a brand-new viewer should still get
+  // the full quota, but the same admin in the same session who already
+  // generated should keep their counter. We rely on per-session state, which
+  // is fine for the current "evaluate quality" rollout phase.
+  useEffect(() => { if (!comicUrl) setComicRegenCount(0); }, [comicUrl]);
+
   // Calculate total chips for a player
   const getTotalChips = (player: GamePlayer): number => {
     const chipValues = getChipValues();
@@ -262,6 +371,11 @@ const GameSummaryScreen = () => {
     setChipGap(game.chipGap || null);
     setChipGapPerPlayer(game.chipGapPerPlayer || null);
     setPreGameTeaser(game.preGameTeaser || null);
+    // Hydrate comic state from cached game row so realtime updates from
+    // other clients show up too (e.g. another admin generated a comic).
+    setComicUrl(game.comicUrl || null);
+    setComicScript(game.comicScript || null);
+    setComicStyleState(game.comicStyle || null);
     
     const sortedPlayers = gamePlayers.sort((a, b) => b.profit - a.profit);
     setPlayers(sortedPlayers);
@@ -971,6 +1085,65 @@ const GameSummaryScreen = () => {
         });
     } else {
       forceGenerateRef.current = false;
+    }
+
+    // ─── Comic vibe snapshot (always for completed games) ───
+    // Build the same factual data the AI summary uses so the "Generate Comic"
+    // button can fire any time, regardless of whether the AI summary is cached.
+    if (game.status === 'completed' && sortedPlayers.length > 0) {
+      try {
+        const tonight = sortedPlayers.map(p => ({
+          name: p.playerName,
+          profit: Math.round(p.profit),
+          rebuys: p.rebuys,
+        }));
+
+        const recordsBroken: string[] = [];
+        const notableStreaks: string[] = [];
+        const upsets: string[] = [];
+        const rankingShifts: string[] = [];
+        for (const h of bank) {
+          if (h.label.includes('שיא') || h.label.includes('Top 20') || h.label.includes('Top 10')) {
+            recordsBroken.push(`${h.emoji} ${h.label}: ${h.detail}`);
+          }
+          if (h.label === 'רצף') notableStreaks.push(h.detail);
+          if (h.label === 'הפתעות') upsets.push(h.detail);
+        }
+        // Lightweight ranking-shift recompute (mirrors the AI block).
+        try {
+          const beforeTonight = activeStats.map(s => {
+            const tonightPlayer = sortedPlayers.find(p => p.playerId === s.playerId);
+            const tonightProfit = tonightPlayer ? tonightPlayer.profit : 0;
+            return { ...s, totalProfit: s.totalProfit - tonightProfit };
+          }).sort((a, b) => b.totalProfit - a.totalProfit);
+          const afterTonight = [...activeStats];
+          for (const stat of activeStats) {
+            const newRank = afterTonight.findIndex(s => s.playerId === stat.playerId) + 1;
+            const oldRank = beforeTonight.findIndex(s => s.playerId === stat.playerId) + 1;
+            if (newRank > 0 && oldRank > 0 && newRank < oldRank) {
+              const passed = beforeTonight.slice(newRank - 1, oldRank - 1)
+                .filter(s => s.playerId !== stat.playerId).map(s => s.playerName);
+              if (passed.length > 0) rankingShifts.push(`${stat.playerName} עלה ממקום ${oldRank} למקום ${newRank}`);
+            }
+          }
+        } catch { /* best-effort */ }
+
+        const weekdayLabel = new Date(game.date || game.createdAt).toLocaleDateString('he-IL', { weekday: 'long' });
+        setComicVibe({
+          tonight,
+          recordsBroken,
+          notableStreaks,
+          upsets,
+          rankingShifts,
+          totalPot: Math.round(tonightsPot),
+          totalRebuys: totalRebuysTonight,
+          comboHistoryText: combo.totalGamesWithCombo > 1 ? buildComboHistoryText(combo) : undefined,
+          date: game.date || game.createdAt,
+          weekday: weekdayLabel,
+        });
+      } catch { setComicVibe(null); }
+    } else {
+      setComicVibe(null);
     }
 
     setIsLoading(false);
@@ -1798,6 +1971,112 @@ const GameSummaryScreen = () => {
                         </div>
                       ))}
                     </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Game-Night Comic Section ─── */}
+      {/* Visible to everyone when a comic exists, or to the owner (with completed game)
+          so they can generate one. Live/chip-entry games hide the section entirely. */}
+      {(comicUrl || (isOwner && comicVibe && players.length > 0)) && (
+        <div style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
+          <div className="card" style={{ padding: '0.75rem' }}>
+            <button
+              onClick={() => toggleSection('comic')}
+              style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, color: '#f8fafc', marginBottom: collapsedSections.comic ? 0 : '0.5rem' }}
+            >
+              <h2 className="card-title" style={{ margin: 0 }}>{t('summary.comicTitle')}</h2>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', transform: collapsedSections.comic ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>▼</span>
+            </button>
+
+            {!collapsedSections.comic && (
+              <div style={{ animation: 'contentFadeIn 0.25s ease-out' }}>
+                {/* Owner action row — varies by state */}
+                {isOwner && !isGeneratingComic && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+                    {!comicUrl && getGeminiApiKey() && (
+                      <span
+                        className="btn btn-sm"
+                        style={{ background: 'linear-gradient(135deg, #A855F7, #EC4899)', color: 'white', fontSize: '0.72rem', padding: '0.3rem 0.7rem', cursor: 'pointer', fontWeight: 600 }}
+                        onClick={handleGenerateComic}
+                      >
+                        {t('summary.comicGenerate')}
+                      </span>
+                    )}
+                    {comicUrl && comicRegenCount < MAX_REGENERATIONS_PER_GAME && (
+                      <span
+                        className="btn btn-sm"
+                        style={{ background: '#2a1f3d', color: '#A855F7', border: '1px solid #4a2f6e', fontSize: '0.7rem', padding: '0.25rem 0.6rem', cursor: 'pointer' }}
+                        onClick={handleRegenerateComic}
+                      >
+                        {t('summary.comicRegenerate')}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* No-API-key hint (admin only) */}
+                {isOwner && !comicUrl && !getGeminiApiKey() && (
+                  <div style={{ padding: '0.75rem', background: 'rgba(168,85,247,0.08)', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.5rem' }}>
+                    {t('summary.comicNoApiKey')}
+                  </div>
+                )}
+
+                {/* Generating state */}
+                {isGeneratingComic && (
+                  <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>🎨</div>
+                    {comicProgress === 'script' && t('summary.comicGenScript')}
+                    {comicProgress === 'art' && t('summary.comicGenArt')}
+                    {comicProgress === 'bbox' && t('summary.comicGenBbox')}
+                    {comicProgress === 'upload' && t('summary.comicGenUpload')}
+                    <AIProgressBar operationKey="game_summary" />
+                  </div>
+                )}
+
+                {/* Error state */}
+                {comicError && !isGeneratingComic && (
+                  <div style={{ padding: '0.6rem 0.75rem', marginBottom: '0.5rem', background: '#2d1f1f', border: '1px solid #6b2828', borderRadius: '8px', fontSize: '0.8rem', color: '#f87171', textAlign: 'center' }}>
+                    ⚠️ {comicError}
+                  </div>
+                )}
+
+                {/* Hint when no comic yet (everyone) */}
+                {!comicUrl && !isGeneratingComic && !comicError && (
+                  <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.06)', borderRadius: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+                    {t('summary.comicHint')}
+                  </div>
+                )}
+
+                {/* Rendered comic + share */}
+                {comicUrl && comicScript && !isGeneratingComic && (
+                  <>
+                    <ComicRenderer
+                      ref={comicRef}
+                      imageUrl={comicUrl}
+                      script={comicScript}
+                      forShare
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+                      <button
+                        className="btn btn-primary"
+                        style={{ background: 'linear-gradient(135deg, #25D366, #128C7E)', border: 'none', color: 'white', padding: '0.55rem 1.2rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', borderRadius: '8px', opacity: isSharingComic ? 0.6 : 1 }}
+                        disabled={isSharingComic}
+                        onClick={handleShareComic}
+                      >
+                        {isSharingComic ? t('common.capturing') : t('summary.comicShare')}
+                      </button>
+                    </div>
+                    {comicStyle && (
+                      <div style={{ textAlign: 'center', fontSize: '0.6rem', color: '#94a3b8', marginTop: '0.5rem', opacity: 0.6 }}>
+                        {t(`summary.comicStyle${comicStyle.charAt(0).toUpperCase()}${comicStyle.slice(1)}` as never)}
+                        {comicScript.modelImage ? ` • ${comicScript.modelImage}` : ''}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.25.0';
+export const APP_VERSION = '5.26.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.26.0',
+    date: '2026-04-29',
+    changes: [
+      '🎨 Game-Night Comic: admin can generate a one-page Hebrew comic of any completed game and share it to WhatsApp — three-stage AI pipeline (script → art → face-bbox) using Gemini 2.5 Flash Image, with DOM-rendered Hebrew bubbles for crisp typography',
+      '🖼️ Six comic styles auto-picked by game vibe (Sunday strip, Manga, Noir, Pixar 3D, Tintin ligne claire, Retro 70s) with style-matched bubble themes; "Try another style" cycles through them, capped at 3 regenerations per game',
+      '🗄️ New supabase/033 migration: game-comics Storage bucket (admin-write RLS, public-read) + 4 new columns on games — fail-silent, all members see the same comic via existing realtime',
+      '🗳️ Schedule polls — major upgrade: admins can delete (027) and edit (028) polls; per-vote history (029) shows when each vote was cast or changed',
+      '🔔 Schedule polls — vote-change notifications (030, 031, 032): voters learn when participants change their RSVP after confirmation; admins can opt out per-poll, change-window controls',
+      '📲 Vote reminder banner: floating banner nudges members with unanswered open polls, with one-tap deep link to vote',
+      '🔡 Loaded Heebo font alongside Outfit so Hebrew renders cleanly inside the comic speech bubbles',
+    ],
+  },
   {
     version: '5.25.0',
     date: '2026-04-28',

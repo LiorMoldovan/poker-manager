@@ -1,4 +1,4 @@
-import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense, AppNotification, PlayerTraits, GamePoll, RsvpResponse, CreatePollInput } from '../types';
+import { Player, PlayerType, PlayerGender, Game, GamePlayer, ChipValue, Settings, PlayerStats, PendingForecast, GameForecast, SharedExpense, AppNotification, PlayerTraits, GamePoll, RsvpResponse, CreatePollInput, ComicScript, ComicStyleKey } from '../types';
 import {
   cacheGet, cacheSet, cacheRemove,
   cacheGetItem, cacheSetItem, cacheRemoveItem,
@@ -16,8 +16,14 @@ import {
   getAnyResponseVoterIds as cacheGetAnyResponseVoterIds,
   createPollRpc, castPollVoteRpc, cancelPollRpc, manuallyClosePollRpc,
   expandPollRpc, updatePollTargetRpc, updatePollExpansionDelayRpc,
+  updatePollMetaRpc, type PollMetaPatch,
   claimPollNotificationsRpc, linkPollToGameRpc,
   adminCastPollVoteRpc, adminDeletePollVoteRpc,
+  deletePollRpc,
+  subscribeToPollChangesRpc, unsubscribeFromPollChangesRpc,
+  getMyPollChangeSubscriptionsRpc, getPollChangeRecipientsRpc,
+  getMyVoteChangeNotifsRpc, setMyVoteChangeNotifsRpc,
+  type PollChangeRecipient,
 } from './supabaseCache';
 import { supabase } from './supabaseClient';
 
@@ -287,7 +293,18 @@ export const updateSharedExpense = (gameId: string, expense: SharedExpense): voi
 };
 
 export const deleteGame = (id: string): void => {
-  const games = getAllGames().filter(g => g.id !== id);
+  const all = getAllGames();
+  const target = all.find(g => g.id === id);
+
+  // If a comic was generated for this game, also remove the storage object
+  // so we never leave orphaned files in the bucket. Fire-and-forget; cache
+  // cleanup happens regardless of network outcome (the DB cascade still
+  // works and the SQL row goes away).
+  if (target?.comicUrl) {
+    deleteComicAsset(target.id).catch(() => { /* best-effort cleanup */ });
+  }
+
+  const games = all.filter(g => g.id !== id);
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId !== id);
   setItem(STORAGE_KEYS.GAMES, games);
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
@@ -832,6 +849,88 @@ export const saveGameAiSummary = (gameId: string, summary: string, model?: strin
   }
 };
 
+// ─── Game-Night Comic ─────────────────────────────────────────
+// Storage layout: bucket 'game-comics' → '{groupId}/{gameId}.png'.
+// The PNG is uploaded directly from the client (admin-only, gated by
+// RLS), and the public URL + script + style are cached on the games
+// row so all members see the same comic via realtime sync.
+
+const COMIC_BUCKET = 'game-comics';
+
+const comicObjectPath = (groupId: string, gameId: string): string =>
+  `${groupId}/${gameId}.png`;
+
+/**
+ * Upload a PNG (as a Blob) to the comic bucket and return the public URL.
+ * Throws on RLS / network failure so the orchestrator can degrade gracefully.
+ */
+export const uploadComicImage = async (gameId: string, png: Blob): Promise<string> => {
+  const groupId = getGroupId();
+  if (!groupId) throw new Error('No group context — cannot upload comic');
+
+  const path = comicObjectPath(groupId, gameId);
+  const { error } = await supabase.storage.from(COMIC_BUCKET).upload(path, png, {
+    contentType: 'image/png',
+    upsert: true,
+    cacheControl: '3600',
+  });
+  if (error) throw new Error(`Comic upload failed: ${error.message}`);
+
+  const { data } = supabase.storage.from(COMIC_BUCKET).getPublicUrl(path);
+  if (!data?.publicUrl) throw new Error('Comic upload returned no public URL');
+  // Append cache-buster so a regenerated comic shows the new image instead
+  // of a CDN-cached old PNG. The bucket itself is set to public-read.
+  return `${data.publicUrl}?v=${Date.now()}`;
+};
+
+/**
+ * Save the comic metadata onto the game row. Triggers the existing debounced
+ * `pushToSupabase` flow for `games`, which fans out via realtime to all
+ * group members.
+ */
+export const saveGameComic = (
+  gameId: string,
+  url: string,
+  script: ComicScript,
+  style: ComicStyleKey,
+): void => {
+  const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  const idx = games.findIndex(g => g.id === gameId);
+  if (idx === -1) return;
+  games[idx].comicUrl = url;
+  games[idx].comicScript = script;
+  games[idx].comicStyle = style;
+  games[idx].comicGeneratedAt = new Date().toISOString();
+  setItem(STORAGE_KEYS.GAMES, games);
+};
+
+/**
+ * Best-effort cleanup of the storage object when a comic is regenerated
+ * or its game is deleted. Failures are non-fatal — the upsert on next
+ * generation will overwrite, and DB-row deletion makes orphans inert.
+ */
+export const deleteComicAsset = async (gameId: string): Promise<void> => {
+  const groupId = getGroupId();
+  if (!groupId) return;
+  const path = comicObjectPath(groupId, gameId);
+  await supabase.storage.from(COMIC_BUCKET).remove([path]);
+};
+
+/**
+ * Clear the comic columns on a game row (used by "Regenerate" so the UI
+ * shows the loading state cleanly while the new pipeline runs).
+ */
+export const clearGameComic = (gameId: string): void => {
+  const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
+  const idx = games.findIndex(g => g.id === gameId);
+  if (idx === -1) return;
+  delete games[idx].comicUrl;
+  delete games[idx].comicScript;
+  delete games[idx].comicStyle;
+  delete games[idx].comicGeneratedAt;
+  setItem(STORAGE_KEYS.GAMES, games);
+};
+
 
 // ========== Chronicle Profiles (AI-generated player stories) ==========
 
@@ -1361,6 +1460,8 @@ export const adminDeleteVote = (
 export const cancelPoll = (pollId: string, reason?: string): Promise<void> =>
   cancelPollRpc(pollId, reason ?? null);
 
+export const deletePoll = (pollId: string): Promise<void> => deletePollRpc(pollId);
+
 export const manuallyClosePoll = (pollId: string, dateId: string): Promise<void> =>
   manuallyClosePollRpc(pollId, dateId);
 
@@ -1371,6 +1472,35 @@ export const updatePollTarget = (pollId: string, target: number): Promise<void> 
 
 export const updatePollExpansionDelay = (pollId: string, hours: number): Promise<void> =>
   updatePollExpansionDelayRpc(pollId, hours);
+
+export const updatePollMeta = (pollId: string, patch: PollMetaPatch): Promise<void> =>
+  updatePollMetaRpc(pollId, patch);
+
+export type { PollMetaPatch };
+
+// ─── Vote-change notifications opt-in ───
+export const subscribeToPollChanges = (pollId: string): Promise<void> =>
+  subscribeToPollChangesRpc(pollId);
+
+export const unsubscribeFromPollChanges = (pollId: string): Promise<void> =>
+  unsubscribeFromPollChangesRpc(pollId);
+
+export const getMyPollChangeSubscriptions = (): Promise<string[]> =>
+  getMyPollChangeSubscriptionsRpc();
+
+export const getPollChangeRecipients = (pollId: string): Promise<PollChangeRecipient[]> =>
+  getPollChangeRecipientsRpc(pollId);
+
+export type { PollChangeRecipient };
+
+// Per-admin opt-out for vote_change pings (migration 032). Lets each
+// admin individually decide whether the schedule's chatty vote-change
+// channel pings them, without affecting major-update notifications.
+export const getMyVoteChangeNotifs = (groupId: string): Promise<boolean> =>
+  getMyVoteChangeNotifsRpc(groupId);
+
+export const setMyVoteChangeNotifs = (groupId: string, enabled: boolean): Promise<void> =>
+  setMyVoteChangeNotifsRpc(groupId, enabled);
 
 export const claimPollNotifications = (
   pollId: string,

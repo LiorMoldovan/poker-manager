@@ -107,6 +107,58 @@ export interface Game {
   preGameTeaser?: string; // AI-generated pre-game teaser text
   periodMarkers?: PeriodMarkers; // Period context stored at game creation
   paidSettlements?: PaidSettlement[];
+  comicUrl?: string; // Public Supabase Storage URL of the rendered comic PNG
+  comicScript?: ComicScript; // Panels, dialogue + per-character bboxes for client-side bubble overlay
+  comicStyle?: ComicStyleKey; // Which visual style was used (newspaper, manga, ...)
+  comicGeneratedAt?: string; // ISO timestamp of last generation (for regen rate-limit)
+}
+
+// ─── Game-Night Comic ─────────────────────────────────────────
+// Cached on `games` row so every group member sees the same comic.
+// Hebrew speech text lives in this script and is rendered as DOM
+// over the art image; the model never draws letters itself, which
+// guarantees crisp Hebrew typography regardless of style.
+
+export type ComicStyleKey =
+  | 'newspaper'
+  | 'manga'
+  | 'noir'
+  | 'pixar3d'
+  | 'tintin'
+  | 'retro70s';
+
+export type ComicBubbleType = 'speech' | 'thought' | 'shout' | 'caption';
+
+export interface ComicBubble {
+  speaker: string;       // exact player name from `tonight`, or 'narrator' for captions
+  text: string;          // Hebrew dialogue (1 short line, ≤ ~40 chars)
+  type: ComicBubbleType;
+}
+
+export interface ComicPanel {
+  id: 1 | 2 | 3 | 4;
+  scene: string;         // English description of the scene fed back into the art prompt
+  characters: string[];  // Character descriptions ('name:expression') — drives consistency
+  bubbles: ComicBubble[];
+  /**
+   * Bounding box of the speaker's face (or bubble anchor target) in NORMALIZED
+   * coordinates [0..1] of the full comic image. [yMin, xMin, yMax, xMax]
+   * matches Gemini's native bbox format. Filled by the bbox-detection stage.
+   */
+  bboxes?: Record<string, [number, number, number, number]>;
+}
+
+export interface ComicScript {
+  style: ComicStyleKey;
+  title: string;         // Short Hebrew title (optional caption strip)
+  panels: ComicPanel[];
+  /** 2x2 grid layout (default). Reserved for future single-row variants. */
+  layout?: '2x2' | '1x4';
+  /** Total image dimensions (px) — used to convert normalized bboxes to pixels. */
+  width?: number;
+  height?: number;
+  modelText?: string;    // Display name of model used for script (debug)
+  modelImage?: string;   // Display name of model used for art (debug)
 }
 
 export interface PaidSettlement {
@@ -143,6 +195,7 @@ export interface GamePollVote {
   response: RsvpResponse;
   comment?: string | null;
   votedAt: string;
+  createdAt: string;                // first time this row was inserted; stays fixed across edits
   castByUserId?: string | null;     // auth.uid() of the user who last cast/edited this vote
 }
 

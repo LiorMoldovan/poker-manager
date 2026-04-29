@@ -12,7 +12,9 @@ import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGame
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
-import { proxyGeminiGenerate, proxyGeminiModels } from './apiProxy';
+import { proxyGeminiGenerate, proxyGeminiModels, proxyGeminiImage } from './apiProxy';
+import { getComicStyle } from './comicStyles';
+import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 
 // Models ordered by quality — cascading fallback from best to lightest.
 // On rate-limit (429) or not-found (404), the next model is tried automatically.
@@ -2389,6 +2391,410 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
   }
 
   throw new Error('All AI models failed to generate game summary');
+};
+
+// ─── AI Game-Night Comic ──────────────────────────────────────────────────
+// Three-stage pipeline:
+//   Stage 1 (text):   generateComicScript()        — JSON script
+//   Stage 2 (image):  generateComicArt()           — PNG, art only
+//   Stage 3 (text):   detectComicBoundingBoxes()   — face bboxes per panel
+//
+// Hebrew dialogue is rendered as DOM text on top of the art client-side.
+// The model never draws letters, which guarantees crisp Hebrew typography.
+
+const IMAGE_MODEL = 'gemini-2.5-flash-image';
+
+interface ComicScriptInputPayload {
+  date: string;
+  weekday: string;
+  tonight: { name: string; profit: number; rebuys: number; rank: number }[];
+  totalPot: number;
+  totalRebuys: number;
+  recordsBroken: string[];
+  notableStreaks: string[];
+  upsets: string[];
+  rankingShifts: string[];
+  comboHistoryText?: string;
+  styleVibe: string; // from ComicStyle.scriptVibe
+}
+
+/**
+ * Stage 1 — generate a JSON script for a 4-panel comic.
+ * Reuses the same factual data as generateGameNightSummary but distills
+ * it into a 4-beat narrative with Hebrew dialogue.
+ */
+export const generateComicScript = async (
+  payload: ComicScriptInputPayload,
+  styleKey: ComicStyleKey,
+): Promise<{ script: ComicScript; model: string }> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+  if (payload.tonight.length === 0) throw new Error('No players for comic script');
+
+  const tonightLines = payload.tonight.map(p =>
+    `${p.rank}. ${p.name}: ${p.profit >= 0 ? '+' : ''}${p.profit} שקלים, ${p.rebuys} קניות`,
+  ).join('\n');
+
+  const dramaSections: string[] = [];
+  if (payload.recordsBroken.length) dramaSections.push(`שיאים: ${payload.recordsBroken.join(' | ')}`);
+  if (payload.notableStreaks.length) dramaSections.push(`רצפים: ${payload.notableStreaks.join(' | ')}`);
+  if (payload.upsets.length) dramaSections.push(`הפתעות: ${payload.upsets.join(' | ')}`);
+  if (payload.rankingShifts.length) dramaSections.push(`שינויי דירוג: ${payload.rankingShifts.join(' | ')}`);
+  if (payload.comboHistoryText) dramaSections.push(payload.comboHistoryText);
+
+  const drama = dramaSections.length ? `\n\nאירועים מיוחדים:\n${dramaSections.join('\n')}` : '';
+
+  const winner = payload.tonight[0];
+  const loser = payload.tonight[payload.tonight.length - 1];
+
+  const prompt = `אתה תסריטאי קומיקס. צור תסריט לעמוד קומיקס בן 4 פאנלים על ערב פוקר אמיתי בין חברים.
+
+🎭 רוח הסיפור (חובה לתפוס את המצב הזה): ${payload.styleVibe}
+
+📊 נתונים אמיתיים מהערב:
+תאריך: ${payload.weekday} ${payload.date}
+קופה: ${payload.totalPot} שקלים (${payload.totalRebuys} קניות סה״כ)
+תוצאות:
+${tonightLines}${drama}
+
+הפאנלים מספרים את הקשת הדרמטית של הערב:
+פאנל 1 — פתיחה / מתח: בית, שולחן, הסטים, הצגת הדמויות הבולטות
+פאנל 2 — הקרב המרכזי / רגע מפנה
+פאנל 3 — שיא דרמטי (ניצחון, קאמבק, הפסד גדול, הפתעה)
+פאנל 4 — סגירה / פאנץ׳ עם ${winner.name} כמנצח (+${winner.profit}) ו-${loser.name} כמפסיד הגדול (${loser.profit})
+
+📐 פלט JSON תקני בלבד (ללא markdown, ללא הסברים), במבנה הזה בדיוק:
+
+{
+  "title": "כותרת קצרה בעברית, עד 5 מילים",
+  "panels": [
+    {
+      "id": 1,
+      "scene": "English description of the visual scene — characters, poses, expressions, environment, lighting. Write 1-2 sentences. This is the prompt for the image model so be specific and visual.",
+      "characters": ["name:expression", "name:expression"],
+      "bubbles": [
+        { "speaker": "exact player name OR 'narrator'", "text": "דיאלוג קצר בעברית — מקסימום 6 מילים", "type": "speech | thought | shout | caption" }
+      ]
+    }
+  ]
+}
+
+⚠️ חובה:
+- כל פאנל: 1-2 בועות בלבד (לא 3, לא 4). דיאלוג קצר וקולע
+- כל ${payload.tonight.length} השחקנים חייבים להופיע באחד הפאנלים לפחות
+- "speaker" חייב להיות בדיוק אחד מהשמות: ${payload.tonight.map(p => `"${p.name}"`).join(', ')} או "narrator"
+- "type": "caption" רק כש-speaker = "narrator"
+- "scene" באנגלית כי זה הולך למודל ציור
+- דיאלוג בעברית טבעית, לא תרגומית. עברית של שולחן פוקר בין חברים. מותר סלנג קל
+- אל תמציא סכומים או דירוגים שלא מופיעים למעלה
+- characters: רשימה של "name:expression" בלבד (למשל "yossi:focused", "dani:sweating") — ייעזר באמני הציור לעקביות בין פאנלים
+
+החזר JSON תקני בלבד, בלי טקסט נוסף.`;
+
+  const result = await callWithFallback({
+    prompt,
+    apiKey,
+    temperature: 0.85,
+    maxOutputTokens: 4096,
+    topP: 0.95,
+    responseMimeType: 'application/json',
+    label: 'Comic script',
+  });
+
+  let parsed: { title: string; panels: ComicPanel[] };
+  try {
+    parsed = JSON.parse(result.text);
+  } catch (err) {
+    throw new Error(`Comic script JSON parse failed: ${(err as Error).message}`);
+  }
+
+  if (!Array.isArray(parsed.panels) || parsed.panels.length !== 4) {
+    throw new Error(`Comic script must have exactly 4 panels (got ${parsed.panels?.length})`);
+  }
+
+  // Light sanity-pass: enforce id 1-4, drop empty bubbles, clamp dialogue length.
+  const panels: ComicPanel[] = parsed.panels.map((p, i) => ({
+    id: ((p.id || i + 1) as 1 | 2 | 3 | 4),
+    scene: String(p.scene || '').slice(0, 600),
+    characters: Array.isArray(p.characters) ? p.characters.map(String).slice(0, 6) : [],
+    bubbles: Array.isArray(p.bubbles)
+      ? p.bubbles
+          .filter(b => b && typeof b.text === 'string' && b.text.trim().length > 0)
+          .slice(0, 2)
+          .map(b => ({
+            speaker: String(b.speaker || 'narrator').trim(),
+            text: String(b.text).trim().slice(0, 60),
+            type: (['speech', 'thought', 'shout', 'caption'].includes(b.type as string)
+              ? b.type
+              : 'speech') as ComicPanel['bubbles'][number]['type'],
+          }))
+      : [],
+  }));
+
+  const script: ComicScript = {
+    style: styleKey,
+    title: String(parsed.title || '').slice(0, 60),
+    panels,
+    layout: '2x2',
+    modelText: getModelDisplayName(result.model),
+  };
+
+  return { script, model: result.model };
+};
+
+/**
+ * Stage 2 — generate the comic art image (4 panels in one PNG).
+ * Returns base64-encoded PNG data and pixel dimensions.
+ *
+ * Single shot using gemini-2.5-flash-image. The prompt includes EVERY
+ * panel description plus the style fragment, and aggressively forbids
+ * letters/text/bubbles since Hebrew is rendered client-side.
+ */
+export const generateComicArt = async (
+  script: ComicScript,
+): Promise<{ base64: string; mimeType: string; width: number; height: number; model: string }> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  if (!navigator.onLine) {
+    throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
+  }
+
+  const style = getComicStyle(script.style);
+
+  // Build a single prompt that lays out all 4 panels in a 2x2 grid.
+  const panelLines = script.panels.map(p => {
+    const charLine = p.characters.length > 0 ? ` Characters present: ${p.characters.join(', ')}.` : '';
+    return `Panel ${p.id} (${panelPosition(p.id)}): ${p.scene}${charLine}`;
+  }).join('\n');
+
+  const characterRoster = collectCharacterRoster(script);
+
+  const prompt = `Create a single high-quality one-page comic illustration: a 2x2 grid of 4 panels telling a connected story about a poker night between friends.
+
+🎨 ART STYLE — LOCK THIS DOWN:
+${style.promptFragment}.
+
+CRITICAL — image content rules:
+- Render ONLY illustration. NO text whatsoever inside the image. NO speech bubbles. NO captions. NO panel numbers. NO signatures, watermarks, or logos.
+- Speech bubbles will be added later as a separate overlay; if you draw bubble shapes they will collide with the overlay and ruin the page.
+- Leave clean empty negative space near each main character's face/upper body so a bubble overlay has room to land. Keep faces unobstructed and well-lit.
+- Compose all 4 panels INSIDE one image as a 2x2 grid: panel 1 top-${ARABIC_RTL ? 'right' : 'left'}, panel 2 top-${ARABIC_RTL ? 'left' : 'right'}, panel 3 bottom-${ARABIC_RTL ? 'right' : 'left'}, panel 4 bottom-${ARABIC_RTL ? 'left' : 'right'}. Use clear panel borders matching the style. Equal panel sizes.
+- Square output, roughly 1024x1024 pixels.
+
+CHARACTER CONSISTENCY (very important):
+- Use the same character design across all 4 panels. ${characterRoster}
+- Each character should be visually distinguishable (different clothing colors, hair, build) so a viewer can track them across panels.
+
+PANEL CONTENT:
+${panelLines}
+
+NEGATIVE PROMPT:
+${style.negativePrompt}.`;
+
+  const response = await proxyGeminiImage(IMAGE_MODEL, {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.9,
+      // gemini-2.5-flash-image returns IMAGE in candidates[].content.parts[].inlineData
+      responseModalities: ['IMAGE'],
+    },
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    const errMsg = errData?.error?.message || `Comic image HTTP ${response.status}`;
+    throw new Error(errMsg);
+  }
+
+  const data = await response.json();
+  const parts: Array<{ inlineData?: { data: string; mimeType: string }; inline_data?: { data: string; mime_type: string } }> =
+    data?.candidates?.[0]?.content?.parts || [];
+
+  // Tolerate both camelCase and snake_case key variants from the upstream API.
+  let base64 = '';
+  let mimeType = 'image/png';
+  for (const part of parts) {
+    const inline = part.inlineData || part.inline_data;
+    if (inline?.data) {
+      base64 = inline.data;
+      mimeType = (part.inlineData?.mimeType) || (part.inline_data?.mime_type) || 'image/png';
+      break;
+    }
+  }
+  if (!base64) {
+    const finishReason = data?.candidates?.[0]?.finishReason;
+    throw new Error(`Image model returned no image data${finishReason ? ` (finishReason=${finishReason})` : ''}`);
+  }
+
+  // Probe size from the base64 (we don't need pixel-perfect — just enough for
+  // bbox normalization). Decode header to read PNG/JPEG dimensions.
+  const dims = readImageDimensions(base64, mimeType);
+
+  return {
+    base64,
+    mimeType,
+    width: dims.width || 1024,
+    height: dims.height || 1024,
+    model: IMAGE_MODEL,
+  };
+};
+
+/**
+ * Stage 3 — ask Gemini to locate each speaker's face/anchor point in
+ * the rendered image, returned as normalized [yMin, xMin, yMax, xMax]
+ * (Gemini's native 0-1000 bbox format, which we re-normalize to 0..1).
+ *
+ * Per-bubble, this lets the client overlay the speech bubble pointing
+ * to the correct character with a tail anchored to their face.
+ */
+export const detectComicBoundingBoxes = async (
+  imageBase64: string,
+  mimeType: string,
+  script: ComicScript,
+): Promise<ComicScript> => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  // Build per-panel speaker request. We only ask for speakers that aren't
+  // narrator (captions float free at the panel corner).
+  const requests = script.panels.map(p => {
+    const speakers = p.bubbles
+      .filter(b => b.type !== 'caption' && b.speaker !== 'narrator')
+      .map(b => b.speaker);
+    return {
+      panel: p.id,
+      panelPosition: panelPosition(p.id),
+      speakers: Array.from(new Set(speakers)),
+    };
+  }).filter(r => r.speakers.length > 0);
+
+  if (requests.length === 0) {
+    return { ...script, panels: script.panels };
+  }
+
+  const prompt = `You are looking at a 4-panel poker comic image (2x2 grid: panel 1 top-left, panel 2 top-right, panel 3 bottom-left, panel 4 bottom-right).
+
+For each panel and each requested character, return the bounding box of that character's FACE (or upper torso if face is obscured) in the FULL image. Use Gemini's standard normalized format: [ymin, xmin, ymax, xmax] with values 0-1000 relative to the full image dimensions (NOT to the panel).
+
+Characters are described informally — match by visual prominence within the requested panel quadrant.
+
+Requested panels and characters:
+${requests.map(r => `Panel ${r.panel} (${r.panelPosition}): ${r.speakers.join(', ')}`).join('\n')}
+
+Return ONLY valid JSON in this exact shape, no markdown, no commentary:
+{
+  "panels": [
+    { "panel": 1, "boxes": [ { "name": "<requested name>", "box": [ymin, xmin, ymax, xmax] } ] }
+  ]
+}
+
+If you cannot confidently locate a character, omit them from the output.`;
+
+  // Use gemini-2.5-flash for bbox detection: it's a deterministic structured
+  // extraction task (not creative writing), so we benefit from a non-thinking
+  // model that's faster + cheaper + doesn't waste output tokens on reasoning.
+  const response = await proxyGeminiGenerate('v1beta', 'gemini-2.5-flash', apiKey, {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType, data: imageBase64 } },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    // Bbox detection is best-effort — fall back to no bboxes; client will
+    // place bubbles in default panel-corner positions.
+    return script;
+  }
+
+  let parsed: { panels?: { panel: number; boxes?: { name: string; box: number[] }[] }[] };
+  try {
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    parsed = JSON.parse(text);
+  } catch {
+    return script;
+  }
+
+  if (!Array.isArray(parsed.panels)) return script;
+
+  const updated: ComicPanel[] = script.panels.map(p => {
+    const entry = parsed.panels!.find(e => e.panel === p.id);
+    if (!entry || !Array.isArray(entry.boxes)) return p;
+    const bboxes: NonNullable<ComicPanel['bboxes']> = {};
+    for (const b of entry.boxes) {
+      if (!b || typeof b.name !== 'string' || !Array.isArray(b.box) || b.box.length !== 4) continue;
+      const [yMin, xMin, yMax, xMax] = b.box.map(Number);
+      if ([yMin, xMin, yMax, xMax].some(v => !Number.isFinite(v))) continue;
+      // Gemini returns 0..1000; normalize to 0..1.
+      bboxes[b.name] = [yMin / 1000, xMin / 1000, yMax / 1000, xMax / 1000];
+    }
+    return Object.keys(bboxes).length > 0 ? { ...p, bboxes } : p;
+  });
+
+  return { ...script, panels: updated };
+};
+
+// ─── Comic helpers ────────────────────────────────────────────────────────
+
+const ARABIC_RTL = false; // English layout descriptors stay left-to-right for the model
+
+const panelPosition = (id: number): string => {
+  switch (id) {
+    case 1: return 'top-left';
+    case 2: return 'top-right';
+    case 3: return 'bottom-left';
+    case 4: return 'bottom-right';
+    default: return 'top-left';
+  }
+};
+
+const collectCharacterRoster = (script: ComicScript): string => {
+  const map = new Map<string, string>();
+  for (const p of script.panels) {
+    for (const c of p.characters) {
+      const [name, expr] = c.split(':');
+      if (!name) continue;
+      if (!map.has(name)) map.set(name, expr || '');
+    }
+  }
+  if (map.size === 0) return '';
+  return 'Roster: ' + Array.from(map.entries())
+    .map(([name, expr]) => expr ? `"${name}" (${expr.replace(/[",]/g, ' ')})` : `"${name}"`)
+    .join(', ') + '.';
+};
+
+/**
+ * Lightweight base64 dimension probe. Supports PNG (most common output)
+ * with JPEG fallback. We only need approximate dimensions for bbox
+ * normalization, so a quick header read is fine.
+ */
+const readImageDimensions = (base64: string, mimeType: string): { width: number; height: number } => {
+  try {
+    const bin = atob(base64.slice(0, 64));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (mimeType.includes('png')) {
+      // PNG IHDR width/height at offset 16 (big-endian uint32).
+      const view = new DataView(bytes.buffer);
+      if (bytes.length >= 24) {
+        const width = view.getUint32(16);
+        const height = view.getUint32(20);
+        if (width > 0 && height > 0) return { width, height };
+      }
+    }
+    // Fallback: caller will use 1024 default.
+    return { width: 0, height: 0 };
+  } catch {
+    return { width: 0, height: 0 };
+  }
 };
 
 // ─── AI Player Chronicle ──────────────────────────────────────────────────

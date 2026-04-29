@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { hapticTap, hapticSuccess } from '../utils/haptics';
 import { Player, PlayerType, PlayerStats, GameForecast, Game, PendingForecast } from '../types';
-import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation } from '../database/storage';
+import { getAllPlayers, addPlayer, createGame, getPlayerByName, getPlayerStats, savePendingForecast, getPendingForecast, clearPendingForecast, checkForecastMatch, linkForecastToGame, publishPendingForecast, getActiveGame, getGamePlayers, deleteGame, getAllGames, getAllGamePlayers, getSettings, updateGame, saveTTSPool, flushGameCreation, linkPollToGame } from '../database/storage';
 import { cleanNumber } from '../utils/calculations';
 import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
@@ -152,8 +152,20 @@ const applyPeriodOverride = (base: PeriodMarkers, override: string | null): Peri
   return { ...base, ...option.getMarkerOverrides() };
 };
 
+// State payload passed via navigate('/', { state: { fromPoll } }) when the
+// admin clicks "Start Scheduled Game" on a confirmed poll. Drives one-shot
+// prefill of players + location, and is consumed (history-replaced) after.
+type FromPollNavState = {
+  fromPoll?: {
+    pollId: string;
+    playerIds: string[];
+    location?: string;
+  };
+};
+
 const NewGameScreen = () => {
   const navigate = useNavigate();
+  const routerLocation = useLocation();
   const { t, isRTL } = useTranslation();
   const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
   const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
@@ -195,6 +207,66 @@ const NewGameScreen = () => {
   const [publishedExpanded, setPublishedExpanded] = useState(false);
   const forecastRef = useRef<HTMLDivElement>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Holds the source poll id (if user came here via "Start Scheduled Game")
+  // so that on game creation we can link poll → game. Survives re-renders.
+  const pollLinkIdRef = useRef<string | null>(null);
+  // Holds player ids that arrived via fromPoll prefill, pending tier-section
+  // auto-expansion. Consumed by an effect once `players` is loaded so that
+  // any pre-selected non-permanent players are visible (not hidden inside
+  // the collapsed permanent_guest / guest sections).
+  const pendingExpandIdsRef = useRef<string[] | null>(null);
+
+  // One-shot consumption of fromPoll navigation state. Fires once on mount
+  // and replaces the history state so a refresh doesn't re-trigger prefill.
+  useEffect(() => {
+    const navState = routerLocation.state as FromPollNavState | null;
+    const fromPoll = navState?.fromPoll;
+    if (!fromPoll) return;
+    pollLinkIdRef.current = fromPoll.pollId;
+    if (fromPoll.playerIds && fromPoll.playerIds.length > 0) {
+      setSelectedIds(new Set(fromPoll.playerIds));
+      pendingExpandIdsRef.current = [...fromPoll.playerIds];
+    }
+    if (fromPoll.location && fromPoll.location.trim()) {
+      const loc = fromPoll.location.trim();
+      try {
+        const known = (getSettings().locations || []) as string[];
+        if (known.includes(loc)) {
+          setGameLocation(loc);
+          setCustomLocation('');
+        } else {
+          setGameLocation('other');
+          setCustomLocation(loc);
+        }
+      } catch {
+        setGameLocation('other');
+        setCustomLocation(loc);
+      }
+    }
+    // Clear the navigation state so revisits/refreshes don't re-prefill.
+    navigate(routerLocation.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Once players are loaded, auto-expand any tier sections that contain
+  // pre-selected players from the poll prefill. Clears the ref after
+  // running once so it doesn't fight the user's manual collapse toggles.
+  useEffect(() => {
+    const ids = pendingExpandIdsRef.current;
+    if (!ids || players.length === 0) return;
+    const byId = new Map(players.map(p => [p.id, p]));
+    let needPermanentGuests = false;
+    let needGuests = false;
+    for (const id of ids) {
+      const p = byId.get(id);
+      if (!p) continue;
+      if (p.type === 'permanent_guest') needPermanentGuests = true;
+      else if (p.type === 'guest') needGuests = true;
+    }
+    if (needPermanentGuests) setShowPermanentGuests(true);
+    if (needGuests) setShowGuests(true);
+    pendingExpandIdsRef.current = null;
+  }, [players]);
 
   useEffect(() => {
     loadPlayers();
@@ -393,6 +465,17 @@ const NewGameScreen = () => {
 
     if (periodMarkers) {
       updateGame(game.id, { periodMarkers });
+    }
+
+    // If this game was launched from a confirmed poll ("Start Scheduled
+    // Game"), link the poll → game now. Best-effort: a failed link doesn't
+    // abort the game flow, but is logged so admins can retry from the poll.
+    const linkPollId = pollLinkIdRef.current;
+    if (linkPollId) {
+      pollLinkIdRef.current = null;
+      linkPollToGame(linkPollId, game.id).catch(err => {
+        console.warn('linkPollToGame failed (non-blocking):', err);
+      });
     }
 
     flushGameCreation().catch(err => console.warn('Game creation flush failed:', err));
@@ -1648,6 +1731,11 @@ const NewGameScreen = () => {
         const last3 = myStats?.lastGameResults?.slice(0, 3) || [];
         const last3Avg = last3.length >= 3 ? last3.reduce((s, g) => s + g.profit, 0) / last3.length : null;
         const acc = hasTraining ? Math.round((tp.totalCorrect / tp.totalQuestions) * 100) : 0;
+        // Total questions answered = scored (correct + wrong) + neutralized.
+        // tp.totalQuestions is scored-only, so the casual "X שאלות באימונים"
+        // would otherwise be lower than the leaderboard's "ענו" column. Match
+        // the leaderboard so the same player sees the same number everywhere.
+        const totalAnsweredQs = tp ? tp.totalQuestions + (tp.totalNeutral || 0) : 0;
 
         // Daily seed so the message changes once per day, not per render
         const daySeed = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
@@ -1661,32 +1749,32 @@ const NewGameScreen = () => {
         if (hasTraining && myStats) {
           if (daysSinceGame !== null && daysSinceGame >= 21) {
             const weeks = Math.floor(daysSinceGame / 7);
-            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות — תתחמם באימון` });
+            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות — תתחמם באימון` });
             msgs.push({ icon: '🔔', title: `${n}, מתגעגעים לשולחן?`, sub: `${acc}% דיוק באימונים · ${formatCurrency(myStats.totalProfit)} סה"כ` });
           }
           if (tp.streak.current >= 3) {
             msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · סה"כ ${formatCurrency(myStats.totalProfit)} במשחקים` });
           }
           if (acc < 45) {
-            msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק — יש מה לשפר`, sub: `שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))} · ${tp.totalQuestions} שאלות` });
+            msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק — יש מה לשפר`, sub: `שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))} · ${totalAnsweredQs} שאלות` });
           }
           if (acc >= 70) {
             msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — האימון עובד`, sub: `שיא רווח ${formatCurrency(myStats.biggestWin)} · סה"כ ${formatCurrency(myStats.totalProfit)}` });
           }
           if (myStats.currentStreak < 0) {
-            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות — תמשיך להתאמן` });
+            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות — תמשיך להתאמן` });
           }
           msgs.push({ icon: '⚡', title: `${n}, ${acc}% דיוק · ${wp}% נצחונות`, sub: `${tp.sessionsCompleted} אימונים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
-          msgs.push({ icon: '💪', title: `${n}, ${tp.totalQuestions} שאלות באימונים`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${myStats.gamesPlayed} משחקים` });
+          msgs.push({ icon: '💪', title: `${n}, ${totalAnsweredQs} שאלות באימונים`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${myStats.gamesPlayed} משחקים` });
         } else if (hasTraining) {
           if (tp.streak.current >= 3) {
-            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות` });
+            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות` });
           }
           if (acc >= 70) {
-            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — אתה חד`, sub: `${tp.sessionsCompleted} אימונים · ${tp.totalQuestions} שאלות` });
+            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — אתה חד`, sub: `${tp.sessionsCompleted} אימונים · ${totalAnsweredQs} שאלות` });
           }
-          msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק`, sub: `${tp.totalQuestions} שאלות · ${tp.sessionsCompleted} אימונים` });
-          msgs.push({ icon: '⚡', title: `${n}, ${tp.sessionsCompleted} אימונים עד עכשיו`, sub: `${acc}% דיוק · ${tp.totalQuestions} שאלות` });
+          msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק`, sub: `${totalAnsweredQs} שאלות · ${tp.sessionsCompleted} אימונים` });
+          msgs.push({ icon: '⚡', title: `${n}, ${tp.sessionsCompleted} אימונים עד עכשיו`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות` });
         } else if (myStats && myStats.gamesPlayed > 0) {
           const signed = (v: number) => `${v >= 0 ? '\u200E+' : '\u200E'}${cleanNumber(v)}`;
           if (daysSinceGame !== null && daysSinceGame >= 21) {
@@ -1819,13 +1907,21 @@ const NewGameScreen = () => {
         ) : (
           <>
             {permanentPlayers.length > 0 && (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
-                gap: '0.3rem'
-              }}>
-                {permanentPlayers.map(renderPlayerTile)}
-              </div>
+              <>
+                <div style={{
+                  fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)',
+                  marginBottom: '0.35rem',
+                }}>
+                  {t('newGame.permanentPlayers')} ({permanentPlayers.length})
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))',
+                  gap: '0.3rem'
+                }}>
+                  {permanentPlayers.map(renderPlayerTile)}
+                </div>
+              </>
             )}
           </>
         )}

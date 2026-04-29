@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse } from '../types';
+import type { Player, Game, GamePlayer, ChipValue, Settings, SharedExpense, GameForecast, PendingForecast, PaidSettlement, AppNotification, PlayerTraits, GamePoll, GamePollDate, GamePollVote, GamePollStatus, RsvpResponse, ComicScript, ComicStyleKey } from '../types';
 import type { ChronicleEntry, GraphInsightsEntry } from './storage';
 
 // ── Cache state ──
@@ -44,6 +44,10 @@ function toGame(row: Record<string, unknown>): Game {
   if (row.pre_game_teaser) game.preGameTeaser = row.pre_game_teaser as string;
   if (row.forecast_comment) game.forecastComment = row.forecast_comment as string;
   if (row.forecast_accuracy) game.forecastAccuracy = row.forecast_accuracy as Game['forecastAccuracy'];
+  if (row.comic_url) game.comicUrl = row.comic_url as string;
+  if (row.comic_script) game.comicScript = row.comic_script as ComicScript;
+  if (row.comic_style) game.comicStyle = row.comic_style as ComicStyleKey;
+  if (row.comic_generated_at) game.comicGeneratedAt = row.comic_generated_at as string;
   return game;
 }
 
@@ -128,6 +132,9 @@ function toGamePollDate(row: Record<string, unknown>): GamePollDate {
 }
 
 function toGamePollVote(row: Record<string, unknown>): GamePollVote {
+  // created_at fell back to voted_at if the column hasn't been migrated
+  // yet (pre-029 deployments). Once 029 is applied this branch never hits.
+  const createdAt = (row.created_at as string | null) ?? (row.voted_at as string);
   return {
     id: row.id as string,
     pollId: row.poll_id as string,
@@ -137,6 +144,7 @@ function toGamePollVote(row: Record<string, unknown>): GamePollVote {
     response: row.response as RsvpResponse,
     comment: (row.comment as string | null) ?? null,
     votedAt: row.voted_at as string,
+    createdAt,
     castByUserId: (row.cast_by_user_id as string | null) ?? null,
   };
 }
@@ -209,6 +217,10 @@ function gameToRow(g: Game, groupId: string) {
     pre_game_teaser: g.preGameTeaser || null,
     forecast_comment: g.forecastComment || null,
     forecast_accuracy: g.forecastAccuracy || null,
+    comic_url: g.comicUrl || null,
+    comic_script: g.comicScript || null,
+    comic_style: g.comicStyle || null,
+    comic_generated_at: g.comicGeneratedAt || null,
     created_at: g.createdAt,
   };
 }
@@ -1525,6 +1537,16 @@ export async function cancelPollRpc(pollId: string, reason?: string | null): Pro
   await refreshPollsNow();
 }
 
+// Permanently remove a poll and all its dates + votes. Admin-only via
+// the underlying RPC. Cascades on the FKs handle child cleanup.
+export async function deletePollRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_game_poll', {
+    p_poll_id: pollId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
 export async function manuallyClosePollRpc(pollId: string, dateId: string): Promise<void> {
   const { error } = await supabase.rpc('manual_close_game_poll', {
     p_poll_id: pollId,
@@ -1556,6 +1578,95 @@ export async function updatePollExpansionDelayRpc(pollId: string, hours: number)
   });
   if (error) throw error;
   await refreshPollsNow();
+}
+
+export interface PollMetaPatch {
+  target: number;
+  expansionDelay: number;
+  note: string | null;
+  defaultLocation: string | null;
+  allowMaybe: boolean;
+}
+
+export async function updatePollMetaRpc(pollId: string, patch: PollMetaPatch): Promise<void> {
+  const { error } = await supabase.rpc('update_game_poll_meta', {
+    p_poll_id: pollId,
+    p_target: patch.target,
+    p_expansion_delay: patch.expansionDelay,
+    // Empty strings are normalized to NULL on the SQL side so the user
+    // can clear note/location by submitting an empty field.
+    p_note: patch.note ?? '',
+    p_default_location: patch.defaultLocation ?? '',
+    p_allow_maybe: patch.allowMaybe,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+// ─── Vote-change notifications opt-in ───────────────────
+// Per-poll subscriptions stored in game_poll_change_subscribers. Admins,
+// owners, and super-admins are implicitly always notified — only members
+// need to opt in via the poll card toggle.
+
+export async function subscribeToPollChangesRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('subscribe_to_poll_changes', { p_poll_id: pollId });
+  if (error) throw error;
+}
+
+export async function unsubscribeFromPollChangesRpc(pollId: string): Promise<void> {
+  const { error } = await supabase.rpc('unsubscribe_from_poll_changes', { p_poll_id: pollId });
+  if (error) throw error;
+}
+
+export async function getMyPollChangeSubscriptionsRpc(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('get_my_poll_change_subscriptions');
+  if (error) {
+    console.warn('get_my_poll_change_subscriptions failed:', error);
+    return [];
+  }
+  const rows = (data as { poll_id: string }[] | null) ?? [];
+  return rows.map(r => r.poll_id);
+}
+
+export interface PollChangeRecipient {
+  playerName: string;
+  role: 'admin' | 'super_admin' | 'subscriber';
+}
+
+export async function getPollChangeRecipientsRpc(pollId: string): Promise<PollChangeRecipient[]> {
+  const { data, error } = await supabase.rpc('get_poll_change_recipients', { p_poll_id: pollId });
+  if (error) {
+    console.warn('get_poll_change_recipients failed:', error);
+    return [];
+  }
+  const rows = (data as { player_name: string; role: string }[] | null) ?? [];
+  return rows.map(r => ({
+    playerName: r.player_name,
+    role: (r.role as PollChangeRecipient['role']),
+  }));
+}
+
+// Per-(user, group) preference for receiving vote-change push pings.
+// Defaults to TRUE server-side; admins use this to mute the chatty
+// vote_change channel without losing the four major-update channels
+// (creation / expansion / confirmation / cancellation). Migration 032.
+export async function getMyVoteChangeNotifsRpc(groupId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('get_my_vote_change_notifs', {
+    p_group_id: groupId,
+  });
+  if (error) {
+    console.warn('get_my_vote_change_notifs failed:', error);
+    return true;
+  }
+  return data !== false;
+}
+
+export async function setMyVoteChangeNotifsRpc(groupId: string, enabled: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_my_vote_change_notifs', {
+    p_group_id: groupId,
+    p_enabled:  enabled,
+  });
+  if (error) throw error;
 }
 
 export async function claimPollNotificationsRpc(

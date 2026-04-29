@@ -566,7 +566,7 @@ const GameDetailsScreen = () => {
           onClick={handleShare}
           disabled={isSharing}
         >
-          {isSharing ? '📸 Capturing...' : '📤 Share'}
+          {isSharing ? t('common.capturing') : t('common.share')}
         </button>
       </div>
     </div>
