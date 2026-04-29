@@ -4,7 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { captureAndSplit, shareComicImage } from '../utils/sharing';
 import { GamePlayer, Settlement, SkippedTransfer, GameForecast, SharedExpense, PlayerStats, PeriodMarkers, PaidSettlement, ComicScript, ComicStyleKey } from '../types';
 import { getGame, getGamePlayers, getSettings, getChipValues, getPlayerStats, getAllGames, getAllGamePlayers, getAllPlayers, saveForecastAccuracy, saveForecastComment, saveGameAiSummary, isPlayerFemale, updateGameStatus, invalidateAICaches, updateGame, createNotification, getPlayerEmailForNotification, getGroupId } from '../database/storage';
-import { generateGameComic, MAX_REGENERATIONS_PER_GAME } from '../utils/comicGeneration';
+import { generateGameComic, MAX_REGENERATIONS_PER_GAME, ComicStageError } from '../utils/comicGeneration';
 import ComicRenderer from '../components/ComicRenderer';
 import { proxySendEmail } from '../utils/apiProxy';
 import { calculateSettlement, formatCurrency, cleanNumber, calculateCombinedSettlement, formatHebrewHalf } from '../utils/calculations';
@@ -284,14 +284,21 @@ const GameSummaryScreen = () => {
       if (freshGame?.comicScript) setComicScript(freshGame.comicScript);
       setComicRegenCount(c => c + 1);
     } catch (err) {
-      console.error('Comic generation failed:', err);
+      const stage = err instanceof ComicStageError ? err.stage : 'unknown';
       const msg = err instanceof Error ? err.message : String(err);
+      console.error('[comic] ui:generation_failed', { stage, message: msg, error: err });
       if (msg === 'NO_API_KEY') {
         setComicError(t('summary.comicNoApiKey'));
       } else if (msg === 'OFFLINE') {
         setComicError(t('summary.aiQuotaError'));
-      } else if (msg.includes('429') || msg.includes('quota')) {
+      } else if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
         setComicError(t('summary.aiQuotaError'));
+      } else if (stage === 'art') {
+        setComicError(`${t('summary.comicGenError')} (${t('summary.comicGenArt')})`);
+      } else if (stage === 'script') {
+        setComicError(`${t('summary.comicGenError')} (${t('summary.comicGenScript')})`);
+      } else if (stage === 'upload') {
+        setComicError(`${t('summary.comicGenError')} (${t('summary.comicGenUpload')})`);
       } else {
         setComicError(t('summary.comicGenError'));
       }

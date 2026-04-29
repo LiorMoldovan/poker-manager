@@ -70,11 +70,30 @@ export const nextStyleAfter = (current?: ComicStyleKey): ComicStyleKey => {
   return COMIC_STYLE_ORDER[(idx + 1) % COMIC_STYLE_ORDER.length];
 };
 
+/**
+ * Stage-tagged error so the UI / logs can show *which* step failed
+ * (script / art / bbox / upload) instead of a flat error string.
+ */
+export class ComicStageError extends Error {
+  readonly stage: 'script' | 'art' | 'bbox' | 'upload';
+  readonly cause?: unknown;
+  constructor(stage: 'script' | 'art' | 'bbox' | 'upload', message: string, cause?: unknown) {
+    super(message);
+    this.name = 'ComicStageError';
+    this.stage = stage;
+    this.cause = cause;
+  }
+}
+
 export const generateGameComic = async (
   input: ComicGenerationInput,
 ): Promise<ComicGenerationResult> => {
   if (!getGeminiApiKey()) throw new Error('NO_API_KEY');
   if (!navigator.onLine) throw new Error('OFFLINE');
+
+  const pipelineStart = Date.now();
+  // eslint-disable-next-line no-console
+  console.log('[comic] pipeline:start', { gameId: input.gameId, players: input.vibe.tonight.length });
 
   // Best-effort cleanup of any stale storage object before re-uploading
   // (upsert overwrites anyway but this also clears any half-finished prior
@@ -84,34 +103,53 @@ export const generateGameComic = async (
   // ── Decide style ──
   const styleKey: ComicStyleKey = input.forceStyle
     ?? pickStyleForGame(input.vibe, input.cycleFromStyle);
+  // eslint-disable-next-line no-console
+  console.log('[comic] pipeline:style_picked', { styleKey, forced: !!input.forceStyle, cycledFrom: input.cycleFromStyle });
 
   // ── Stage 1: script ──
   input.onProgress?.('script');
-  const { script: rawScript, model: scriptModel } = await generateComicScript(
-    {
-      date: formatDateShort(input.date),
-      weekday: input.weekday,
-      tonight: input.vibe.tonight.map((p, i) => ({
-        name: p.name,
-        profit: Math.round(p.profit),
-        rebuys: p.rebuys,
-        rank: i + 1,
-      })),
-      totalPot: Math.round(input.totalPot),
-      totalRebuys: input.totalRebuys,
-      recordsBroken: input.recordsBroken,
-      notableStreaks: input.notableStreaks,
-      upsets: input.upsets,
-      rankingShifts: input.rankingShifts,
-      comboHistoryText: input.comboHistoryText,
-      styleVibe: styleVibeFor(styleKey),
-    },
-    styleKey,
-  );
+  let rawScript;
+  let scriptModel;
+  try {
+    const out = await generateComicScript(
+      {
+        date: formatDateShort(input.date),
+        weekday: input.weekday,
+        tonight: input.vibe.tonight.map((p, i) => ({
+          name: p.name,
+          profit: Math.round(p.profit),
+          rebuys: p.rebuys,
+          rank: i + 1,
+        })),
+        totalPot: Math.round(input.totalPot),
+        totalRebuys: input.totalRebuys,
+        recordsBroken: input.recordsBroken,
+        notableStreaks: input.notableStreaks,
+        upsets: input.upsets,
+        rankingShifts: input.rankingShifts,
+        comboHistoryText: input.comboHistoryText,
+        styleVibe: styleVibeFor(styleKey),
+      },
+      styleKey,
+    );
+    rawScript = out.script;
+    scriptModel = out.model;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[comic] pipeline:fail_at_script', { message: err instanceof Error ? err.message : String(err) });
+    throw new ComicStageError('script', err instanceof Error ? err.message : String(err), err);
+  }
 
-  // ── Stage 2: art ──
+  // ── Stage 2: art (has internal model fallback chain) ──
   input.onProgress?.('art');
-  const art = await generateComicArt(rawScript);
+  let art;
+  try {
+    art = await generateComicArt(rawScript);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[comic] pipeline:fail_at_art', { message: err instanceof Error ? err.message : String(err) });
+    throw new ComicStageError('art', err instanceof Error ? err.message : String(err), err);
+  }
 
   // ── Stage 3: bboxes (best-effort — never fatal) ──
   input.onProgress?.('bbox');
@@ -119,7 +157,8 @@ export const generateGameComic = async (
   try {
     scriptWithBoxes = await detectComicBoundingBoxes(art.base64, art.mimeType, rawScript);
   } catch (err) {
-    console.warn('[comic] bbox detection failed (non-fatal):', err);
+    // eslint-disable-next-line no-console
+    console.warn('[comic] bbox detection threw (non-fatal):', err);
   }
 
   scriptWithBoxes = {
@@ -131,12 +170,28 @@ export const generateGameComic = async (
 
   // ── Upload PNG to Storage and save metadata to games row ──
   input.onProgress?.('upload');
-  const blob = base64ToBlob(art.base64, art.mimeType);
-  const url = await uploadComicImage(input.gameId, blob);
+  let url: string;
+  try {
+    const blob = base64ToBlob(art.base64, art.mimeType);
+    url = await uploadComicImage(input.gameId, blob);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[comic] pipeline:fail_at_upload', { message: err instanceof Error ? err.message : String(err) });
+    throw new ComicStageError('upload', err instanceof Error ? err.message : String(err), err);
+  }
 
   // Clear-then-save sequence so the realtime fan-out shows the new state cleanly.
   clearGameComic(input.gameId);
   saveGameComic(input.gameId, url, scriptWithBoxes, styleKey);
+
+  // eslint-disable-next-line no-console
+  console.log('[comic] pipeline:success', {
+    gameId: input.gameId,
+    styleKey,
+    scriptModel,
+    imageModel: art.model,
+    totalMs: Date.now() - pipelineStart,
+  });
 
   return {
     url,

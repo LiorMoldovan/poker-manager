@@ -2402,7 +2402,33 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 // Hebrew dialogue is rendered as DOM text on top of the art client-side.
 // The model never draws letters, which guarantees crisp Hebrew typography.
 
-const IMAGE_MODEL = 'gemini-2.5-flash-image';
+// Image-generation model fallback chain — best/canonical first, then preview
+// alias. Both point at the same Nano Banana family but they have separate
+// regional / per-key quotas, so trying the second when the first 429s often
+// rescues the request without the user ever noticing.
+const IMAGE_MODELS = [
+  'gemini-2.5-flash-image',
+  'gemini-2.5-flash-image-preview',
+];
+
+// Structured logger for the comic pipeline — every line is prefixed [comic]
+// so you can grep the browser console / Vercel logs for exactly the comic
+// generation timeline. Includes elapsed-ms since stage start.
+const comicLog = (event: string, fields?: Record<string, unknown>) => {
+  const payload = fields ? { event, ...fields } : { event };
+  // eslint-disable-next-line no-console
+  console.log(`[comic] ${event}`, payload);
+};
+const comicWarn = (event: string, fields?: Record<string, unknown>) => {
+  const payload = fields ? { event, ...fields } : { event };
+  // eslint-disable-next-line no-console
+  console.warn(`[comic] ${event}`, payload);
+};
+const comicError = (event: string, fields?: Record<string, unknown>) => {
+  const payload = fields ? { event, ...fields } : { event };
+  // eslint-disable-next-line no-console
+  console.error(`[comic] ${event}`, payload);
+};
 
 interface ComicScriptInputPayload {
   date: string;
@@ -2491,6 +2517,9 @@ ${tonightLines}${drama}
 
 החזר JSON תקני בלבד, בלי טקסט נוסף.`;
 
+  const stageStart = Date.now();
+  comicLog('script:start', { style: styleKey, players: payload.tonight.length, promptChars: prompt.length });
+
   const result = await callWithFallback({
     prompt,
     apiKey,
@@ -2505,10 +2534,12 @@ ${tonightLines}${drama}
   try {
     parsed = JSON.parse(result.text);
   } catch (err) {
+    comicError('script:parse_failed', { model: result.model, error: (err as Error).message, sample: result.text.slice(0, 200) });
     throw new Error(`Comic script JSON parse failed: ${(err as Error).message}`);
   }
 
   if (!Array.isArray(parsed.panels) || parsed.panels.length !== 4) {
+    comicError('script:invalid_shape', { model: result.model, panelCount: parsed.panels?.length });
     throw new Error(`Comic script must have exactly 4 panels (got ${parsed.panels?.length})`);
   }
 
@@ -2538,6 +2569,14 @@ ${tonightLines}${drama}
     layout: '2x2',
     modelText: getModelDisplayName(result.model),
   };
+
+  comicLog('script:success', {
+    model: result.model,
+    title: script.title,
+    panelCount: panels.length,
+    bubbleCount: panels.reduce((acc, p) => acc + p.bubbles.length, 0),
+    totalStageMs: Date.now() - stageStart,
+  });
 
   return { script, model: result.model };
 };
@@ -2592,52 +2631,115 @@ ${panelLines}
 NEGATIVE PROMPT:
 ${style.negativePrompt}.`;
 
-  const response = await proxyGeminiImage(IMAGE_MODEL, {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.9,
-      // gemini-2.5-flash-image returns IMAGE in candidates[].content.parts[].inlineData
-      responseModalities: ['IMAGE'],
-    },
-  });
+  const stageStart = Date.now();
+  comicLog('art:start', { style: script.style, panels: script.panels.length, promptChars: prompt.length });
 
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    const errMsg = errData?.error?.message || `Comic image HTTP ${response.status}`;
-    throw new Error(errMsg);
-  }
+  // Try each image model in order; on 429 / 404 / 503 / no-image, fall through
+  // to the next. Hard errors (4xx other than rate-limit, 5xx network) terminate
+  // the chain and surface to the orchestrator. Detailed per-attempt logging
+  // lets you tell exactly what happened from the browser console.
+  let lastError = '';
+  let lastStatus = 0;
+  let lastFinishReason: string | undefined;
 
-  const data = await response.json();
-  const parts: Array<{ inlineData?: { data: string; mimeType: string }; inline_data?: { data: string; mime_type: string } }> =
-    data?.candidates?.[0]?.content?.parts || [];
+  for (const candidate of IMAGE_MODELS) {
+    const attemptStart = Date.now();
+    try {
+      comicLog('art:attempt', { model: candidate });
+      const response = await proxyGeminiImage(candidate, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          // gemini-2.5-flash-image returns IMAGE in candidates[].content.parts[].inlineData
+          responseModalities: ['IMAGE'],
+        },
+      });
 
-  // Tolerate both camelCase and snake_case key variants from the upstream API.
-  let base64 = '';
-  let mimeType = 'image/png';
-  for (const part of parts) {
-    const inline = part.inlineData || part.inline_data;
-    if (inline?.data) {
-      base64 = inline.data;
-      mimeType = (part.inlineData?.mimeType) || (part.inline_data?.mime_type) || 'image/png';
-      break;
+      lastStatus = response.status;
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData?.error?.message || `HTTP ${response.status}`;
+        lastError = errMsg;
+        comicWarn('art:http_error', { model: candidate, status: response.status, message: errMsg, ms: Date.now() - attemptStart });
+        // Retryable: rate-limit / not-found / service unavailable → next model
+        if (response.status === 429 || response.status === 404 || response.status === 503) continue;
+        // Hard error: surface immediately
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      const parts: Array<{ inlineData?: { data: string; mimeType: string }; inline_data?: { data: string; mime_type: string } }> =
+        data?.candidates?.[0]?.content?.parts || [];
+      const finishReason = data?.candidates?.[0]?.finishReason;
+      lastFinishReason = finishReason;
+
+      // Tolerate both camelCase and snake_case key variants from upstream.
+      let base64 = '';
+      let mimeType = 'image/png';
+      for (const part of parts) {
+        const inline = part.inlineData || part.inline_data;
+        if (inline?.data) {
+          base64 = inline.data;
+          mimeType = (part.inlineData?.mimeType) || (part.inline_data?.mime_type) || 'image/png';
+          break;
+        }
+      }
+
+      if (!base64) {
+        // Empty image (often SAFETY filter or recitation) → try next model.
+        lastError = `no image data (finishReason=${finishReason || 'none'})`;
+        comicWarn('art:no_image', { model: candidate, finishReason, ms: Date.now() - attemptStart });
+        continue;
+      }
+
+      // SUCCESS
+      const dims = readImageDimensions(base64, mimeType);
+      const totalMs = Date.now() - stageStart;
+      const attemptMs = Date.now() - attemptStart;
+      comicLog('art:success', {
+        model: candidate,
+        attemptMs,
+        totalStageMs: totalMs,
+        sizeKB: Math.round(base64.length * 3 / 4 / 1024),
+        width: dims.width || 1024,
+        height: dims.height || 1024,
+      });
+
+      return {
+        base64,
+        mimeType,
+        width: dims.width || 1024,
+        height: dims.height || 1024,
+        model: candidate,
+      };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // Network errors or thrown hard errors. If this is a recoverable network
+      // hiccup, continue to next model; otherwise rethrow.
+      lastError = errMsg;
+      comicWarn('art:exception', { model: candidate, message: errMsg, ms: Date.now() - attemptStart });
+      // Heuristic: if it's clearly a bad-key / quota error, the next model
+      // would fail too — but we still try once for completeness, since the
+      // preview model sometimes has a separate quota bucket.
+      if (errMsg.includes('API key') || errMsg.includes('INVALID_API_KEY')) throw err;
+      // Otherwise fall through and try next.
     }
   }
-  if (!base64) {
-    const finishReason = data?.candidates?.[0]?.finishReason;
-    throw new Error(`Image model returned no image data${finishReason ? ` (finishReason=${finishReason})` : ''}`);
-  }
 
-  // Probe size from the base64 (we don't need pixel-perfect — just enough for
-  // bbox normalization). Decode header to read PNG/JPEG dimensions.
-  const dims = readImageDimensions(base64, mimeType);
-
-  return {
-    base64,
-    mimeType,
-    width: dims.width || 1024,
-    height: dims.height || 1024,
-    model: IMAGE_MODEL,
-  };
+  // All models exhausted.
+  comicError('art:all_failed', {
+    triedModels: IMAGE_MODELS,
+    lastStatus,
+    lastError,
+    lastFinishReason,
+    totalStageMs: Date.now() - stageStart,
+  });
+  throw new Error(
+    lastError
+      ? `Comic image generation failed after ${IMAGE_MODELS.length} model attempts: ${lastError}`
+      : 'Comic image generation failed (no models returned an image)',
+  );
 };
 
 /**
@@ -2670,8 +2772,15 @@ export const detectComicBoundingBoxes = async (
   }).filter(r => r.speakers.length > 0);
 
   if (requests.length === 0) {
+    comicLog('bbox:skipped', { reason: 'no_speakers' });
     return { ...script, panels: script.panels };
   }
+
+  const stageStart = Date.now();
+  comicLog('bbox:start', {
+    requestPanels: requests.length,
+    totalSpeakers: requests.reduce((acc, r) => acc + r.speakers.length, 0),
+  });
 
   const prompt = `You are looking at a 4-panel poker comic image (2x2 grid: panel 1 top-left, panel 2 top-right, panel 3 bottom-left, panel 4 bottom-right).
 
@@ -2711,6 +2820,12 @@ If you cannot confidently locate a character, omit them from the output.`;
   if (!response.ok) {
     // Bbox detection is best-effort — fall back to no bboxes; client will
     // place bubbles in default panel-corner positions.
+    const errData = await response.json().catch(() => ({}));
+    comicWarn('bbox:http_error_nonfatal', {
+      status: response.status,
+      message: (errData as { error?: { message?: string } })?.error?.message || 'unknown',
+      ms: Date.now() - stageStart,
+    });
     return script;
   }
 
@@ -2719,11 +2834,18 @@ If you cannot confidently locate a character, omit them from the output.`;
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     parsed = JSON.parse(text);
-  } catch {
+  } catch (err) {
+    comicWarn('bbox:parse_failed_nonfatal', {
+      message: err instanceof Error ? err.message : String(err),
+      ms: Date.now() - stageStart,
+    });
     return script;
   }
 
-  if (!Array.isArray(parsed.panels)) return script;
+  if (!Array.isArray(parsed.panels)) {
+    comicWarn('bbox:invalid_shape_nonfatal', { ms: Date.now() - stageStart });
+    return script;
+  }
 
   const updated: ComicPanel[] = script.panels.map(p => {
     const entry = parsed.panels!.find(e => e.panel === p.id);
@@ -2737,6 +2859,13 @@ If you cannot confidently locate a character, omit them from the output.`;
       bboxes[b.name] = [yMin / 1000, xMin / 1000, yMax / 1000, xMax / 1000];
     }
     return Object.keys(bboxes).length > 0 ? { ...p, bboxes } : p;
+  });
+
+  const totalBoxes = updated.reduce((acc, p) => acc + Object.keys(p.bboxes || {}).length, 0);
+  comicLog('bbox:success', {
+    boxesFound: totalBoxes,
+    panelsWithBoxes: updated.filter(p => p.bboxes && Object.keys(p.bboxes).length > 0).length,
+    totalStageMs: Date.now() - stageStart,
   });
 
   return { ...script, panels: updated };

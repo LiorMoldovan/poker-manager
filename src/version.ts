@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.26.0';
+export const APP_VERSION = '5.26.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.26.1',
+    date: '2026-04-29',
+    changes: [
+      '🎨 Comic pipeline: stage-tagged errors (ComicStageError) surface which step failed (script/art/upload) in the UI instead of a generic message',
+      '🔄 Comic art: multi-model fallback chain — tries each IMAGE_MODEL in order on 429/404/503/empty-image, with per-attempt console logging',
+      '📊 Comic pipeline: structured console logging at every stage (start, style, script, art, bbox, upload, success/fail) for easier debugging',
+      '📐 Schedule tab header: flex-wrap layout so action buttons wrap gracefully on narrow viewports instead of title truncation',
+    ],
+  },
   {
     version: '5.26.0',
     date: '2026-04-29',

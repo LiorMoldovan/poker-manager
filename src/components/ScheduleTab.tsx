@@ -394,16 +394,19 @@ export default function ScheduleTab() {
     <div style={{ direction: 'rtl', textAlign: isRTL ? 'right' : 'left' }}>
       {/* Header */}
       <div className="card" style={{ marginBottom: 12, padding: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 8,
+          // Wrap action buttons to a new line on narrow viewports rather than
+          // truncating the title with an ellipsis.
+          flexWrap: 'wrap', rowGap: 8,
+        }}>
           <h2 style={{
             margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)',
-            // Allow ellipsis on extreme narrow viewports without forcing the
-            // action buttons (⚙️ + Create) to wrap below.
-            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             📅 {t('schedule.tabTitle')}
           </h2>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {isAdmin && (
               <button
                 onClick={() => setShowConfig(s => !s)}
