@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,7 +12,9 @@ import {
   getMyPollChangeSubscriptions,
   getMyVoteChangeNotifs, setMyVoteChangeNotifs,
   getGroupId,
+  getPlayerStats, getAllGames,
 } from '../database/storage';
+import { formatHebrewHalf } from '../utils/calculations';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n/translations';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
@@ -1922,6 +1924,23 @@ function shortHebrewWeekday(d: Date): string {
     .replace(/^יום\s+/, '');
 }
 
+// Current half-year window (H1 = Jan–Jun, H2 = Jul–Dec) used for the
+// share-card period leaderboard. Mirrors the H1/H2 logic in
+// StatisticsScreen.getDateFilter so the table matches what users see in
+// the stats tab. Returns the same {start, end} shape getPlayerStats
+// expects, with end inclusive of the entire last day.
+function getCurrentHalfYearFilter(): { start: Date; end: Date; isH1: boolean; year: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const isH1 = now.getMonth() < 6;
+  return {
+    start: new Date(year, isH1 ? 0 : 6, 1, 0, 0, 0, 0),
+    end: new Date(year, isH1 ? 5 : 11, isH1 ? 30 : 31, 23, 59, 59, 999),
+    isH1,
+    year,
+  };
+}
+
 // Compact date+time label used in the invitation and cancellation
 // per-date rows. Keeps day-of-week on its own line so it reads at a
 // glance even when the row also carries a vote-count cluster.
@@ -1935,13 +1954,13 @@ function ShareDateLabel({
     : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
   const time = fmtShareTime(date.proposedTime);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
       {dayOfWeek && (
         <span style={{
-          fontSize: 18, fontWeight: 700, color, letterSpacing: 0.2, lineHeight: 1.15,
+          fontSize: 22, fontWeight: 700, color, letterSpacing: 0.2, lineHeight: 1.15,
         }}>{dayOfWeek}</span>
       )}
-      <span style={{ fontSize: 15, color: muted, lineHeight: 1.2 }}>
+      <span style={{ fontSize: 18, color: muted, lineHeight: 1.2 }}>
         {dayMonth}{time && ` · ${time}`}
       </span>
     </div>
@@ -1976,15 +1995,15 @@ function ShareBoardingHero({
   const Segment = ({ label, value }: { label: string; value: string }) => (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 8,
-      padding: '0 8px', minWidth: 0,
+      alignItems: 'center', justifyContent: 'center', gap: 10,
+      padding: '0 10px', minWidth: 0,
     }}>
       <span style={{
-        fontSize: 13, color: TEXT_MUTED, letterSpacing: 1.4,
+        fontSize: 16, color: TEXT_MUTED, letterSpacing: 1.5,
         textTransform: 'uppercase', fontWeight: 600,
       }}>{label}</span>
       <span style={{
-        fontSize: 22, fontWeight: 700, color: TEXT,
+        fontSize: 28, fontWeight: 700, color: TEXT,
         lineHeight: 1.15, letterSpacing: 0.1,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         maxWidth: '100%',
@@ -1996,18 +2015,18 @@ function ShareBoardingHero({
     <div style={{
       width: 1, alignSelf: 'stretch',
       background: 'rgba(148, 163, 184, 0.20)',
-      margin: '6px 0',
+      margin: '8px 0',
     }} />
   );
 
   return (
     <div style={{
       position: 'relative',
-      padding: '24px 10px 22px',
-      marginBottom: 20,
+      padding: '30px 12px 28px',
+      marginBottom: 26,
       background: `linear-gradient(180deg, ${accentTint}, rgba(15, 23, 42, 0.35))`,
       border: `1px solid ${accent}55`,
-      borderRadius: 16,
+      borderRadius: 20,
       display: 'flex', alignItems: 'stretch',
       // Subtle accent stripe along the top inner edge — reads as the
       // boarding-pass "stub" cut without competing with the main border.
@@ -2055,22 +2074,22 @@ function SharePhaseBadge({
   }
   return (
     <div style={{
-      display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20,
+      display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 26,
     }}>
       <span style={{
-        padding: '6px 14px', borderRadius: 999,
+        padding: '8px 18px', borderRadius: 999,
         background: `${phaseColor}1f`, color: phaseColor,
         border: `1px solid ${phaseColor}55`,
-        fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
+        fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
       }}>
         {poll.status === 'expanded' ? '🌐' : '⭐'} {phaseLabel}
       </span>
       {opensToAllAt && (
         <span style={{
-          padding: '6px 14px', borderRadius: 999,
+          padding: '8px 18px', borderRadius: 999,
           background: 'rgba(148, 163, 184, 0.10)', color: TEXT_MUTED,
           border: `1px solid rgba(148, 163, 184, 0.25)`,
-          fontSize: 14, fontWeight: 600,
+          fontSize: 18, fontWeight: 600,
         }}>
           ⏰ {t('schedule.share.opensToAllOn', { date: opensToAllAt })}
         </span>
@@ -2155,13 +2174,12 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
 
   return (
     <div style={{
-      // 720 px gives WhatsApp a roughly portrait-phone aspect ratio so
-      // recipients see the card large in the chat preview without having
-      // to tap-to-zoom. With html2canvas's default scale of 2 the output
-      // is 1440 px wide — sharp on any retina display, modest in file
-      // size, and inside the 1.6 MB WhatsApp recompresses to anyway.
-      width: 720,
-      padding: 28,
+      // 900 px gives WhatsApp a tall portrait card with room for a real
+      // typographic hierarchy. With html2canvas's default scale of 2 the
+      // output is 1800 px wide — comfortably above retina densities and
+      // still inside the size budget WhatsApp recompresses to.
+      width: 900,
+      padding: 32,
       background: BG_OUTER,
       direction: 'rtl',
       fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -2171,34 +2189,34 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
       <div style={{
         background: BG_CARD,
         border: `1px solid ${BORDER}`,
-        borderRadius: 18,
-        padding: 26,
-        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4)',
+        borderRadius: 22,
+        padding: 32,
+        boxShadow: '0 14px 36px rgba(0, 0, 0, 0.42)',
       }}>
         {/* Header — emoji badge on the leading edge + title (and an
             optional subtitle for invitation/cancellation). No status
             pill — the title plus the badge color already convey the
             mode unambiguously. */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 16,
-          paddingBottom: 20,
+          display: 'flex', alignItems: 'center', gap: 20,
+          paddingBottom: 26,
           borderBottom: `1px solid ${BORDER}`,
-          marginBottom: 22,
+          marginBottom: 28,
         }}>
           <div style={{
-            width: 60, height: 60, borderRadius: 16,
+            width: 76, height: 76, borderRadius: 20,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `${header.color}1f`, fontSize: 32,
-            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 14px ${header.color}33`,
+            background: `${header.color}1f`, fontSize: 42,
+            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 16px ${header.color}33`,
             flexShrink: 0,
           }}>{header.emoji}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
-              fontSize: 26, fontWeight: 800, color: TEXT,
+              fontSize: 34, fontWeight: 800, color: TEXT,
               letterSpacing: 0.2, lineHeight: 1.2,
             }}>{header.title}</div>
             {header.subtitle && (
-              <div style={{ fontSize: 15, color: TEXT_MUTED, marginTop: 5, lineHeight: 1.3 }}>
+              <div style={{ fontSize: 19, color: TEXT_MUTED, marginTop: 7, lineHeight: 1.3 }}>
                 {header.subtitle}
               </div>
             )}
@@ -2241,17 +2259,17 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
             slogan in a friend-group share, so it's gone — the wordmark
             alone is enough to identify the source. */}
         <div style={{
-          marginTop: 24,
-          paddingTop: 16,
+          marginTop: 30,
+          paddingTop: 20,
           borderTop: `1px solid ${BORDER}`,
           textAlign: 'center',
         }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            fontSize: 14, fontWeight: 700, color: TEXT_MUTED,
-            letterSpacing: 1.6, textTransform: 'uppercase',
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            fontSize: 18, fontWeight: 700, color: TEXT_MUTED,
+            letterSpacing: 1.8, textTransform: 'uppercase',
           }}>
-            <span style={{ fontSize: 16 }}>🃏</span>
+            <span style={{ fontSize: 20 }}>🃏</span>
             <span>{t('schedule.share.footer')}</span>
           </div>
         </div>
@@ -2292,44 +2310,44 @@ function PollShareInvitationBody({
       {/* Target progress meter — uppercase micro-heading + count, then
           the gradient bar. Matches the "passenger manifest" header
           rhythm in the confirmation card. */}
-      <div style={{ marginBottom: 22 }}>
+      <div style={{ marginBottom: 28 }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 12,
+          marginBottom: 16,
         }}>
           <span style={{
-            fontSize: 14, color: TEXT_MUTED, fontWeight: 700,
-            letterSpacing: 1.4, textTransform: 'uppercase',
+            fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+            letterSpacing: 1.5, textTransform: 'uppercase',
           }}>🎯 {t('schedule.share.target')}</span>
           <span style={{
-            padding: '5px 14px', borderRadius: 999,
+            padding: '7px 18px', borderRadius: 999,
             background: `${ACCENT_GREEN}1a`, color: ACCENT_GREEN,
             border: `1px solid ${ACCENT_GREEN}55`,
-            fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
+            fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
           }}>
             {t('schedule.share.targetProgress', { count: bestYes, target: poll.targetPlayerCount })}
           </span>
         </div>
         <div style={{
-          height: 12, background: 'rgba(148, 163, 184, 0.15)',
-          borderRadius: 6, overflow: 'hidden',
+          height: 16, background: 'rgba(148, 163, 184, 0.15)',
+          borderRadius: 8, overflow: 'hidden',
         }}>
           <div style={{
             width: `${targetPct}%`, height: '100%',
             background: `linear-gradient(90deg, ${ACCENT_BLUE}, ${ACCENT_GREEN})`,
-            borderRadius: 6,
+            borderRadius: 8,
           }} />
         </div>
       </div>
 
       {/* Proposed-dates section */}
       <div style={{
-        fontSize: 14, color: TEXT_MUTED, fontWeight: 700,
-        letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 12,
+        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16,
       }}>
         📅 {t('schedule.share.proposedDates')}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {poll.dates.map(d => {
           const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
           const loc = d.location || poll.defaultLocation;
@@ -2342,39 +2360,39 @@ function PollShareInvitationBody({
           ];
           return (
             <div key={d.id} style={{
-              padding: '16px 20px',
+              padding: '20px 26px',
               background: 'rgba(15, 23, 42, 0.55)',
               border: `1px dashed ${BORDER}`,
-              borderRadius: 14,
-              display: 'flex', flexDirection: 'column', gap: 14,
+              borderRadius: 18,
+              display: 'flex', flexDirection: 'column', gap: 18,
             }}>
               {/* Top row — date + count pills */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
                   {loc && (
-                    <div style={{ fontSize: 15, color: TEXT_MUTED, marginTop: 6 }}>
+                    <div style={{ fontSize: 18, color: TEXT_MUTED, marginTop: 8 }}>
                       📍 {loc}
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
                   <span style={{
-                    padding: '5px 12px', borderRadius: 999, fontSize: 14, fontWeight: 700,
+                    padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
                     background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
                     border: `1px solid ${ACCENT_GREEN}55`,
                     letterSpacing: 0.2,
                   }}>✓ {s.yes}</span>
                   {poll.allowMaybe && (
                     <span style={{
-                      padding: '5px 12px', borderRadius: 999, fontSize: 14, fontWeight: 700,
+                      padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
                       background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
                       border: '1px solid rgba(234, 179, 8, 0.45)',
                       letterSpacing: 0.2,
                     }}>? {s.maybe}</span>
                   )}
                   <span style={{
-                    padding: '5px 12px', borderRadius: 999, fontSize: 14, fontWeight: 700,
+                    padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
                     background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
                     border: '1px solid rgba(239, 68, 68, 0.40)',
                     letterSpacing: 0.2,
@@ -2384,20 +2402,20 @@ function PollShareInvitationBody({
 
               {/* Voter chips grouped yes → maybe → no */}
               {s.voters.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {voterGroups.map(g => {
                     if (g.rows.length === 0) return null;
                     if (g.resp === 'maybe' && !poll.allowMaybe) return null;
                     return (
                       <div key={g.resp} style={{
-                        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
-                        padding: '8px 12px', borderRadius: 10,
+                        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+                        padding: '10px 14px', borderRadius: 12,
                         background: g.tint,
                         border: `1px solid ${g.color}33`,
                       }}>
                         <span style={{
-                          fontSize: 12, fontWeight: 700, color: g.color,
-                          padding: '3px 10px', borderRadius: 999,
+                          fontSize: 14, fontWeight: 700, color: g.color,
+                          padding: '4px 12px', borderRadius: 999,
                           background: `${g.color}26`,
                           letterSpacing: 0.4, textTransform: 'uppercase',
                         }}>
@@ -2409,15 +2427,15 @@ function PollShareInvitationBody({
                             <span
                               key={`${g.resp}-${v.playerId}`}
                               style={{
-                                fontSize: 15, color: TEXT,
-                                padding: '3px 12px', borderRadius: 12,
+                                fontSize: 18, color: TEXT,
+                                padding: '4px 14px', borderRadius: 14,
                                 background: 'rgba(255, 255, 255, 0.05)',
                                 border: `1px solid ${BORDER}`,
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
                                 fontWeight: 500,
                               }}>
                               {name}
-                              {v.isProxy && <span style={{ color: '#eab308', fontSize: 12 }}>★</span>}
+                              {v.isProxy && <span style={{ color: '#eab308', fontSize: 14 }}>★</span>}
                             </span>
                           );
                         })}
@@ -2433,10 +2451,10 @@ function PollShareInvitationBody({
 
       {poll.note && (
         <div style={{
-          marginTop: 16, padding: '14px 18px',
+          marginTop: 22, padding: '18px 24px',
           background: 'rgba(59, 130, 246, 0.08)',
-          borderInlineStart: `4px solid ${ACCENT_BLUE}`,
-          borderRadius: 8, fontSize: 17, color: TEXT, lineHeight: 1.5,
+          borderInlineStart: `5px solid ${ACCENT_BLUE}`,
+          borderRadius: 10, fontSize: 22, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
@@ -2475,28 +2493,28 @@ function PollShareConfirmationBody({
           em-dash when the manifest is somehow empty. */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: 16,
       }}>
         <span style={{
-          fontSize: 14, color: TEXT_MUTED, fontWeight: 700,
-          letterSpacing: 1.4, textTransform: 'uppercase',
+          fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+          letterSpacing: 1.5, textTransform: 'uppercase',
         }}>
           {t('schedule.share.confirmedPlayers')}
         </span>
         <span style={{
-          padding: '5px 14px', borderRadius: 999,
+          padding: '7px 18px', borderRadius: 999,
           background: `${ACCENT_GREEN}1f`, color: ACCENT_GREEN,
           border: `1px solid ${ACCENT_GREEN}55`,
-          fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
+          fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
         }}>
           ✓ {confirmedPlayers.length}
         </span>
       </div>
       <div style={{
-        padding: '14px 18px',
+        padding: '18px 24px',
         background: 'rgba(15, 23, 42, 0.55)',
         border: `1px dashed ${BORDER}`,
-        borderRadius: 14,
+        borderRadius: 18,
       }}>
         {confirmedPlayers.length > 0 ? (() => {
           // Pre-split into two columns and number column-major so the
@@ -2510,16 +2528,16 @@ function PollShareConfirmationBody({
           const left = confirmedPlayers.slice(half);
           const Row = ({ num, name }: { num: number; name: string }) => (
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              fontSize: 17, color: TEXT, lineHeight: 1.3,
+              display: 'flex', alignItems: 'center', gap: 12,
+              fontSize: 22, color: TEXT, lineHeight: 1.3,
               minWidth: 0,
             }}>
               <span style={{
                 flexShrink: 0,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 24, height: 24, borderRadius: 999,
+                width: 30, height: 30, borderRadius: 999,
                 background: `${ACCENT_GREEN}22`, color: ACCENT_GREEN,
-                fontSize: 13, fontWeight: 700,
+                fontSize: 16, fontWeight: 700,
               }}>{num}</span>
               <span style={{
                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -2528,13 +2546,13 @@ function PollShareConfirmationBody({
             </div>
           );
           return (
-            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9, minWidth: 0 }}>
+            <div style={{ display: 'flex', gap: 26, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
                 {right.map((p, i) => (
                   <Row key={p.id} num={i + 1} name={p.name} />
                 ))}
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9, minWidth: 0 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
                 {left.map((p, i) => (
                   <Row key={p.id} num={half + i + 1} name={p.name} />
                 ))}
@@ -2542,21 +2560,214 @@ function PollShareConfirmationBody({
             </div>
           );
         })() : (
-          <span style={{ color: TEXT_MUTED, fontSize: 17 }}>—</span>
+          <span style={{ color: TEXT_MUTED, fontSize: 22 }}>—</span>
         )}
       </div>
 
+      {/* Period leaderboard — the same H1/H2 stats users see in the
+          Statistics tab, scoped to ONLY the confirmed players for this
+          poll, so recipients can see how each attendee is doing this
+          half-year at a glance. Renders a row per confirmed player with
+          their PERIOD-WIDE rank (so the ranks may not start at 1 nor be
+          contiguous — that's intentional: it positions each attendee
+          within the broader season). Hides itself if the period has no
+          completed games yet. */}
+      <PollSharePeriodLeaderboard
+        confirmedPlayers={confirmedPlayers}
+        t={t}
+        tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN }}
+      />
+
       {poll.note && (
         <div style={{
-          marginTop: 16, padding: '14px 18px',
+          marginTop: 22, padding: '18px 24px',
           background: 'rgba(16, 185, 129, 0.08)',
-          borderInlineStart: `4px solid ${ACCENT_GREEN}`,
-          borderRadius: 8, fontSize: 17, color: TEXT, lineHeight: 1.5,
+          borderInlineStart: `5px solid ${ACCENT_GREEN}`,
+          borderRadius: 10, fontSize: 22, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
       )}
     </>
+  );
+}
+
+// Period leaderboard table — confirmed players + their stats for the
+// current half-year, shown as a compact ranked table. Pulls the same
+// PlayerStats slice the Statistics tab uses so numbers line up exactly
+// with what users see in the app. Renders nothing if no completed
+// games exist in the current period (no signal worth sharing).
+function PollSharePeriodLeaderboard({
+  confirmedPlayers, t, tokens,
+}: {
+  confirmedPlayers: Player[];
+  t: PollShareCardProps['t'];
+  tokens: { TEXT: string; TEXT_MUTED: string; BORDER: string; ACCENT_GREEN: string };
+}) {
+  const { TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN } = tokens;
+
+  // Compute the rows lazily so the share card can be rendered for polls
+  // that have nothing yet without paying the storage scan cost. useMemo
+  // would help, but this component is only mounted while the share card
+  // is being captured (off-screen, ~1 frame) so a plain const is fine.
+  const period = getCurrentHalfYearFilter();
+  const allPeriodGames = getAllGames().filter(g => {
+    if (g.status !== 'completed') return false;
+    const d = new Date(g.date || g.createdAt);
+    return d >= period.start && d <= period.end;
+  });
+  if (allPeriodGames.length === 0) return null;
+
+  const allPeriodStats = getPlayerStats({ start: period.start, end: period.end })
+    .filter(s => s.gamesPlayed > 0)
+    .sort((a, b) => b.totalProfit - a.totalProfit);
+
+  // overall period rank (1-based) keyed by playerId
+  const rankByPlayer = new Map<string, number>();
+  allPeriodStats.forEach((s, i) => rankByPlayer.set(s.playerId, i + 1));
+
+  // Confirmed players who actually played in this period (others are
+  // filtered out — showing "—" for everything would just be noise).
+  const confirmedIds = new Set(confirmedPlayers.map(p => p.id));
+  const rows = allPeriodStats
+    .filter(s => confirmedIds.has(s.playerId))
+    .map(s => ({ stats: s, rank: rankByPlayer.get(s.playerId) ?? 0 }));
+
+  if (rows.length === 0) return null;
+
+  const periodLabel = formatHebrewHalf(period.isH1 ? 1 : 2, period.year);
+  const activePlayersCount = allPeriodStats.length;
+
+  // Medal emoji for top 3 overall, plain rank otherwise.
+  const medalFor = (rank: number) =>
+    rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+
+  // Signed thousand-separated profit ("+1,432" / "-180"). Mirrors
+  // formatCurrency's pattern of a single leading LRM mark wrapping the
+  // entire sign+digits run, so the sign sits on the correct side of the
+  // number in an RTL context (instead of getting attached to whatever
+  // RTL text precedes the cell).
+  const fmtSignedProfit = (n: number) => {
+    const rounded = Math.round(n);
+    const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+    return `\u200E${sign}${Math.abs(rounded).toLocaleString('en-US')}`;
+  };
+
+  // Match the muted/dashed visual language of the manifest so the
+  // table reads as part of the same family.
+  const cellPad = '12px 14px';
+  const headerCellStyle: CSSProperties = {
+    fontSize: 16, color: TEXT_MUTED, fontWeight: 700,
+    letterSpacing: 0.6, textTransform: 'uppercase',
+    padding: cellPad, textAlign: 'center', whiteSpace: 'nowrap',
+  };
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 16, gap: 12, flexWrap: 'wrap',
+      }}>
+        <span style={{
+          fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+          letterSpacing: 1.5, textTransform: 'uppercase',
+        }}>
+          📊 {t('schedule.share.periodTable')}
+        </span>
+        <span style={{
+          fontSize: 16, color: TEXT_MUTED, fontWeight: 600,
+        }}>
+          {periodLabel} · {t('schedule.share.periodMeta', {
+            games: allPeriodGames.length,
+            players: activePlayersCount,
+          })}
+        </span>
+      </div>
+      <div style={{
+        background: 'rgba(15, 23, 42, 0.55)',
+        border: `1px dashed ${BORDER}`,
+        borderRadius: 18,
+        overflow: 'hidden',
+      }}>
+        <table style={{
+          width: '100%', borderCollapse: 'collapse',
+          fontSize: 20, color: TEXT, lineHeight: 1.25,
+        }}>
+          <thead>
+            <tr style={{ background: 'rgba(148, 163, 184, 0.08)' }}>
+              <th style={{ ...headerCellStyle, width: '12%' }}>#</th>
+              <th style={{ ...headerCellStyle, textAlign: 'right' }}>
+                {t('schedule.share.periodColPlayer')}
+              </th>
+              <th style={{ ...headerCellStyle, width: '20%' }}>
+                {t('schedule.share.periodColProfit')}
+              </th>
+              <th style={{ ...headerCellStyle, width: '16%' }}>
+                {t('schedule.share.periodColAvg')}
+              </th>
+              <th style={{ ...headerCellStyle, width: '12%' }}>
+                {t('schedule.share.periodColGames')}
+              </th>
+              <th style={{ ...headerCellStyle, width: '14%' }}>
+                {t('schedule.share.periodColWinRate')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ stats, rank }, i) => {
+              const profitColor = stats.totalProfit > 0 ? ACCENT_GREEN
+                : stats.totalProfit < 0 ? '#f87171' : TEXT_MUTED;
+              const avgColor = stats.avgProfit > 0 ? ACCENT_GREEN
+                : stats.avgProfit < 0 ? '#f87171' : TEXT_MUTED;
+              return (
+                <tr key={stats.playerId} style={{
+                  borderTop: i === 0 ? 'none' : `1px solid ${BORDER}`,
+                }}>
+                  <td style={{
+                    padding: cellPad, textAlign: 'center',
+                    fontWeight: 700, color: TEXT,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {rank} {medalFor(rank)}
+                  </td>
+                  <td style={{
+                    padding: cellPad, textAlign: 'right',
+                    fontWeight: 600, whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {stats.playerName}
+                  </td>
+                  <td style={{
+                    padding: cellPad, textAlign: 'center',
+                    fontWeight: 700, color: profitColor, whiteSpace: 'nowrap',
+                  }}>
+                    {fmtSignedProfit(stats.totalProfit)}
+                  </td>
+                  <td style={{
+                    padding: cellPad, textAlign: 'center',
+                    fontWeight: 600, color: avgColor, whiteSpace: 'nowrap',
+                  }}>
+                    {fmtSignedProfit(stats.avgProfit)}
+                  </td>
+                  <td style={{
+                    padding: cellPad, textAlign: 'center',
+                    fontWeight: 600, color: TEXT_MUTED, whiteSpace: 'nowrap',
+                  }}>
+                    {stats.gamesPlayed}
+                  </td>
+                  <td style={{
+                    padding: cellPad, textAlign: 'center',
+                    fontWeight: 700, color: TEXT, whiteSpace: 'nowrap',
+                  }}>
+                    {Math.round(stats.winPercentage)}%
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -2573,32 +2784,32 @@ function PollShareCancellationBody({
       {/* Section title — matches the uppercase rhythm used in the
           confirmation/invitation cards so all three feel like family. */}
       <div style={{
-        fontSize: 14, color: TEXT_MUTED, fontWeight: 700,
-        letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 12,
+        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16,
       }}>
         📅 {t('schedule.share.proposedDates')}
       </div>
       <div style={{
-        padding: '14px 18px', marginBottom: 16,
+        padding: '18px 24px', marginBottom: 22,
         background: 'rgba(15, 23, 42, 0.55)',
         border: `1px dashed ${BORDER}`,
-        borderRadius: 14,
-        display: 'flex', flexDirection: 'column', gap: 12,
+        borderRadius: 18,
+        display: 'flex', flexDirection: 'column', gap: 16,
       }}>
         {poll.dates.map(d => {
           const loc = d.location || poll.defaultLocation;
           return (
             <div key={d.id} style={{
               display: 'flex', justifyContent: 'space-between',
-              alignItems: 'center', gap: 14,
+              alignItems: 'center', gap: 18,
               opacity: 0.65,
               textDecoration: 'line-through',
               textDecorationColor: 'rgba(239, 68, 68, 0.55)',
-              textDecorationThickness: 2,
+              textDecorationThickness: 2.5,
             }}>
               <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
               {loc && (
-                <span style={{ fontSize: 15, color: TEXT_MUTED, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 18, color: TEXT_MUTED, whiteSpace: 'nowrap' }}>
                   📍 {loc}
                 </span>
               )}
@@ -2608,28 +2819,28 @@ function PollShareCancellationBody({
       </div>
       {poll.note && (
         <div style={{
-          padding: '14px 18px', marginBottom: 14,
+          padding: '18px 24px', marginBottom: 18,
           background: 'rgba(148, 163, 184, 0.08)',
-          borderInlineStart: `4px solid ${TEXT_MUTED}`,
-          borderRadius: 8, fontSize: 17, color: TEXT, lineHeight: 1.5,
+          borderInlineStart: `5px solid ${TEXT_MUTED}`,
+          borderRadius: 10, fontSize: 22, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
       )}
       {poll.cancellationReason && (
         <div style={{
-          padding: '16px 20px',
+          padding: '20px 26px',
           background: `linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04))`,
           border: `1px solid ${ACCENT_RED}55`,
-          borderRadius: 14,
+          borderRadius: 18,
         }}>
           <div style={{
-            fontSize: 14, color: ACCENT_RED, fontWeight: 700,
-            letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6,
+            fontSize: 18, color: ACCENT_RED, fontWeight: 700,
+            letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8,
           }}>
             💬 {t('schedule.share.cancellationReason')}
           </div>
-          <div style={{ fontSize: 17, color: TEXT, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 22, color: TEXT, lineHeight: 1.5 }}>
             {poll.cancellationReason}
           </div>
         </div>

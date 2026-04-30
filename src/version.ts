@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.28.1';
+export const APP_VERSION = '5.29.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.29.0',
+    date: '2026-04-30',
+    changes: [
+      '📊 Schedule confirmation share card now includes a half-year leaderboard table for the confirmed players: rank · name · profit · avg · games · win%. Pulls from getPlayerStats with the current H1/H2 window so numbers match the Statistics tab exactly. Top-3 ranks get medals (🥇🥈🥉). Auto-hides when the period has no completed games or no confirmed player has played yet.',
+      '🔍 Rank shown is the OVERALL period rank (not 1..N within attendees) so each confirmed player is positioned in the broader half-year season.',
+      '📐 Share card upsized 720→900 px wide with proportional typography across all three modes (confirmation, invitation, cancellation): title 26→34, hero values 22→28, manifest names 17→22, voter chips 15→18, all paddings/radii/badges scaled. At html2canvas scale: 2 the rendered PNG is 1800 px wide for crisper readability without breaking the WhatsApp size budget.',
+      '🔢 Profit/avg sign formatting now wraps the entire signed run in a single LRM mark (matching formatCurrency), so the +/- sits on the correct side of the number in RTL.',
+    ],
+  },
   {
     version: '5.28.1',
     date: '2026-04-30',
