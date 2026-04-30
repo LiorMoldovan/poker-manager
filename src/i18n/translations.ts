@@ -979,8 +979,8 @@ const he = {
   //   * invitation   → call to action ("come vote")
   //   * confirmation → "everything else is in the app" (reminders, lineup)
   //   * cancellation → soft heads-up that the next game is in the app
-  'schedule.share.captionInvitation': '🗳️ הצבעה פתוחה לערב הפוקר הבא — היכנסו והצביעו',
-  'schedule.share.captionConfirmation': '🃏 ערב פוקר נקבע — לפרטים מלאים ומעקב, היכנסו לאפליקציה',
+  'schedule.share.captionInvitation': 'היכנסו והצביעו',
+  'schedule.share.captionConfirmation': 'לפרטים מלאים ומעקב, היכנסו לאפליקציה',
   'schedule.share.captionCancellation': '🛑 ההצבעה בוטלה — לעדכונים על המשחק הבא היכנסו לאפליקציה',
   'schedule.share.shareInvitationLabel': '📤 שתף הצבעה',
   'schedule.share.shareConfirmationLabel': '📤 שתף משחק',
@@ -2498,8 +2498,8 @@ const en: Record<keyof typeof he, string> = {
   'schedule.share.registeredOnlyNote': 'Voting is open to registered group members only',
   'schedule.share.registerLabel': 'Register at',
   'schedule.share.openAppLink': 'Open the app to vote',
-  'schedule.share.captionInvitation': '🗳️ Vote on the next poker night — open the app to RSVP',
-  'schedule.share.captionConfirmation': '🃏 Poker night is set — see the full lineup and details in the app',
+  'schedule.share.captionInvitation': 'Open the app to vote',
+  'schedule.share.captionConfirmation': 'See the full lineup and details in the app',
   'schedule.share.captionCancellation': '🛑 Poll cancelled — open the app for updates on the next game',
   'schedule.share.shareInvitationLabel': '📤 Share poll',
   'schedule.share.shareConfirmationLabel': '📤 Share game',

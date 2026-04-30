@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.33.3';
+export const APP_VERSION = '5.33.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.33.4',
+    date: '2026-05-01',
+    changes: [
+      '✂️ WhatsApp share captions trimmed to the bare call-to-action so the chat-preview text is short and punchy rather than competing with the share image. Invitation: was `🗳️ הצבעה פתוחה לערב הפוקר הבא — היכנסו והצביעו` → now just `היכנסו והצביעו` (EN: `Open the app to vote`). Confirmation: was `🃏 ערב פוקר נקבע — לפרטים מלאים ומעקב, היכנסו לאפליקציה` → now `לפרטים מלאים ומעקב, היכנסו לאפליקציה` (EN: `See the full lineup and details in the app`). The share-card image already conveys the context (poll status, dates, players, location) — the caption only needs to nudge readers to tap the link. Cancellation caption left unchanged because the 🛑 prefix carries useful out-of-band signal in chat lists where the image preview may be collapsed. Translation keys `schedule.share.captionInvitation` and `schedule.share.captionConfirmation` (HE/EN).',
+    ],
+  },
   {
     version: '5.33.3',
     date: '2026-04-30',
