@@ -203,26 +203,42 @@ function playerToRow(p: Player, groupId: string) {
   };
 }
 
-function gameToRow(g: Game, groupId: string) {
-  return {
+function gameToRow(g: Game, groupId: string): Record<string, unknown> {
+  // Always-present columns: identity + status fields every game has from
+  // the moment of creation. Safe to always include.
+  const row: Record<string, unknown> = {
     id: g.id,
     group_id: groupId,
     date: g.date,
     status: g.status,
-    location: g.location || null,
-    chip_gap: g.chipGap ?? null,
-    chip_gap_per_player: g.chipGapPerPlayer ?? null,
-    ai_summary: g.aiSummary || null,
-    ai_summary_model: g.aiSummaryModel || null,
-    pre_game_teaser: g.preGameTeaser || null,
-    forecast_comment: g.forecastComment || null,
-    forecast_accuracy: g.forecastAccuracy || null,
-    comic_url: g.comicUrl || null,
-    comic_script: g.comicScript || null,
-    comic_style: g.comicStyle || null,
-    comic_generated_at: g.comicGeneratedAt || null,
     created_at: g.createdAt,
   };
+
+  // CRITICAL — multi-device safety: optional columns are only included
+  // when the local Game object actually has them set. If we wrote `null`
+  // whenever local was undefined, a stale cache on another device/tab
+  // could clobber a freshly-saved AI summary (or location, chip_gap, etc.)
+  // just by upserting some unrelated game change. Postgres-on-conflict
+  // UPDATE only touches columns present in the payload, so omitting them
+  // keeps the existing DB value intact.
+  //
+  // `toGame` sets these only when DB has a non-null value, so:
+  //   - undefined locally  ⇒  not loaded yet  ⇒  omit (preserve DB)
+  //   - empty string/null  ⇒  user cleared    ⇒  send null
+  //   - real value         ⇒  send value
+  if (g.location !== undefined) row.location = g.location || null;
+  if (g.chipGap !== undefined) row.chip_gap = g.chipGap ?? null;
+  if (g.chipGapPerPlayer !== undefined) row.chip_gap_per_player = g.chipGapPerPlayer ?? null;
+  if (g.aiSummary !== undefined) row.ai_summary = g.aiSummary || null;
+  if (g.aiSummaryModel !== undefined) row.ai_summary_model = g.aiSummaryModel || null;
+  if (g.preGameTeaser !== undefined) row.pre_game_teaser = g.preGameTeaser || null;
+  if (g.forecastComment !== undefined) row.forecast_comment = g.forecastComment || null;
+  if (g.forecastAccuracy !== undefined) row.forecast_accuracy = g.forecastAccuracy || null;
+  if (g.comicUrl !== undefined) row.comic_url = g.comicUrl || null;
+  if (g.comicScript !== undefined) row.comic_script = g.comicScript || null;
+  if (g.comicStyle !== undefined) row.comic_style = g.comicStyle || null;
+  if (g.comicGeneratedAt !== undefined) row.comic_generated_at = g.comicGeneratedAt || null;
+  return row;
 }
 
 function gamePlayerToRow(gp: GamePlayer) {

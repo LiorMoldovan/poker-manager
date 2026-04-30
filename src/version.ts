@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.26.3';
+export const APP_VERSION = '5.26.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.26.4',
+    date: '2026-04-30',
+    changes: [
+      '🛡️ Multi-device save safety: gameToRow() now omits optional fields (aiSummary, comic_*, forecast_*, location, chip_gap, etc.) when undefined locally instead of writing null. A stale cache on another device/tab can no longer clobber a freshly-saved AI summary just by upserting an unrelated game change — postgres on-conflict update only touches columns present in the payload.',
+      '🐛 Fixes the overnight regression where the AI summary would disappear after another device had loaded the game prior to summary generation and then made any unrelated change.',
+    ],
+  },
   {
     version: '5.26.3',
     date: '2026-04-30',
