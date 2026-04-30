@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.26.2';
+export const APP_VERSION = '5.26.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.26.3',
+    date: '2026-04-30',
+    changes: [
+      '🐛 Fix: AI summary / comic regenerations no longer revert to the previous (or empty) state when realtime echoes race the debounced sync — supabaseCache now tracks per-game pending writes and preserves local copies during refreshGroups for a 15s window',
+      '🚨 Sync errors are now visible: failing Supabase upserts dispatch a `supabase-sync-error` event that App.tsx surfaces as an error toast (throttled), so silent failures (missing columns, RLS, network) can never again let writes evaporate after the next realtime refresh',
+      '🧹 markGameLocallyWritten() called from saveGameAiSummary, saveGameComic, clearGameComic, saveForecastAccuracy, saveForecastComment, updateGame, updateGameStatus — and cleared automatically when the games upsert succeeds',
+    ],
+  },
   {
     version: '5.26.2',
     date: '2026-04-30',

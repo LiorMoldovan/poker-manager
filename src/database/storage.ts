@@ -5,6 +5,7 @@ import {
   cacheSaveTTS, cacheLoadTTS, cacheLoadTTSModel, cacheDeleteTTS,
   getGroupId, resetCache, initSupabaseCache,
   flushSync,
+  markGameLocallyWritten,
   fetchNotifications, getCachedNotifications, getUnreadNotificationCount,
   markNotificationRead, createNotification,
   resolvePlayerUserId, getPlayerEmailForNotification,
@@ -218,6 +219,7 @@ export const updateGameStatus = (gameId: string, status: Game['status']): void =
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex].status = status;
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -247,6 +249,7 @@ export const updateGame = (gameId: string, updates: Partial<Game>): void => {
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex] = { ...games[gameIndex], ...updates };
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -824,7 +827,8 @@ export const saveForecastAccuracy = (gameId: string): void => {
     avgGap,
     score,
   };
-  
+
+  markGameLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAMES, games);
 };
 
@@ -834,6 +838,7 @@ export const saveForecastComment = (gameId: string, comment: string): void => {
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex].forecastComment = comment;
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -845,6 +850,9 @@ export const saveGameAiSummary = (gameId: string, summary: string, model?: strin
   if (gameIndex !== -1) {
     games[gameIndex].aiSummary = summary;
     if (model) games[gameIndex].aiSummaryModel = model;
+    // Mark as locally-written BEFORE setItem so realtime refreshes that
+    // race the debounced sync don't clobber the new ai_summary.
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -901,6 +909,7 @@ export const saveGameComic = (
   games[idx].comicScript = script;
   games[idx].comicStyle = style;
   games[idx].comicGeneratedAt = new Date().toISOString();
+  markGameLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAMES, games);
 };
 
@@ -928,6 +937,7 @@ export const clearGameComic = (gameId: string): void => {
   delete games[idx].comicScript;
   delete games[idx].comicStyle;
   delete games[idx].comicGeneratedAt;
+  markGameLocallyWritten(gameId);
   setItem(STORAGE_KEYS.GAMES, games);
 };
 

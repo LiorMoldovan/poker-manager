@@ -284,6 +284,40 @@ const STORAGE_KEYS = {
 const CHRONICLE_KEY = 'poker_chronicle_profiles';
 const GRAPH_INSIGHTS_KEY = 'poker_graph_insights';
 
+// ── Local-write tracking (race protection) ──
+//
+// Realtime echoes of `games` upserts trigger a full refetch which then
+// REPLACES local memory wholesale. If a user has just made a local write
+// (e.g. saveGameAiSummary, saveGameComic) that hasn't yet been flushed to
+// Supabase, the refetch can race and overwrite the not-yet-synced fields
+// — the user sees their AI summary / comic vanish back to the old value.
+//
+// Fix: every save that modifies a single game row registers a timestamp
+// here, and refreshGroups({games}) preserves local copies of any game
+// whose last-local-write is within the protection window. After a successful
+// upsert the timestamps are cleared, so subsequent realtime echoes can
+// authoritatively replace local memory.
+const PRESERVE_WINDOW_MS = 15_000;
+const gameLocalWriteAt = new Map<string, number>();
+
+/**
+ * Mark a single game row as having a pending local write. Call this from
+ * any save fn in storage.ts that mutates a specific game's column(s).
+ */
+export function markGameLocallyWritten(gameId: string): void {
+  gameLocalWriteAt.set(gameId, Date.now());
+}
+
+function clearLocalWriteMarker(gameId: string): void {
+  gameLocalWriteAt.delete(gameId);
+}
+
+function hasRecentLocalWrite(gameId: string): boolean {
+  const at = gameLocalWriteAt.get(gameId);
+  if (!at) return false;
+  return Date.now() - at < PRESERVE_WINDOW_MS;
+}
+
 // ── Debounced sync ──
 
 const syncTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -339,7 +373,22 @@ async function pushToSupabase(key: string) {
       const rows = games.map(g => gameToRow(g, gid));
       if (rows.length > 0) {
         const { error } = await supabase.from('games').upsert(rows, { onConflict: 'id' });
-        if (error) { logSyncError('games', 'upsert', error); break; }
+        if (error) {
+          logSyncError('games', 'upsert', error);
+          // CRITICAL: surface the failure so users (and devs) see *why*
+          // a save didn't stick. Without this, AI summary / comic writes
+          // can silently fail (e.g. missing migration column) and then
+          // get clobbered by the next realtime refresh, leading to the
+          // confusing "the new format keeps falling back to the old"
+          // bug. Subscribed UI can show a toast.
+          window.dispatchEvent(new CustomEvent('supabase-sync-error', {
+            detail: { table: 'games', op: 'upsert', message: error.message },
+          }));
+          break;
+        }
+        // Successful upsert — clear local-write markers for synced rows
+        // so subsequent realtime echoes can authoritatively refresh them.
+        for (const g of games) clearLocalWriteMarker(g.id);
       }
 
       // Collect all child rows across all games for batch operations
@@ -1291,6 +1340,27 @@ async function refreshGroups(groups: Set<RefreshGroup>): Promise<void> {
       const pm = pmByGame.get(game.id);
       if (pm) game.periodMarkers = pm;
     }
+
+    // Race protection: preserve local copies of any games with a pending
+    // local write that hasn't yet been flushed to Supabase. Without this,
+    // realtime echo of an unrelated upsert can wipe an in-flight aiSummary
+    // / comic save before sync completes, causing the user-visible "old
+    // format keeps coming back" regression.
+    const oldGames = (state.data.get(STORAGE_KEYS.GAMES) as Game[] | undefined) || [];
+    if (oldGames.length > 0 && gameLocalWriteAt.size > 0) {
+      const oldById = new Map(oldGames.map(g => [g.id, g]));
+      for (let i = 0; i < games.length; i++) {
+        const id = games[i].id;
+        if (hasRecentLocalWrite(id)) {
+          const local = oldById.get(id);
+          if (local) {
+            console.log(`[cache] Preserving local copy of game ${id} (pending sync within ${PRESERVE_WINDOW_MS}ms)`);
+            games[i] = local;
+          }
+        }
+      }
+    }
+
     state.data.set(STORAGE_KEYS.GAMES, games);
     state.data.set(STORAGE_KEYS.GAME_PLAYERS, gpRows.map(r => toGamePlayer(r)));
   }

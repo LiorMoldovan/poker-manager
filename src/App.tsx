@@ -11,7 +11,7 @@ import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
 import GroupWizard from './components/GroupWizard';
-import { ToastContainer } from './components/Toast';
+import { ToastContainer, showToast } from './components/Toast';
 import { VoteReminderBanner } from './components/VoteReminderBanner';
 import AuthScreen from './screens/AuthScreen';
 import GroupSetupScreen from './screens/GroupSetupScreen';
@@ -308,6 +308,25 @@ function SupabaseApp() {
     window.addEventListener('supabase-cache-updated', handler);
     return () => window.removeEventListener('supabase-cache-updated', handler);
   }, [dataReady]);
+
+  // Surface Supabase sync failures as toasts so silent saves never go
+  // unnoticed (previously a missing-column or RLS error would only log to
+  // console while the local cache appeared to "save" — and then the next
+  // realtime refresh would clobber the not-yet-synced row).
+  useEffect(() => {
+    let lastShownAt = 0;
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as { table?: string; op?: string; message?: string } | undefined;
+      // Throttle to one toast per 4 seconds — sync errors come in bursts.
+      const now = Date.now();
+      if (now - lastShownAt < 4000) return;
+      lastShownAt = now;
+      const what = detail?.table ? `${detail.table}/${detail.op || 'sync'}` : 'sync';
+      showToast(`⚠️ Save failed: ${what} — ${detail?.message || 'unknown error'}`, 'error');
+    };
+    window.addEventListener('supabase-sync-error', handler);
+    return () => window.removeEventListener('supabase-sync-error', handler);
+  }, []);
 
   // Push notification subscription — only when permission is already granted
   const subscribeToPush = useCallback(async () => {
