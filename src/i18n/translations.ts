@@ -818,7 +818,7 @@ const he = {
   // fraction in an LTR isolate keeps the two digits inside a single
   // LTR run regardless of the surrounding container direction.
   'schedule.targetProgress': '\u2066{count} / {target}\u2069',
-  'schedule.competition.heading': 'השוואה בין תאריכים',
+  'schedule.competition.heading': 'סיכום הצבעות',
   'schedule.competition.leader': 'מוביל',
   'schedule.dateBreakdownHeading': 'פירוט לפי תאריך',
   // Multi-date share images drop the per-date voter chip lists to keep
@@ -2368,7 +2368,7 @@ const en: Record<keyof typeof he, string> = {
   // LRI…PDI wrapper kept symmetric with the HE entry; harmless in
   // LTR contexts but defends against any future RTL embedding.
   'schedule.targetProgress': '\u2066{count} / {target}\u2069',
-  'schedule.competition.heading': 'Date competition',
+  'schedule.competition.heading': 'Vote summary',
   'schedule.dateBreakdownHeading': 'Per-date details',
   'schedule.competition.leader': 'Leading',
   'schedule.share.viewVotersInApp': '👀 Open the app to see who voted on each date',

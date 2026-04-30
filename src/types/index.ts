@@ -222,6 +222,12 @@ export interface GamePoll {
   // out; cast_poll_vote / admin_cast_poll_vote / admin_delete_poll_vote
   // raise 'voting_locked' on the server side.
   votingLockedAt?: string | null;
+  // Migration 040: short auto-generated 6-char base32 slug used as a
+  // pretty alternative to the UUID in WhatsApp share captions
+  // (`/p/<slug>`). Server-side: NOT NULL after the trigger fires.
+  // Client-side: optional because old in-flight rows / SSR snapshots
+  // may not have it yet.
+  shareSlug?: string | null;
   creationNotificationsSentAt?: string | null;
   expandedNotificationsSentAt?: string | null;
   confirmedNotificationsSentAt?: string | null;

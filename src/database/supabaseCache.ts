@@ -167,6 +167,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     allowMaybe: row.allow_maybe !== false,
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
     votingLockedAt: (row.voting_locked_at as string | null) ?? null,
+    shareSlug: (row.share_slug as string | null) ?? null,
     creationNotificationsSentAt: (row.creation_notifications_sent_at as string | null) ?? null,
     expandedNotificationsSentAt: (row.expanded_notifications_sent_at as string | null) ?? null,
     confirmedNotificationsSentAt: (row.confirmed_notifications_sent_at as string | null) ?? null,
@@ -1685,6 +1686,18 @@ export async function setPollVotingLockRpc(pollId: string, locked: boolean): Pro
   });
   if (error) throw error;
   await refreshPollsNow();
+}
+
+// Migration 040: resolve a short share slug (the 6-char code embedded
+// in the WhatsApp `/p/<slug>` deep link) to the canonical poll UUID.
+// Returns null when the slug is unknown so the caller can route to
+// a graceful "poll not found" fallback. The RPC is granted to both
+// `authenticated` and `anon` so this works during the brief post-
+// OAuth window before the supabase session is fully restored.
+export async function resolvePollShareSlugRpc(slug: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('resolve_poll_share_slug', { p_slug: slug });
+  if (error) throw error;
+  return (data as string | null) ?? null;
 }
 
 export async function expandPollRpc(pollId: string): Promise<void> {

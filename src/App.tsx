@@ -1,6 +1,6 @@
 ﻿import { Component, useEffect, useState, useRef, useCallback, useMemo, createContext, useContext, Suspense, lazy } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PermissionRole } from './types';
 import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
@@ -38,6 +38,68 @@ const TrainingHandScreen = lazy(() => import('./screens/TrainingHandScreen'));
 const QuickTrainingScreen = lazy(() => import('./screens/QuickTrainingScreen'));
 const SharedTrainingScreen = lazy(() => import('./screens/SharedTrainingScreen'));
 const SharedQuickPlayScreen = lazy(() => import('./screens/SharedQuickPlayScreen'));
+
+// Short-form deep link for schedule polls. The full URL is
+// `/settings?tab=schedule&poll=<id>` which is correct but reads as a
+// noisy link in WhatsApp captions where the link is always rendered
+// as plain text.
+//
+// As of migration 040 the path param can be EITHER a 36-char poll
+// UUID (the legacy form, still emitted by older shares) or a 6-char
+// base32 slug (the new short form). We sniff the shape via a UUID
+// regex:
+//   * UUID-shaped → redirect synchronously, no DB round-trip.
+//   * Slug-shaped → call `resolve_poll_share_slug` to get the UUID,
+//     then redirect. Failure (unknown slug, network error) falls
+//     back to the bare schedule tab so the user lands on something
+//     useful instead of a 404.
+//
+// `replace: true` on the final navigate keeps history clean — a
+// back-tap from the deep-linked card returns to wherever the user
+// came from rather than bouncing through `/p/<x>`.
+const POLL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function PollDeepLinkRedirect() {
+  const { pollId } = useParams<{ pollId: string }>();
+  const [resolvedId, setResolvedId] = useState<string | null>(null);
+  const [resolveFailed, setResolveFailed] = useState(false);
+
+  useEffect(() => {
+    if (!pollId) return;
+    if (POLL_UUID_RE.test(pollId)) {
+      setResolvedId(pollId);
+      return;
+    }
+    let cancelled = false;
+    import('./database/storage').then(({ resolvePollShareSlug }) => {
+      resolvePollShareSlug(pollId)
+        .then(id => {
+          if (cancelled) return;
+          if (id) setResolvedId(id);
+          else setResolveFailed(true);
+        })
+        .catch(err => {
+          console.warn('resolvePollShareSlug failed:', err);
+          if (!cancelled) setResolveFailed(true);
+        });
+    });
+    return () => { cancelled = true; };
+  }, [pollId]);
+
+  if (!pollId || resolveFailed) {
+    return <Navigate to="/settings?tab=schedule" replace />;
+  }
+  if (!resolvedId) {
+    // Slug-resolution in flight — render nothing rather than a flash
+    // of skeleton; the lookup is a single round-trip and resolves
+    // within a few ms in practice.
+    return null;
+  }
+  return <Navigate
+    to={`/settings?tab=schedule&poll=${encodeURIComponent(resolvedId)}`}
+    replace
+  />;
+}
 
 function prefetchNavScreens() {
   if (typeof requestIdleCallback !== 'undefined') {
@@ -966,6 +1028,9 @@ function SupabaseApp() {
                 <Route path="/game/:gameId" element={<GameSummaryScreen />} />
                 <Route path="/statistics" element={<StatisticsScreen />} />
                 <Route path="/settings" element={<SettingsScreen />} />
+                {/* Short-form schedule-poll deep link — see PollDeepLinkRedirect.
+                    Used in WhatsApp share captions to keep the URL clean. */}
+                <Route path="/p/:pollId" element={<PollDeepLinkRedirect />} />
                 <Route path="/graphs" element={<GraphsScreen />} />
                 {isSuperAdmin && <Route path="/training" element={<TrainingScreen />} />}
                 {isSuperAdmin && <Route path="/training/play" element={<TrainingHandScreen />} />}

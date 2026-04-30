@@ -45,3 +45,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
+// Clear the bootstrap watchdog set in index.html. By the time this
+// line runs, the main module has loaded and React has at least
+// started rendering — if we got here at all, the worst-case "blank
+// screen because the JS chunk 404'd" failure mode is ruled out.
+// (Errors from INSIDE React get caught by ErrorBoundary in App.tsx.)
+const w = window as unknown as {
+  __pokerBootWatchdog?: ReturnType<typeof setTimeout>;
+};
+if (w.__pokerBootWatchdog) {
+  clearTimeout(w.__pokerBootWatchdog);
+  w.__pokerBootWatchdog = undefined;
+}
+

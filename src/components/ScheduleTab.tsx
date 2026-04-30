@@ -1168,15 +1168,23 @@ function PollCard(props: PollCardProps) {
   // directly on the Schedule tab and scrolls to *this specific poll*
   // instead of just the app's home page.
   //
-  // The URL pattern (`/settings?tab=schedule&poll=<id>`) reuses the
-  // existing tab-deep-link infra in SettingsScreen — `?tab=schedule` is
-  // already wired to switch the tab on mount/url-change. The `&poll=`
-  // param is a new convention that ScheduleTab reads to auto-scroll to
-  // the matching card.
+  // The URL uses the short-form `/p/<token>` route (App.tsx →
+  // PollDeepLinkRedirect). `<token>` is the 6-char base32 share slug
+  // (migration 040) when available, falling back to the full poll
+  // UUID for old in-flight rows that haven't been backfilled yet
+  // (the migration backfills on apply, so this is a transient
+  // window). The slug form lands as `https://app.com/p/7g4xq2`
+  // (~52 chars total) — short enough to fit on a single tappable
+  // line in WhatsApp on every phone, vs the UUID form which often
+  // wraps mid-uuid into a noisy multi-line blob.
+  //
+  // The route handler accepts both shapes and resolves the slug to
+  // a UUID via `resolve_poll_share_slug` before redirecting, so old
+  // long-form share links from earlier versions keep working.
   //
   // The bare origin still appears INSIDE the share image (a clean,
-  // typeable fallback) — only the WhatsApp caption gets the longer
-  // deep link, so the image stays uncluttered.
+  // typeable fallback) — only the WhatsApp caption gets the deep
+  // link, so the image stays uncluttered.
   //
   // Falls back to caption-only when window isn't available (SSR).
   const buildShareCaption = (mode: 'invitation' | 'confirmation' | 'cancellation'): string => {
@@ -1187,7 +1195,8 @@ function PollCard(props: PollCardProps) {
     ) as TranslationKey;
     const line = t(captionKey);
     if (typeof window === 'undefined') return line;
-    const deepLink = `${window.location.origin}/settings?tab=schedule&poll=${encodeURIComponent(poll.id)}`;
+    const linkToken = poll.shareSlug ?? poll.id;
+    const deepLink = `${window.location.origin}/p/${encodeURIComponent(linkToken)}`;
     return `${line}\n${deepLink}`;
   };
 
@@ -1717,49 +1726,17 @@ function PollCard(props: PollCardProps) {
                     size="large"
                     t={t}
                   />
-                  {/* Pin / re-pin — admin-only. Surfaces on every
-                      proposed date except the one that's currently
-                      pinned in the DB (poll.confirmedDateId), in
-                      ANY confirmed state — at-target OR below-target
-                      reopen. Earlier we let the button show on the
-                      pinned date in below-target so admins could
-                      "re-affirm", but that opened the re-pin modal
-                      with "switch the locked-in date to <same date>"
-                      copy, which read as a no-op typo. Other dates
-                      still expose the button so an admin can switch
-                      the lock to a runner-up. Hidden once a game
-                      record has been linked to this poll
-                      (confirmedGameId): the game row carries the
-                      date as a column and the SQL refuses to re-pin
-                      in that case, so a silently-no-op button would
-                      be misleading. Label flips between "close on
-                      this date" (initial pin from open/expanded)
-                      and "switch to this date" (re-pin on a
-                      confirmed poll — tie-breaker / change-of-mind
-                      flow, see migration 038). */}
-                  {isAdmin
-                    && poll.confirmedDateId !== d.id
-                    && !poll.confirmedGameId
-                    && (
-                    <button
-                      onClick={() => onManualClose(d.id)}
-                      className="poll-ghost-btn"
-                      // Same short-label / long-tooltip pattern as the
-                      // strip's pick button — the per-date footer is now
-                      // also flex-wrap-enabled (the larger 'large' vote
-                      // count pills land first), so a shorter pick label
-                      // keeps the row from wrapping on borderline-narrow
-                      // viewports. Full status-aware long form lives in
-                      // the title and in the confirmation modal copy.
-                      title={poll.status === 'confirmed'
-                        ? t('schedule.manualRepin')
-                        : t('schedule.manualClose')}
-                      style={{
-                        padding: '4px 10px', borderRadius: 6,
-                        border: '1px dashed var(--border)', background: 'transparent',
-                        color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                      }}>{t('schedule.manualPickShort')}</button>
-                  )}
+                  {/* Per-date pick / re-pin button is gone (v5.32.1).
+                      Multi-date polls expose it in the upper
+                      DateCompetitionStrip scoreboard rows; single-date
+                      polls have no equivalent because there's nothing
+                      to "pick between" with a single option, and admins
+                      can start a game with the current yes-count via
+                      the standard new-game flow without formally
+                      pinning the poll first. The PollManualCloseModal
+                      (and the underlying onManualClose handler / SQL
+                      RPC) stays around because the strip still uses it
+                      for multi-date polls. */}
                 </div>
               </div>
             );
@@ -2966,7 +2943,7 @@ function ShareDateLabel({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
       {headlineParts.length > 0 && (
         <span style={{
-          fontSize: 22, fontWeight: 700, color, letterSpacing: 0.2, lineHeight: 1.15,
+          fontSize: 26, fontWeight: 700, color, letterSpacing: 0.2, lineHeight: 1.15,
         }}>{headlineParts.join(' · ')}</span>
       )}
     </div>
@@ -3005,11 +2982,11 @@ function ShareBoardingHero({
       padding: '0 10px', minWidth: 0,
     }}>
       <span style={{
-        fontSize: 16, color: TEXT_MUTED, letterSpacing: 1.5,
+        fontSize: 18, color: TEXT_MUTED, letterSpacing: 1.5,
         textTransform: 'uppercase', fontWeight: 600,
       }}>{label}</span>
       <span style={{
-        fontSize: 28, fontWeight: 700, color: TEXT,
+        fontSize: 30, fontWeight: 700, color: TEXT,
         lineHeight: 1.15, letterSpacing: 0.1,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         maxWidth: '100%',
@@ -3091,19 +3068,19 @@ function SharePhaseBadge({
       display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 26,
     }}>
       <span style={{
-        padding: '8px 18px', borderRadius: 999,
+        padding: '9px 20px', borderRadius: 999,
         background: `${phaseColor}1f`, color: phaseColor,
         border: `1px solid ${phaseColor}55`,
-        fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
+        fontSize: 21, fontWeight: 700, letterSpacing: 0.3,
       }}>
         {isExpandedPhase ? '🌐' : '⭐'} {phaseLabel}
       </span>
       {opensToAllAt && (
         <span style={{
-          padding: '8px 18px', borderRadius: 999,
+          padding: '9px 20px', borderRadius: 999,
           background: 'rgba(148, 163, 184, 0.10)', color: TEXT_MUTED,
           border: `1px solid rgba(148, 163, 184, 0.25)`,
-          fontSize: 18, fontWeight: 600,
+          fontSize: 21, fontWeight: 600,
         }}>
           ⏰ {t('schedule.share.opensToAllOn', { date: opensToAllAt })}
         </span>
@@ -3242,7 +3219,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
           }}>{header.title}</div>
           {header.subtitle && (
             <div style={{
-              fontSize: 19, color: TEXT_MUTED, lineHeight: 1.35,
+              fontSize: 23, color: TEXT_MUTED, lineHeight: 1.35,
               textAlign: 'center',
             }}>
               {header.subtitle}
@@ -3311,10 +3288,10 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
         }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 10,
-            fontSize: 18, fontWeight: 700, color: TEXT_MUTED,
+            fontSize: 22, fontWeight: 700, color: TEXT_MUTED,
             letterSpacing: 1.8, textTransform: 'uppercase',
           }}>
-            <span style={{ fontSize: 20 }}>🃏</span>
+            <span style={{ fontSize: 24 }}>🃏</span>
             <span>{t('schedule.share.footer')}</span>
           </div>
         </div>
@@ -3384,7 +3361,7 @@ function ShareDateCompetitionStrip({
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{
-        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        fontSize: 22, color: TEXT_MUTED, fontWeight: 700,
         letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12,
       }}>
         🗳 {t('schedule.competition.heading')}
@@ -3434,21 +3411,21 @@ function ShareDateCompetitionStrip({
                   )}
                   <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
                   <span style={{
-                    padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                    padding: '6px 14px', borderRadius: 999, fontSize: 19, fontWeight: 700,
                     background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
                     border: `1px solid ${ACCENT_GREEN}55`,
                   }}>✓ {s.yes}</span>
                   {poll.allowMaybe && (
                     <span style={{
-                      padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                      padding: '6px 14px', borderRadius: 999, fontSize: 19, fontWeight: 700,
                       background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
                       border: '1px solid rgba(234, 179, 8, 0.45)',
                     }}>? {s.maybe}</span>
                   )}
                   <span style={{
-                    padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                    padding: '6px 14px', borderRadius: 999, fontSize: 19, fontWeight: 700,
                     background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
                     border: '1px solid rgba(239, 68, 68, 0.40)',
                   }}>✕ {s.no}</span>
@@ -3535,14 +3512,14 @@ function PollShareInvitationBody({
             marginBottom: 16,
           }}>
             <span style={{
-              fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+              fontSize: 22, color: TEXT_MUTED, fontWeight: 700,
               letterSpacing: 1.5, textTransform: 'uppercase',
             }}>🎯 {t('schedule.share.target')}</span>
             <span style={{
-              padding: '7px 18px', borderRadius: 999,
+              padding: '8px 20px', borderRadius: 999,
               background: `${ACCENT_GREEN}1a`, color: ACCENT_GREEN,
               border: `1px solid ${ACCENT_GREEN}55`,
-              fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
+              fontSize: 22, fontWeight: 700, letterSpacing: 0.3,
             }}>
               {t('schedule.share.targetProgress', { count: bestYes, target: poll.targetPlayerCount })}
             </span>
@@ -3587,7 +3564,7 @@ function PollShareInvitationBody({
       {!isMultiDate && (
       <>
       <div style={{
-        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        fontSize: 22, color: TEXT_MUTED, fontWeight: 700,
         letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16,
       }}>
         📅 {t('schedule.share.proposedDates')}
@@ -3625,7 +3602,7 @@ function PollShareInvitationBody({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
                     {loc && (
-                      <div style={{ fontSize: 18, color: TEXT_MUTED, marginTop: 8 }}>
+                      <div style={{ fontSize: 22, color: TEXT_MUTED, marginTop: 8 }}>
                         📍 {loc}
                       </div>
                     )}
@@ -3636,28 +3613,28 @@ function PollShareInvitationBody({
                   gap: 8, flexShrink: 0,
                 }}>
                   <span style={{
-                    fontSize: 13, color: TEXT_MUTED, fontWeight: 700,
+                    fontSize: 16, color: TEXT_MUTED, fontWeight: 700,
                     letterSpacing: 1.2, textTransform: 'uppercase',
                   }}>
                     {t('schedule.share.currentStatus')}
                   </span>
-                  <div style={{ display: 'flex', gap: 7 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <span style={{
-                      padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
+                      padding: '8px 16px', borderRadius: 999, fontSize: 21, fontWeight: 700,
                       background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
                       border: `1px solid ${ACCENT_GREEN}55`,
                       letterSpacing: 0.2,
                     }}>✓ {s.yes}</span>
                     {poll.allowMaybe && (
                       <span style={{
-                        padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
+                        padding: '8px 16px', borderRadius: 999, fontSize: 21, fontWeight: 700,
                         background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
                         border: '1px solid rgba(234, 179, 8, 0.45)',
                         letterSpacing: 0.2,
                       }}>? {s.maybe}</span>
                     )}
                     <span style={{
-                      padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
+                      padding: '8px 16px', borderRadius: 999, fontSize: 21, fontWeight: 700,
                       background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
                       border: '1px solid rgba(239, 68, 68, 0.40)',
                       letterSpacing: 0.2,
@@ -3680,8 +3657,8 @@ function PollShareInvitationBody({
                         border: `1px solid ${g.color}33`,
                       }}>
                         <span style={{
-                          fontSize: 14, fontWeight: 700, color: g.color,
-                          padding: '4px 12px', borderRadius: 999,
+                          fontSize: 17, fontWeight: 700, color: g.color,
+                          padding: '5px 14px', borderRadius: 999,
                           background: `${g.color}26`,
                           letterSpacing: 0.4, textTransform: 'uppercase',
                         }}>
@@ -3693,15 +3670,15 @@ function PollShareInvitationBody({
                             <span
                               key={`${g.resp}-${v.playerId}`}
                               style={{
-                                fontSize: 18, color: TEXT,
-                                padding: '4px 14px', borderRadius: 14,
+                                fontSize: 22, color: TEXT,
+                                padding: '6px 16px', borderRadius: 14,
                                 background: 'rgba(255, 255, 255, 0.05)',
                                 border: `1px solid ${BORDER}`,
                                 display: 'inline-flex', alignItems: 'center', gap: 6,
                                 fontWeight: 500,
                               }}>
                               {name}
-                              {v.isProxy && <span style={{ color: '#eab308', fontSize: 14 }}>★</span>}
+                              {v.isProxy && <span style={{ color: '#eab308', fontSize: 16 }}>★</span>}
                             </span>
                           );
                         })}
@@ -3730,7 +3707,7 @@ function PollShareInvitationBody({
           background: 'rgba(59, 130, 246, 0.08)',
           border: `1px dashed ${ACCENT_BLUE}66`,
           borderRadius: 14,
-          fontSize: 19, fontWeight: 600, color: TEXT, lineHeight: 1.5,
+          fontSize: 22, fontWeight: 600, color: TEXT, lineHeight: 1.5,
           textAlign: 'center',
         }}>
           {t('schedule.share.viewVotersInApp')}
@@ -3766,7 +3743,7 @@ function PollShareInvitationBody({
           textAlign: 'center',
         }}>
           <div style={{
-            fontSize: 17, color: TEXT_MUTED, lineHeight: 1.45,
+            fontSize: 20, color: TEXT_MUTED, lineHeight: 1.45,
           }}>
             🔒 {t('schedule.share.registeredOnlyNote')}
           </div>
@@ -3777,7 +3754,7 @@ function PollShareInvitationBody({
           <div style={{
             display: 'flex', justifyContent: 'center', alignItems: 'center',
             gap: 10, flexWrap: 'wrap',
-            fontSize: 19, fontWeight: 700, color: ACCENT_BLUE,
+            fontSize: 23, fontWeight: 700, color: ACCENT_BLUE,
             letterSpacing: 0.3,
           }}>
             <span aria-hidden>👉</span>
@@ -3941,7 +3918,7 @@ function PollSharePeriodLeaderboard({
   // hairline divider before the table itself.
   const cellPad = '14px 12px';
   const headerCellStyle: CSSProperties = {
-    fontSize: 16, color: TEXT_MUTED, fontWeight: 700,
+    fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
     letterSpacing: 0.6, textTransform: 'uppercase',
     padding: '10px 12px', whiteSpace: 'nowrap',
   };
@@ -3963,15 +3940,15 @@ function PollSharePeriodLeaderboard({
       }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '8px 18px', borderRadius: 999,
+          padding: '9px 20px', borderRadius: 999,
           background: `${ACCENT_GREEN}1f`, color: ACCENT_GREEN,
           border: `1px solid ${ACCENT_GREEN}55`,
-          fontSize: 20, fontWeight: 700, letterSpacing: 0.3,
+          fontSize: 23, fontWeight: 700, letterSpacing: 0.3,
         }}>
           ✓ {confirmedPlayers.length} {t('schedule.share.confirmedPlayers')}
         </span>
         <span style={{
-          fontSize: 18, color: TEXT_MUTED, fontWeight: 600,
+          fontSize: 21, color: TEXT_MUTED, fontWeight: 600,
           letterSpacing: 0.2,
         }}>
           📊 {periodLabel}
@@ -3980,7 +3957,7 @@ function PollSharePeriodLeaderboard({
       </div>
       <table style={{
         width: '100%', borderCollapse: 'collapse',
-        fontSize: 20, color: TEXT, lineHeight: 1.25,
+        fontSize: 22, color: TEXT, lineHeight: 1.25,
         tableLayout: 'fixed',
       }}>
         <thead>
@@ -4077,7 +4054,7 @@ function PollSharePeriodLeaderboard({
           list). Italics keep it as a subtle clarifying note. */}
       <div style={{
         marginTop: 14,
-        fontSize: 15,
+        fontSize: 18,
         color: TEXT_MUTED,
         fontStyle: 'italic',
         textAlign: 'center',
@@ -4103,7 +4080,7 @@ function PollShareCancellationBody({
       {/* Section title — matches the uppercase rhythm used in the
           confirmation/invitation cards so all three feel like family. */}
       <div style={{
-        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        fontSize: 22, color: TEXT_MUTED, fontWeight: 700,
         letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16,
       }}>
         📅 {t('schedule.share.proposedDates')}
@@ -4128,7 +4105,7 @@ function PollShareCancellationBody({
             }}>
               <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
               {loc && (
-                <span style={{ fontSize: 18, color: TEXT_MUTED, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 22, color: TEXT_MUTED, whiteSpace: 'nowrap' }}>
                   📍 {loc}
                 </span>
               )}
@@ -4154,7 +4131,7 @@ function PollShareCancellationBody({
           borderRadius: 18,
         }}>
           <div style={{
-            fontSize: 18, color: ACCENT_RED, fontWeight: 700,
+            fontSize: 22, color: ACCENT_RED, fontWeight: 700,
             letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 8,
           }}>
             💬 {t('schedule.share.cancellationReason')}

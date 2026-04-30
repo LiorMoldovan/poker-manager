@@ -16,7 +16,7 @@ import {
   getConfirmedPlayerIds as cacheGetConfirmedPlayerIds,
   getAnyResponseVoterIds as cacheGetAnyResponseVoterIds,
   createPollRpc, castPollVoteRpc, cancelPollRpc, manuallyClosePollRpc,
-  setPollVotingLockRpc,
+  setPollVotingLockRpc, resolvePollShareSlugRpc,
   expandPollRpc, updatePollTargetRpc, updatePollExpansionDelayRpc,
   updatePollMetaRpc, type PollMetaPatch,
   claimPollNotificationsRpc, linkPollToGameRpc,
@@ -1508,6 +1508,9 @@ export const manuallyClosePoll = (pollId: string, dateId: string): Promise<void>
 // behavior (status-driven gating). See supabase/039-schedule-voting-lock.sql.
 export const setPollVotingLock = (pollId: string, locked: boolean): Promise<void> =>
   setPollVotingLockRpc(pollId, locked);
+
+export const resolvePollShareSlug = (slug: string): Promise<string | null> =>
+  resolvePollShareSlugRpc(slug);
 
 export const expandPoll = (pollId: string): Promise<void> => expandPollRpc(pollId);
 

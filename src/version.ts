@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.31.2';
+export const APP_VERSION = '5.33.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,53 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.33.0',
+    date: '2026-04-30',
+    changes: [
+      '🚑 Bootstrap watchdog added to `index.html` to self-heal blank-screen PWA boot failures (e.g. Edge mobile PWA showing a blank page after deploy while Chrome PWA on the same device worked). Root cause: a stale `index.html` lingering in the OS-level PWA shell cache referenced hashed JS chunks (`/assets/main-XXXX.js`) that no longer exist on the new Vercel deploy. The script tag 404\'d, React never mounted, and `ErrorBoundary` couldn\'t catch the failure because it happened before React booted. Two new triggers now detect the failure: (1) a capture-phase `error` listener catches `<script>` / `<link>` load failures synchronously, (2) a 10-second watchdog timer fires if `<div id="root">` is still empty by then. Either trigger unregisters every service worker, clears every CacheStorage entry, then hard-reloads with `?_pwa=<ts>` so the browser is forced past its HTTP cache too. Recovery is gated by a `sessionStorage` flag so we attempt at most once per session — if the recovery itself fails (server down etc.), the user sees a normal blank page and can retry by pulling to refresh, instead of being stuck in a reload loop.',
+      '🧹 `main.tsx` clears the bootstrap watchdog as soon as the React tree is rendered, so the recovery path never fires on a healthy boot. Errors that occur INSIDE React after that point continue to be caught by the existing `ErrorBoundary` (with its visible fallback UI + manual reload button) — the watchdog only handles the pre-React failure mode.',
+      '🔄 `public/sw.js` `CACHE_VERSION` bumped from `v3` to `v4`. The constant isn\'t used for any cache key (the SW deliberately delete-all-caches on activate; it\'s push-only otherwise), but bumping the file content forces the browser to detect a new service worker, which triggers install→activate→`clients.claim()`. The matching `updatefound` listener in `main.tsx` then reloads the page once the new SW activates — a clean, non-destructive way to push the bootstrap-watchdog hotfix to every PWA install on first open after deploy without waiting for users to manually reinstall.',
+    ],
+  },
+  {
+    version: '5.32.2',
+    date: '2026-04-30',
+    changes: [
+      '🏷 `DateCompetitionStrip` heading renamed from "השוואה בין תאריכים" / "Date competition" to "סיכום הצבעות" / "Vote summary". The old label leaned into a "race between dates" framing that doesn\'t match how admins actually read the strip (they want the at-a-glance count summary, not a contest narrative). The new wording also covers single-date polls semantically — "vote summary" applies whether there\'s one date or six, while "date competition" implies a comparison.',
+    ],
+  },
+  {
+    version: '5.32.1',
+    date: '2026-04-30',
+    changes: [
+      '✂️ Schedule poll per-date detail row "בחר" button removed for single-date polls too. Previously v5.31.4 hid it for multi-date polls (where the `DateCompetitionStrip` scoreboard already exposed the same pick action) but kept it for single-date polls as the only manual-close entry point. Single-date polls genuinely have nothing to "pick between" — the label always read as a confusing no-op — and admins can already start a game on whatever yes-count they have via the standard new-game flow without formally pinning the poll first, so the early-pin step on single-date polls was redundant. Net effect: the per-date detail row footer is now consistently count-pills-only across all poll shapes, and the strip remains the sole pick-affordance for multi-date polls. The underlying `manuallyClosePollRpc` / `onManualClose` handler / `PollManualCloseModal` stays in place because the multi-date strip still uses them.',
+    ],
+  },
+  {
+    version: '5.32.0',
+    date: '2026-04-30',
+    changes: [
+      '🔗 Schedule-poll WhatsApp share link replaced with a 6-character slug. Each poll now gets an auto-generated short code (Crockford-style base32, no 0/1/i/l/o so it can\'t be misread) and the deep link in the share caption goes from `…/p/<36-char-uuid>` to `…/p/7g4xq2` — short enough to fit on a single tappable line in WhatsApp on every phone instead of wrapping mid-uuid into a noisy multi-line blob. Reads more like an invite code than a database identifier.',
+      '🛡️ Server-side enforcement via new migration `040-poll-share-slug.sql`. Adds `share_slug TEXT` column to `game_polls` with a partial UNIQUE index, a slug generator function `_generate_poll_share_slug()` (probes for free slots up to 50 retries — collision-impossible at 31^6 ≈ 887M keyspace), a BEFORE INSERT trigger that auto-populates the slug on every new poll, a one-shot backfill loop that issues a slug to every existing row, and a public RPC `resolve_poll_share_slug(p_slug)` granted to authenticated AND anon (the slug→UUID mapping leaks no sensitive data — the UUID is already public, it was the previous URL form).',
+      '🛤️ `App.tsx` `PollDeepLinkRedirect` upgraded to handle both link shapes. The same `/p/:pollId` route now sniffs the param via a UUID regex: UUID-shaped → redirect synchronously (preserves backward compat with old long-form share links from before this version); slug-shaped → call the resolver RPC, then redirect once the UUID is back. Failures fall back to the bare schedule tab so unknown slugs land on something useful instead of a 404. Resolution latency is single-RPC and renders nothing in flight (no skeleton flash on the typical sub-100ms round-trip).',
+    ],
+  },
+  {
+    version: '5.31.4',
+    date: '2026-04-30',
+    changes: [
+      '✂️ Schedule poll per-date detail row "בחר" button hidden for multi-date polls. The same pick / re-pin affordance already lives in the upper `DateCompetitionStrip` scoreboard row, so duplicating it in the detail footer below was just visual noise — every multi-date row was carrying two near-identical dashed-ghost buttons that pointed to the same modal. Single-date polls (no strip above) keep the button as their only pin entry point. Net effect: the per-date detail row footer on multi-date polls drops to just the count pills, which leaves more breathing room around the larger \'large\' size variant from v5.31.0.',
+    ],
+  },
+  {
+    version: '5.31.3',
+    date: '2026-04-30',
+    changes: [
+      '🔗 Schedule-poll WhatsApp share link cleaned up. The deep link in the caption switched from the long-form `/settings?tab=schedule&poll=<uuid>` (~78 chars after origin) to a short-form `/p/<uuid>` (~40 chars). On most phones the new URL fits on a single tappable line in the chat preview instead of wrapping mid-uuid into a noisy multi-line blob. Added a tiny `PollDeepLinkRedirect` route in `App.tsx` that normalizes `/p/:pollId` to the canonical settings/schedule URL with `replace: true`, so existing scroll-to-card + URL-strip handlers in `ScheduleTab` keep working unchanged. Long-form links from earlier shares still resolve — the canonical route is unchanged, only the new outbound shares use the short form.',
+      '🔍 WhatsApp share-card typography bumped ~20% for legibility. The 900px-wide rasterised PNG previously rendered most secondary text at 14–18px, which compresses to a hard-to-read size in WhatsApp\'s chat thumbnail. Bumped header subtitle 19→23, section labels 18→22, footer 18→22, strip count pills 15→19, single-date count pills 17→21, voter chips 18→22, location 18→22, boarding-pass values 28→30 / labels 16→18, phase pills 18→21, leaderboard pill 20→23 / table 20→22 / period meta 18→21, register-CTA URL 19→23, registered-only note 17→20, voter-group caption 14→17, period-rank footnote 15→18, cancellation-reason header 18→22 / location 18→22. Pill paddings and gaps were nudged proportionally so the larger numerals don\'t crowd their borders. Title (36px), date headlines (22→26), and the full-width admin-note callouts (already 22px) were left alone — they were already prominent. Net effect: recipients read the share without zooming in, and the card height grows by ~5% which stays well within WhatsApp\'s slice-height budget.',
+    ],
+  },
   {
     version: '5.31.2',
     date: '2026-04-30',

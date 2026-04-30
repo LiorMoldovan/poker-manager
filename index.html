@@ -15,6 +15,113 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Heebo:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+      // Bootstrap watchdog — detects "blank screen" boot failures and
+      // self-heals. The most common failure mode is a stale PWA shell:
+      // an old `index.html` is served from somewhere on disk (browser
+      // HTTP cache, OS-level PWA cache, or Edge's standalone-mode app
+      // shell) that references hashed JS chunks (`/assets/main-XXXX.js`)
+      // that no longer exist on the live deploy because Vite emitted a
+      // new hash on the latest build. The script tag 404s, React never
+      // mounts, and the user sees a blank page — with no in-app
+      // recovery path because ErrorBoundary only catches errors from
+      // INSIDE React, not module-load failures that happen before
+      // React boots.
+      //
+      // Two recovery triggers:
+      //   1. `error` event on a `<script>` tag — fires synchronously
+      //      when a chunk 404s or fails to parse. We catch on
+      //      `window.addEventListener('error', ..., true)` (capture
+      //      phase) so it sees errors that bubble up from script
+      //      loading.
+      //   2. Watchdog timer — if `<div id="root">` is still empty
+      //      after 10 seconds, assume boot failed silently (e.g.
+      //      a network stall on a slow connection PLUS a stale
+      //      shell). 10s is generous enough for slow 3G + lazy
+      //      route imports but well under the user's patience
+      //      threshold for "this is stuck".
+      //
+      // Recovery itself unregisters every service worker, clears
+      // every CacheStorage entry, then hard-reloads with a cache-bust
+      // query so the browser is forced past the HTTP cache layer too.
+      // We also gate recovery on a sessionStorage flag so we don't
+      // ping-pong between recoveries if reloading itself is broken
+      // (e.g. server is down) — one attempt per session.
+      (function () {
+        var RECOVERY_KEY = '__poker_pwa_recovery_attempted';
+        var WATCHDOG_MS = 10000;
+
+        function alreadyAttempted() {
+          try { return sessionStorage.getItem(RECOVERY_KEY) === '1'; }
+          catch (_) { return false; }
+        }
+        function markAttempted() {
+          try { sessionStorage.setItem(RECOVERY_KEY, '1'); } catch (_) {}
+        }
+
+        function recover(reason) {
+          if (alreadyAttempted()) {
+            console.warn('PWA boot watchdog: recovery already attempted this session; not retrying.', reason);
+            return;
+          }
+          markAttempted();
+          console.warn('PWA boot watchdog: recovering due to:', reason);
+
+          var clearOps = [];
+
+          if ('serviceWorker' in navigator) {
+            clearOps.push(
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (r) { return r.unregister(); }));
+              }).catch(function () {})
+            );
+          }
+          if (typeof caches !== 'undefined' && caches.keys) {
+            clearOps.push(
+              caches.keys().then(function (names) {
+                return Promise.all(names.map(function (n) { return caches.delete(n); }));
+              }).catch(function () {})
+            );
+          }
+
+          Promise.all(clearOps).catch(function () {}).then(function () {
+            // Cache-bust the URL so the browser is forced past any
+            // HTTP-layer cache too — `?_pwa=<ts>` is benign for the
+            // SPA router (it ignores unknown params). We deliberately
+            // keep the path so a user landing via a deep link
+            // (e.g. /p/<slug>) returns to the same page after recovery.
+            var url = new URL(window.location.href);
+            url.searchParams.set('_pwa', Date.now().toString());
+            window.location.replace(url.toString());
+          });
+        }
+
+        // Trigger 1: capture-phase error listener catches `<script>`
+        // load failures (404 / parse error on a Vite chunk).
+        window.addEventListener('error', function (ev) {
+          var target = ev.target;
+          if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+            recover('asset-load-error: ' + (target.src || target.href || target.tagName));
+          }
+        }, true);
+
+        // Trigger 2: watchdog. If the root is still empty after the
+        // timeout, the React tree never mounted. Cleared from
+        // main.tsx as soon as React commits its first render.
+        window.__pokerBootWatchdog = setTimeout(function () {
+          var root = document.getElementById('root');
+          if (root && root.children.length === 0) {
+            recover('watchdog-timeout');
+          }
+        }, WATCHDOG_MS);
+
+        // Expose a manual recovery hook for support / debugging.
+        window.__pokerPwaRecover = function () {
+          try { sessionStorage.removeItem(RECOVERY_KEY); } catch (_) {}
+          recover('manual');
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
