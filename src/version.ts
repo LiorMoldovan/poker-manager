@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.28.0';
+export const APP_VERSION = '5.28.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.28.1',
+    date: '2026-04-30',
+    changes: [
+      '🎫 Schedule share-card polish: removed redundant status pill ("✓ סגור" / "🗳 הצביעו" / "⊘ בוטל") that just doubled what the title already says — colored emoji badge alone now carries the mode.',
+      '🔧 Fixed English key leakage ("schedule.share.headerSubtitleConfirmation") on the confirmation share image — root cause was the t() fallback treating `\'\'` as missing; switched to dropping the subtitle field entirely on confirmation. Cleaned up 5 dead translation keys.',
+      '📱 Share card upsized 520→720 px wide with proportionally scaled paddings and font sizes (titles, hero values, manifest names, notes, voter chips, all of it). At default scale: 2 the rendered PNG is 1440 px wide — sharper preview in WhatsApp without quality loss.',
+      '🎨 Comic bubbles: capped maxWidth at 55% (78%→55%) and minWidth at 22% so bubbles no longer cover the character art beneath. Caption width capped at 70%. Font-size clamps tightened to keep 2-line wraps with the new narrower bubbles.',
+      '🤖 Comic prompt rework: panel scenes now lead with character + action ("Yossi slams cards down with a triumphant grin") instead of cinematic environment; explicit ban on photo / cinematic / depth-of-field / wide-shot language so FLUX returns illustrated character close-ups instead of empty rooms.',
+    ],
+  },
   {
     version: '5.28.0',
     date: '2026-04-30',

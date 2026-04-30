@@ -2504,21 +2504,22 @@ ${tonightLines}${drama}
   "panels": [
     {
       "id": 1,
-      "scene": "English description of the visual scene — characters, poses, expressions, environment, lighting. Write 1-2 sentences. This is the prompt for the image model so be specific and visual.",
+      "scene": "ENGLISH, ONE sentence, CHARACTER-FIRST. Start with the character name and a vivid ACTION (e.g. 'Yossi slams his cards down with a triumphant grin' or 'Dani clutches his head as his last chip slides across the table'). Describe pose, facial expression, and ONE prop or gesture. Do NOT describe lighting, atmosphere, depth of field, camera angle, or cinematic mood. Do NOT describe wide rooms or establishing shots — characters fill the frame.",
       "characters": ["name:expression", "name:expression"],
       "bubbles": [
-        { "speaker": "exact player name OR 'narrator'", "text": "דיאלוג קצר בעברית — מקסימום 6 מילים", "type": "speech | thought | shout | caption" }
+        { "speaker": "exact player name OR 'narrator'", "text": "דיאלוג קצר בעברית — מקסימום 5 מילים", "type": "speech | thought | shout | caption" }
       ]
     }
   ]
 }
 
 ⚠️ חובה:
-- כל פאנל: 1-2 בועות בלבד (לא 3, לא 4). דיאלוג קצר וקולע
+- כל פאנל: 1-2 בועות בלבד (לא 3, לא 4). דיאלוג קצר וקולע — מקסימום 5 מילים, רצוי 3-4
 - כל ${payload.tonight.length} השחקנים חייבים להופיע באחד הפאנלים לפחות
 - "speaker" חייב להיות בדיוק אחד מהשמות: ${payload.tonight.map(p => `"${p.name}"`).join(', ')} או "narrator"
 - "type": "caption" רק כש-speaker = "narrator"
-- "scene" באנגלית כי זה הולך למודל ציור
+- "scene" באנגלית, משפט אחד בלבד, מתחיל בשם דמות ופועל פעולה (לא בתיאור חדר)
+- אסור להזכיר ב-scene מילים כמו: lighting, atmosphere, mood, cinematic, depth of field, ambient, soft focus, camera angle, wide shot, establishing
 - דיאלוג בעברית טבעית, לא תרגומית. עברית של שולחן פוקר בין חברים. מותר סלנג קל
 - אל תמציא סכומים או דירוגים שלא מופיעים למעלה
 - characters: רשימה של "name:expression" בלבד (למשל "yossi:focused", "dani:sweating") — ייעזר באמני הציור לעקביות בין פאנלים
@@ -2638,17 +2639,25 @@ export const generateComicArt = async (
 
   const buildPanelPrompt = (panel: ComicPanel): string => {
     const charLine = panel.characters.length > 0
-      ? ` Characters present: ${panel.characters.join(', ')}.`
+      ? ` Characters in this panel: ${panel.characters.join(', ')}.`
       : '';
+    // Order matters: diffusion models give later tokens slightly more
+    // weight, so we end with the strongest constraints (style + no-text).
+    // We LEAD with the "illustration not photo" directive because Sana/
+    // FLUX default to photorealistic output unless told otherwise; we
+    // also center the prompt on the CHARACTERS doing an ACTION (not on
+    // the environment) so the model fills the frame with people instead
+    // of empty rooms.
     return [
-      `Single illustrated scene, full-frame, no panel grid, no comic borders.`,
-      `Style: ${cleanedStyleFragment}.`,
-      `Scene: ${panel.scene}${charLine}`,
+      `A single hand-drawn cartoon comic-book illustration panel — NOT a photograph, NOT photorealistic, NOT cinematic photography.`,
+      `${cleanedStyleFragment}.`,
+      `Subject (fills the frame): ${panel.scene}${charLine}`,
       characterRoster,
-      // Hammer the no-text constraint — FLUX otherwise loves rendering text.
-      `IMPORTANT: absolutely NO text anywhere in the image. NO letters, NO words, NO numbers, NO Hebrew characters, NO English characters, NO signs, NO captions, NO speech bubbles, NO panel numbers, NO watermarks, NO logos, NO writing of any kind. Pure illustration only — speech bubbles are added separately.`,
-      `Leave clean negative space near each character's face/upper body so a speech bubble overlay has room.`,
-      `Negative: ${cleanedNegative}.`,
+      `Composition: characters drawn LARGE and CENTERED in the panel, expressive faces clearly visible, full bodies or torso-up framing. The panel is FULL of character action — no empty rooms, no wide establishing shots.`,
+      // Hammer the no-text constraint — without it both Sana and FLUX
+      // freely render gibberish letters that become real text leakage.
+      `Absolutely NO text anywhere in the image: no letters, no words, no numbers, no Hebrew, no English, no signs, no captions, no speech bubbles, no panel numbers, no watermarks, no logos, no writing of any kind. Pure illustration only — speech bubbles are added separately as an overlay.`,
+      `Negative: ${cleanedNegative}, photograph, photo, photorealistic, realistic, cinematic, depth of field, bokeh, ambient occlusion, empty room, wide establishing shot.`,
     ].filter(Boolean).join(' ');
   };
 
