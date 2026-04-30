@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.33.0';
+export const APP_VERSION = '5.33.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,28 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.33.3',
+    date: '2026-04-30',
+    changes: [
+      '🏷 Added "סיכום:" / "Summary:" label above the per-date detail row\'s vote-count pills. Without a heading the bare row of pills (`✓ 1 מגיע   ? 0 אעדכן   ✗ 1 בחוץ`) read as a continuation of the voter chips above it instead of a distinct summary block — the dashed top border alone wasn\'t enough of a separator on dense cards. The label sits ABOVE the pill row (not inline) because the large-variant pills with words after the numbers already wrap on narrow viewports; an inline label would either steal width from the pills or get pushed onto its own line awkwardly. Translation keys `schedule.dateSummaryLabel` (HE/EN).',
+    ],
+  },
+  {
+    version: '5.33.2',
+    date: '2026-04-30',
+    changes: [
+      '📲 PWA install signal hardened so Edge/Chromium reliably create a true standalone PWA instead of a browser bookmark. After v5.33.0 the user reported their reinstalled Edge PWA opened as a regular browser tab instead of the standalone app shell. Root cause: with only an SVG icon and no `display_override` / `id`, recent Edge mobile builds intermittently fall back to "add as shortcut" instead of "install as app". Fixes in `public/manifest.json`: explicit `id: "/"` (stable PWA identity matching the prior start_url so existing installs are preserved), `display_override: ["standalone", "minimal-ui"]` for the formal display fallback chain, icons split into separate `purpose: "any"` and `purpose: "maskable"` entries (Chromium has historic bugs interpreting the combined `"any maskable"` purpose with SVG sources). Fixes in `index.html`: added `apple-touch-icon` link (without it iOS shows a screenshot-thumbnail home-screen icon), `apple-mobile-web-app-title="Poker"` (cleaner iOS home-screen label than the long <title>), `viewport-fit=cover` (lets standalone PWA paint under the iOS notch), `mobile-web-app-capable` + `application-name` meta tags (Edge mobile reads these as install-qualification hints).',
+    ],
+  },
+  {
+    version: '5.33.1',
+    date: '2026-04-30',
+    changes: [
+      '🖼 WhatsApp share `MAX_SLICE_HEIGHT` raised from 1200 to 1900 CSS px in `src/utils/sharing.ts`. The v5.31.3 +20% typography bump on the confirmation share card pushed it ~50px past 1200 with a typical 6-10 player leaderboard, splitting an otherwise-readable card into two cropped halves — a regression flagged by the user. WhatsApp itself has no hard image-height cap; the chat preview just shows the top portion with a tap-to-expand affordance, which is far better UX than a forcibly-split image. 1900 covers the realistic worst case (10–12 player leaderboard + admin note + boarding hero) while still feeling like one image. Polls with more attendees still split, just at a more meaningful threshold.',
+      '🔍 WhatsApp invitation share-card typography pushed another +10–15% on top of v5.31.3. Affects ONLY invitation mode (the user explicitly asked to keep confirmation as-is now that it stays on one image): strip date headline 26→30, strip section heading 22→24, strip count pills 19→22, single-date count pills 21→24, single-date voter chips 22→24 / group caption 17→19, single-date location 22→25, target meter pill 22→24, target label 22→24, phase pills 21→23, "view voters in app" callout 22→24, single-date proposed-dates section label 22→24, admin note 22→24. Confirmation\'s `ShareBoardingHero` (30/18) and `PollSharePeriodLeaderboard` (22/23/21/18) and the cancellation body are unchanged.',
+    ],
+  },
   {
     version: '5.33.0',
     date: '2026-04-30',

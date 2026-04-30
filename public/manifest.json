@@ -1,10 +1,12 @@
 {
+  "id": "/",
   "name": "Poker Manager",
   "short_name": "Poker",
   "description": "ניהול ערבי פוקר — מעקב משחקים, סיכומים, סטטיסטיקות ו-AI",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "dir": "rtl",
   "lang": "he",
@@ -17,7 +19,13 @@
       "src": "/poker.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/poker.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

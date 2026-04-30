@@ -6,11 +6,32 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/svg+xml" href="/poker.svg" />
+    <!-- iOS Safari uses apple-touch-icon for the home-screen icon when
+         installed via "Add to Home Screen". Without it iOS shows a
+         miniaturized screenshot of the page, which looks broken. SVG
+         is accepted by iOS 16+; older iOS falls back to a default
+         rounded-square. -->
+    <link rel="apple-touch-icon" href="/poker.svg" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0a0a0f" />
+    <!-- iOS PWA: declare standalone capability and tell iOS to render
+         under the status bar (matching `display: standalone` from
+         manifest.json on Chromium browsers). `apple-mobile-web-app-title`
+         is the home-screen label for iOS — without it iOS uses the
+         <title> which on this site is "Poker Game Manager" (long). -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Poker" />
+    <!-- Microsoft Edge / Chromium signal that this is a real installable
+         web app. Browsers ignore unknown meta tags so this is harmless
+         on others. Helps Edge mobile resolve "Install this site as an
+         app" vs "Add as bookmark" when the user taps the menu install
+         option — without it some Edge builds default to the bookmark
+         path, which opens the launcher icon in the regular browser
+         instead of standalone. -->
+    <meta name="application-name" content="Poker Manager" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Poker Game Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

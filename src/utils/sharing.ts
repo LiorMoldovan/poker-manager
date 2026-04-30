@@ -100,7 +100,21 @@ export const shareToWhatsApp = (text: string): void => {
 // Poll sharing now uses screenshot capture (see PollShareCard in ScheduleTab.tsx)
 // instead of text — keeps WhatsApp output consistent with the rest of the app.
 
-const MAX_SLICE_HEIGHT = 1200;
+// Maximum CSS-px height a single share slice is allowed to be before
+// the splitter cuts it into multiple images. Originally 1200 — chosen
+// to mirror a "single phone screenshot's worth" of vertical real
+// estate. Raised to 1900 in v5.33.1 because the v5.31.3 +20%
+// typography bump on the confirmation share card pushed it ~50px
+// past 1200 with a typical 6-10 player leaderboard, splitting an
+// otherwise-readable card into two cropped halves. WhatsApp itself
+// has no hard height cap — the chat preview just shows the top
+// portion and a tap-to-expand affordance, which is far better UX
+// than a forcibly-split image. 1900 covers the realistic worst
+// case (10–12 player leaderboard + admin note + boarding hero) while
+// still feeling like one image rather than a vertical scroll. Polls
+// with more attendees will still split, just at a more meaningful
+// height.
+const MAX_SLICE_HEIGHT = 1900;
 
 // Floor on slice height (in canvas px). When the boundary-aware splitter
 // snaps interior slice boundaries to data-share-split anchors, we refuse
