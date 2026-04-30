@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.27.6';
+export const APP_VERSION = '5.28.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.28.0',
+    date: '2026-04-30',
+    changes: [
+      '🎨 Game-Night Comic — drastic quality rework. Image generation moved off Gemini (paid-tier only) to Pollinations.ai FLUX, free anonymous tier. Each of the 4 panels is now generated separately at 1024×1024 with a focused single-scene prompt that aggressively forbids text, then composited client-side onto a 2068×2068 canvas with hairline gutters. Hybrid parallel-then-sequential-retry strategy with 429 backoff handles the anonymous-tier concurrent-request limit gracefully. Result: zero text leakage, sharper composition, clean Hebrew DOM bubbles on top.',
+      '📊 Comic art progress is reported per-panel ("Drawing panel 2 of 4…") so the ~4–6 minute generation feels measurable instead of hung. Localized in HE + EN.',
+      '💬 Comic speech bubbles widened (maxWidth 60% → 78%, minWidth 20% → 38%) with overflowWrap instead of wordBreak, fixing awkward narrow Hebrew column wrapping on mobile.',
+      '🎫 Schedule confirmation hero (boarding-pass strip) redesigned with four uniform segments — day · date · time · location — same typographic weight, accent stripe carries the color. Reads as a single horizontal strip instead of competing focal points. Hebrew weekday now renders as "שבת" instead of redundant "יום שבת".',
+      '🔧 Postgres trigger fix (035-fix-zero-sum-trigger.sql): check_game_zero_sum no longer fires on the BEFORE-INSERT phase of upserts of already-completed games, eliminating the spurious "Game profits must sum to zero" toast when saving AI summaries, comics, paid settlements, etc. on historically drifted games.',
+    ],
+  },
   {
     version: '5.27.6',
     date: '2026-04-30',

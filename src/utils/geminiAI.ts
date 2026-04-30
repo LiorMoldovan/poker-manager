@@ -2590,103 +2590,335 @@ ${tonightLines}${drama}
 };
 
 /**
- * Stage 2 — generate the comic art image (4 panels in one image).
- * Returns base64-encoded image data and pixel dimensions.
+ * Stage 2 — generate the comic art image at maximum quality.
  *
- * Uses Pollinations.ai's anonymous FLUX endpoint (no API key, free).
- * The prompt includes every panel description plus the style fragment
- * and aggressively forbids letters/text/bubbles since Hebrew is rendered
- * client-side as a DOM overlay.
+ * Strategy: hybrid parallel-then-sequential.
+ *   Phase 1 (optimistic): fire all 4 panels in parallel with small
+ *     250ms staggers. If Pollinations' anonymous tier happens to allow
+ *     concurrent requests at this moment, all 4 succeed in ~90s and
+ *     we're done.
+ *   Phase 2 (fallback): for any panel that returned 429 (Pollinations'
+ *     anonymous tier currently caps at 1 concurrent generation), retry
+ *     each one SEQUENTIALLY with exponential backoff (3s, 6s, 12s).
  *
- * Latency note: anonymous Pollinations is throttled and a 1024x1024 FLUX
- * image typically takes 60-90 seconds to return. The orchestrator reports
- * a long-running 'art' progress stage to set user expectation.
+ * Worst case is 4 sequential ~90s generations = ~5-6 minutes. Best case
+ * is ~90s. Real-world average sits in between depending on Pollinations'
+ * server load. Each panel is 1024x1024 — FLUX's native training
+ * resolution where it produces its best work — composited into a
+ * 2068x2068 final 2x2 grid via canvas with thin dark gutters.
+ *
+ * Why this beats the previous single-shot 4-in-1 approach:
+ *   - Each panel gets FLUX's full attention (no quadrant-splitting)
+ *   - "No text" instruction reinforced 4 separate times → near-zero
+ *     letter leakage instead of frequent
+ *   - Layout/borders are drawn by canvas, not begged from the model
+ *   - Final resolution is 2x sharper (2068 vs 1024)
+ *
+ * Trade-off: character consistency is best-effort. Same character
+ * roster fed to each panel prompt, same base seed, but FLUX without
+ * reference images can't perfectly preserve faces. Acceptable for our
+ * manually-triggered stylistic feature.
+ *
+ * Per-panel progress: optional callback invoked each time a panel
+ * completes so the UI can show "panel 3 of 4" instead of a stuck
+ * spinner during long sequential retries.
  */
 export const generateComicArt = async (
   script: ComicScript,
+  onPanelProgress?: (completed: number, total: number) => void,
 ): Promise<{ base64: string; mimeType: string; width: number; height: number; model: string }> => {
   if (!navigator.onLine) {
     throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
   }
 
   const style = getComicStyle(script.style);
-
-  // Compact panel-line format. FLUX prefers concrete, shorter prompts than
-  // Gemini's image model — verbose narrative prompts can dilute the style
-  // signal. We strip the multi-line structure and lead with the style.
-  const panelLines = script.panels.map(p => {
-    const charLine = p.characters.length > 0 ? ` Characters: ${p.characters.join(', ')}.` : '';
-    return `Panel ${p.id} (${panelPosition(p.id)}): ${p.scene}${charLine}`;
-  }).join(' ');
-
+  const cleanedStyleFragment = stripComicLayoutKeywords(style.promptFragment);
+  const cleanedNegative = stripComicLayoutKeywords(style.negativePrompt);
   const characterRoster = collectCharacterRoster(script);
 
-  const prompt = [
-    'A 4-panel comic strip about a poker night between friends, 2x2 grid layout, single image with all 4 panels visible.',
-    `Style: ${style.promptFragment}.`,
-    panelLines,
-    characterRoster,
-    'Use the same recognizable character design across all 4 panels. Each character has distinct clothing colors, hair, and build so they are trackable.',
-    'NO text inside the image. NO letters, NO words, NO speech bubbles, NO captions, NO panel numbers, NO signatures, NO watermarks. Speech bubbles will be added separately as an overlay — leave clean negative space near each main face.',
-    `Negative: ${style.negativePrompt}.`,
-  ].filter(Boolean).join(' ');
+  const buildPanelPrompt = (panel: ComicPanel): string => {
+    const charLine = panel.characters.length > 0
+      ? ` Characters present: ${panel.characters.join(', ')}.`
+      : '';
+    return [
+      `Single illustrated scene, full-frame, no panel grid, no comic borders.`,
+      `Style: ${cleanedStyleFragment}.`,
+      `Scene: ${panel.scene}${charLine}`,
+      characterRoster,
+      // Hammer the no-text constraint — FLUX otherwise loves rendering text.
+      `IMPORTANT: absolutely NO text anywhere in the image. NO letters, NO words, NO numbers, NO Hebrew characters, NO English characters, NO signs, NO captions, NO speech bubbles, NO panel numbers, NO watermarks, NO logos, NO writing of any kind. Pure illustration only — speech bubbles are added separately.`,
+      `Leave clean negative space near each character's face/upper body so a speech bubble overlay has room.`,
+      `Negative: ${cleanedNegative}.`,
+    ].filter(Boolean).join(' ');
+  };
 
-  // Unique seed per generation so Pollinations' prompt+seed cache doesn't
-  // return the same image on regenerate. Mix a random component on top of
-  // the timestamp to defeat any second-resolution collisions.
-  const seed = (Date.now() % 1_000_000) + Math.floor(Math.random() * 1000);
+  // Same base seed for all 4 panels, plus per-panel offset. Same base helps
+  // FLUX produce visually similar character designs across panels (loose
+  // continuity); per-panel offset ensures each panel is a distinct image
+  // rather than 4 copies. Random component keeps every regeneration fresh.
+  const baseSeed = (Date.now() % 1_000_000) + Math.floor(Math.random() * 1000);
+  const TOTAL = script.panels.length;
 
   const stageStart = Date.now();
   comicLog('art:start', {
     provider: IMAGE_PROVIDER,
     model: IMAGE_MODEL,
     style: script.style,
-    panels: script.panels.length,
-    promptChars: prompt.length,
-    seed,
+    strategy: 'hybrid-parallel-then-sequential',
+    panelCount: TOTAL,
+    panelPx: PANEL_PX,
+    baseSeed,
   });
 
-  try {
-    const { blob, mimeType, sourceUrl, model } = await pollinationsImage(prompt, {
-      width: 1024,
-      height: 1024,
+  type PanelResult = { panelId: 1 | 2 | 3 | 4; blob: Blob; mimeType: string; model: string };
+
+  // Generate one panel once. Throws on any error (the caller decides what
+  // to do with rate-limit vs hard errors).
+  const generatePanelOnce = async (panel: ComicPanel, seedOffset: number): Promise<PanelResult> => {
+    const prompt = buildPanelPrompt(panel);
+    const seed = baseSeed + panel.id * 7919 + seedOffset; // 7919 = prime
+    const taskStart = Date.now();
+    comicLog('art:panel_attempt', { panelId: panel.id, seed, promptChars: prompt.length });
+    const { blob, mimeType, model } = await pollinationsImage(prompt, {
+      width: PANEL_PX,
+      height: PANEL_PX,
       seed,
       model: IMAGE_MODEL,
       nologo: true,
     });
-
-    const base64 = await blobToBase64(blob);
-    const dims = await readBlobDimensions(blob);
-
-    const totalMs = Date.now() - stageStart;
-    comicLog('art:success', {
-      provider: IMAGE_PROVIDER,
-      model,
+    comicLog('art:panel_success', {
+      panelId: panel.id,
       seed,
-      sourceUrlPrefix: sourceUrl.slice(0, 120),
       sizeKB: Math.round(blob.size / 1024),
-      width: dims.width || 1024,
-      height: dims.height || 1024,
-      totalStageMs: totalMs,
+      ms: Date.now() - taskStart,
     });
+    return { panelId: panel.id as 1 | 2 | 3 | 4, blob, mimeType, model };
+  };
 
-    return {
-      base64,
-      mimeType,
-      width: dims.width || 1024,
-      height: dims.height || 1024,
-      model,
-    };
+  const results: Array<PanelResult | null> = new Array(TOTAL).fill(null);
+  let completed = 0;
+  const reportProgress = () => {
+    onPanelProgress?.(completed, TOTAL);
+    comicLog('art:progress', { completed, total: TOTAL, elapsedMs: Date.now() - stageStart });
+  };
+
+  // ── Phase 1: optimistic parallel ──
+  const STAGGER_MS = 250;
+  const phase1 = await Promise.allSettled(
+    script.panels.map(async (panel, idx) => {
+      if (idx > 0) await sleep(idx * STAGGER_MS);
+      try {
+        const r = await generatePanelOnce(panel, 0);
+        results[idx] = r;
+        completed += 1;
+        reportProgress();
+        return r;
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        comicWarn('art:panel_phase1_failed', { panelId: panel.id, message: errMsg });
+        throw err;
+      }
+    }),
+  );
+
+  const failedIndices = phase1
+    .map((r, i) => (r.status === 'rejected' ? i : -1))
+    .filter(i => i >= 0);
+
+  comicLog('art:phase1_complete', {
+    succeeded: TOTAL - failedIndices.length,
+    failed: failedIndices.length,
+    elapsedMs: Date.now() - stageStart,
+  });
+
+  // ── Phase 2: sequential retry for any failures ──
+  // Pollinations anonymous tier rate-limits to ~1 concurrent generation,
+  // so concurrent calls beyond the first commonly return 429 instantly.
+  // We retry those one at a time with exponential backoff. Non-rate-limit
+  // errors (network, 5xx, etc.) are treated as final immediately.
+  const RETRY_DELAYS_MS = [3000, 6000, 12000];
+  const isRateLimitError = (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /\b429\b|too many requests|rate limit/i.test(msg);
+  };
+
+  for (const idx of failedIndices) {
+    const panel = script.panels[idx];
+    let lastErr: unknown;
+    let succeeded = false;
+
+    for (let attempt = 0; attempt < RETRY_DELAYS_MS.length + 1; attempt++) {
+      if (attempt > 0) {
+        const delay = RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+        comicLog('art:panel_retry_wait', { panelId: panel.id, attempt, delayMs: delay });
+        await sleep(delay);
+      }
+      try {
+        // Use a different seed offset on retry so we don't hit any
+        // accidental cache collision with a previous failed attempt.
+        const r = await generatePanelOnce(panel, attempt * 1000);
+        results[idx] = r;
+        completed += 1;
+        reportProgress();
+        succeeded = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        const rateLimited = isRateLimitError(err);
+        comicWarn('art:panel_retry_failed', {
+          panelId: panel.id,
+          attempt: attempt + 1,
+          rateLimited,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        // Hard errors (not 429) — don't waste retries.
+        if (!rateLimited) break;
+      }
+    }
+
+    if (!succeeded) {
+      comicError('art:panel_exhausted', {
+        panelId: panel.id,
+        message: lastErr instanceof Error ? lastErr.message : String(lastErr),
+        totalStageMs: Date.now() - stageStart,
+      });
+      throw new Error(`Panel ${panel.id} failed after retries: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+    }
+  }
+
+  const finalResults = results as PanelResult[];
+  if (finalResults.some(r => !r)) {
+    throw new Error('Comic image generation: missing panel(s) after retry phase');
+  }
+
+  // ── Composite via canvas ──
+  let composite: { blob: Blob; mimeType: string; width: number; height: number };
+  try {
+    composite = await composePanelsToGrid(finalResults);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    comicError('art:failed', {
-      provider: IMAGE_PROVIDER,
-      model: IMAGE_MODEL,
+    comicError('art:compose_failed', {
       message: errMsg,
       totalStageMs: Date.now() - stageStart,
     });
-    throw new Error(`Comic image generation failed: ${errMsg}`);
+    throw new Error(`Comic compositing failed: ${errMsg}`);
   }
+
+  const base64 = await blobToBase64(composite.blob);
+
+  const totalMs = Date.now() - stageStart;
+  comicLog('art:success', {
+    provider: IMAGE_PROVIDER,
+    model: IMAGE_MODEL,
+    strategy: 'hybrid-parallel-then-sequential',
+    panelCount: finalResults.length,
+    parallelSucceededCount: TOTAL - failedIndices.length,
+    sequentialRetryCount: failedIndices.length,
+    finalSizeKB: Math.round(composite.blob.size / 1024),
+    width: composite.width,
+    height: composite.height,
+    totalStageMs: totalMs,
+  });
+
+  return {
+    base64,
+    mimeType: composite.mimeType,
+    width: composite.width,
+    height: composite.height,
+    model: finalResults[0]?.model || `pollinations/${IMAGE_MODEL}`,
+  };
+};
+
+// ─── Per-panel constants and helpers ──────────────────────────────────────
+
+/** Edge length of each individual panel image in pixels. 1024 is FLUX's
+ * native training resolution — going higher often degrades quality,
+ * going lower throws away detail the model already produces. */
+const PANEL_PX = 1024;
+/** Thin gutter between panels in the composite. */
+const GUTTER_PX = 10;
+/** Outer border thickness around the whole composite. */
+const BORDER_PX = 8;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/**
+ * Strip layout/grid keywords from a style prompt. The original style
+ * fragments were written for the single-shot 4-in-1 approach and contain
+ * phrases like "thick black panel borders 2x2 grid layout with 12px
+ * gutter". When we generate one panel at a time, those phrases confuse
+ * FLUX into drawing nested grids inside each panel. Removing the
+ * comma-separated descriptors that mention panel/grid/gutter cleans this
+ * up without rewriting the style definitions.
+ */
+const stripComicLayoutKeywords = (prompt: string): string => {
+  return prompt
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .filter(s => !/(\b|^)(panel|grid|gutter|layout|2x2)(\b|s\b)/i.test(s))
+    .join(', ');
+};
+
+/**
+ * Composite 4 individual panel images into a single 2x2 grid on a canvas
+ * with thin dark gutters and an outer border. Returns a JPEG blob and the
+ * final pixel dimensions.
+ *
+ * Panel positions are deterministic by panelId:
+ *   1 → top-left, 2 → top-right, 3 → bottom-left, 4 → bottom-right
+ *
+ * If a panel is missing (shouldn't happen since Promise.all throws on
+ * failure, but defensive), that quadrant is filled with the gutter color
+ * so the layout still reads as a 2x2 grid.
+ */
+const composePanelsToGrid = async (
+  panels: Array<{ panelId: 1 | 2 | 3 | 4; blob: Blob }>,
+): Promise<{ blob: Blob; mimeType: string; width: number; height: number }> => {
+  const dim = 2 * PANEL_PX + GUTTER_PX + 2 * BORDER_PX;
+  const canvas = document.createElement('canvas');
+  canvas.width = dim;
+  canvas.height = dim;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+  // Fill background (acts as the gutter + outer-border color).
+  ctx.fillStyle = '#0e0e0e';
+  ctx.fillRect(0, 0, dim, dim);
+
+  const positions: Record<1 | 2 | 3 | 4, { x: number; y: number }> = {
+    1: { x: BORDER_PX, y: BORDER_PX },
+    2: { x: BORDER_PX + PANEL_PX + GUTTER_PX, y: BORDER_PX },
+    3: { x: BORDER_PX, y: BORDER_PX + PANEL_PX + GUTTER_PX },
+    4: { x: BORDER_PX + PANEL_PX + GUTTER_PX, y: BORDER_PX + PANEL_PX + GUTTER_PX },
+  };
+
+  const loadBlobImage = (blob: Blob): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => { URL.revokeObjectURL(objectUrl); resolve(img); };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('panel image load failed')); };
+      img.src = objectUrl;
+    });
+
+  // Draw panels in their 2x2 positions, scaling each to PANEL_PX x PANEL_PX
+  // so even slightly off-size returns from Pollinations land in the grid.
+  for (const panel of panels) {
+    const pos = positions[panel.panelId];
+    if (!pos) continue;
+    const img = await loadBlobImage(panel.blob);
+    ctx.drawImage(img, pos.x, pos.y, PANEL_PX, PANEL_PX);
+  }
+
+  const blob: Blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(b => {
+      if (b) resolve(b);
+      else reject(new Error('canvas.toBlob returned null'));
+    }, 'image/jpeg', 0.92);
+  });
+
+  return { blob, mimeType: 'image/jpeg', width: dim, height: dim };
 };
 
 /**
@@ -2843,31 +3075,6 @@ const collectCharacterRoster = (script: ComicScript): string => {
   return 'Roster: ' + Array.from(map.entries())
     .map(([name, expr]) => expr ? `"${name}" (${expr.replace(/[",]/g, ' ')})` : `"${name}"`)
     .join(', ') + '.';
-};
-
-/**
- * Read pixel dimensions from any image Blob (JPEG/PNG/WebP) by loading
- * it through an off-DOM HTMLImageElement. Used for bbox normalization
- * after Pollinations returns a JPEG.
- *
- * Resolves to {0,0} on load error so the caller can fall back to the
- * requested dimensions (we always ask for 1024x1024).
- */
-const readBlobDimensions = (blob: Blob): Promise<{ width: number; height: number }> => {
-  return new Promise(resolve => {
-    const img = new Image();
-    const objectUrl = URL.createObjectURL(blob);
-    img.onload = () => {
-      const dims = { width: img.naturalWidth, height: img.naturalHeight };
-      URL.revokeObjectURL(objectUrl);
-      resolve(dims);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve({ width: 0, height: 0 });
-    };
-    img.src = objectUrl;
-  });
 };
 
 /**

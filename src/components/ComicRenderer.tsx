@@ -173,26 +173,23 @@ const bubblePlacementFromBBox = (
 ): BubblePlacement => {
   const bbox = panel.bboxes?.[bubble.speaker];
   if (!bbox) {
-    // No bbox detected — fall back to corner placement that doesn't overlap
-    // the center of the panel where the action usually lives.
+    // No bbox detected — fall back to wider corner placements. Hebrew
+    // wraps awkwardly when bubbles are too narrow on mobile screens, so
+    // we give them more horizontal room and overlap the placement spots.
     const fallback: BubblePlacement[] = [
-      { top: 0.04, left: 0.04, maxWidth: 0.55, tailX: 0.5, tailY: 0.5, hasTail: true },
-      { top: 0.04, left: 0.41, maxWidth: 0.55, tailX: 0.5, tailY: 0.5, hasTail: true },
+      { top: 0.04, left: 0.04, maxWidth: 0.8, tailX: 0.5, tailY: 0.5, hasTail: true },
+      { top: 0.62, left: 0.18, maxWidth: 0.8, tailX: 0.5, tailY: 0.5, hasTail: true },
     ];
     return fallback[index % fallback.length];
   }
 
-  // Bbox is normalized to the FULL image (0..1). Convert to panel-local
-  // coords by mapping into the panel's quadrant (each quadrant is half-axis).
   const panelOffsetY = panel.id <= 2 ? 0 : 0.5;
   const panelOffsetX = panel.id % 2 === 1 ? 0 : 0.5;
   const [yMin, xMin, yMax, xMax] = bbox;
 
-  // Face center in image coords:
   const faceCY = (yMin + yMax) / 2;
   const faceCX = (xMin + xMax) / 2;
 
-  // Convert to panel-local 0..1:
   const localFaceCY = (faceCY - panelOffsetY) / 0.5;
   const localFaceCX = (faceCX - panelOffsetX) / 0.5;
 
@@ -200,19 +197,22 @@ const bubblePlacementFromBBox = (
   const bubbleAbove = localFaceCY > 0.35;
   const top = bubbleAbove
     ? Math.max(0.02, localFaceCY - 0.32)
-    : Math.min(0.74, localFaceCY + 0.18);
+    : Math.min(0.7, localFaceCY + 0.18);
 
-  // Horizontal: prefer the side with more room.
+  // Horizontal: bubbles get up to ~78% of the panel quadrant so Hebrew
+  // text fits on 1-2 lines on mobile screens. We anchor near the face
+  // but bias toward whichever side has more horizontal room.
+  const BUBBLE_MAX_WIDTH = 0.78;
   const leftSpace = localFaceCX;
   const rightSpace = 1 - localFaceCX;
   const placeLeft = leftSpace >= rightSpace
-    ? Math.max(0.03, localFaceCX - 0.35)
-    : Math.min(0.62, localFaceCX + 0.04);
+    ? Math.max(0.02, localFaceCX - BUBBLE_MAX_WIDTH * 0.85)
+    : Math.min(1 - BUBBLE_MAX_WIDTH - 0.02, localFaceCX + 0.04);
 
   return {
     top,
     left: placeLeft,
-    maxWidth: 0.6,
+    maxWidth: BUBBLE_MAX_WIDTH,
     tailX: localFaceCX,
     tailY: bubbleAbove ? localFaceCY - 0.04 : localFaceCY + 0.04,
     hasTail: true,
@@ -247,18 +247,22 @@ const Bubble = ({ bubble, placement, theme }: BubbleProps) => {
 
   const caption = theme.caption;
 
-  // Clamp font size by text length to avoid overflow.
+  // Clamp font size by text length to avoid overflow. Hebrew letters are
+  // a touch wider than Latin so we err on the smaller side for long lines.
   const len = bubble.text.length;
   const fontSize = isCaption
-    ? len > 30 ? '0.62rem' : '0.7rem'
-    : len > 24 ? '0.62rem' : len > 14 ? '0.68rem' : '0.74rem';
+    ? len > 36 ? '0.65rem' : len > 22 ? '0.72rem' : '0.8rem'
+    : len > 30 ? '0.7rem' : len > 18 ? '0.78rem' : len > 10 ? '0.85rem' : '0.92rem';
 
   const baseStyle: CSSProperties = {
     position: 'absolute',
     top: `${placement.top * 100}%`,
     left: `${placement.left * 100}%`,
     maxWidth: `${placement.maxWidth * 100}%`,
-    minWidth: '20%',
+    // Generous min-width prevents the browser from squeezing short Hebrew
+    // text into a 1-word-per-line column on narrow mobile viewports. The
+    // bubble will still grow horizontally up to maxWidth as needed.
+    minWidth: isCaption ? '50%' : '38%',
     padding: theme.padding,
     background: isCaption ? caption.background : theme.background,
     color: isCaption ? caption.color : theme.color,
@@ -277,7 +281,11 @@ const Bubble = ({ bubble, placement, theme }: BubbleProps) => {
     transform: isShout
       ? `${theme.transform || ''} rotate(-2deg)`.trim()
       : theme.transform,
-    wordBreak: 'break-word',
+    // overflowWrap (only break long words on overflow) is gentler than the
+    // earlier `wordBreak: break-word` which forced mid-word breaks on
+    // every Hebrew word.
+    overflowWrap: 'break-word',
+    whiteSpace: 'normal',
   };
 
   return (

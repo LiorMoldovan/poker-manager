@@ -73,6 +73,10 @@ const GameSummaryScreen = () => {
   // mobile users (no devtools) can still see *why* generation failed.
   const [comicErrorDetail, setComicErrorDetail] = useState<{ stage: string; raw: string } | null>(null);
   const [comicProgress, setComicProgress] = useState<'script' | 'art' | 'bbox' | 'upload' | null>(null);
+  // Per-panel progress for the long-running art stage. Lets the UI show
+  // "panel 2 of 4..." instead of one frozen message during sequential
+  // retries on Pollinations' rate-limited anonymous tier.
+  const [comicArtPanel, setComicArtPanel] = useState<{ panel: number; total: number } | null>(null);
   const [isSharingComic, setIsSharingComic] = useState(false);
   const comicRef = useRef<HTMLDivElement>(null);
   // Snapshot of the data needed to generate a comic — captured during loadData
@@ -263,6 +267,7 @@ const GameSummaryScreen = () => {
     setComicError(null);
     setComicErrorDetail(null);
     setComicProgress('script');
+    setComicArtPanel(null);
     // Open the comic section so the progress is visible.
     setCollapsedSections(prev => ({ ...prev, comic: false }));
     try {
@@ -285,7 +290,14 @@ const GameSummaryScreen = () => {
         rankingShifts: comicVibe.rankingShifts,
         comboHistoryText: comicVibe.comboHistoryText,
         cycleFromStyle: cycleStyle ? (comicStyle || undefined) : undefined,
-        onProgress: setComicProgress,
+        onProgress: (stage, detail) => {
+          setComicProgress(stage);
+          if (stage === 'art' && detail) {
+            setComicArtPanel({ panel: detail.panel, total: detail.total });
+          } else if (stage !== 'art') {
+            setComicArtPanel(null);
+          }
+        },
       });
       setComicUrl(result.url);
       setComicStyleState(result.style);
@@ -319,6 +331,7 @@ const GameSummaryScreen = () => {
     } finally {
       setIsGeneratingComic(false);
       setComicProgress(null);
+      setComicArtPanel(null);
     }
   };
 
@@ -2064,7 +2077,13 @@ const GameSummaryScreen = () => {
                   <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>
                     <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem', animation: 'pulse 1.5s infinite' }}>🎨</div>
                     {comicProgress === 'script' && t('summary.comicGenScript')}
-                    {comicProgress === 'art' && t('summary.comicGenArt')}
+                    {comicProgress === 'art' && (
+                      comicArtPanel
+                        ? t('summary.comicGenArtPanel')
+                            .replace('{panel}', String(comicArtPanel.panel))
+                            .replace('{total}', String(comicArtPanel.total))
+                        : t('summary.comicGenArt')
+                    )}
                     {comicProgress === 'bbox' && t('summary.comicGenBbox')}
                     {comicProgress === 'upload' && t('summary.comicGenUpload')}
                     <AIProgressBar operationKey="game_summary" />

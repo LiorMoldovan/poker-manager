@@ -1913,6 +1913,15 @@ function fmtShareTime(raw: string | null | undefined): string {
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : trimmed;
 }
 
+// Hebrew locale's full weekday name returns "יום שבת". When we already
+// label the column as "יום" we'd be saying it twice — strip the prefix
+// so the value reads as just "שבת".
+function shortHebrewWeekday(d: Date): string {
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('he-IL', { weekday: 'long' })
+    .replace(/^יום\s+/, '');
+}
+
 // Compact date+time label used in the invitation and cancellation
 // per-date rows. Keeps day-of-week on its own line so it reads at a
 // glance even when the row also carries a vote-count cluster.
@@ -1920,9 +1929,7 @@ function ShareDateLabel({
   date, color, muted,
 }: { date: GamePollDate; color: string; muted: string }) {
   const d = new Date(date.proposedDate);
-  const dayOfWeek = isNaN(d.getTime())
-    ? ''
-    : d.toLocaleDateString('he-IL', { weekday: 'long' });
+  const dayOfWeek = shortHebrewWeekday(d);
   const dayMonth = isNaN(d.getTime())
     ? date.proposedDate
     : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
@@ -1941,11 +1948,13 @@ function ShareDateLabel({
   );
 }
 
-// Confirmation hero — boarding-pass layout. Four vertical segments
-// (day-of-week / date numeral / time / location) separated by hairline
-// dividers, with the date numeral sized as the visual anchor. The
-// outer document is RTL so the natural reading order is right→left:
-// day on the far right, location on the far left.
+// Confirmation hero — boarding-pass layout. Four IDENTICAL columns
+// (day · date · time · location), each with a small uppercase label on
+// top and a same-sized value below, separated by hairline dividers.
+// The accent stripe (top inner shadow + tinted gradient) carries all
+// the color so the data values stay typographically uniform — that
+// uniformity is what makes the four facts read as a single horizontal
+// strip rather than four competing focal points.
 function ShareBoardingHero({
   date, location, accent, accentTint, tokens,
 }: {
@@ -1958,37 +1967,25 @@ function ShareBoardingHero({
   const { TEXT, TEXT_MUTED } = tokens;
   const d = new Date(date.proposedDate);
   const valid = !isNaN(d.getTime());
-  const dayOfWeek = valid ? d.toLocaleDateString('he-IL', { weekday: 'long' }) : '';
-  const dayNumeral = valid ? String(d.getDate()) : date.proposedDate;
-  const monthName = valid ? d.toLocaleDateString('he-IL', { month: 'long' }) : '';
+  const dayOfWeek = shortHebrewWeekday(d);
+  const dayMonth = valid
+    ? d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' })
+    : date.proposedDate;
   const time = fmtShareTime(date.proposedTime);
 
-  // Each segment shares the same vertical structure so the columns
-  // align: a tiny uppercase label on top, the value below. Letting the
-  // numeral segment render its label *under* the value (month name)
-  // breaks pattern intentionally — the numeral is the hero.
-  const Segment = ({
-    label, value, valueSize, valueWeight, valueColor, valueLetterSpacing,
-  }: {
-    label: string;
-    value: string;
-    valueSize: number;
-    valueWeight: number;
-    valueColor: string;
-    valueLetterSpacing?: number;
-  }) => (
+  const Segment = ({ label, value }: { label: string; value: string }) => (
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 4,
-      padding: '0 4px', minWidth: 0,
+      alignItems: 'center', justifyContent: 'center', gap: 6,
+      padding: '0 6px', minWidth: 0,
     }}>
       <span style={{
         fontSize: 10, color: TEXT_MUTED, letterSpacing: 1.2,
         textTransform: 'uppercase', fontWeight: 600,
       }}>{label}</span>
       <span style={{
-        fontSize: valueSize, fontWeight: valueWeight, color: valueColor,
-        letterSpacing: valueLetterSpacing ?? 0.2, lineHeight: 1.05,
+        fontSize: 16, fontWeight: 700, color: TEXT,
+        lineHeight: 1.15, letterSpacing: 0.1,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         maxWidth: '100%',
       }}>{value}</span>
@@ -2012,54 +2009,17 @@ function ShareBoardingHero({
       border: `1px solid ${accent}55`,
       borderRadius: 12,
       display: 'flex', alignItems: 'stretch',
-      // Boarding-pass perforation: a dashed top edge that reads as a
-      // tear-line. Subtle enough that it doesn't compete with the
-      // primary border, but distinct enough to register as "ticket".
+      // Subtle accent stripe along the top inner edge — reads as the
+      // boarding-pass "stub" cut without competing with the main border.
       boxShadow: `inset 0 1px 0 0 ${accent}33`,
     }}>
-      <Segment
-        label="יום"
-        value={dayOfWeek}
-        valueSize={15}
-        valueWeight={700}
-        valueColor={accent}
-      />
+      <Segment label="יום" value={dayOfWeek || '—'} />
       <Divider />
-      {/* Date numeral — the visual anchor. Renders the day number large
-          with the month name in a smaller line below, giving the segment
-          a "stamp" feel without overflowing. */}
-      <div style={{
-        flex: 1.15, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 2,
-        padding: '0 4px', minWidth: 0,
-      }}>
-        <span style={{
-          fontSize: 36, fontWeight: 800, color: TEXT,
-          lineHeight: 1, letterSpacing: -0.5,
-        }}>{dayNumeral}</span>
-        {monthName && (
-          <span style={{
-            fontSize: 11, color: TEXT_MUTED, letterSpacing: 0.6,
-            fontWeight: 600, marginTop: 2,
-          }}>{monthName}</span>
-        )}
-      </div>
+      <Segment label="תאריך" value={dayMonth} />
       <Divider />
-      <Segment
-        label="שעה"
-        value={time || '—'}
-        valueSize={18}
-        valueWeight={700}
-        valueColor={TEXT}
-      />
+      <Segment label="שעה" value={time || '—'} />
       <Divider />
-      <Segment
-        label="מיקום"
-        value={location ? `📍 ${location}` : '—'}
-        valueSize={13}
-        valueWeight={600}
-        valueColor={location ? TEXT : TEXT_MUTED}
-      />
+      <Segment label="מיקום" value={location ? `📍 ${location}` : '—'} />
     </div>
   );
 }
@@ -2175,9 +2135,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
       emoji: '🃏',
       title: t('schedule.share.invitationTitle'),
       color: ACCENT_BLUE,
-      subtitle: t('schedule.share.headerSubtitleInvitation', {
-        count: bestYes, target: poll.targetPlayerCount,
-      }),
+      subtitle: t('schedule.share.headerSubtitleInvitation'),
       pill: t('schedule.share.statusPillInvitation'),
       pillIcon: '🗳',
     },
@@ -2185,10 +2143,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
       emoji: '🔒',
       title: t('schedule.share.confirmationTitle'),
       color: ACCENT_GREEN,
-      subtitle: t('schedule.share.headerSubtitleConfirmation', {
-        count: confirmedPlayers.length,
-        target: poll.targetPlayerCount,
-      }),
+      subtitle: t('schedule.share.headerSubtitleConfirmation'),
       pill: t('schedule.share.statusPillConfirmation'),
       pillIcon: '✓',
     },
@@ -2243,9 +2198,11 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
               fontSize: 18, fontWeight: 800, color: TEXT,
               letterSpacing: 0.2, lineHeight: 1.2,
             }}>{header.title}</div>
-            <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 3, lineHeight: 1.3 }}>
-              {header.subtitle}
-            </div>
+            {header.subtitle && (
+              <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 3, lineHeight: 1.3 }}>
+                {header.subtitle}
+              </div>
+            )}
           </div>
           <span style={{
             padding: '5px 11px', borderRadius: 999,
@@ -2551,33 +2508,50 @@ function PollShareConfirmationBody({
         border: `1px dashed ${BORDER}`,
         borderRadius: 10,
       }}>
-        {confirmedPlayers.length > 0 ? (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            columnGap: 14, rowGap: 6,
-          }}>
-            {confirmedPlayers.map((p, idx) => (
-              <div key={p.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                fontSize: 13, color: TEXT, lineHeight: 1.3,
-                minWidth: 0,
-              }}>
-                <span style={{
-                  flexShrink: 0,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 18, height: 18, borderRadius: 999,
-                  background: `${ACCENT_GREEN}22`, color: ACCENT_GREEN,
-                  fontSize: 10, fontWeight: 700,
-                }}>{idx + 1}</span>
-                <span style={{
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  fontWeight: 500,
-                }}>{p.name}</span>
+        {confirmedPlayers.length > 0 ? (() => {
+          // Pre-split into two columns and number column-major so the
+          // player visually below #1 reads as #2 (top-to-bottom flow per
+          // column), instead of the row-major default where #2 lands
+          // beside #1 in the next column. The container is RTL so the
+          // first flex child sits on the right edge — that's where the
+          // first half (1..ceil(n/2)) belongs.
+          const half = Math.ceil(confirmedPlayers.length / 2);
+          const right = confirmedPlayers.slice(0, half);
+          const left = confirmedPlayers.slice(half);
+          const Row = ({ num, name }: { num: number; name: string }) => (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 13, color: TEXT, lineHeight: 1.3,
+              minWidth: 0,
+            }}>
+              <span style={{
+                flexShrink: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 18, height: 18, borderRadius: 999,
+                background: `${ACCENT_GREEN}22`, color: ACCENT_GREEN,
+                fontSize: 10, fontWeight: 700,
+              }}>{num}</span>
+              <span style={{
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                fontWeight: 500,
+              }}>{name}</span>
+            </div>
+          );
+          return (
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                {right.map((p, i) => (
+                  <Row key={p.id} num={i + 1} name={p.name} />
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                {left.map((p, i) => (
+                  <Row key={p.id} num={half + i + 1} name={p.name} />
+                ))}
+              </div>
+            </div>
+          );
+        })() : (
           <span style={{ color: TEXT_MUTED, fontSize: 13 }}>—</span>
         )}
       </div>

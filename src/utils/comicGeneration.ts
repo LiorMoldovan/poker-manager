@@ -49,8 +49,16 @@ export interface ComicGenerationInput {
    * "Regenerate" cycles instead of repeating.
    */
   cycleFromStyle?: ComicStyleKey;
-  /** Progress reporter for the UI. */
-  onProgress?: (stage: 'script' | 'art' | 'bbox' | 'upload') => void;
+  /**
+   * Progress reporter for the UI.
+   * `detail` is populated for the long-running art stage to expose
+   * per-panel progress so the user can see "panel 2 of 4..." instead
+   * of one stuck "drawing" message during 5-minute sequential retries.
+   */
+  onProgress?: (
+    stage: 'script' | 'art' | 'bbox' | 'upload',
+    detail?: { panel: number; total: number },
+  ) => void;
 }
 
 export interface ComicGenerationResult {
@@ -141,11 +149,16 @@ export const generateGameComic = async (
   }
 
   // ── Stage 2: art ──
-  // Pollinations.ai (anonymous FLUX). 60-90s typical latency on free tier.
+  // Pollinations.ai anonymous FLUX. The new strategy generates 4 panels
+  // individually (best case ~90s parallel, worst case ~5-6 min sequential
+  // retry due to anonymous-tier 1-concurrent rate limit), so we expose
+  // per-panel progress to the UI.
   input.onProgress?.('art');
   let art;
   try {
-    art = await generateComicArt(rawScript);
+    art = await generateComicArt(rawScript, (completed, total) => {
+      input.onProgress?.('art', { panel: completed, total });
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[comic] pipeline:fail_at_art', { message: err instanceof Error ? err.message : String(err) });
