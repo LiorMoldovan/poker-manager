@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.26.1';
+export const APP_VERSION = '5.26.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.26.2',
+    date: '2026-04-30',
+    changes: [
+      '🩺 Comic generation error: surfaces the raw upstream error message inline (collapsible "Technical details") so failures can be diagnosed on mobile without devtools',
+      '🔁 Comic art fallback: try the canonical `gemini-2.5-flash-image-preview` alias first (broader regional availability) and `gemini-2.5-flash-image` as backup',
+      '📐 Schedule tab header: title no longer truncates on narrow viewports — buttons wrap to a new line instead',
+    ],
+  },
   {
     version: '5.26.1',
     date: '2026-04-29',

@@ -2402,13 +2402,15 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 // Hebrew dialogue is rendered as DOM text on top of the art client-side.
 // The model never draws letters, which guarantees crisp Hebrew typography.
 
-// Image-generation model fallback chain — best/canonical first, then preview
-// alias. Both point at the same Nano Banana family but they have separate
-// regional / per-key quotas, so trying the second when the first 429s often
-// rescues the request without the user ever noticing.
+// Image-generation model fallback chain. Both aliases point at the same
+// Nano Banana family, but `-preview` is the canonical name in Google's docs
+// and is more widely available across regions; the non-preview alias is
+// rolling out and 404s in some regions. We try the most-available alias
+// first, then the GA name as a backup. Different aliases also have separate
+// per-key quota buckets, which gets us past transient 429s.
 const IMAGE_MODELS = [
-  'gemini-2.5-flash-image',
   'gemini-2.5-flash-image-preview',
+  'gemini-2.5-flash-image',
 ];
 
 // Structured logger for the comic pipeline — every line is prefixed [comic]

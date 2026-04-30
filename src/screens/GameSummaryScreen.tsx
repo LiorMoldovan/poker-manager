@@ -66,6 +66,9 @@ const GameSummaryScreen = () => {
   const [comicRegenCount, setComicRegenCount] = useState<number>(0);
   const [isGeneratingComic, setIsGeneratingComic] = useState(false);
   const [comicError, setComicError] = useState<string | null>(null);
+  // Raw upstream error text + stage, surfaced under the localized message so
+  // mobile users (no devtools) can still see *why* generation failed.
+  const [comicErrorDetail, setComicErrorDetail] = useState<{ stage: string; raw: string } | null>(null);
   const [comicProgress, setComicProgress] = useState<'script' | 'art' | 'bbox' | 'upload' | null>(null);
   const [isSharingComic, setIsSharingComic] = useState(false);
   const comicRef = useRef<HTMLDivElement>(null);
@@ -251,6 +254,7 @@ const GameSummaryScreen = () => {
     }
     setIsGeneratingComic(true);
     setComicError(null);
+    setComicErrorDetail(null);
     setComicProgress('script');
     // Open the comic section so the progress is visible.
     setCollapsedSections(prev => ({ ...prev, comic: false }));
@@ -287,6 +291,9 @@ const GameSummaryScreen = () => {
       const stage = err instanceof ComicStageError ? err.stage : 'unknown';
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[comic] ui:generation_failed', { stage, message: msg, error: err });
+      // Always capture the raw upstream error so it can be shown in the UI for
+      // mobile diagnostics (no devtools available).
+      setComicErrorDetail({ stage, raw: msg });
       if (msg === 'NO_API_KEY') {
         setComicError(t('summary.comicNoApiKey'));
       } else if (msg === 'OFFLINE') {
@@ -2048,7 +2055,29 @@ const GameSummaryScreen = () => {
                 {/* Error state */}
                 {comicError && !isGeneratingComic && (
                   <div style={{ padding: '0.6rem 0.75rem', marginBottom: '0.5rem', background: '#2d1f1f', border: '1px solid #6b2828', borderRadius: '8px', fontSize: '0.8rem', color: '#f87171', textAlign: 'center' }}>
-                    ⚠️ {comicError}
+                    <div>⚠️ {comicError}</div>
+                    {comicErrorDetail && (
+                      <details style={{ marginTop: '0.4rem', textAlign: isRTL ? 'right' : 'left' }}>
+                        <summary style={{ cursor: 'pointer', fontSize: '0.7rem', color: '#fca5a5', userSelect: 'none' }}>
+                          {isRTL ? 'פרטים טכניים' : 'Technical details'}
+                        </summary>
+                        <div style={{
+                          marginTop: '0.35rem',
+                          padding: '0.4rem 0.5rem',
+                          background: 'rgba(0,0,0,0.35)',
+                          borderRadius: '4px',
+                          fontFamily: 'monospace',
+                          fontSize: '0.7rem',
+                          color: '#fca5a5',
+                          wordBreak: 'break-word',
+                          whiteSpace: 'pre-wrap',
+                          direction: 'ltr',
+                          textAlign: 'left',
+                        }}>
+                          stage: {comicErrorDetail.stage}{'\n'}error: {comicErrorDetail.raw}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
 
