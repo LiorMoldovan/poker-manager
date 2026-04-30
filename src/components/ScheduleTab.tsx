@@ -2159,7 +2159,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
       subtitle: t('schedule.share.headerSubtitleInvitation'),
     },
     confirmation: {
-      emoji: '🔒',
+      emoji: '🎟️',
       title: t('schedule.share.confirmationTitle'),
       color: ACCENT_GREEN,
     },
@@ -2193,34 +2193,36 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
         padding: 32,
         boxShadow: '0 14px 36px rgba(0, 0, 0, 0.42)',
       }}>
-        {/* Header — emoji badge on the leading edge + title (and an
-            optional subtitle for invitation/cancellation). No status
-            pill — the title plus the badge color already convey the
-            mode unambiguously. */}
+        {/* Header — centered: emoji badge sits above a centered title.
+            Stacking gives the title the visual weight of a real event
+            invitation (badge as a "stamp", title as the marquee) and
+            keeps the share card symmetrical regardless of title length.
+            No status pill — title + badge color convey the mode. */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 20,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: 16,
           paddingBottom: 26,
           borderBottom: `1px solid ${BORDER}`,
           marginBottom: 28,
         }}>
           <div style={{
-            width: 76, height: 76, borderRadius: 20,
+            width: 84, height: 84, borderRadius: 22,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `${header.color}1f`, fontSize: 42,
-            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 16px ${header.color}33`,
-            flexShrink: 0,
+            background: `${header.color}1f`, fontSize: 46,
+            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 18px ${header.color}33`,
           }}>{header.emoji}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 36, fontWeight: 800, color: TEXT,
+            letterSpacing: 0.2, lineHeight: 1.2, textAlign: 'center',
+          }}>{header.title}</div>
+          {header.subtitle && (
             <div style={{
-              fontSize: 34, fontWeight: 800, color: TEXT,
-              letterSpacing: 0.2, lineHeight: 1.2,
-            }}>{header.title}</div>
-            {header.subtitle && (
-              <div style={{ fontSize: 19, color: TEXT_MUTED, marginTop: 7, lineHeight: 1.3 }}>
-                {header.subtitle}
-              </div>
-            )}
-          </div>
+              fontSize: 19, color: TEXT_MUTED, lineHeight: 1.35,
+              textAlign: 'center',
+            }}>
+              {header.subtitle}
+            </div>
+          )}
         </div>
 
         {/* Body — varies by mode */}
@@ -2622,23 +2624,33 @@ function PollSharePeriodLeaderboard({
 
   return (
     <div>
-      {/* Centered metadata caption — same rhythm as the StatisticsScreen
-          share-table header, just upsized for the share card scale. */}
+      {/* Two-side metadata caption: participants pill anchored to the
+          inline-start (visually right in RTL) so it's the first thing
+          recipients see; period meta on the inline-end (visually left)
+          as supporting context. Hairline divider underneath echoes the
+          StatisticsScreen share-table rhythm. */}
       <div style={{
-        textAlign: 'center',
-        fontSize: 18,
-        color: TEXT_MUTED,
-        fontWeight: 600,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 16, flexWrap: 'wrap',
         marginBottom: 14,
         paddingBottom: 12,
         borderBottom: `1px solid ${BORDER}`,
-        letterSpacing: 0.2,
       }}>
-        📊 {periodLabel}
-        {' • '}{t('stats.gamesCount', { count: allPeriodGames.length })}
-        {' • '}
-        <span style={{ color: ACCENT_GREEN, fontWeight: 700 }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '8px 18px', borderRadius: 999,
+          background: `${ACCENT_GREEN}1f`, color: ACCENT_GREEN,
+          border: `1px solid ${ACCENT_GREEN}55`,
+          fontSize: 20, fontWeight: 700, letterSpacing: 0.3,
+        }}>
           ✓ {confirmedPlayers.length} {t('schedule.share.confirmedPlayers')}
+        </span>
+        <span style={{
+          fontSize: 18, color: TEXT_MUTED, fontWeight: 600,
+          letterSpacing: 0.2,
+        }}>
+          📊 {periodLabel}
+          {' • '}{t('stats.gamesCount', { count: allPeriodGames.length })}
         </span>
       </div>
       <table style={{
@@ -2733,6 +2745,22 @@ function PollSharePeriodLeaderboard({
           })}
         </tbody>
       </table>
+
+      {/* Rank explanation — small muted footnote so recipients
+          understand that the # column reflects each player's overall
+          period standing (not their order within the participants
+          list). Italics keep it as a subtle clarifying note. */}
+      <div style={{
+        marginTop: 14,
+        fontSize: 15,
+        color: TEXT_MUTED,
+        fontStyle: 'italic',
+        textAlign: 'center',
+        lineHeight: 1.4,
+        opacity: 0.85,
+      }}>
+        ℹ️ {t('schedule.share.periodRankNote')}
+      </div>
     </div>
   );
 }

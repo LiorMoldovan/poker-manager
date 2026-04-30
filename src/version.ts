@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.29.1';
+export const APP_VERSION = '5.29.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.29.2',
+    date: '2026-04-30',
+    changes: [
+      '🎟️ Confirmation share-card header redesigned: centered "stamp" layout (icon above title), confirmation title changed from "ערב פוקר נסגר" to the warmer "ערב פוקר נקבע", and the lock icon replaced with a ticket icon to read as an event invitation rather than a closure.',
+      '👥 Participants pill (✓ N) moved to the right edge of the table caption (RTL leading) so it\'s the first thing the eye lands on. Label renamed from "מגיעים" → "משתתפים" / "Coming" → "Participants".',
+      'ℹ️ Added a small italic footnote under the leaderboard explaining that ranks reflect each player\'s overall current half-year standing (not just their position within the participants list) — clears up why ranks may not start at 1 nor be contiguous.',
+    ],
+  },
   {
     version: '5.29.1',
     date: '2026-04-30',
