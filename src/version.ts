@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.30.0';
+export const APP_VERSION = '5.30.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.30.1',
+    date: '2026-04-30',
+    changes: [
+      '🚧 Game-Night Comic feature parked. The collapsible "🎨 קומיקס הערב" section on GameSummaryScreen is hidden behind a single feature flag (COMIC_FEATURE_ENABLED = false). Free image-model output (Pollinations Sana / FLUX) does not reach the quality bar set by the Imagen-tier reference comic — embedded text gags, character-identity continuity, and 6-panel layouts are not achievable on the free tier. All code, types, translations, the Supabase Storage bucket, the games-table comic columns, and the validation script remain in place. Re-enable by flipping the flag to true once a viable image source (paid Imagen, free Hugging Face comic-trained model, or HTML-overlay sign labels added to ComicRenderer) lands.',
+    ],
+  },
   {
     version: '5.30.0',
     date: '2026-04-30',

@@ -17,6 +17,25 @@ import { withAITiming } from '../utils/aiTiming';
 import { useTranslation } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 
+// ────────────────────────────────────────────────────────────────────
+// Game-Night Comic feature: PARKED.
+//
+// The pipeline (Pollinations FLUX/Sana art + DOM speech-bubble overlay
+// + Supabase Storage caching) is fully wired and works end-to-end, but
+// the free image-model tier we're locked into can't deliver quality
+// close to the reference output the user wants (Imagen-tier comics
+// with embedded text gags and consistent character identity). Rather
+// than ship a feature that produces lower-quality output every week,
+// we hide the UI surface until a better path opens (paid Imagen, a
+// free comic-trained model on Hugging Face, or an "HTML overlay
+// signs" feature added to ComicRenderer).
+//
+// All code, types, translations, DB columns, Storage bucket and the
+// `_comic_test_*` validation script remain in place. To re-enable the
+// section: flip this flag to `true` and ship.
+// ────────────────────────────────────────────────────────────────────
+const COMIC_FEATURE_ENABLED = false;
+
 const GameSummaryScreen = () => {
   const { t, isRTL } = useTranslation();
   const { gameId } = useParams<{ gameId: string }>();
@@ -2027,8 +2046,9 @@ const GameSummaryScreen = () => {
 
       {/* ─── Game-Night Comic Section ─── */}
       {/* Visible to everyone when a comic exists, or to the owner (with completed game)
-          so they can generate one. Live/chip-entry games hide the section entirely. */}
-      {(comicUrl || (isOwner && comicVibe && players.length > 0)) && (
+          so they can generate one. Live/chip-entry games hide the section entirely.
+          PARKED via COMIC_FEATURE_ENABLED until output quality is acceptable. */}
+      {COMIC_FEATURE_ENABLED && (comicUrl || (isOwner && comicVibe && players.length > 0)) && (
         <div style={{ padding: '0.75rem', background: '#1a1a2e', marginTop: '-1rem' }}>
           <div className="card" style={{ padding: '0.75rem' }}>
             <button
