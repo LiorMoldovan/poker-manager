@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.29.0';
+export const APP_VERSION = '5.29.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.29.1',
+    date: '2026-04-30',
+    changes: [
+      '🪪 Confirmation share card collapsed to a single screen: the separate "names manifest" block is gone — confirmed players now live as rows inside the period stats table (rank/medal · name · profit · avg · games · win%). Players who haven\'t played in the current half-year sit at the bottom with em-dashes so the table doubles as the attendee roster.',
+      '📝 Admin note moved up to sit right under the boarding-pass hero (instead of trailing the card), so the host\'s message reads as part of the booking.',
+      '📊 Table redesigned to mirror the StatisticsScreen share-table format: centered metadata caption (📊 period · X משחקים · ✓ N מגיעים) over a hairline divider, then a clean borderless table with row separators, color-coded profit/avg/win%, and overall period rank with medals for top 3.',
+    ],
+  },
   {
     version: '5.29.0',
     date: '2026-04-30',

@@ -2487,100 +2487,13 @@ function PollShareConfirmationBody({
         tokens={{ TEXT, TEXT_MUTED }}
       />
 
-      {/* Passenger manifest — confirmed players in a 2-column grid with
-          a check prefix on each row. Numbered ticks (1..N) give it the
-          "checked-in" feel without being noisy. Falls back to a single
-          em-dash when the manifest is somehow empty. */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 16,
-      }}>
-        <span style={{
-          fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
-          letterSpacing: 1.5, textTransform: 'uppercase',
-        }}>
-          {t('schedule.share.confirmedPlayers')}
-        </span>
-        <span style={{
-          padding: '7px 18px', borderRadius: 999,
-          background: `${ACCENT_GREEN}1f`, color: ACCENT_GREEN,
-          border: `1px solid ${ACCENT_GREEN}55`,
-          fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
-        }}>
-          ✓ {confirmedPlayers.length}
-        </span>
-      </div>
-      <div style={{
-        padding: '18px 24px',
-        background: 'rgba(15, 23, 42, 0.55)',
-        border: `1px dashed ${BORDER}`,
-        borderRadius: 18,
-      }}>
-        {confirmedPlayers.length > 0 ? (() => {
-          // Pre-split into two columns and number column-major so the
-          // player visually below #1 reads as #2 (top-to-bottom flow per
-          // column), instead of the row-major default where #2 lands
-          // beside #1 in the next column. The container is RTL so the
-          // first flex child sits on the right edge — that's where the
-          // first half (1..ceil(n/2)) belongs.
-          const half = Math.ceil(confirmedPlayers.length / 2);
-          const right = confirmedPlayers.slice(0, half);
-          const left = confirmedPlayers.slice(half);
-          const Row = ({ num, name }: { num: number; name: string }) => (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              fontSize: 22, color: TEXT, lineHeight: 1.3,
-              minWidth: 0,
-            }}>
-              <span style={{
-                flexShrink: 0,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 30, height: 30, borderRadius: 999,
-                background: `${ACCENT_GREEN}22`, color: ACCENT_GREEN,
-                fontSize: 16, fontWeight: 700,
-              }}>{num}</span>
-              <span style={{
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                fontWeight: 500,
-              }}>{name}</span>
-            </div>
-          );
-          return (
-            <div style={{ display: 'flex', gap: 26, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-                {right.map((p, i) => (
-                  <Row key={p.id} num={i + 1} name={p.name} />
-                ))}
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-                {left.map((p, i) => (
-                  <Row key={p.id} num={half + i + 1} name={p.name} />
-                ))}
-              </div>
-            </div>
-          );
-        })() : (
-          <span style={{ color: TEXT_MUTED, fontSize: 22 }}>—</span>
-        )}
-      </div>
-
-      {/* Period leaderboard — the same H1/H2 stats users see in the
-          Statistics tab, scoped to ONLY the confirmed players for this
-          poll, so recipients can see how each attendee is doing this
-          half-year at a glance. Renders a row per confirmed player with
-          their PERIOD-WIDE rank (so the ranks may not start at 1 nor be
-          contiguous — that's intentional: it positions each attendee
-          within the broader season). Hides itself if the period has no
-          completed games yet. */}
-      <PollSharePeriodLeaderboard
-        confirmedPlayers={confirmedPlayers}
-        t={t}
-        tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN }}
-      />
-
+      {/* Admin note — sits right under the hero so it reads as a host
+          message attached to the booking, not as an afterthought. Keeps
+          the boarding-pass aesthetic with the accent stripe on the
+          inline-start edge. */}
       {poll.note && (
         <div style={{
-          marginTop: 22, padding: '18px 24px',
+          marginBottom: 22, padding: '18px 24px',
           background: 'rgba(16, 185, 129, 0.08)',
           borderInlineStart: `5px solid ${ACCENT_GREEN}`,
           borderRadius: 10, fontSize: 22, color: TEXT, lineHeight: 1.5,
@@ -2588,15 +2501,33 @@ function PollShareConfirmationBody({
           📝 {poll.note}
         </div>
       )}
+
+      {/* Unified attendees table — replaces the old "names manifest" +
+          separate stats table. Lists every confirmed player as a row
+          with their current half-year stats (rank/medal, profit, avg,
+          games, win%). Players who haven't played yet this period
+          appear at the bottom with em-dashes. The visual format mirrors
+          the StatisticsScreen share-table so recipients see a familiar
+          layout. */}
+      <PollSharePeriodLeaderboard
+        confirmedPlayers={confirmedPlayers}
+        t={t}
+        tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN }}
+      />
     </>
   );
 }
 
-// Period leaderboard table — confirmed players + their stats for the
-// current half-year, shown as a compact ranked table. Pulls the same
-// PlayerStats slice the Statistics tab uses so numbers line up exactly
-// with what users see in the app. Renders nothing if no completed
-// games exist in the current period (no signal worth sharing).
+// Unified attendees + period stats table — every confirmed player gets
+// a row with their current half-year stats (sourced from the same
+// PlayerStats the Statistics tab uses so numbers line up). Players who
+// haven't played in the current period are shown at the bottom with
+// em-dashes for stats, so the table doubles as the "who's coming"
+// roster. Visual format mirrors the StatisticsScreen share-table:
+// a centered metadata caption with a hairline divider, then a clean
+// borderless table with row separators. Returns null only if there
+// are no confirmed players (the rest of the share card already has
+// no useful content in that case).
 function PollSharePeriodLeaderboard({
   confirmedPlayers, t, tokens,
 }: {
@@ -2606,167 +2537,202 @@ function PollSharePeriodLeaderboard({
 }) {
   const { TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN } = tokens;
 
-  // Compute the rows lazily so the share card can be rendered for polls
-  // that have nothing yet without paying the storage scan cost. useMemo
-  // would help, but this component is only mounted while the share card
-  // is being captured (off-screen, ~1 frame) so a plain const is fine.
+  if (confirmedPlayers.length === 0) return null;
+
+  // Compute the rows lazily — this component only mounts while the
+  // share card is being captured off-screen (~1 frame) so a plain
+  // const is fine; useMemo would just add ceremony.
   const period = getCurrentHalfYearFilter();
   const allPeriodGames = getAllGames().filter(g => {
     if (g.status !== 'completed') return false;
     const d = new Date(g.date || g.createdAt);
     return d >= period.start && d <= period.end;
   });
-  if (allPeriodGames.length === 0) return null;
 
   const allPeriodStats = getPlayerStats({ start: period.start, end: period.end })
     .filter(s => s.gamesPlayed > 0)
     .sort((a, b) => b.totalProfit - a.totalProfit);
 
-  // overall period rank (1-based) keyed by playerId
+  // Period-overall rank (1-based) — recipients see how each attendee
+  // sits in the broader season, not just within the confirmed group.
+  // Ranks may therefore not be contiguous in the table, which is the
+  // intended signal.
   const rankByPlayer = new Map<string, number>();
-  allPeriodStats.forEach((s, i) => rankByPlayer.set(s.playerId, i + 1));
+  const statsById = new Map<string, typeof allPeriodStats[number]>();
+  allPeriodStats.forEach((s, i) => {
+    rankByPlayer.set(s.playerId, i + 1);
+    statsById.set(s.playerId, s);
+  });
 
-  // Confirmed players who actually played in this period (others are
-  // filtered out — showing "—" for everything would just be noise).
-  const confirmedIds = new Set(confirmedPlayers.map(p => p.id));
-  const rows = allPeriodStats
-    .filter(s => confirmedIds.has(s.playerId))
-    .map(s => ({ stats: s, rank: rankByPlayer.get(s.playerId) ?? 0 }));
-
-  if (rows.length === 0) return null;
+  type Row = {
+    playerId: string;
+    name: string;
+    stats: typeof allPeriodStats[number] | null;
+    rank: number | null;
+  };
+  const withStats: Row[] = [];
+  const withoutStats: Row[] = [];
+  confirmedPlayers.forEach(p => {
+    const s = statsById.get(p.id) ?? null;
+    const r = rankByPlayer.get(p.id) ?? null;
+    (s ? withStats : withoutStats).push({
+      playerId: p.id, name: p.name, stats: s, rank: r,
+    });
+  });
+  // Within "with stats" we honor the period leaderboard order
+  // (already DESC by profit). "Without stats" stays in confirmed-list
+  // order so the host's intended ordering is preserved at the bottom.
+  withStats.sort((a, b) => (b.stats!.totalProfit - a.stats!.totalProfit));
+  const rows: Row[] = [...withStats, ...withoutStats];
 
   const periodLabel = formatHebrewHalf(period.isH1 ? 1 : 2, period.year);
-  const activePlayersCount = allPeriodStats.length;
 
-  // Medal emoji for top 3 overall, plain rank otherwise.
-  const medalFor = (rank: number) =>
-    rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+  // Medal emoji for top 3 overall in the period; only awarded when
+  // the player actually has positive profit (matches StatisticsScreen
+  // getMedal — a #1 with negative profit doesn't get a gold medal).
+  const medalFor = (rank: number | null, profit: number) => {
+    if (rank == null || profit <= 0) return '';
+    if (rank === 1) return ' 🥇';
+    if (rank === 2) return ' 🥈';
+    if (rank === 3) return ' 🥉';
+    return '';
+  };
 
-  // Signed thousand-separated profit ("+1,432" / "-180"). Mirrors
-  // formatCurrency's pattern of a single leading LRM mark wrapping the
-  // entire sign+digits run, so the sign sits on the correct side of the
-  // number in an RTL context (instead of getting attached to whatever
-  // RTL text precedes the cell).
+  // Signed thousand-separated profit ("+1,432" / "-180"). Single
+  // leading LRM mark wraps the sign+digits run so the sign sits on
+  // the correct side of the number in an RTL cell (mirrors
+  // formatCurrency).
   const fmtSignedProfit = (n: number) => {
     const rounded = Math.round(n);
     const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
     return `\u200E${sign}${Math.abs(rounded).toLocaleString('en-US')}`;
   };
 
-  // Match the muted/dashed visual language of the manifest so the
-  // table reads as part of the same family.
-  const cellPad = '12px 14px';
+  // Header row format mirrors StatisticsScreen exactly: centered
+  // muted caption with the timeframe, total games count, and the
+  // attendee tally — all separated by middle-dot bullets, with a
+  // hairline divider before the table itself.
+  const cellPad = '14px 12px';
   const headerCellStyle: CSSProperties = {
     fontSize: 16, color: TEXT_MUTED, fontWeight: 700,
     letterSpacing: 0.6, textTransform: 'uppercase',
-    padding: cellPad, textAlign: 'center', whiteSpace: 'nowrap',
+    padding: '10px 12px', whiteSpace: 'nowrap',
   };
+  const dashCellColor = 'rgba(148, 163, 184, 0.55)';
 
   return (
-    <div style={{ marginTop: 22 }}>
+    <div>
+      {/* Centered metadata caption — same rhythm as the StatisticsScreen
+          share-table header, just upsized for the share card scale. */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 16, gap: 12, flexWrap: 'wrap',
+        textAlign: 'center',
+        fontSize: 18,
+        color: TEXT_MUTED,
+        fontWeight: 600,
+        marginBottom: 14,
+        paddingBottom: 12,
+        borderBottom: `1px solid ${BORDER}`,
+        letterSpacing: 0.2,
       }}>
-        <span style={{
-          fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
-          letterSpacing: 1.5, textTransform: 'uppercase',
-        }}>
-          📊 {t('schedule.share.periodTable')}
-        </span>
-        <span style={{
-          fontSize: 16, color: TEXT_MUTED, fontWeight: 600,
-        }}>
-          {periodLabel} · {t('schedule.share.periodMeta', {
-            games: allPeriodGames.length,
-            players: activePlayersCount,
-          })}
+        📊 {periodLabel}
+        {' • '}{t('stats.gamesCount', { count: allPeriodGames.length })}
+        {' • '}
+        <span style={{ color: ACCENT_GREEN, fontWeight: 700 }}>
+          ✓ {confirmedPlayers.length} {t('schedule.share.confirmedPlayers')}
         </span>
       </div>
-      <div style={{
-        background: 'rgba(15, 23, 42, 0.55)',
-        border: `1px dashed ${BORDER}`,
-        borderRadius: 18,
-        overflow: 'hidden',
+      <table style={{
+        width: '100%', borderCollapse: 'collapse',
+        fontSize: 20, color: TEXT, lineHeight: 1.25,
+        tableLayout: 'fixed',
       }}>
-        <table style={{
-          width: '100%', borderCollapse: 'collapse',
-          fontSize: 20, color: TEXT, lineHeight: 1.25,
-        }}>
-          <thead>
-            <tr style={{ background: 'rgba(148, 163, 184, 0.08)' }}>
-              <th style={{ ...headerCellStyle, width: '12%' }}>#</th>
-              <th style={{ ...headerCellStyle, textAlign: 'right' }}>
-                {t('schedule.share.periodColPlayer')}
-              </th>
-              <th style={{ ...headerCellStyle, width: '20%' }}>
-                {t('schedule.share.periodColProfit')}
-              </th>
-              <th style={{ ...headerCellStyle, width: '16%' }}>
-                {t('schedule.share.periodColAvg')}
-              </th>
-              <th style={{ ...headerCellStyle, width: '12%' }}>
-                {t('schedule.share.periodColGames')}
-              </th>
-              <th style={{ ...headerCellStyle, width: '14%' }}>
-                {t('schedule.share.periodColWinRate')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ stats, rank }, i) => {
-              const profitColor = stats.totalProfit > 0 ? ACCENT_GREEN
-                : stats.totalProfit < 0 ? '#f87171' : TEXT_MUTED;
-              const avgColor = stats.avgProfit > 0 ? ACCENT_GREEN
-                : stats.avgProfit < 0 ? '#f87171' : TEXT_MUTED;
-              return (
-                <tr key={stats.playerId} style={{
-                  borderTop: i === 0 ? 'none' : `1px solid ${BORDER}`,
+        <thead>
+          <tr>
+            <th style={{ ...headerCellStyle, width: '11%', textAlign: 'right' }}>
+              {t('stats.rankCol')}
+            </th>
+            <th style={{ ...headerCellStyle, textAlign: 'right' }}>
+              {t('stats.playerCol')}
+            </th>
+            <th style={{ ...headerCellStyle, width: '20%', textAlign: 'right' }}>
+              {t('stats.profitCol')}
+            </th>
+            <th style={{ ...headerCellStyle, width: '15%', textAlign: 'right' }}>
+              {t('stats.avgCol')}
+            </th>
+            <th style={{ ...headerCellStyle, width: '11%', textAlign: 'center' }}>
+              {t('stats.gamesCol')}
+            </th>
+            <th style={{ ...headerCellStyle, width: '13%', textAlign: 'center' }}>
+              {t('stats.winRateCol')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const profit = row.stats?.totalProfit ?? 0;
+            const avg = row.stats?.avgProfit ?? 0;
+            const profitColor = !row.stats ? dashCellColor
+              : profit > 0 ? ACCENT_GREEN
+              : profit < 0 ? '#f87171' : TEXT_MUTED;
+            const avgColor = !row.stats ? dashCellColor
+              : avg > 0 ? ACCENT_GREEN
+              : avg < 0 ? '#f87171' : TEXT_MUTED;
+            const winColor = !row.stats ? dashCellColor
+              : row.stats.winPercentage >= 50 ? ACCENT_GREEN : '#f87171';
+            return (
+              <tr key={row.playerId} style={{
+                borderTop: i === 0 ? 'none' : `1px solid ${BORDER}`,
+              }}>
+                <td style={{
+                  padding: cellPad, textAlign: 'right',
+                  fontWeight: 700, color: TEXT,
+                  whiteSpace: 'nowrap',
                 }}>
-                  <td style={{
-                    padding: cellPad, textAlign: 'center',
-                    fontWeight: 700, color: TEXT,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {rank} {medalFor(rank)}
-                  </td>
-                  <td style={{
-                    padding: cellPad, textAlign: 'right',
-                    fontWeight: 600, whiteSpace: 'nowrap',
-                    overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {stats.playerName}
-                  </td>
-                  <td style={{
-                    padding: cellPad, textAlign: 'center',
-                    fontWeight: 700, color: profitColor, whiteSpace: 'nowrap',
-                  }}>
-                    {fmtSignedProfit(stats.totalProfit)}
-                  </td>
-                  <td style={{
-                    padding: cellPad, textAlign: 'center',
-                    fontWeight: 600, color: avgColor, whiteSpace: 'nowrap',
-                  }}>
-                    {fmtSignedProfit(stats.avgProfit)}
-                  </td>
-                  <td style={{
-                    padding: cellPad, textAlign: 'center',
-                    fontWeight: 600, color: TEXT_MUTED, whiteSpace: 'nowrap',
-                  }}>
-                    {stats.gamesPlayed}
-                  </td>
-                  <td style={{
-                    padding: cellPad, textAlign: 'center',
-                    fontWeight: 700, color: TEXT, whiteSpace: 'nowrap',
-                  }}>
-                    {Math.round(stats.winPercentage)}%
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                  {row.rank != null ? (
+                    <>{row.rank}{medalFor(row.rank, profit)}</>
+                  ) : (
+                    <span style={{ color: dashCellColor }}>—</span>
+                  )}
+                </td>
+                <td style={{
+                  padding: cellPad, textAlign: 'right',
+                  fontWeight: 600, whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  color: TEXT,
+                }}>
+                  {row.name}
+                </td>
+                <td style={{
+                  padding: cellPad, textAlign: 'right',
+                  fontWeight: 700, color: profitColor, whiteSpace: 'nowrap',
+                }}>
+                  {row.stats ? fmtSignedProfit(profit) : '—'}
+                </td>
+                <td style={{
+                  padding: cellPad, textAlign: 'right',
+                  fontWeight: 600, color: avgColor, whiteSpace: 'nowrap',
+                }}>
+                  {row.stats ? fmtSignedProfit(avg) : '—'}
+                </td>
+                <td style={{
+                  padding: cellPad, textAlign: 'center',
+                  fontWeight: 600, whiteSpace: 'nowrap',
+                  color: row.stats ? TEXT : dashCellColor,
+                }}>
+                  {row.stats ? row.stats.gamesPlayed : '—'}
+                </td>
+                <td style={{
+                  padding: cellPad, textAlign: 'center',
+                  fontWeight: 700, color: winColor, whiteSpace: 'nowrap',
+                }}>
+                  {row.stats ? `${Math.round(row.stats.winPercentage)}%` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
