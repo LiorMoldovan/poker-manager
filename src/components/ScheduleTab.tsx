@@ -1920,15 +1920,28 @@ function PollCard(props: PollCardProps) {
              an admin can pull the plug if too many drop after the lock-in.
              The cancel modal collects an optional reason which is sent
              as a cancellation notification, so members aren't left
-             wondering why the announced game disappeared. */
-          <button onClick={onCancel} style={{ ...ghostBtn, color: '#ef4444', borderColor: '#ef4444' }}>
-            {t('schedule.cancelPoll')}
+             wondering why the announced game disappeared. Label uses
+             the short form ('בטל' / 'Cancel') so the second-row cluster
+             stays compact; the modal title that opens on click uses
+             the full form ('schedule.cancelPoll') for unambiguous intent.
+             Tooltip carries the full label so hover still discloses
+             that this cancels the poll, not just the action. */
+          <button
+            onClick={onCancel}
+            title={t('schedule.cancelPoll')}
+            style={{ ...ghostBtn, color: '#ef4444', borderColor: '#ef4444' }}
+          >
+            {t('schedule.cancelPollShort')}
           </button>
         )}
         {/* Delete (permanent) — admin-only, available in any state.
             For active polls we recommend Cancel first via the confirm copy.
             Sits on the second visual row alongside Cancel (the destructive
-            cluster) so admins don't tap one when meaning the other. */}
+            cluster) so admins don't tap one when meaning the other.
+            Same short-label / long-tooltip pattern as the cancel button:
+            visible label is the short form (deletePollShort); hovering
+            shows the full long form (deletePoll) so the "permanently"
+            warning is still discoverable. */}
         {isAdmin && (
           <button
             onClick={onDelete}
@@ -1937,7 +1950,7 @@ function PollCard(props: PollCardProps) {
               ...ghostBtn, color: '#ef4444',
               border: '1px dashed rgba(239, 68, 68, 0.5)',
             }}>
-            {t('schedule.deletePoll')}
+            {t('schedule.deletePollShort')}
           </button>
         )}
       </div>

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.31.0';
+export const APP_VERSION = '5.31.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.31.1',
+    date: '2026-04-30',
+    changes: [
+      '✂️ Schedule poll action-row destructive cluster (Lock / Cancel / Delete) labels shortened to "🔒 נעל" / "בטל" / "🗑 מחק" (was "🔒 נעל הצבעה" / "בטל הצבעה" / "🗑 מחק לצמיתות"). The full long form is preserved as the button `title` attribute (hover tooltip on desktop, long-press on mobile) and as the modal title that opens on click — so the warning still surfaces, just not on the resting button face. Net effect: the second action-row line now fits on a single ~360px-wide viewport without crowding, and the destructive cluster reads as a clean "verb-only" trio (lock / cancel / delete) parallel to the first row\'s constructive trio (start / share / edit). Hebrew + English. Locked-state labels follow suit: "🔓 שחרר" / "🔓 Unlock" instead of the longer "🔓 שחרר הצבעה" / "🔓 Unlock voting". Side benefit: the polls-history delete button (which reused the same short key) now also shows the trash emoji.',
+    ],
+  },
   {
     version: '5.31.0',
     date: '2026-04-30',
