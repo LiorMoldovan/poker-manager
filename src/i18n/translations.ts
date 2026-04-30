@@ -898,6 +898,7 @@ const he = {
 
   'schedule.expandNow': 'הרחב עכשיו',
   'schedule.manualClose': 'סגור על תאריך זה',
+  'schedule.manualPickShort': 'בחר',
   // Re-pin label — surfaces on per-date rows of an already-confirmed
   // poll. Lets admins switch the lock-in to a tied / preferred date
   // without cancelling the whole poll. The currently-pinned date
@@ -2443,6 +2444,7 @@ const en: Record<keyof typeof he, string> = {
 
   'schedule.expandNow': 'Expand now',
   'schedule.manualClose': 'Close on this date',
+  'schedule.manualPickShort': 'Pick',
   'schedule.manualRepin': 'Pick date',
   'schedule.manualCloseConfirmTitle': 'Close poll on this date',
   'schedule.manualCloseConfirmBody': 'Lock the game in on {date}? All votes are kept and players can still update their RSVP on any of the proposed dates.',

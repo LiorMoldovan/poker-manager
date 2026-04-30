@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.31.1';
+export const APP_VERSION = '5.31.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.31.2',
+    date: '2026-04-30',
+    changes: [
+      '✂️ Schedule poll "pick this date" buttons shortened — both the `DateCompetitionStrip` row button and the per-date detail row footer button now show just "בחר" / "Pick" instead of "בחר תאריך" / "Pick date". Same short-label / long-tooltip pattern as the destructive cluster from v5.31.1: the full status-aware label ("בחר תאריך" pre-confirm, or the equivalent re-pin language post-confirm) is preserved as a hover tooltip and as the modal title that opens on click. Frees ~30-40px on every strip row, which is enough on a 360px viewport to fit the full date label like "יום חמישי 30/4" without ellipsis truncation.',
+    ],
+  },
   {
     version: '5.31.1',
     date: '2026-04-30',

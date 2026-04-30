@@ -1744,15 +1744,21 @@ function PollCard(props: PollCardProps) {
                     <button
                       onClick={() => onManualClose(d.id)}
                       className="poll-ghost-btn"
+                      // Same short-label / long-tooltip pattern as the
+                      // strip's pick button — the per-date footer is now
+                      // also flex-wrap-enabled (the larger 'large' vote
+                      // count pills land first), so a shorter pick label
+                      // keeps the row from wrapping on borderline-narrow
+                      // viewports. Full status-aware long form lives in
+                      // the title and in the confirmation modal copy.
+                      title={poll.status === 'confirmed'
+                        ? t('schedule.manualRepin')
+                        : t('schedule.manualClose')}
                       style={{
                         padding: '4px 10px', borderRadius: 6,
                         border: '1px dashed var(--border)', background: 'transparent',
                         color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                      }}>{
-                        poll.status === 'confirmed'
-                          ? t('schedule.manualRepin')
-                          : t('schedule.manualClose')
-                      }</button>
+                      }}>{t('schedule.manualPickShort')}</button>
                   )}
                 </div>
               </div>
@@ -2664,16 +2670,26 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
                     <button
                       onClick={() => onManualClose(d.id)}
                       className="poll-ghost-btn"
+                      // Visible label is the short form ('בחר' / 'Pick')
+                      // because the strip row is single-line and every
+                      // pixel of the date label deserves to win over a
+                      // verbose verb. The full status-aware form
+                      // ('בחר תאריך' / 'סגור על תאריך זה' for pre-confirm,
+                      // 'בחר תאריך' / 'switch the locked-in date' for
+                      // re-pin) lives in the title attribute so hover
+                      // (desktop) / long-press (mobile) still discloses
+                      // the action's intent. The confirmation modal that
+                      // opens on click ALSO shows the full long form, so
+                      // there's no ambiguity at the point of commit.
+                      title={poll.status === 'confirmed'
+                        ? t('schedule.manualRepin')
+                        : t('schedule.manualClose')}
                       style={{
                         padding: '2px 7px', borderRadius: 6,
                         border: '1px dashed var(--border)', background: 'transparent',
                         color: 'var(--text-muted)', fontSize: 10.5, cursor: 'pointer',
                         whiteSpace: 'nowrap', flexShrink: 0,
-                      }}>{
-                        poll.status === 'confirmed'
-                          ? t('schedule.manualRepin')
-                          : t('schedule.manualClose')
-                      }</button>
+                      }}>{t('schedule.manualPickShort')}</button>
                   )}
                 </div>
               </div>
