@@ -808,6 +808,8 @@ const he = {
   'schedule.voters.changed': 'עודכן',
   'schedule.voters.votedAt': 'הצביע ב־{time}',
   'schedule.voters.changedFrom': 'עודכן (מקורית: {time})',
+  'schedule.voters.showList': 'הצג מצביעים',
+  'schedule.voters.hideList': 'הסתר מצביעים',
   // \u2066…\u2069 = LRI…PDI (LEFT-TO-RIGHT ISOLATE / POP DIRECTIONAL
   // ISOLATE). Without these the spaces around the slash get absorbed
   // as RTL neutrals in a Hebrew paragraph, which splits "6 / 7" into
@@ -818,6 +820,7 @@ const he = {
   'schedule.targetProgress': '\u2066{count} / {target}\u2069',
   'schedule.competition.heading': 'השוואה בין תאריכים',
   'schedule.competition.leader': 'מוביל',
+  'schedule.dateBreakdownHeading': 'פירוט לפי תאריך',
   // Multi-date share images drop the per-date voter chip lists to keep
   // the rasterised PNG short enough to land in WhatsApp without being
   // chopped. We replace those blocks with a single CTA that points
@@ -906,7 +909,7 @@ const he = {
   // matches the action ("switch to" vs "lock in").
   'schedule.manualCloseConfirmBody': 'לנעול את המשחק על {date}? כל ההצבעות נשמרות וכל השחקנים עדיין יוכלו לעדכן את התשובה שלהם לכל אחד מהתאריכים.',
   'schedule.manualRepinConfirmTitle': 'החלפת התאריך הנעול',
-  'schedule.manualRepinConfirmBody': 'להחליף את התאריך הנעול ל־{date}? המצב הזה שימושי כשקיבלתם תיקו וצריך לבחור תאריך, או כשרוצים לעבור לתאריך אחר. ההצבעות לא מתאפסות והשחקנים יקבלו עדכון שהמשחק עבר לתאריך זה.',
+  'schedule.manualRepinConfirmBody': 'להחליף את התאריך הנעול ל־{date}? ההצבעות נשמרות והשחקנים יקבלו עדכון.',
   'schedule.manualCloseConfirmAction': 'נעל על תאריך זה',
   'schedule.manualRepinConfirmAction': 'בחר תאריך',
   // Success / failure toasts for the pick-date / re-pin flow. The
@@ -978,6 +981,8 @@ const he = {
   'schedule.share.captionCancellation': '🛑 ההצבעה בוטלה — לעדכונים על המשחק הבא היכנסו לאפליקציה',
   'schedule.share.shareInvitationLabel': '📤 שתף הצבעה',
   'schedule.share.shareConfirmationLabel': '📤 שתף משחק',
+  'schedule.share.shareMenuLabel': '📤 שתף ▾',
+  'schedule.share.chooserTitle': 'מה לשתף?',
   'schedule.share.invitationCallToAction': 'היכנסו לאפליקציה והצביעו',
   'schedule.share.confirmationFarewell': 'נתראה ליד השולחן',
   // Same LRI…PDI wrapper as schedule.targetProgress — see comment
@@ -1005,6 +1010,15 @@ const he = {
   'schedule.share.headerSubtitleInvitation': 'הצבעה פתוחה',
   'schedule.share.headerSubtitleCancellation': 'אין משחק הפעם',
   'schedule.errorPollLocked': 'ההצבעה כבר נסגרה',
+  'schedule.errorVotingLocked': 'ההצבעה ננעלה ע״י אדמין',
+  'schedule.lockVotes': '🔒 נעל הצבעה',
+  'schedule.unlockVotes': '🔓 שחרר הצבעה',
+  'schedule.lockVotesTooltip': 'נעל את ההצבעה כדי שלא יהיו עוד שינויים',
+  'schedule.unlockVotesTooltip': 'אפשר שוב הצבעה ושינויים',
+  'schedule.votingLockedBadge': '🔒 ההצבעה נעולה',
+  'schedule.votingLockedAt': 'נעל ע״י אדמין',
+  'schedule.votingLockedSuccess': 'ההצבעה ננעלה',
+  'schedule.votingUnlockedSuccess': 'ההצבעה שוחררה',
   'schedule.errorSeatFull': 'הכיסאות מלאים — היעד כבר הושג. אם רוצים להוסיף עוד שחקן, אפשר לעדכן את היעד דרך "ערוך"',
   'schedule.errorNoPlayerLink': 'אין שחקן מקושר. עברו לטאב "קבוצה" וקשרו את החשבון',
   'schedule.errorTierNotAllowed': 'הצבעה זמינה כרגע לשחקנים קבועים בלבד',
@@ -2347,10 +2361,13 @@ const en: Record<keyof typeof he, string> = {
   'schedule.voters.changed': 'updated',
   'schedule.voters.votedAt': 'voted at {time}',
   'schedule.voters.changedFrom': 'updated (originally: {time})',
+  'schedule.voters.showList': 'Show voters',
+  'schedule.voters.hideList': 'Hide voters',
   // LRI…PDI wrapper kept symmetric with the HE entry; harmless in
   // LTR contexts but defends against any future RTL embedding.
   'schedule.targetProgress': '\u2066{count} / {target}\u2069',
   'schedule.competition.heading': 'Date competition',
+  'schedule.dateBreakdownHeading': 'Per-date details',
   'schedule.competition.leader': 'Leading',
   'schedule.share.viewVotersInApp': '👀 Open the app to see who voted on each date',
   'schedule.startScheduledGame': 'Start game',
@@ -2428,7 +2445,7 @@ const en: Record<keyof typeof he, string> = {
   'schedule.manualCloseConfirmTitle': 'Close poll on this date',
   'schedule.manualCloseConfirmBody': 'Lock the game in on {date}? All votes are kept and players can still update their RSVP on any of the proposed dates.',
   'schedule.manualRepinConfirmTitle': 'Switch the locked-in date',
-  'schedule.manualRepinConfirmBody': 'Switch the locked-in date to {date}? Use this when there\u2019s a tie at the target or you simply want a different night. Votes are preserved and players will be re-notified about the new pick.',
+  'schedule.manualRepinConfirmBody': 'Switch the locked-in date to {date}? Votes are preserved and players will be re-notified.',
   'schedule.manualCloseConfirmAction': 'Lock in this date',
   'schedule.manualRepinConfirmAction': 'Pick date',
   'schedule.manualCloseSuccess': 'Game locked in on {date}',
@@ -2480,6 +2497,8 @@ const en: Record<keyof typeof he, string> = {
   'schedule.share.captionCancellation': '🛑 Poll cancelled — open the app for updates on the next game',
   'schedule.share.shareInvitationLabel': '📤 Share poll',
   'schedule.share.shareConfirmationLabel': '📤 Share game',
+  'schedule.share.shareMenuLabel': '📤 Share ▾',
+  'schedule.share.chooserTitle': 'Share what?',
   'schedule.share.invitationCallToAction': 'Open the app to vote',
   'schedule.share.confirmationFarewell': 'See you at the table',
   'schedule.share.targetProgress': '\u2066{count} / {target}\u2069 players',
@@ -2504,6 +2523,15 @@ const en: Record<keyof typeof he, string> = {
   'schedule.share.headerSubtitleInvitation': 'Voting open',
   'schedule.share.headerSubtitleCancellation': 'No game this round',
   'schedule.errorPollLocked': 'Poll already closed',
+  'schedule.errorVotingLocked': 'Voting was locked by an admin',
+  'schedule.lockVotes': '🔒 Lock voting',
+  'schedule.unlockVotes': '🔓 Unlock voting',
+  'schedule.lockVotesTooltip': 'Freeze the lineup — no more vote changes',
+  'schedule.unlockVotesTooltip': 'Allow voting and vote changes again',
+  'schedule.votingLockedBadge': '🔒 Voting locked',
+  'schedule.votingLockedAt': 'Locked by admin',
+  'schedule.votingLockedSuccess': 'Voting locked',
+  'schedule.votingUnlockedSuccess': 'Voting unlocked',
   'schedule.errorSeatFull': 'All seats are taken — the target was reached. If you want to add another player, raise the target via "Edit"',
   'schedule.errorNoPlayerLink': 'No linked player. Open Group tab and link your account.',
   'schedule.errorTierNotAllowed': 'Voting is currently limited to permanent players',

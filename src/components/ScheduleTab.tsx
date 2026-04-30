@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   getAllPolls, getAllPlayers, getSettings, saveSettings,
   createPoll, castVote, cancelPoll, manuallyClosePoll,
+  setPollVotingLock,
   updatePollMeta,
   deletePoll,
   adminCastVote, adminDeleteVote,
@@ -51,6 +52,24 @@ const fmtHebrewDate = (d: GamePollDate): string => {
     const mon = dt.getMonth() + 1;
     const time = d.proposedTime ? ` ${d.proposedTime.slice(0, 5)}` : '';
     return `${wd} ${day}/${mon}${time}`;
+  } catch {
+    return d.proposedDate;
+  }
+};
+
+// Compact format for tight horizontal slots (DateCompetitionStrip rows).
+// Drops the time and lets the caller decide about location — the strip
+// sits directly above the per-date detail block which carries the full
+// fmtHebrewDate + location, so omitting them here is loss-free for the
+// reader and saves ~50px of width per row, which is the difference
+// between fitting on a 360px viewport and ellipsis-truncating.
+const fmtHebrewDateCompact = (d: GamePollDate): string => {
+  try {
+    const dt = new Date(`${d.proposedDate}T${d.proposedTime || '21:00'}`);
+    const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
+    const day = dt.getDate();
+    const mon = dt.getMonth() + 1;
+    return `${wd} ${day}/${mon}`;
   } catch {
     return d.proposedDate;
   }
@@ -370,6 +389,11 @@ export default function ScheduleTab() {
   // Map error code from RPC to localized message
   const handleRpcError = (e: unknown): string => {
     const msg = errMsg(e);
+    // 'voting_locked' is the migration-039 admin soft-lock; 'poll_locked'
+    // is the long-standing terminal-status guard. Order matters — the
+    // raw error message can contain both phrases when nested, so we
+    // match the more specific one first.
+    if (msg.includes('voting_locked')) return t('schedule.errorVotingLocked');
     if (msg.includes('poll_locked')) return t('schedule.errorPollLocked');
     if (msg.includes('seat_full')) return t('schedule.errorSeatFull');
     if (msg.includes('no_player_link')) return t('schedule.errorNoPlayerLink');
@@ -987,6 +1011,11 @@ function PollCard(props: PollCardProps) {
     return m;
   }, [poll.votes, currentPlayer]);
 
+  // Migration 039: admin-toggleable soft lock on still-active polls.
+  // When set, the SQL guard rejects every vote RPC with 'voting_locked'.
+  // Boolean form derived once; used everywhere RSVP / proxy buttons gate.
+  const isVotingLocked = !!poll.votingLockedAt;
+
   const canVote = useMemo(() => {
     if (!currentPlayer) return { allowed: false, reason: 'no_player_link' as const };
     // Voting is allowed on open / expanded / confirmed. Confirmed-state
@@ -995,6 +1024,11 @@ function PollCard(props: PollCardProps) {
     // game. Cancelled and expired stay locked.
     if (poll.status === 'cancelled' || poll.status === 'expired') {
       return { allowed: false, reason: 'poll_locked' as const };
+    }
+    // Migration 039: admin-flipped soft lock. Independent of status —
+    // freezes all votes (including admin proxies) until unlocked.
+    if (isVotingLocked) {
+      return { allowed: false, reason: 'voting_locked' as const };
     }
     // Tier gate. Mirrors the SQL in 031:
     //   * 'open'      → permanents only (the original 48h window).
@@ -1011,10 +1045,39 @@ function PollCard(props: PollCardProps) {
       return { allowed: false, reason: 'tier_not_allowed' as const };
     }
     return { allowed: true as const };
-  }, [poll.status, poll.expandedAt, currentPlayer]);
+  }, [poll.status, poll.expandedAt, currentPlayer, isVotingLocked]);
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
   const [proxyDateId, setProxyDateId] = useState<string | null>(null);
+
+  // Per-date "show voters" toggle. Keyed by date.id, value=true means
+  // expanded. Default is collapsed (empty Set ⇒ all collapsed) so the
+  // schedule tab stays compact on mobile — a confirmed date with 6+
+  // proxy-voter chips can otherwise push the card past 500px tall and
+  // bury the action row + share buttons below the fold. Tapping the
+  // header / "show voters" toggle in a row expands just that row's
+  // chip list. State is local to the card; resets on remount (e.g.
+  // after a tab switch), which is fine — the collapsed view always
+  // shows the count totals so the user never loses critical info.
+  const [expandedVoterDates, setExpandedVoterDates] = useState<Set<string>>(() => new Set());
+  const toggleVotersExpanded = (dateId: string) => {
+    setExpandedVoterDates(prev => {
+      const next = new Set(prev);
+      if (next.has(dateId)) next.delete(dateId); else next.add(dateId);
+      return next;
+    });
+  };
+
+  // Share-target chooser modal. Only opens when a poll is in the
+  // genuinely-ambiguous "confirmed-below-target" state where BOTH
+  // sharing the invitation (recruiting) and sharing the confirmation
+  // (announcing) make sense. Open / expanded polls share the
+  // invitation directly with one tap; confirmed-at-target polls
+  // share the confirmation directly. Only the rare ambiguous state
+  // pays the cost of an extra modal step — and gets a one-line
+  // explanation in return so the admin understands why two options
+  // exist instead of guessing from two near-identical button labels.
+  const [shareChooserOpen, setShareChooserOpen] = useState(false);
 
   // Confirmed date helpers
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
@@ -1147,6 +1210,29 @@ function PollCard(props: PollCardProps) {
     buildShareCaption('cancellation'),
   );
 
+  // Lock / unlock toggle (migration 039). Reversible single-click
+  // action — no confirmation modal, no destructive consequences. The
+  // RPC is idempotent at the SQL level, but we still gate on a local
+  // submitting flag so a double-tap doesn't fire two requests in
+  // flight. Success/error toasts surface the new state so the admin
+  // gets immediate confirmation.
+  const [lockSubmitting, setLockSubmitting] = useState(false);
+  const handleToggleVotingLock = async () => {
+    if (lockSubmitting) return;
+    setLockSubmitting(true);
+    const nextLocked = !isVotingLocked;
+    try {
+      await setPollVotingLock(poll.id, nextLocked);
+      onSuccess(nextLocked
+        ? t('schedule.votingLockedSuccess')
+        : t('schedule.votingUnlockedSuccess'));
+    } catch (e) {
+      onError(handleRpcError(e));
+    } finally {
+      setLockSubmitting(false);
+    }
+  };
+
   // Chrome (status pill, border, progress, hints) follows visualStatus
   // so a confirmed-below-target poll reads as voting-open. Behavior
   // (vote eligibility, auto-confirm trigger, share button defaults)
@@ -1190,6 +1276,27 @@ function PollCard(props: PollCardProps) {
           )}
           {isExpansionDue && (
             <span style={{ fontSize: 11, color: '#f59e0b' }} title={t('schedule.timer.openPhaseDue')}>⏰</span>
+          )}
+          {/* Voting-locked badge (migration 039). Renders inline next
+              to the status pill so the locked state is visible at a
+              glance — admins scanning the polls list immediately see
+              which polls are frozen, and members get a clear "voting
+              is locked" cue before tapping the (disabled) RSVP buttons.
+              Yellow tinted to match the same warning palette used by
+              the lock toggle button below in the action row. */}
+          {isVotingLocked && (
+            <span
+              title={t('schedule.errorVotingLocked')}
+              style={{
+                fontSize: 11, fontWeight: 600,
+                padding: '2px 8px', borderRadius: 999,
+                background: 'rgba(250, 204, 21, 0.14)',
+                color: '#facc15',
+                border: '1px solid rgba(250, 204, 21, 0.40)',
+              }}
+            >
+              {t('schedule.votingLockedBadge')}
+            </span>
           )}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -1261,6 +1368,7 @@ function PollCard(props: PollCardProps) {
                   maybe={s.maybe}
                   no={s.no}
                   allowMaybe={poll.allowMaybe}
+                  size="large"
                   t={t}
                 />
               </div>
@@ -1305,6 +1413,7 @@ function PollCard(props: PollCardProps) {
                       canVote.allowed ? '' :
                       canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
                       canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
+                      canVote.reason === 'voting_locked' ? t('schedule.errorVotingLocked') :
                       t('schedule.errorPollLocked')
                     }
                     className={`poll-rsvp-btn${active ? ' poll-rsvp-btn--active' : ''}`}
@@ -1322,13 +1431,18 @@ function PollCard(props: PollCardProps) {
               {isAdmin && (
                 <button
                   onClick={() => setProxyDateId(confirmedDate.id)}
-                  title={t('schedule.proxy.modalTitle')}
+                  disabled={isVotingLocked}
+                  title={isVotingLocked
+                    ? t('schedule.errorVotingLocked')
+                    : t('schedule.proxy.modalTitle')}
                   className="poll-rsvp-btn"
                   style={{
                     padding: '6px 10px', borderRadius: 8,
                     border: '1px solid rgba(16, 185, 129, 0.4)',
                     background: 'rgba(16, 185, 129, 0.12)',
-                    color: '#34d399', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    color: '#34d399', fontSize: 11, fontWeight: 600,
+                    cursor: isVotingLocked ? 'not-allowed' : 'pointer',
+                    opacity: isVotingLocked ? 0.4 : 1,
                   }}>{t('schedule.proxy.add')}</button>
               )}
             </div>
@@ -1410,15 +1524,49 @@ function PollCard(props: PollCardProps) {
             t={t}
           />
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Per-date detail rows. Higher gap (12 vs 8) + box-shadow on
+            each card so the rows visually pop apart from each other on
+            mobile — without this the muted-on-muted backgrounds make
+            the rows blend into one continuous block. The shadow stays
+            very subtle on dark mode (low alpha) so it doesn't fight
+            the card chrome above.
+
+            Section heading mirrors the strip's "🗳 השוואה בין תאריכים"
+            so both sections read as labeled siblings — the strip is
+            the at-a-glance scoreboard, this is the per-date drill-
+            down. Without the heading the strip and the detail cards
+            blur into one undifferentiated stack on mobile. Only
+            shown for multi-date polls; single-date polls don't have
+            a strip above to distinguish from. */}
+        {poll.dates.length >= 2 && (
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+            letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span aria-hidden>📋</span>
+            <span>{t('schedule.dateBreakdownHeading')}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {poll.dates.map(d => {
             const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
             const myVote = currentUserVoteByDate.get(d.id);
             const loc = d.location || poll.defaultLocation;
+            const isPinnedHere = poll.confirmedDateId === d.id;
             return (
+              // Pinned date gets a soft green tint + slightly stronger
+              // border so the same "this is the picked date" identity
+              // carries across the strip and the per-date row. Other
+              // rows use a neutral elevated surface with a subtle
+              // outline so each one reads as a distinct card.
               <div key={d.id} className="poll-date-row" style={{
-                padding: 10, borderRadius: 8, background: 'var(--surface-elevated, var(--surface))',
-                border: '1px solid var(--border)',
+                padding: 10, borderRadius: 8,
+                background: isPinnedHere
+                  ? 'rgba(16, 185, 129, 0.06)'
+                  : 'var(--surface-elevated, var(--surface))',
+                border: `1px solid ${isPinnedHere ? 'rgba(16, 185, 129, 0.40)' : 'var(--border)'}`,
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.18)',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
@@ -1470,6 +1618,7 @@ function PollCard(props: PollCardProps) {
                           canVote.allowed ? '' :
                           canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
                           canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
+                          canVote.reason === 'voting_locked' ? t('schedule.errorVotingLocked') :
                           t('schedule.errorPollLocked')
                         }
                         className={`poll-rsvp-btn${active ? ' poll-rsvp-btn--active' : ''}`}
@@ -1487,24 +1636,67 @@ function PollCard(props: PollCardProps) {
                   {isAdmin && (
                     <button
                       onClick={() => setProxyDateId(d.id)}
-                      title={t('schedule.proxy.modalTitle')}
+                      disabled={isVotingLocked}
+                      title={isVotingLocked
+                        ? t('schedule.errorVotingLocked')
+                        : t('schedule.proxy.modalTitle')}
                       className="poll-rsvp-btn"
                       style={{
                         padding: '6px 10px', borderRadius: 8,
                         border: '1px solid rgba(16, 185, 129, 0.4)',
                         background: 'rgba(16, 185, 129, 0.12)',
-                        color: '#34d399', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        color: '#34d399', fontSize: 11, fontWeight: 600,
+                        cursor: isVotingLocked ? 'not-allowed' : 'pointer',
+                        opacity: isVotingLocked ? 0.4 : 1,
                       }}>{t('schedule.proxy.add')}</button>
                   )}
                 </div>
-                {/* Live voter lists — visible to everyone */}
-                <VoterGroups
-                  voters={s.voters}
-                  playerById={playerById}
-                  userIdToPlayerName={userIdToPlayerName}
-                  allowMaybe={poll.allowMaybe}
-                  t={t}
-                />
+                {/* Voter list — collapsed by default to keep each
+                    per-date card compact on mobile. Tapping the
+                    toggle expands the chip list. The toggle is a
+                    full-width dashed button whose label includes the
+                    total voter count so the user knows how many
+                    names are hidden without expanding. When there
+                    are zero voters we render nothing here (no chips,
+                    no toggle) — the count pills in the footer
+                    already say "0 / 0 / 0" which is enough. */}
+                {s.voters.length > 0 && (() => {
+                  const expanded = expandedVoterDates.has(d.id);
+                  return (
+                    <>
+                      <button
+                        onClick={() => toggleVotersExpanded(d.id)}
+                        className="poll-ghost-btn"
+                        style={{
+                          marginTop: 8,
+                          width: '100%',
+                          padding: '6px 10px', borderRadius: 6,
+                          border: '1px dashed var(--border)', background: 'transparent',
+                          color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          fontWeight: 600,
+                        }}
+                        aria-expanded={expanded}
+                      >
+                        <span aria-hidden>{expanded ? '▲' : '▼'}</span>
+                        <span>
+                          {expanded
+                            ? t('schedule.voters.hideList')
+                            : `${t('schedule.voters.showList')} (${s.voters.length})`}
+                        </span>
+                      </button>
+                      {expanded && (
+                        <VoterGroups
+                          voters={s.voters}
+                          playerById={playerById}
+                          userIdToPlayerName={userIdToPlayerName}
+                          allowMaybe={poll.allowMaybe}
+                          t={t}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
                 {/* Per-date footer — vote counts are visible to everyone, the
                     manual-close action is admin-only. Sits below the voter
                     list so the date row reads top→bottom: header, RSVP,
@@ -1515,12 +1707,14 @@ function PollCard(props: PollCardProps) {
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   gap: 8, marginTop: 8, paddingTop: 6,
                   borderTop: '1px dashed var(--border)',
+                  flexWrap: 'wrap',
                 }}>
                   <VoteCountPills
                     yes={s.yes}
                     maybe={s.maybe}
                     no={s.no}
                     allowMaybe={poll.allowMaybe}
+                    size="large"
                     t={t}
                   />
                   {/* Pin / re-pin — admin-only. Surfaces on every
@@ -1605,24 +1799,37 @@ function PollCard(props: PollCardProps) {
             ✓ {t('schedule.gameStarted')}
           </span>
         )}
-        {/* Share buttons.
-            Each button always carries the label of WHAT it shares
-            ("שתף הצבעה" / "Share poll" vs "שתף משחק" / "Share game")
-            so admins can scan the action row and know what's about
-            to leave the app — no need to click and find out.
-            Visibility:
-              - Open / expanded → invitation only.
-              - Confirmed at target → confirmation only.
-              - Confirmed BELOW target (post-lock-in dropout OR
-                early-pick) → BOTH render side-by-side. The state
-                is genuinely ambiguous (recruiting vs announcing),
-                so we let the admin pick the intent rather than
-                guessing. visualStatus pivots in-app voting back on
-                in this state, so "Share poll" stays useful for
-                re-recruitment. */}
-        {(poll.status === 'open' || poll.status === 'expanded' || isConfirmedBelowTarget) && (
+        {/* Share button(s).
+            Three cases — collapsed onto a single visible button so
+            the action row stays compact:
+              - Open / expanded            → 1 button → "📤 שתף הצבעה" → directly captures the invitation.
+              - Confirmed at target        → 1 button → "📤 שתף משחק"  → directly captures the confirmation. (rendered below alongside other confirmed-only chrome)
+              - Confirmed BELOW target     → 1 button → "📤 שתף ▾"     → opens a chooser modal listing both options PLUS
+                                              a one-line explanation of why both apply. The
+                                              ambiguous case earns a tap because the choice
+                                              is non-obvious; the unambiguous cases stay
+                                              one-tap (no regression).
+            Earlier this row showed BOTH buttons side-by-side in the
+            below-target case, but the labels were near-identical
+            ("שתף הצבעה" / "שתף משחק") and admins couldn't tell from
+            scanning which one to pick — losing the readability win
+            we got from labeling each share with WHAT it shares. The
+            chooser modal restores that clarity by spelling out the
+            INTENT ("recruit more players" vs. "announce it's
+            locked") next to each option. */}
+        {(poll.status === 'open' || poll.status === 'expanded') && !isConfirmedBelowTarget && (
           <button onClick={handleShareInvitation} disabled={isSharing} style={shareBtn}>
             {isSharing ? t('common.capturing') : t('schedule.share.shareInvitationLabel')}
+          </button>
+        )}
+        {isConfirmedBelowTarget && (
+          <button
+            onClick={() => setShareChooserOpen(true)}
+            disabled={isSharing}
+            style={shareBtn}
+            title={t('schedule.share.chooserTitle')}
+          >
+            {isSharing ? t('common.capturing') : t('schedule.share.shareMenuLabel')}
           </button>
         )}
         {/* Vote-change subscription toggle — members only, active polls
@@ -1644,7 +1851,7 @@ function PollCard(props: PollCardProps) {
             {isSubscribed ? t('schedule.subscribe.on') : t('schedule.subscribe.off')}
           </button>
         )}
-        {poll.status === 'confirmed' && confirmedDate && (
+        {poll.status === 'confirmed' && confirmedDate && !isConfirmedBelowTarget && (
           <button onClick={handleShareConfirmation} disabled={isSharing} style={shareBtn}>
             {isSharing ? t('common.capturing') : t('schedule.share.shareConfirmationLabel')}
           </button>
@@ -1662,6 +1869,52 @@ function PollCard(props: PollCardProps) {
               the target if someone drops post-lock-in. */
           <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
         )}
+        {/* Forced wrap point: pushes the "finalizing" cluster (lock,
+            cancel, delete) onto a second visual row so they don't sit
+            shoulder-to-shoulder with the constructive actions (start,
+            share, edit). Implemented as a zero-height flex item that
+            consumes 100% of the row's basis — flexbox completes the
+            current line and continues on the next. Admin-only since
+            the wrap only matters when those buttons are about to render
+            below it. */}
+        {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
+          <div style={{ flexBasis: '100%', height: 0 }} aria-hidden />
+        )}
+        {/* Lock / unlock voting (migration 039). Admin-only. Visible on
+            still-active polls (open / expanded / confirmed). When the
+            poll is unlocked the button reads "🔒 נעל הצבעה" and toggles
+            the lock on; when locked it reads "🔓 שחרר הצבעה" and toggles
+            it back off. Sits at the head of the second-row cluster
+            (lock → cancel → delete) — the cluster's mental model is
+            "actions that finalize / wind down the poll", and locking
+            voting is the lightest of the three (reversible, just
+            freezes RSVPs); placing it leftmost in RTL puts it first
+            in reading order so admins see the safest option first. */}
+        {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
+          <button
+            onClick={handleToggleVotingLock}
+            disabled={lockSubmitting}
+            title={isVotingLocked
+              ? t('schedule.unlockVotesTooltip')
+              : t('schedule.lockVotesTooltip')}
+            style={{
+              ...ghostBtn,
+              color: isVotingLocked ? '#34d399' : '#facc15',
+              borderColor: isVotingLocked
+                ? 'rgba(16, 185, 129, 0.5)'
+                : 'rgba(250, 204, 21, 0.5)',
+              background: isVotingLocked
+                ? 'rgba(16, 185, 129, 0.10)'
+                : 'rgba(250, 204, 21, 0.10)',
+              opacity: lockSubmitting ? 0.6 : 1,
+              cursor: lockSubmitting ? 'wait' : 'pointer',
+            }}
+          >
+            {isVotingLocked
+              ? t('schedule.unlockVotes')
+              : t('schedule.lockVotes')}
+          </button>
+        )}
         {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
           /* Cancel — also visible on confirmed polls (migration 036) so
              an admin can pull the plug if too many drop after the lock-in.
@@ -1674,10 +1927,8 @@ function PollCard(props: PollCardProps) {
         )}
         {/* Delete (permanent) — admin-only, available in any state.
             For active polls we recommend Cancel first via the confirm copy.
-            No auto-margin: that consumes all leftover row space and forces
-            the button to wrap to its own line on narrow (≤360px) viewports.
-            Letting it flow naturally with the rest keeps the action row
-            tightly packed on mobile while still working fine on desktop. */}
+            Sits on the second visual row alongside Cancel (the destructive
+            cluster) so admins don't tap one when meaning the other. */}
         {isAdmin && (
           <button
             onClick={onDelete}
@@ -1703,6 +1954,58 @@ function PollCard(props: PollCardProps) {
           handleRpcError={handleRpcError}
           t={t}
         />
+      )}
+
+      {/* Share-target chooser modal — only opens for the rare
+          confirmed-below-target case where both invitation and
+          confirmation shares make sense. Lightweight: just a title
+          and the same compact share pills the action row already
+          uses, side-by-side, so the user sees the two options in
+          their familiar form (no big primary buttons, no extra
+          body copy) and picks. Picking either option closes the
+          modal and triggers the existing share handler; the
+          off-screen capture infrastructure handles the rest. */}
+      {shareChooserOpen && (
+        <ModalPortal>
+          <div
+            className="modal-overlay"
+            onClick={() => !isSharing && setShareChooserOpen(false)}
+          >
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">{t('schedule.share.chooserTitle')}</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => setShareChooserOpen(false)}
+                  disabled={isSharing}
+                  aria-label={t('common.close')}
+                >×</button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                <button
+                  onClick={() => {
+                    setShareChooserOpen(false);
+                    handleShareInvitation();
+                  }}
+                  disabled={isSharing}
+                  style={shareBtn}
+                >
+                  {t('schedule.share.shareInvitationLabel')}
+                </button>
+                <button
+                  onClick={() => {
+                    setShareChooserOpen(false);
+                    handleShareConfirmation();
+                  }}
+                  disabled={isSharing}
+                  style={shareBtn}
+                >
+                  {t('schedule.share.shareConfirmationLabel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Off-screen premium screenshot card (rendered only while sharing) */}
@@ -1976,10 +2279,19 @@ interface VoteCountPillsProps {
   maybe: number;
   no: number;
   allowMaybe: boolean;
+  // Layout variant — see comments in the body for the rationale of each.
+  //   'compact' (default) — tight inline pills used inside the
+  //     DateCompetitionStrip's single-line rows where horizontal space
+  //     is at a premium. Symbol-only, small font.
+  //   'large' — prominent pills used in the per-date detail row footer
+  //     and the confirmed banner. Bigger font, more padding, an
+  //     inline Hebrew label after the count so the meaning is
+  //     unambiguous at a glance ("✓ 6 מגיעים" rather than "✓ 6").
+  size?: 'compact' | 'large';
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
-function VoteCountPills({ yes, maybe, no, allowMaybe, t }: VoteCountPillsProps) {
+function VoteCountPills({ yes, maybe, no, allowMaybe, size = 'compact', t }: VoteCountPillsProps) {
   type Pill = { value: number; color: string; bg: string; symbol: string; label: string };
   const pills: Pill[] = [
     { value: yes,   color: '#10b981', bg: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.rsvpYes') },
@@ -1991,8 +2303,24 @@ function VoteCountPills({ yes, maybe, no, allowMaybe, t }: VoteCountPillsProps) 
   }
   pills.push({ value: no, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.10)', symbol: '✗', label: t('schedule.rsvpNo') });
 
+  const isLarge = size === 'large';
+  const containerGap = isLarge ? 8 : 3;
+  const pillPadding = isLarge ? '4px 10px' : '2px 7px';
+  const pillGap = isLarge ? 5 : 3;
+  const pillFontSize = isLarge ? 13 : 11;
+  const symbolFontSize = isLarge ? 13 : 10;
+
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+    // Non-wrapping inline cluster — when these pills sit inside the
+    // DateCompetitionStrip's per-row top line they MUST stay on the
+    // same line as the date label and pick button, otherwise the row
+    // breaks into two visual lines on a 360px viewport. Padding +
+    // gaps are tuned tight enough that ✓N + ?N + ✗N fits even when
+    // N reaches double digits. The 'large' variant relaxes those
+    // constraints (it lives in the per-date detail row footer where
+    // there's a full row of horizontal space) and adds the response
+    // label after the count for instant readability.
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: containerGap, flexShrink: 0 }}>
       {pills.map((p, i) => {
         const active = p.value > 0;
         return (
@@ -2001,12 +2329,12 @@ function VoteCountPills({ yes, maybe, no, allowMaybe, t }: VoteCountPillsProps) 
             className="poll-count-pill"
             title={`${p.value} ${p.label}`}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '2px 9px', borderRadius: 999,
+              display: 'inline-flex', alignItems: 'center', gap: pillGap,
+              padding: pillPadding, borderRadius: 999,
               background: active ? p.bg : 'transparent',
               color: active ? p.color : 'var(--text-muted)',
               border: `1px solid ${active ? `${p.color}55` : 'var(--border)'}`,
-              fontSize: 11,
+              fontSize: pillFontSize,
               fontWeight: active ? 700 : 500,
               fontVariantNumeric: 'tabular-nums',
               opacity: active ? 1 : 0.55,
@@ -2014,8 +2342,13 @@ function VoteCountPills({ yes, maybe, no, allowMaybe, t }: VoteCountPillsProps) 
               animationDelay: `${i * 40}ms`,
             }}
           >
-            <span aria-hidden style={{ fontSize: 10 }}>{p.symbol}</span>
+            <span aria-hidden style={{ fontSize: symbolFontSize }}>{p.symbol}</span>
             {p.value}
+            {isLarge && (
+              <span style={{ fontSize: pillFontSize - 2, fontWeight: 500, opacity: 0.85 }}>
+                {p.label}
+              </span>
+            )}
           </span>
         );
       })}
@@ -2160,18 +2493,32 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
   const showTieHint = topCount >= 2 && topYes >= poll.targetPlayerCount;
 
   return (
+    // Strip is the "scoreboard panel" — a labeled outer container that
+    // visually reads as one cohesive widget distinct from the per-date
+    // detail cards below it. We use a soft indigo (#6366f1) tint
+    // because the per-row backgrounds inside the panel are tinted in
+    // the per-date palette (green for leader, slate for runners-up),
+    // and indigo doesn't collide with any of those — making the
+    // panel↔row contrast obvious. The subtle gradient + blue-shaded
+    // shadow give the panel a "scoreboard" feel that's distinct from
+    // the standard card chrome elsewhere on the screen. The section
+    // heading sits inside the panel border (not above it) so the
+    // panel + heading + rows feel like one unit.
     <div style={{
-      marginBottom: 10,
-      padding: '8px 10px',
-      borderRadius: 8,
-      border: '1px solid var(--border)',
-      background: 'var(--surface-elevated, var(--surface))',
+      marginBottom: 14,
+      padding: '10px 12px',
+      borderRadius: 10,
+      border: '1px solid rgba(99, 102, 241, 0.32)',
+      background: 'linear-gradient(180deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%)',
+      boxShadow: '0 1px 4px rgba(99, 102, 241, 0.18)',
     }}>
       <div style={{
-        fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-        letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6,
+        fontSize: 11, fontWeight: 700, color: '#a5b4fc',
+        letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8,
+        display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        🗳 {t('schedule.competition.heading')}
+        <span aria-hidden>🗳</span>
+        <span>{t('schedule.competition.heading')}</span>
       </div>
       {showTieHint && (
         <div style={{
@@ -2191,7 +2538,10 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
           const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
           const isLeader = d.id === leaderId;
           const pct = Math.min(100, Math.round((s.yes / Math.max(1, poll.targetPlayerCount)) * 100));
-          const loc = d.location || poll.defaultLocation;
+          // Note: location intentionally NOT pulled here — the compact
+          // strip layout drops it to keep rows on a single line at
+          // mobile widths. The full date + time + location render in
+          // the per-date detail row directly below this strip.
           // Glyph rule: ONLY ✅ — and only when this row is the
           // truly-confirmed lock-in (visualStatus='confirmed' makes
           // the parent pass confirmedDateId; we just match on it).
@@ -2208,34 +2558,71 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
           const isConfirmedHere = confirmedDateId === d.id;
           const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
           return (
+            // Each row is its own bordered card so the strip reads as a
+            // *list of dates* rather than a wall of text. Non-leader rows
+            // get a soft surface tint + outline; the leader row keeps the
+            // brighter green rail + green-tint background as the
+            // "currently winning / pinned" highlight. The contrast
+            // between the two states is what carries the leader signal
+            // — the user reported the previous flat-on-flat look made
+            // the strip feel like one undifferentiated block.
             <div key={d.id} style={{
-              display: 'flex', flexDirection: 'column', gap: 4,
-              padding: '6px 8px',
-              borderRadius: 6,
-              borderInlineStart: isLeader ? '3px solid #10b981' : '3px solid transparent',
-              background: isLeader ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+              display: 'flex', flexDirection: 'column', gap: 6,
+              padding: '8px 10px',
+              borderRadius: 8,
+              // Per-row card sits ON TOP of the indigo scoreboard panel,
+              // so we lift each row to a neutral surface (var(--surface))
+              // to read as a "card on the panel" rather than blending
+              // into the indigo wash. Leader keeps its green identity
+              // (rail + green tint) which now contrasts cleanly with
+              // both the indigo panel and the neutral non-leader rows.
+              border: `1px solid ${isLeader ? 'rgba(16, 185, 129, 0.45)' : 'rgba(148, 163, 184, 0.30)'}`,
+              borderInlineStart: isLeader
+                ? '3px solid #10b981'
+                : `1px solid rgba(148, 163, 184, 0.30)`,
+              background: isLeader
+                ? 'rgba(16, 185, 129, 0.12)'
+                : 'var(--surface)',
             }}>
+              {/* Top row: date label (left-aligned in RTL = inline-start)
+                  + pills + pick button. NO flexWrap — on narrow mobile
+                  viewports we'd rather truncate the date label with an
+                  ellipsis than break the row into two visual lines.
+                  The pills and pick button are flexShrink:0 so they
+                  always render whole; the date label is the only
+                  shrinkable piece, which is the right trade-off (date
+                  recognition reads fine even when truncated to "יום
+                  חמישי 30/4…"). */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                gap: 8, flexWrap: 'wrap',
+                gap: 8,
               }}>
+                {/* Compact date label — `fmtHebrewDateCompact` drops the
+                    time, and we deliberately omit the location too.
+                    Both still appear in the per-date detail row directly
+                    below the strip, so the reader doesn't lose any
+                    information; the strip stays a one-line scoreboard
+                    even on a 360px viewport. */}
                 <div style={{
-                  fontSize: 13, fontWeight: isLeader ? 700 : 600, color: 'var(--text)',
+                  fontSize: 12.5, fontWeight: isLeader ? 700 : 600, color: 'var(--text)',
                   display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: '1 1 auto',
+                  overflow: 'hidden',
                 }}>
                   {leaderGlyph && (
                     <span
                       aria-label={t('schedule.competition.leader')}
                       title={t('schedule.competition.leader')}
-                      style={{ fontSize: 13 }}
+                      style={{ fontSize: 13, flexShrink: 0 }}
                     >{leaderGlyph}</span>
                   )}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {fmtHebrewDate(d)}
-                    {loc && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{` — ${loc}`}</span>}
+                    {fmtHebrewDateCompact(d)}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  flexShrink: 0,
+                }}>
                   <VoteCountPills
                     yes={s.yes}
                     maybe={s.maybe}
@@ -2265,10 +2652,10 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
                       onClick={() => onManualClose(d.id)}
                       className="poll-ghost-btn"
                       style={{
-                        padding: '3px 9px', borderRadius: 6,
+                        padding: '2px 7px', borderRadius: 6,
                         border: '1px dashed var(--border)', background: 'transparent',
-                        color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                        whiteSpace: 'nowrap',
+                        color: 'var(--text-muted)', fontSize: 10.5, cursor: 'pointer',
+                        whiteSpace: 'nowrap', flexShrink: 0,
                       }}>{
                         poll.status === 'confirmed'
                           ? t('schedule.manualRepin')

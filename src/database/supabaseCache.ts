@@ -166,6 +166,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     defaultLocation: (row.default_location as string | null) ?? null,
     allowMaybe: row.allow_maybe !== false,
     cancellationReason: (row.cancellation_reason as string | null) ?? null,
+    votingLockedAt: (row.voting_locked_at as string | null) ?? null,
     creationNotificationsSentAt: (row.creation_notifications_sent_at as string | null) ?? null,
     expandedNotificationsSentAt: (row.expanded_notifications_sent_at as string | null) ?? null,
     confirmedNotificationsSentAt: (row.confirmed_notifications_sent_at as string | null) ?? null,
@@ -1665,6 +1666,22 @@ export async function manuallyClosePollRpc(pollId: string, dateId: string): Prom
   const { error } = await supabase.rpc('manual_close_game_poll', {
     p_poll_id: pollId,
     p_date_id: dateId,
+  });
+  if (error) throw error;
+  await refreshPollsNow();
+}
+
+// Migration 039: admin-toggleable soft lock on voting. Independent of
+// poll.status — locks a still-active poll (open/expanded/confirmed) so
+// no further votes (member self-RSVP or admin proxy) can land until
+// admin unlocks. Idempotent at the SQL level: locking an already-locked
+// poll refreshes the timestamp, unlocking an already-unlocked poll is
+// a no-op. Throws on cancelled/expired polls (the lock would be
+// meaningless on a terminal status).
+export async function setPollVotingLockRpc(pollId: string, locked: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_poll_voting_lock', {
+    p_poll_id: pollId,
+    p_locked: locked,
   });
   if (error) throw error;
   await refreshPollsNow();

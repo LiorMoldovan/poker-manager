@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.30.1';
+export const APP_VERSION = '5.31.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,34 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.31.0',
+    date: '2026-04-30',
+    changes: [
+      '🔒 New admin-only "lock voting" toggle on schedule polls. Sits in the action row of any still-active poll (open / expanded / confirmed) as "🔒 נעל הצבעה" / "🔒 Lock voting" — one click freezes the lineup so no further vote changes (member self-RSVP or admin proxy) can land until the admin unlocks. The button flips to "🔓 שחרר הצבעה" / "🔓 Unlock voting" while locked and a yellow "🔒 ההצבעה נעולה" badge appears next to the status pill so the locked state is visible at a glance. Closes the gap between "the game is confirmed but starts tomorrow" and "I want to start the canonical game flow now" — admins can now freeze the lineup without committing to NewGameScreen\'s forecast/TTS/buy-in flow.',
+      '🛡️ Server-side enforcement via new migration `039-schedule-voting-lock.sql`. Adds `voting_locked_at TIMESTAMPTZ` to `game_polls`, a new admin-only `set_poll_voting_lock(poll_id, locked)` RPC, and tightens `cast_poll_vote` / `admin_cast_poll_vote` / `admin_delete_poll_vote` to raise `voting_locked` whenever the column is non-null. The lock applies even to admin proxy actions so it can\'t be silently bypassed — admin must unlock first to make any change. Independent of poll status: the lock can be toggled on/off freely without affecting status, dates, votes, or notification flags.',
+      '🎨 Action row reorganized so destructive actions (Cancel poll, Delete permanently) cluster on a separate visual line from constructive ones (Start game, Share, Edit, Lock). A flexbox-break trick wraps the row mid-flow on viewport widths where everything would otherwise crowd onto a single line — admins are less likely to mis-tap the destructive cluster when scanning the constructive one.',
+      '🌐 New translation keys: `schedule.lockVotes` / `schedule.unlockVotes` (button labels), `schedule.lockVotesTooltip` / `schedule.unlockVotesTooltip` (hover hints), `schedule.votingLockedBadge` (header pill), `schedule.errorVotingLocked` (RSVP-disabled tooltip + RPC error mapping), `schedule.votingLockedSuccess` / `schedule.votingUnlockedSuccess` (toast confirmations). Hebrew + English.',
+      '🎨 Schedule poll vote-count pills got a `large` size variant. Per-date detail row footers + the single-date confirmed banner now render the count summary at 13px (up from 11px) with extra padding and the Hebrew/English label after the number — "✓ 6 מגיעים   ? 1 אעדכן   ✗ 0 לא מגיעים" instead of "✓ 6 ? 1 ✗ 0". The compact symbol-only variant stays in `DateCompetitionStrip` rows where space is tight. Also adds `flexWrap: wrap` to the per-date footer so the larger pills can drop the pick button to a second line on narrow viewports rather than overflowing.',
+      '🌌 `DateCompetitionStrip` panel re-skinned. Replaced the flat slate tint with a soft indigo gradient (`rgba(99, 102, 241, 0.12) → 0.06`) + indigo border + bluish drop-shadow + light-indigo (`#a5b4fc`) heading so the "🗳 השוואה בין תאריכים" widget reads as a distinct scoreboard panel rather than a passive container. Non-leader rows inside the panel were lifted to the app\'s standard `var(--surface)` so they sit on the indigo wash like cards on a tray; leader rows keep their green identity (rail + green tint) which now contrasts cleanly with both the panel and the runner-up rows. Indigo was chosen because it doesn\'t collide with any of the existing role colors (green=leader/yes, red=no/destructive, yellow/amber=maybe/expanded/lock, blue=open status pill, primary blue=actions).',
+      '🔒 Lock-voting toggle button moved to the second action-row line alongside Cancel + Delete (was previously on the first row with Edit). The mental model for that cluster is "actions that finalize / wind down the poll", and locking voting is the lightest of the three (fully reversible, no data lost) so it leads the cluster in RTL reading order. Constructive actions (Start game, Share, Edit) keep the first row.',
+      '✂️ "Switch the locked-in date" confirmation modal copy trimmed. Dropped the tie-break / use-case explanation and the "the game switched to this date" trailing clause; kept only what the admin actually needs to confirm (votes are preserved, players will be re-notified). The action button label below already conveys the intent so the body doesn\'t need to re-explain when to use the flow. Hebrew + English.',
+    ],
+  },
+  {
+    version: '5.30.3',
+    date: '2026-04-30',
+    changes: [
+      '📤 Share buttons consolidated. Open / expanded polls still show a single one-tap "📤 שתף הצבעה" / "Share poll" button, and confirmed-at-target polls still show a single one-tap "📤 שתף משחק" / "Share game" button — no regression. The genuinely-ambiguous "confirmed-below-target" case (admin pinned a date but yes-count < target) used to render BOTH buttons side-by-side, but the labels were near-identical and admins couldn\'t scan to know which to pick. That case now collapses to a single "📤 שתף ▾" button that opens a lightweight chooser — title only, then the same two compact "📤 שתף הצבעה" / "📤 שתף משחק" pill buttons the action row already uses, side-by-side. Picking either pill closes the modal and kicks off the same capture+share path as before. Compact, no extra body copy, familiar buttons.',
+    ],
+  },
+  {
+    version: '5.30.2',
+    date: '2026-04-30',
+    changes: [
+      '🪗 Per-date voter chip lists in schedule polls now collapse by default. Each row\'s footer carries a "▼ הצג מצביעים (N)" / "▼ Show voters (N)" toggle; the count pills, RSVP buttons, proxy badge, pinned-date highlight, and pick button all stay visible while collapsed so the row remains fully actionable. Confirmed dates with 6+ proxy chips used to push a single card past 500px tall on mobile and bury share/action buttons below the fold — now every per-date card lands at a roughly fixed compact height, which (a) makes the "Date competition" strip clearly distinct from the per-date detail block, (b) makes individual rows visually distinct from each other, and (c) puts the share buttons back within thumb reach without scrolling. State is local to the card so expanding one date doesn\'t expand the others.',
+    ],
+  },
   {
     version: '5.30.1',
     date: '2026-04-30',

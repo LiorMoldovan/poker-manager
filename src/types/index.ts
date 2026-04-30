@@ -215,6 +215,13 @@ export interface GamePoll {
   defaultLocation?: string | null;
   allowMaybe: boolean;
   cancellationReason?: string | null;
+  // Migration 039: admin-toggleable soft lock on voting. NULL = open
+  // to votes; non-null timestamp = frozen by admin (status keeps its
+  // independent meaning, so an open/expanded/confirmed poll can be
+  // locked without changing status). Members see RSVP buttons greyed
+  // out; cast_poll_vote / admin_cast_poll_vote / admin_delete_poll_vote
+  // raise 'voting_locked' on the server side.
+  votingLockedAt?: string | null;
   creationNotificationsSentAt?: string | null;
   expandedNotificationsSentAt?: string | null;
   confirmedNotificationsSentAt?: string | null;
