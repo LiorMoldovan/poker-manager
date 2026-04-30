@@ -260,11 +260,15 @@ const Bubble = ({ bubble, placement, theme }: BubbleProps) => {
     position: 'absolute',
     top: `${placement.top * 100}%`,
     left: `${placement.left * 100}%`,
+    // CRITICAL: `width: max-content` makes the bubble size to the natural
+    // inline width of its text (capped by maxWidth). Without this, an
+    // absolutely-positioned div uses unstable shrink-to-fit sizing and
+    // ends up at minWidth on small viewports — that's what produced
+    // the column-of-single-words rendering on mobile.
+    width: 'max-content',
     maxWidth: `${placement.maxWidth * 100}%`,
-    // Modest min-width prevents single-word-per-line wrapping but stays
-    // small enough that short bubbles ("yes!", "אאוט!") don't artificially
-    // grow into a giant box covering the character art beneath.
-    minWidth: isCaption ? '32%' : '22%',
+    // No minWidth needed — max-content already gives short text a tight
+    // fit and long text expands up to maxWidth before wrapping.
     padding: theme.padding,
     background: isCaption ? caption.background : theme.background,
     color: isCaption ? caption.color : theme.color,

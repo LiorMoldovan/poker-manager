@@ -1399,6 +1399,24 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
   box-shadow: var(--card-shadow), 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
+/* Deep-link highlight: when the user lands here via a share-card URL
+ * (`/settings?tab=schedule&poll=<id>`), pulse a soft cyan ring around
+ * the targeted poll card for ~2s so the eye lands on the right card
+ * after auto-scroll. The wrapper itself has no padding/margin (it's
+ * a transparent `<div>`) so the ring traces the inner .poll-card. */
+.poll-card-deeplink-highlight > .poll-card {
+  animation: pollDeepLinkPulse 2s var(--poll-ease-out) 1;
+}
+@keyframes pollDeepLinkPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+  20%  { box-shadow: 0 0 0 6px rgba(56, 189, 248, 0.45); }
+  60%  { box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .poll-card-deeplink-highlight > .poll-card { animation: none; }
+}
+
 /* Status pill — refined typography + subtle gradient sheen */
 .poll-status-pill {
   display: inline-flex;

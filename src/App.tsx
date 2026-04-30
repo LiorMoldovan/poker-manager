@@ -735,6 +735,11 @@ function SupabaseApp() {
     </div>
   );
 
+  const unreadNotifications = getCachedNotifications().filter(n => !n.read);
+  const bannerLabel = notifCount === 1 && unreadNotifications[0]?.title
+    ? unreadNotifications[0].title
+    : t('notification.bannerMany', { count: notifCount });
+
   const notificationBanner = notifCount > 0 && !showNotifPanel && (
     <div
       onClick={() => setShowNotifPanel(true)}
@@ -749,9 +754,7 @@ function SupabaseApp() {
     >
       <span style={{ fontSize: '1.1rem' }}>🔔</span>
       <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#EAB308' }}>
-        {notifCount === 1
-          ? (t('notification.settlementTitle'))
-          : `${notifCount} ${t('notification.settlementTitle')}`}
+        {bannerLabel}
       </span>
     </div>
   );

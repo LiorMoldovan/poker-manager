@@ -483,6 +483,7 @@ const he = {
   'notification.selfDisputeEmailSubject': 'אישור — דיווחת על תשלום חסר — Poker Manager',
   'notification.unlinkedDisputeTitle': '{target} לא מקושר — דיווחת על תשלום חסר',
   'notification.unlinkedDisputeBody': 'דיווחת שתשלום של {amount} מ-{target} מערב {date} לא התקבל, אך {target} לא מקושר למערכת',
+  'notification.bannerMany': '{count} התראות חדשות',
 
   // ── Push Notifications ──
   'push.tabLabel': '🔔 התראות',
@@ -807,7 +808,21 @@ const he = {
   'schedule.voters.changed': 'עודכן',
   'schedule.voters.votedAt': 'הצביע ב־{time}',
   'schedule.voters.changedFrom': 'עודכן (מקורית: {time})',
-  'schedule.targetProgress': '{count} / {target}',
+  // \u2066…\u2069 = LRI…PDI (LEFT-TO-RIGHT ISOLATE / POP DIRECTIONAL
+  // ISOLATE). Without these the spaces around the slash get absorbed
+  // as RTL neutrals in a Hebrew paragraph, which splits "6 / 7" into
+  // two single-digit LTR runs that the bidi algo then re-orders for
+  // RTL display — producing the visible "7 / 6" reading. Wrapping the
+  // fraction in an LTR isolate keeps the two digits inside a single
+  // LTR run regardless of the surrounding container direction.
+  'schedule.targetProgress': '\u2066{count} / {target}\u2069',
+  'schedule.competition.heading': 'השוואה בין תאריכים',
+  'schedule.competition.leader': 'מוביל',
+  // Multi-date share images drop the per-date voter chip lists to keep
+  // the rasterised PNG short enough to land in WhatsApp without being
+  // chopped. We replace those blocks with a single CTA that points
+  // recipients to the app for the full voter breakdown per date.
+  'schedule.share.viewVotersInApp': '👀 לפרטי המצביעים לכל תאריך, פתחו את האפליקציה',
   'schedule.startScheduledGame': 'התחל משחק',
   'schedule.editBeforeStart': 'ערוך לפני ההתחלה',
   'schedule.generateForecast': '🔮 צור תחזית',
@@ -879,13 +894,40 @@ const he = {
 
   'schedule.expandNow': 'הרחב עכשיו',
   'schedule.manualClose': 'סגור על תאריך זה',
+  // Re-pin label — surfaces on per-date rows of an already-confirmed
+  // poll. Lets admins switch the lock-in to a tied / preferred date
+  // without cancelling the whole poll. The currently-pinned date
+  // hides this button entirely (you can't switch to where you already
+  // are), so we don't need a "current pick" copy.
+  'schedule.manualRepin': 'בחר תאריך',
   'schedule.manualCloseConfirmTitle': 'סגירת הצבעה על תאריך זה',
-  'schedule.manualCloseConfirmBody': 'לסגור את ההצבעה ולנעול את המשחק על {date}? שאר התאריכים יוסרו, אבל שחקנים עדיין יוכלו לעדכן את ההצבעה שלהם לתאריך הזה.',
+  // Modal body — covers both initial-close and re-pin flows. Re-pin
+  // renders the alternate copy (manualRepinConfirmBody) so the wording
+  // matches the action ("switch to" vs "lock in").
+  'schedule.manualCloseConfirmBody': 'לנעול את המשחק על {date}? כל ההצבעות נשמרות וכל השחקנים עדיין יוכלו לעדכן את התשובה שלהם לכל אחד מהתאריכים.',
+  'schedule.manualRepinConfirmTitle': 'החלפת התאריך הנעול',
+  'schedule.manualRepinConfirmBody': 'להחליף את התאריך הנעול ל־{date}? המצב הזה שימושי כשקיבלתם תיקו וצריך לבחור תאריך, או כשרוצים לעבור לתאריך אחר. ההצבעות לא מתאפסות והשחקנים יקבלו עדכון שהמשחק עבר לתאריך זה.',
   'schedule.manualCloseConfirmAction': 'נעל על תאריך זה',
+  'schedule.manualRepinConfirmAction': 'בחר תאריך',
+  // Success / failure toasts for the pick-date / re-pin flow. The
+  // failure copy is what surfaces when migration 038 hasn't been
+  // applied yet — the SQL silently no-ops on confirmed polls and the
+  // UI would otherwise look frozen. Better to tell the admin the
+  // action didn't take effect than to leave them clicking a button
+  // that quietly does nothing.
+  'schedule.manualCloseSuccess': 'המשחק ננעל על {date}',
+  'schedule.manualRepinSuccess': 'המשחק עבר ל־{date}',
+  'schedule.manualCloseNoop': 'הפעולה לא בוצעה. ייתכן שצריך להריץ את עדכון מסד הנתונים האחרון (038-schedule-repin-confirmed.sql).',
+  // Tie hint — pinned just under the competition strip when 2+ dates
+  // share the highest yes-count AND that count has reached target.
+  // Nudges admins to use the per-date "Switch to this date" affordance
+  // so they realise they have a real choice instead of accepting the
+  // auto-pinned tie-mate by default.
+  'schedule.competition.tieHint': '🔀 תיקו על היעד — בחרו את התאריך הרצוי בכפתור שליד כל תאריך',
   'schedule.confirmedCanChange': '💡 משחק נסגר — אפשר עדיין לעדכן הצבעה אם משהו השתנה',
   'schedule.openSeats.singular': 'נשאר מקום אחרון',
   'schedule.openSeats.plural': 'נשארו עוד {missing} מקומות פנויים',
-  'schedule.proxy.add': '➕ הוסף',
+  'schedule.proxy.add': '➕ עדכן',
   'schedule.proxy.modalTitle': 'הצבעה ידנית עבור שחקן',
   'schedule.proxy.modalHelper': 'אדמינים יכולים להצביע בשם שחקנים שלא נרשמו לאפליקציה. הצבעה כזו תוחלף אוטומטית אם השחקן נרשם ומצביע בעצמו.',
   'schedule.proxy.selectPlayer': 'בחרו שחקן (אפשר כמה ביחד)',
@@ -918,13 +960,30 @@ const he = {
   'schedule.proxy.typePermanent': '⭐ קבועים',
   'schedule.proxy.typeGuest': '🏠 אורחים',
   'schedule.proxy.typeOccasional': '👤 מזדמנים',
-  'schedule.share.invitationTitle': 'הצבעת ערב פוקר',
+  'schedule.share.invitationTitle': 'קביעת ערב פוקר',
   'schedule.share.confirmationTitle': 'ערב פוקר נקבע',
   'schedule.share.cancellationTitle': 'ההצבעה בוטלה',
   'schedule.share.footer': 'Poker Manager',
+  'schedule.share.registeredOnlyNote': 'ההצבעה זמינה רק לחברי הקבוצה הרשומים באפליקציה',
+  'schedule.share.registerLabel': 'להרשמה',
+  'schedule.share.openAppLink': 'היכנסו והצביעו',
+  // WhatsApp caption text — sent alongside the share image so recipients
+  // get a clickable URL even though the URL inside the rasterised
+  // image is just pixels. Each mode has its own opening line:
+  //   * invitation   → call to action ("come vote")
+  //   * confirmation → "everything else is in the app" (reminders, lineup)
+  //   * cancellation → soft heads-up that the next game is in the app
+  'schedule.share.captionInvitation': '🗳️ הצבעה פתוחה לערב הפוקר הבא — היכנסו והצביעו',
+  'schedule.share.captionConfirmation': '🃏 ערב פוקר נקבע — לפרטים מלאים ומעקב, היכנסו לאפליקציה',
+  'schedule.share.captionCancellation': '🛑 ההצבעה בוטלה — לעדכונים על המשחק הבא היכנסו לאפליקציה',
+  'schedule.share.shareInvitationLabel': '📤 שתף הצבעה',
+  'schedule.share.shareConfirmationLabel': '📤 שתף משחק',
   'schedule.share.invitationCallToAction': 'היכנסו לאפליקציה והצביעו',
   'schedule.share.confirmationFarewell': 'נתראה ליד השולחן',
-  'schedule.share.targetProgress': '{count} / {target} שחקנים',
+  // Same LRI…PDI wrapper as schedule.targetProgress — see comment
+  // there. The trailing "שחקנים" is RTL Hebrew and stays in the
+  // paragraph flow; only the digits + slash need the isolate.
+  'schedule.share.targetProgress': '\u2066{count} / {target}\u2069 שחקנים',
   'schedule.share.proposedDates': 'תאריכים מוצעים',
   'schedule.share.confirmedPlayers': 'משתתפים',
   'schedule.share.periodTable': 'סטטיסטיקה לחציון',
@@ -938,13 +997,15 @@ const he = {
   'schedule.share.note': 'הערה',
   'schedule.share.cancellationReason': 'סיבת הביטול',
   'schedule.share.target': 'יעד',
-  'schedule.share.phaseOpen': 'פתוח לקבועים בלבד',
-  'schedule.share.phaseExpanded': 'פתוח לכל השחקנים',
-  'schedule.share.opensToAllOn': 'נפתח לכולם ב־{date}',
+  'schedule.share.phaseOpen': 'הצבעה פתוחה לקבועים בלבד',
+  'schedule.share.phaseExpanded': 'הצבעה פתוחה לכל השחקנים',
+  'schedule.share.opensToAllOn': 'הצבעה נפתחת לכולם ב־{date}',
+  'schedule.share.currentStatus': 'מצב נוכחי',
   'schedule.share.tagline': 'Schedule · Track · Train',
   'schedule.share.headerSubtitleInvitation': 'הצבעה פתוחה',
   'schedule.share.headerSubtitleCancellation': 'אין משחק הפעם',
   'schedule.errorPollLocked': 'ההצבעה כבר נסגרה',
+  'schedule.errorSeatFull': 'הכיסאות מלאים — היעד כבר הושג. אם רוצים להוסיף עוד שחקן, אפשר לעדכן את היעד דרך "ערוך"',
   'schedule.errorNoPlayerLink': 'אין שחקן מקושר. עברו לטאב "קבוצה" וקשרו את החשבון',
   'schedule.errorTierNotAllowed': 'הצבעה זמינה כרגע לשחקנים קבועים בלבד',
   'schedule.errorPastDate': 'לא ניתן להציע תאריך שעבר',
@@ -1404,6 +1465,7 @@ const he = {
   'settings.setup.stepInviteDesc': 'שלח קוד הזמנה לשחקנים כדי שיצטרפו לקבוצה',
   'settings.setup.welcomeTitle': '🎉 הקבוצה מוכנה!',
   'settings.setup.welcomeSubtitle': 'הנה מה שאפשר לעשות באפליקציה:',
+  'settings.setup.welcomeSchedule': 'תזמון משחק — הצבעה על תאריכים שנסגרת אוטומטית כשנאסף מניין',
   'settings.setup.welcomeNewGame': 'התחל משחק חדש — בחר שחקנים, קבל תחזית AI ושגר ערב פוקר',
   'settings.setup.welcomeLive': 'מעקב חי — ריבאיים, הוצאות משותפות והכרזות קוליות',
   'settings.setup.welcomeEnd': 'סיום משחק — ספירת צ\'יפים, חישוב רווחים וסיכום AI אוטומטי',
@@ -1417,7 +1479,9 @@ const he = {
   'settings.setup.aboutApp': '📖 מה אפשר לעשות?',
   'settings.setup.gameFlowBtn': '🎮 איך מנהלים משחק?',
   'settings.setup.gameFlowTitle': 'מחזור חיי משחק',
-  'settings.setup.gameFlowSubtitle': 'חמישה שלבים מההתחלה ועד הסוף',
+  'settings.setup.gameFlowSubtitle': 'שישה שלבים מההתחלה ועד הסוף',
+  'settings.setup.gameFlowScheduleTitle': 'תזמון המשחק',
+  'settings.setup.gameFlowScheduleDesc': 'פתחו הצבעה על תאריכים מוצעים, השחקנים מצביעים מי מגיע, והמערכת מאשרת אוטומטית את הערב כשנאסף מניין',
   'settings.setup.gameFlowStep1Title': 'הקמת משחק חדש',
   'settings.setup.gameFlowStep1Desc': 'בחרו שחקנים לערב, בחרו מיקום, וקבלו תחזית AI אישית לכל שחקן',
   'settings.setup.gameFlowStep2Title': 'משחק חי',
@@ -1958,6 +2022,7 @@ const en: Record<keyof typeof he, string> = {
   'notification.selfDisputeEmailSubject': 'Confirmation — Unpaid Settlement Reported — Poker Manager',
   'notification.unlinkedDisputeTitle': '{target} not linked — unpaid reported',
   'notification.unlinkedDisputeBody': 'You reported that payment of {amount} from {target} on {date} was not received, but {target} is not linked to the system',
+  'notification.bannerMany': '{count} new notifications',
 
   // ── Push Notifications ──
   'push.tabLabel': '🔔 Notifications',
@@ -2282,7 +2347,12 @@ const en: Record<keyof typeof he, string> = {
   'schedule.voters.changed': 'updated',
   'schedule.voters.votedAt': 'voted at {time}',
   'schedule.voters.changedFrom': 'updated (originally: {time})',
-  'schedule.targetProgress': '{count} / {target}',
+  // LRI…PDI wrapper kept symmetric with the HE entry; harmless in
+  // LTR contexts but defends against any future RTL embedding.
+  'schedule.targetProgress': '\u2066{count} / {target}\u2069',
+  'schedule.competition.heading': 'Date competition',
+  'schedule.competition.leader': 'Leading',
+  'schedule.share.viewVotersInApp': '👀 Open the app to see who voted on each date',
   'schedule.startScheduledGame': 'Start game',
   'schedule.editBeforeStart': 'Edit before starting',
   'schedule.generateForecast': '🔮 Generate forecast',
@@ -2354,13 +2424,21 @@ const en: Record<keyof typeof he, string> = {
 
   'schedule.expandNow': 'Expand now',
   'schedule.manualClose': 'Close on this date',
+  'schedule.manualRepin': 'Pick date',
   'schedule.manualCloseConfirmTitle': 'Close poll on this date',
-  'schedule.manualCloseConfirmBody': 'Close the poll and lock the game in on {date}? All other proposed dates will be dropped, but voters can still update their RSVP for this date.',
+  'schedule.manualCloseConfirmBody': 'Lock the game in on {date}? All votes are kept and players can still update their RSVP on any of the proposed dates.',
+  'schedule.manualRepinConfirmTitle': 'Switch the locked-in date',
+  'schedule.manualRepinConfirmBody': 'Switch the locked-in date to {date}? Use this when there\u2019s a tie at the target or you simply want a different night. Votes are preserved and players will be re-notified about the new pick.',
   'schedule.manualCloseConfirmAction': 'Lock in this date',
+  'schedule.manualRepinConfirmAction': 'Pick date',
+  'schedule.manualCloseSuccess': 'Game locked in on {date}',
+  'schedule.manualRepinSuccess': 'Game switched to {date}',
+  'schedule.manualCloseNoop': 'Nothing changed. The latest DB update (038-schedule-repin-confirmed.sql) may need to be applied.',
+  'schedule.competition.tieHint': '🔀 Tie at the target — pick the date you want using the button next to each date',
   'schedule.confirmedCanChange': '💡 Game locked in — you can still update your RSVP if your plans change',
   'schedule.openSeats.singular': 'Last seat available',
   'schedule.openSeats.plural': '{missing} seats still open',
-  'schedule.proxy.add': '➕ Add',
+  'schedule.proxy.add': '➕ Update',
   'schedule.proxy.modalTitle': 'Manual vote on behalf of a player',
   'schedule.proxy.modalHelper': 'Admins can vote for players who have not registered. If the player later registers and votes themselves, their own vote will replace the manual one.',
   'schedule.proxy.selectPlayer': 'Select players (multi-select)',
@@ -2390,13 +2468,21 @@ const en: Record<keyof typeof he, string> = {
   'schedule.proxy.typePermanent': '⭐ Permanent',
   'schedule.proxy.typeGuest': '🏠 Guests',
   'schedule.proxy.typeOccasional': '👤 Occasional',
-  'schedule.share.invitationTitle': 'Poker Night Poll',
+  'schedule.share.invitationTitle': 'Setting Poker Night',
   'schedule.share.confirmationTitle': 'Poker Night Set',
   'schedule.share.cancellationTitle': 'Poll Cancelled',
   'schedule.share.footer': 'Poker Manager',
+  'schedule.share.registeredOnlyNote': 'Voting is open to registered group members only',
+  'schedule.share.registerLabel': 'Register at',
+  'schedule.share.openAppLink': 'Open the app to vote',
+  'schedule.share.captionInvitation': '🗳️ Vote on the next poker night — open the app to RSVP',
+  'schedule.share.captionConfirmation': '🃏 Poker night is set — see the full lineup and details in the app',
+  'schedule.share.captionCancellation': '🛑 Poll cancelled — open the app for updates on the next game',
+  'schedule.share.shareInvitationLabel': '📤 Share poll',
+  'schedule.share.shareConfirmationLabel': '📤 Share game',
   'schedule.share.invitationCallToAction': 'Open the app to vote',
   'schedule.share.confirmationFarewell': 'See you at the table',
-  'schedule.share.targetProgress': '{count} / {target} players',
+  'schedule.share.targetProgress': '\u2066{count} / {target}\u2069 players',
   'schedule.share.proposedDates': 'Proposed dates',
   'schedule.share.confirmedPlayers': 'Participants',
   'schedule.share.periodTable': 'Half-year stats',
@@ -2410,13 +2496,15 @@ const en: Record<keyof typeof he, string> = {
   'schedule.share.note': 'Note',
   'schedule.share.cancellationReason': 'Cancellation reason',
   'schedule.share.target': 'Target',
-  'schedule.share.phaseOpen': 'Permanents only',
-  'schedule.share.phaseExpanded': 'Open to everyone',
-  'schedule.share.opensToAllOn': 'Opens to everyone on {date}',
+  'schedule.share.phaseOpen': 'Voting open to permanents only',
+  'schedule.share.phaseExpanded': 'Voting open to everyone',
+  'schedule.share.opensToAllOn': 'Voting opens to everyone on {date}',
+  'schedule.share.currentStatus': 'Current status',
   'schedule.share.tagline': 'Schedule · Track · Train',
   'schedule.share.headerSubtitleInvitation': 'Voting open',
   'schedule.share.headerSubtitleCancellation': 'No game this round',
   'schedule.errorPollLocked': 'Poll already closed',
+  'schedule.errorSeatFull': 'All seats are taken — the target was reached. If you want to add another player, raise the target via "Edit"',
   'schedule.errorNoPlayerLink': 'No linked player. Open Group tab and link your account.',
   'schedule.errorTierNotAllowed': 'Voting is currently limited to permanent players',
   'schedule.errorPastDate': 'Cannot propose a past date',
@@ -2873,6 +2961,7 @@ const en: Record<keyof typeof he, string> = {
   'settings.setup.stepInviteDesc': 'Send invite codes so players can join the group',
   'settings.setup.welcomeTitle': '🎉 Group is ready!',
   'settings.setup.welcomeSubtitle': 'Here\'s what you can do in the app:',
+  'settings.setup.welcomeSchedule': 'Schedule a game — date poll that auto-confirms once the target count is reached',
   'settings.setup.welcomeNewGame': 'Start a new game — pick players, get AI forecast, and launch poker night',
   'settings.setup.welcomeLive': 'Live tracking — rebuys, shared expenses, and voice announcements',
   'settings.setup.welcomeEnd': 'End game — count chips, calculate profits, and get automatic AI summary',
@@ -2886,7 +2975,9 @@ const en: Record<keyof typeof he, string> = {
   'settings.setup.aboutApp': '📖 What can you do?',
   'settings.setup.gameFlowBtn': '🎮 How to run a game?',
   'settings.setup.gameFlowTitle': 'Game Lifecycle',
-  'settings.setup.gameFlowSubtitle': 'Five steps from start to finish',
+  'settings.setup.gameFlowSubtitle': 'Six steps from start to finish',
+  'settings.setup.gameFlowScheduleTitle': 'Schedule the night',
+  'settings.setup.gameFlowScheduleDesc': 'Open a poll with proposed dates, players vote who\'s in, and the system auto-confirms the night once the target count is reached',
   'settings.setup.gameFlowStep1Title': 'New Game Setup',
   'settings.setup.gameFlowStep1Desc': 'Pick players for the night, choose location, and get a personal AI forecast for each player',
   'settings.setup.gameFlowStep2Title': 'Live Game',

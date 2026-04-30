@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ReactNode, CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   getAllPolls, getAllPlayers, getSettings, saveSettings,
   createPoll, castVote, cancelPoll, manuallyClosePoll,
@@ -135,12 +135,44 @@ const isActionablePoll = (p: GamePoll): boolean =>
   || p.status === 'expanded'
   || (p.status === 'confirmed' && !p.confirmedGameId);
 
-// Archive a finished poll IF either:
-//   * it's older than ARCHIVE_DAYS (the long-tail rule), OR
-//   * there's at least one actionable poll alongside it (the "we've moved
-//     on" signal — a new poll, a confirmed game waiting to start, etc.).
-// Active polls are never archived.
-const shouldArchive = (p: GamePoll, hasActionable: boolean): boolean => {
+// True when every proposed date on the poll is strictly before "today".
+// We compare end-of-day for the latest date against the caller-supplied
+// today-start: a poll whose latest date is yesterday counts as past-dated;
+// a poll whose latest date is today is still live (the game might be
+// happening right now); a poll with at least one future date is never
+// past-dated even if other proposals already lapsed.
+const isPastDatedPoll = (p: GamePoll, todayStartTs: number): boolean => {
+  if (!p.dates || p.dates.length === 0) return false;
+  let latestEndOfDayTs = 0;
+  for (const d of p.dates) {
+    if (!d.proposedDate) continue;
+    // 'YYYY-MM-DD' parsed at end-of-day local time so a date marked
+    // "today" is treated as still-live until midnight rolls over.
+    const ts = new Date(`${d.proposedDate}T23:59:59`).getTime();
+    if (Number.isNaN(ts)) continue;
+    if (ts > latestEndOfDayTs) latestEndOfDayTs = ts;
+  }
+  // No parseable date → can't decide → leave it active.
+  if (latestEndOfDayTs === 0) return false;
+  return latestEndOfDayTs < todayStartTs;
+};
+
+// Archive a poll IF any of:
+//   * every proposed date is strictly before today (the "the game date
+//     already passed, nothing left to do" rule — applies to ANY status,
+//     including open/expanded/confirmed-without-game; once the date is
+//     in the past the poll is dead weight regardless), OR
+//   * it's a finished poll (cancelled / expired / confirmed-with-game-
+//     started) AND there's at least one actionable poll alongside it
+//     (the "we've moved on" signal), OR
+//   * it's a finished poll older than ARCHIVE_DAYS (the long-tail rule).
+// Active polls with at least one future date stay active.
+const shouldArchive = (
+  p: GamePoll,
+  hasActionable: boolean,
+  todayStartTs: number,
+): boolean => {
+  if (isPastDatedPoll(p, todayStartTs)) return true;
   if (!isFinishedPoll(p)) return false;
   if (hasActionable) return true;
   const created = new Date(p.createdAt).getTime();
@@ -167,6 +199,16 @@ export default function ScheduleTab() {
   const { t, isRTL } = useTranslation();
   const { role, isOwner, isSuperAdmin, playerName } = usePermissions();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Deep-link target: when a recipient taps the share-card URL
+  // (`/settings?tab=schedule&poll=<id>`), the SettingsScreen handles the
+  // tab switch (`?tab=schedule`) and we read `?poll=<id>` here to
+  // scroll the matching PollCard into view and pulse a highlight ring.
+  // After handling, we strip the `poll` param via `navigate(..., {
+  // replace: true })` so a refresh doesn't re-trigger the highlight
+  // and the back button stays clean.
+  const [highlightedPollId, setHighlightedPollId] = useState<string | null>(null);
 
   // Admin gate: group admin OR group owner OR platform super-admin.
   // Mirrors the canonical check used elsewhere (e.g. App.tsx).
@@ -216,6 +258,53 @@ export default function ScheduleTab() {
     const id = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Deep-link handler: scroll to and highlight the poll referenced by
+  // `?poll=<id>`. Runs whenever the URL changes OR `polls` finishes
+  // loading (the param can arrive before polls are populated, so we
+  // re-check on each polls update). We do not include the highlighted
+  // poll in active list explicitly — if the poll has been archived
+  // since the share, the lookup misses gracefully and we just leave
+  // the user on the Schedule tab without scrolling. Future iteration
+  // could auto-expand the archive when the target is archived.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const targetPollId = params.get('poll');
+    if (!targetPollId) return;
+    if (polls.length === 0) return; // wait for polls to load
+    if (!polls.some(p => p.id === targetPollId)) {
+      // Poll not in current visible set (archived / wrong group / deleted).
+      // Strip the param so we don't keep retrying as the user navigates.
+      params.delete('poll');
+      navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+      return;
+    }
+    // Defer to next paint so PollCards have committed to the DOM.
+    const raf = requestAnimationFrame(() => {
+      const el = document.getElementById(`poll-card-${targetPollId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setHighlightedPollId(targetPollId);
+      }
+      // Strip `poll` from the URL after handling so refresh / back
+      // doesn't re-trigger. Preserve `tab=schedule` (and any other
+      // params) by mutating the same URLSearchParams.
+      params.delete('poll');
+      navigate(
+        { pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' },
+        { replace: true }
+      );
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [location.search, location.pathname, polls, navigate]);
+
+  // Auto-clear the highlight after the pulse animation finishes (~2s),
+  // so re-clicking the same deep-link from the same session can re-pulse.
+  useEffect(() => {
+    if (!highlightedPollId) return;
+    const timer = setTimeout(() => setHighlightedPollId(null), 2200);
+    return () => clearTimeout(timer);
+  }, [highlightedPollId]);
 
   const handleToggleSubscription = async (pollId: string) => {
     const isSubscribed = subscribedPollIds.has(pollId);
@@ -282,6 +371,7 @@ export default function ScheduleTab() {
   const handleRpcError = (e: unknown): string => {
     const msg = errMsg(e);
     if (msg.includes('poll_locked')) return t('schedule.errorPollLocked');
+    if (msg.includes('seat_full')) return t('schedule.errorSeatFull');
     if (msg.includes('no_player_link')) return t('schedule.errorNoPlayerLink');
     if (msg.includes('tier_not_allowed')) return t('schedule.errorTierNotAllowed');
     if (msg.includes('past_date')) return t('schedule.errorPastDate');
@@ -298,21 +388,43 @@ export default function ScheduleTab() {
     return players.find(p => p.name === playerName) || null;
   }, [players, playerName]);
 
+  // Day-bucket key: changes once when the calendar day rolls over.
+  // We can't depend on `now` directly here — the heartbeat tick updates
+  // it every second, which would re-run the partition memo every second
+  // for no useful change. Day-bucket is stable for ~24h at a time, so
+  // the memo only re-evaluates on poll change or midnight rollover.
+  const dayBucket = Math.floor(now / (24 * 60 * 60 * 1000));
+
   // Partition polls into active vs archive.
   // Two-pass: first detect whether any poll is actionable (voting open or
-  // start-game pending), then route each finished poll through shouldArchive
-  // with that signal. This is what implements the "new poll → previous
-  // round's finished polls collapse to history" UX.
+  // start-game pending) AND has a future date, then route each poll
+  // through shouldArchive with that signal plus today's start-of-day
+  // timestamp (used by the past-dated rule). This implements both the
+  // "new poll → previous round's finished polls collapse to history" UX
+  // and the "the game date already passed → archive" auto-cleanup.
   const { activePolls, archivePolls } = useMemo(() => {
-    const hasActionable = polls.some(isActionablePoll);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayStartTs = todayStart.getTime();
+    // Live-actionable = currently voting OR confirmed-waiting-to-start
+    // AND has at least one future date. A past-dated open poll doesn't
+    // count as "new round of activity" — it's junk that's about to
+    // archive itself, so we don't let it drag finished polls along.
+    const hasActionable = polls.some(p =>
+      isActionablePoll(p) && !isPastDatedPoll(p, todayStartTs)
+    );
     const a: GamePoll[] = [];
     const h: GamePoll[] = [];
     for (const p of polls) {
-      if (shouldArchive(p, hasActionable)) h.push(p);
+      if (shouldArchive(p, hasActionable, todayStartTs)) h.push(p);
       else a.push(p);
     }
     return { activePolls: a, archivePolls: h };
-  }, [polls]);
+    // dayBucket is read implicitly via the deps array — it's the
+    // signal that today rolled over; the memo body still uses
+    // `new Date()` for the actual timestamp.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polls, dayBucket]);
 
   // ── Vote handler ──
   const handleVote = async (poll: GamePoll, dateId: string, response: RsvpResponse) => {
@@ -371,11 +483,31 @@ export default function ScheduleTab() {
     if (!manualClosePending || manualCloseSubmitting) return;
     setManualCloseSubmitting(true);
     try {
-      await manuallyClosePoll(manualClosePending.poll.id, manualClosePending.dateId);
-      // Re-fetch the freshly confirmed poll and trigger notifications
+      const requestedDateId = manualClosePending.dateId;
+      const isRepin = manualClosePending.poll.status === 'confirmed';
+      await manuallyClosePoll(manualClosePending.poll.id, requestedDateId);
+      // Re-fetch the freshly confirmed poll and check whether the RPC
+      // actually took effect. The SQL refuses to UPDATE if the status
+      // filter excludes the row (e.g., on a confirmed poll when
+      // migration 038 isn't applied yet) — `error` stays null and the
+      // call resolves cleanly, but the row never changed. We detect
+      // that here so the admin sees a clear "nothing happened, check
+      // your DB migrations" message instead of clicking a button that
+      // silently does nothing. Same check covers the after-game-
+      // started guard from 038 (confirmed_game_id IS NOT NULL → no-op).
       const fresh = getAllPolls().find(p => p.id === manualClosePending.poll.id);
-      if (fresh && fresh.status === 'confirmed') {
+      const dateLabel = (() => {
+        const d = manualClosePending.poll.dates.find(x => x.id === requestedDateId);
+        return d ? fmtHebrewDate(d) : '';
+      })();
+      if (!fresh || fresh.status !== 'confirmed' || fresh.confirmedDateId !== requestedDateId) {
+        showMsg('error', t('schedule.manualCloseNoop'));
+      } else {
         sendConfirmedNotifications(fresh).catch(() => {});
+        showMsg('success', t(
+          isRepin ? 'schedule.manualRepinSuccess' : 'schedule.manualCloseSuccess',
+          { date: dateLabel },
+        ));
       }
       setManualClosePending(null);
     } catch (e) {
@@ -484,8 +616,12 @@ export default function ScheduleTab() {
 
       {/* Active polls */}
       {activePolls.map(poll => (
-        <PollCard
+        <div
           key={poll.id}
+          id={`poll-card-${poll.id}`}
+          className={highlightedPollId === poll.id ? 'poll-card-deeplink-highlight' : undefined}
+        >
+        <PollCard
           poll={poll}
           players={players}
           currentPlayer={currentPlayer}
@@ -504,6 +640,7 @@ export default function ScheduleTab() {
           navigate={navigate}
           t={t}
         />
+        </div>
       ))}
 
       {/* Archive (history) */}
@@ -696,12 +833,20 @@ export default function ScheduleTab() {
       {manualClosePending && (() => {
         const date = manualClosePending.poll.dates.find(d => d.id === manualClosePending.dateId);
         const dateLabel = date ? fmtHebrewDate(date) : '';
+        // Re-pin path uses different copy than initial close so the
+        // modal accurately reflects the action: "lock in" vs "switch
+        // the lock to". Detected by whether the poll is already in
+        // a confirmed state when the admin opened the dialog.
+        const isRepin = manualClosePending.poll.status === 'confirmed';
+        const titleKey       = isRepin ? 'schedule.manualRepinConfirmTitle'  : 'schedule.manualCloseConfirmTitle';
+        const bodyKey        = isRepin ? 'schedule.manualRepinConfirmBody'   : 'schedule.manualCloseConfirmBody';
+        const actionLabelKey = isRepin ? 'schedule.manualRepinConfirmAction' : 'schedule.manualCloseConfirmAction';
         return (
           <ModalPortal>
           <div className="modal-overlay" onClick={() => !manualCloseSubmitting && setManualClosePending(null)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <h3 className="modal-title">{t('schedule.manualCloseConfirmTitle')}</h3>
+                <h3 className="modal-title">{t(titleKey)}</h3>
                 <button
                   className="modal-close"
                   onClick={() => setManualClosePending(null)}
@@ -710,7 +855,7 @@ export default function ScheduleTab() {
                 >×</button>
               </div>
               <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
-                {t('schedule.manualCloseConfirmBody', { date: dateLabel })}
+                {t(bodyKey, { date: dateLabel })}
               </p>
               <div className="actions">
                 <button
@@ -730,7 +875,7 @@ export default function ScheduleTab() {
                     cursor: manualCloseSubmitting ? 'wait' : 'pointer',
                   }}
                 >
-                  {manualCloseSubmitting ? '...' : t('schedule.manualCloseConfirmAction')}
+                  {manualCloseSubmitting ? '...' : t(actionLabelKey)}
                 </button>
               </div>
             </div>
@@ -881,6 +1026,25 @@ function PollCard(props: PollCardProps) {
       .filter((p): p is Player => !!p);
   }, [confirmedDate, poll.votes, playerById]);
 
+  // Seat-open detection on a confirmed poll. Confirmation is one-way at
+  // the SQL level (migration 031) — status, confirmed_date, and
+  // confirmed_at stay pinned. But when the yes-count slips below target
+  // (someone dropped out post-lock-in), voting is *effectively* open
+  // again on that locked date, and the card should read that way: same
+  // chrome as an open/expanded poll, same date row, same share-card
+  // mode (invitation, not confirmation). We derive a `visualStatus` for
+  // chrome decisions; behavior keys still off `poll.status` where the
+  // distinction matters (e.g. tier gate on cast_poll_vote, the
+  // auto-confirm trigger that only re-fires while status='open'/'expanded').
+  const confirmedDateYes = confirmedDate
+    ? (dateStats.get(confirmedDate.id)?.yes ?? 0)
+    : 0;
+  const isConfirmedBelowTarget =
+    poll.status === 'confirmed' && confirmedDateYes < poll.targetPlayerCount;
+  const visualStatus: typeof poll.status = isConfirmedBelowTarget
+    ? (poll.expandedAt ? 'expanded' : 'open')
+    : poll.status;
+
   // Status palette + icon glyphs.
   // Notes:
   //   * `expanded` is intentionally amber-orange (#f97316) so it doesn't
@@ -901,7 +1065,6 @@ function PollCard(props: PollCardProps) {
     cancelled: STATUS_META.cancelled.color,
     expired: STATUS_META.expired.color,
   };
-  const statusLabelKey = `schedule.status${poll.status.charAt(0).toUpperCase() + poll.status.slice(1)}`;
 
   // Expansion-due indicator
   const expansionDueAt = new Date(poll.createdAt).getTime() + poll.expansionDelayHours * 3600_000;
@@ -916,6 +1079,7 @@ function PollCard(props: PollCardProps) {
     mode: 'invitation' | 'confirmation' | 'cancellation',
     baseName: string,
     title: string,
+    caption: string,
   ) => {
     if (isSharing) return;
     setShareMode(mode);
@@ -925,7 +1089,7 @@ function PollCard(props: PollCardProps) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       if (!shareCardRef.current) return;
       const files = await captureAndSplit(shareCardRef.current, baseName, { backgroundColor: '#0f172a' });
-      await shareFiles(files, title);
+      await shareFiles(files, title, caption);
     } catch (e) {
       onError(handleRpcError(e));
     } finally {
@@ -934,14 +1098,64 @@ function PollCard(props: PollCardProps) {
     }
   }, [isSharing, onError, handleRpcError]);
 
-  const handleShareInvitation = () => captureShare('invitation', `poker-poll-invitation-${poll.id.slice(0, 8)}`, t('schedule.share.invitationTitle'));
-  const handleShareConfirmation = () => captureShare('confirmation', `poker-poll-confirmed-${poll.id.slice(0, 8)}`, t('schedule.share.confirmationTitle'));
-  const handleShareCancellation = () => captureShare('cancellation', `poker-poll-cancelled-${poll.id.slice(0, 8)}`, t('schedule.share.cancellationTitle'));
+  // Build the per-mode caption: a short Hebrew/English line that matches
+  // the mode's intent (vote / view details / heads-up about cancellation),
+  // followed by a deep-link URL on its own line. WhatsApp linkifies URLs
+  // in captions, so the recipient gets a tappable link that lands them
+  // directly on the Schedule tab and scrolls to *this specific poll*
+  // instead of just the app's home page.
+  //
+  // The URL pattern (`/settings?tab=schedule&poll=<id>`) reuses the
+  // existing tab-deep-link infra in SettingsScreen — `?tab=schedule` is
+  // already wired to switch the tab on mount/url-change. The `&poll=`
+  // param is a new convention that ScheduleTab reads to auto-scroll to
+  // the matching card.
+  //
+  // The bare origin still appears INSIDE the share image (a clean,
+  // typeable fallback) — only the WhatsApp caption gets the longer
+  // deep link, so the image stays uncluttered.
+  //
+  // Falls back to caption-only when window isn't available (SSR).
+  const buildShareCaption = (mode: 'invitation' | 'confirmation' | 'cancellation'): string => {
+    const captionKey = (
+      mode === 'invitation'   ? 'schedule.share.captionInvitation' :
+      mode === 'confirmation' ? 'schedule.share.captionConfirmation' :
+                                'schedule.share.captionCancellation'
+    ) as TranslationKey;
+    const line = t(captionKey);
+    if (typeof window === 'undefined') return line;
+    const deepLink = `${window.location.origin}/settings?tab=schedule&poll=${encodeURIComponent(poll.id)}`;
+    return `${line}\n${deepLink}`;
+  };
 
-  const statusMeta = STATUS_META[poll.status] || STATUS_META.open;
+  const handleShareInvitation = () => captureShare(
+    'invitation',
+    `poker-poll-invitation-${poll.id.slice(0, 8)}`,
+    t('schedule.share.invitationTitle'),
+    buildShareCaption('invitation'),
+  );
+  const handleShareConfirmation = () => captureShare(
+    'confirmation',
+    `poker-poll-confirmed-${poll.id.slice(0, 8)}`,
+    t('schedule.share.confirmationTitle'),
+    buildShareCaption('confirmation'),
+  );
+  const handleShareCancellation = () => captureShare(
+    'cancellation',
+    `poker-poll-cancelled-${poll.id.slice(0, 8)}`,
+    t('schedule.share.cancellationTitle'),
+    buildShareCaption('cancellation'),
+  );
+
+  // Chrome (status pill, border, progress, hints) follows visualStatus
+  // so a confirmed-below-target poll reads as voting-open. Behavior
+  // (vote eligibility, auto-confirm trigger, share button defaults)
+  // continues to key off poll.status where the distinction matters.
+  const statusMeta = STATUS_META[visualStatus] || STATUS_META.open;
+  const visualStatusLabelKey = `schedule.status${visualStatus.charAt(0).toUpperCase() + visualStatus.slice(1)}`;
 
   return (
-    <div className="card poll-card" style={{ padding: 14, marginBottom: 12, borderRight: `4px solid ${statusColor[poll.status] || 'var(--border)'}` }}>
+    <div className="card poll-card" style={{ padding: 14, marginBottom: 12, borderRight: `4px solid ${statusColor[visualStatus] || 'var(--border)'}` }}>
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -953,9 +1167,9 @@ function PollCard(props: PollCardProps) {
               borderColor: `${statusMeta.color}55`,
             }}>
             <span aria-hidden style={{ fontSize: 10 }}>{statusMeta.icon}</span>
-            {t(statusLabelKey as TranslationKey)}
+            {t(visualStatusLabelKey as TranslationKey)}
           </span>
-          {poll.status !== 'confirmed' && poll.status !== 'cancelled' && (
+          {visualStatus !== 'confirmed' && visualStatus !== 'cancelled' && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               {t('schedule.targetProgress', { count: bestDateYes, target: poll.targetPlayerCount })}
             </span>
@@ -964,8 +1178,8 @@ function PollCard(props: PollCardProps) {
               confirmation. Surfaces only when at least one yes-vote is in
               and the count is still below target, so a fresh poll with
               0 yes-votes doesn't shout "7 seats still open" the moment it
-              opens. */}
-          {(poll.status === 'open' || poll.status === 'expanded')
+              opens. Includes confirmed-below-target via visualStatus. */}
+          {(visualStatus === 'open' || visualStatus === 'expanded')
             && bestDateYes > 0
             && bestDateYes < poll.targetPlayerCount && (
             <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
@@ -992,27 +1206,29 @@ function PollCard(props: PollCardProps) {
         </div>
       )}
 
-      {/* Confirmed banner — keeps the green "this date is locked in"
-          identity but exposes the live voter list in full so members
-          can still see who's in / out / maybe even after auto-close.
-          Voting is server-locked once status='confirmed' (cast_poll_vote
-          rejects), but the breakdown remains useful: admins can still
-          proxy-vote to backfill / correct the roster, and changes to
-          existing rows (e.g. someone updated their comment) flow in via
-          realtime. */}
-      {poll.status === 'confirmed' && confirmedDate && (() => {
+      {/* Confirmed banner — only when the seat is full. When the
+          yes-count slips below target post-lock-in, we skip the
+          banner and fall through to the open-poll date list below
+          (see visualStatus), so the card reads as "voting still open
+          for the missing seat" instead of "GAME LOCKED IN". The
+          green pulse + ✅ identity is reserved for the at-target,
+          truly-locked state. */}
+      {/* Confirmed banner — only for single-date confirmed polls. With
+          2+ dates we show the competition strip + full per-date list
+          below instead, so the winner stays visible alongside the
+          competition. The "this game is locked in" identity then
+          comes from the status pill + the strip's ✅ on the leader
+          row, which avoids a heavy double-render of the confirmed
+          date's RSVP buttons + voter list. */}
+      {poll.status === 'confirmed' && !isConfirmedBelowTarget && confirmedDate && poll.dates.length < 2 && (() => {
         const s = dateStats.get(confirmedDate.id) || {
           yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0,
         };
         const myVote = currentUserVoteByDate.get(confirmedDate.id);
-        // Confirmed-state vote changes (migration 031). The poll stays
-        // confirmed regardless of how the count moves — confirmation is
-        // one-way. We surface an open-seats hint so the admin sees at a
-        // glance when capacity is still available and can proxy-add a
-        // player or lower the target via Edit (migration 034 allows
-        // editing confirmed polls).
-        const missing = Math.max(0, poll.targetPlayerCount - s.yes);
-        const hasOpenSeats = missing > 0;
+        // This branch only renders when the seat is FULL — drops below
+        // target are handled by the open-poll layout below (visualStatus
+        // pivot). So the open-seats CTA / button highlight that lived
+        // here are unnecessary now.
         return (
           <div className="poll-confirmed-banner">
             <div style={{
@@ -1049,21 +1265,6 @@ function PollCard(props: PollCardProps) {
                 />
               </div>
             </div>
-            {/* Open-seats hint — the confirmed yes-count is still below
-                the configured target. Framed as an invitation rather
-                than an alarm: the game already locked in, the admin
-                just has room to proxy-add another player (or to lower
-                the target via Edit) before the night. */}
-            {hasOpenSeats && (
-              <div style={{
-                padding: '6px 10px', borderRadius: 6, marginBottom: 8,
-                color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic',
-              }}>
-                💡 {missing === 1
-                  ? t('schedule.openSeats.singular')
-                  : t('schedule.openSeats.plural', { missing })}
-              </div>
-            )}
             {/* Inline RSVP buttons — members can still change their mind
                 after confirmation (migration 031 loosened cast_poll_vote
                 to allow status='confirmed'). canVote enforces the same
@@ -1085,13 +1286,22 @@ function PollCard(props: PollCardProps) {
                   maybe: t('schedule.rsvpMaybe'),
                   no: t('schedule.rsvpNo'),
                 };
-                const disabled = !canVote.allowed;
+                // Seat-cap on yes upgrades. The SQL is the source of
+                // truth (migration 037 raises 'seat_full'), but we
+                // disable the button proactively so users get instant
+                // feedback instead of a round-trip error toast. Idempotent
+                // re-votes ('yes' → 'yes') stay enabled because the
+                // server treats them as a no-op (count unchanged).
+                const wouldOverfill =
+                  resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
+                const disabled = !canVote.allowed || wouldOverfill;
                 return (
                   <button
                     key={resp}
                     disabled={disabled}
                     onClick={() => onVote(poll, confirmedDate.id, resp)}
                     title={
+                      wouldOverfill ? t('schedule.errorSeatFull') :
                       canVote.allowed ? '' :
                       canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
                       canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
@@ -1157,8 +1367,49 @@ function PollCard(props: PollCardProps) {
         </div>
       )}
 
-      {/* Per-date rows (only for open/expanded; confirmed already shown above) */}
-      {(poll.status === 'open' || poll.status === 'expanded') && (
+      {/* Per-date rows. Renders for:
+            - open / expanded polls (visualStatus pivot pulls confirmed-
+              below-target into this branch too — voting is back live).
+            - multi-date confirmed-at-target polls (so the competition
+              strip + all proposed dates stay visible alongside the
+              winner; admins can re-pin to a runner-up if needed).
+          Single-date confirmed-at-target polls are handled by the
+          dedicated confirmed banner above — re-rendering the same date
+          here would double-print the RSVP controls and voter list.
+          Migration 031 allows vote changes on confirmed polls so
+          members can flip yes↔no on the locked date and record votes
+          on runner-up dates (useful when a seat slips and someone
+          wants to signal "I'd come Thursday but not Tuesday"). */}
+      {(visualStatus === 'open' || visualStatus === 'expanded'
+        || (visualStatus === 'confirmed' && poll.dates.length >= 2)) && (
+        <>
+        {/* At-a-glance scoreboard above the detail rows. Renders whenever
+            there are 2+ proposed dates, including confirmed polls — the
+            strip highlights the locked-in date with a ✅ glyph (when at
+            target) or just the green left-rail (when below target) so
+            the admin's pick stays visible alongside the competition. */}
+        {poll.dates.length >= 2 && (
+          <DateCompetitionStrip
+            poll={poll}
+            dateStats={dateStats}
+            // Only mark a date with the ✅ glyph when the poll is
+            // *truly* confirmed and at-target. Confirmed-below-target
+            // pivots to visualStatus='open' (seats reopened) so the
+            // previously-locked date drops the ✅ — the strip's
+            // pinned-date override (which uses the raw poll value)
+            // still keeps the green left-rail on that row, so the
+            // admin's pick stays visually anchored without claiming
+            // the seat is full.
+            confirmedDateId={visualStatus === 'confirmed' ? confirmedDate?.id ?? null : null}
+            // Surface the pick/re-pin button right inside the strip
+            // for admins. The strip is the comparison layer; if a tie
+            // forces a choice, the button needs to live where admins
+            // are looking.
+            isAdmin={isAdmin}
+            onManualClose={onManualClose}
+            t={t}
+          />
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {poll.dates.map(d => {
             const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
@@ -1202,13 +1453,20 @@ function PollCard(props: PollCardProps) {
                     const labelMap: Record<RsvpResponse, string> = {
                       yes: t('schedule.rsvpYes'), maybe: t('schedule.rsvpMaybe'), no: t('schedule.rsvpNo'),
                     };
-                    const disabled = !canVote.allowed;
+                    // Per-date seat-cap on yes upgrades. Same rule as
+                    // the confirmed-banner branch: block 'yes' only when
+                    // it would push *this* date's yes-count past target,
+                    // and only when the user isn't already 'yes' on it.
+                    const wouldOverfill =
+                      resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
+                    const disabled = !canVote.allowed || wouldOverfill;
                     return (
                       <button
                         key={resp}
                         disabled={disabled}
                         onClick={() => onVote(poll, d.id, resp)}
                         title={
+                          wouldOverfill ? t('schedule.errorSeatFull') :
                           canVote.allowed ? '' :
                           canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
                           canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
@@ -1265,7 +1523,30 @@ function PollCard(props: PollCardProps) {
                     allowMaybe={poll.allowMaybe}
                     t={t}
                   />
-                  {isAdmin && (
+                  {/* Pin / re-pin — admin-only. Surfaces on every
+                      proposed date except the one that's currently
+                      pinned in the DB (poll.confirmedDateId), in
+                      ANY confirmed state — at-target OR below-target
+                      reopen. Earlier we let the button show on the
+                      pinned date in below-target so admins could
+                      "re-affirm", but that opened the re-pin modal
+                      with "switch the locked-in date to <same date>"
+                      copy, which read as a no-op typo. Other dates
+                      still expose the button so an admin can switch
+                      the lock to a runner-up. Hidden once a game
+                      record has been linked to this poll
+                      (confirmedGameId): the game row carries the
+                      date as a column and the SQL refuses to re-pin
+                      in that case, so a silently-no-op button would
+                      be misleading. Label flips between "close on
+                      this date" (initial pin from open/expanded)
+                      and "switch to this date" (re-pin on a
+                      confirmed poll — tie-breaker / change-of-mind
+                      flow, see migration 038). */}
+                  {isAdmin
+                    && poll.confirmedDateId !== d.id
+                    && !poll.confirmedGameId
+                    && (
                     <button
                       onClick={() => onManualClose(d.id)}
                       className="poll-ghost-btn"
@@ -1273,13 +1554,18 @@ function PollCard(props: PollCardProps) {
                         padding: '4px 10px', borderRadius: 6,
                         border: '1px dashed var(--border)', background: 'transparent',
                         color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
-                      }}>{t('schedule.manualClose')}</button>
+                      }}>{
+                        poll.status === 'confirmed'
+                          ? t('schedule.manualRepin')
+                          : t('schedule.manualClose')
+                      }</button>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
+        </>
       )}
 
       {/* Action buttons */}
@@ -1319,15 +1605,31 @@ function PollCard(props: PollCardProps) {
             ✓ {t('schedule.gameStarted')}
           </span>
         )}
-        {(poll.status === 'open' || poll.status === 'expanded') && (
+        {/* Share buttons.
+            Each button always carries the label of WHAT it shares
+            ("שתף הצבעה" / "Share poll" vs "שתף משחק" / "Share game")
+            so admins can scan the action row and know what's about
+            to leave the app — no need to click and find out.
+            Visibility:
+              - Open / expanded → invitation only.
+              - Confirmed at target → confirmation only.
+              - Confirmed BELOW target (post-lock-in dropout OR
+                early-pick) → BOTH render side-by-side. The state
+                is genuinely ambiguous (recruiting vs announcing),
+                so we let the admin pick the intent rather than
+                guessing. visualStatus pivots in-app voting back on
+                in this state, so "Share poll" stays useful for
+                re-recruitment. */}
+        {(poll.status === 'open' || poll.status === 'expanded' || isConfirmedBelowTarget) && (
           <button onClick={handleShareInvitation} disabled={isSharing} style={shareBtn}>
-            {isSharing ? t('common.capturing') : t('common.share')}
+            {isSharing ? t('common.capturing') : t('schedule.share.shareInvitationLabel')}
           </button>
         )}
-        {/* Vote-change subscription toggle — members only, active polls only.
-            Admins/owners are server-side always-recipients so they don't need
-            this button (and we hide it to keep the action row tight). */}
-        {!isAdmin && (poll.status === 'open' || poll.status === 'expanded') && (
+        {/* Vote-change subscription toggle — members only, active polls
+            only. Includes confirmed-below-target via visualStatus so
+            members can subscribe to the "seat reopened" notifications.
+            Admins/owners are server-side always-recipients. */}
+        {!isAdmin && (visualStatus === 'open' || visualStatus === 'expanded') && (
           <button
             onClick={onToggleSubscription}
             title={isSubscribed
@@ -1344,7 +1646,7 @@ function PollCard(props: PollCardProps) {
         )}
         {poll.status === 'confirmed' && confirmedDate && (
           <button onClick={handleShareConfirmation} disabled={isSharing} style={shareBtn}>
-            {isSharing ? t('common.capturing') : t('common.share')}
+            {isSharing ? t('common.capturing') : t('schedule.share.shareConfirmationLabel')}
           </button>
         )}
         {poll.status === 'cancelled' && isAdmin && (
@@ -1360,7 +1662,12 @@ function PollCard(props: PollCardProps) {
               the target if someone drops post-lock-in. */
           <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
         )}
-        {isAdmin && (poll.status === 'open' || poll.status === 'expanded') && (
+        {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
+          /* Cancel — also visible on confirmed polls (migration 036) so
+             an admin can pull the plug if too many drop after the lock-in.
+             The cancel modal collects an optional reason which is sent
+             as a cancellation notification, so members aren't left
+             wondering why the announced game disappeared. */
           <button onClick={onCancel} style={{ ...ghostBtn, color: '#ef4444', borderColor: '#ef4444' }}>
             {t('schedule.cancelPoll')}
           </button>
@@ -1416,6 +1723,11 @@ function PollCard(props: PollCardProps) {
               playerById={playerById}
               confirmedDate={confirmedDate}
               confirmedPlayers={confirmedPlayers}
+              // window.location.origin matches the convention already
+              // used in SettingsScreen for invite links — keeps the
+              // share card environment-agnostic (works on localhost,
+              // preview, and production without a hardcoded URL).
+              appUrl={typeof window !== 'undefined' ? window.location.origin : undefined}
               t={t}
             />
           </div>
@@ -1711,6 +2023,281 @@ function VoteCountPills({ yes, maybe, no, allowMaybe, t }: VoteCountPillsProps) 
   );
 }
 
+// Progress-bar palette for the date competition strip.
+//
+// Every bar — leader or not — uses the SAME continuous gradient that
+// ends in green on the closure side (the side the bar grows toward as
+// it fills to target). The gradient image is sized to span the *full
+// track* via background-size + background-position, then clipped by
+// the bar's width.
+//
+// Stop positions are explicit (not evenly distributed) and biased
+// heavily toward green: the warm tones (red→orange→yellow) are
+// compressed into the first ~25% of the gradient and the back half
+// is solid green. That means a bar at 50% already reveals the green
+// stop on its leading edge, and a bar at 100% reads as "fully green"
+// (the last 50%+ of the palette is saturated green) — which matches
+// how a thermometer should feel: warm when far from target, decisively
+// green once close to / at target.
+//
+// Crucially, bar color is purely a function of the date's own pct to
+// target — leader designation does NOT change the palette. Otherwise a
+// stale "leader" with fewer yes-votes ends up with a more advanced
+// (greener) bar than a runner-up that's actually further along, which
+// reads as a contradiction. Leader status is communicated through the
+// row's left-rail border, the bold weight, and (when the poll is
+// confirmed at target) the ✅ glyph — never through a different bar
+// color.
+const PROGRESS_PALETTE_STOPS: ReadonlyArray<readonly [string, string]> = [
+  ['#ef4444', '0%'],    // red — far from target
+  ['#f97316', '8%'],    // orange — early warm tail
+  ['#facc15', '18%'],   // yellow — getting going
+  ['#84cc16', '30%'],   // lime  — green starts kicking in
+  ['#10b981', '50%'],   // emerald — solid green from halfway
+  ['#10b981', '100%'],  // emerald — saturated tail
+];
+
+function buildProgressGradient(isRTL: boolean): string {
+  const dir = isRTL ? 'to left' : 'to right';
+  const stops = PROGRESS_PALETTE_STOPS.map(([c, p]) => `${c} ${p}`).join(', ');
+  return `linear-gradient(${dir}, ${stops})`;
+}
+
+// background-size value that scales the gradient image to the full
+// track width regardless of how wide the visible bar is. At pct=50 the
+// image is 200% of the bar (=100% of track); at pct=100 the image is
+// 100% of bar (=100% of track). pct=0 is degenerate (bar is invisible)
+// — return any safe value, callers skip the inner div in practice via
+// width:0% so the size doesn't matter.
+function progressBackgroundSize(pct: number): string {
+  const safe = Math.max(pct, 0.5);
+  return `${(100 / safe) * 100}% 100%`;
+}
+
+// ─── DateCompetitionStrip ─────────────────────────────
+// At-a-glance scoreboard for multi-date polls. Pinned above the per-date
+// detail rows so admins/voters can compare which proposed date is winning
+// without scrolling through each date's voter list. Renders whenever the
+// poll has 2+ proposed dates — including confirmed polls (both at-target
+// and below-target) so the comparison stays visible after a pick.
+//
+// Leader signaling:
+//   - Green left-rail + bold weight on the pinned date when the poll is
+//     confirmed (using the raw poll.confirmedDateId, so it survives the
+//     visualStatus pivot to 'open' on below-target polls).
+//   - Otherwise green rail on the unique vote leader (>0 yes, no tie).
+//   - The ✅ glyph keys off the visualStatus-aware confirmedDateId prop
+//     so it appears only when truly at-target; below-target keeps the
+//     rail but drops the lock-in glyph.
+//   - 🏆 was removed: its "leader at target but not pinned" semantics
+//     produced a confusing read in tie scenarios where admins had
+//     manually picked a different date than the vote leader.
+
+interface DateCompetitionStripProps {
+  poll: GamePoll;
+  dateStats: Map<string, DateStat>;
+  // When set, this date is treated as the leader regardless of yes-count
+  // ties. Used when the poll is already confirmed: the locked-in date is
+  // the actual winner even if a runner-up later catches up on yes-votes.
+  confirmedDateId?: string | null;
+  // Admin-only: surfaces a per-row "pick this date" affordance directly
+  // inside the strip so admins can resolve a tie without scrolling
+  // down to the per-date detail rows. The strip is the most prominent
+  // comparison view on the card; if the action only lives below it,
+  // tied scenarios feel like a dead-end. When isAdmin is false (or
+  // onManualClose is omitted) the button is suppressed and the strip
+  // renders read-only.
+  isAdmin?: boolean;
+  onManualClose?: (dateId: string) => void;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}
+
+function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onManualClose, t }: DateCompetitionStripProps) {
+  const { isRTL } = useTranslation();
+  // Leader (= green left-rail + bold weight) selection:
+  //
+  //   1. If the poll is confirmed and has a pinned date, the pin
+  //      ALWAYS wins the leader role — even when the seat has
+  //      slipped below target (visualStatus='open'). The admin made
+  //      a choice; the strip should keep that choice highlighted so
+  //      the pin doesn't visually disappear when one yes-voter drops
+  //      out. This is independent of the `confirmedDateId` prop
+  //      (which is the visualStatus-aware version, null in below-
+  //      target) — for leader-styling we use the raw poll value.
+  //
+  //   2. Otherwise (open / expanded / no pin yet) we fall back to
+  //      the unique vote leader. Ties on top get no leader at all
+  //      — keeps the visual honest until either a tie-breaker pick
+  //      happens or the count breaks the tie.
+  //
+  // The ✅ glyph still keys off the visualStatus-aware prop, so:
+  //   - confirmed-at-target → ✅ on the pinned row
+  //   - confirmed-below-target → green rail on the pinned row but
+  //     no ✅ (the seat is reopened; rail says "this is the pick"
+  //     without the lock-in semantics of ✅)
+  let leaderId: string | null = null;
+  let topYes = 0;
+  let topCount = 0;
+  for (const d of poll.dates) {
+    const y = dateStats.get(d.id)?.yes ?? 0;
+    if (y > topYes) topYes = y;
+  }
+  if (topYes > 0) {
+    for (const d of poll.dates) {
+      const y = dateStats.get(d.id)?.yes ?? 0;
+      if (y === topYes) { topCount++; leaderId = d.id; }
+    }
+    if (topCount !== 1) leaderId = null;
+  }
+  if (poll.status === 'confirmed'
+      && poll.confirmedDateId
+      && poll.dates.some(d => d.id === poll.confirmedDateId)) {
+    // Pinned-date override — wins regardless of yes-count tie-break,
+    // both for at-target (visualStatus='confirmed') and below-target
+    // (visualStatus pivots to 'open' but the pick still stands).
+    leaderId = poll.confirmedDateId;
+  }
+  const showTieHint = topCount >= 2 && topYes >= poll.targetPlayerCount;
+
+  return (
+    <div style={{
+      marginBottom: 10,
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid var(--border)',
+      background: 'var(--surface-elevated, var(--surface))',
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+        letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 6,
+      }}>
+        🗳 {t('schedule.competition.heading')}
+      </div>
+      {showTieHint && (
+        <div style={{
+          marginBottom: 8,
+          padding: '6px 10px',
+          borderRadius: 6,
+          background: 'rgba(234, 179, 8, 0.10)',
+          border: '1px dashed rgba(234, 179, 8, 0.45)',
+          color: 'var(--text)',
+          fontSize: 12, fontWeight: 600, lineHeight: 1.4,
+        }}>
+          {t('schedule.competition.tieHint')}
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {poll.dates.map(d => {
+          const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
+          const isLeader = d.id === leaderId;
+          const pct = Math.min(100, Math.round((s.yes / Math.max(1, poll.targetPlayerCount)) * 100));
+          const loc = d.location || poll.defaultLocation;
+          // Glyph rule: ONLY ✅ — and only when this row is the
+          // truly-confirmed lock-in (visualStatus='confirmed' makes
+          // the parent pass confirmedDateId; we just match on it).
+          //
+          // The 🏆 emoji used to fire on "leader at target but not
+          // confirmed", which produced a confusing artifact: when an
+          // admin manually pins a date that's below-target, the
+          // *vote* leader is some other row, and 🏆 jumped to that
+          // row even though admin's pick was elsewhere — reading as
+          // "your pick lost" even though nothing was lost. With the
+          // pick affordance now first-class, "leader by yes count"
+          // is sufficiently signaled by the green left-rail + bold
+          // weight; no emoji is needed for that state.
+          const isConfirmedHere = confirmedDateId === d.id;
+          const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
+          return (
+            <div key={d.id} style={{
+              display: 'flex', flexDirection: 'column', gap: 4,
+              padding: '6px 8px',
+              borderRadius: 6,
+              borderInlineStart: isLeader ? '3px solid #10b981' : '3px solid transparent',
+              background: isLeader ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                gap: 8, flexWrap: 'wrap',
+              }}>
+                <div style={{
+                  fontSize: 13, fontWeight: isLeader ? 700 : 600, color: 'var(--text)',
+                  display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: '1 1 auto',
+                }}>
+                  {leaderGlyph && (
+                    <span
+                      aria-label={t('schedule.competition.leader')}
+                      title={t('schedule.competition.leader')}
+                      style={{ fontSize: 13 }}
+                    >{leaderGlyph}</span>
+                  )}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {fmtHebrewDate(d)}
+                    {loc && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{` — ${loc}`}</span>}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <VoteCountPills
+                    yes={s.yes}
+                    maybe={s.maybe}
+                    no={s.no}
+                    allowMaybe={poll.allowMaybe}
+                    t={t}
+                  />
+                  {/* Per-row pick / re-pin affordance — admin-only,
+                      same rules as the per-date detail row's button.
+                      Gates on the raw poll.confirmedDateId so the
+                      button is hidden on the currently-pinned date
+                      in BOTH at-target and below-target reopen
+                      states. Earlier we showed it on the pinned row
+                      in below-target (visualStatus pivots to 'open'
+                      so confirmedDateId-prop is null), but the
+                      modal it opened — "switch the locked-in date
+                      to <same date>" — read as a confusing no-op.
+                      Other (non-pinned) rows still get the button
+                      so admins can shift the lock during a tie or
+                      change-of-mind. */}
+                  {isAdmin
+                    && onManualClose
+                    && poll.confirmedDateId !== d.id
+                    && !poll.confirmedGameId
+                    && (
+                    <button
+                      onClick={() => onManualClose(d.id)}
+                      className="poll-ghost-btn"
+                      style={{
+                        padding: '3px 9px', borderRadius: 6,
+                        border: '1px dashed var(--border)', background: 'transparent',
+                        color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}>{
+                        poll.status === 'confirmed'
+                          ? t('schedule.manualRepin')
+                          : t('schedule.manualClose')
+                      }</button>
+                  )}
+                </div>
+              </div>
+              <div style={{
+                height: 4, background: 'rgba(148, 163, 184, 0.18)',
+                borderRadius: 999, overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%',
+                  background: buildProgressGradient(isRTL),
+                  backgroundSize: progressBackgroundSize(pct),
+                  backgroundPosition: isRTL ? 'right center' : 'left center',
+                  borderRadius: 999,
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── VoterGroups ───────────────────────────────────────
 // Renders the live voter list for one poll-date, grouped yes → maybe → no.
 // Visible to everyone (members + admins).
@@ -1942,10 +2529,15 @@ function getCurrentHalfYearFilter(): { start: Date; end: Date; isH1: boolean; ye
 }
 
 // Compact date+time label used in the invitation and cancellation
-// per-date rows. Keeps day-of-week on its own line so it reads at a
-// glance even when the row also carries a vote-count cluster.
+// per-date rows. Day-of-week, date, and time share a single bold
+// headline ("שלישי · 5 במאי · 21:00") so the "when" reads as one
+// unit. Earlier iterations split time onto its own muted line, but
+// the user feedback was clear: the hour deserves the same prominence
+// as the date — there's no other "when" detail competing for it.
+// Falls back gracefully when any piece is missing (parse failure on
+// the date, or no time set on the poll).
 function ShareDateLabel({
-  date, color, muted,
+  date, color, muted: _muted,
 }: { date: GamePollDate; color: string; muted: string }) {
   const d = new Date(date.proposedDate);
   const dayOfWeek = shortHebrewWeekday(d);
@@ -1953,16 +2545,14 @@ function ShareDateLabel({
     ? date.proposedDate
     : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
   const time = fmtShareTime(date.proposedTime);
+  const headlineParts = [dayOfWeek, dayMonth, time].filter(Boolean);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-      {dayOfWeek && (
+      {headlineParts.length > 0 && (
         <span style={{
           fontSize: 22, fontWeight: 700, color, letterSpacing: 0.2, lineHeight: 1.15,
-        }}>{dayOfWeek}</span>
+        }}>{headlineParts.join(' · ')}</span>
       )}
-      <span style={{ fontSize: 18, color: muted, lineHeight: 1.2 }}>
-        {dayMonth}{time && ` · ${time}`}
-      </span>
     </div>
   );
 }
@@ -2038,7 +2628,7 @@ function ShareBoardingHero({
       <Divider />
       <Segment label="שעה" value={time || '—'} />
       <Divider />
-      <Segment label="מיקום" value={location ? `📍 ${location}` : '—'} />
+      <Segment label="מיקום" value={location ? `📍 ${location}` : 'נעדכן'} />
     </div>
   );
 }
@@ -2054,8 +2644,16 @@ function SharePhaseBadge({
   tokens: { TEXT: string; TEXT_MUTED: string; ACCENT_BLUE: string; ACCENT_GREEN: string };
 }) {
   const { TEXT_MUTED, ACCENT_BLUE, ACCENT_GREEN } = tokens;
-  const phaseColor = poll.status === 'expanded' ? ACCENT_GREEN : ACCENT_BLUE;
-  const phaseLabel = poll.status === 'expanded'
+  // Derived voting phase. For confirmed-below-target polls (rendered as
+  // invitation cards via the visualStatus pivot), poll.status is
+  // 'confirmed' but voting is effectively in its prior phase — use
+  // expandedAt to pick the right label so the recipient sees an
+  // accurate "open to all" / "permanents only" caption.
+  const isExpandedPhase =
+    poll.status === 'expanded'
+    || (poll.status === 'confirmed' && !!poll.expandedAt);
+  const phaseColor = isExpandedPhase ? ACCENT_GREEN : ACCENT_BLUE;
+  const phaseLabel = isExpandedPhase
     ? t('schedule.share.phaseExpanded')
     : t('schedule.share.phaseOpen');
   // Absolute opens-to-all timestamp — recipients see a static image, so
@@ -2082,7 +2680,7 @@ function SharePhaseBadge({
         border: `1px solid ${phaseColor}55`,
         fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
       }}>
-        {poll.status === 'expanded' ? '🌐' : '⭐'} {phaseLabel}
+        {isExpandedPhase ? '🌐' : '⭐'} {phaseLabel}
       </span>
       {opensToAllAt && (
         <span style={{
@@ -2123,10 +2721,16 @@ interface PollShareCardProps {
   playerById: Map<string, Player>;
   confirmedDate: GamePollDate | undefined;
   confirmedPlayers: Player[];
+  // App origin (e.g. https://poker-manager.vercel.app). Used in the
+  // invitation card's "registered members only" footnote so recipients
+  // who don't have the app yet have a URL to type in. Passed in from
+  // the call site (typically window.location.origin) so the card stays
+  // pure / SSR-safe.
+  appUrl?: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
-function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, t }: PollShareCardProps) {
+function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t }: PollShareCardProps) {
   // Shared visual tokens
   const BG_OUTER = '#0f172a';        // slate-900 — page background
   const BG_CARD = '#1e293b';         // slate-800 — card surface
@@ -2159,7 +2763,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
       subtitle: t('schedule.share.headerSubtitleInvitation'),
     },
     confirmation: {
-      emoji: '🎟️',
+      emoji: '🥳',
       title: t('schedule.share.confirmationTitle'),
       color: ACCENT_GREEN,
     },
@@ -2193,23 +2797,28 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
         padding: 32,
         boxShadow: '0 14px 36px rgba(0, 0, 0, 0.42)',
       }}>
-        {/* Header — centered: emoji badge sits above a centered title.
-            Stacking gives the title the visual weight of a real event
-            invitation (badge as a "stamp", title as the marquee) and
-            keeps the share card symmetrical regardless of title length.
-            No status pill — title + badge color convey the mode. */}
+        {/* Header — centered "stamp" layout. Tile uses a gentle linear
+            gradient + a faint top-edge highlight to feel like a glossy
+            badge instead of a flat tint, but stays restrained (no
+            outer glow, no tilt, no halo on the title). The divider is
+            a short centered hairline split by a small accent dot —
+            just enough personality to break up the wall-to-wall
+            border without screaming. Title color/size unchanged. */}
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           gap: 16,
-          paddingBottom: 26,
-          borderBottom: `1px solid ${BORDER}`,
           marginBottom: 28,
         }}>
           <div style={{
-            width: 84, height: 84, borderRadius: 22,
+            width: 92, height: 92, borderRadius: 24,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `${header.color}1f`, fontSize: 46,
-            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 18px ${header.color}33`,
+            background: `linear-gradient(160deg, ${header.color}33 0%, ${header.color}14 100%)`,
+            fontSize: 50,
+            boxShadow: [
+              `inset 0 0 0 1px ${header.color}55`,
+              `inset 0 1px 0 rgba(255, 255, 255, 0.14)`,
+              `0 4px 14px rgba(0, 0, 0, 0.32)`,
+            ].join(', '),
           }}>{header.emoji}</div>
           <div style={{
             fontSize: 36, fontWeight: 800, color: TEXT,
@@ -2223,9 +2832,26 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
               {header.subtitle}
             </div>
           )}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            marginTop: 10,
+          }}>
+            <span style={{ height: 1, width: 80, background: `${header.color}40` }} />
+            <span style={{
+              width: 6, height: 6, borderRadius: 999,
+              background: header.color,
+            }} />
+            <span style={{ height: 1, width: 80, background: `${header.color}40` }} />
+          </div>
         </div>
 
-        {/* Body — varies by mode */}
+        {/* Body — varies by mode. Invitation mode is reused for both
+            truly-open polls AND confirmed-below-target ones (where the
+            visualStatus pivot makes voting effectively reopen). The
+            invitation body deliberately renders both states the same
+            way — no ✅ marker, no date collapse — so recipients always
+            see the full slate of proposed dates with live counts and
+            understand voting is back in play. */}
         {mode === 'invitation' && (
           <PollShareInvitationBody
             poll={poll}
@@ -2233,6 +2859,7 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
             playerById={playerById}
             bestYes={bestYes}
             targetPct={targetPct}
+            appUrl={appUrl}
             t={t}
             tokens={{ TEXT, TEXT_MUTED, BORDER, ACCENT_BLUE, ACCENT_GREEN }}
           />
@@ -2287,18 +2914,185 @@ type ShareTokens = {
   ACCENT_BLUE?: string; ACCENT_GREEN?: string; ACCENT_RED?: string;
 };
 
+// ─── ShareDateCompetitionStrip ─────────────────────────
+// Multi-date poll scoreboard for the WhatsApp share image. Renders one
+// row per proposed date with the date label, ✓/?/✕ count pills, and a
+// thin progress bar. Same shape/intent as the in-app DateCompetitionStrip
+// but tuned for the 900-wide rasterised card. See that component's
+// header for the full leader/glyph rules — both strips share the
+// pinned-date override + ✅-only-at-target semantics.
+
+function ShareDateCompetitionStrip({
+  poll, dateStats, confirmedDateId, t, tokens,
+}: {
+  poll: GamePoll;
+  dateStats: Map<string, DateStat>;
+  // When set, this date is treated as the leader regardless of the
+  // yes-count tie-break. Used for confirmed-below-target polls so the
+  // locked-in date stays highlighted with ✅ even if a runner-up has
+  // briefly caught up on yes-votes.
+  confirmedDateId?: string | null;
+  t: PollShareCardProps['t'];
+  tokens: ShareTokens;
+}) {
+  const { TEXT, TEXT_MUTED, BORDER, ACCENT_GREEN = '#10b981' } = tokens;
+
+  // Mirror the in-app DateCompetitionStrip leader rules:
+  //   1. Pinned-date override — if the poll is confirmed and has a
+  //      pinned date, that row is the leader regardless of yes-count
+  //      ties or below-target slips. Uses the raw poll value so the
+  //      pin stays highlighted even when the prop is null (below
+  //      target / invitation share).
+  //   2. Otherwise the unique vote leader wins; ties produce no
+  //      leader row.
+  let leaderId: string | null = null;
+  let topYes = 0;
+  for (const d of poll.dates) {
+    const y = dateStats.get(d.id)?.yes ?? 0;
+    if (y > topYes) topYes = y;
+  }
+  if (topYes > 0) {
+    let count = 0;
+    for (const d of poll.dates) {
+      const y = dateStats.get(d.id)?.yes ?? 0;
+      if (y === topYes) { count++; leaderId = d.id; }
+    }
+    if (count !== 1) leaderId = null;
+  }
+  if (poll.status === 'confirmed'
+      && poll.confirmedDateId
+      && poll.dates.some(d => d.id === poll.confirmedDateId)) {
+    leaderId = poll.confirmedDateId;
+  }
+
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{
+        fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+        letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 12,
+      }}>
+        🗳 {t('schedule.competition.heading')}
+      </div>
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 8,
+        padding: '14px 18px',
+        background: 'rgba(15, 23, 42, 0.55)',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 14,
+      }}>
+        {poll.dates.map(d => {
+          const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
+          const isLeader = d.id === leaderId;
+          const pct = Math.min(100, Math.round((s.yes / Math.max(1, poll.targetPlayerCount)) * 100));
+          // Same glyph rule as the in-app DateCompetitionStrip — see
+          // there for the rationale. ✅ for the locked-in date only;
+          // the leader-at-target trophy was dropped because it
+          // jumped to the vote-leader (not the admin's pick) once a
+          // poll dropped below target, producing a misleading
+          // "your pick lost" read. Green rail + bold weight handle
+          // the leading-row signal on their own.
+          const isConfirmedHere = confirmedDateId === d.id;
+          const leaderGlyph: string | null = isConfirmedHere ? '✅' : null;
+          return (
+            // data-share-split lets the rasterised image splitter cut
+            // between strip rows when a long-date list pushes the
+            // overall share past the slice height cap. Without an
+            // anchor here the splitter would default to a flat-pixel
+            // boundary which can land mid-row and chop a date off.
+            <div key={d.id} data-share-split="true" style={{
+              display: 'flex', flexDirection: 'column', gap: 6,
+              padding: '8px 12px',
+              borderRadius: 10,
+              borderInlineStart: isLeader ? `4px solid ${ACCENT_GREEN}` : '4px solid transparent',
+              background: isLeader ? `${ACCENT_GREEN}14` : 'transparent',
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                gap: 12,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  {leaderGlyph && (
+                    <span style={{ fontSize: 22 }} aria-label={t('schedule.competition.leader')}>
+                      {leaderGlyph}
+                    </span>
+                  )}
+                  <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <span style={{
+                    padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                    background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
+                    border: `1px solid ${ACCENT_GREEN}55`,
+                  }}>✓ {s.yes}</span>
+                  {poll.allowMaybe && (
+                    <span style={{
+                      padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                      background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
+                      border: '1px solid rgba(234, 179, 8, 0.45)',
+                    }}>? {s.maybe}</span>
+                  )}
+                  <span style={{
+                    padding: '4px 11px', borderRadius: 999, fontSize: 15, fontWeight: 700,
+                    background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
+                    border: '1px solid rgba(239, 68, 68, 0.40)',
+                  }}>✕ {s.no}</span>
+                </div>
+              </div>
+              <div style={{
+                height: 5, background: 'rgba(148, 163, 184, 0.18)',
+                borderRadius: 999, overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${pct}%`, height: '100%',
+                  // Share card is always rendered RTL — gradient direction
+                  // is fixed accordingly so green lands on the closure
+                  // (target-reached) side of the bar.
+                  background: buildProgressGradient(true),
+                  backgroundSize: progressBackgroundSize(pct),
+                  backgroundPosition: 'right center',
+                  borderRadius: 999,
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function PollShareInvitationBody({
-  poll, dateStats, playerById, bestYes, targetPct, t, tokens,
+  poll, dateStats, playerById, bestYes, targetPct, appUrl, t, tokens,
 }: {
   poll: GamePoll;
   dateStats: Map<string, DateStat>;
   playerById: Map<string, Player>;
   bestYes: number;
   targetPct: number;
+  // App origin URL — appended as a plain-text footnote so recipients
+  // who don't have the app yet know where to register. Optional so
+  // tests / SSR can omit it.
+  appUrl?: string;
   t: PollShareCardProps['t'];
   tokens: ShareTokens;
 }) {
   const { TEXT, TEXT_MUTED, BORDER, ACCENT_BLUE = '#3b82f6', ACCENT_GREEN = '#10b981' } = tokens;
+  // Multi-date polls drop the per-date voter chip lists entirely. The
+  // competition strip already carries the date + count breakdown, and
+  // dragging the full voter chips into the rasterised PNG ballooned the
+  // height past WhatsApp's slice budget — every multi-date share
+  // ended up cut. A single "open the app for voter details" callout is
+  // a much better trade: the share stays one image, recipients still
+  // see WHO has voted via the strip's vote counts, and the deep link
+  // in the footer takes them to full per-date voter lists in-app.
+  //
+  // Invitation mode is now reserved for truly-open polls (status='open'
+  // or 'expanded'). Confirmed polls — including the below-target case
+  // where seats have slipped and voting is effectively reopened in-app
+  // — route to PollShareConfirmationBody instead, so the share image
+  // truthfully reflects "the date is picked" even when more votes are
+  // still being collected. See the share-button gates in PollCard.
+  const isMultiDate = poll.dates.length >= 2;
   return (
     <>
       {/* Phase + deadline pills — actionable context for recipients who
@@ -2309,40 +3103,73 @@ function PollShareInvitationBody({
         tokens={{ TEXT, TEXT_MUTED, ACCENT_BLUE, ACCENT_GREEN }}
       />
 
-      {/* Target progress meter — uppercase micro-heading + count, then
-          the gradient bar. Matches the "passenger manifest" header
-          rhythm in the confirmation card. */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 16,
-        }}>
-          <span style={{
-            fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
-            letterSpacing: 1.5, textTransform: 'uppercase',
-          }}>🎯 {t('schedule.share.target')}</span>
-          <span style={{
-            padding: '7px 18px', borderRadius: 999,
-            background: `${ACCENT_GREEN}1a`, color: ACCENT_GREEN,
-            border: `1px solid ${ACCENT_GREEN}55`,
-            fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
-          }}>
-            {t('schedule.share.targetProgress', { count: bestYes, target: poll.targetPlayerCount })}
-          </span>
-        </div>
-        <div style={{
-          height: 16, background: 'rgba(148, 163, 184, 0.15)',
-          borderRadius: 8, overflow: 'hidden',
-        }}>
+      {/* Target progress meter — single-date polls only. For multi-date
+          polls this top-level "best yes vs target" bar would just be a
+          duplicate of the strongest row inside the competition strip
+          (the leader's bar carries the same number, with the same
+          gradient palette), so we drop it entirely. The strip's per-
+          date bars already make target progress legible and the
+          recipients save ~120px of vertical space. Single-date polls
+          don't render the strip, so the global meter is still the
+          only "how close are we?" signal there. */}
+      {!isMultiDate && (
+        <div style={{ marginBottom: 28 }}>
           <div style={{
-            width: `${targetPct}%`, height: '100%',
-            background: `linear-gradient(90deg, ${ACCENT_BLUE}, ${ACCENT_GREEN})`,
-            borderRadius: 8,
-          }} />
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            marginBottom: 16,
+          }}>
+            <span style={{
+              fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
+              letterSpacing: 1.5, textTransform: 'uppercase',
+            }}>🎯 {t('schedule.share.target')}</span>
+            <span style={{
+              padding: '7px 18px', borderRadius: 999,
+              background: `${ACCENT_GREEN}1a`, color: ACCENT_GREEN,
+              border: `1px solid ${ACCENT_GREEN}55`,
+              fontSize: 18, fontWeight: 700, letterSpacing: 0.3,
+            }}>
+              {t('schedule.share.targetProgress', { count: bestYes, target: poll.targetPlayerCount })}
+            </span>
+          </div>
+          <div style={{
+            height: 16, background: 'rgba(148, 163, 184, 0.15)',
+            borderRadius: 8, overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${targetPct}%`, height: '100%',
+              background: `linear-gradient(90deg, ${ACCENT_BLUE}, ${ACCENT_GREEN})`,
+              borderRadius: 8,
+            }} />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Proposed-dates section */}
+      {/* Multi-date competition strip — at-a-glance scoreboard so
+          recipients can compare dates without scanning the full per-date
+          lists below. Renders for every multi-date poll. Invitation
+          mode is reserved for open/expanded polls (no pin yet) so we
+          deliberately pass confirmedDateId=null — every proposed date
+          is still in the running and a ✅ marker would mislead
+          recipients into thinking the slate is already settled.
+          Confirmed polls render via PollShareConfirmationBody, which
+          has its own pinned-date hero treatment. */}
+      {isMultiDate && (
+        <ShareDateCompetitionStrip
+          poll={poll}
+          dateStats={dateStats}
+          confirmedDateId={null}
+          t={t}
+          tokens={tokens}
+        />
+      )}
+
+      {/* Per-date detail blocks — single-date polls only. Multi-date
+          shares drop these entirely (the strip above already carries
+          the count breakdown) and surface a CTA pointing recipients
+          to the app for the full voter lists. This keeps the share
+          short enough to render as a single PNG even with 5+ dates. */}
+      {!isMultiDate && (
+      <>
       <div style={{
         fontSize: 18, color: TEXT_MUTED, fontWeight: 700,
         letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 16,
@@ -2361,48 +3188,69 @@ function PollShareInvitationBody({
             { resp: 'no',    color: '#f87171',    tint: 'rgba(239, 68, 68, 0.08)',  symbol: '✕', label: t('schedule.voters.no'),    rows: s.voters.filter(v => v.response === 'no') },
           ];
           return (
-            <div key={d.id} style={{
-              padding: '20px 26px',
-              background: 'rgba(15, 23, 42, 0.55)',
-              border: `1px dashed ${BORDER}`,
-              borderRadius: 18,
-              display: 'flex', flexDirection: 'column', gap: 18,
-            }}>
-              {/* Top row — date + count pills */}
+            <div
+              key={d.id}
+              data-share-split="true"
+              style={{
+                padding: '20px 26px',
+                background: 'rgba(15, 23, 42, 0.55)',
+                border: `1px dashed ${BORDER}`,
+                borderRadius: 18,
+                display: 'flex', flexDirection: 'column', gap: 18,
+              }}
+            >
+              {/* Top row — date label (+ location) on the inline-start
+                  side, count cluster on the inline-end side. Single-date
+                  layout is the only path that renders the per-date block
+                  now, so we always show the count cluster and full
+                  voter chips below. */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
-                  {loc && (
-                    <div style={{ fontSize: 18, color: TEXT_MUTED, marginTop: 8 }}>
-                      📍 {loc}
-                    </div>
-                  )}
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
+                    {loc && (
+                      <div style={{ fontSize: 18, color: TEXT_MUTED, marginTop: 8 }}>
+                        📍 {loc}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
+                  gap: 8, flexShrink: 0,
+                }}>
                   <span style={{
-                    padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
-                    background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
-                    border: `1px solid ${ACCENT_GREEN}55`,
-                    letterSpacing: 0.2,
-                  }}>✓ {s.yes}</span>
-                  {poll.allowMaybe && (
+                    fontSize: 13, color: TEXT_MUTED, fontWeight: 700,
+                    letterSpacing: 1.2, textTransform: 'uppercase',
+                  }}>
+                    {t('schedule.share.currentStatus')}
+                  </span>
+                  <div style={{ display: 'flex', gap: 7 }}>
                     <span style={{
                       padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
-                      background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
-                      border: '1px solid rgba(234, 179, 8, 0.45)',
+                      background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
+                      border: `1px solid ${ACCENT_GREEN}55`,
                       letterSpacing: 0.2,
-                    }}>? {s.maybe}</span>
-                  )}
-                  <span style={{
-                    padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
-                    background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
-                    border: '1px solid rgba(239, 68, 68, 0.40)',
-                    letterSpacing: 0.2,
-                  }}>✕ {s.no}</span>
+                    }}>✓ {s.yes}</span>
+                    {poll.allowMaybe && (
+                      <span style={{
+                        padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
+                        background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
+                        border: '1px solid rgba(234, 179, 8, 0.45)',
+                        letterSpacing: 0.2,
+                      }}>? {s.maybe}</span>
+                    )}
+                    <span style={{
+                      padding: '7px 14px', borderRadius: 999, fontSize: 17, fontWeight: 700,
+                      background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
+                      border: '1px solid rgba(239, 68, 68, 0.40)',
+                      letterSpacing: 0.2,
+                    }}>✕ {s.no}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Voter chips grouped yes → maybe → no */}
+              {/* Voter chips grouped yes → maybe → no. */}
               {s.voters.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {voterGroups.map(g => {
@@ -2450,6 +3298,28 @@ function PollShareInvitationBody({
           );
         })}
       </div>
+      </>
+      )}
+
+      {/* Multi-date polls: skip the per-date voter chip walls (they
+          ballooned the share past WhatsApp's slice budget) and replace
+          with a CTA pointing recipients to the app for full voter
+          details. The competition strip above already carries the
+          per-date count breakdown so recipients see the standings at a
+          glance — only the per-name list lives in-app. */}
+      {isMultiDate && (
+        <div style={{
+          marginTop: 4,
+          padding: '18px 24px',
+          background: 'rgba(59, 130, 246, 0.08)',
+          border: `1px dashed ${ACCENT_BLUE}66`,
+          borderRadius: 14,
+          fontSize: 19, fontWeight: 600, color: TEXT, lineHeight: 1.5,
+          textAlign: 'center',
+        }}>
+          {t('schedule.share.viewVotersInApp')}
+        </div>
+      )}
 
       {poll.note && (
         <div style={{
@@ -2459,6 +3329,45 @@ function PollShareInvitationBody({
           borderRadius: 10, fontSize: 22, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
+        </div>
+      )}
+
+      {/* Registered-members-only footnote. Sits below the dates / admin
+          note so it doesn't compete with the call-to-action above, but
+          stays inside the card body (not the brand footer) so it's
+          clearly attached to the invitation itself. The URL renders
+          with the protocol stripped for readability — the full origin
+          stays the underlying value so a recipient typing it works
+          either way. The note is dashed-outlined to read as
+          "fine print" rather than another action box. */}
+      {appUrl && (
+        <div style={{
+          marginTop: 22, padding: '16px 22px',
+          background: 'rgba(148, 163, 184, 0.06)',
+          border: `1px dashed ${BORDER}`,
+          borderRadius: 12,
+          display: 'flex', flexDirection: 'column', gap: 8,
+          textAlign: 'center',
+        }}>
+          <div style={{
+            fontSize: 17, color: TEXT_MUTED, lineHeight: 1.45,
+          }}>
+            🔒 {t('schedule.share.registeredOnlyNote')}
+          </div>
+          {/* Register label + URL. Label stays in the parent's RTL flow
+              so Hebrew reads naturally; the URL itself is force-LTR
+              via dir="ltr" so the domain segments don't flip under the
+              RTL container. */}
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            gap: 10, flexWrap: 'wrap',
+            fontSize: 19, fontWeight: 700, color: ACCENT_BLUE,
+            letterSpacing: 0.3,
+          }}>
+            <span aria-hidden>👉</span>
+            <span>{t('schedule.share.registerLabel')}:</span>
+            <span dir="ltr">{appUrl.replace(/^https?:\/\//, '')}</span>
+          </div>
         </div>
       )}
     </>
@@ -4004,11 +4913,7 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
               cursor: submitting ? 'wait' : 'pointer',
               opacity: (submitting || selectedCount === 0 || capExceeded) ? 0.5 : 1,
             }}>
-            {submitting
-              ? '...'
-              : selectedCount > 1
-                ? t('schedule.proxy.saveCount', { count: selectedCount })
-                : (singleExistingVote ? t('schedule.proxy.editVote') : t('schedule.proxy.add'))}
+            {submitting ? '...' : t('common.save')}
           </button>
         </div>
       </div>

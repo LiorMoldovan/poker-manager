@@ -1135,6 +1135,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>{t('settings.setup.welcomeSubtitle')}</div>
             </div>
             {[
+              { icon: '📅', text: t('settings.setup.welcomeSchedule') },
               { icon: '🎮', text: t('settings.setup.welcomeNewGame') },
               { icon: '📡', text: t('settings.setup.welcomeLive') },
               { icon: '🧮', text: t('settings.setup.welcomeEnd') },
@@ -1158,6 +1159,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
               <button
                 onClick={() => {
                   const items = [
+                    { icon: '📅', key: 'settings.setup.welcomeSchedule' },
                     { icon: '🎮', key: 'settings.setup.welcomeNewGame' },
                     { icon: '📡', key: 'settings.setup.welcomeLive' },
                     { icon: '🧮', key: 'settings.setup.welcomeEnd' },
@@ -1212,11 +1214,12 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{t('settings.setup.gameFlowSubtitle')}</div>
             </div>
             {[
-              { step: 1, icon: '🃏', color: '#6366f1', title: t('settings.setup.gameFlowStep1Title'), desc: t('settings.setup.gameFlowStep1Desc') },
-              { step: 2, icon: '📡', color: '#f59e0b', title: t('settings.setup.gameFlowStep2Title'), desc: t('settings.setup.gameFlowStep2Desc') },
-              { step: 3, icon: '🧮', color: '#ef4444', title: t('settings.setup.gameFlowStep3Title'), desc: t('settings.setup.gameFlowStep3Desc') },
-              { step: 4, icon: '🏆', color: '#10B981', title: t('settings.setup.gameFlowStep4Title'), desc: t('settings.setup.gameFlowStep4Desc') },
-              { step: 5, icon: '📊', color: '#a78bfa', title: t('settings.setup.gameFlowStep5Title'), desc: t('settings.setup.gameFlowStep5Desc') },
+              { step: 1, icon: '📅', color: '#0ea5e9', title: t('settings.setup.gameFlowScheduleTitle'), desc: t('settings.setup.gameFlowScheduleDesc') },
+              { step: 2, icon: '🃏', color: '#6366f1', title: t('settings.setup.gameFlowStep1Title'), desc: t('settings.setup.gameFlowStep1Desc') },
+              { step: 3, icon: '📡', color: '#f59e0b', title: t('settings.setup.gameFlowStep2Title'), desc: t('settings.setup.gameFlowStep2Desc') },
+              { step: 4, icon: '🧮', color: '#ef4444', title: t('settings.setup.gameFlowStep3Title'), desc: t('settings.setup.gameFlowStep3Desc') },
+              { step: 5, icon: '🏆', color: '#10B981', title: t('settings.setup.gameFlowStep4Title'), desc: t('settings.setup.gameFlowStep4Desc') },
+              { step: 6, icon: '📊', color: '#a78bfa', title: t('settings.setup.gameFlowStep5Title'), desc: t('settings.setup.gameFlowStep5Desc') },
             ].map((s, i, arr) => (
               <div key={s.step}>
                 <div style={{
@@ -1251,11 +1254,12 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
               <button
                 onClick={() => {
                   const steps = [
-                    { step: 1, icon: '🃏', titleKey: 'settings.setup.gameFlowStep1Title', descKey: 'settings.setup.gameFlowStep1Desc' },
-                    { step: 2, icon: '📡', titleKey: 'settings.setup.gameFlowStep2Title', descKey: 'settings.setup.gameFlowStep2Desc' },
-                    { step: 3, icon: '🧮', titleKey: 'settings.setup.gameFlowStep3Title', descKey: 'settings.setup.gameFlowStep3Desc' },
-                    { step: 4, icon: '🏆', titleKey: 'settings.setup.gameFlowStep4Title', descKey: 'settings.setup.gameFlowStep4Desc' },
-                    { step: 5, icon: '📊', titleKey: 'settings.setup.gameFlowStep5Title', descKey: 'settings.setup.gameFlowStep5Desc' },
+                    { step: 1, icon: '📅', titleKey: 'settings.setup.gameFlowScheduleTitle', descKey: 'settings.setup.gameFlowScheduleDesc' },
+                    { step: 2, icon: '🃏', titleKey: 'settings.setup.gameFlowStep1Title', descKey: 'settings.setup.gameFlowStep1Desc' },
+                    { step: 3, icon: '📡', titleKey: 'settings.setup.gameFlowStep2Title', descKey: 'settings.setup.gameFlowStep2Desc' },
+                    { step: 4, icon: '🧮', titleKey: 'settings.setup.gameFlowStep3Title', descKey: 'settings.setup.gameFlowStep3Desc' },
+                    { step: 5, icon: '🏆', titleKey: 'settings.setup.gameFlowStep4Title', descKey: 'settings.setup.gameFlowStep4Desc' },
+                    { step: 6, icon: '📊', titleKey: 'settings.setup.gameFlowStep5Title', descKey: 'settings.setup.gameFlowStep5Desc' },
                   ] as const;
                   const lines = steps.map(s => `${s.icon} ${s.step}. ${t(s.titleKey)}\n   ${t(s.descKey)}`).join('\n\n');
                   shareToWhatsApp(`🎮 ${t('settings.setup.gameFlowTitle')}\n${t('settings.setup.gameFlowSubtitle')}\n\n${lines}`);

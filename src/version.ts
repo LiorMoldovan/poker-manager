@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.29.2';
+export const APP_VERSION = '5.30.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,32 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.30.0',
+    date: '2026-04-30',
+    changes: [
+      '🗳️ Multi-date schedule polls now show a "השוואה בין תאריכים" / "Date competition" strip above the per-date detail rows so admins/voters see the standings at a glance instead of scrolling through each date\'s voter list. Each strip row carries the date, ✓/?/✕ count pills, and a percentage-driven progress bar. The leading row gets a green left-rail + bold weight; the rail follows the admin\'s pinned date when the poll is confirmed (so a tie-breaker pick stays anchored even when seats slip below target). The 🏆 trophy glyph was dropped — it used to jump to the vote-leader after an admin pinned a different date, reading as "your pick lost" — and ✅ now renders only when a date is genuinely confirmed-at-target.',
+      '🎯 New "tie-breaker" / "change-of-mind" pick flow — when two dates are tied at the target (or whenever an admin wants to switch the lock), a "בחר תאריך" / "Pick date" button lives on every per-date row (both inside the strip and in the detail block below). Selecting fires the new `manual_close_game_poll` RPC variant from migration 038 which now accepts re-pinning on already-confirmed polls (was previously open/expanded only). The confirmation modal flips its title and copy between "lock in this date" (initial pick) and "switch the locked-in date" (re-pin). A success/error toast surfaces after the RPC: success says "Game switched to <date>"; if the SQL silently no-ops (e.g. migration 038 not applied yet, or a game was already started from this poll) the user gets a clear "nothing changed" hint pointing at the migration.',
+      '📤 Share buttons re-architected to match user intent. Open / expanded polls show a single "📤 שתף הצבעה" / "Share poll" button (invitation card with the competition strip). Confirmed-at-target polls show "📤 שתף משחק" / "Share game" (boarding-pass + player-list confirmation card). Confirmed-below-target polls (post-lock-in dropout OR early-pick) are genuinely ambiguous — the admin might want to recruit (share poll) OR announce the locked date (share game) — so BOTH buttons render side-by-side and the admin chooses. Each button always displays the action it will perform so admins can scan the row and know what\'s about to leave the app.',
+      '✂️ Multi-date share images are now compact enough to land in WhatsApp without being chopped — the upper "target progress" meter is dropped (the strip\'s per-date bars carry the same signal), per-date voter chip walls are replaced with a single "👀 לפרטי המצביעים לכל תאריך, פתחו את האפליקציה" CTA, and the boundary-aware screenshot slicer (in `sharing.ts`) snaps cuts to `data-share-split` row boundaries instead of slicing mid-row. Single-date shares keep the original detailed layout with full voter chips since they comfortably fit in one image.',
+      '🔁 Confirmed-below-target polls (someone dropped out post-lock-in) now visually pivot back to the open/expanded chrome — voting affordances are live again, members can flip yes↔no on the locked date and record votes on runner-up dates, and the in-app status pill reads "open"/"expanded" so the card matches reality. The share image keeps a separate gate on raw `poll.status` so a tie-breaker pick still produces the "game is set" share regardless of where votes currently stand.',
+      '🐛 RTL bidi fix on the seat counter — the Hebrew template `{count} / {target} שחקנים` was rendering as `7 / 6 שחקנים` in the Hebrew/RTL container because the spaces around the slash were absorbed as RTL neutrals, splitting "6" and "7" into two separate single-digit LTR runs that the bidi algorithm then reordered. Wrapped the fraction in Unicode LRI…PDI (`\u2066…\u2069`) so the digits + slash stay inside a single LTR isolate and now read `6 / 7` as intended.',
+      '🎨 Schedule poll progress bars use a single percentage-driven palette (red → orange → yellow → lime → emerald) for ALL bars, regardless of leader status. Previously the leading bar used a different palette which produced weird artifacts where a "leader" with fewer yes-votes had a more advanced gradient than a runner-up that was actually further along. Color now reflects truth (how close to target this date is); leader-ness is conveyed exclusively by the green left-rail + bold weight + ✅ glyph instead.',
+      '🛠️ Pick button visibility tightened — the "בחר תאריך" affordance is now hidden on the currently-pinned date in BOTH at-target and below-target reopen states. Earlier it stayed visible in below-target so admins could "re-affirm" the same date, but the modal that opened ("switch the locked-in date to <same date>") read as a confusing no-op. Other (non-pinned) rows still expose the button so an admin can shift the lock to a runner-up.',
+      '🪞 Single-date confirmed-at-target polls no longer double-render the confirmed banner alongside a redundant per-date row. The block gate that included `visualStatus===\'confirmed\'` for multi-date competition strips also accidentally re-rendered the same date below the banner with duplicate RSVP controls and voter list. Now the per-date rows render only for open/expanded polls OR multi-date confirmed polls — single-date confirmed-at-target stays clean.',
+      '🌐 Schedule feature surfaced in the new-group wizard\'s "what does Poker Manager do?" page and the Settings → Help → Game Flow page, both with concise Hebrew + English copy explaining the multi-date poll → vote → confirm flow.',
+      '🔔 Notification banner shows the actual notification title when there\'s exactly one unread (instead of always saying "settlement"); falls back to a count-aware label otherwise.',
+      '🔗 Google OAuth round-trips now preserve the full URL (path + query) instead of redirecting to the bare origin. Recipients tapping a share-card deep link (`/settings?tab=schedule&poll=<id>`) and signing in with Google now land back on the right poll instead of the home page. A subtle cyan pulse animation also draws the eye to the deep-linked card after auto-scroll.',
+      '🎨 Comic bubbles use `width: max-content` (capped by maxWidth) so absolutely-positioned bubbles get a tight inline fit instead of falling back to unstable shrink-to-fit sizing — fixes the "single word per line" rendering on narrow viewports.',
+    ],
+  },
+  {
+    version: '5.29.3',
+    date: '2026-04-30',
+    changes: [
+      '🐛 Payment modal arrow direction — the `from → to` header in the settle-up modal previously forced `direction: ltr` so it always rendered with a right-pointing arrow regardless of UI language. In Hebrew RTL the eye scans right-to-left, so the right-pointing arrow visually went *against* the reading flow and made it look like the recipient was paying the payer instead. Now the arrow flips to `←` in RTL (and stays `→` in LTR), and the LTR override is removed so the layout inherits the parent\'s direction. The arrow now always points from the payer to the recipient in the user\'s natural reading direction.',
+    ],
+  },
   {
     version: '5.29.2',
     date: '2026-04-30',

@@ -2580,8 +2580,11 @@ const GameSummaryScreen = () => {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)', direction: 'ltr' }}>
-              {paymentModal.from} → {paymentModal.to}
+            <div style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem', color: 'var(--text)' }}>
+              {/* Arrow follows reading direction so it visually points from payer to recipient.
+                  In RTL: payer renders on the right, recipient on the left → arrow must point left.
+                  In LTR: payer on the left, recipient on the right → arrow must point right. */}
+              {paymentModal.from} {isRTL ? '←' : '→'} {paymentModal.to}
             </div>
             <button
               onClick={() => copyAmount(paymentModal.amount)}
