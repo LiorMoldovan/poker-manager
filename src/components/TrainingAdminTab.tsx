@@ -34,6 +34,7 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey, runGeminiTextPrompt } from '../utils/geminiAI';
 import { proxyGeminiGenerate } from '../utils/apiProxy';
+import { notifyReportersOfResolution, type AiResolutionText } from '../utils/trainingReportNotifications';
 import { LEGACY_NAME_CORRECTIONS } from '../App';
 
 const RATE_LIMIT_DELAY = 7500;
@@ -294,7 +295,7 @@ const TrainingAdminTab = () => {
   const [removingFlagged, setRemovingFlagged] = useState(false);
   const [dismissingFlagged, setDismissingFlagged] = useState<string | null>(null);
   const [fixingFlagged, setFixingFlagged] = useState<string | null>(null);
-  const [fixPreview, setFixPreview] = useState<{ poolId: string; original: PoolScenario; fixed: PoolScenario } | null>(null);
+  const [fixPreview, setFixPreview] = useState<{ poolId: string; original: PoolScenario; fixed: PoolScenario; reports: TrainingFlagReport[] } | null>(null);
   const [fixFeedback, setFixFeedback] = useState('');
   const [fixHistory, setFixHistory] = useState<string[]>([]);
   const [regenerating, setRegenerating] = useState(false);
@@ -355,74 +356,97 @@ const TrainingAdminTab = () => {
   const [cloudCleanMsg, setCloudCleanMsg] = useState<string | null>(null);
   const [sessionCleanMode, setSessionCleanMode] = useState<string | null>(null);
   const [selectedSessions, setSelectedSessions] = useState<Set<number>>(new Set());
+  // Styled confirm dialog — replaces the legacy native confirm() so
+  // destructive cloud-cleaning actions match the rest of the app.
+  // The owner-only training tab stays Hebrew-only by convention.
+  const [confirmDialog, setConfirmDialog] = useState<{
+    body: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const [confirmDialogBusy, setConfirmDialogBusy] = useState(false);
 
-  const handleCleanPlayerFromCloud = useCallback(async (playerName: string, sessionIndices?: Set<number>) => {
+  const runConfirmDialog = async () => {
+    if (!confirmDialog || confirmDialogBusy) return;
+    setConfirmDialogBusy(true);
+    try {
+      await confirmDialog.onConfirm();
+    } finally {
+      setConfirmDialogBusy(false);
+      setConfirmDialog(null);
+    }
+  };
+
+  const handleCleanPlayerFromCloud = useCallback((playerName: string, sessionIndices?: Set<number>) => {
     const isPartial = sessionIndices && sessionIndices.size > 0;
     const label = isPartial
       ? `למחוק ${sessionIndices.size} אימונים של ${playerName} מהענן?`
       : `למחוק את כל נתוני האימון של ${playerName} מהענן?`;
-    if (!confirm(label)) return;
-    setCloudCleaningPlayer(playerName);
-    setCloudCleanMsg(null);
-    try {
-      const okAnswers = await writeTrainingAnswersWithRetry((data) => {
-        let players: typeof data.players;
-        if (isPartial) {
-          players = data.players.map(p => {
-            if (p.playerName !== playerName) return p;
-            const remaining = p.sessions.filter((_, idx) => !sessionIndices.has(idx));
-            if (remaining.length === 0) return null;
-            let scored = 0, corr = 0;
-            for (const s of remaining) {
-              for (const r of s.results) {
-                if (r.neutralized) continue;
-                if (!r.nearMiss) { scored++; if (r.correct) corr++; }
-              }
+    setConfirmDialog({
+      body: label,
+      onConfirm: async () => {
+        setCloudCleaningPlayer(playerName);
+        setCloudCleanMsg(null);
+        try {
+          const okAnswers = await writeTrainingAnswersWithRetry((data) => {
+            let players: typeof data.players;
+            if (isPartial) {
+              players = data.players.map(p => {
+                if (p.playerName !== playerName) return p;
+                const remaining = p.sessions.filter((_, idx) => !sessionIndices.has(idx));
+                if (remaining.length === 0) return null;
+                let scored = 0, corr = 0;
+                for (const s of remaining) {
+                  for (const r of s.results) {
+                    if (r.neutralized) continue;
+                    if (!r.nearMiss) { scored++; if (r.correct) corr++; }
+                  }
+                }
+                return { ...p, sessions: remaining, totalQuestions: scored, totalCorrect: corr, accuracy: scored > 0 ? (corr / scored) * 100 : 0 };
+              }).filter((p): p is TrainingPlayerData => p !== null);
+            } else {
+              players = data.players.filter(p => p.playerName !== playerName);
             }
-            return { ...p, sessions: remaining, totalQuestions: scored, totalCorrect: corr, accuracy: scored > 0 ? (corr / scored) * 100 : 0 };
-          }).filter((p): p is TrainingPlayerData => p !== null);
-        } else {
-          players = data.players.filter(p => p.playerName !== playerName);
-        }
-        return normalizeTrainingPlayers({ ...data, lastUpdated: new Date().toISOString(), players });
-      });
+            return normalizeTrainingPlayers({ ...data, lastUpdated: new Date().toISOString(), players });
+          });
 
-      const removeInsights = !isPartial;
-      let okInsights = true;
-      if (removeInsights) {
-        const insightsRaw = await fetchTrainingInsights();
-        if (insightsRaw?.insights) {
-          const insights: TrainingInsightsFile = {
-            ...insightsRaw,
-            lastUpdated: new Date().toISOString(),
-            insights: { ...insightsRaw.insights },
-          };
-          delete insights.insights[playerName];
-          const up = await uploadTrainingInsights(insights);
-          okInsights = up.success;
+          const removeInsights = !isPartial;
+          let okInsights = true;
+          if (removeInsights) {
+            const insightsRaw = await fetchTrainingInsights();
+            if (insightsRaw?.insights) {
+              const insights: TrainingInsightsFile = {
+                ...insightsRaw,
+                lastUpdated: new Date().toISOString(),
+                insights: { ...insightsRaw.insights },
+              };
+              delete insights.insights[playerName];
+              const up = await uploadTrainingInsights(insights);
+              okInsights = up.success;
+            }
+          }
+          if (okAnswers && okInsights) {
+            if (!isPartial) {
+              resetSharedTrainingProgress(playerName);
+              clearPendingUploadsForPlayer(playerName);
+            }
+            const msg = isPartial
+              ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו`
+              : `✅ ${playerName} הוסר בהצלחה`;
+            setCloudCleanMsg(msg);
+            setSessionCleanMode(null);
+            setSelectedSessions(new Set());
+            await new Promise(r => setTimeout(r, 1500));
+            await loadAll();
+          } else {
+            setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק חיבור לאינטרנט');
+          }
+        } catch {
+          setCloudCleanMsg('⚠️ שגיאה — נסה שוב');
+        } finally {
+          setCloudCleaningPlayer(null);
         }
-      }
-      if (okAnswers && okInsights) {
-        if (!isPartial) {
-          resetSharedTrainingProgress(playerName);
-          clearPendingUploadsForPlayer(playerName);
-        }
-        const msg = isPartial
-          ? `✅ ${sessionIndices.size} אימונים של ${playerName} הוסרו`
-          : `✅ ${playerName} הוסר בהצלחה`;
-        setCloudCleanMsg(msg);
-        setSessionCleanMode(null);
-        setSelectedSessions(new Set());
-        await new Promise(r => setTimeout(r, 1500));
-        await loadAll();
-      } else {
-        setCloudCleanMsg('⚠️ העלאה נכשלה — בדוק חיבור לאינטרנט');
-      }
-    } catch {
-      setCloudCleanMsg('⚠️ שגיאה — נסה שוב');
-    } finally {
-      setCloudCleaningPlayer(null);
-    }
+      },
+    });
   }, [loadAll]);
 
   const playersNeedingInsights = useMemo((): TrainingPlayerData[] => {
@@ -705,11 +729,34 @@ const TrainingAdminTab = () => {
     }
   };
 
+  // ── Lookup helpers for notifying reporters ──
+  // Captured before mutation since handlers below clear the flag reports as part of resolution.
+  const collectReportsForPool = useCallback((poolId: string, source: TrainingAnswersFile | null): TrainingFlagReport[] => {
+    if (!source) return [];
+    const out: TrainingFlagReport[] = [];
+    source.players.forEach(p => p.sessions.forEach(s => {
+      (s.flagReports || []).forEach(r => { if (r.poolId === poolId) out.push(r); });
+    }));
+    return out;
+  }, []);
+
+  const lookupScenario = useCallback((poolId: string): PoolScenario | undefined => {
+    return pool?.scenarios.find(s => s.poolId === poolId);
+  }, [pool]);
+
   // ── Remove flagged + neutralize scores ──
   const handleRemoveFlagged = async (poolIds: string[]) => {
     if (removingFlagged) return;
     setRemovingFlagged(true);
     setFlagMsg(`מסיר ${poolIds.length} שאלות ומתקן ציונים...`);
+    // Capture reports + scenarios BEFORE we mutate `answers` (the writeTrainingAnswers call below
+    // strips flagReports for the removed pool ids — so we can't look them up after).
+    const notifyPayload = poolIds.map(pid => ({
+      poolId: pid,
+      reports: collectReportsForPool(pid, answers),
+      scenario: lookupScenario(pid) || null,
+      ai: (analyses[pid] || null) as AiResolutionText | null,
+    }));
     try {
       const result = await removeFromTrainingPool(poolIds);
       if (result.success) {
@@ -775,6 +822,17 @@ const TrainingAdminTab = () => {
         setFlagMsg(neutralized
           ? `✅ הוסרו ${poolIds.length} שאלות + ציונים תוקנו`
           : `✅ הוסרו ${poolIds.length} שאלות (תיקון ציונים נכשל)`);
+        // Notify each reporter (best-effort, fire-and-forget).
+        for (const item of notifyPayload) {
+          if (item.scenario) {
+            notifyReportersOfResolution({
+              reports: item.reports,
+              scenario: item.scenario,
+              outcome: 'accept_removed',
+              ai: item.ai,
+            }).catch(err => console.warn('[training-report-notify] remove dispatch failed:', err));
+          }
+        }
       } else {
         setFlagMsg(`❌ שגיאה: ${result.message}`);
       }
@@ -805,11 +863,23 @@ const TrainingAdminTab = () => {
   const handleDismissFlagged = async (poolId: string) => {
     setDismissingFlagged(poolId);
     setFlagMsg(`דוחה דיווחים...`);
+    // Capture reports BEFORE writeTrainingAnswers strips them.
+    const reportsToNotify = collectReportsForPool(poolId, answers);
+    const scenarioForNotify = lookupScenario(poolId) || null;
+    const aiForNotify = (analyses[poolId] || null) as AiResolutionText | null;
     try {
       const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
       if (ok) {
         if (answers) setAnswers(clearFlagsLocally(answers, poolId));
         setFlagMsg('✅ הדיווחים נדחו — השאלה נשארת');
+        if (scenarioForNotify) {
+          notifyReportersOfResolution({
+            reports: reportsToNotify,
+            scenario: scenarioForNotify,
+            outcome: 'reject_kept',
+            ai: aiForNotify,
+          }).catch(err => console.warn('[training-report-notify] dismiss dispatch failed:', err));
+        }
       } else {
         setFlagMsg('❌ שגיאה בעדכון');
       }
@@ -1046,7 +1116,7 @@ ${reportSummary}
       }
 
       pushFixLog('שלב 4/4: ניתוח + תיקון הושלמו בהצלחה', 'success');
-      setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
+      setFixPreview({ poolId, original: scenario, fixed: fixedScenario, reports });
       setFixFeedback('');
       setFixHistory([]);
       setFlagMsg(null);
@@ -1152,7 +1222,7 @@ ${reportSummary}
       }
 
       pushFixLog('שלב 4/4: אימות מבנה עבר — תצוגה מקדימה מוכנה', 'success');
-      setFixPreview({ poolId, original: scenario, fixed: fixedScenario });
+      setFixPreview({ poolId, original: scenario, fixed: fixedScenario, reports });
       setFixFeedback('');
       setFixHistory([]);
       setFlagMsg(null);
@@ -1243,7 +1313,8 @@ ${historyContext}
   // ── Confirm AI fix (save to pool + clear flags) ──
   const confirmAIFix = async () => {
     if (!fixPreview || !pool) return;
-    const { poolId, fixed } = fixPreview;
+    const { poolId, fixed, reports: reportsForNotify } = fixPreview;
+    const aiForNotify = (analyses[poolId] || null) as AiResolutionText | null;
     const again = validateAIFixedScenario(fixed);
     if (again) {
       pushFixLog(`שמירה בוטלה — אימות לפני שמירה נכשל: ${again}`, 'error');
@@ -1284,6 +1355,14 @@ ${historyContext}
       }
       pushFixLog('✅ כל השלבים הושלמו — השאלה במאגר והדיווחים אוחדו', 'success');
       setFlagMsg('✅ השאלה תוקנה — הדיווחים נמחקו');
+      // Notify reporters that their report was accepted and the question was fixed.
+      // Use the FIXED scenario for context so the message reflects the corrected question.
+      notifyReportersOfResolution({
+        reports: reportsForNotify,
+        scenario: fixed,
+        outcome: 'accept_fixed',
+        ai: aiForNotify,
+      }).catch(err => console.warn('[training-report-notify] fix dispatch failed:', err));
       setFixPreview(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown';
@@ -3234,6 +3313,51 @@ ${gameSummary ? `💰 קשר ביצועים: קשר בין חולשות אימו
       {insightMsg && (
         <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0.5rem' }}>
           {insightMsg}
+        </div>
+      )}
+
+      {/* Styled confirm modal — replaces the legacy native confirm()
+          dialog for owner-only cloud cleanup actions. */}
+      {confirmDialog && (
+        <div
+          className="modal-overlay"
+          onClick={() => !confirmDialogBusy && setConfirmDialog(null)}
+        >
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, direction: 'rtl' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">מחיקה מהענן</h3>
+              <button
+                className="modal-close"
+                onClick={() => setConfirmDialog(null)}
+                disabled={confirmDialogBusy}
+                aria-label="סגור"
+              >×</button>
+            </div>
+            <p style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5, color: 'var(--text)' }}>
+              {confirmDialog.body}
+            </p>
+            <div className="actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setConfirmDialog(null)}
+                disabled={confirmDialogBusy}
+              >
+                ביטול
+              </button>
+              <button
+                className="btn"
+                onClick={runConfirmDialog}
+                disabled={confirmDialogBusy}
+                style={{
+                  background: '#ef4444', color: '#fff', fontWeight: 600,
+                  opacity: confirmDialogBusy ? 0.7 : 1,
+                  cursor: confirmDialogBusy ? 'wait' : 'pointer',
+                }}
+              >
+                {confirmDialogBusy ? '...' : 'מחק'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

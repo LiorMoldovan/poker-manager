@@ -6,7 +6,7 @@ import { hasPermission } from './permissions';
 import { logActivity, updateSessionActivity, getScreenName, resetSession } from './utils/activityLogger';
 import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
-import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription } from './database/supabaseCache';
+import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, flushAllPendingSyncs } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
@@ -326,6 +326,25 @@ function SupabaseApp() {
     };
     window.addEventListener('supabase-sync-error', handler);
     return () => window.removeEventListener('supabase-sync-error', handler);
+  }, []);
+
+  // Mobile-safety net: flush any pending debounced syncs when the tab is
+  // hidden or being unloaded. Mobile browsers (especially iOS Safari) will
+  // suspend or evict setTimeout when the tab backgrounds, so a 300ms
+  // debounced sync that hasn't fired yet would be lost forever otherwise —
+  // exactly the bug that made AI summaries appear to save and then vanish
+  // on the next session.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushAllPendingSyncs();
+    };
+    const onPageHide = () => flushAllPendingSyncs();
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   }, []);
 
   // Push notification subscription — only when permission is already granted

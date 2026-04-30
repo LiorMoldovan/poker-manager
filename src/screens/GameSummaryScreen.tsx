@@ -48,6 +48,9 @@ const GameSummaryScreen = () => {
   const [chipGapPerPlayer, setChipGapPerPlayer] = useState<number | null>(null);
   
   const [isSharing, setIsSharing] = useState(false);
+  // In-app error banner for the share flow — replaces window.alert()
+  // so the error UX matches the rest of the app.
+  const [shareError, setShareError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [gameNotFound, setGameNotFound] = useState(false);
   const [forecasts, setForecasts] = useState<GameForecast[]>([]);
@@ -237,7 +240,11 @@ const GameSummaryScreen = () => {
 
   const handleRegenerateAiSummary = () => {
     if (!gameId) return;
-    saveGameAiSummary(gameId, '');
+    // Pre-clear is best-effort — failure here is non-fatal because the
+    // subsequent generation will overwrite the row anyway.
+    saveGameAiSummary(gameId, '').catch(err =>
+      console.warn('[ai] pre-clear summary failed (non-fatal):', err),
+    );
     setAiSummary(null);
     setAiSummaryError(null);
     setIsLoadingAiSummary(false);
@@ -1073,10 +1080,22 @@ const GameSummaryScreen = () => {
       withAITiming('game_summary', () => generateGameNightSummary(summaryPayload))
         .then(async result => {
           const modelDisplay = getModelDisplayName(result.meta.model);
+          // CRITICAL: persist to Supabase BEFORE updating the UI so the
+          // user can never see a "saved" summary that wasn't actually saved.
+          // Mobile browsers backgrounding the tab between UI-update and
+          // sync caused the previous regression where the summary
+          // appeared, then vanished on the next session.
+          try {
+            await saveGameAiSummary(game.id, result.text, modelDisplay);
+          } catch (err) {
+            console.error('[ai] summary save failed:', err);
+            const msg = err instanceof Error ? err.message : String(err);
+            setAiSummaryError(`${t('summary.aiGenError')} — ${msg}`);
+            return;
+          }
           setAiSummary(result.text);
           setAiSummaryModel(modelDisplay);
           setAiSummaryError(null);
-          saveGameAiSummary(game.id, result.text, modelDisplay);
           if (shouldAutoGenerate) {
             import('../utils/backgroundAI').then(({ regenerateAIInBackground }) => {
               regenerateAIInBackground();
@@ -1335,7 +1354,7 @@ const GameSummaryScreen = () => {
       }
     } catch (error) {
       console.error('Error sharing:', error);
-      alert(t('summary.shareError'));
+      setShareError(t('summary.shareError'));
     } finally {
       setCollapsedSections(savedCollapsed);
       setIsSharing(false);
@@ -2652,6 +2671,26 @@ const GameSummaryScreen = () => {
           ref={(el) => { if (el) setTimeout(() => setSettlementToast(null), 5000); }}
         >
           {settlementToast.message}
+        </div>
+      )}
+
+      {/* Share-error toast — matches settlementToast styling above so
+          the surface is consistent. Auto-dismisses after 5s; the user
+          can also tap to dismiss early. Replaces the old native alert(). */}
+      {shareError && (
+        <div
+          onClick={() => setShareError(null)}
+          style={{
+            position: 'fixed', bottom: '5rem', left: '50%', transform: 'translateX(-50%)',
+            background: '#7f1d1d',
+            color: 'white', padding: '0.75rem 1.25rem', borderRadius: '12px',
+            fontSize: '0.85rem', fontWeight: 600, zIndex: 9999,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)', cursor: 'pointer',
+            animation: 'contentFadeIn 0.25s ease-out', maxWidth: '90vw', textAlign: 'center',
+          }}
+          ref={(el) => { if (el) setTimeout(() => setShareError(null), 5000); }}
+        >
+          {shareError}
         </div>
       )}
     </div>

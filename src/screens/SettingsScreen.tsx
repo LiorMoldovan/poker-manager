@@ -233,6 +233,30 @@ const SettingsScreen = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showGameFlow, setShowGameFlow] = useState(false);
 
+  // Shared confirmation dialog — replaces the five legacy native
+  // confirm() popups across this screen with a single styled modal so
+  // the destructive backup/AI/report actions match the rest of the app.
+  // Body supports newlines via `white-space: pre-line`.
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    body: string;
+    confirmLabel: string;
+    destructive?: boolean;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  const [confirmDialogBusy, setConfirmDialogBusy] = useState(false);
+
+  const runConfirmDialog = async () => {
+    if (!confirmDialog || confirmDialogBusy) return;
+    setConfirmDialogBusy(true);
+    try {
+      await confirmDialog.onConfirm();
+    } finally {
+      setConfirmDialogBusy(false);
+      setConfirmDialog(null);
+    }
+  };
+
   // Backup state
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
@@ -1534,40 +1558,54 @@ const SettingsScreen = () => {
             return;
           }
           const msg = `${t('settings.backup.restoreConfirm')}\n\n${summary.groupName} - ${summary.exportedAt?.split('T')[0]}\n${t('settings.backup.stats', { players: String(summary.playerCount || 0), games: String(summary.gameCount || 0) })}`;
-          if (!window.confirm(msg)) return;
-          const currentGroupId = getGroupId();
-          if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
-          setRestoreLoading(true);
-          setBackupStatus(t('settings.backup.restoring'));
-          const result = await restoreFromBackup(text, currentGroupId);
-          if (result.success) {
-            setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
-          } else {
-            setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
-          }
-          setRestoreLoading(false);
+          setConfirmDialog({
+            title: t('settings.backup.restoreConfirmTitle'),
+            body: msg,
+            confirmLabel: t('settings.backup.restoreAction'),
+            destructive: true,
+            onConfirm: async () => {
+              const currentGroupId = getGroupId();
+              if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
+              setRestoreLoading(true);
+              setBackupStatus(t('settings.backup.restoring'));
+              const result = await restoreFromBackup(text, currentGroupId);
+              if (result.success) {
+                setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
+              } else {
+                setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
+              }
+              setRestoreLoading(false);
+            },
+          });
         };
 
-        const handleGitHubRestore = async (fileName: string) => {
-          if (!window.confirm(t('settings.backup.restoreConfirm'))) return;
-          const currentGroupId = getGroupId();
-          if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
-          setRestoreLoading(true);
-          setBackupStatus(t('settings.backup.fetchingBackup'));
-          const content = await fetchGitHubBackup(groupName, fileName);
-          if (!content) {
-            setBackupStatus(t('settings.backup.failed'));
-            setRestoreLoading(false);
-            return;
-          }
-          setBackupStatus(t('settings.backup.restoring'));
-          const result = await restoreFromBackup(content, currentGroupId);
-          if (result.success) {
-            setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
-          } else {
-            setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
-          }
-          setRestoreLoading(false);
+        const handleGitHubRestore = (fileName: string) => {
+          setConfirmDialog({
+            title: t('settings.backup.restoreConfirmTitle'),
+            body: t('settings.backup.restoreConfirm'),
+            confirmLabel: t('settings.backup.restoreAction'),
+            destructive: true,
+            onConfirm: async () => {
+              const currentGroupId = getGroupId();
+              if (!currentGroupId) { setBackupStatus(t('settings.backup.failed')); return; }
+              setRestoreLoading(true);
+              setBackupStatus(t('settings.backup.fetchingBackup'));
+              const content = await fetchGitHubBackup(groupName, fileName);
+              if (!content) {
+                setBackupStatus(t('settings.backup.failed'));
+                setRestoreLoading(false);
+                return;
+              }
+              setBackupStatus(t('settings.backup.restoring'));
+              const result = await restoreFromBackup(content, currentGroupId);
+              if (result.success) {
+                setBackupStatus(t('settings.backup.restoreSuccess', { tables: String(result.tablesRestored) }));
+              } else {
+                setBackupStatus(t('settings.backup.restoreErrors', { errors: result.errors.slice(0, 3).join(', ') }));
+              }
+              setRestoreLoading(false);
+            },
+          });
         };
 
         return (
@@ -2100,7 +2138,13 @@ const SettingsScreen = () => {
                               </div>
                               <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text)', minWidth: '48px', textAlign: isRTL ? 'left' : 'right' }}>{h.charsUsed.toLocaleString()} {t('settings.ai.charUnit')}</span>
                               <button
-                                onClick={() => { if (confirm(t('settings.ai.confirmDeleteUsage'))) { deleteElevenLabsGameEntry(h.gameId); setAiTick(u => u + 1); } }}
+                                onClick={() => setConfirmDialog({
+                                  title: t('settings.ai.confirmDeleteTitle'),
+                                  body: t('settings.ai.confirmDeleteUsage'),
+                                  confirmLabel: t('common.delete'),
+                                  destructive: true,
+                                  onConfirm: () => { deleteElevenLabsGameEntry(h.gameId); setAiTick(u => u + 1); },
+                                })}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0 0.15rem', opacity: 0.4 }}
                                 title={t('settings.ai.deleteUsageRow')}
                               >🗑️</button>
@@ -2188,7 +2232,13 @@ const SettingsScreen = () => {
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.75rem' }}>
                 <button
                   className="btn btn-sm"
-                  onClick={() => { if (confirm(t('settings.ai.confirmReset'))) { resetUsage(); setAiStatus(getAIStatus()); setAiTestResults(null); } }}
+                  onClick={() => setConfirmDialog({
+                    title: t('settings.ai.confirmResetTitle'),
+                    body: t('settings.ai.confirmReset'),
+                    confirmLabel: t('settings.ai.resetData'),
+                    destructive: true,
+                    onConfirm: () => { resetUsage(); setAiStatus(getAIStatus()); setAiTestResults(null); },
+                  })}
                   style={{ fontSize: '0.6rem', padding: '0.2rem 0.5rem', background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
                 >
                   {t('settings.ai.resetData')}
@@ -2373,11 +2423,16 @@ const SettingsScreen = () => {
                     {new Date(r.created_at).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </span>
                   <button
-                    onClick={async () => {
-                      if (!confirm(t('common.confirm'))) return;
-                      await supabase.from('issue_reports').delete().eq('id', r.id);
-                      loadReports();
-                    }}
+                    onClick={() => setConfirmDialog({
+                      title: t('settings.report.confirmDeleteTitle'),
+                      body: t('settings.report.confirmDeleteBody'),
+                      confirmLabel: t('common.delete'),
+                      destructive: true,
+                      onConfirm: async () => {
+                        await supabase.from('issue_reports').delete().eq('id', r.id);
+                        loadReports();
+                      },
+                    })}
                     style={{
                       background: 'none', border: 'none', color: '#ef4444',
                       fontSize: '0.65rem', cursor: 'pointer', padding: '0.1rem 0.25rem',
@@ -3507,10 +3562,14 @@ const SettingsScreen = () => {
               return { start: weekStart, end: labelEnd, users: users.size, sessions: userDays.size };
             }).reverse();
 
-            const trendMaxUsers = Math.max(1, ...weeklyTrend.map(w => w.users));
+            // Bars represent total visits (user-days) — the "real" weekly activity
+            // total — not unique-user counts. Unique-user count is still shown in the
+            // bottom legend so both metrics are visible.
+            const trendMaxSessions = Math.max(1, ...weeklyTrend.map(w => w.sessions));
             const thisWeekUsers = weeklyTrend[weeklyTrend.length - 1]?.users ?? 0;
-            const lastWeekUsers = weeklyTrend[weeklyTrend.length - 2]?.users ?? 0;
-            const usersDelta = thisWeekUsers - lastWeekUsers;
+            const thisWeekSessions = weeklyTrend[weeklyTrend.length - 1]?.sessions ?? 0;
+            const lastWeekSessions = weeklyTrend[weeklyTrend.length - 2]?.sessions ?? 0;
+            const sessionsDelta = thisWeekSessions - lastWeekSessions;
 
             // Date-range label for the *current* (Sat-anchored) week, reused by
             // any sub-card that wants to clarify which days "this week" covers.
@@ -3614,20 +3673,20 @@ const SettingsScreen = () => {
                     <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                       {t('settings.activity.weeklyTrend')}
                     </span>
-                    {usersDelta !== 0 && (
+                    {sessionsDelta !== 0 && (
                       <span style={{
                         fontSize: '0.62rem', fontWeight: 600, padding: '0.1rem 0.4rem',
                         borderRadius: '8px',
-                        background: usersDelta > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-                        color: usersDelta > 0 ? '#10B981' : '#ef4444',
+                        background: sessionsDelta > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                        color: sessionsDelta > 0 ? '#10B981' : '#ef4444',
                       }}>
-                        {usersDelta > 0 ? '▲' : '▼'} {Math.abs(usersDelta)} {t('settings.activity.vsLastWeek')}
+                        {sessionsDelta > 0 ? '▲' : '▼'} {Math.abs(sessionsDelta)} {t('settings.activity.vsLastWeek')}
                       </span>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '64px' }}>
                     {weeklyTrend.map((week, i) => {
-                      const barH = Math.max(4, (week.users / trendMaxUsers) * 44);
+                      const barH = Math.max(4, (week.sessions / trendMaxSessions) * 44);
                       const isCurrent = i === weeklyTrend.length - 1;
                       const startD = week.start.getDate();
                       const startM = week.start.getMonth() + 1;
@@ -3647,7 +3706,7 @@ const SettingsScreen = () => {
                             lineHeight: 1,
                             fontVariantNumeric: 'tabular-nums',
                           }}>
-                            {week.users}
+                            {week.sessions}
                           </span>
                           <div
                             title={`${tooltipFull}: ${week.users} ${t('settings.activity.users')}, ${week.sessions} ${t('settings.activity.sessionsLabel')}`}
@@ -3655,7 +3714,7 @@ const SettingsScreen = () => {
                               width: '100%', height: `${barH}px`, borderRadius: '3px',
                               background: isCurrent
                                 ? 'linear-gradient(180deg, #6366f1, #818cf8)'
-                                : `rgba(99, 102, 241, ${0.2 + (week.users / trendMaxUsers) * 0.4})`,
+                                : `rgba(99, 102, 241, ${0.2 + (week.sessions / trendMaxSessions) * 0.4})`,
                               transition: 'height 0.3s ease',
                             }}
                           />
@@ -3668,7 +3727,7 @@ const SettingsScreen = () => {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.35rem', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
                     <span>{t('settings.activity.trendUsers')}: {thisWeekUsers}</span>
-                    <span>{t('settings.activity.trendSessions')}: {weeklyTrend[weeklyTrend.length - 1]?.sessions ?? 0}</span>
+                    <span>{t('settings.activity.trendSessions')}: {thisWeekSessions}</span>
                   </div>
                 </div>
 
@@ -3689,7 +3748,15 @@ const SettingsScreen = () => {
                       ? p.sessions.reduce((latest: TSession, s: TSession) => new Date(s.date) > new Date(latest.date) ? s : latest)
                       : null;
                     return { name: p.playerName, totalSessions: p.sessions.length, weekQs, accuracy: p.accuracy, lastSession };
-                  }).sort((a, b) => b.weekQs - a.weekQs);
+                  }).sort((a, b) => {
+                    // Most recent activity first. Players who never trained sink to the bottom.
+                    const aTime = a.lastSession ? new Date(a.lastSession.date).getTime() : 0;
+                    const bTime = b.lastSession ? new Date(b.lastSession.date).getTime() : 0;
+                    if (bTime !== aTime) return bTime - aTime;
+                    // Tiebreaker: more questions this week first, then by name for stability.
+                    if (b.weekQs !== a.weekQs) return b.weekQs - a.weekQs;
+                    return a.name.localeCompare(b.name);
+                  });
 
                   const activeThisWeek = trainers.filter(t => t.weekQs > 0);
 
@@ -3721,14 +3788,21 @@ const SettingsScreen = () => {
                                 {tr.name}
                               </span>
                               <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)' }}>
-                                {isActive
-                                  ? `${Math.round(tr.accuracy)}% · ${tr.totalSessions} ${language === 'he' ? 'סשנים' : 'sess'}`
-                                  : ''
-                                }
+                                {isActive && `${Math.round(tr.accuracy)}% · ${tr.totalSessions} ${language === 'he' ? 'סשנים' : 'sess'}`}
+                                {tr.lastSession && (() => {
+                                  const d = new Date(tr.lastSession.date);
+                                  const dateLabel = `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                  return (
+                                    <Fragment>
+                                      {isActive ? ' · ' : ''}
+                                      <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{dateLabel}</span>
+                                    </Fragment>
+                                  );
+                                })()}
                               </span>
                               <span style={{
                                 fontSize: '0.6rem', fontWeight: 600, textAlign: 'end',
-                                color: isActive ? '#818cf8' : 'var(--text-muted)',
+                                color: isActive ? '#10B981' : 'var(--text-muted)',
                               }}>
                                 {isActive
                                   ? `${tr.weekQs} ${language === 'he' ? 'שאלות' : 'Q'}`
@@ -3801,8 +3875,13 @@ const SettingsScreen = () => {
                           border: `1px solid ${borderColor}`, borderTop: '1px solid var(--border)',
                         }}>
                           {(() => {
-                            const lastDate = new Date(user.latestEntry.lastActive || user.latestEntry.timestamp);
+                            const lastEntry = user.latestEntry;
+                            const lastDate = new Date(lastEntry.lastActive || lastEntry.timestamp);
                             const lastStr = lastDate.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                            const lastSessionMin = lastEntry.sessionDuration || 0;
+                            const lastSessionScreens = (lastEntry.screensVisited || []).slice();
+
+                            const totalSessions = user.entries.length;
                             const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
                             const screenCounts: Record<string, number> = {};
                             for (const e of user.entries) {
@@ -3812,30 +3891,75 @@ const SettingsScreen = () => {
                             }
                             const screensSorted = Object.entries(screenCounts).sort((a, b) => b[1] - a[1]);
 
+                            const sectionLabelStyle: React.CSSProperties = {
+                              fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)',
+                              textTransform: 'uppercase', letterSpacing: '0.05em',
+                            };
+                            const statRowStyle: React.CSSProperties = {
+                              display: 'flex', gap: '0.6rem', fontSize: '0.62rem',
+                              color: 'var(--text-muted)', flexWrap: 'wrap',
+                            };
+                            const chipStyle: React.CSSProperties = {
+                              fontSize: '0.62rem', padding: '0.15rem 0.4rem', borderRadius: '10px',
+                              background: 'var(--background)', color: 'var(--text-muted)',
+                              border: '1px solid var(--border)',
+                            };
+
                             return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                <div style={{ display: 'flex', gap: '0.6rem', fontSize: '0.62rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                                  <span>🕐 {lastStr}</span>
-                                  <span>📊 {user.sessions30d} {t('settings.activity.visits')}</span>
-                                  {totalMin >= 1 && <span>⏱️ {Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                {/* ── Last session ── */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                  <div style={sectionLabelStyle}>
+                                    🎯 {language === 'he' ? 'ביקור אחרון' : 'Last visit'}
+                                  </div>
+                                  <div style={statRowStyle}>
+                                    <span>🕐 {lastStr}</span>
+                                    {lastSessionMin >= 1 && (
+                                      <span>⏱️ {Math.round(lastSessionMin)} {language === 'he' ? 'דק׳' : 'min'}</span>
+                                    )}
+                                  </div>
+                                  {lastSessionScreens.length > 0 ? (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                      {lastSessionScreens.map((screen, idx) => (
+                                        <span key={`${screen}-${idx}`} style={chipStyle}>{screen}</span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.6 }}>
+                                      {language === 'he' ? 'אין פירוט מסכים לביקור הזה' : 'No screen data for this visit'}
+                                    </div>
+                                  )}
                                 </div>
-                                {screensSorted.length > 0 ? (
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                                    {screensSorted.map(([screen, count]) => (
-                                      <span key={screen} style={{
-                                        fontSize: '0.62rem', padding: '0.15rem 0.4rem', borderRadius: '10px',
-                                        background: 'var(--background)', color: 'var(--text-muted)',
-                                        border: '1px solid var(--border)',
-                                      }}>
-                                        {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
-                                      </span>
-                                    ))}
+
+                                {/* divider */}
+                                <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
+
+                                {/* ── Total (last 30d) ── */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                  <div style={sectionLabelStyle}>
+                                    📈 {language === 'he' ? 'סה"כ (30 ימים)' : 'Total (30 days)'}
                                   </div>
-                                ) : (
-                                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
-                                    {language === 'he' ? 'נתוני מסכים יופיעו מהביקור הבא' : 'Screen data will appear from next visit'}
+                                  <div style={statRowStyle}>
+                                    <span>📊 {user.sessions30d} {t('settings.activity.visits')}</span>
+                                    <span>🔁 {totalSessions} {language === 'he' ? 'סשנים' : 'sessions'}</span>
+                                    {totalMin >= 1 && (
+                                      <span>⏱️ {Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
+                                    )}
                                   </div>
-                                )}
+                                  {screensSorted.length > 0 ? (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                                      {screensSorted.map(([screen, count]) => (
+                                        <span key={screen} style={chipStyle}>
+                                          {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
+                                      {language === 'he' ? 'נתוני מסכים יופיעו מהביקור הבא' : 'Screen data will appear from next visit'}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
@@ -4490,6 +4614,54 @@ const SettingsScreen = () => {
                   fontSize: '0.8rem', fontWeight: 700, fontFamily: 'Outfit, sans-serif',
                 }}
               >{t('settings.setup.gameFlowClose')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shared confirmation modal — replaces the legacy native confirm()
+          dialogs across this screen so destructive actions (backup
+          restore, AI usage reset/delete, issue-report delete) match the
+          rest of the app's premium chrome. */}
+      {confirmDialog && (
+        <div className="modal-overlay" onClick={() => !confirmDialogBusy && setConfirmDialog(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{confirmDialog.title}</h3>
+              <button
+                className="modal-close"
+                onClick={() => setConfirmDialog(null)}
+                disabled={confirmDialogBusy}
+                aria-label={t('common.close')}
+              >×</button>
+            </div>
+            <p style={{
+              fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5,
+              color: 'var(--text)', whiteSpace: 'pre-line',
+            }}>
+              {confirmDialog.body}
+            </p>
+            <div className="actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setConfirmDialog(null)}
+                disabled={confirmDialogBusy}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="btn"
+                onClick={runConfirmDialog}
+                disabled={confirmDialogBusy}
+                style={{
+                  background: confirmDialog.destructive ? '#ef4444' : '#10b981',
+                  color: '#fff', fontWeight: 600,
+                  opacity: confirmDialogBusy ? 0.7 : 1,
+                  cursor: confirmDialogBusy ? 'wait' : 'pointer',
+                }}
+              >
+                {confirmDialogBusy ? '...' : confirmDialog.confirmLabel}
+              </button>
             </div>
           </div>
         </div>

@@ -12,7 +12,7 @@ import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGame
 import { getComboHistory } from './comboHistory';
 import { fetchTrainingAnswers } from '../database/trainingData';
 import { recordSuccess, recordRateLimit, readRateLimitHeaders } from './aiUsageTracker';
-import { proxyGeminiGenerate, proxyGeminiModels, proxyGeminiImage } from './apiProxy';
+import { proxyGeminiGenerate, proxyGeminiModels, pollinationsImage } from './apiProxy';
 import { getComicStyle } from './comicStyles';
 import type { ComicScript, ComicStyleKey, ComicPanel } from '../types';
 
@@ -29,6 +29,9 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'gemini-3-flash-preview': '3 Flash',
   'gemini-3.1-flash-lite-preview': '3.1 Flash-Lite',
   'gemini-2.5-flash': '2.5 Flash',
+  // Comic image provider — Pollinations (anonymous, free).
+  'pollinations/flux': 'FLUX',
+  'pollinations/zimage': 'Pollinations',
 };
 
 export const getModelDisplayName = (model: string): string =>
@@ -2402,16 +2405,19 @@ ${standingsLines}${contextBlock}${periodEndingBlock}${buildTraitBlock(tonight.ma
 // Hebrew dialogue is rendered as DOM text on top of the art client-side.
 // The model never draws letters, which guarantees crisp Hebrew typography.
 
-// Image-generation model fallback chain. Both aliases point at the same
-// Nano Banana family, but `-preview` is the canonical name in Google's docs
-// and is more widely available across regions; the non-preview alias is
-// rolling out and 404s in some regions. We try the most-available alias
-// first, then the GA name as a backup. Different aliases also have separate
-// per-key quota buckets, which gets us past transient 429s.
-const IMAGE_MODELS = [
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-image',
-];
+// Image generation provider. Google's Gemini image models (Nano Banana
+// family) are paid-tier only — the free API tier returns `limit: 0` for
+// every image-generation request. We fall back to Pollinations.ai which
+// offers anonymous access to FLUX (Black Forest Labs, 12B params) for
+// free, with no API key. Trade-off: 60-90s latency vs Nano Banana's
+// 5-15s, and slightly less character consistency. Quality is good
+// enough for our manually-triggered comic feature.
+//
+// Kept as a constant so we have a single place to swap providers if
+// Pollinations ever becomes unreliable (e.g. switch to Cloudflare
+// Workers AI Flux with a user-supplied token).
+const IMAGE_PROVIDER = 'pollinations' as const;
+const IMAGE_MODEL = 'flux' as const;
 
 // Structured logger for the comic pipeline — every line is prefixed [comic]
 // so you can grep the browser console / Vercel logs for exactly the comic
@@ -2584,164 +2590,103 @@ ${tonightLines}${drama}
 };
 
 /**
- * Stage 2 — generate the comic art image (4 panels in one PNG).
- * Returns base64-encoded PNG data and pixel dimensions.
+ * Stage 2 — generate the comic art image (4 panels in one image).
+ * Returns base64-encoded image data and pixel dimensions.
  *
- * Single shot using gemini-2.5-flash-image. The prompt includes EVERY
- * panel description plus the style fragment, and aggressively forbids
- * letters/text/bubbles since Hebrew is rendered client-side.
+ * Uses Pollinations.ai's anonymous FLUX endpoint (no API key, free).
+ * The prompt includes every panel description plus the style fragment
+ * and aggressively forbids letters/text/bubbles since Hebrew is rendered
+ * client-side as a DOM overlay.
+ *
+ * Latency note: anonymous Pollinations is throttled and a 1024x1024 FLUX
+ * image typically takes 60-90 seconds to return. The orchestrator reports
+ * a long-running 'art' progress stage to set user expectation.
  */
 export const generateComicArt = async (
   script: ComicScript,
 ): Promise<{ base64: string; mimeType: string; width: number; height: number; model: string }> => {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) throw new Error('NO_API_KEY');
-
   if (!navigator.onLine) {
     throw new Error('אין חיבור לאינטרנט — לא ניתן להפעיל AI');
   }
 
   const style = getComicStyle(script.style);
 
-  // Build a single prompt that lays out all 4 panels in a 2x2 grid.
+  // Compact panel-line format. FLUX prefers concrete, shorter prompts than
+  // Gemini's image model — verbose narrative prompts can dilute the style
+  // signal. We strip the multi-line structure and lead with the style.
   const panelLines = script.panels.map(p => {
-    const charLine = p.characters.length > 0 ? ` Characters present: ${p.characters.join(', ')}.` : '';
+    const charLine = p.characters.length > 0 ? ` Characters: ${p.characters.join(', ')}.` : '';
     return `Panel ${p.id} (${panelPosition(p.id)}): ${p.scene}${charLine}`;
-  }).join('\n');
+  }).join(' ');
 
   const characterRoster = collectCharacterRoster(script);
 
-  const prompt = `Create a single high-quality one-page comic illustration: a 2x2 grid of 4 panels telling a connected story about a poker night between friends.
+  const prompt = [
+    'A 4-panel comic strip about a poker night between friends, 2x2 grid layout, single image with all 4 panels visible.',
+    `Style: ${style.promptFragment}.`,
+    panelLines,
+    characterRoster,
+    'Use the same recognizable character design across all 4 panels. Each character has distinct clothing colors, hair, and build so they are trackable.',
+    'NO text inside the image. NO letters, NO words, NO speech bubbles, NO captions, NO panel numbers, NO signatures, NO watermarks. Speech bubbles will be added separately as an overlay — leave clean negative space near each main face.',
+    `Negative: ${style.negativePrompt}.`,
+  ].filter(Boolean).join(' ');
 
-🎨 ART STYLE — LOCK THIS DOWN:
-${style.promptFragment}.
-
-CRITICAL — image content rules:
-- Render ONLY illustration. NO text whatsoever inside the image. NO speech bubbles. NO captions. NO panel numbers. NO signatures, watermarks, or logos.
-- Speech bubbles will be added later as a separate overlay; if you draw bubble shapes they will collide with the overlay and ruin the page.
-- Leave clean empty negative space near each main character's face/upper body so a bubble overlay has room to land. Keep faces unobstructed and well-lit.
-- Compose all 4 panels INSIDE one image as a 2x2 grid: panel 1 top-${ARABIC_RTL ? 'right' : 'left'}, panel 2 top-${ARABIC_RTL ? 'left' : 'right'}, panel 3 bottom-${ARABIC_RTL ? 'right' : 'left'}, panel 4 bottom-${ARABIC_RTL ? 'left' : 'right'}. Use clear panel borders matching the style. Equal panel sizes.
-- Square output, roughly 1024x1024 pixels.
-
-CHARACTER CONSISTENCY (very important):
-- Use the same character design across all 4 panels. ${characterRoster}
-- Each character should be visually distinguishable (different clothing colors, hair, build) so a viewer can track them across panels.
-
-PANEL CONTENT:
-${panelLines}
-
-NEGATIVE PROMPT:
-${style.negativePrompt}.`;
+  // Unique seed per generation so Pollinations' prompt+seed cache doesn't
+  // return the same image on regenerate. Mix a random component on top of
+  // the timestamp to defeat any second-resolution collisions.
+  const seed = (Date.now() % 1_000_000) + Math.floor(Math.random() * 1000);
 
   const stageStart = Date.now();
-  comicLog('art:start', { style: script.style, panels: script.panels.length, promptChars: prompt.length });
-
-  // Try each image model in order; on 429 / 404 / 503 / no-image, fall through
-  // to the next. Hard errors (4xx other than rate-limit, 5xx network) terminate
-  // the chain and surface to the orchestrator. Detailed per-attempt logging
-  // lets you tell exactly what happened from the browser console.
-  let lastError = '';
-  let lastStatus = 0;
-  let lastFinishReason: string | undefined;
-
-  for (const candidate of IMAGE_MODELS) {
-    const attemptStart = Date.now();
-    try {
-      comicLog('art:attempt', { model: candidate });
-      const response = await proxyGeminiImage(candidate, {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.9,
-          // gemini-2.5-flash-image returns IMAGE in candidates[].content.parts[].inlineData
-          responseModalities: ['IMAGE'],
-        },
-      });
-
-      lastStatus = response.status;
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const errMsg = errData?.error?.message || `HTTP ${response.status}`;
-        lastError = errMsg;
-        comicWarn('art:http_error', { model: candidate, status: response.status, message: errMsg, ms: Date.now() - attemptStart });
-        // Retryable: rate-limit / not-found / service unavailable → next model
-        if (response.status === 429 || response.status === 404 || response.status === 503) continue;
-        // Hard error: surface immediately
-        throw new Error(errMsg);
-      }
-
-      const data = await response.json();
-      const parts: Array<{ inlineData?: { data: string; mimeType: string }; inline_data?: { data: string; mime_type: string } }> =
-        data?.candidates?.[0]?.content?.parts || [];
-      const finishReason = data?.candidates?.[0]?.finishReason;
-      lastFinishReason = finishReason;
-
-      // Tolerate both camelCase and snake_case key variants from upstream.
-      let base64 = '';
-      let mimeType = 'image/png';
-      for (const part of parts) {
-        const inline = part.inlineData || part.inline_data;
-        if (inline?.data) {
-          base64 = inline.data;
-          mimeType = (part.inlineData?.mimeType) || (part.inline_data?.mime_type) || 'image/png';
-          break;
-        }
-      }
-
-      if (!base64) {
-        // Empty image (often SAFETY filter or recitation) → try next model.
-        lastError = `no image data (finishReason=${finishReason || 'none'})`;
-        comicWarn('art:no_image', { model: candidate, finishReason, ms: Date.now() - attemptStart });
-        continue;
-      }
-
-      // SUCCESS
-      const dims = readImageDimensions(base64, mimeType);
-      const totalMs = Date.now() - stageStart;
-      const attemptMs = Date.now() - attemptStart;
-      comicLog('art:success', {
-        model: candidate,
-        attemptMs,
-        totalStageMs: totalMs,
-        sizeKB: Math.round(base64.length * 3 / 4 / 1024),
-        width: dims.width || 1024,
-        height: dims.height || 1024,
-      });
-
-      return {
-        base64,
-        mimeType,
-        width: dims.width || 1024,
-        height: dims.height || 1024,
-        model: candidate,
-      };
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      // Network errors or thrown hard errors. If this is a recoverable network
-      // hiccup, continue to next model; otherwise rethrow.
-      lastError = errMsg;
-      comicWarn('art:exception', { model: candidate, message: errMsg, ms: Date.now() - attemptStart });
-      // Heuristic: if it's clearly a bad-key / quota error, the next model
-      // would fail too — but we still try once for completeness, since the
-      // preview model sometimes has a separate quota bucket.
-      if (errMsg.includes('API key') || errMsg.includes('INVALID_API_KEY')) throw err;
-      // Otherwise fall through and try next.
-    }
-  }
-
-  // All models exhausted.
-  comicError('art:all_failed', {
-    triedModels: IMAGE_MODELS,
-    lastStatus,
-    lastError,
-    lastFinishReason,
-    totalStageMs: Date.now() - stageStart,
+  comicLog('art:start', {
+    provider: IMAGE_PROVIDER,
+    model: IMAGE_MODEL,
+    style: script.style,
+    panels: script.panels.length,
+    promptChars: prompt.length,
+    seed,
   });
-  throw new Error(
-    lastError
-      ? `Comic image generation failed after ${IMAGE_MODELS.length} model attempts: ${lastError}`
-      : 'Comic image generation failed (no models returned an image)',
-  );
+
+  try {
+    const { blob, mimeType, sourceUrl, model } = await pollinationsImage(prompt, {
+      width: 1024,
+      height: 1024,
+      seed,
+      model: IMAGE_MODEL,
+      nologo: true,
+    });
+
+    const base64 = await blobToBase64(blob);
+    const dims = await readBlobDimensions(blob);
+
+    const totalMs = Date.now() - stageStart;
+    comicLog('art:success', {
+      provider: IMAGE_PROVIDER,
+      model,
+      seed,
+      sourceUrlPrefix: sourceUrl.slice(0, 120),
+      sizeKB: Math.round(blob.size / 1024),
+      width: dims.width || 1024,
+      height: dims.height || 1024,
+      totalStageMs: totalMs,
+    });
+
+    return {
+      base64,
+      mimeType,
+      width: dims.width || 1024,
+      height: dims.height || 1024,
+      model,
+    };
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    comicError('art:failed', {
+      provider: IMAGE_PROVIDER,
+      model: IMAGE_MODEL,
+      message: errMsg,
+      totalStageMs: Date.now() - stageStart,
+    });
+    throw new Error(`Comic image generation failed: ${errMsg}`);
+  }
 };
 
 /**
@@ -2875,8 +2820,6 @@ If you cannot confidently locate a character, omit them from the output.`;
 
 // ─── Comic helpers ────────────────────────────────────────────────────────
 
-const ARABIC_RTL = false; // English layout descriptors stay left-to-right for the model
-
 const panelPosition = (id: number): string => {
   switch (id) {
     case 1: return 'top-left';
@@ -2903,29 +2846,51 @@ const collectCharacterRoster = (script: ComicScript): string => {
 };
 
 /**
- * Lightweight base64 dimension probe. Supports PNG (most common output)
- * with JPEG fallback. We only need approximate dimensions for bbox
- * normalization, so a quick header read is fine.
+ * Read pixel dimensions from any image Blob (JPEG/PNG/WebP) by loading
+ * it through an off-DOM HTMLImageElement. Used for bbox normalization
+ * after Pollinations returns a JPEG.
+ *
+ * Resolves to {0,0} on load error so the caller can fall back to the
+ * requested dimensions (we always ask for 1024x1024).
  */
-const readImageDimensions = (base64: string, mimeType: string): { width: number; height: number } => {
-  try {
-    const bin = atob(base64.slice(0, 64));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    if (mimeType.includes('png')) {
-      // PNG IHDR width/height at offset 16 (big-endian uint32).
-      const view = new DataView(bytes.buffer);
-      if (bytes.length >= 24) {
-        const width = view.getUint32(16);
-        const height = view.getUint32(20);
-        if (width > 0 && height > 0) return { width, height };
+const readBlobDimensions = (blob: Blob): Promise<{ width: number; height: number }> => {
+  return new Promise(resolve => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    img.onload = () => {
+      const dims = { width: img.naturalWidth, height: img.naturalHeight };
+      URL.revokeObjectURL(objectUrl);
+      resolve(dims);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: 0, height: 0 });
+    };
+    img.src = objectUrl;
+  });
+};
+
+/**
+ * Convert a Blob to its raw base64 payload (without the
+ * "data:<mime>;base64," prefix). Used to feed the Pollinations JPEG into
+ * the rest of the pipeline (bbox detection + Storage upload), which both
+ * expect base64.
+ */
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('FileReader returned non-string result'));
+        return;
       }
-    }
-    // Fallback: caller will use 1024 default.
-    return { width: 0, height: 0 };
-  } catch {
-    return { width: 0, height: 0 };
-  }
+      const idx = result.indexOf(',');
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
 };
 
 // ─── AI Player Chronicle ──────────────────────────────────────────────────

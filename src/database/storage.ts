@@ -843,15 +843,41 @@ export const saveForecastComment = (gameId: string, comment: string): void => {
   }
 };
 
-// Save AI-generated game night summary on game record (so it's not re-generated)
-export const saveGameAiSummary = (gameId: string, summary: string, model?: string): void => {
+/**
+ * Save AI-generated game night summary on the game record.
+ *
+ * Writes DIRECTLY to Supabase (not via the debounced cache sync) before
+ * updating the local cache. This is essential for mobile: the previous
+ * implementation went through a 300ms debounced setTimeout, which mobile
+ * browsers (especially iOS Safari) suspend or evict the moment the tab
+ * is backgrounded. Users would see the summary appear, lock the phone,
+ * and the sync would never fire — leaving the freshly-generated text
+ * stranded in in-memory cache that gets discarded on the next page load.
+ *
+ * Direct write means the database has the summary the moment this fn
+ * resolves, regardless of what the user does next. Throws on failure so
+ * the caller can surface a real error instead of optimistically claiming
+ * success.
+ */
+export const saveGameAiSummary = async (
+  gameId: string,
+  summary: string,
+  model?: string,
+): Promise<void> => {
+  const updates: Record<string, unknown> = { ai_summary: summary || null };
+  if (model !== undefined) updates.ai_summary_model = model || null;
+
+  const { error } = await supabase.from('games').update(updates).eq('id', gameId);
+  if (error) throw new Error(`Save AI summary failed: ${error.message}`);
+
+  // Mirror in local cache so the rest of the app sees the new value
+  // immediately. markGameLocallyWritten guards against the realtime echo
+  // of our own update racing back and overwriting unrelated local fields.
   const games = getItem<Game[]>(STORAGE_KEYS.GAMES, []);
   const gameIndex = games.findIndex(g => g.id === gameId);
   if (gameIndex !== -1) {
     games[gameIndex].aiSummary = summary;
-    if (model) games[gameIndex].aiSummaryModel = model;
-    // Mark as locally-written BEFORE setItem so realtime refreshes that
-    // race the debounced sync don't clobber the new ai_summary.
+    if (model !== undefined) games[gameIndex].aiSummaryModel = model;
     markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }

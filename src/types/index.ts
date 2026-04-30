@@ -288,7 +288,7 @@ export interface Settings {
   scheduleEmailsEnabled?: boolean; // Beta-period toggle: when false, schedule notifications skip email broadcasts
   schedulePushEnabled?: boolean;   // Beta-period toggle: when false, schedule notifications skip push broadcasts (default true)
   // Group-level defaults pre-filled in CreatePollModal (still editable per poll)
-  scheduleDefaultTarget?: number;          // 2..12, default 8
+  scheduleDefaultTarget?: number;          // 2..12, default 7
   scheduleDefaultDelayHours?: number;      // 0..240, default 48
   scheduleDefaultTime?: string;            // 'HH:MM' 24h, default '21:00'
   scheduleDefaultAllowMaybe?: boolean;     // default true

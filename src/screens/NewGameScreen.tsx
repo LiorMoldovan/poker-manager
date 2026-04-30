@@ -39,8 +39,16 @@ async function canvasToForecastShareFile(canvas: HTMLCanvasElement, baseName: st
 
 /**
  * שיתוף מרובה קבצים לווטסאפ: ניסיון מרובד → אם לא נתמך/נכשל, תמונה אחר תמונה (יציב יותר במכשירים מסוימים) → הורדה.
+ *
+ * `options.showSequentialTip` is invoked once per session before the
+ * first sequential share, and must return a Promise that resolves when
+ * the user has acknowledged the tip. The caller wires this to a styled
+ * in-app modal so we don't fall back to native window.alert().
  */
-async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
+async function shareImageFilesForWhatsApp(
+  files: File[],
+  options?: { showSequentialTip?: (count: number) => Promise<void> },
+): Promise<void> {
   const caption = '🔮 תחזית פוקר';
 
   const downloadAllAndOpenWa = () => {
@@ -64,11 +72,10 @@ async function shareImageFilesForWhatsApp(files: File[]): Promise<void> {
       files.length > 1
       && typeof sessionStorage !== 'undefined'
       && !sessionStorage.getItem(FORECAST_SEQUENTIAL_SHARE_TIP_KEY)
+      && options?.showSequentialTip
     ) {
       sessionStorage.setItem(FORECAST_SEQUENTIAL_SHARE_TIP_KEY, '1');
-      window.alert(
-        `נשלחות ${files.length} תמונות ברצף.\nבחר ווטסאפ ובאותה קבוצה בכל פעם. עדיף להשלים את כל החלקים לפני שממשיכים בשיחה — כך הכול מגיע בסדר.`,
-      );
+      await options.showSequentialTip(files.length);
     }
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
@@ -184,6 +191,12 @@ const NewGameScreen = () => {
   const [gameLocation, setGameLocation] = useState<string>('');
   const [customLocation, setCustomLocation] = useState<string>('');
   const [isSharing, setIsSharing] = useState(false);
+  // Sequential-share tip modal — replaces the old native window.alert()
+  // so it matches the rest of the app's premium chrome. The ref keeps
+  // the resolver across the render cycle so the share-loop can `await`
+  // until the user dismisses the tip.
+  const [sequentialTip, setSequentialTip] = useState<{ count: number } | null>(null);
+  const sequentialTipResolverRef = useRef<(() => void) | null>(null);
   const [cachedForecasts, setCachedForecasts] = useState<ReturnType<typeof generateForecasts> | null>(null);
   const [aiForecasts, setAiForecasts] = useState<ForecastResult[] | null>(null);
   const [comboHistory, setComboHistory] = useState<ComboHistory | null>(null);
@@ -1369,7 +1382,12 @@ const NewGameScreen = () => {
         files.push(await canvasToForecastShareFile(canvas, pageBase));
       }
 
-      await shareImageFilesForWhatsApp(files);
+      await shareImageFilesForWhatsApp(files, {
+        showSequentialTip: (count) => new Promise<void>((resolve) => {
+          sequentialTipResolverRef.current = resolve;
+          setSequentialTip({ count });
+        }),
+      });
     } catch (error) {
       console.error('Error sharing forecast:', error);
     } finally {
@@ -3209,6 +3227,44 @@ const NewGameScreen = () => {
                 style={{ flex: 1 }}
               >
                 {t('newGame.abandonDelete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sequential-share tip — shown once per session before the first
+          multi-image WhatsApp share. Replaces the old window.alert() so
+          the chrome matches the rest of the app. The share loop awaits
+          the resolver, so the user keeps full control over pacing. */}
+      {sequentialTip && (
+        <div className="modal-overlay" onClick={() => {
+          const resolve = sequentialTipResolverRef.current;
+          sequentialTipResolverRef.current = null;
+          setSequentialTip(null);
+          resolve?.();
+        }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, direction: 'rtl' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">📤 {t('newGame.sequentialShareTipTitle')}</h3>
+            </div>
+            <p style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.6, color: 'var(--text)' }}>
+              {t('newGame.sequentialShareTipBody', { count: sequentialTip.count })}
+            </p>
+            <div className="actions">
+              <button
+                className="btn"
+                onClick={() => {
+                  const resolve = sequentialTipResolverRef.current;
+                  sequentialTipResolverRef.current = null;
+                  setSequentialTip(null);
+                  resolve?.();
+                }}
+                style={{
+                  background: '#10b981', color: '#fff', fontWeight: 600,
+                }}
+              >
+                {t('common.confirm')}
               </button>
             </div>
           </div>

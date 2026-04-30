@@ -303,13 +303,10 @@ const LiveGameScreen = () => {
     setEditingExpense(null);
   };
 
-  // Remove a player who didn't show up (only if they haven't rebought yet)
+  // Remove a player who didn't show up. The Remove button is rendered
+  // only when `player.rebuys <= 1`, so any player reaching this handler
+  // is always safely removable (zero-sum + buy-in math stays balanced).
   const handleRemovePlayer = (player: GamePlayer) => {
-    if (player.rebuys > 1) {
-      // Player has already rebought, can't remove
-      alert(t('live.cantRemove'));
-      return;
-    }
     setPlayerToRemove(player);
   };
 

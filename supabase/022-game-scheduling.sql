@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS game_polls (
   created_at                        TIMESTAMPTZ NOT NULL DEFAULT now(),
   status                            TEXT NOT NULL DEFAULT 'open'
                                       CHECK (status IN ('open', 'expanded', 'confirmed', 'cancelled', 'expired')),
-  target_player_count               INT NOT NULL DEFAULT 8 CHECK (target_player_count >= 2),
+  target_player_count               INT NOT NULL DEFAULT 7 CHECK (target_player_count >= 2),
   expansion_delay_hours             INT NOT NULL DEFAULT 48 CHECK (expansion_delay_hours >= 0),
   expanded_at                       TIMESTAMPTZ,
   confirmed_date_id                 UUID, -- FK added below (forward reference)

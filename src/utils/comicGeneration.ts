@@ -140,7 +140,8 @@ export const generateGameComic = async (
     throw new ComicStageError('script', err instanceof Error ? err.message : String(err), err);
   }
 
-  // ── Stage 2: art (has internal model fallback chain) ──
+  // ── Stage 2: art ──
+  // Pollinations.ai (anonymous FLUX). 60-90s typical latency on free tier.
   input.onProgress?.('art');
   let art;
   try {

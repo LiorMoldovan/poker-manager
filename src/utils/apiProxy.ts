@@ -98,6 +98,85 @@ export async function proxyGeminiImage(
   });
 }
 
+/**
+ * Anonymous image generation via Pollinations.ai.
+ *
+ * Free, no signup, no API key. Uses the public GET endpoint:
+ *   https://image.pollinations.ai/prompt/{encodedPrompt}?width=...&height=...&seed=...&model=...
+ *
+ * Why we call this directly from the browser (not via /api/...):
+ *   - Pollinations is intentionally CORS-friendly (their docs show <img src="...">)
+ *   - We have no secret to hide (anonymous tier needs no key)
+ *   - Vercel Edge Functions cap at ~30s but Pollinations frequently takes
+ *     60-90s for 1024x1024 on the anonymous tier. A direct browser fetch
+ *     respects the user's chosen wait time.
+ *
+ * Pollinations caches by `prompt + seed`, so callers MUST pass a fresh
+ * seed each generation (e.g. Date.now() + Math.random()) to avoid getting
+ * the previously-cached image back on regenerate.
+ */
+export interface PollinationsImageOptions {
+  width?: number;
+  height?: number;
+  seed?: number;
+  /** Available anonymous models: 'flux' (recommended), 'zimage' (default). Premium models like 'nanobanana' require an account. */
+  model?: 'flux' | 'zimage' | string;
+  nologo?: boolean;
+  signal?: AbortSignal;
+}
+
+export async function pollinationsImage(
+  prompt: string,
+  options: PollinationsImageOptions = {},
+): Promise<{ blob: Blob; mimeType: string; sourceUrl: string; model: string }> {
+  const {
+    width = 1024,
+    height = 1024,
+    seed = Date.now(),
+    model = 'flux',
+    nologo = true,
+    signal,
+  } = options;
+
+  const params = new URLSearchParams({
+    width: String(width),
+    height: String(height),
+    seed: String(seed),
+    model,
+    ...(nologo ? { nologo: 'true' } : {}),
+  });
+
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params.toString()}`;
+
+  const response = await fetch(url, { method: 'GET', signal });
+
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const txt = await response.text();
+      try {
+        const json = JSON.parse(txt);
+        detail = json?.message || json?.error || detail;
+      } catch {
+        if (txt) detail = txt.slice(0, 300);
+      }
+    } catch { /* ignore body read errors */ }
+    throw new Error(`Pollinations image generation failed: ${detail}`);
+  }
+
+  const mimeType = response.headers.get('content-type') || 'image/jpeg';
+  if (!mimeType.startsWith('image/')) {
+    throw new Error(`Pollinations returned non-image response: ${mimeType}`);
+  }
+
+  const blob = await response.blob();
+  if (!blob || blob.size === 0) {
+    throw new Error('Pollinations returned empty image body');
+  }
+
+  return { blob, mimeType, sourceUrl: url, model: `pollinations/${model}` };
+}
+
 export async function proxyGeminiModels(_apiKey: string, version = 'v1beta'): Promise<Response> {
   const auth = await getAuthHeaders();
   const groupKey = getGroupGeminiKey();

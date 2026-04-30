@@ -180,6 +180,8 @@ export default function ScheduleTab() {
   const [editPoll, setEditPoll] = useState<GamePoll | null>(null);
   const [deletePollConfirm, setDeletePollConfirm] = useState<GamePoll | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [manualClosePending, setManualClosePending] = useState<{ poll: GamePoll; dateId: string } | null>(null);
+  const [manualCloseSubmitting, setManualCloseSubmitting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   // Set of poll IDs the current user has opted in to receive vote-change
   // notifications for. Loaded once on mount and updated optimistically by
@@ -356,16 +358,29 @@ export default function ScheduleTab() {
   // backed by the update_game_poll_meta RPC. Keeping the call site here so
   // future per-field shortcuts can still be wired in if needed.
 
-  const handleManualClose = async (poll: GamePoll, dateId: string) => {
-    if (!confirm(t('schedule.manualClose') + '?')) return;
+  // Opens the in-app manual-close confirmation modal. Native confirm()
+  // was unreliable across browsers/embeddings (see deletePollConfirm) and
+  // its OS-styled chrome breaks the app's premium look.
+  const handleManualClose = (poll: GamePoll, dateId: string) => {
+    setManualClosePending({ poll, dateId });
+  };
+
+  const performManualClose = async () => {
+    if (!manualClosePending || manualCloseSubmitting) return;
+    setManualCloseSubmitting(true);
     try {
-      await manuallyClosePoll(poll.id, dateId);
+      await manuallyClosePoll(manualClosePending.poll.id, manualClosePending.dateId);
       // Re-fetch the freshly confirmed poll and trigger notifications
-      const fresh = getAllPolls().find(p => p.id === poll.id);
+      const fresh = getAllPolls().find(p => p.id === manualClosePending.poll.id);
       if (fresh && fresh.status === 'confirmed') {
         sendConfirmedNotifications(fresh).catch(() => {});
       }
-    } catch (e) { showMsg('error', handleRpcError(e)); }
+      setManualClosePending(null);
+    } catch (e) {
+      showMsg('error', handleRpcError(e));
+    } finally {
+      setManualCloseSubmitting(false);
+    }
   };
 
   // Opens the in-app delete-confirmation modal. Native confirm() was
@@ -670,6 +685,57 @@ export default function ScheduleTab() {
           </ModalPortal>
         );
       })()}
+
+      {/* Manual close confirmation modal — admin-only. Replaces the
+          native confirm() dialog so the UX matches the rest of the app
+          (premium chrome, RTL-aware, dismiss-on-overlay). The action
+          flips the poll to 'confirmed' on the chosen date and drops
+          the other proposed dates, so we surface the date prominently. */}
+      {manualClosePending && (() => {
+        const date = manualClosePending.poll.dates.find(d => d.id === manualClosePending.dateId);
+        const dateLabel = date ? fmtHebrewDate(date) : '';
+        return (
+          <ModalPortal>
+          <div className="modal-overlay" onClick={() => !manualCloseSubmitting && setManualClosePending(null)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 className="modal-title">{t('schedule.manualCloseConfirmTitle')}</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => setManualClosePending(null)}
+                  disabled={manualCloseSubmitting}
+                  aria-label={t('common.close')}
+                >×</button>
+              </div>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+                {t('schedule.manualCloseConfirmBody', { date: dateLabel })}
+              </p>
+              <div className="actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setManualClosePending(null)}
+                  disabled={manualCloseSubmitting}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  className="btn"
+                  onClick={performManualClose}
+                  disabled={manualCloseSubmitting}
+                  style={{
+                    background: '#10b981', color: '#fff', fontWeight: 600,
+                    opacity: manualCloseSubmitting ? 0.7 : 1,
+                    cursor: manualCloseSubmitting ? 'wait' : 'pointer',
+                  }}
+                >
+                  {manualCloseSubmitting ? '...' : t('schedule.manualCloseConfirmAction')}
+                </button>
+              </div>
+            </div>
+          </div>
+          </ModalPortal>
+        );
+      })()}
     </div>
   );
 }
@@ -892,6 +958,20 @@ function PollCard(props: PollCardProps) {
               {t('schedule.targetProgress', { count: bestDateYes, target: poll.targetPlayerCount })}
             </span>
           )}
+          {/* Open-seats hint during voting — same friendly copy used after
+              confirmation. Surfaces only when at least one yes-vote is in
+              and the count is still below target, so a fresh poll with
+              0 yes-votes doesn't shout "7 seats still open" the moment it
+              opens. */}
+          {(poll.status === 'open' || poll.status === 'expanded')
+            && bestDateYes > 0
+            && bestDateYes < poll.targetPlayerCount && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              💡 {(poll.targetPlayerCount - bestDateYes) === 1
+                ? t('schedule.openSeats.singular')
+                : t('schedule.openSeats.plural', { missing: poll.targetPlayerCount - bestDateYes })}
+            </span>
+          )}
           {isExpansionDue && (
             <span style={{ fontSize: 11, color: '#f59e0b' }} title={t('schedule.timer.openPhaseDue')}>⏰</span>
           )}
@@ -925,13 +1005,14 @@ function PollCard(props: PollCardProps) {
         const myVote = currentUserVoteByDate.get(confirmedDate.id);
         // Confirmed-state vote changes (migration 031). The poll stays
         // confirmed regardless of how the count moves — confirmation is
-        // one-way. We surface a "below target" warning so the admin
-        // sees at a glance when too many people have dropped out and
-        // can manually cancel if needed.
+        // one-way. We surface an open-seats hint so the admin sees at a
+        // glance when capacity is still available and can proxy-add a
+        // player or lower the target via Edit (migration 034 allows
+        // editing confirmed polls).
         const missing = Math.max(0, poll.targetPlayerCount - s.yes);
-        const isBelowTarget = missing > 0;
+        const hasOpenSeats = missing > 0;
         return (
-          <div className={`poll-confirmed-banner${isBelowTarget ? ' poll-confirmed-banner--below-target' : ''}`}>
+          <div className="poll-confirmed-banner">
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               flexWrap: 'wrap', gap: 6, marginBottom: 8,
@@ -966,19 +1047,19 @@ function PollCard(props: PollCardProps) {
                 />
               </div>
             </div>
-            {/* Below-target warning — the confirmation count has dropped
-                below the configured target since the game was locked in.
-                Surfaces in the green banner so admins can see at a glance
-                whether to cancel/re-poll. We don't auto-revert status —
-                that decision belongs to the organizer. */}
-            {isBelowTarget && (
+            {/* Open-seats hint — the confirmed yes-count is still below
+                the configured target. Framed as an invitation rather
+                than an alarm: the game already locked in, the admin
+                just has room to proxy-add another player (or to lower
+                the target via Edit) before the night. */}
+            {hasOpenSeats && (
               <div style={{
                 padding: '6px 10px', borderRadius: 6, marginBottom: 8,
-                background: 'rgba(234, 179, 8, 0.12)',
-                border: '1px solid rgba(234, 179, 8, 0.35)',
-                color: '#eab308', fontSize: 12, fontWeight: 600,
+                color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic',
               }}>
-                {t('schedule.belowTarget', { count: s.yes, missing })}
+                💡 {missing === 1
+                  ? t('schedule.openSeats.singular')
+                  : t('schedule.openSeats.plural', { missing })}
               </div>
             )}
             {/* Inline RSVP buttons — members can still change their mind
@@ -1269,16 +1350,18 @@ function PollCard(props: PollCardProps) {
             {isSharing ? t('common.capturing') : t('common.share')}
           </button>
         )}
+        {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
+          /* One consolidated edit button — opens EditPollModal where the
+              admin can adjust note, default location, target, expansion
+              delay, and allow_maybe in a single submit. Available on
+              confirmed polls too (migration 034) so an admin can lower
+              the target if someone drops post-lock-in. */
+          <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
+        )}
         {isAdmin && (poll.status === 'open' || poll.status === 'expanded') && (
-          <>
-            {/* One consolidated edit button — opens EditPollModal where the
-                admin can adjust note, default location, target, expansion
-                delay, and allow_maybe in a single submit. */}
-            <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
-            <button onClick={onCancel} style={{ ...ghostBtn, color: '#ef4444', borderColor: '#ef4444' }}>
-              {t('schedule.cancelPoll')}
-            </button>
-          </>
+          <button onClick={onCancel} style={{ ...ghostBtn, color: '#ef4444', borderColor: '#ef4444' }}>
+            {t('schedule.cancelPoll')}
+          </button>
         )}
         {/* Delete (permanent) — admin-only, available in any state.
             For active polls we recommend Cancel first via the confirm copy.
@@ -1819,10 +1902,20 @@ function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, t }: 
 }
 
 // ─── PollShareCard helpers ─────────────────────────────
-// Date typography for the share cards: split the day-of-week, calendar day,
-// and time onto distinct visual tiers so the date "reads" at a glance even
-// in a compressed WhatsApp preview. Keeps Hebrew RTL by relying on
-// document direction rather than hard-coding alignment.
+
+// Strip seconds from a "HH:MM:SS" stored time so the share card shows
+// "21:00" rather than "21:00:00". Returns the original string if it
+// doesn't match the HH:MM(:SS) shape, so legacy data isn't dropped.
+function fmtShareTime(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  const m = /^(\d{1,2}):(\d{2})/.exec(trimmed);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : trimmed;
+}
+
+// Compact date+time label used in the invitation and cancellation
+// per-date rows. Keeps day-of-week on its own line so it reads at a
+// glance even when the row also carries a vote-count cluster.
 function ShareDateLabel({
   date, color, muted,
 }: { date: GamePollDate; color: string; muted: string }) {
@@ -1832,8 +1925,8 @@ function ShareDateLabel({
     : d.toLocaleDateString('he-IL', { weekday: 'long' });
   const dayMonth = isNaN(d.getTime())
     ? date.proposedDate
-    : `${d.getDate()}/${d.getMonth() + 1}`;
-  const time = (date.proposedTime || '').trim();
+    : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'long' });
+  const time = fmtShareTime(date.proposedTime);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
       {dayOfWeek && (
@@ -1844,6 +1937,129 @@ function ShareDateLabel({
       <span style={{ fontSize: 12, color: muted, lineHeight: 1.2 }}>
         {dayMonth}{time && ` · ${time}`}
       </span>
+    </div>
+  );
+}
+
+// Confirmation hero — boarding-pass layout. Four vertical segments
+// (day-of-week / date numeral / time / location) separated by hairline
+// dividers, with the date numeral sized as the visual anchor. The
+// outer document is RTL so the natural reading order is right→left:
+// day on the far right, location on the far left.
+function ShareBoardingHero({
+  date, location, accent, accentTint, tokens,
+}: {
+  date: GamePollDate;
+  location: string | null;
+  accent: string;
+  accentTint: string;
+  tokens: { TEXT: string; TEXT_MUTED: string };
+}) {
+  const { TEXT, TEXT_MUTED } = tokens;
+  const d = new Date(date.proposedDate);
+  const valid = !isNaN(d.getTime());
+  const dayOfWeek = valid ? d.toLocaleDateString('he-IL', { weekday: 'long' }) : '';
+  const dayNumeral = valid ? String(d.getDate()) : date.proposedDate;
+  const monthName = valid ? d.toLocaleDateString('he-IL', { month: 'long' }) : '';
+  const time = fmtShareTime(date.proposedTime);
+
+  // Each segment shares the same vertical structure so the columns
+  // align: a tiny uppercase label on top, the value below. Letting the
+  // numeral segment render its label *under* the value (month name)
+  // breaks pattern intentionally — the numeral is the hero.
+  const Segment = ({
+    label, value, valueSize, valueWeight, valueColor, valueLetterSpacing,
+  }: {
+    label: string;
+    value: string;
+    valueSize: number;
+    valueWeight: number;
+    valueColor: string;
+    valueLetterSpacing?: number;
+  }) => (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 4,
+      padding: '0 4px', minWidth: 0,
+    }}>
+      <span style={{
+        fontSize: 10, color: TEXT_MUTED, letterSpacing: 1.2,
+        textTransform: 'uppercase', fontWeight: 600,
+      }}>{label}</span>
+      <span style={{
+        fontSize: valueSize, fontWeight: valueWeight, color: valueColor,
+        letterSpacing: valueLetterSpacing ?? 0.2, lineHeight: 1.05,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        maxWidth: '100%',
+      }}>{value}</span>
+    </div>
+  );
+
+  const Divider = () => (
+    <div style={{
+      width: 1, alignSelf: 'stretch',
+      background: 'rgba(148, 163, 184, 0.20)',
+      margin: '4px 0',
+    }} />
+  );
+
+  return (
+    <div style={{
+      position: 'relative',
+      padding: '18px 8px 16px',
+      marginBottom: 14,
+      background: `linear-gradient(180deg, ${accentTint}, rgba(15, 23, 42, 0.35))`,
+      border: `1px solid ${accent}55`,
+      borderRadius: 12,
+      display: 'flex', alignItems: 'stretch',
+      // Boarding-pass perforation: a dashed top edge that reads as a
+      // tear-line. Subtle enough that it doesn't compete with the
+      // primary border, but distinct enough to register as "ticket".
+      boxShadow: `inset 0 1px 0 0 ${accent}33`,
+    }}>
+      <Segment
+        label="יום"
+        value={dayOfWeek}
+        valueSize={15}
+        valueWeight={700}
+        valueColor={accent}
+      />
+      <Divider />
+      {/* Date numeral — the visual anchor. Renders the day number large
+          with the month name in a smaller line below, giving the segment
+          a "stamp" feel without overflowing. */}
+      <div style={{
+        flex: 1.15, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 2,
+        padding: '0 4px', minWidth: 0,
+      }}>
+        <span style={{
+          fontSize: 36, fontWeight: 800, color: TEXT,
+          lineHeight: 1, letterSpacing: -0.5,
+        }}>{dayNumeral}</span>
+        {monthName && (
+          <span style={{
+            fontSize: 11, color: TEXT_MUTED, letterSpacing: 0.6,
+            fontWeight: 600, marginTop: 2,
+          }}>{monthName}</span>
+        )}
+      </div>
+      <Divider />
+      <Segment
+        label="שעה"
+        value={time || '—'}
+        valueSize={18}
+        valueWeight={700}
+        valueColor={TEXT}
+      />
+      <Divider />
+      <Segment
+        label="מיקום"
+        value={location ? `📍 ${location}` : '—'}
+        valueSize={13}
+        valueWeight={600}
+        valueColor={location ? TEXT : TEXT_MUTED}
+      />
     </div>
   );
 }
@@ -1942,18 +2158,50 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
   const ACCENT_GREEN = '#10b981';
   const ACCENT_RED = '#ef4444';
 
-  // Header palette per mode
-  const headerByMode = {
-    invitation: { emoji: '🃏', title: t('schedule.share.invitationTitle'), color: ACCENT_BLUE },
-    confirmation: { emoji: '✅', title: t('schedule.share.confirmationTitle'), color: ACCENT_GREEN },
-    cancellation: { emoji: '❌', title: t('schedule.share.cancellationTitle'), color: ACCENT_RED },
-  } as const;
-  const header = headerByMode[mode];
-
-  // Best-vote count for invitation progress bar
+  // Best-vote count for invitation progress bar (also used in the
+  // header subtitle so the title strip carries meaningful status).
   let bestYes = 0;
   for (const s of dateStats.values()) if (s.yes > bestYes) bestYes = s.yes;
   const targetPct = Math.min(100, Math.round((bestYes / Math.max(1, poll.targetPlayerCount)) * 100));
+
+  // Header palette + per-mode meta. The subtitle replaces the old
+  // poll-creation date (which recipients confused with the game date)
+  // with status meta that's actually useful at-a-glance: "X/Y אישרו"
+  // for confirmation, target progress for invitation, the cancellation
+  // moment for cancellation. The status pill mirrors the same idea
+  // visually on the leading edge of the header strip.
+  const headerByMode = {
+    invitation: {
+      emoji: '🃏',
+      title: t('schedule.share.invitationTitle'),
+      color: ACCENT_BLUE,
+      subtitle: t('schedule.share.headerSubtitleInvitation', {
+        count: bestYes, target: poll.targetPlayerCount,
+      }),
+      pill: t('schedule.share.statusPillInvitation'),
+      pillIcon: '🗳',
+    },
+    confirmation: {
+      emoji: '🔒',
+      title: t('schedule.share.confirmationTitle'),
+      color: ACCENT_GREEN,
+      subtitle: t('schedule.share.headerSubtitleConfirmation', {
+        count: confirmedPlayers.length,
+        target: poll.targetPlayerCount,
+      }),
+      pill: t('schedule.share.statusPillConfirmation'),
+      pillIcon: '✓',
+    },
+    cancellation: {
+      emoji: '❌',
+      title: t('schedule.share.cancellationTitle'),
+      color: ACCENT_RED,
+      subtitle: t('schedule.share.headerSubtitleCancellation'),
+      pill: t('schedule.share.statusPillCancellation'),
+      pillIcon: '⊘',
+    },
+  } as const;
+  const header = headerByMode[mode];
 
   return (
     <div style={{
@@ -1972,24 +2220,42 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
         padding: 18,
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
       }}>
-        {/* Header */}
+        {/* Header — emoji badge + title/subtitle, with a status pill on
+            the leading edge that mirrors the mode color. The badge has
+            a soft inner ring (boxShadow) for a premium chip-like
+            treatment, and the subtitle now carries useful status meta
+            instead of the misleading poll-creation date. */}
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          paddingBottom: 12,
+          display: 'flex', alignItems: 'center', gap: 12,
+          paddingBottom: 14,
           borderBottom: `1px solid ${BORDER}`,
-          marginBottom: 14,
+          marginBottom: 16,
         }}>
           <div style={{
-            width: 40, height: 40, borderRadius: 10,
+            width: 44, height: 44, borderRadius: 12,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `${header.color}22`, fontSize: 22,
+            background: `${header.color}1f`, fontSize: 24,
+            boxShadow: `inset 0 0 0 1px ${header.color}55, 0 0 12px ${header.color}33`,
+            flexShrink: 0,
           }}>{header.emoji}</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: TEXT }}>{header.title}</div>
-            <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 2 }}>
-              {new Date(poll.createdAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' })}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontSize: 18, fontWeight: 800, color: TEXT,
+              letterSpacing: 0.2, lineHeight: 1.2,
+            }}>{header.title}</div>
+            <div style={{ fontSize: 12, color: TEXT_MUTED, marginTop: 3, lineHeight: 1.3 }}>
+              {header.subtitle}
             </div>
           </div>
+          <span style={{
+            padding: '5px 11px', borderRadius: 999,
+            background: `${header.color}1a`, color: header.color,
+            border: `1px solid ${header.color}55`,
+            fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+            whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            {header.pillIcon} {header.pill}
+          </span>
         </div>
 
         {/* Body — varies by mode */}
@@ -2023,9 +2289,10 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
           />
         )}
 
-        {/* Footer — branded wordmark + tagline. The accent line above
-            visually anchors the brand to the card without competing with
-            the mode-specific accent in the body. */}
+        {/* Footer — single-line branded wordmark. The old uppercase
+            tagline ("Schedule · Track · Train") read like a marketing
+            slogan in a friend-group share, so it's gone — the wordmark
+            alone is enough to identify the source. */}
         <div style={{
           marginTop: 18,
           paddingTop: 12,
@@ -2034,17 +2301,11 @@ function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confi
         }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontSize: 13, fontWeight: 700, color: TEXT,
+            fontSize: 12, fontWeight: 700, color: TEXT_MUTED,
             letterSpacing: 1.5, textTransform: 'uppercase',
           }}>
-            <span style={{ fontSize: 14 }}>🃏</span>
+            <span style={{ fontSize: 13 }}>🃏</span>
             <span>{t('schedule.share.footer')}</span>
-          </div>
-          <div style={{
-            fontSize: 10, color: TEXT_MUTED, letterSpacing: 1.2,
-            textTransform: 'uppercase', marginTop: 3, opacity: 0.7,
-          }}>
-            {t('schedule.share.tagline')}
           </div>
         </div>
       </div>
@@ -2081,15 +2342,31 @@ function PollShareInvitationBody({
         tokens={{ TEXT, TEXT_MUTED, ACCENT_BLUE, ACCENT_GREEN }}
       />
 
-      {/* Target progress meter */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-          <span style={{ fontSize: 12, color: TEXT_MUTED }}>🎯 {t('schedule.share.target')}</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>
+      {/* Target progress meter — uppercase micro-heading + count, then
+          the gradient bar. Matches the "passenger manifest" header
+          rhythm in the confirmation card. */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: 8,
+        }}>
+          <span style={{
+            fontSize: 11, color: TEXT_MUTED, fontWeight: 700,
+            letterSpacing: 1.2, textTransform: 'uppercase',
+          }}>🎯 {t('schedule.share.target')}</span>
+          <span style={{
+            padding: '3px 10px', borderRadius: 999,
+            background: `${ACCENT_GREEN}1a`, color: ACCENT_GREEN,
+            border: `1px solid ${ACCENT_GREEN}55`,
+            fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+          }}>
             {t('schedule.share.targetProgress', { count: bestYes, target: poll.targetPlayerCount })}
           </span>
         </div>
-        <div style={{ height: 6, background: 'rgba(148, 163, 184, 0.15)', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{
+          height: 8, background: 'rgba(148, 163, 184, 0.15)',
+          borderRadius: 4, overflow: 'hidden',
+        }}>
           <div style={{
             width: `${targetPct}%`, height: '100%',
             background: `linear-gradient(90deg, ${ACCENT_BLUE}, ${ACCENT_GREEN})`,
@@ -2098,15 +2375,19 @@ function PollShareInvitationBody({
         </div>
       </div>
 
-      {/* Proposed dates */}
-      <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 8, fontWeight: 600, letterSpacing: 0.3 }}>
+      {/* Proposed-dates section */}
+      <div style={{
+        fontSize: 11, color: TEXT_MUTED, fontWeight: 700,
+        letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8,
+      }}>
         📅 {t('schedule.share.proposedDates')}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {poll.dates.map(d => {
           const s = dateStats.get(d.id) || { yes: 0, maybe: 0, no: 0, voters: [], proxyCount: 0 };
           const loc = d.location || poll.defaultLocation;
-          // Group voters by response, in display order yes → maybe → no
+          // Group voters by response in display order yes → maybe → no.
+          // Empty groups are filtered at render time.
           const voterGroups: { resp: RsvpResponse; color: string; tint: string; symbol: string; label: string; rows: VoterRow[] }[] = [
             { resp: 'yes',   color: ACCENT_GREEN, tint: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.voters.yes'),   rows: s.voters.filter(v => v.response === 'yes') },
             { resp: 'maybe', color: '#eab308',    tint: 'rgba(234, 179, 8, 0.10)',  symbol: '?', label: t('schedule.voters.maybe'), rows: s.voters.filter(v => v.response === 'maybe') },
@@ -2114,11 +2395,11 @@ function PollShareInvitationBody({
           ];
           return (
             <div key={d.id} style={{
-              padding: '10px 12px',
-              background: 'rgba(15, 23, 42, 0.5)',
-              border: `1px solid ${BORDER}`,
-              borderRadius: 8,
-              display: 'flex', flexDirection: 'column', gap: 8,
+              padding: '12px 14px',
+              background: 'rgba(15, 23, 42, 0.55)',
+              border: `1px dashed ${BORDER}`,
+              borderRadius: 10,
+              display: 'flex', flexDirection: 'column', gap: 10,
             }}>
               {/* Top row — date + count pills */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
@@ -2130,25 +2411,31 @@ function PollShareInvitationBody({
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                   <span style={{
-                    padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                    background: 'rgba(16, 185, 129, 0.15)', color: ACCENT_GREEN,
+                    padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    background: `${ACCENT_GREEN}26`, color: ACCENT_GREEN,
+                    border: `1px solid ${ACCENT_GREEN}55`,
+                    letterSpacing: 0.2,
                   }}>✓ {s.yes}</span>
                   {poll.allowMaybe && (
                     <span style={{
-                      padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                      background: 'rgba(234, 179, 8, 0.15)', color: '#eab308',
+                      padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                      background: 'rgba(234, 179, 8, 0.18)', color: '#eab308',
+                      border: '1px solid rgba(234, 179, 8, 0.45)',
+                      letterSpacing: 0.2,
                     }}>? {s.maybe}</span>
                   )}
                   <span style={{
-                    padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                    background: 'rgba(239, 68, 68, 0.12)', color: '#f87171',
+                    padding: '3px 9px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    background: 'rgba(239, 68, 68, 0.16)', color: '#f87171',
+                    border: '1px solid rgba(239, 68, 68, 0.40)',
+                    letterSpacing: 0.2,
                   }}>✕ {s.no}</span>
                 </div>
               </div>
 
-              {/* Voter chips, grouped yes → maybe → no (only groups with voters) */}
+              {/* Voter chips grouped yes → maybe → no */}
               {s.voters.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {voterGroups.map(g => {
@@ -2157,14 +2444,15 @@ function PollShareInvitationBody({
                     return (
                       <div key={g.resp} style={{
                         display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6,
-                        padding: '6px 8px', borderRadius: 6,
+                        padding: '6px 8px', borderRadius: 8,
                         background: g.tint,
                         border: `1px solid ${g.color}33`,
                       }}>
                         <span style={{
-                          fontSize: 11, fontWeight: 700, color: g.color,
-                          padding: '2px 8px', borderRadius: 10,
-                          background: `${g.color}22`,
+                          fontSize: 10, fontWeight: 700, color: g.color,
+                          padding: '2px 8px', borderRadius: 999,
+                          background: `${g.color}26`,
+                          letterSpacing: 0.4, textTransform: 'uppercase',
                         }}>
                           {g.symbol} {g.label} · {g.rows.length}
                         </span>
@@ -2179,6 +2467,7 @@ function PollShareInvitationBody({
                                 background: 'rgba(255, 255, 255, 0.05)',
                                 border: `1px solid ${BORDER}`,
                                 display: 'inline-flex', alignItems: 'center', gap: 4,
+                                fontWeight: 500,
                               }}>
                               {name}
                               {v.isProxy && <span style={{ color: '#eab308', fontSize: 10 }}>★</span>}
@@ -2200,19 +2489,11 @@ function PollShareInvitationBody({
           marginTop: 12, padding: '10px 12px',
           background: 'rgba(59, 130, 246, 0.08)',
           borderInlineStart: `3px solid ${ACCENT_BLUE}`,
-          borderRadius: 6, fontSize: 13, color: TEXT,
+          borderRadius: 6, fontSize: 13, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
       )}
-
-      <div style={{
-        marginTop: 14, padding: '8px 12px',
-        textAlign: 'center', fontSize: 12, color: TEXT_MUTED,
-        background: 'rgba(59, 130, 246, 0.06)', borderRadius: 6,
-      }}>
-        🃏 {t('schedule.share.invitationCallToAction')}
-      </div>
     </>
   );
 }
@@ -2230,67 +2511,73 @@ function PollShareConfirmationBody({
   const loc = confirmedDate.location || poll.defaultLocation;
   return (
     <>
-      {/* Confirmed date hero — large, centered "trophy" treatment. */}
-      <div style={{
-        padding: 16,
-        background: `linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.05))`,
-        border: `1px solid rgba(16, 185, 129, 0.40)`,
-        borderRadius: 12,
-        marginBottom: 14,
-        textAlign: 'center',
-      }}>
-        {(() => {
-          const d = new Date(confirmedDate.proposedDate);
-          const dayOfWeek = isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL', { weekday: 'long' });
-          const dayMonth = isNaN(d.getTime()) ? confirmedDate.proposedDate : `${d.getDate()}/${d.getMonth() + 1}`;
-          const time = (confirmedDate.proposedTime || '').trim();
-          return (
-            <>
-              <div style={{ fontSize: 13, color: ACCENT_GREEN, fontWeight: 600, letterSpacing: 1, marginBottom: 4 }}>
-                🗓 {dayOfWeek}
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: TEXT, letterSpacing: 0.5, lineHeight: 1.1 }}>
-                {dayMonth}
-              </div>
-              {time && (
-                <div style={{ fontSize: 15, color: TEXT, fontWeight: 600, marginTop: 4 }}>
-                  {time}
-                </div>
-              )}
-            </>
-          );
-        })()}
-        {loc && (
-          <div style={{ fontSize: 14, color: ACCENT_GREEN, fontWeight: 500, marginTop: 8 }}>
-            📍 {loc}
-          </div>
-        )}
-      </div>
+      {/* Boarding-pass hero — four columns (day · date · time · location)
+          separated by hairline dividers. Date numeral is the visual
+          anchor; everything else is supporting metadata. */}
+      <ShareBoardingHero
+        date={confirmedDate}
+        location={loc || null}
+        accent={ACCENT_GREEN}
+        accentTint="rgba(16, 185, 129, 0.12)"
+        tokens={{ TEXT, TEXT_MUTED }}
+      />
 
-      {/* Confirmed players */}
-      <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 8, fontWeight: 600, letterSpacing: 0.3 }}>
-        👥 {t('schedule.share.confirmedPlayers')} ({confirmedPlayers.length})
+      {/* Passenger manifest — confirmed players in a 2-column grid with
+          a check prefix on each row. Numbered ticks (1..N) give it the
+          "checked-in" feel without being noisy. Falls back to a single
+          em-dash when the manifest is somehow empty. */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 8,
+      }}>
+        <span style={{
+          fontSize: 11, color: TEXT_MUTED, fontWeight: 700,
+          letterSpacing: 1.2, textTransform: 'uppercase',
+        }}>
+          {t('schedule.share.confirmedPlayers')}
+        </span>
+        <span style={{
+          padding: '3px 10px', borderRadius: 999,
+          background: `${ACCENT_GREEN}1f`, color: ACCENT_GREEN,
+          border: `1px solid ${ACCENT_GREEN}55`,
+          fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+        }}>
+          ✓ {confirmedPlayers.length}
+        </span>
       </div>
       <div style={{
-        padding: 12,
-        background: 'rgba(15, 23, 42, 0.5)',
-        border: `1px solid ${BORDER}`,
-        borderRadius: 8,
-        display: 'flex', flexWrap: 'wrap', gap: 6,
+        padding: '10px 12px',
+        background: 'rgba(15, 23, 42, 0.55)',
+        border: `1px dashed ${BORDER}`,
+        borderRadius: 10,
       }}>
-        {confirmedPlayers.length > 0 ? confirmedPlayers.map(p => (
-          <span key={p.id} style={{
-            padding: '5px 10px',
-            background: 'rgba(16, 185, 129, 0.12)',
-            border: `1px solid rgba(16, 185, 129, 0.25)`,
-            borderRadius: 14,
-            fontSize: 12,
-            color: TEXT,
-            fontWeight: 500,
+        {confirmedPlayers.length > 0 ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            columnGap: 14, rowGap: 6,
           }}>
-            {p.name}
-          </span>
-        )) : (
+            {confirmedPlayers.map((p, idx) => (
+              <div key={p.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                fontSize: 13, color: TEXT, lineHeight: 1.3,
+                minWidth: 0,
+              }}>
+                <span style={{
+                  flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 18, height: 18, borderRadius: 999,
+                  background: `${ACCENT_GREEN}22`, color: ACCENT_GREEN,
+                  fontSize: 10, fontWeight: 700,
+                }}>{idx + 1}</span>
+                <span style={{
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  fontWeight: 500,
+                }}>{p.name}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
           <span style={{ color: TEXT_MUTED, fontSize: 13 }}>—</span>
         )}
       </div>
@@ -2298,21 +2585,13 @@ function PollShareConfirmationBody({
       {poll.note && (
         <div style={{
           marginTop: 12, padding: '10px 12px',
-          background: 'rgba(16, 185, 129, 0.06)',
+          background: 'rgba(16, 185, 129, 0.08)',
           borderInlineStart: `3px solid ${ACCENT_GREEN}`,
-          borderRadius: 6, fontSize: 13, color: TEXT,
+          borderRadius: 6, fontSize: 13, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
       )}
-
-      <div style={{
-        marginTop: 14, padding: '8px 12px',
-        textAlign: 'center', fontSize: 12, color: TEXT_MUTED,
-        background: 'rgba(16, 185, 129, 0.06)', borderRadius: 6,
-      }}>
-        🃏 {t('schedule.share.confirmationFarewell')}
-      </div>
     </>
   );
 }
@@ -2327,18 +2606,20 @@ function PollShareCancellationBody({
   const { TEXT, TEXT_MUTED, BORDER, ACCENT_RED = '#ef4444' } = tokens;
   return (
     <>
-      {/* Which game was cancelled — show the proposed dates so recipients
-          have context even when the admin didn't add a note or reason.
-          No vote breakdown here: counts are no longer actionable. */}
-      <div style={{ fontSize: 12, color: TEXT_MUTED, marginBottom: 8, fontWeight: 600, letterSpacing: 0.3 }}>
+      {/* Section title — matches the uppercase rhythm used in the
+          confirmation/invitation cards so all three feel like family. */}
+      <div style={{
+        fontSize: 11, color: TEXT_MUTED, fontWeight: 700,
+        letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8,
+      }}>
         📅 {t('schedule.share.proposedDates')}
       </div>
       <div style={{
-        padding: 12, marginBottom: 12,
-        background: 'rgba(15, 23, 42, 0.5)',
-        border: `1px solid ${BORDER}`,
-        borderRadius: 8,
-        display: 'flex', flexDirection: 'column', gap: 6,
+        padding: '10px 12px', marginBottom: 12,
+        background: 'rgba(15, 23, 42, 0.55)',
+        border: `1px dashed ${BORDER}`,
+        borderRadius: 10,
+        display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         {poll.dates.map(d => {
           const loc = d.location || poll.defaultLocation;
@@ -2346,9 +2627,10 @@ function PollShareCancellationBody({
             <div key={d.id} style={{
               display: 'flex', justifyContent: 'space-between',
               alignItems: 'center', gap: 10,
-              opacity: 0.7,
+              opacity: 0.65,
               textDecoration: 'line-through',
-              textDecorationColor: 'rgba(239, 68, 68, 0.6)',
+              textDecorationColor: 'rgba(239, 68, 68, 0.55)',
+              textDecorationThickness: 1.5,
             }}>
               <ShareDateLabel date={d} color={TEXT} muted={TEXT_MUTED} />
               {loc && (
@@ -2365,7 +2647,7 @@ function PollShareCancellationBody({
           padding: '10px 12px', marginBottom: 10,
           background: 'rgba(148, 163, 184, 0.08)',
           borderInlineStart: `3px solid ${TEXT_MUTED}`,
-          borderRadius: 6, fontSize: 13, color: TEXT,
+          borderRadius: 6, fontSize: 13, color: TEXT, lineHeight: 1.5,
         }}>
           📝 {poll.note}
         </div>
@@ -2373,11 +2655,14 @@ function PollShareCancellationBody({
       {poll.cancellationReason && (
         <div style={{
           padding: '12px 14px',
-          background: 'rgba(239, 68, 68, 0.10)',
-          border: `1px solid rgba(239, 68, 68, 0.3)`,
-          borderRadius: 8,
+          background: `linear-gradient(135deg, rgba(239, 68, 68, 0.14), rgba(239, 68, 68, 0.04))`,
+          border: `1px solid ${ACCENT_RED}55`,
+          borderRadius: 10,
         }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: ACCENT_RED, marginBottom: 4, letterSpacing: 0.3 }}>
+          <div style={{
+            fontSize: 11, color: ACCENT_RED, fontWeight: 700,
+            letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4,
+          }}>
             💬 {t('schedule.share.cancellationReason')}
           </div>
           <div style={{ fontSize: 14, color: TEXT, lineHeight: 1.5 }}>
@@ -2405,7 +2690,7 @@ function CreatePollModal(props: CreatePollModalProps) {
   // Group-level defaults (still editable per-poll). Fall back to legacy
   // hardcoded values if the settings columns aren't populated yet.
   const defaultTime = settings.scheduleDefaultTime || DEFAULT_GAME_TIME;
-  const [target, setTarget] = useState(settings.scheduleDefaultTarget ?? 8);
+  const [target, setTarget] = useState(settings.scheduleDefaultTarget ?? 7);
   const [delay, setDelay] = useState(settings.scheduleDefaultDelayHours ?? 48);
   const [allowMaybe, setAllowMaybe] = useState(settings.scheduleDefaultAllowMaybe !== false);
   const [defaultLocation, setDefaultLocation] = useState('');
@@ -3011,6 +3296,9 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
   const [response, setResponse] = useState<RsvpResponse>('yes');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Inline-modal flag for the "Delete this vote?" confirmation. Replaces
+  // the old native confirm() so the UX matches the rest of the app.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Group filtered players by type. Order: permanent → permanent_guest → guest,
   // matching the convention used in SettingsScreen and other admin lists.
@@ -3055,14 +3343,18 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
     () => poll.votes.filter(v => v.dateId === dateId && v.response === 'yes').length,
     [poll.votes, dateId],
   );
-  // Cap only matters during the active phase. Once the poll is
-  // 'confirmed' the auto-close trigger has already locked in the
-  // game and won't re-fire (it gates on status IN open/expanded), so
-  // accepting more "yes" votes can't accidentally re-confirm a
-  // different date. Admins might want to add a late-arriving guest to
-  // the roster, and the cap would otherwise block that. Skip the
-  // cap entirely on confirmed polls.
-  const enforceCap = poll.status === 'open' || poll.status === 'expanded';
+  // Cap is enforced in every active state — including 'confirmed'.
+  // Target is the seat cap, not just the auto-confirm trigger: a poll
+  // with target=8 and yes=7 has exactly one open seat, and the admin
+  // can fill that 8th seat via proxy but should not be able to push
+  // the roster past target. If the admin needs more capacity (e.g.
+  // a late-arriving guest beyond plan), they raise the target via
+  // the Edit button (migration 034 allows editing confirmed polls)
+  // and then proxy-vote. 'cancelled' / 'expired' don't expose the
+  // proxy button at all, so the gate doesn't need to handle them.
+  const enforceCap = poll.status === 'open'
+    || poll.status === 'expanded'
+    || poll.status === 'confirmed';
   const slotsRemaining = Math.max(0, poll.targetPlayerCount - currentYesCount);
   const selectedNewYesCount = useMemo(() => {
     let n = 0;
@@ -3226,10 +3518,13 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!onlySelectedId || !singleExistingVote) return;
-    const player = players.find(p => p.id === onlySelectedId);
-    if (!confirm(t('schedule.proxy.confirmDelete', { name: player?.name || '' }))) return;
+    setConfirmingDelete(true);
+  };
+
+  const performDelete = async () => {
+    if (!onlySelectedId || !singleExistingVote) return;
     setSubmitting(true);
     try {
       await adminDeleteVote(dateId, onlySelectedId);
@@ -3237,8 +3532,8 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
       onClose();
     } catch (e) {
       onError(handleRpcError(e));
-    } finally {
       setSubmitting(false);
+      setConfirmingDelete(false);
     }
   };
 
@@ -3318,9 +3613,10 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
             {/* Slot hint — only relevant for the 'yes' response since
                 target headcount caps yes-votes only. Switches color on
                 full so the admin sees the constraint at a glance.
-                Hidden on confirmed polls (enforceCap=false): the cap
-                no longer applies post-confirmation since the auto-
-                close trigger can't re-fire on a confirmed row. */}
+                Shown in every active phase including 'confirmed' —
+                target is the seat cap, so admins can fill the
+                remaining spots up to target but not beyond. To exceed
+                target, raise it via the poll's Edit button first. */}
             {enforceCap && isYesResponse && (
               <div style={{
                 fontSize: 11, fontWeight: 600,
@@ -3548,6 +3844,54 @@ function ProxyVoteModal(props: ProxyVoteModalProps) {
         </div>
       </div>
     </div>
+    {/* Nested confirm-delete modal — stacks above the proxy modal via a
+        second ModalPortal so the .modal-overlay's fixed positioning
+        keeps it anchored to the viewport regardless of the parent's
+        overflow/transform context. */}
+    {confirmingDelete && onlySelectedId && (() => {
+      const player = players.find(p => p.id === onlySelectedId);
+      return (
+        <ModalPortal>
+          <div className="modal-overlay" onClick={() => !submitting && setConfirmingDelete(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, direction: 'rtl' }}>
+              <div className="modal-header">
+                <h3 className="modal-title">{t('schedule.proxy.confirmDeleteTitle')}</h3>
+                <button
+                  className="modal-close"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={submitting}
+                  aria-label={t('common.close')}
+                >×</button>
+              </div>
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
+                {t('schedule.proxy.confirmDelete', { name: player?.name || '' })}
+              </p>
+              <div className="actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={submitting}
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  className="btn"
+                  onClick={performDelete}
+                  disabled={submitting}
+                  style={{
+                    background: '#ef4444', color: '#fff', fontWeight: 600,
+                    opacity: submitting ? 0.7 : 1,
+                    cursor: submitting ? 'wait' : 'pointer',
+                  }}
+                >
+                  {submitting ? '...' : t('schedule.proxy.deleteVote')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      );
+    })()}
     </ModalPortal>
   );
 }
@@ -3565,7 +3909,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   const initial = getSettings();
   const [pushEnabled, setPushEnabled] = useState<boolean>(initial.schedulePushEnabled !== false);
   const [emailsEnabled, setEmailsEnabled] = useState<boolean>(initial.scheduleEmailsEnabled === true);
-  const [defaultTarget, setDefaultTarget] = useState<number>(initial.scheduleDefaultTarget ?? 8);
+  const [defaultTarget, setDefaultTarget] = useState<number>(initial.scheduleDefaultTarget ?? 7);
   const [defaultDelay, setDefaultDelay] = useState<number>(initial.scheduleDefaultDelayHours ?? 48);
   const [defaultTime, setDefaultTime] = useState<string>(initial.scheduleDefaultTime ?? '21:00');
   const [defaultAllowMaybe, setDefaultAllowMaybe] = useState<boolean>(initial.scheduleDefaultAllowMaybe !== false);
@@ -3583,7 +3927,7 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
       const fresh = getSettings();
       setPushEnabled(fresh.schedulePushEnabled !== false);
       setEmailsEnabled(fresh.scheduleEmailsEnabled === true);
-      setDefaultTarget(fresh.scheduleDefaultTarget ?? 8);
+      setDefaultTarget(fresh.scheduleDefaultTarget ?? 7);
       setDefaultDelay(fresh.scheduleDefaultDelayHours ?? 48);
       setDefaultTime(fresh.scheduleDefaultTime ?? '21:00');
       setDefaultAllowMaybe(fresh.scheduleDefaultAllowMaybe !== false);
@@ -3632,9 +3976,9 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
   // mount-time `initial.scheduleDefaultTarget`, and the change wouldn't be
   // persisted.
   const commitDefaultTarget = () => {
-    const clamped = Math.max(2, Math.min(12, defaultTarget || 8));
+    const clamped = Math.max(2, Math.min(12, defaultTarget || 7));
     if (clamped !== defaultTarget) setDefaultTarget(clamped);
-    const persisted = getSettings().scheduleDefaultTarget ?? 8;
+    const persisted = getSettings().scheduleDefaultTarget ?? 7;
     if (clamped !== persisted) {
       void persist({ scheduleDefaultTarget: clamped });
     }

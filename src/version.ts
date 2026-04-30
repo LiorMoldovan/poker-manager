@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.26.4';
+export const APP_VERSION = '5.27.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,58 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.27.6',
+    date: '2026-04-30',
+    changes: [
+      '📦 Consolidated push of accumulated multi-agent work (5.27.0 → 5.27.5): training-report notifications, Activity weekly trend metric fix, expanded member-card split, Training Engagement last-session column + sort + green weekly count.',
+    ],
+  },
+  {
+    version: '5.27.5',
+    date: '2026-04-30',
+    changes: [
+      '🎨 Activity > Training Engagement — per-row weekly questions count (e.g. `8 שאלות`) is now emerald green (`#10B981`) instead of indigo, so it visually separates from the indigo `2/8 פעילים` summary count in the card header. Easier to scan: header = summary, row = individual achievement.',
+    ],
+  },
+  {
+    version: '5.27.4',
+    date: '2026-04-30',
+    changes: [
+      '🎯 Activity > Training Engagement card — rows are now sorted by most-recent training session first (descending by `lastSession.date`), so the player who trained most recently always appears at the top regardless of whether they hit their weekly goal. Players who never trained sink to the bottom. Tiebreaker is `weekQs` desc, then name for stable ordering.',
+    ],
+  },
+  {
+    version: '5.27.3',
+    date: '2026-04-30',
+    changes: [
+      '👤 Activity > expanded member card now splits into two clearly-separated sections: 🎯 ביקור אחרון (last session date+time, that session\'s duration in minutes, and the screens visited only in that visit — no ×counts since it\'s a single session) and 📈 סה"כ (30 ימים) (active days, total session count, total minutes, and the cumulative screen chips with ×counts). A faint divider sits between them. Previously everything was bundled into one ambiguous row and the screens chip list mixed last-visit with all-time data.',
+    ],
+  },
+  {
+    version: '5.27.2',
+    date: '2026-04-30',
+    changes: [
+      '🎯 Activity > Training Engagement card — each row now shows the player\'s last training date + time (e.g. `30/4 21:30`) alongside accuracy / total sessions, so you can see at a glance when each player last trained without needing to expand them. Date is bidi-isolated (`dir="ltr"`) so the digits render correctly inside the RTL row.',
+    ],
+  },
+  {
+    version: '5.27.1',
+    date: '2026-04-30',
+    changes: [
+      '📊 Activity weekly trend chart — bars now represent total visits (user-days) instead of unique users, matching the "ביקורים השבוע" stat above. The number on top of each bar, the bar height, the gradient intensity, and the ▲/▼ delta vs last week are all driven by `sessions` (user-days). Unique-user count is still shown in the bottom-left legend (`משתמשים השבוע`), so both metrics remain visible — just no longer disagree silently.',
+    ],
+  },
+  {
+    version: '5.27.0',
+    date: '2026-04-30',
+    changes: [
+      '🔔 Training reports — auto-notify the reporter when admin resolves a flagged question. Both push notification (short summary) AND email (full nicely-formatted message) are sent automatically when admin clicks Remove / Dismiss / Apply Fix.',
+      '🤖 If admin used AI to analyze the report, the rich `acceptText` / `rejectText` (with thanks + detailed explanation) is included in the email — same content quality as the manual WhatsApp share. If admin acted without AI, a generic outcome message is built per action: removed / fixed / kept.',
+      '📨 Email is personalized per reporter (greeting with their name, question context with cards/board/situation/correct answer, their own original comment, then the verdict + explanation).',
+      '🛠️ New `src/utils/trainingReportNotifications.ts` helper centralizes the dispatch (best-effort, never blocks/throws). Wired into `handleRemoveFlagged`, `handleDismissFlagged`, and `confirmAIFix`. `fixPreview` now carries the captured `reports[]` so the post-save notification has access to the original reporters even after the flagReports are cleared from training_answers.',
+    ],
+  },
   {
     version: '5.26.4',
     date: '2026-04-30',

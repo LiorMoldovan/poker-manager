@@ -278,7 +278,7 @@ function settingsToRow(s: Settings, groupId: string) {
     language: s.language || 'he',
     schedule_emails_enabled: s.scheduleEmailsEnabled ?? false,
     schedule_push_enabled: s.schedulePushEnabled ?? true,
-    schedule_default_target: s.scheduleDefaultTarget ?? 8,
+    schedule_default_target: s.scheduleDefaultTarget ?? 7,
     schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',
     schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
@@ -354,6 +354,34 @@ export async function flushSync(key: string): Promise<void> {
     syncTimers.delete(key);
   }
   await pushToSupabase(key);
+}
+
+/**
+ * Flush ALL pending debounced syncs immediately. Designed to be called
+ * from `pagehide` / `visibilitychange:hidden` so a backgrounded mobile
+ * tab can persist any in-flight writes before the OS suspends us.
+ *
+ * Returns once every pending sync has either succeeded or failed —
+ * callers should NOT await this (browsers won't wait), they should fire
+ * it and let it complete in the background.
+ */
+export function flushAllPendingSyncs(): void {
+  if (syncTimers.size === 0) return;
+  const keys = Array.from(syncTimers.keys());
+  for (const key of keys) {
+    const t = syncTimers.get(key);
+    if (t) {
+      clearTimeout(t);
+      syncTimers.delete(key);
+    }
+  }
+  // Fire-and-forget: pagehide doesn't reliably await async work, but the
+  // request will still go out via the normal fetch path.
+  for (const key of keys) {
+    pushToSupabase(key).catch(err =>
+      console.warn(`[cache] flush-on-hide failed for ${key}:`, err),
+    );
+  }
 }
 
 // ── Push changes to Supabase ──
@@ -1543,7 +1571,7 @@ export async function createPollRpc(input: CreatePollRpcInput): Promise<GamePoll
   const { data, error } = await supabase.rpc('create_game_poll', {
     p_group_id: state.groupId,
     p_dates: datesPayload,
-    p_target: input.targetPlayerCount ?? 8,
+    p_target: input.targetPlayerCount ?? 7,
     p_expansion_delay: input.expansionDelayHours ?? 48,
     p_default_location: input.defaultLocation || null,
     p_allow_maybe: input.allowMaybe ?? true,
