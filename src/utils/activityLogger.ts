@@ -219,6 +219,38 @@ export const logActivity = async (role: PermissionRole, playerName?: string, use
     fingerprint: null,
     player_name: entry.playerName || null,
   });
+
+  // Self-heal: any earlier session row for THIS device that's missing the
+  // player_name / user_id we now know about gets backfilled. This protects
+  // against the race where the very first session of a member fires before
+  // `auth.membership.playerName` has loaded — without this, a NULL row
+  // would linger forever and the Activity tab would render a phantom
+  // duplicate user. Scoped to (group_id, device_id) so we never touch
+  // another group's data; the `.is(col, null)` filter guarantees we only
+  // patch NULL columns and never overwrite an existing value (so a prior
+  // rename on an older row stays put).
+  if (gid && (entry.playerName || entry.userId)) {
+    try {
+      // Only patch rows where the field is currently NULL — never overwrite
+      // an existing value. Two separate updates keep each column's NULL-only
+      // guard independent (PostgREST `.is(col, null)` filter applies to one
+      // column at a time).
+      if (entry.playerName) {
+        await supabase.from('activity_log')
+          .update({ player_name: entry.playerName })
+          .eq('group_id', gid)
+          .eq('device_id', entry.deviceId)
+          .is('player_name', null);
+      }
+      if (entry.userId) {
+        await supabase.from('activity_log')
+          .update({ user_id: entry.userId })
+          .eq('group_id', gid)
+          .eq('device_id', entry.deviceId)
+          .is('user_id', null);
+      }
+    } catch { /* best-effort backfill; failure is non-fatal */ }
+  }
 };
 
 export const updateSessionActivity = async (

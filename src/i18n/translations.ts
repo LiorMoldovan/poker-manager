@@ -766,6 +766,10 @@ const he = {
   'settings.tabActivity': '📊 פעילות',
   'settings.tabAbout': 'ℹ️ אודות',
   'settings.tabReport': '📩 דיווח בעיה',
+  // Super-admin-only sandbox tab — renders the same schedule poll
+  // list with the cleaner Compact PollCard layout while we validate
+  // feature parity end-to-end. Hidden for everyone else.
+  'settings.tabScheduleLab': '🧪 המשחק הבא (ישן)',
   // ─── Schedule (Game Polls) ───
   'schedule.tabTitle': 'המשחק הבא',
   'schedule.history': '🗂 היסטוריה',
@@ -837,7 +841,7 @@ const he = {
   'schedule.goToActiveGame': 'עבור למשחק הפעיל',
   'schedule.cancelPoll': 'בטל הצבעה',
   'schedule.deletePoll': '🗑 מחק לצמיתות',
-  'schedule.cancelPollShort': 'בטל',
+  'schedule.cancelPollShort': '🚫 בטל',
   'schedule.deletePollShort': '🗑 מחק',
   'schedule.deletePollConfirmTitle': 'מחיקת הצבעה',
   'schedule.deletePollConfirm': 'למחוק את ההצבעה לצמיתות? פעולה זו לא הפיכה — כל הקולות והתאריכים יימחקו.',
@@ -851,7 +855,7 @@ const he = {
   'schedule.editExpansionDelay': 'שנה זמן הרחבה',
   'schedule.editPoll': 'ערוך',
   'schedule.editPollTitle': 'עריכת הצבעה',
-  'schedule.editPollSubtitle': 'עדכן את פרטי ההצבעה. השינויים יחולו מיידית.',
+  'schedule.editPollSubtitle': 'השינויים יחולו מיידית.',
   'schedule.editPollSaved': '✓ ההצבעה עודכנה',
   'schedule.editPollSave': 'שמור שינויים',
   'schedule.fieldNote': 'הערה למשתתפים',
@@ -875,12 +879,12 @@ const he = {
   'schedule.timer.fmtMinutes': '{m} דקות',
   'schedule.timer.fmtSeconds': 'פחות מדקה',
 
-  'schedule.subscribe.off': '🔔 הודיעו לי על שינויים',
-  'schedule.subscribe.on': '🔕 ביטול התראות שינוי',
-  'schedule.subscribe.tooltipOff': 'קבל התראה כשמישהו משנה הצבעה בפול הזה',
-  'schedule.subscribe.tooltipOn': 'אתה מנוי — קבל התראה על כל שינוי הצבעה',
-  'schedule.subscribe.subscribed': '✓ נרשמת לקבלת התראות על שינויים',
-  'schedule.subscribe.unsubscribed': '✓ ביטלת את ההתראות על שינויים',
+  'schedule.subscribe.off': '🔔 הודיעו לי על הצבעות',
+  'schedule.subscribe.on': '🔕 ביטול התראות הצבעה',
+  'schedule.subscribe.tooltipOff': 'קבל התראה כשמישהו מצביע או משנה הצבעה בפול הזה',
+  'schedule.subscribe.tooltipOn': 'אתה מנוי — קבל התראה על כל הצבעה ועל כל שינוי',
+  'schedule.subscribe.subscribed': '✓ נרשמת לקבלת התראות על הצבעות',
+  'schedule.subscribe.unsubscribed': '✓ ביטלת את ההתראות על הצבעות',
   'schedule.subscribe.changeNotificationTitle': '🔄 הצבעה עודכנה',
 
   'voteReminder.titleDefault': '🃏 מחכים לקול שלך!',
@@ -910,10 +914,10 @@ const he = {
   // Modal body — covers both initial-close and re-pin flows. Re-pin
   // renders the alternate copy (manualRepinConfirmBody) so the wording
   // matches the action ("switch to" vs "lock in").
-  'schedule.manualCloseConfirmBody': 'לנעול את המשחק על {date}? כל ההצבעות נשמרות וכל השחקנים עדיין יוכלו לעדכן את התשובה שלהם לכל אחד מהתאריכים.',
+  'schedule.manualCloseConfirmBody': 'לנעול את המשחק על {date}? ההצבעות נשמרות וניתן עדיין לעדכן.',
   'schedule.manualRepinConfirmTitle': 'החלפת התאריך הנעול',
   'schedule.manualRepinConfirmBody': 'להחליף את התאריך הנעול ל־{date}? ההצבעות נשמרות והשחקנים יקבלו עדכון.',
-  'schedule.manualCloseConfirmAction': 'נעל על תאריך זה',
+  'schedule.manualCloseConfirmAction': 'נעל תאריך',
   'schedule.manualRepinConfirmAction': 'בחר תאריך',
   // Success / failure toasts for the pick-date / re-pin flow. The
   // failure copy is what surfaces when migration 038 hasn't been
@@ -933,7 +937,7 @@ const he = {
   'schedule.confirmedCanChange': '💡 משחק נסגר — אפשר עדיין לעדכן הצבעה אם משהו השתנה',
   'schedule.openSeats.singular': 'נשאר מקום אחרון',
   'schedule.openSeats.plural': 'נשארו עוד {missing} מקומות פנויים',
-  'schedule.proxy.add': '➕ עדכן',
+  'schedule.proxy.add': '➕',
   'schedule.proxy.modalTitle': 'הצבעה ידנית עבור שחקן',
   'schedule.proxy.modalHelper': 'אדמינים יכולים להצביע בשם שחקנים שלא נרשמו לאפליקציה. הצבעה כזו תוחלף אוטומטית אם השחקן נרשם ומצביע בעצמו.',
   'schedule.proxy.selectPlayer': 'בחרו שחקן (אפשר כמה ביחד)',
@@ -1043,23 +1047,22 @@ const he = {
   'schedule.notePrefix': '📝',
   'schedule.cardsCount': '{count} הצבעות',
   'schedule.youVoted': 'הצבעת:',
-  'schedule.notVotedYet': 'לא הצבעת',
   'schedule.voters': 'מצביעים:',
   'schedule.config': 'הגדרות',
   'schedule.config.title': 'הגדרות שיבוץ',
   'schedule.config.pushEnabled': 'שלח Push לחברי הקבוצה',
-  'schedule.config.pushHelper': 'נשלחת בעת פתיחת/סגירת/ביטול הצבעה.',
+  'schedule.config.pushHelper': 'נשלחת בפתיחה/סגירה/ביטול.',
   'schedule.config.emailsEnabled': 'שלח מייל לחברי הקבוצה',
-  'schedule.config.emailsHelper': 'נשלח לכתובות הרשומות בעת פתיחת/סגירת/ביטול הצבעה.',
+  'schedule.config.emailsHelper': 'נשלח בפתיחה/סגירה/ביטול.',
   // Per-admin opt-out for vote_change pings (migration 032). The
   // helper text spells out the trade-off so admins know exactly what
   // they're losing if they mute it.
   'schedule.config.voteChangeNotifs': '🔄 קבל פוש על שינויי הצבעה',
-  'schedule.config.voteChangeNotifsHelper': 'אדמין מקבל התראה בכל שינוי הצבעה. כיבוי משאיר אותך עם ההתראות המרכזיות בלבד (פתיחה/הרחבה/סגירה/ביטול).',
+  'schedule.config.voteChangeNotifsHelper': 'התראה לאדמין על כל שינוי הצבעה.',
   'schedule.config.saved': '✓ ההגדרות נשמרו',
   'schedule.config.adminOnly': 'הגדרות זמינות לאדמין בלבד',
   'schedule.config.defaultsTitle': 'ערכי ברירת מחדל להצבעה חדשה',
-  'schedule.config.defaultsHelper': 'הערכים יופיעו אוטומטית במסך פתיחת ההצבעה ועדיין ניתנים לעריכה לכל הצבעה בנפרד.',
+  'schedule.config.defaultsHelper': 'ברירות מחדל לפתיחת הצבעה — ניתנות לעריכה.',
   'schedule.config.defaultTarget': 'יעד שחקנים',
   'schedule.config.defaultDelayHours': 'השהיית הרחבה (שעות)',
   'schedule.config.defaultTime': 'שעת התחלה',
@@ -1552,6 +1555,20 @@ const he = {
   // ── Training (minimal — kept Hebrew since it's Hebrew-content) ──
   'training.title': 'אימון פוקר',
   'training.subtitle': 'תרגול סיטואציות מותאם לשולחן שלך',
+  // ─── PollCard (Compact) per-date affordances ───
+  // Tag rendered next to the current member's name in the expanded
+  // voter list so they can spot themselves quickly. Gendered because
+  // Hebrew has no single neutral 2nd-person pronoun — picking the
+  // wrong form reads as a typo. Caller selects the variant from the
+  // member's `gender` field on the Player record.
+  'schedule.voters.youTag.male': 'אתה',
+  'schedule.voters.youTag.female': 'את',
+  // Per-date pill labels: locked = poll confirmed on this date,
+  // leading = currently the most-voted date in an open/expanded poll.
+  'schedule.lockedDate': 'נסגר',
+  'schedule.leadingDate': 'מוביל',
+  // aria-label for the row of admin action chips at the bottom of the card.
+  'schedule.adminBarLabel': 'פעולות אדמין',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -2322,6 +2339,7 @@ const en: Record<keyof typeof he, string> = {
   'settings.tabActivity': '📊 Activity',
   'settings.tabAbout': 'ℹ️ About',
   'settings.tabReport': '📩 Report',
+  'settings.tabScheduleLab': '🧪 Next Game (old)',
   // ─── Schedule (Game Polls) ───
   'schedule.tabTitle': 'Next Game',
   'schedule.history': '🗂 History',
@@ -2384,7 +2402,7 @@ const en: Record<keyof typeof he, string> = {
   'schedule.goToActiveGame': 'Go to live game',
   'schedule.cancelPoll': 'Cancel poll',
   'schedule.deletePoll': '🗑 Delete permanently',
-  'schedule.cancelPollShort': 'Cancel',
+  'schedule.cancelPollShort': '🚫 Cancel',
   'schedule.deletePollShort': '🗑 Delete',
   'schedule.deletePollConfirmTitle': 'Delete poll',
   'schedule.deletePollConfirm': 'Permanently delete this poll? This cannot be undone — all votes and dates will be removed.',
@@ -2398,7 +2416,7 @@ const en: Record<keyof typeof he, string> = {
   'schedule.editExpansionDelay': 'Edit expansion delay',
   'schedule.editPoll': 'Edit',
   'schedule.editPollTitle': 'Edit poll',
-  'schedule.editPollSubtitle': 'Update poll details. Changes apply immediately.',
+  'schedule.editPollSubtitle': 'Changes apply immediately.',
   'schedule.editPollSaved': '✓ Poll updated',
   'schedule.editPollSave': 'Save changes',
   'schedule.fieldNote': 'Note to participants',
@@ -2422,12 +2440,12 @@ const en: Record<keyof typeof he, string> = {
   'schedule.timer.fmtMinutes': '{m}m',
   'schedule.timer.fmtSeconds': 'less than a minute',
 
-  'schedule.subscribe.off': '🔔 Notify me on changes',
-  'schedule.subscribe.on': '🔕 Mute change alerts',
-  'schedule.subscribe.tooltipOff': 'Get a ping whenever someone changes their vote on this poll',
-  'schedule.subscribe.tooltipOn': 'You\'re subscribed — you\'ll be pinged on every vote change',
-  'schedule.subscribe.subscribed': '✓ Subscribed to vote-change alerts',
-  'schedule.subscribe.unsubscribed': '✓ Unsubscribed from vote-change alerts',
+  'schedule.subscribe.off': '🔔 Notify me on votes',
+  'schedule.subscribe.on': '🔕 Mute vote alerts',
+  'schedule.subscribe.tooltipOff': 'Get a ping whenever someone votes or changes their vote on this poll',
+  'schedule.subscribe.tooltipOn': 'You\'re subscribed — you\'ll be pinged on every vote and every change',
+  'schedule.subscribe.subscribed': '✓ Subscribed to vote alerts',
+  'schedule.subscribe.unsubscribed': '✓ Unsubscribed from vote alerts',
   'schedule.subscribe.changeNotificationTitle': '🔄 Vote updated',
 
   'voteReminder.titleDefault': '🃏 Your vote is missing!',
@@ -2449,10 +2467,10 @@ const en: Record<keyof typeof he, string> = {
   'schedule.manualPickShort': 'Pick',
   'schedule.manualRepin': 'Pick date',
   'schedule.manualCloseConfirmTitle': 'Close poll on this date',
-  'schedule.manualCloseConfirmBody': 'Lock the game in on {date}? All votes are kept and players can still update their RSVP on any of the proposed dates.',
+  'schedule.manualCloseConfirmBody': 'Lock the game on {date}? Votes are kept and remain editable.',
   'schedule.manualRepinConfirmTitle': 'Switch the locked-in date',
   'schedule.manualRepinConfirmBody': 'Switch the locked-in date to {date}? Votes are preserved and players will be re-notified.',
-  'schedule.manualCloseConfirmAction': 'Lock in this date',
+  'schedule.manualCloseConfirmAction': 'Lock date',
   'schedule.manualRepinConfirmAction': 'Pick date',
   'schedule.manualCloseSuccess': 'Game locked in on {date}',
   'schedule.manualRepinSuccess': 'Game switched to {date}',
@@ -2461,7 +2479,7 @@ const en: Record<keyof typeof he, string> = {
   'schedule.confirmedCanChange': '💡 Game locked in — you can still update your RSVP if your plans change',
   'schedule.openSeats.singular': 'Last seat available',
   'schedule.openSeats.plural': '{missing} seats still open',
-  'schedule.proxy.add': '➕ Update',
+  'schedule.proxy.add': '➕',
   'schedule.proxy.modalTitle': 'Manual vote on behalf of a player',
   'schedule.proxy.modalHelper': 'Admins can vote for players who have not registered. If the player later registers and votes themselves, their own vote will replace the manual one.',
   'schedule.proxy.selectPlayer': 'Select players (multi-select)',
@@ -2559,20 +2577,19 @@ const en: Record<keyof typeof he, string> = {
   'schedule.notePrefix': '📝',
   'schedule.cardsCount': '{count} polls',
   'schedule.youVoted': 'Your vote:',
-  'schedule.notVotedYet': 'Not voted yet',
   'schedule.voters': 'Voters:',
   'schedule.config': 'Settings',
   'schedule.config.title': 'Schedule settings',
   'schedule.config.pushEnabled': 'Send push to group members',
-  'schedule.config.pushHelper': 'Sent on poll creation / confirmation / cancellation.',
+  'schedule.config.pushHelper': 'Sent on poll open / close / cancel.',
   'schedule.config.voteChangeNotifs': '🔄 Notify me on vote changes',
-  'schedule.config.voteChangeNotifsHelper': 'Admins get a push on every vote change by default. Turning this off keeps only the major-update pings (creation / expansion / confirmation / cancellation).',
+  'schedule.config.voteChangeNotifsHelper': 'Push admin on every vote change.',
   'schedule.config.emailsEnabled': 'Send email to group members',
-  'schedule.config.emailsHelper': 'Sent to registered addresses on poll creation / confirmation / cancellation.',
+  'schedule.config.emailsHelper': 'Sent on poll open / close / cancel.',
   'schedule.config.saved': '✓ Settings saved',
   'schedule.config.adminOnly': 'Admins only',
   'schedule.config.defaultsTitle': 'Default values for new polls',
-  'schedule.config.defaultsHelper': 'These values pre-fill the create-poll dialog and remain editable per poll.',
+  'schedule.config.defaultsHelper': 'Defaults for new polls — still editable per poll.',
   'schedule.config.defaultTarget': 'Target players',
   'schedule.config.defaultDelayHours': 'Expansion delay (hours)',
   'schedule.config.defaultTime': 'Default start time',
@@ -3065,6 +3082,12 @@ const en: Record<keyof typeof he, string> = {
   // ── Training ──
   'training.title': 'Poker Training',
   'training.subtitle': 'Scenario drills tailored to your table',
+  // ─── PollCard "Your vote" summary chip & per-date affordances ───
+  'schedule.voters.youTag.male': 'you',
+  'schedule.voters.youTag.female': 'you',
+  'schedule.lockedDate': 'Locked',
+  'schedule.leadingDate': 'Leading',
+  'schedule.adminBarLabel': 'Admin actions',
 };
 
 const translations = { he, en } as const;

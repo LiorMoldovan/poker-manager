@@ -29,6 +29,7 @@ import {
 } from '../utils/scheduleNotifications';
 import { captureAndSplit, shareFiles } from '../utils/sharing';
 import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings } from '../types';
+import PollCardCompact from './scheduleLab/PollCardCompact';
 
 // Render a modal as a direct child of <body>. This is critical for
 // `position: fixed` overlays: any ancestor with a non-`none` transform,
@@ -39,12 +40,12 @@ import type { GamePoll, GamePollDate, RsvpResponse, Player, Settings } from '../
 // a portal the overlay would be clipped to the card and the modal's
 // pinned footer (Save button) ends up off-screen on mobile. Rendering
 // at <body> guarantees the overlay anchors to the actual viewport.
-const ModalPortal = ({ children }: { children: ReactNode }) =>
+export const ModalPortal = ({ children }: { children: ReactNode }) =>
   typeof document !== 'undefined' ? createPortal(children, document.body) : null;
 
 // ─── Helpers ───────────────────────────────────────────
 
-const fmtHebrewDate = (d: GamePollDate): string => {
+export const fmtHebrewDate = (d: GamePollDate): string => {
   try {
     const dt = new Date(`${d.proposedDate}T${d.proposedTime || '21:00'}`);
     const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
@@ -63,7 +64,7 @@ const fmtHebrewDate = (d: GamePollDate): string => {
 // fmtHebrewDate + location, so omitting them here is loss-free for the
 // reader and saves ~50px of width per row, which is the difference
 // between fitting on a 360px viewport and ellipsis-truncating.
-const fmtHebrewDateCompact = (d: GamePollDate): string => {
+export const fmtHebrewDateCompact = (d: GamePollDate): string => {
   try {
     const dt = new Date(`${d.proposedDate}T${d.proposedTime || '21:00'}`);
     const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
@@ -214,7 +215,22 @@ interface DraftDate {
 
 const DEFAULT_GAME_TIME = '21:00';
 
-export default function ScheduleTab() {
+export interface ScheduleTabProps {
+  // Picks which `PollCard` body to render for each poll. Both variants
+  // share the exact same data flow, voting / proxy / share / edit /
+  // lock / cancel / delete handlers, and modal stack — only the visual
+  // layout differs.
+  //   * 'compact' — the cleaner one-tile-per-date layout (PollCardCompact).
+  //                 Default; shipped to every user from v5.x onward.
+  //   * 'legacy'  — the original chrome (status pill + competition
+  //                 strip + per-date detail rows + summary footer).
+  //                 Kept around behind a super-admin-only sub-tab as a
+  //                 fallback while the new layout proves itself in
+  //                 production. Will be removed once we're confident.
+  variant?: 'legacy' | 'compact';
+}
+
+export default function ScheduleTab({ variant = 'compact' }: ScheduleTabProps = {}) {
   const { t, isRTL } = useTranslation();
   const { role, isOwner, isSuperAdmin, playerName } = usePermissions();
   const navigate = useNavigate();
@@ -645,25 +661,51 @@ export default function ScheduleTab() {
           id={`poll-card-${poll.id}`}
           className={highlightedPollId === poll.id ? 'poll-card-deeplink-highlight' : undefined}
         >
-        <PollCard
-          poll={poll}
-          players={players}
-          currentPlayer={currentPlayer}
-          isAdmin={isAdmin}
-          now={now}
-          onVote={handleVote}
-          onEdit={() => setEditPoll(poll)}
-          onManualClose={(dateId) => handleManualClose(poll, dateId)}
-          onCancel={() => setShowCancelModal({ pollId: poll.id })}
-          onDelete={() => handleDeletePoll(poll)}
-          isSubscribed={subscribedPollIds.has(poll.id)}
-          onToggleSubscription={() => handleToggleSubscription(poll.id)}
-          onError={(text) => showMsg('error', text)}
-          onSuccess={(text) => showMsg('success', text)}
-          handleRpcError={handleRpcError}
-          navigate={navigate}
-          t={t}
-        />
+        {/* Card body picker: same props go into both variants — the
+            two render the exact same data with the same handlers,
+            differing only in visual layout. Compact lives in a
+            sandbox tab while we validate full feature parity. */}
+        {variant === 'compact' ? (
+          <PollCardCompact
+            poll={poll}
+            players={players}
+            currentPlayer={currentPlayer}
+            isAdmin={isAdmin}
+            now={now}
+            onVote={handleVote}
+            onEdit={() => setEditPoll(poll)}
+            onManualClose={(dateId) => handleManualClose(poll, dateId)}
+            onCancel={() => setShowCancelModal({ pollId: poll.id })}
+            onDelete={() => handleDeletePoll(poll)}
+            isSubscribed={subscribedPollIds.has(poll.id)}
+            onToggleSubscription={() => handleToggleSubscription(poll.id)}
+            onError={(text) => showMsg('error', text)}
+            onSuccess={(text) => showMsg('success', text)}
+            handleRpcError={handleRpcError}
+            navigate={navigate}
+            t={t}
+          />
+        ) : (
+          <PollCard
+            poll={poll}
+            players={players}
+            currentPlayer={currentPlayer}
+            isAdmin={isAdmin}
+            now={now}
+            onVote={handleVote}
+            onEdit={() => setEditPoll(poll)}
+            onManualClose={(dateId) => handleManualClose(poll, dateId)}
+            onCancel={() => setShowCancelModal({ pollId: poll.id })}
+            onDelete={() => handleDeletePoll(poll)}
+            isSubscribed={subscribedPollIds.has(poll.id)}
+            onToggleSubscription={() => handleToggleSubscription(poll.id)}
+            onError={(text) => showMsg('error', text)}
+            onSuccess={(text) => showMsg('success', text)}
+            handleRpcError={handleRpcError}
+            navigate={navigate}
+            t={t}
+          />
+        )}
         </div>
       ))}
 
@@ -913,7 +955,7 @@ export default function ScheduleTab() {
 
 // ─── Sub-components ────────────────────────────────────
 
-interface PollCardProps {
+export interface PollCardProps {
   poll: GamePoll;
   players: Player[];
   currentPlayer: Player | null;
@@ -1377,7 +1419,6 @@ function PollCard(props: PollCardProps) {
                   maybe={s.maybe}
                   no={s.no}
                   allowMaybe={poll.allowMaybe}
-                  size="large"
                   t={t}
                 />
               </div>
@@ -1741,7 +1782,6 @@ function PollCard(props: PollCardProps) {
                     maybe={s.maybe}
                     no={s.no}
                     allowMaybe={poll.allowMaybe}
-                    size="large"
                     t={t}
                   />
                   {/* Per-date pick / re-pin button is gone (v5.32.1).
@@ -2055,14 +2095,14 @@ function PollCard(props: PollCardProps) {
   );
 }
 
-const ghostBtn: React.CSSProperties = {
+export const ghostBtn: React.CSSProperties = {
   padding: '6px 10px', borderRadius: 6,
   border: '1px solid var(--border)', background: 'transparent',
   color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
 };
 
 // App-standard compact share pill (mirrors StatisticsScreen / GraphsScreen).
-const shareBtn: React.CSSProperties = {
+export const shareBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
   padding: '0.4rem 0.8rem', fontSize: '0.75rem',
   background: 'var(--surface)', color: 'var(--text-muted)',
@@ -2143,7 +2183,7 @@ function ToggleSwitch({ checked, onChange, ariaLabel, disabled }: ToggleSwitchPr
 // the right granularity — second-by-second motion would be noise on a
 // poll page that mostly sits in multi-hour windows.
 
-interface PollTimerProps {
+export interface PollTimerProps {
   poll: GamePoll;
   now: number;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -2180,7 +2220,7 @@ const getDateRowTimestamp = (d: GamePollDate): number => {
   return Number.isFinite(ts) ? ts : 0;
 };
 
-function PollTimer({ poll, now, t }: PollTimerProps) {
+export function PollTimer({ poll, now, t }: PollTimerProps) {
   if (poll.status === 'cancelled' || poll.status === 'expired') return null;
 
   let color = '#3b82f6';
@@ -2289,7 +2329,7 @@ function PollTimer({ poll, now, t }: PollTimerProps) {
 // so the eye locks onto the live numbers. Mirrors the RSVP button + voter
 // chip palette so the visual identity is consistent across the date row.
 
-interface VoteCountPillsProps {
+export interface VoteCountPillsProps {
   yes: number;
   maybe: number;
   no: number;
@@ -2306,7 +2346,7 @@ interface VoteCountPillsProps {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
-function VoteCountPills({ yes, maybe, no, allowMaybe, size = 'compact', t }: VoteCountPillsProps) {
+export function VoteCountPills({ yes, maybe, no, allowMaybe, size = 'compact', t }: VoteCountPillsProps) {
   type Pill = { value: number; color: string; bg: string; symbol: string; label: string };
   const pills: Pill[] = [
     { value: yes,   color: '#10b981', bg: 'rgba(16, 185, 129, 0.10)', symbol: '✓', label: t('schedule.rsvpYes') },
@@ -2405,7 +2445,7 @@ const PROGRESS_PALETTE_STOPS: ReadonlyArray<readonly [string, string]> = [
   ['#10b981', '100%'],  // emerald — saturated tail
 ];
 
-function buildProgressGradient(isRTL: boolean): string {
+export function buildProgressGradient(isRTL: boolean): string {
   const dir = isRTL ? 'to left' : 'to right';
   const stops = PROGRESS_PALETTE_STOPS.map(([c, p]) => `${c} ${p}`).join(', ');
   return `linear-gradient(${dir}, ${stops})`;
@@ -2417,7 +2457,7 @@ function buildProgressGradient(isRTL: boolean): string {
 // 100% of bar (=100% of track). pct=0 is degenerate (bar is invisible)
 // — return any safe value, callers skip the inner div in practice via
 // width:0% so the size doesn't matter.
-function progressBackgroundSize(pct: number): string {
+export function progressBackgroundSize(pct: number): string {
   const safe = Math.max(pct, 0.5);
   return `${(100 / safe) * 100}% 100%`;
 }
@@ -2719,7 +2759,7 @@ function DateCompetitionStrip({ poll, dateStats, confirmedDateId, isAdmin, onMan
 //     a small "✎" badge appears to flag the change. Hovering the chip
 //     reveals the full original→latest history in a tooltip.
 
-interface VoterGroupsProps {
+export interface VoterGroupsProps {
   voters: VoterRow[];
   playerById: Map<string, Player>;
   // Maps a vote's cast_by_user_id → player display name. Used to render
@@ -2728,6 +2768,14 @@ interface VoterGroupsProps {
   // "by admin" label.
   userIdToPlayerName: Map<string, string>;
   allowMaybe: boolean;
+  // When set, the matching voter chip gets a small "(you)" badge so
+  // the current member can spot themselves at a glance instead of
+  // scanning every name in the list. Defaults to no highlight.
+  // Currently only used by the Compact PollCard variant.
+  highlightPlayerId?: string | null;
+  // Localised label rendered inside the highlight badge. Required
+  // when `highlightPlayerId` is set; ignored otherwise.
+  youLabel?: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
@@ -2763,7 +2811,7 @@ const fmtVoteDateTime = (iso: string): string => {
   }
 };
 
-function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, t }: VoterGroupsProps) {
+export function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, highlightPlayerId, youLabel, t }: VoterGroupsProps) {
   const groups: { response: RsvpResponse; label: string; color: string; tint: string }[] = [
     { response: 'yes',   label: t('schedule.voters.yes'),   color: '#10b981', tint: 'rgba(16, 185, 129, 0.12)' },
     { response: 'maybe', label: t('schedule.voters.maybe'), color: '#eab308', tint: 'rgba(234, 179, 8, 0.12)' },
@@ -2871,6 +2919,16 @@ function VoterGroups({ voters, playerById, userIdToPlayerName, allowMaybe, t }: 
                             border: '1px solid rgba(96, 165, 250, 0.3)',
                           }}>
                             ✎ {t('schedule.voters.changed')}
+                          </span>
+                        )}
+                        {highlightPlayerId === v.playerId && youLabel && (
+                          <span style={{
+                            color: '#a5b4fc', fontSize: 10, fontWeight: 700,
+                            padding: '0 6px', borderRadius: 6,
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            border: '1px solid rgba(99, 102, 241, 0.40)',
+                          }}>
+                            {youLabel}
                           </span>
                         )}
                       </div>
@@ -3112,7 +3170,7 @@ function SharePhaseBadge({
 // Premium-styled card rendered off-screen and converted to PNG by html2canvas
 // for WhatsApp sharing. Mirrors the dark-navy aesthetic of GameSummaryScreen.
 
-type VoterRow = {
+export type VoterRow = {
   playerId: string;
   response: RsvpResponse;
   isProxy: boolean;
@@ -3124,7 +3182,7 @@ type VoterRow = {
   // null for legacy rows or self-cast votes where attribution is moot.
   castByUserId: string | null;
 };
-type DateStat = { yes: number; maybe: number; no: number; voters: VoterRow[]; proxyCount: number };
+export type DateStat = { yes: number; maybe: number; no: number; voters: VoterRow[]; proxyCount: number };
 
 interface PollShareCardProps {
   mode: 'invitation' | 'confirmation' | 'cancellation';
@@ -3142,7 +3200,7 @@ interface PollShareCardProps {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
-function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t }: PollShareCardProps) {
+export function PollShareCard({ mode, poll, dateStats, playerById, confirmedDate, confirmedPlayers, appUrl, t }: PollShareCardProps) {
   // Shared visual tokens
   const BG_OUTER = '#0f172a';        // slate-900 — page background
   const BG_CARD = '#1e293b';         // slate-800 — card surface
@@ -4771,7 +4829,7 @@ interface ProxyVoteModalProps {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
-function ProxyVoteModal(props: ProxyVoteModalProps) {
+export function ProxyVoteModal(props: ProxyVoteModalProps) {
   const { poll, dateId, players, onClose, onSuccess, onError, handleRpcError, t } = props;
   // Admin's player name — used to attribute the change in the notification
   // body and to skip pinging the actor about their own action.

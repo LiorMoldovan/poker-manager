@@ -46,6 +46,7 @@ import { getGroupId } from '../database/supabaseCache';
 import TrainingAdminTab from '../components/TrainingAdminTab';
 import GroupManagementTab from '../components/GroupManagementTab';
 import ScheduleTab from '../components/ScheduleTab';
+import { NumericInput } from '../components/NumericInput';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
 import { useTranslation } from '../i18n';
@@ -206,8 +207,8 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
-  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
+  type TabId = 'group' | 'schedule' | 'scheduleLab' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
+  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'scheduleLab', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
   const location = useLocation();
   const getDefaultTab = (): TabId => {
     // Honor ?tab=<id> URL param (used by deep links from push notifications)
@@ -646,6 +647,7 @@ const SettingsScreen = () => {
     { id: 'report', label: t('settings.tabReport'), icon: '📩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'schedule', label: t('settings.tabSchedule'), icon: '📅', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
+    { id: 'scheduleLab', label: t('settings.tabScheduleLab'), icon: '🧪', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
   ];
   
   const tabs = allTabs.filter(tab => {
@@ -975,6 +977,21 @@ const SettingsScreen = () => {
         <ScheduleTab />
       )}
 
+      {/* Schedule Lab — super-admin-only fallback to the *legacy* poll
+          card layout. The default `schedule` tab now ships the
+          Compact layout to every user; this sub-tab keeps the
+          original chrome around so a super admin can sanity-check
+          parity bugs against the old visuals on real polls. Same
+          data, same admin handlers, same WhatsApp share / proxy /
+          lock / edit / cancel / delete flows; only the visual
+          chrome differs. The body is double-gated by `isSuperAdmin`
+          so a shared deep link (`?tab=scheduleLab`) can't expose it
+          to non-super-admins. Will be removed once the Compact
+          layout has soaked long enough in production. */}
+      {activeTab === 'scheduleLab' && isSuperAdmin && (
+        <ScheduleTab variant="legacy" />
+      )}
+
       {/* Game Settings Tab */}
       {activeTab === 'game' && (
         <div className="card">
@@ -997,13 +1014,12 @@ const SettingsScreen = () => {
                 <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{t('settings.game.buyinValue')}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{t('settings.game.buyinValueHelper')}</div>
               </div>
-              <input
-                type="number"
+              <NumericInput
                 className="input"
                 style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
                 value={settings.rebuyValue}
-                onChange={e => handleSettingsChange('rebuyValue', parseInt(e.target.value) || 0)}
-                min="1"
+                onChange={n => handleSettingsChange('rebuyValue', n)}
+                min={1}
                 disabled={!canEditSettings}
               />
             </div>
@@ -1015,13 +1031,12 @@ const SettingsScreen = () => {
                   {t('settings.game.buyinHelper', { value: cleanNumber(settings.rebuyValue), chips: (settings.chipsPerRebuy || 10000).toLocaleString() })}
                 </div>
               </div>
-              <input
-                type="number"
+              <NumericInput
                 className="input"
                 style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
                 value={settings.chipsPerRebuy}
-                onChange={e => handleSettingsChange('chipsPerRebuy', parseInt(e.target.value) || 0)}
-                min="1"
+                onChange={n => handleSettingsChange('chipsPerRebuy', n)}
+                min={1}
                 disabled={!canEditSettings}
               />
             </div>
@@ -1033,13 +1048,12 @@ const SettingsScreen = () => {
                   {t('settings.game.minTransferHelper')}
                 </div>
               </div>
-              <input
-                type="number"
+              <NumericInput
                 className="input"
                 style={{ width: '90px', textAlign: 'center', fontSize: '0.85rem' }}
                 value={settings.minTransfer}
-                onChange={e => handleSettingsChange('minTransfer', parseInt(e.target.value) || 0)}
-                min="0"
+                onChange={n => handleSettingsChange('minTransfer', n)}
+                min={0}
                 disabled={!canEditSettings}
               />
             </div>
@@ -1304,13 +1318,12 @@ const SettingsScreen = () => {
                   />
                   <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>{chip.color}</span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>=</span>
-                  <input
-                    type="number"
+                  <NumericInput
                     className="input"
                     style={{ width: '80px', textAlign: 'center', fontSize: '0.85rem' }}
                     value={chip.value}
-                    onChange={e => handleChipValueChange(chip.id, parseInt(e.target.value) || 0)}
-                    min="1"
+                    onChange={n => handleChipValueChange(chip.id, n)}
+                    min={1}
                     disabled={!canEditChips}
                   />
                   {canEditChips && (
@@ -3417,12 +3430,43 @@ const SettingsScreen = () => {
             const oneDayMs = 86400000;
             const thirtyDaysMs = 30 * oneDayMs;
 
+            // Group by stable identity, not display name. Activity rows for the
+            // same physical user can carry different `player_name` values across
+            // sessions (e.g. an early row written before membership had loaded
+            // has NULL, later rows have "ספי טורס") — grouping by name would
+            // render those as TWO separate cards. user_id is the strongest
+            // signal (collapses the same authenticated user across multiple
+            // devices); device_id is the fallback for never-signed-in visitors.
+            const keyOf = (e: ActivityLogEntry): string => e.userId || e.deviceId;
+
+            // Pre-compute the canonical display name per group: the most recent
+            // row that actually has a player_name wins. If no row in the group
+            // ever carried a name, fall back to the manual device label or the
+            // 8-char device id prefix (legacy behavior).
+            const latestNamedByKey = new Map<string, { date: number; name: string }>();
+            for (const entry of activityLog) {
+              if (!entry.playerName) continue;
+              const k = keyOf(entry);
+              const ts = new Date(entry.lastActive || entry.timestamp).getTime();
+              const cur = latestNamedByKey.get(k);
+              if (!cur || ts > cur.date) latestNamedByKey.set(k, { date: ts, name: entry.playerName });
+            }
+            const nameByKey = new Map<string, string>();
+            for (const entry of activityLog) {
+              const k = keyOf(entry);
+              if (nameByKey.has(k)) continue;
+              const named = latestNamedByKey.get(k);
+              const fallback = deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
+              nameByKey.set(k, named?.name || fallback);
+            }
+            const nameOf = (e: ActivityLogEntry): string => nameByKey.get(keyOf(e)) || e.deviceId.slice(0, 8);
+
             const userMap = new Map<string, ActivityLogEntry[]>();
             for (const entry of activityLog) {
-              const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
-              const existing = userMap.get(name) || [];
+              const k = keyOf(entry);
+              const existing = userMap.get(k) || [];
               existing.push(entry);
-              userMap.set(name, existing);
+              userMap.set(k, existing);
             }
 
             const liveUsers = Array.from(userMap.entries()).filter(([, entries]) =>
@@ -3432,14 +3476,14 @@ const SettingsScreen = () => {
 
 
             const todayStr = now.toDateString();
-            const todayUniqueNames = [...new Set(
+            const todayUniqueKeys = new Set(
               activityLog.filter(e => {
                 const lastTime = new Date(e.lastActive || e.timestamp);
                 return lastTime.toDateString() === todayStr;
-              })
-                .map(e => e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8))
-            )];
-            const todayUniqueUsers = todayUniqueNames.length;
+              }).map(keyOf)
+            );
+            const todayUniqueUsers = todayUniqueKeys.size;
+            const todayUniqueNames = Array.from(todayUniqueKeys).map(k => nameByKey.get(k) || k.slice(0, 8));
 
             // "This week" is anchored to Saturday — the local week starts on Sat
             // and runs Sat→Fri. This matches the Israeli calendar convention used
@@ -3457,9 +3501,8 @@ const SettingsScreen = () => {
               activityLog
                 .filter(e => new Date(e.lastActive || e.timestamp).getTime() >= currentWeekStart.getTime())
                 .map(e => {
-                  const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
                   const day = new Date(e.lastActive || e.timestamp).toDateString();
-                  return `${n}|${day}`;
+                  return `${keyOf(e)}|${day}`;
                 })
             );
             const weekSessions = weekUserDays.size;
@@ -3470,16 +3513,16 @@ const SettingsScreen = () => {
               for (const e of activityLog) {
                 const lastTime = new Date(e.lastActive || e.timestamp);
                 if (lastTime.getTime() < currentWeekStart.getTime()) continue;
-                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
-                if (!userDays.has(n)) userDays.set(n, new Set());
-                userDays.get(n)!.add(lastTime.toDateString());
-                userSessions.set(n, (userSessions.get(n) || 0) + 1);
+                const k = keyOf(e);
+                if (!userDays.has(k)) userDays.set(k, new Set());
+                userDays.get(k)!.add(lastTime.toDateString());
+                userSessions.set(k, (userSessions.get(k) || 0) + 1);
               }
-              let best = '';
+              let bestKey = '';
               let max = 0;
-              for (const [n, days] of userDays) { if (days.size > max) { max = days.size; best = n; } }
-              if (!best) return null;
-              return { name: best, days: max, sessions: userSessions.get(best) || 0 };
+              for (const [k, days] of userDays) { if (days.size > max) { max = days.size; bestKey = k; } }
+              if (!bestKey) return null;
+              return { name: nameByKey.get(bestKey) || bestKey.slice(0, 8), days: max, sessions: userSessions.get(bestKey) || 0 };
             })();
 
             const lastVisitor = (() => {
@@ -3487,7 +3530,7 @@ const SettingsScreen = () => {
               const latest = activityLog.reduce((a, b) =>
                 new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a
               );
-              const name = latest.playerName || deviceLabels[latest.deviceId] || latest.deviceId.slice(0, 8);
+              const name = nameOf(latest);
               const ago = Math.floor((now.getTime() - new Date(latest.lastActive || latest.timestamp).getTime()) / 60000);
               const agoLabel = ago < 60 ? `${ago}${language === 'he' ? ' דק׳' : 'm'}` : `${Math.floor(ago / 60)}${language === 'he' ? ' שע׳' : 'h'}`;
               return { name, agoLabel };
@@ -3502,13 +3545,11 @@ const SettingsScreen = () => {
             for (const entry of activityLog) {
               const d = new Date(entry.lastActive || entry.timestamp);
               if (d.getTime() < currentWeekStart.getTime()) continue;
-              const name = entry.playerName || deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
-              const key = `${name}|${d.toDateString()}|${d.getHours() < 6 ? 0 : d.getHours() < 12 ? 1 : d.getHours() < 18 ? 2 : 3}`;
-              if (heatmapSeen.has(key)) continue;
-              heatmapSeen.add(key);
-              const day = d.getDay();
               const slot = d.getHours() < 6 ? 0 : d.getHours() < 12 ? 1 : d.getHours() < 18 ? 2 : 3;
-              heatmap[day][slot]++;
+              const dedupKey = `${keyOf(entry)}|${d.toDateString()}|${slot}`;
+              if (heatmapSeen.has(dedupKey)) continue;
+              heatmapSeen.add(dedupKey);
+              heatmap[d.getDay()][slot]++;
             }
             const maxHeat = Math.max(1, ...heatmap.flat());
             const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
@@ -3517,7 +3558,7 @@ const SettingsScreen = () => {
             const slotDisplayOrder = [1, 2, 3, 0];
             const todayDayIdx = now.getDay();
 
-            const userStats = Array.from(userMap.entries()).map(([name, entries]) => {
+            const userStats = Array.from(userMap.entries()).map(([groupKey, entries]) => {
               const last30 = entries.filter(e => now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs);
               const uniqueDays30d = new Set(last30.map(e => new Date(e.lastActive || e.timestamp).toDateString())).size;
               const totalMin = last30.reduce((s, e) => s + (e.sessionDuration || 0), 0);
@@ -3526,9 +3567,10 @@ const SettingsScreen = () => {
               const latestDay = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate());
               const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
               const daysSince = Math.round((todayDay.getTime() - latestDay.getTime()) / oneDayMs);
+              const name = nameByKey.get(groupKey) || groupKey.slice(0, 8);
               const member = activityMembers.find(m => m.playerName === name || m.displayName === name);
               const memberRole = member?.role || latest.role || 'member';
-              return { name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, entries, memberRole };
+              return { groupKey, name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, entries, memberRole };
             }).sort((a, b) => a.daysSince - b.daysSince);
 
 
@@ -3551,13 +3593,10 @@ const SettingsScreen = () => {
                 const ts = new Date(e.lastActive || e.timestamp).getTime();
                 return ts >= weekStart.getTime() && ts < nextWeekStart.getTime();
               });
-              const users = new Set(entries.map(e =>
-                e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8)
-              ));
+              const users = new Set(entries.map(keyOf));
               const userDays = new Set(entries.map(e => {
-                const n = e.playerName || deviceLabels[e.deviceId] || e.deviceId.slice(0, 8);
                 const day = new Date(e.lastActive || e.timestamp).toDateString();
-                return `${n}|${day}`;
+                return `${keyOf(e)}|${day}`;
               }));
               return { start: weekStart, end: labelEnd, users: users.size, sessions: userDays.size };
             }).reverse();
@@ -3594,11 +3633,12 @@ const SettingsScreen = () => {
                       {t('settings.activity.liveNow', { count: liveUsers.length })}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                      {liveUsers.map(([name, entries]) => {
+                      {liveUsers.map(([groupKey, entries]) => {
                         const latest = entries.reduce((a, b) => new Date(b.lastActive || b.timestamp) > new Date(a.lastActive || a.timestamp) ? b : a);
                         const screen = latest.screensVisited.length > 0 ? latest.screensVisited[latest.screensVisited.length - 1] : '';
+                        const name = nameByKey.get(groupKey) || groupKey.slice(0, 8);
                         return (
-                          <span key={name} style={{
+                          <span key={groupKey} style={{
                             fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: '12px',
                             background: 'rgba(16, 185, 129, 0.15)', color: '#34d399',
                           }}>
@@ -3824,14 +3864,14 @@ const SettingsScreen = () => {
                   {t('settings.activity.membersSection', { count: userStats.length })}
                 </div>
                 {userStats.map((user) => {
-                  const isExpanded = expandedUser === user.name;
+                  const isExpanded = expandedUser === user.groupKey;
                   const roleInfo = getRoleInfo(user.memberRole);
                   const isActive = user.daysSince === 0;
                   const borderColor = isActive ? 'rgba(16, 185, 129, 0.4)' : user.daysSince > 7 ? 'rgba(239, 68, 68, 0.3)' : 'var(--border)';
                   return (
-                    <div key={user.name}>
+                    <div key={user.groupKey}>
                       <div
-                        onClick={() => setExpandedUser(isExpanded ? null : user.name)}
+                        onClick={() => setExpandedUser(isExpanded ? null : user.groupKey)}
                         style={{
                           padding: '0.55rem 0.7rem', borderRadius: '10px',
                           background: 'var(--surface)', marginBottom: isExpanded ? 0 : '0.4rem',

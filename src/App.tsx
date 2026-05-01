@@ -482,14 +482,26 @@ function SupabaseApp() {
     updateSessionActivity(screens, duration, keepalive).catch(() => {});
   }, []);
 
+  // Wait until auth is fully settled before starting a session — `auth.loading`
+  // stays true until `fetchMemberships` resolves, so by the time we enter this
+  // effect `playerName` reflects the real linked-player value (or null because
+  // the member genuinely isn't linked yet) rather than the transient "auth.user
+  // arrived but memberships haven't" gap that previously inserted activity_log
+  // rows with player_name = NULL.
+  //
+  // Dep on `auth.user?.id` (not `auth.user`) so a Supabase token refresh —
+  // which emits a NEW user object reference but the same identity — doesn't
+  // tear down and rebuild the session. Without this the effect re-fires every
+  // ~hour and inserts a duplicate row.
+  const userId = auth.user?.id ?? null;
   useEffect(() => {
-    if (!dataReady || !role || !auth.user) return;
+    if (!dataReady || !role || !userId || auth.loading) return;
     sessionStartRef.current = Date.now();
     screensVisitedRef.current = new Set([getScreenName(locationRef.current)]);
     isTrackingRef.current = true;
 
     const initialScreen = getScreenName(locationRef.current);
-    logActivity(role, playerName || undefined, auth.user.id, [initialScreen]).catch(() => {});
+    logActivity(role, playerName || undefined, userId, [initialScreen]).catch(() => {});
 
     activityIntervalRef.current = setInterval(() => pushSessionUpdate(), 5 * 60 * 1000);
 
@@ -507,7 +519,7 @@ function SupabaseApp() {
       if (activityIntervalRef.current) clearInterval(activityIntervalRef.current);
       document.removeEventListener('visibilitychange', handleVisChange);
     };
-  }, [dataReady, role, auth.user, playerName, pushSessionUpdate]);
+  }, [dataReady, role, userId, auth.loading, playerName, pushSessionUpdate]);
 
   useEffect(() => {
     if (isTrackingRef.current) {

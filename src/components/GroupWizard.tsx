@@ -6,6 +6,7 @@ import {
   saveChipValue, deleteChipValue,
 } from '../database/storage';
 import type { Player, PlayerGender, Settings, ChipValue } from '../types';
+import { NumericInput } from './NumericInput';
 
 interface GroupWizardProps {
   ownerPlayerName: string | null;
@@ -483,11 +484,10 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
                     {t('settings.game.buyinValue')} (₪)
                   </label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={settings.rebuyValue}
-                    onChange={e => handleSettingsChange('rebuyValue', Math.max(1, parseInt(e.target.value) || 1))}
-                    min="1"
+                    onChange={n => handleSettingsChange('rebuyValue', n)}
+                    min={1}
                     style={{
                       width: '100%', padding: '0.5rem', borderRadius: '6px',
                       border: '1px solid var(--border)', background: 'var(--background)',
@@ -500,11 +500,10 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                   <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem' }}>
                     {t('settings.game.chipsPerBuyin')}
                   </label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={settings.chipsPerRebuy}
-                    onChange={e => handleSettingsChange('chipsPerRebuy', Math.max(1, parseInt(e.target.value) || 1))}
-                    min="1"
+                    onChange={n => handleSettingsChange('chipsPerRebuy', n)}
+                    min={1}
                     style={{
                       width: '100%', padding: '0.5rem', borderRadius: '6px',
                       border: '1px solid var(--border)', background: 'var(--background)',
@@ -552,11 +551,10 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flex: 1, minWidth: 0 }}>
                       {cv.color}
                     </span>
-                    <input
-                      type="number"
+                    <NumericInput
                       value={cv.value}
-                      onChange={e => handleChipValueChange(cv.id, parseInt(e.target.value) || 0)}
-                      min="1"
+                      onChange={n => handleChipValueChange(cv.id, n)}
+                      min={1}
                       style={{
                         width: '70px', padding: '0.25rem 0.4rem', borderRadius: '5px',
                         border: '1px solid var(--border)', background: 'var(--background)',

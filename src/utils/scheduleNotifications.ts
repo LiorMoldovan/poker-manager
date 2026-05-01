@@ -32,6 +32,17 @@ function deepLinkUrl(pollId: string): string {
   return `/settings?tab=schedule&pollId=${encodeURIComponent(pollId)}`;
 }
 
+// Absolute share URL for the email body (push uses the relative deep link
+// above; email clients render bare URLs as auto-linkified hyperlinks, so
+// we always need an absolute origin). Prefers the short share slug — same
+// form WhatsApp shares emit — and falls back to the full UUID for polls
+// that pre-date the slug migration or rows that haven't been hydrated yet.
+function emailVoteLink(poll: GamePoll): string | null {
+  if (typeof window === 'undefined') return null;
+  const token = poll.shareSlug ?? poll.id;
+  return `${window.location.origin}/p/${encodeURIComponent(token)}`;
+}
+
 function resolveRecipientPlayerIds(poll: GamePoll, kind: NotificationKind): string[] {
   const players = getAllPlayers();
   switch (kind) {
@@ -141,6 +152,16 @@ async function dispatch(poll: GamePoll, kind: NotificationKind, title: string, b
     return;
   }
   const senderName = 'Poker Manager';
+  // Append a clickable deep link to the email body. The push channel
+  // already carries a `url`, but the email body was previously
+  // text-only — recipients had to remember to open the app manually.
+  // EmailJS broadcast template renders `message` and most clients
+  // auto-linkify bare URLs, so a plain "label: <url>" line is enough.
+  const link = emailVoteLink(poll);
+  const linkLabel = kind === 'creation' || kind === 'expanded'
+    ? 'להצבעה'
+    : 'לפרטים';
+  const emailBody = link ? `${body}\n\n${linkLabel}: ${link}` : body;
   await Promise.allSettled(playerNames.map(async (name) => {
     try {
       const info = await getPlayerEmailForNotification(poll.groupId, name);
@@ -150,7 +171,7 @@ async function dispatch(poll: GamePoll, kind: NotificationKind, title: string, b
       const ok = await proxySendBroadcastEmail({
         to: info.email,
         subject: title,
-        message: body,
+        message: emailBody,
         senderName,
       });
       if (!ok) console.warn(`[schedule-notify/${kind}] email failed for ${name}`);
@@ -201,15 +222,18 @@ export async function sendCancellationNotifications(poll: GamePoll): Promise<voi
   await dispatch(poll, 'cancellation', title, body, names);
 }
 
-// ── Vote-change notifications ──
-// Fires every time a vote row is updated (response/comment changed) — not on
-// the initial cast. Recipients are resolved server-side: admins, owners,
-// super-admins, plus members who opted in via the subscription button.
+// ── Vote-event notifications ──
+// Fires every time a vote row is created (initial cast) OR updated
+// (response/comment changed). Recipients are resolved server-side via
+// get_poll_change_recipients: admins, owners, super-admins, plus members
+// who opted in via the subscription button. Each recipient may also have
+// muted via the per-group schedule_vote_change_notifs flag — that filter
+// runs in the RPC, so we don't repeat it here.
 //
-// NOT claim-gated: each vote change is its own discrete event. If the same
-// client fires twice for the same change, the recipient list resolution is
-// idempotent and the worst case is a duplicate ping — far better than missing
-// real changes.
+// NOT claim-gated: each vote event is its own discrete signal. If the same
+// client fires twice for the same event, the recipient list resolution is
+// idempotent and the worst case is a duplicate ping — far better than
+// missing a real cast/change.
 
 const RESPONSE_LABEL: Record<RsvpResponse, string> = {
   yes: 'אישר',
@@ -217,11 +241,12 @@ const RESPONSE_LABEL: Record<RsvpResponse, string> = {
   no: 'סירב',
 };
 
-function buildVoteChangeBody(
+function buildVoteEventBody(
   poll: GamePoll,
   vote: GamePollVote,
   voterName: string,
   changedByName: string | null,
+  isNewVote: boolean,
 ): { title: string; body: string } {
   const date = poll.dates.find(d => d.id === vote.dateId);
   const dateLine = date ? formatHebrewDateTime(date) : '';
@@ -229,8 +254,12 @@ function buildVoteChangeBody(
   const proxyTag = changedByName && changedByName !== voterName
     ? ` (ע״י ${changedByName})`
     : '';
+  // Distinct title so the lock-screen preview tells subscribers
+  // immediately whether this is fresh activity or a flip — the body
+  // ("ליאור אישר לתאריך…") reads identically for both cases.
+  const title = isNewVote ? '🗳️ הצבעה חדשה' : '🔄 הצבעה עודכנה';
   return {
-    title: '🔄 הצבעה עודכנה',
+    title,
     body: `${voterName}${proxyTag} ${responseLabel} לתאריך ${dateLine}`.trim(),
   };
 }
@@ -240,6 +269,7 @@ export async function sendVoteChangeNotifications(
   vote: GamePollVote,
   voterName: string,
   changedByName: string | null,
+  options?: { isNewVote?: boolean },
 ): Promise<void> {
   let recipients: { playerName: string }[] = [];
   try {
@@ -248,8 +278,8 @@ export async function sendVoteChangeNotifications(
     console.warn('[schedule-notify/vote_change] recipient lookup failed:', err);
     return;
   }
-  // Don't notify the actor about their own change. The actor is whoever
-  // physically clicked — for self-edits that's the voter, for admin proxy
+  // Don't notify the actor about their own action. The actor is whoever
+  // physically clicked — for self-votes that's the voter, for admin proxy
   // edits that's the admin (changedByName). Filtering them out avoids
   // pinging the user who just clicked the button.
   const actorName = changedByName ?? voterName;
@@ -257,7 +287,9 @@ export async function sendVoteChangeNotifications(
     .map(r => r.playerName)
     .filter(name => name !== actorName);
   if (names.length === 0) return;
-  const { title, body } = buildVoteChangeBody(poll, vote, voterName, changedByName);
+  const { title, body } = buildVoteEventBody(
+    poll, vote, voterName, changedByName, options?.isNewVote ?? false,
+  );
   await dispatch(poll, 'vote_change', title, body, names);
 }
 
