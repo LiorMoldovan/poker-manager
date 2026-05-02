@@ -79,6 +79,13 @@ const SettingsScreen = () => {
   const [showFullChangelog, setShowFullChangelog] = useState(false);
   const [deletePlayerConfirm, setDeletePlayerConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteChipConfirm, setDeleteChipConfirm] = useState<{ id: string; name: string } | null>(null);
+  // Collapsed/expanded state for the player groups (by type) on the Players tab.
+  // Defaults to all collapsed so the long roster doesn't dominate the view.
+  const [playerGroupsCollapsed, setPlayerGroupsCollapsed] = useState<Record<PlayerType, boolean>>({
+    permanent: true,
+    permanent_guest: true,
+    guest: true,
+  });
   
   // Gemini AI state
   const [geminiKey, setGeminiKey] = useState<string>('');
@@ -311,7 +318,13 @@ const SettingsScreen = () => {
     const gid = getGroupId();
     if (!gid) return;
     getGroupPushSubscribers(gid).then(subs => {
-      setPushSubscriberCount(subs.length);
+      // Dedup by player so the headline count agrees with the chip
+      // list directly below (which is also keyed by playerName). One
+      // player who has enabled push on phone + laptop + tablet would
+      // otherwise show as 3 separate rows here, making "N שחקנים"
+      // larger than the actual roster.
+      const uniquePlayers = new Set(subs.map(s => s.playerName || '?'));
+      setPushSubscriberCount(uniquePlayers.size);
       setPushSubscribers(subs);
     });
   }, []);
@@ -651,6 +664,12 @@ const SettingsScreen = () => {
   ];
   
   const tabs = allTabs.filter(tab => {
+    // `scheduleLab` is the legacy poll-card fallback, kept reachable
+    // for super-admins via the deep-link `?tab=scheduleLab` while we
+    // dog-food the new compact card. We hide it from the visible
+    // tab bar so the chrome stays clean — the activeTab guard at
+    // the render site still authorises super-admins to land on it.
+    if (tab.id === 'scheduleLab') return false;
     if (tab.superAdminOnly && !isSuperAdmin) return false;
     if (tab.ownerOnly && !isOwner) return false;
     if (tab.adminOnly && role !== 'admin' && !isSuperAdmin && !isOwner) return false;
@@ -1359,7 +1378,7 @@ const SettingsScreen = () => {
                   fontSize: '0.75rem', fontFamily: 'Outfit, sans-serif', fontWeight: 600,
                 }}
               >
-                + {t('settings.players.add')}
+                {t('settings.players.add')}
               </button>
             )}
           </div>
@@ -1371,53 +1390,126 @@ const SettingsScreen = () => {
             </div>
           ) : (
             <div>
-              {players.map((player, idx) => {
-                const typeLabel = player.type === 'permanent' ? '⭐'
-                  : player.type === 'permanent_guest' ? '🏠' : '👤';
+              {(['permanent', 'permanent_guest', 'guest'] as const).map(groupType => {
+                const groupPlayers = players.filter(p => p.type === groupType);
+                if (groupPlayers.length === 0) return null;
+
+                const groupTitle = groupType === 'permanent'
+                  ? (language === 'he' ? '⭐ קבועים' : '⭐ Permanent')
+                  : groupType === 'permanent_guest'
+                    ? (language === 'he' ? '🏠 אורחים' : '🏠 Guests')
+                    : (language === 'he' ? '👤 מזדמנים' : '👤 Occasional');
+                const isCollapsed = playerGroupsCollapsed[groupType];
+                const chevron = isCollapsed ? (isRTL ? '◀' : '▶') : '▼';
 
                 return (
-                  <div
-                    key={player.id}
-                    className="settings-row"
-                    style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{player.name}</span>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{typeLabel}</span>
-                      <span style={{ fontSize: '0.55rem', color: player.gender === 'female' ? '#EC4899' : '#60A5FA', opacity: 0.6 }}>
-                        {player.gender === 'female' ? '♀' : '♂'}
+                  <div key={groupType} style={{ marginBottom: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPlayerGroupsCollapsed(prev => ({ ...prev, [groupType]: !prev[groupType] }))}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        padding: '0.5rem 0.75rem',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        marginBottom: isCollapsed ? 0 : '0.25rem',
+                      }}
+                      aria-expanded={!isCollapsed}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>{groupTitle}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>
+                          ({groupPlayers.length})
+                        </span>
                       </span>
-                    </div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{chevron}</span>
+                    </button>
 
-                    {(canEditPlayers || canDeletePlayers) && (
-                      <div style={{ display: 'flex', gap: '0.2rem', flexShrink: 0 }}>
-                        {canEditPlayers && (
-                          <button
-                            className="row-action"
-                            onClick={() => openEditPlayer(player)}
-                            title={t('common.edit')}
-                          >✏️</button>
-                        )}
-                        {canEditPlayers && (
-                          <button
-                            className="row-action row-action-purple"
-                            onClick={() => {
-                              const existing = getAllPlayerTraits().get(player.name);
-                              setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
-                              setTraitsStyleText(existing?.style.join(', ') || '');
-                              setTraitsQuirksText(existing?.quirks.join(', ') || '');
-                              setEditingTraitsPlayer(player);
-                            }}
-                            title={t('settings.traits.button')}
-                          >🎭</button>
-                        )}
-                        {canDeletePlayers && (
-                          <button
-                            className="row-action row-action-danger"
-                            onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
-                            title={t('settings.players.deleteTitle')}
-                          >🗑️</button>
-                        )}
+                    {!isCollapsed && (
+                      <div>
+                        {groupPlayers.map((player, idx) => {
+                          // Gender glyph (♀ / ♂) sits inline directly after
+                          // the name, gender-coloured (pink / blue) for an
+                          // immediate visual cue. Sized 0.95rem and bold
+                          // — an explicit upgrade over the prior almost-
+                          // invisible 0.55rem @ 60% opacity rendering.
+                          const genderGlyph = player.gender === 'female' ? '♀' : '♂';
+                          const genderColor = player.gender === 'female' ? '#EC4899' : '#60A5FA';
+                          return (
+                            <div
+                              key={player.id}
+                              className="settings-row"
+                              style={{ animation: `contentFadeIn 0.25s ease-out ${idx * 0.03}s both` }}
+                            >
+                              <div style={{
+                                flex: 1, minWidth: 0,
+                                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                              }}>
+                                <span style={{
+                                  fontWeight: 600, fontSize: '0.9rem',
+                                  color: 'var(--text)',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  minWidth: 0,
+                                }}>
+                                  {player.name}
+                                </span>
+                                <span
+                                  title={player.gender === 'female' ? 'נקבה' : 'זכר'}
+                                  style={{
+                                    fontSize: '0.95rem',
+                                    fontWeight: 700,
+                                    color: genderColor,
+                                    flexShrink: 0,
+                                    lineHeight: 1,
+                                  }}>
+                                  {genderGlyph}
+                                </span>
+                              </div>
+
+                              {(canEditPlayers || canDeletePlayers) && (
+                                <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                                  {canEditPlayers && (
+                                    <button
+                                      className="row-action"
+                                      onClick={() => openEditPlayer(player)}
+                                      title={t('common.edit')}
+                                    >✏️</button>
+                                  )}
+                                  {canEditPlayers && (
+                                    <button
+                                      className="row-action row-action-purple"
+                                      onClick={() => {
+                                        const existing = getAllPlayerTraits().get(player.name);
+                                        setTraitsForm(existing ? { ...existing, style: [...existing.style], quirks: [...existing.quirks] } : { style: [], quirks: [] });
+                                        setTraitsStyleText(existing?.style.join(', ') || '');
+                                        setTraitsQuirksText(existing?.quirks.join(', ') || '');
+                                        setEditingTraitsPlayer(player);
+                                      }}
+                                      title={t('settings.traits.button')}
+                                    >🎭</button>
+                                  )}
+                                  {canDeletePlayers && (
+                                    <button
+                                      className="row-action row-action-danger"
+                                      onClick={() => setDeletePlayerConfirm({ id: player.id, name: player.name })}
+                                      title={t('settings.players.deleteTitle')}
+                                    >🗑️</button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2267,13 +2359,16 @@ const SettingsScreen = () => {
         <>
           {/* Report Form */}
           <div className="card" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: '0 0 0.75rem', fontSize: '1rem', textAlign: 'center' }}>
-              {t('report.title')}
-            </h3>
-
-            {/* Category Selector */}
+            {/* Category selector — its label doubles as the card's
+                section heading, so we drop the redundant `דיווח על
+                בעיה` h3 and promote the category label to h3-level
+                size + centred alignment. */}
             <div style={{ marginBottom: '0.75rem' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+              <div style={{
+                fontSize: '1rem', fontWeight: 600,
+                color: 'var(--text)', textAlign: 'center',
+                marginBottom: '0.6rem',
+              }}>
                 {t('report.categoryLabel')}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
@@ -3026,24 +3121,6 @@ const SettingsScreen = () => {
               </div>
               {pushTarget === 'select' && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
-                  <button
-                    onClick={() => setPushSelectedPlayers(players.map(p => p.name))}
-                    style={{
-                      padding: '0.25rem 0.5rem', borderRadius: '0.4rem',
-                      border: '1px solid rgba(16,185,129,0.4)', background: 'rgba(16,185,129,0.08)',
-                      color: '#10B981', cursor: 'pointer', fontSize: '0.65rem',
-                      fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                    }}
-                  >{language === 'he' ? 'בחר הכל' : 'Select All'}</button>
-                  <button
-                    onClick={() => setPushSelectedPlayers([])}
-                    style={{
-                      padding: '0.25rem 0.5rem', borderRadius: '0.4rem',
-                      border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)',
-                      color: '#ef4444', cursor: 'pointer', fontSize: '0.65rem',
-                      fontFamily: 'Outfit, sans-serif', fontWeight: 600,
-                    }}
-                  >{language === 'he' ? 'נקה הכל' : 'Deselect All'}</button>
                   {players.map(p => (
                     <button
                       key={p.id}
@@ -3570,8 +3647,18 @@ const SettingsScreen = () => {
               const name = nameByKey.get(groupKey) || groupKey.slice(0, 8);
               const member = activityMembers.find(m => m.playerName === name || m.displayName === name);
               const memberRole = member?.role || latest.role || 'member';
-              return { groupKey, name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, entries, memberRole };
-            }).sort((a, b) => a.daysSince - b.daysSince);
+              return { groupKey, name, sessions30d: uniqueDays30d, avgDuration: totalMin, daysSince, latestEntry: latest, latestTs: latestDate.getTime(), entries, memberRole };
+              // Sort by the *full* timestamp of each member's most recent
+              // activity, not the day-rounded `daysSince`. The previous
+              // `daysSince`-only ordering bucketed everyone who visited
+              // today together (and likewise for yesterday, two days ago,
+              // …) so within each bucket the rendered order followed the
+              // arbitrary `userMap` iteration order rather than real
+              // recency. Descending `latestTs` puts the member who was
+              // last active 5 minutes ago above the one who logged in
+              // 8 hours ago, which is what "recent entrance" actually
+              // means at the per-row level.
+            }).sort((a, b) => b.latestTs - a.latestTs);
 
 
 

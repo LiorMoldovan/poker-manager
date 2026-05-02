@@ -51,8 +51,15 @@ export const fmtHebrewDate = (d: GamePollDate): string => {
     const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
     const day = dt.getDate();
     const mon = dt.getMonth() + 1;
-    const time = d.proposedTime ? ` ${d.proposedTime.slice(0, 5)}` : '';
-    return `${wd} ${day}/${mon}${time}`;
+    // Middle dot (`·`) between the three semantic chunks (weekday,
+    // date, time) gives the field its rhythm — without it the
+    // string `יום חמישי 7/5 21:00` reads as one run-on phrase
+    // because plain spaces don't visually segment "weekday | date |
+    // time". The separator is non-punctuation, RTL-safe, and only
+    // appears between segments that actually exist (no `·` after
+    // the date when no time was set).
+    const time = d.proposedTime ? ` · ${d.proposedTime.slice(0, 5)}` : '';
+    return `${wd} · ${day}/${mon}${time}`;
   } catch {
     return d.proposedDate;
   }
@@ -70,7 +77,7 @@ export const fmtHebrewDateCompact = (d: GamePollDate): string => {
     const wd = dt.toLocaleDateString('he-IL', { weekday: 'long' });
     const day = dt.getDate();
     const mon = dt.getMonth() + 1;
-    return `${wd} ${day}/${mon}`;
+    return `${wd} · ${day}/${mon}`;
   } catch {
     return d.proposedDate;
   }
@@ -585,39 +592,50 @@ export default function ScheduleTab({ variant = 'compact' }: ScheduleTabProps = 
       <div className="card" style={{ marginBottom: 12, padding: 14 }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 8,
-          // Wrap action buttons to a new line on narrow viewports rather than
-          // truncating the title with an ellipsis.
-          flexWrap: 'wrap', rowGap: 8,
+          // Single-line layout on phones — the heading + ⚙️ + create-CTA used
+          // to wrap to two rows at 320–375px. Trimming labels (HE: "פתיחת
+          // הצבעה" → "+ הצבעה"; EN: "Open poll" → "+ Poll") and tightening
+          // the gear chip lets the row hold one line down to a 280px card.
+          // `min-width: 0` on the h2 lets the title truncate rather than
+          // force a wrap, and `flex-shrink: 0` on the action group keeps
+          // the buttons their natural size.
+          gap: 6,
         }}>
           <h2 style={{
-            margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)',
+            margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)',
+            minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             📅 {t('schedule.tabTitle')}
           </h2>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+            {/* Primary first in DOM order so under RTL it sits at the
+                right (where the eye lands), settings gear demotes
+                to the left as a secondary chip. */}
+            {isAdmin && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                style={{
+                  padding: '7px 12px', borderRadius: 8, border: 'none',
+                  background: 'var(--primary)', color: '#fff', fontWeight: 600,
+                  fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>
+                {activePolls.length === 0 && archivePolls.length === 0
+                  ? t('schedule.empty.createFirst')
+                  : t('schedule.create')}
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setShowConfig(s => !s)}
                 title={t('schedule.config')}
                 style={{
-                  padding: '8px 10px', borderRadius: 8,
+                  padding: '7px 9px', borderRadius: 8,
                   border: '1px solid var(--border)', background: 'transparent',
                   color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14,
+                  lineHeight: 1,
                 }}>
                 ⚙️
-              </button>
-            )}
-            {isAdmin && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                style={{
-                  padding: '8px 14px', borderRadius: 8, border: 'none',
-                  background: 'var(--primary)', color: '#fff', fontWeight: 600, cursor: 'pointer',
-                }}>
-                {activePolls.length === 0 && archivePolls.length === 0
-                  ? t('schedule.empty.createFirst')
-                  : t('schedule.create')}
               </button>
             )}
           </div>
@@ -4932,6 +4950,18 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
     return poll.votes.find(v => v.dateId === dateId && v.playerId === onlySelectedId) ?? null;
   }, [onlySelectedId, poll.votes, dateId]);
 
+  // Selected players who currently have a vote on this date — drives the
+  // "Delete N votes" CTA in the footer when multi-select is active.
+  // (Players selected without an existing vote are silently skipped from
+  // the delete list — there's nothing to delete for them — but they don't
+  // block the delete: the admin can pick "5 selected, 3 with votes" and
+  // the button cleanly removes only the 3.)
+  const selectedExistingVotes = useMemo(() => {
+    return poll.votes.filter(v =>
+      v.dateId === dateId && selectedPlayerIds.has(v.playerId),
+    );
+  }, [selectedPlayerIds, poll.votes, dateId]);
+
   // Track which player's existing vote (if any) currently drives the form
   // prefill. We use a ref so transitions like "select A (had 'yes' + comment)
   // → switch to B (no existing vote)" can clear the carry-over without
@@ -5067,16 +5097,27 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
   };
 
   const handleDelete = () => {
-    if (!onlySelectedId || !singleExistingVote) return;
+    if (selectedExistingVotes.length === 0) return;
     setConfirmingDelete(true);
   };
 
   const performDelete = async () => {
-    if (!onlySelectedId || !singleExistingVote) return;
+    if (selectedExistingVotes.length === 0) return;
     setSubmitting(true);
     try {
-      await adminDeleteVote(dateId, onlySelectedId);
-      onSuccess(t('schedule.proxy.deleted'));
+      // `adminDeleteVote` is a per-row RPC — there's no bulk variant —
+      // so we serialize the deletions to keep error reporting clear.
+      // Failures stop on first error so partial deletes are obvious.
+      let deleted = 0;
+      for (const v of selectedExistingVotes) {
+        await adminDeleteVote(dateId, v.playerId);
+        deleted++;
+      }
+      onSuccess(
+        deleted > 1
+          ? t('schedule.proxy.deletedBulk', { count: deleted })
+          : t('schedule.proxy.deleted')
+      );
       onClose();
     } catch (e) {
       onError(handleRpcError(e));
@@ -5362,16 +5403,20 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
           <button className="btn btn-secondary btn-sm" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          {/* Delete is only meaningful for a single existing vote. With
-              bulk select active we hide it to avoid an ambiguous "delete
-              5 votes" — the admin can do that explicitly per row. */}
-          {selectedCount === 1 && singleExistingVote && (
+          {/* Delete shows up whenever any selected player has an
+              existing vote on this date. Single-select reads "Delete
+              vote", bulk-select reads "Delete N votes" — selected
+              players without a current vote are silently skipped at
+              perform time (nothing to delete for them). */}
+          {selectedExistingVotes.length > 0 && (
             <button
               className="btn btn-danger btn-sm"
               onClick={handleDelete}
               disabled={submitting}
               style={{ opacity: submitting ? 0.6 : 1 }}>
-              {t('schedule.proxy.deleteVote')}
+              {selectedExistingVotes.length === 1
+                ? t('schedule.proxy.deleteVote')
+                : t('schedule.proxy.deleteVotesBulk', { count: selectedExistingVotes.length })}
             </button>
           )}
           <button
@@ -5392,14 +5437,27 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
         second ModalPortal so the .modal-overlay's fixed positioning
         keeps it anchored to the viewport regardless of the parent's
         overflow/transform context. */}
-    {confirmingDelete && onlySelectedId && (() => {
-      const player = players.find(p => p.id === onlySelectedId);
+    {confirmingDelete && selectedExistingVotes.length > 0 && (() => {
+      const isBulk = selectedExistingVotes.length > 1;
+      const singlePlayer = !isBulk
+        ? players.find(p => p.id === selectedExistingVotes[0].playerId)
+        : null;
+      // For bulk we list player names so the admin sees exactly which
+      // votes will go. The list collapses gracefully on narrow modals
+      // — names wrap with comma separators rather than each on a line.
+      const bulkNames = isBulk
+        ? selectedExistingVotes
+            .map(v => players.find(p => p.id === v.playerId)?.name || '?')
+            .join(', ')
+        : '';
       return (
         <ModalPortal>
           <div className="modal-overlay" onClick={() => !submitting && setConfirmingDelete(false)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 380, direction: 'rtl' }}>
               <div className="modal-header">
-                <h3 className="modal-title">{t('schedule.proxy.confirmDeleteTitle')}</h3>
+                <h3 className="modal-title">
+                  {isBulk ? t('schedule.proxy.confirmDeleteTitleBulk') : t('schedule.proxy.confirmDeleteTitle')}
+                </h3>
                 <button
                   className="modal-close"
                   onClick={() => setConfirmingDelete(false)}
@@ -5407,9 +5465,23 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                   aria-label={t('common.close')}
                 >×</button>
               </div>
-              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
-                {t('schedule.proxy.confirmDelete', { name: player?.name || '' })}
+              <p className="text-muted" style={{ fontSize: '0.9rem', marginBottom: isBulk ? '0.5rem' : '1rem', lineHeight: 1.5 }}>
+                {isBulk
+                  ? t('schedule.proxy.confirmDeleteBulk', { count: selectedExistingVotes.length })
+                  : t('schedule.proxy.confirmDelete', { name: singlePlayer?.name || '' })}
               </p>
+              {isBulk && (
+                <div style={{
+                  fontSize: '0.78rem', color: 'var(--text)',
+                  marginBottom: '1rem', lineHeight: 1.5,
+                  padding: '0.5rem 0.65rem', borderRadius: 6,
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  wordBreak: 'break-word',
+                }}>
+                  {bulkNames}
+                </div>
+              )}
               <div className="actions">
                 <button
                   className="btn btn-secondary"
@@ -5428,7 +5500,11 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
                     cursor: submitting ? 'wait' : 'pointer',
                   }}
                 >
-                  {submitting ? '...' : t('schedule.proxy.deleteVote')}
+                  {submitting
+                    ? '...'
+                    : isBulk
+                      ? t('schedule.proxy.deleteVotesBulk', { count: selectedExistingVotes.length })
+                      : t('schedule.proxy.deleteVote')}
                 </button>
               </div>
             </div>

@@ -147,7 +147,7 @@ CREATE TABLE settings (
   group_id          UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE UNIQUE,
   rebuy_value       NUMERIC NOT NULL DEFAULT 50,
   chips_per_rebuy   INTEGER NOT NULL DEFAULT 1000,
-  min_transfer      NUMERIC NOT NULL DEFAULT 20,
+  min_transfer      NUMERIC NOT NULL DEFAULT 5,
   game_night_days   JSONB DEFAULT '[4, 6]'::jsonb,
   locations         JSONB DEFAULT '[]'::jsonb,
   blocked_transfers JSONB DEFAULT '[]'::jsonb
