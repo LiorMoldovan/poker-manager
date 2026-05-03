@@ -3455,8 +3455,15 @@ const SettingsScreen = () => {
           r.setDate(r.getDate() - r.getDay()); // Sun→0 already, no offset needed
           return r;
         })();
+        // When the week start IS today (e.g. user opens Settings on a Sunday)
+        // we want a single date, not a degenerate "3–3.5" range. Otherwise the
+        // label compresses to `D–D.M` for same-month and expands to
+        // `D.M–D.M` across a month boundary.
         const _sameMonth = _wkStart.getMonth() === _now.getMonth();
-        const headerWeekRangeLabel = _sameMonth
+        const _sameDay = _sameMonth && _wkStart.getDate() === _now.getDate();
+        const headerWeekRangeLabel = _sameDay
+          ? `${_now.getDate()}.${_now.getMonth() + 1}`
+          : _sameMonth
           ? `${_wkStart.getDate()}–${_now.getDate()}.${_now.getMonth() + 1}`
           : `${_wkStart.getDate()}.${_wkStart.getMonth() + 1}–${_now.getDate()}.${_now.getMonth() + 1}`;
         return (
@@ -3725,10 +3732,14 @@ const SettingsScreen = () => {
 
             // Date-range label for the *current* (Sun-anchored) week, reused by
             // any sub-card that wants to clarify which days "this week" covers.
+            // Same same-day collapse as the header label so a Sunday visit
+            // reads "3.5" rather than "3–3.5".
             const currentWeekRangeLabel = (() => {
               const s = currentWeekStart;
               const e = now;
               const sameMonth = s.getMonth() === e.getMonth();
+              const sameDay = sameMonth && s.getDate() === e.getDate();
+              if (sameDay) return `${e.getDate()}.${e.getMonth() + 1}`;
               return sameMonth
                 ? `${s.getDate()}–${e.getDate()}.${e.getMonth() + 1}`
                 : `${s.getDate()}.${s.getMonth() + 1}–${e.getDate()}.${e.getMonth() + 1}`;
@@ -3813,7 +3824,7 @@ const SettingsScreen = () => {
                     {currentWeekRangeLabel}
                   </span>
                   <span style={{ opacity: 0.7 }}>
-                    ({language === 'he' ? 'משבת אחרונה' : 'since last Sat'})
+                    ({language === 'he' ? 'מיום ראשון' : 'since Sun'})
                   </span>
                 </div>
 

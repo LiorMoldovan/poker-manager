@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.4';
+export const APP_VERSION = '5.35.5';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.5',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Settings → Activity tab date labels: collapse the degenerate "3–3.5" range into a single "3.5" when the week start day equals today, and replace the now-stale "(משבת אחרונה)" / "(since last Sat)" caption with "(מיום ראשון)" / "(since Sun)" to match the Sunday-anchored week from 5.35.4. Visible immediately on Sundays: with Sun→Sat weeks the new week\'s start IS Sunday, so visiting the tab on a Sunday produced labels like `📆 3–3.5` (start day = end day = today, May 3) in 4 different places — the section header, the "השבוע" line below the live-now strip, the small "this week" badge on the visits-this-week summary card, and the per-week-row label on the weekly trend card. Fix is a same-day check (`sameMonth && s.getDate() === e.getDate()`) in both label builders that returns `D.M` directly. Same logic mirrored in both the early `headerWeekRangeLabel` (computed before activityLog data loads, exposed in the section header next to the title) and the in-body `currentWeekRangeLabel` (used by the rest of the cards) so they never disagree. The "(since last Saturday)" caption was a leftover from when the window was Sat→Fri — now correctly says "since Sunday" in HE/EN. File: `src/screens/SettingsScreen.tsx`.',
+    ],
+  },
   {
     version: '5.35.4',
     date: '2026-05-03',
