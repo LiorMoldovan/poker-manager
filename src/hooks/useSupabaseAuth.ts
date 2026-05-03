@@ -247,6 +247,21 @@ export function useSupabaseAuth() {
     return { data, error };
   }, [state.user, activeGroupId, fetchMemberships]);
 
+  // Lists existing players in the group that no member is currently linked to.
+  // Used by PlayerPicker so a new joiner can claim an existing record (with all
+  // its game history) rather than typing a slightly different name and creating
+  // a duplicate — see migration 047 + the duplicate-player issue Sefi hit.
+  const listLinkablePlayers = useCallback(async (): Promise<{ id: string; name: string }[]> => {
+    const { data, error } = await supabase.rpc('list_linkable_players', {
+      p_group_id: activeGroupId,
+    });
+    if (error) {
+      console.error('[auth] list_linkable_players failed:', error.message);
+      return [];
+    }
+    return (data as { id: string; name: string }[] | null) ?? [];
+  }, [activeGroupId]);
+
   const updateMemberRole = useCallback(async (targetUserId: string, newRole: string) => {
     const { error } = await supabase.rpc('update_member_role', {
       target_user_id: targetUserId,
@@ -373,6 +388,7 @@ export function useSupabaseAuth() {
     joinGroup,
     linkToPlayer,
     selfCreateAndLink,
+    listLinkablePlayers,
     updateMemberRole,
     removeMember,
     transferOwnership,

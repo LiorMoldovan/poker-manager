@@ -242,24 +242,59 @@ export const useOnlineStatus = () => {
   return online;
 };
 
-function PlayerPicker({ onSelfCreate, userDisplayName }: {
+function PlayerPicker({ onSelfCreate, onLink, listLinkable, userDisplayName }: {
   onSelfCreate: (name: string) => Promise<{ data: unknown; error: unknown }>;
+  onLink: (playerId: string) => Promise<{ error: unknown }>;
+  listLinkable: () => Promise<{ id: string; name: string }[]>;
   userDisplayName: string;
 }) {
   const { t } = useTranslation();
   const [newName, setNewName] = useState(userDisplayName);
   const [error, setError] = useState('');
+  const [linkable, setLinkable] = useState<{ id: string; name: string }[] | null>(null);
+  // 'list' = pick existing player, 'create' = type a new name
+  // We start in 'list' mode if there are existing unlinked players to claim
+  // (this is the path that prevents duplicates — see migration 047). We fall
+  // back to 'create' automatically if the list is empty.
+  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listLinkable().then(rows => {
+      if (cancelled) return;
+      setLinkable(rows);
+      if (rows.length === 0) setMode('create');
+    });
+    return () => { cancelled = true; };
+  }, [listLinkable]);
 
   const handleSelfCreate = async () => {
     const trimmed = newName.trim();
     if (!trimmed) { setError(t('picker.emptyName')); return; }
     setError('');
+    setSubmitting(true);
     const { error: err } = await onSelfCreate(trimmed);
+    setSubmitting(false);
     if (err) {
       const msg = (err as { message?: string })?.message || '';
       setError(msg.includes('duplicate') ? t('picker.duplicate') : msg || t('picker.createError'));
     }
   };
+
+  const handlePick = async (playerId: string) => {
+    setError('');
+    setLinkingId(playerId);
+    const { error: err } = await onLink(playerId);
+    setLinkingId(null);
+    if (err) {
+      const msg = (err as { message?: string })?.message || '';
+      setError(msg || t('picker.linkError'));
+    }
+  };
+
+  const showList = mode === 'list' && linkable && linkable.length > 0;
 
   return (
     <div style={{
@@ -272,36 +307,91 @@ function PlayerPicker({ onSelfCreate, userDisplayName }: {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🃏</div>
-          <h2 style={{ color: 'var(--text)', marginBottom: '0.25rem' }}>{t('picker.welcome')}</h2>
+          <h2 style={{ color: 'var(--text)', marginBottom: '0.25rem' }}>
+            {showList ? t('picker.existingHeader') : t('picker.welcome')}
+          </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {t('picker.subtitle')}
+            {showList ? t('picker.existingHelp') : t('picker.subtitle')}
           </p>
         </div>
-        <input
-          type="text"
-          value={newName}
-          onChange={e => setNewName(e.target.value)}
-          placeholder={t('picker.placeholder')}
-          autoFocus
-          dir="rtl"
-          style={{
-            width: '100%', padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '10px',
-            border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
-            marginBottom: '0.75rem', boxSizing: 'border-box', outline: 'none', fontFamily: 'Outfit, sans-serif',
-          }}
-          onKeyDown={e => { if (e.key === 'Enter') handleSelfCreate(); }}
-        />
-        {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
-        <button
-          onClick={handleSelfCreate}
-          style={{
-            width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, borderRadius: '10px',
-            border: 'none', background: 'var(--primary)', color: 'white', cursor: 'pointer',
-            fontFamily: 'Outfit, sans-serif',
-          }}
-        >
-          {t('picker.continue')}
-        </button>
+
+        {showList ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem', maxHeight: '50vh', overflowY: 'auto' }}>
+              {linkable!.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => handlePick(p.id)}
+                  disabled={linkingId !== null}
+                  style={{
+                    padding: '0.75rem 1rem', fontSize: '0.95rem', fontWeight: 600, borderRadius: '10px',
+                    border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
+                    cursor: linkingId === null ? 'pointer' : 'wait', textAlign: 'right',
+                    opacity: linkingId !== null && linkingId !== p.id ? 0.5 : 1,
+                    fontFamily: 'Outfit, sans-serif',
+                  }}
+                >
+                  {linkingId === p.id ? '…' : p.name}
+                </button>
+              ))}
+            </div>
+            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
+            <button
+              onClick={() => { setError(''); setMode('create'); }}
+              disabled={linkingId !== null}
+              style={{
+                width: '100%', padding: '0.6rem', fontSize: '0.85rem', fontWeight: 500, borderRadius: '10px',
+                border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)',
+                cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+              }}
+            >
+              {t('picker.notInList')}
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder={t('picker.placeholder')}
+              autoFocus
+              dir="rtl"
+              style={{
+                width: '100%', padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: '10px',
+                border: '2px solid var(--border)', background: 'var(--background)', color: 'var(--text)',
+                marginBottom: '0.75rem', boxSizing: 'border-box', outline: 'none', fontFamily: 'Outfit, sans-serif',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSelfCreate(); }}
+            />
+            {error && <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', marginBottom: '0.5rem' }}>{error}</p>}
+            <button
+              onClick={handleSelfCreate}
+              disabled={submitting}
+              style={{
+                width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 600, borderRadius: '10px',
+                border: 'none', background: 'var(--primary)', color: 'white',
+                cursor: submitting ? 'wait' : 'pointer', opacity: submitting ? 0.6 : 1,
+                fontFamily: 'Outfit, sans-serif', marginBottom: linkable && linkable.length > 0 ? '0.5rem' : 0,
+              }}
+            >
+              {t('picker.continue')}
+            </button>
+            {linkable && linkable.length > 0 && (
+              <button
+                onClick={() => { setError(''); setMode('list'); }}
+                disabled={submitting}
+                style={{
+                  width: '100%', padding: '0.5rem', fontSize: '0.8rem', fontWeight: 500, borderRadius: '10px',
+                  border: 'none', background: 'transparent', color: 'var(--text-muted)',
+                  cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+                }}
+              >
+                {t('picker.backToList')}
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -737,6 +827,8 @@ function SupabaseApp() {
     return (
       <PlayerPicker
         onSelfCreate={auth.selfCreateAndLink}
+        onLink={auth.linkToPlayer}
+        listLinkable={auth.listLinkablePlayers}
         userDisplayName={displayName}
       />
     );

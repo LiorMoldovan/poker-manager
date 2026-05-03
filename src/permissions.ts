@@ -6,7 +6,9 @@ const ROLE_PERMISSIONS: Record<PermissionRole, Permission[]> = {
     'game:manage_rebuys',
     'game:enter_chips',
     'game:finalize',
-    'game:delete',
+    // 'game:delete' is intentionally NOT granted to admins — only the group
+    // owner and super admins can delete a game from history. This prevents
+    // accidental destructive actions by promoted admins.
     'game:clear_all',
     'player:add',
     'player:edit',

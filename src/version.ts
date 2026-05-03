@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.0';
+export const APP_VERSION = '5.35.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.1',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Heal duplicate-player record for `ספי` and prevent the same class of bug from happening again. User reported that Settings > Players showed `ספי טורס` while Statistics showed `ספי` — turned out to be two genuinely different `players` rows for the same human in the same group: an old admin-created record `ספי` (Dec 2025, 5 completed games) and a new self-created record `ספי טורס` (May 1 2026, 0 games but linked to user `sefitores`). His login was attached to the empty record while all his game history sat under the unlinked one, so neither view could show "him" correctly.',
+      '🐛 Root cause: `PlayerPicker` (`src/App.tsx`) only ever rendered a name-input — it never showed the joiner the list of unlinked players in the group, despite `.cursor/rules/group-management.mdc` explicitly saying the picker should *"show: list of unlinked players + I\'m not on the list — create me"*. So when Sefi joined on May 1, he had no way to know `ספי` already existed, typed his preferred full name, and `self_create_and_link` minted a duplicate. Same trap is set for every future joiner — anyone whose chosen display name doesn\'t exactly match an admin-created roster row creates a duplicate.',
+      '🩹 New SQL `046-merge-duplicate-player-sefi.sql` heals Sefi\'s specific duplicate. Re-links `group_members.player_id` from the empty `ספי טורס` (a71324…) to the historical `ספי` (ec7b80…), moves the lone `game_poll_votes` row that was attached to the dup, defensively migrates any `player_invites` / `player_traits` / `game_players` references (idempotent — UPDATE is no-op when no rows match), then deletes the duplicate `players` row. The DELETE is single-row (passes the `block_bulk_deletes` trigger from migration 043) and guarded with `NOT EXISTS` checks against every reference table so an unexpected new FK row would turn the delete into a safe no-op rather than an orphan. Final `RAISE NOTICE` block verifies post-state. Verified live: `players_dup=0, game_players_on_old=5, group_members_on_old=1, poll_votes_on_old=1, all_orphan_refs=0` — Sefi will see `ספי` consistently across every screen on next reload.',
+      '🛡 New SQL `047-list-linkable-players.sql` adds the RPC the picker needs. SECURITY DEFINER with pinned `search_path = public, pg_temp` (matches 045 hygiene), takes optional `p_group_id` (falls back to caller\'s primary group), validates caller is a member of that group before returning data, returns `(id, name)` for every player in the group that no `group_members` row is linked to. Required because the `gm_select` RLS policy on `group_members` only returns the caller\'s own row — a joiner literally cannot compute "unlinked players" client-side. `revoke all from public, grant execute to authenticated`.',
+      '🛡 PlayerPicker rewrite. Now calls `list_linkable_players` on mount and, when the group has unlinked players, renders them as a vertical list of "I am [Name]" buttons that call `link_member_to_player` directly — same flow that the cursor rule promised. A small dashed "I\'m not on the list — create me" link drops into the original name-input self-create flow as a fallback. If the group genuinely has zero unlinked players (fresh group, no admin-created roster), the picker goes straight to the input — no regression. New `listLinkablePlayers` wrapper added to `useSupabaseAuth` and exposed on the hook surface alongside the existing `linkToPlayer`. New i18n keys (HE + EN): `picker.existingHeader`, `picker.existingHelp`, `picker.notInList`, `picker.linkError`, `picker.backToList`. Files: `src/App.tsx`, `src/hooks/useSupabaseAuth.ts`, `src/i18n/translations.ts`.',
+      '🔒 `game:delete` capability removed from the `admin` role permission set in `src/permissions.ts` — only group owner + super admin can delete a completed game from history now. Prevents accidental / hostile destructive action by promoted admins; owners typically pick admins who haven\'t internalized the consequences yet, and a deleted game cascade-removes 8+ `game_players` rows, the AI summary, the comic, the forecast comparison, paid_settlements, etc. The capability stays available via the existing owner-and-above checks (`isOwner` / `isSuperAdmin`) so no UI path is broken — admins simply no longer see the delete affordance.',
+      '🔧 Activity log `getScreenName` now maps `/p/*` paths to `Poll Link` instead of falling through to the generic `Other` bucket. Match the existing routing convention (`/p/<token>` is the public poll-share landing page used by WhatsApp share links). Owner activity dashboard now reports those visits as a distinct screen so it\'s actually possible to see how many people are landing via shared poll links vs visiting the polls tab from inside the app.',
+    ],
+  },
   {
     version: '5.35.0',
     date: '2026-05-03',

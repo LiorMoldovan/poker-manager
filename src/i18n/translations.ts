@@ -68,6 +68,11 @@ const he = {
   'picker.emptyName': 'נא להזין שם',
   'picker.duplicate': 'שם זה כבר קיים בקבוצה',
   'picker.createError': 'שגיאה ביצירת שחקן',
+  'picker.existingHeader': 'אני כבר ברשימה',
+  'picker.existingHelp': 'בחר את השם שלך מתוך השחקנים שכבר רשומים בקבוצה — כך תקבל את כל היסטוריית המשחקים שלך:',
+  'picker.notInList': 'אני לא ברשימה — צור לי שחקן חדש',
+  'picker.linkError': 'לא הצלחנו לקשר אותך לשחקן הזה',
+  'picker.backToList': '↩ חזרה לרשימת השחקנים',
 
   // ── Add Member Banner ──
   'addMember.title': '➕ בקשת הצטרפות',
@@ -1651,6 +1656,11 @@ const en: Record<keyof typeof he, string> = {
   'picker.emptyName': 'Please enter a name',
   'picker.duplicate': 'This name already exists in the group',
   'picker.createError': 'Error creating player',
+  'picker.existingHeader': "I'm already on the list",
+  'picker.existingHelp': "Pick your name from the roster — you'll keep all your existing game history:",
+  'picker.notInList': "I'm not on the list — create me",
+  'picker.linkError': "Couldn't link you to that player",
+  'picker.backToList': '↩ Back to player list',
 
   // ── Add Member Banner ──
   'addMember.title': '➕ Join Request',
