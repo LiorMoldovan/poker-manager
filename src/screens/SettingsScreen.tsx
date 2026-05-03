@@ -3442,13 +3442,17 @@ const SettingsScreen = () => {
 
       {/* Activity Tab - Owner Only - Enhanced Dashboard */}
       {activeTab === 'activity' && isOwner && (() => {
-        // Same Saturday-anchored "this week" range used by every weekly stat
+        // Same Sunday-anchored "this week" range used by every weekly stat
         // and the heatmap further down. Computed once here so the header can
         // expose it next to the title — no need to wait for activityLog data.
+        // Sunday→Saturday matches the user-visible day labels (א=Sun … ש=Sat)
+        // rendered in the heatmap rows below — having both the row order and
+        // the "this week" window agree avoids the off-by-one where the first
+        // row of the heatmap fell into the previous week's bucket.
         const _now = new Date();
         const _wkStart = (() => {
           const r = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
-          r.setDate(r.getDate() - ((r.getDay() + 1) % 7));
+          r.setDate(r.getDate() - r.getDay()); // Sun→0 already, no offset needed
           return r;
         })();
         const _sameMonth = _wkStart.getMonth() === _now.getMonth();
@@ -3583,17 +3587,18 @@ const SettingsScreen = () => {
             const todayUniqueUsers = todayUniqueKeys.size;
             const todayUniqueNames = Array.from(todayUniqueKeys).map(k => nameByKey.get(k) || k.slice(0, 8));
 
-            // "This week" is anchored to Saturday — the local week starts on Sat
-            // and runs Sat→Fri. This matches the Israeli calendar convention used
-            // elsewhere in the app and makes the weekly trend bars line up with
-            // the summary stats below (same window, same key — see weeklyTrend).
-            const startOfSatWeek = (d: Date): Date => {
+            // "This week" is anchored to Sunday — the local week starts on Sun
+            // and runs Sun→Sat. JavaScript's `Date.getDay()` already returns
+            // 0=Sun … 6=Sat, so the offset is just `getDay()` directly.
+            // The heatmap rows below are labelled א=Sun … ש=Sat (also `getDay()`
+            // index order) which keeps "Sunday is column 0 and the start of
+            // the week" consistent everywhere on this tab.
+            const startOfSunWeek = (d: Date): Date => {
               const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-              const offset = (r.getDay() + 1) % 7; // Sat→0, Sun→1, …, Fri→6
-              r.setDate(r.getDate() - offset);
+              r.setDate(r.getDate() - r.getDay());
               return r;
             };
-            const currentWeekStart = startOfSatWeek(now);
+            const currentWeekStart = startOfSunWeek(now);
 
             const weekUserDays = new Set(
               activityLog
@@ -3635,7 +3640,7 @@ const SettingsScreen = () => {
             })();
 
 
-            // Heatmap shares the same Saturday-anchored window as the summary
+            // Heatmap shares the same Sunday-anchored window as the summary
             // stats and the weekly trend's current bar — one source of truth
             // for "this week" across the whole Activity tab.
             const heatmap: number[][] = Array.from({ length: 7 }, () => [0, 0, 0, 0]);
@@ -3683,11 +3688,11 @@ const SettingsScreen = () => {
 
 
 
-            // Weekly trend buckets, Saturday-aligned. Each bucket is a half-open
+            // Weekly trend buckets, Sunday-aligned. Each bucket is a half-open
             // interval [weekStart, nextWeekStart) so consecutive weeks never
             // double-count an entry that happens to fall on the boundary. The
             // current (incomplete) week's label end is capped at "now" so the
-            // range reads e.g. "25–29.4" rather than the full Sat–Fri span.
+            // range reads e.g. "26–30.4" rather than the full Sun–Sat span.
             const weeklyTrend = Array.from({ length: 3 }, (_, i) => {
               const weekStart = new Date(currentWeekStart);
               weekStart.setDate(weekStart.getDate() - i * 7);
@@ -3718,7 +3723,7 @@ const SettingsScreen = () => {
             const lastWeekSessions = weeklyTrend[weeklyTrend.length - 2]?.sessions ?? 0;
             const sessionsDelta = thisWeekSessions - lastWeekSessions;
 
-            // Date-range label for the *current* (Sat-anchored) week, reused by
+            // Date-range label for the *current* (Sun-anchored) week, reused by
             // any sub-card that wants to clarify which days "this week" covers.
             const currentWeekRangeLabel = (() => {
               const s = currentWeekStart;
@@ -3884,7 +3889,7 @@ const SettingsScreen = () => {
                 {/* Training Engagement */}
                 {trainingPlayers.length > 0 && (() => {
                   const now = new Date();
-                  // Saturday-anchored window — same semantics as the weekly trend
+                  // Sunday-anchored window — same semantics as the weekly trend
                   // and "ביקורים השבוע" stat above so all "this week" numbers in
                   // this card cover the exact same date range.
                   const weekStartMs = currentWeekStart.getTime();

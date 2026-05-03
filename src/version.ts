@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.3';
+export const APP_VERSION = '5.35.4';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.4',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Settings → Activity tab: weekly window now anchors to Sunday→Saturday instead of Saturday→Friday. User wanted "this week" to read Sun→Sat to match the calendar he and the rest of the group think in. Affects the weekly heatmap (`מפת חום שבועית`), the "ביקורים השבוע" / unique-users / week-over-week delta on the summary cards, the 3-bar weekly trend chart, the weekly training engagement card, and the date-range label in the section header. Implementation is a one-line change to the offset math (`r.setDate(r.getDate() - r.getDay())` — `Date.getDay()` already returns 0=Sun…6=Sat, so the offset is just `getDay()` directly, no `+1) % 7` shenanigan needed). Both code sites that computed week-start (the inline header version at the top of the activity-tab block and the shared `startOfSatWeek` → renamed `startOfSunWeek`) updated together so every consumer of `currentWeekStart` agrees. Heatmap row labels (א=Sun, ב=Mon, …, ש=Sat) were already in `getDay()` index order so nothing in the rendering needed to move; previously the first row (Sun) was effectively part of the *next* week\'s bucket which was always slightly off-feel — now the row order and the bucket edges match. Verified across all 6 consumers of `currentWeekStart` (`weekUserDays`, `mostActiveThisWeek`, `heatmap`, `weeklyTrend`, `currentWeekRangeLabel`, `trainingEngagement`) — every one of them now reports the same Sun-anchored window. No other screens carried Saturday-week logic so this is a single-screen behaviour change with no cross-screen drift to worry about. File: `src/screens/SettingsScreen.tsx`.',
+    ],
+  },
   {
     version: '5.35.3',
     date: '2026-05-03',
