@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.5';
+export const APP_VERSION = '5.35.6';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.6',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Settings → Activity tab: replaced the Sun→Sat calendar week (5.35.4) with a rolling 7-day window ending today. Closes the "Sunday surprise" we hit in 5.35.5 — opening the tab on a Sunday morning showed near-empty stats and degenerate `D.M` labels because the calendar week had just rolled over and `today` was the only day in the window. A rolling window always covers exactly 7 calendar days regardless of which weekday the owner opens the tab on, so the dashboard reads the same shape every visit and the day-of-week label drift can\'t happen anymore.',
+      '🛠 Implementation. Both `_wkStart` (the early header copy that runs before activityLog loads) and `currentWeekStart` (the body copy used by every consumer below) are now `today_at_midnight − 6 days`. The inclusive range `[today−6, now]` is a real 7 calendar days. Helper renamed `startOfSunWeek` → `startOfRolling7d`; the variable name `currentWeekStart` is kept across all six consumers (`weekUserDays`, `mostActiveThisWeek`, `heatmap`, `weeklyTrend`, `currentWeekRangeLabel`, `trainingEngagement`) for diff hygiene — its meaning is now "start of the rolling 7-day window" and there\'s a comment to that effect. Same-day collapse from 5.35.5 deleted as dead code: a 7-day rolling window can\'t degenerate to a single day. Heatmap maths unchanged — it aggregates by `getDay()` and a rolling 7-day window contains exactly one of each day-of-week, so each `dayNames[]` row still gets one calendar day\'s data. Weekly trend buckets become 3 contiguous rolling 7-day windows (`[t−6,t]`, `[t−13,t−7]`, `[t−20,t−14]`) — half-open on the upper end to avoid double-counting boundary entries; no overlap, no gaps. File: `src/screens/SettingsScreen.tsx`.',
+      '🛠 Labels. The "📆 השבוע: 3–3.5 (מיום ראשון)" caption becomes "📆 7 ימים אחרונים: 27.4–3.5 (נע)" / "Last 7 days: 27.4–3.5 (rolling)". The "(rolling)" / "(נע)" hint signals readers that this isn\'t a Sun→Sat calendar week — useful since the dashboard previously was Sat→Fri (≤5.35.3) then Sun→Sat (5.35.4–5) so longtime users expect calendar weeks. i18n keys retuned: `weekSessions` → "ביקורים ב-7 ימים" / "Visits (7d)"; `trendUsers` → "משתמשים (7 ימים)" / "Users (7d)"; `trendSessions` → "ביקורים (7 ימים)" / "Visits (7d)"; the "אימון השבוע" training-engagement title becomes "אימון ב-7 ימים אחרונים" / "Training (last 7d)". The `vsLastWeek` comparison label stays as "vs last week" / "לעומת שבוע קודם" — the previous 7-day bucket IS the right meaning of "last week" for a rolling dashboard, and that phrasing reads better than "vs prev 7d". Heatmap title `מפת חום שבועית` / `Weekly heat map` left intact — colloquially correct (it\'s 7 days of data) and the rolling-window caption right next to it spells out the exact range. Files: `src/screens/SettingsScreen.tsx`, `src/i18n/translations.ts`.',
+    ],
+  },
   {
     version: '5.35.5',
     date: '2026-05-03',

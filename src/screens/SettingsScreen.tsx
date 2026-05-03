@@ -3442,28 +3442,24 @@ const SettingsScreen = () => {
 
       {/* Activity Tab - Owner Only - Enhanced Dashboard */}
       {activeTab === 'activity' && isOwner && (() => {
-        // Same Sunday-anchored "this week" range used by every weekly stat
-        // and the heatmap further down. Computed once here so the header can
-        // expose it next to the title — no need to wait for activityLog data.
-        // Sunday→Saturday matches the user-visible day labels (א=Sun … ש=Sat)
-        // rendered in the heatmap rows below — having both the row order and
-        // the "this week" window agree avoids the off-by-one where the first
-        // row of the heatmap fell into the previous week's bucket.
+        // Rolling 7-day window ending today (inclusive). Decision in 5.35.6:
+        // calendar weeks (Sun→Sat) caused a "Sunday surprise" where opening
+        // the tab on a Sunday morning showed near-empty stats because the
+        // week had just reset. A rolling window always covers 7 days of
+        // context regardless of what day it is — same shape every visit,
+        // no artificial drops at week boundaries. Heatmap math is unaffected:
+        // its rows aggregate by day-of-week, and a rolling 7-day window
+        // contains exactly one of each day-of-week. Computed once here so
+        // the header can expose the date range next to the title without
+        // waiting for activityLog data to load.
         const _now = new Date();
         const _wkStart = (() => {
           const r = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
-          r.setDate(r.getDate() - r.getDay()); // Sun→0 already, no offset needed
+          r.setDate(r.getDate() - 6); // [today-6 00:00, now] = 7 calendar days
           return r;
         })();
-        // When the week start IS today (e.g. user opens Settings on a Sunday)
-        // we want a single date, not a degenerate "3–3.5" range. Otherwise the
-        // label compresses to `D–D.M` for same-month and expands to
-        // `D.M–D.M` across a month boundary.
         const _sameMonth = _wkStart.getMonth() === _now.getMonth();
-        const _sameDay = _sameMonth && _wkStart.getDate() === _now.getDate();
-        const headerWeekRangeLabel = _sameDay
-          ? `${_now.getDate()}.${_now.getMonth() + 1}`
-          : _sameMonth
+        const headerWeekRangeLabel = _sameMonth
           ? `${_wkStart.getDate()}–${_now.getDate()}.${_now.getMonth() + 1}`
           : `${_wkStart.getDate()}.${_wkStart.getMonth() + 1}–${_now.getDate()}.${_now.getMonth() + 1}`;
         return (
@@ -3594,18 +3590,20 @@ const SettingsScreen = () => {
             const todayUniqueUsers = todayUniqueKeys.size;
             const todayUniqueNames = Array.from(todayUniqueKeys).map(k => nameByKey.get(k) || k.slice(0, 8));
 
-            // "This week" is anchored to Sunday — the local week starts on Sun
-            // and runs Sun→Sat. JavaScript's `Date.getDay()` already returns
-            // 0=Sun … 6=Sat, so the offset is just `getDay()` directly.
-            // The heatmap rows below are labelled א=Sun … ש=Sat (also `getDay()`
-            // index order) which keeps "Sunday is column 0 and the start of
-            // the week" consistent everywhere on this tab.
-            const startOfSunWeek = (d: Date): Date => {
+            // Rolling 7-day window ending now. Mirrors `_wkStart` above —
+            // they're computed twice because the section header renders
+            // before activityLog has loaded and needs its own copy of the
+            // boundary, then the body needs the same boundary tied to the
+            // post-load `now`. Keep both in sync if the semantics ever
+            // change again. The variable name `currentWeekStart` is kept
+            // for diff hygiene across all the consumers below — it really
+            // means "start of the rolling 7-day window" now.
+            const startOfRolling7d = (d: Date): Date => {
               const r = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-              r.setDate(r.getDate() - r.getDay());
+              r.setDate(r.getDate() - 6);
               return r;
             };
-            const currentWeekStart = startOfSunWeek(now);
+            const currentWeekStart = startOfRolling7d(now);
 
             const weekUserDays = new Set(
               activityLog
@@ -3647,9 +3645,11 @@ const SettingsScreen = () => {
             })();
 
 
-            // Heatmap shares the same Sunday-anchored window as the summary
+            // Heatmap shares the same rolling 7-day window as the summary
             // stats and the weekly trend's current bar — one source of truth
-            // for "this week" across the whole Activity tab.
+            // for the dashboard's "recent activity" view. With a 7-day window
+            // each `dayNames[]` row gets exactly one calendar day's data,
+            // which is what makes the heatmap legible.
             const heatmap: number[][] = Array.from({ length: 7 }, () => [0, 0, 0, 0]);
             const heatmapSeen = new Set<string>();
             for (const entry of activityLog) {
@@ -3695,11 +3695,12 @@ const SettingsScreen = () => {
 
 
 
-            // Weekly trend buckets, Sunday-aligned. Each bucket is a half-open
-            // interval [weekStart, nextWeekStart) so consecutive weeks never
-            // double-count an entry that happens to fall on the boundary. The
-            // current (incomplete) week's label end is capped at "now" so the
-            // range reads e.g. "26–30.4" rather than the full Sun–Sat span.
+            // Trend buckets: 3 rolling 7-day windows ending today, today-7,
+            // and today-14. Each bucket is a half-open interval
+            // [bucketStart, bucketStart+7d) so consecutive buckets never
+            // double-count an entry on the boundary. The most-recent bucket's
+            // label end is capped at "now" so the range reads e.g.
+            // "27.4–3.5" rather than running into tomorrow's date.
             const weeklyTrend = Array.from({ length: 3 }, (_, i) => {
               const weekStart = new Date(currentWeekStart);
               weekStart.setDate(weekStart.getDate() - i * 7);
@@ -3730,16 +3731,16 @@ const SettingsScreen = () => {
             const lastWeekSessions = weeklyTrend[weeklyTrend.length - 2]?.sessions ?? 0;
             const sessionsDelta = thisWeekSessions - lastWeekSessions;
 
-            // Date-range label for the *current* (Sun-anchored) week, reused by
-            // any sub-card that wants to clarify which days "this week" covers.
-            // Same same-day collapse as the header label so a Sunday visit
-            // reads "3.5" rather than "3–3.5".
+            // Date-range label for the rolling 7-day window, reused by any
+            // sub-card that wants to clarify which 7 days the stats cover.
+            // Always spans 7 calendar days so the label is always a real
+            // range — the same-day collapse from 5.35.5 (when the window
+            // could degenerate to a single day on a Sunday) is no longer
+            // needed.
             const currentWeekRangeLabel = (() => {
               const s = currentWeekStart;
               const e = now;
               const sameMonth = s.getMonth() === e.getMonth();
-              const sameDay = sameMonth && s.getDate() === e.getDate();
-              if (sameDay) return `${e.getDate()}.${e.getMonth() + 1}`;
               return sameMonth
                 ? `${s.getDate()}–${e.getDate()}.${e.getMonth() + 1}`
                 : `${s.getDate()}.${s.getMonth() + 1}–${e.getDate()}.${e.getMonth() + 1}`;
@@ -3812,19 +3813,22 @@ const SettingsScreen = () => {
                   ))}
                 </div>
 
-                {/* "This week" coverage caption — clarifies which dates every
-                    weekly stat below (and the heatmap) is computed over. */}
+                {/* Rolling 7-day coverage caption — clarifies which dates
+                    every "weekly" stat below (and the heatmap) is computed
+                    over. The "(נע)" / "(rolling)" hint signals to readers
+                    that this isn't a Sun→Sat calendar week — it follows
+                    them as days pass, always covering the latest 7 days. */}
                 <div style={{
                   fontSize: '0.55rem', color: 'var(--text-muted)',
                   marginBottom: '0.5rem', marginTop: '-0.25rem',
                   display: 'flex', alignItems: 'center', gap: '0.3rem',
                 }}>
-                  <span>📆 {language === 'he' ? 'השבוע' : 'This week'}:</span>
+                  <span>📆 {language === 'he' ? '7 ימים אחרונים' : 'Last 7 days'}:</span>
                   <span style={{ fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
                     {currentWeekRangeLabel}
                   </span>
                   <span style={{ opacity: 0.7 }}>
-                    ({language === 'he' ? 'מיום ראשון' : 'since Sun'})
+                    ({language === 'he' ? 'נע' : 'rolling'})
                   </span>
                 </div>
 
@@ -3931,7 +3935,7 @@ const SettingsScreen = () => {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', gap: '0.4rem' }}>
                         <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'baseline', gap: '0.35rem', flexWrap: 'wrap' }}>
-                          🎯 {language === 'he' ? 'אימון השבוע' : 'Training This Week'}
+                          🎯 {language === 'he' ? 'אימון ב-7 ימים אחרונים' : 'Training (last 7d)'}
                           <span style={{ fontSize: '0.55rem', fontWeight: 500, color: 'var(--text-muted)', opacity: 0.8, fontVariantNumeric: 'tabular-nums', direction: 'ltr', unicodeBidi: 'isolate' }}>
                             {currentWeekRangeLabel}
                           </span>
