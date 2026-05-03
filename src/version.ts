@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.34.1';
+export const APP_VERSION = '5.34.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,20 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.34.2',
+    date: '2026-05-03',
+    changes: [
+      '🚨 Fix completed-game wipe on group sync. Sunday morning, Saturday\'s game appeared in History as "0 שחקנים • 0 קניות" — the `games` row was intact but every `game_players` row had been deleted from Supabase, breaking the WhatsApp pay-link (`/game-summary/<id>?pay=1`) for everyone in the chat. Recovered the lost data from the `backups` table (auto game-end backup taken at Sun 02:11 IL contained the full 8-player roster + chip counts + profits), but the recovery was wiped a second time within minutes by the same code path — proof that the bug was active in production and stomping any restored rows.',
+      '🐛 Root cause: `pushToSupabase` (`src/database/supabaseCache.ts`) treated the **local in-memory cache as authoritative for deletes** in three sync paths. After upserting the local rows, each path also ran `SELECT id FROM <table> WHERE <scope>` and then `DELETE` of any server id NOT in local — i.e. *"if I don\'t have it, it must be garbage."* For `players` and `games` the scope was the whole group; for `game_players` the scope was every game with at least one local row. The shared_expenses / game_forecasts / paid_settlements / period_markers child tables had the same pattern keyed on `IN (allLocalGameIds)` — and `game_forecasts` / `paid_settlements` did the even more destructive *delete-all-then-bulk-insert*.',
+      '🐛 Why local was incomplete: (a) `fetchByGameIds` did `.select(*).in(column, batch)` with NO `.range()`, so PostgREST silently capped the response at 1000 rows — once a group reached ~1000 game_players rows in a single id-batch, the cache loaded a truncated subset; (b) per-batch errors were logged as warnings but returned [], so any transient RLS / network blip produced a partial cache; (c) other devices in the group could be mid-init, on a stale bundle, or replaying a `pagehide` flush queued from an earlier session, all of which drove the same delete-back into the server.',
+      '🩹 Fix: replaced "local is authoritative" with **"server is authoritative, local only writes what it changed"**. The PLAYERS, GAMES, and GAME_PLAYERS sync flushes are now upsert-only — they never delete. Real deletes happen on the user-action paths and emit explicit `supabase.from(table).delete().eq("id", id)` calls (`deletePlayer`, `deleteGame`, `removeGamePlayer`, `removeSharedExpense` — see `src/database/storage.ts`). The schema cascades on `games.id → game_players / shared_expenses / game_forecasts / paid_settlements / period_markers / comics / tts_pools`, so `deleteGame` still removes the whole footprint atomically with one DB call.',
+      '🩹 Child-table reconciliation (forecasts, paid_settlements, expenses, period_markers — these don\'t have UNIQUE(game_id, ...) constraints we can upsert against, so they need explicit replace) is now scoped to **only games the user actually touched in this flush**, gated on `gameLocalWriteAt`. A stale tab merely re-upserting the games array (e.g. after a realtime echo) finds an empty marker set and is a pure no-op for child tables — it can no longer mass-replace another game\'s forecasts. To make this safe end-to-end, every single-game mutator now sets the marker: `createGame`, `updateGameChipGap`, `addSharedExpense`, `removeSharedExpense`, `updateSharedExpense`, `linkForecastToGame` (the existing markers on `updateGameStatus` / `updateGame` / AI summary / comic save / forecast accuracy / forecast comment are unchanged).',
+      '🩹 `fetchByGameIds` now paginates each id-batch via `.range(from, from+1000-1)`, mirroring `fetchAllRows`. Combined with the upsert-only flushes, a >1000-row child query can\'t silently truncate AND can\'t cause data loss even if it did.',
+      '🛡 New SQL migration `043-block-bulk-deletes.sql` installs a server-side guardrail so the same bug can\'t corrupt the database again — and so the deploy of v5.34.2 doesn\'t leave a 5-minute window where stale clients can still cause damage. A statement-level `BEFORE DELETE` trigger on `game_players`, `games`, and `players` rejects any direct DELETE statement that affects more than one row (e.g. the old client\'s `DELETE WHERE id IN (...)` garbage-collection pattern). Single-row direct deletes (`DELETE WHERE id = $1`) — which is all the v5.34.2 client uses — pass through untouched, and FK CASCADE deletes (e.g. `deleteGame` cascading to `game_players`) are detected via `pg_trigger_depth() > 1` and allowed. Net effect: the moment this migration is applied, every still-running v5.34.1-and-older client in the group has its destructive sync path blocked at the database, so no one needs to be asked to "close and reopen the app" for the rollout to be safe — the existing 5-minute `/api/version` poll in `src/main.tsx` will eventually self-reload them onto v5.34.2.',
+      '✅ Net result: a stale, partial, or pre-init cache is now a benign read-only situation for that device — it shows fewer rows locally until the next refresh, but it can never corrupt the server. Verified: the affected game\'s 8-player roster restored from the auto game-end backup, WhatsApp pay-link works again. Files: `src/database/supabaseCache.ts` (sync flushes + `fetchByGameIds`), `src/database/storage.ts` (explicit deletes + marker calls), `supabase/043-block-bulk-deletes.sql` (DB-level bulk-delete guard), `src/version.ts`.',
+    ],
+  },
   {
     version: '5.34.1',
     date: '2026-05-02',

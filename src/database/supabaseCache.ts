@@ -398,25 +398,60 @@ async function pushToSupabase(key: string) {
 
   switch (key) {
     case STORAGE_KEYS.PLAYERS: {
+      // Upsert-only sync — never garbage-collect server rows from the local
+      // list. Local cache is allowed to be incomplete (partial fetch / stale
+      // tab / pre-init device / a 1000-row PostgREST clamp on a child query),
+      // and using "anything on the server I don't recognise is garbage"
+      // semantics turns every such window into a destructive cascade for
+      // everyone in the group. Explicit deletes ride directly on the user
+      // action that asked for the delete (`deletePlayer`) — see storage.ts.
       const players = (state.data.get(key) as Player[]) || [];
       const rows = players.map(p => playerToRow(p, gid));
-      if (rows.length > 0) {
-        const { error } = await supabase.from('players').upsert(rows, { onConflict: 'id' });
-        if (error) { logSyncError('players', 'upsert', error); break; }
-      }
-      const { data: existing, error: selErr } = await supabase.from('players').select('id').eq('group_id', gid);
-      if (selErr) { logSyncError('players', 'select', selErr); break; }
-      const currentIds = new Set(players.map(p => p.id));
-      const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
-      if (toDelete.length > 0) {
-        const { error: delErr } = await supabase.from('players').delete().in('id', toDelete);
-        if (delErr) logSyncError('players', 'delete', delErr);
-      }
+      if (rows.length === 0) break;
+      const { error } = await supabase.from('players').upsert(rows, { onConflict: 'id' });
+      if (error) logSyncError('players', 'upsert', error);
       break;
     }
     case STORAGE_KEYS.GAMES: {
+      // Upsert-only sync, scoped to games the user has actually touched.
+      //
+      // Previously this path was `LOCAL is the source of truth`: we'd upsert
+      // the local list AND delete every server row whose id wasn't in local
+      // (cascade-deleting game_players / shared_expenses / forecasts /
+      // paid_settlements / period_markers / comics / tts_pools). For child
+      // tables we'd `DELETE FROM forecasts WHERE game_id IN (allGameIds)`
+      // then bulk-insert from local. Both patterns assume local is complete
+      // and authoritative. Neither holds in a multi-device app:
+      //   - `fetchByGameIds` doesn't paginate, so a single >1000-row
+      //     response gets silently truncated (PostgREST default cap),
+      //   - per-batch `select(*).in(column, batch)` errors return [] (a
+      //     warning, not a failure), so a transient RLS / network blip
+      //     produces a partial cache,
+      //   - other devices can be mid-init, on stale bundles, in offline
+      //     queues, or replaying a pagehide flush from a previous session.
+      // Any of those produced "I have fewer rows than the server, therefore
+      // delete the rest" — corrupting completed games for everyone.
+      //
+      // The contract now is: this flush only persists what's been written
+      // locally (upsert). Real deletes happen on the user-action paths
+      // (`deleteGame` / `removeSharedExpense`) via direct `supabase.delete`
+      // calls — see storage.ts. Child tables are reconciled per-touched-
+      // game so re-saving Game A never wipes Game B's forecasts.
       const games = (state.data.get(key) as Game[]) || [];
       const rows = games.map(g => gameToRow(g, gid));
+
+      // Capture which games were actually mutated locally BEFORE the
+      // upsert clears their markers. This is the scope for child-table
+      // reconciliation below: we only touch a game's children if the
+      // user (on this device) genuinely wrote to that game during the
+      // current debounce window. A stale tab merely re-upserting an
+      // unchanged games array (e.g. echoed from a realtime refresh)
+      // will not have any markers, so it stays a pure no-op for child
+      // tables.
+      const locallyTouchedGameIds = new Set(
+        games.map(g => g.id).filter(id => gameLocalWriteAt.has(id)),
+      );
+
       if (rows.length > 0) {
         const { error } = await supabase.from('games').upsert(rows, { onConflict: 'id' });
         if (error) {
@@ -437,48 +472,40 @@ async function pushToSupabase(key: string) {
         for (const g of games) clearLocalWriteMarker(g.id);
       }
 
-      // Collect all child rows across all games for batch operations
-      const allGameIds = games.map(g => g.id);
-      const allExpRows: Record<string, unknown>[] = [];
-      const allExpIds = new Set<string>();
-      const allFcRows: Record<string, unknown>[] = [];
-      const allPsRows: Record<string, unknown>[] = [];
-      const allPmRows: Record<string, unknown>[] = [];
-      const gamesWithMarkers = new Set<string>();
+      // Child-table reconciliation runs ONLY on games whose marker was
+      // present when this flush started. For everything else we trust
+      // the server (any realtime refresh will pick up the latest).
+      const touchedGameIds = games.map(g => g.id).filter(id => locallyTouchedGameIds.has(id));
+      const expRowsByGame = new Map<string, Record<string, unknown>[]>();
+      const expIdsByGame = new Map<string, Set<string>>();
+      const fcRowsByGame = new Map<string, Record<string, unknown>[]>();
+      const psRowsByGame = new Map<string, Record<string, unknown>[]>();
+      const pmRowsByGame = new Map<string, Record<string, unknown>>();
 
       for (const game of games) {
-        if (game.sharedExpenses && game.sharedExpenses.length > 0) {
-          for (const e of game.sharedExpenses) {
-            allExpIds.add(e.id);
-            allExpRows.push({
-              id: e.id, game_id: game.id, description: e.description,
-              paid_by: e.paidBy, paid_by_name: e.paidByName, amount: e.amount,
-              participants: e.participants, participant_names: e.participantNames,
-              created_at: e.createdAt,
-            });
-          }
-        }
-        if (game.forecasts && game.forecasts.length > 0) {
-          for (const f of game.forecasts) {
-            allFcRows.push({
-              game_id: game.id, player_name: f.playerName,
-              expected_profit: f.expectedProfit, highlight: f.highlight || null,
-              sentence: f.sentence || null, is_surprise: f.isSurprise || false,
-            });
-          }
-        }
-        if (game.paidSettlements && game.paidSettlements.length > 0) {
-          for (const ps of game.paidSettlements) {
-            allPsRows.push({
-              game_id: game.id, from_player: ps.from, to_player: ps.to,
-              paid_at: ps.paidAt, amount: ps.amount ?? null,
-              auto_closed: ps.autoClosed ?? false,
-            });
-          }
-        }
+        const exps = (game.sharedExpenses || []).map(e => ({
+          id: e.id, game_id: game.id, description: e.description,
+          paid_by: e.paidBy, paid_by_name: e.paidByName, amount: e.amount,
+          participants: e.participants, participant_names: e.participantNames,
+          created_at: e.createdAt,
+        }));
+        expRowsByGame.set(game.id, exps);
+        expIdsByGame.set(game.id, new Set(exps.map(r => r.id as string)));
+
+        fcRowsByGame.set(game.id, (game.forecasts || []).map(f => ({
+          game_id: game.id, player_name: f.playerName,
+          expected_profit: f.expectedProfit, highlight: f.highlight || null,
+          sentence: f.sentence || null, is_surprise: f.isSurprise || false,
+        })));
+
+        psRowsByGame.set(game.id, (game.paidSettlements || []).map(ps => ({
+          game_id: game.id, from_player: ps.from, to_player: ps.to,
+          paid_at: ps.paidAt, amount: ps.amount ?? null,
+          auto_closed: ps.autoClosed ?? false,
+        })));
+
         if (game.periodMarkers) {
-          gamesWithMarkers.add(game.id);
-          allPmRows.push({
+          pmRowsByGame.set(game.id, {
             game_id: game.id,
             is_first_game_of_month: game.periodMarkers.isFirstGameOfMonth,
             is_last_game_of_month: game.periodMarkers.isLastGameOfMonth,
@@ -493,97 +520,109 @@ async function pushToSupabase(key: string) {
         }
       }
 
-      // Batch sync all child tables in parallel
+      // Batch sync child tables in parallel, scoped per-game so a write to
+      // game A can never touch game B's children.
       const UPSERT_BATCH = 200;
-      await Promise.all([
-        // Shared expenses: upsert all + delete orphans
-        (async () => {
-          if (allExpRows.length > 0) {
-            for (let i = 0; i < allExpRows.length; i += UPSERT_BATCH) {
-              const { error: ue } = await supabase.from('shared_expenses').upsert(allExpRows.slice(i, i + UPSERT_BATCH), { onConflict: 'id' });
-              if (ue) logSyncError('shared_expenses', 'upsert', ue);
-            }
-          }
-          if (allGameIds.length > 0) {
-            const { data: existingExps } = await supabase.from('shared_expenses').select('id').in('game_id', allGameIds);
-            const orphanIds = (existingExps || []).filter(r => !allExpIds.has(r.id)).map(r => r.id);
-            if (orphanIds.length > 0) {
-              const { error: de } = await supabase.from('shared_expenses').delete().in('id', orphanIds);
-              if (de) logSyncError('shared_expenses', 'delete', de);
-            }
-          }
-        })(),
-        // Forecasts: delete all for group games, then bulk insert
-        (async () => {
-          if (allGameIds.length > 0) {
-            const { error: de } = await supabase.from('game_forecasts').delete().in('game_id', allGameIds);
-            if (de) logSyncError('game_forecasts', 'delete', de);
-          }
-          if (allFcRows.length > 0) {
-            for (let i = 0; i < allFcRows.length; i += UPSERT_BATCH) {
-              const { error: ie } = await supabase.from('game_forecasts').insert(allFcRows.slice(i, i + UPSERT_BATCH));
-              if (ie) logSyncError('game_forecasts', 'insert', ie);
-            }
-          }
-        })(),
-        // Paid settlements: delete all for group games, then bulk insert
-        (async () => {
-          if (allGameIds.length > 0) {
-            const { error: de } = await supabase.from('paid_settlements').delete().in('game_id', allGameIds);
-            if (de) logSyncError('paid_settlements', 'delete', de);
-          }
-          if (allPsRows.length > 0) {
-            for (let i = 0; i < allPsRows.length; i += UPSERT_BATCH) {
-              const { error: ie } = await supabase.from('paid_settlements').insert(allPsRows.slice(i, i + UPSERT_BATCH));
-              if (ie) logSyncError('paid_settlements', 'insert', ie);
-            }
-          }
-        })(),
-        // Period markers: upsert all with markers, delete orphans without
-        (async () => {
-          if (allPmRows.length > 0) {
-            for (let i = 0; i < allPmRows.length; i += UPSERT_BATCH) {
-              const { error: ue } = await supabase.from('period_markers').upsert(allPmRows.slice(i, i + UPSERT_BATCH), { onConflict: 'game_id' });
-              if (ue) logSyncError('period_markers', 'upsert', ue);
-            }
-          }
-          const noMarkerIds = allGameIds.filter(id => !gamesWithMarkers.has(id));
-          if (noMarkerIds.length > 0) {
-            const { error: de } = await supabase.from('period_markers').delete().in('game_id', noMarkerIds);
-            if (de) logSyncError('period_markers', 'delete', de);
-          }
-        })(),
-      ]);
 
-      // Delete removed games
-      const { data: existing, error: selErr } = await supabase.from('games').select('id').eq('group_id', gid);
-      if (selErr) { logSyncError('games', 'select', selErr); break; }
-      const currentIds = new Set(games.map(g => g.id));
-      const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
-      if (toDelete.length > 0) {
-        const { error: delErr } = await supabase.from('games').delete().in('id', toDelete);
-        if (delErr) logSyncError('games', 'delete', delErr);
-      }
+      // Per-game shared_expenses reconciliation: upsert local + delete
+      // server orphans for THAT game only (a removed expense lands here).
+      const reconcileExpensesForGame = async (gameId: string): Promise<void> => {
+        const localRows = expRowsByGame.get(gameId) || [];
+        const localIds = expIdsByGame.get(gameId) || new Set<string>();
+        if (localRows.length > 0) {
+          for (let i = 0; i < localRows.length; i += UPSERT_BATCH) {
+            const { error: ue } = await supabase.from('shared_expenses')
+              .upsert(localRows.slice(i, i + UPSERT_BATCH), { onConflict: 'id' });
+            if (ue) logSyncError('shared_expenses', 'upsert', ue);
+          }
+        }
+        const { data: existingExps, error: selErr } = await supabase
+          .from('shared_expenses').select('id').eq('game_id', gameId);
+        if (selErr) { logSyncError('shared_expenses', 'select', selErr); return; }
+        const orphanIds = (existingExps || []).filter(r => !localIds.has(r.id as string)).map(r => r.id);
+        if (orphanIds.length > 0) {
+          const { error: de } = await supabase.from('shared_expenses').delete().in('id', orphanIds);
+          if (de) logSyncError('shared_expenses', 'delete', de);
+        }
+      };
+
+      // Per-game forecasts: no UNIQUE on (game_id, player_name), so we
+      // replace this game's forecasts wholesale. Scoped to one game_id —
+      // a stale tab can no longer wipe forecasts for unrelated games.
+      const reconcileForecastsForGame = async (gameId: string): Promise<void> => {
+        const localRows = fcRowsByGame.get(gameId) || [];
+        const { error: de } = await supabase.from('game_forecasts').delete().eq('game_id', gameId);
+        if (de) { logSyncError('game_forecasts', 'delete', de); return; }
+        if (localRows.length > 0) {
+          for (let i = 0; i < localRows.length; i += UPSERT_BATCH) {
+            const { error: ie } = await supabase.from('game_forecasts')
+              .insert(localRows.slice(i, i + UPSERT_BATCH));
+            if (ie) logSyncError('game_forecasts', 'insert', ie);
+          }
+        }
+      };
+
+      // Per-game paid_settlements: same shape as forecasts.
+      const reconcileSettlementsForGame = async (gameId: string): Promise<void> => {
+        const localRows = psRowsByGame.get(gameId) || [];
+        const { error: de } = await supabase.from('paid_settlements').delete().eq('game_id', gameId);
+        if (de) { logSyncError('paid_settlements', 'delete', de); return; }
+        if (localRows.length > 0) {
+          for (let i = 0; i < localRows.length; i += UPSERT_BATCH) {
+            const { error: ie } = await supabase.from('paid_settlements')
+              .insert(localRows.slice(i, i + UPSERT_BATCH));
+            if (ie) logSyncError('paid_settlements', 'insert', ie);
+          }
+        }
+      };
+
+      // Per-game period_markers: 0-or-1 row per game, UNIQUE(game_id).
+      const reconcilePeriodMarkersForGame = async (gameId: string): Promise<void> => {
+        const row = pmRowsByGame.get(gameId);
+        if (row) {
+          const { error: ue } = await supabase.from('period_markers')
+            .upsert(row, { onConflict: 'game_id' });
+          if (ue) logSyncError('period_markers', 'upsert', ue);
+        } else {
+          const { error: de } = await supabase.from('period_markers').delete().eq('game_id', gameId);
+          if (de) logSyncError('period_markers', 'delete', de);
+        }
+      };
+
+      // Run per-game reconciliations in parallel across games + child types.
+      // Cap concurrency loosely via Promise.all over the games array — for
+      // typical groups (≤ a few hundred games) this is well under the
+      // PostgREST connection budget.
+      await Promise.all(touchedGameIds.flatMap(gameId => [
+        reconcileExpensesForGame(gameId),
+        reconcileForecastsForGame(gameId),
+        reconcileSettlementsForGame(gameId),
+        reconcilePeriodMarkersForGame(gameId),
+      ]));
+
+      // No "delete games not in local" tail anymore — that path was the
+      // primary cause of full-game wipes (cascade FK deleted game_players
+      // and friends for the cascade-completed games). `deleteGame` in
+      // storage.ts now issues an explicit `supabase.from('games').delete()`
+      // call, so a real user deletion still propagates correctly.
       break;
     }
     case STORAGE_KEYS.GAME_PLAYERS: {
+      // Upsert-only sync. The previous "delete every server row whose id
+      // isn't in local" path was the proximate cause of completed-game
+      // rosters disappearing on Sunday mornings (any group member opening
+      // the app with a stale or partial cache for one game would, on the
+      // next setItem(GAME_PLAYERS, ...), shop the server roster for that
+      // game down to whatever subset they happened to be holding).
+      // Real deletes happen on `removeGamePlayer` in storage.ts via an
+      // explicit `supabase.from('game_players').delete().eq('id', id)`.
+      // Cascade deletes (whole-game removal) are covered by the FK from
+      // game_players.game_id → games(id) ON DELETE CASCADE.
       const gps = (state.data.get(key) as GamePlayer[]) || [];
       const rows = gps.map(gamePlayerToRow);
-      if (rows.length > 0) {
-        const { error } = await supabase.from('game_players').upsert(rows, { onConflict: 'id' });
-        if (error) { logSyncError('game_players', 'upsert', error); break; }
-      }
-      const gameIds = [...new Set(gps.map(gp => gp.gameId))];
-      if (gameIds.length > 0) {
-        const { data: existing, error: selErr } = await supabase.from('game_players').select('id').in('game_id', gameIds);
-        if (selErr) { logSyncError('game_players', 'select', selErr); break; }
-        const currentIds = new Set(gps.map(gp => gp.id));
-        const toDelete = (existing || []).filter(r => !currentIds.has(r.id)).map(r => r.id);
-        if (toDelete.length > 0) {
-          const { error: delErr } = await supabase.from('game_players').delete().in('id', toDelete);
-          if (delErr) logSyncError('game_players', 'delete', delErr);
-        }
-      }
+      if (rows.length === 0) break;
+      const { error } = await supabase.from('game_players').upsert(rows, { onConflict: 'id' });
+      if (error) logSyncError('game_players', 'upsert', error);
       break;
     }
     case STORAGE_KEYS.CHIP_VALUES: {
@@ -731,21 +770,42 @@ async function loadGamePolls(groupId: string): Promise<GamePoll[]> {
 
 // Fetch child rows by game_id in batches — avoids RLS subquery performance issues
 // and the 1000-row global limit for tables without a group_id column.
+//
+// Each batch is paginated with `.range(from, from+PAGE-1)` because PostgREST
+// returns at most 1000 rows per request (default cap, not configurable from
+// the client). Without this, a sufficiently popular group (≈100 games × ≈10
+// players/game = 1000 rows in a single batch) would silently truncate the
+// returned set — and the caller would then treat the truncated subset as
+// authoritative. Combined with the old "delete server rows not in local"
+// flush logic this caused completed-game rosters to vanish without warning.
 async function fetchByGameIds(
   table: string,
   gameIds: string[],
   column = 'game_id',
 ): Promise<Record<string, unknown>[]> {
   if (gameIds.length === 0) return [];
-  const BATCH = 100;
-  const batches: string[][] = [];
-  for (let i = 0; i < gameIds.length; i += BATCH) {
-    batches.push(gameIds.slice(i, i + BATCH));
+  const ID_BATCH = 100;
+  const PAGE = 1000;
+  const idBatches: string[][] = [];
+  for (let i = 0; i < gameIds.length; i += ID_BATCH) {
+    idBatches.push(gameIds.slice(i, i + ID_BATCH));
   }
-  const results = await Promise.all(batches.map(async (batch, idx) => {
-    const { data, error } = await supabase.from(table).select('*').in(column, batch);
-    if (error) console.warn(`${table} batch ${idx}:`, error.message);
-    return (data || []) as Record<string, unknown>[];
+  const results = await Promise.all(idBatches.map(async (batch, idx) => {
+    const collected: Record<string, unknown>[] = [];
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supabase.from(table).select('*')
+        .in(column, batch).range(from, from + PAGE - 1);
+      if (error) {
+        console.warn(`${table} batch ${idx} page @${from}:`, error.message);
+        break;
+      }
+      if (!data || data.length === 0) break;
+      collected.push(...(data as Record<string, unknown>[]));
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return collected;
   }));
   return results.flat();
 }

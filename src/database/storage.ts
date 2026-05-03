@@ -146,6 +146,14 @@ export const playerHasGames = (playerId: string): boolean => {
 };
 
 export const deletePlayer = (id: string): void => {
+  // Server-side delete is explicit. The PLAYERS sync flush is upsert-only
+  // (see supabaseCache.ts case STORAGE_KEYS.PLAYERS) — without this direct
+  // call a deleted player would linger on Supabase forever.
+  // Cascade FKs on game_players.player_id / player_traits.player_id handle
+  // the dependent rows.
+  supabase.from('players').delete().eq('id', id).then(({ error }) => {
+    if (error) console.warn('deletePlayer failed:', error.message);
+  });
   const players = getAllPlayers().filter(p => p.id !== id);
   setItem(STORAGE_KEYS.PLAYERS, players);
 };
@@ -209,6 +217,11 @@ export const createGame = (playerIds: string[], location?: string, forecasts?: {
   });
   
   games.push(newGame);
+  // Mark the brand-new game as locally written so the GAMES sync will
+  // reconcile its forecasts/markers/etc. on the next flush. Without this
+  // marker the new "only sync children for locally-touched games" guard
+  // in supabaseCache.ts would skip child reconciliation for the new row.
+  markGameLocallyWritten(newGame.id);
   setItem(STORAGE_KEYS.GAMES, games);
   setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
   
@@ -241,6 +254,7 @@ export const updateGameChipGap = (gameId: string, chipGap: number, chipGapPerPla
   if (gameIndex !== -1) {
     games[gameIndex].chipGap = chipGap;
     games[gameIndex].chipGapPerPlayer = chipGapPerPlayer;
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -263,6 +277,7 @@ export const addSharedExpense = (gameId: string, expense: SharedExpense): void =
     const game = games[gameIndex];
     game.sharedExpenses = game.sharedExpenses || [];
     game.sharedExpenses.push(expense);
+    markGameLocallyWritten(gameId);
     setItem(STORAGE_KEYS.GAMES, games);
   }
 };
@@ -275,6 +290,7 @@ export const removeSharedExpense = (gameId: string, expenseId: string): void => 
     const game = games[gameIndex];
     if (game.sharedExpenses) {
       game.sharedExpenses = game.sharedExpenses.filter(e => e.id !== expenseId);
+      markGameLocallyWritten(gameId);
       setItem(STORAGE_KEYS.GAMES, games);
     }
   }
@@ -290,6 +306,7 @@ export const updateSharedExpense = (gameId: string, expense: SharedExpense): voi
       const expenseIndex = game.sharedExpenses.findIndex(e => e.id === expense.id);
       if (expenseIndex !== -1) {
         game.sharedExpenses[expenseIndex] = expense;
+        markGameLocallyWritten(gameId);
         setItem(STORAGE_KEYS.GAMES, games);
       }
     }
@@ -307,6 +324,18 @@ export const deleteGame = (id: string): void => {
   if (target?.comicUrl) {
     deleteComicAsset(target.id).catch(() => { /* best-effort cleanup */ });
   }
+
+  // Explicit server-side delete. The GAMES sync flush is now upsert-only
+  // (see supabaseCache.ts case STORAGE_KEYS.GAMES) — relying on the old
+  // "anything not in local must be garbage" flush behaviour was the
+  // primary cause of completed-game wipes when a stale tab/device hit
+  // the sync. The schema's `ON DELETE CASCADE` from games(id) covers
+  // game_players, shared_expenses, game_forecasts, paid_settlements,
+  // period_markers, comics and tts_pools, so a single explicit delete
+  // here removes the whole game's footprint atomically.
+  supabase.from('games').delete().eq('id', id).then(({ error }) => {
+    if (error) console.warn('deleteGame failed:', error.message);
+  });
 
   const games = all.filter(g => g.id !== id);
   const gamePlayers = getItem<GamePlayer[]>(STORAGE_KEYS.GAME_PLAYERS, []).filter(gp => gp.gameId !== id);
@@ -358,6 +387,11 @@ export const removeGamePlayer = (gamePlayerId: string): boolean => {
     // Only allow removal if player hasn't bought in yet (rebuys = 1 means initial buyin only)
     const player = gamePlayers[index];
     if (player.rebuys <= 1) {
+      // Explicit server-side delete — the GAME_PLAYERS sync flush is
+      // upsert-only (see supabaseCache.ts case STORAGE_KEYS.GAME_PLAYERS).
+      supabase.from('game_players').delete().eq('id', gamePlayerId).then(({ error }) => {
+        if (error) console.warn('removeGamePlayer failed:', error.message);
+      });
       gamePlayers.splice(index, 1);
       setItem(STORAGE_KEYS.GAME_PLAYERS, gamePlayers);
       return true;
@@ -674,6 +708,7 @@ export const linkForecastToGame = (gameId: string): void => {
       if (pending.preGameTeaser) {
         games[gameIndex].preGameTeaser = pending.preGameTeaser;
       }
+      markGameLocallyWritten(gameId);
       setItem(STORAGE_KEYS.GAMES, games);
     }
   }
