@@ -466,11 +466,26 @@ const GameSummaryScreen = () => {
       setSkippedTransfers(small);
     }
 
-    // Auto-close: mark all unsettled as paid after 48 hours
+    // Auto-close: mark all unsettled as paid after 48 hours.
+    //
+    // Guard: if the game already has *any* auto-closed entry, treat the
+    // historical settlement record as frozen and never persist new entries.
+    // Without this, a future change to the settlement algorithm could
+    // produce different (from, to) pairs than the ones previously stored,
+    // and this block would re-run the auto-close path against the *new*
+    // pairs — silently appending them to an already-closed game and
+    // polluting the historical record. The settlement algorithm output
+    // for already-closed games is informational only.
     const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
     const gameAge = Date.now() - new Date(game.date || game.createdAt).getTime();
     const loadedPaid = game.paidSettlements || [];
-    if (gameAge > FORTY_EIGHT_HOURS && computedSettlements.length > 0 && game.status === 'completed') {
+    const alreadyAutoClosed = loadedPaid.some(p => p.autoClosed);
+    if (
+      gameAge > FORTY_EIGHT_HOURS &&
+      computedSettlements.length > 0 &&
+      game.status === 'completed' &&
+      !alreadyAutoClosed
+    ) {
       const isPaid = (from: string, to: string) => loadedPaid.some(p => p.from === from && p.to === to);
       const unsettled = computedSettlements.filter(s => !isPaid(s.from, s.to));
       if (unsettled.length > 0) {

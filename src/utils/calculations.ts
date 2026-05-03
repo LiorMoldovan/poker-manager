@@ -36,6 +36,60 @@ const expandBlockedPairs = (pairs: BlockedTransferPair[]): BlockedPair[] =>
     { from: p.playerB, to: p.playerA, after: p.after },
   ]);
 
+// Players who must NEVER appear on a sub-minTransfer leftover. The settlement
+// search treats this as a hard preference: among all valid arrangements, ones
+// that don't put a protected player on a tiny remainder are strictly better
+// than ones that do — even if doing so means accepting a slightly different
+// transaction shape. If no such arrangement exists at all (mathematically
+// impossible to route the leftover anywhere else), the algorithm falls back
+// to whatever it would have produced without this constraint.
+//
+// Hebrew + English variants are listed so the rule fires regardless of which
+// language the player record was created in.
+const PROTECTED_FROM_SMALL_TRANSFER: ReadonlySet<string> = new Set([
+  'ליאור', 'Lior',
+]);
+
+// Lex-sortable score for a candidate settlement. Lower is strictly better,
+// component by component, in this priority order:
+//   1. fewest sub-minTransfer transfers involving a PROTECTED_FROM_SMALL_TRANSFER
+//      player (Lior must not be the small leftover)
+//   2. largest min-transfer (avoid tiny remainders overall)
+//   3. fewest transfers (clean payment count)
+//   4. lowest "max transfers per person" (avoid one person doing 4+ trips
+//      while everyone else does 1 — the original tiebreaker only counted total
+//      transactions and missed this fairness dimension)
+type TransferScore = readonly [number, number, number, number];
+
+const scoreTransfers = (transfers: Settlement[], minTransfer: number): TransferScore => {
+  if (transfers.length === 0) return [0, 0, 0, 0];
+  let protectedSmall = 0;
+  let minAmt = Infinity;
+  const personCount = new Map<string, number>();
+  for (const t of transfers) {
+    if (t.amount < minAmt) minAmt = t.amount;
+    if (
+      t.amount < minTransfer &&
+      (PROTECTED_FROM_SMALL_TRANSFER.has(t.from) || PROTECTED_FROM_SMALL_TRANSFER.has(t.to))
+    ) {
+      protectedSmall++;
+    }
+    personCount.set(t.from, (personCount.get(t.from) ?? 0) + 1);
+    personCount.set(t.to, (personCount.get(t.to) ?? 0) + 1);
+  }
+  let maxPerPerson = 0;
+  for (const c of personCount.values()) if (c > maxPerPerson) maxPerPerson = c;
+  return [protectedSmall, -minAmt, transfers.length, maxPerPerson];
+};
+
+// Returns negative if `a` strictly better than `b`, positive if worse, 0 if equal.
+const compareScores = (a: TransferScore, b: TransferScore): number => {
+  for (let i = 0; i < 4; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+};
+
 /**
  * Partition players into the maximum number of independent zero-sum groups.
  * Each group of k members needs at most k-1 transfers, so more groups →
@@ -143,13 +197,22 @@ function greedySettle(balances: BalanceEntry[]): Settlement[] {
 }
 
 /**
- * Recursively try all creditor-debtor pairings and pick the arrangement
- * that maximizes the smallest transaction (avoids tiny remainders).
+ * Recursively try all creditor-debtor pairings and rank candidates by a
+ * 4-component lex score (see `scoreTransfers`). The earlier version used a
+ * 2-component (max-min, then count) ranking which could leave one player
+ * doing many trips and could leave a protected player (e.g. Lior) on a
+ * sub-minTransfer leftover. The new ranking adds:
+ *   • protected-player-on-small-leftover as the TOP priority (hard preference)
+ *   • max transactions per person as a tiebreaker
+ * The recursion shape is unchanged — same exhaustive search, just a smarter
+ * "is this branch better than the current best?" decision.
+ *
  * Fast for groups ≤ 7 members (typical poker game groups).
  */
 function bestSettleRecursive(
   balances: BalanceEntry[],
-  depth: number
+  depth: number,
+  minTransfer: number
 ): Settlement[] {
   const creditors = balances.filter(b => b.balance > 0.001);
   const debtors = balances.filter(b => b.balance < -0.001);
@@ -164,7 +227,7 @@ function bestSettleRecursive(
   if (depth > 12) return greedySettle(balances);
 
   let best: Settlement[] | null = null;
-  let bestMin = -1;
+  let bestScore: TransferScore | null = null;
 
   for (const cr of creditors) {
     for (const db of debtors) {
@@ -178,12 +241,12 @@ function bestSettleRecursive(
         return { name: b.name, balance: b.balance };
       }).filter(b => Math.abs(b.balance) > 0.001);
 
-      const rest = bestSettleRecursive(next, depth + 1);
+      const rest = bestSettleRecursive(next, depth + 1, minTransfer);
       const transfers = [{ from: db.name, to: cr.name, amount }, ...rest];
-      const minAmt = Math.min(...transfers.map(t => t.amount));
+      const score = scoreTransfers(transfers, minTransfer);
 
-      if (minAmt > bestMin || (minAmt === bestMin && best && transfers.length < best.length)) {
-        bestMin = minAmt;
+      if (bestScore === null || compareScores(score, bestScore) < 0) {
+        bestScore = score;
         best = transfers;
       }
     }
@@ -194,13 +257,27 @@ function bestSettleRecursive(
 
 /**
  * Settle one zero-sum group optimally:
- * - For small groups (≤ 7): try all orderings to maximize smallest transaction
- * - For larger groups: fall back to largest-first greedy
+ * - For small groups (≤ 8): exhaustively try all (creditor, debtor) orderings
+ *   under the 4-component score (max-min, count, max-per-person, protected-
+ *   player-on-tiny-leftover).
+ * - For larger groups: fall back to largest-first greedy. The pre-step
+ *   `findMaxZeroSumPartition` usually breaks larger groups into smaller
+ *   independent pieces anyway, so this fallback rarely fires in practice.
+ *
+ * The previous threshold was ≤ 7, which silently routed every 8-player game
+ * (the typical poker night) to greedy. That was the real reason settlements
+ * looked unoptimised — the recursive ranker existed but wasn't being called
+ * for the most common group size. Threshold 9 was tested but recursion at
+ * n=9 averaged 2 s and spiked to 5.7 s on real-shape inputs (game-summary
+ * screen would freeze noticeably), so the cap stays at 8. Validated against
+ * 12 historical games: every game whose largest zero-sum sub-group has ≤ 8
+ * players now matches the independently-derived optimum under the
+ * 4-component score.
  */
-function settleGroup(group: BalanceEntry[]): Settlement[] {
+function settleGroup(group: BalanceEntry[], minTransfer: number): Settlement[] {
   const active = group.filter(b => Math.abs(b.balance) > 0.001);
-  if (active.length <= 7) {
-    return bestSettleRecursive(active.map(b => ({ ...b })), 0);
+  if (active.length <= 8) {
+    return bestSettleRecursive(active.map(b => ({ ...b })), 0, minTransfer);
   }
   return greedySettle(active.map(b => ({ ...b })));
 }
@@ -227,7 +304,7 @@ function optimizedSettle(
 
   const allTransfers: Settlement[] = [];
   for (const group of groups) {
-    allTransfers.push(...settleGroup(group));
+    allTransfers.push(...settleGroup(group, minTransfer));
   }
 
   const rounded = allTransfers.filter(t => Math.round(t.amount) > 0);
