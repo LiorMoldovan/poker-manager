@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.1';
+export const APP_VERSION = '5.35.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.2',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Realtime DELETE events now actually reach connected clients. Latent project-wide bug, surfaced by yesterday\'s 046-merge-duplicate-player-sefi migration: the user kept seeing the deleted `ספי טורס` row in Settings → Players for hours after the DB was clean. Root cause is a Supabase Realtime + RLS + REPLICA IDENTITY interaction: Supabase Realtime evaluates a table\'s SELECT policy against the OLD row payload before forwarding a `postgres_changes` event to a client. With `REPLICA IDENTITY DEFAULT` (the Postgres default — and what every one of our 23 realtime-subscribed tables had been using since `003-realtime.sql` first enabled Realtime), the OLD row payload contains ONLY the primary key — every other column is NULL. Our group-scoped RLS predicate is `group_id IN (SELECT group_id FROM group_members WHERE user_id = auth.uid())`, which against `group_id = NULL` evaluates to NULL, treated as false, so the DELETE event is silently dropped. The client\'s in-memory cache never learns the row was deleted; the deleted row stays visible until something else triggers a re-fetch (any UPDATE on the same table, a logout, a manual refresh).',
+      '🛡 New SQL `048-realtime-replica-full.sql` does two things: (1) sets `REPLICA IDENTITY FULL` on every realtime-subscribed table — `players`, `games`, `game_players`, `shared_expenses`, `game_forecasts`, `paid_settlements`, `period_markers`, `settings`, `chip_values`, `pending_forecasts`, `chronicle_profiles`, `graph_insights`, `tts_pools`, `group_members`, `groups`, `notifications`, `player_traits`, `training_answers`, `training_pool`, `training_insights`, `game_polls`, `game_poll_dates`, `game_poll_votes` (23 in total). With FULL, the entire OLD row is shipped in the WAL DELETE record, so RLS evaluates against the real `group_id` and the event reaches every authorised client. (2) Issues a no-op `UPDATE players SET name = name WHERE id = ec7b80…` so the user\'s already-open Settings tab gets a fresh realtime UPDATE event that triggers `scheduleRealtimeRefresh(\'players\')` and clears the stale ספי טורס entry from the cache without any user action. Trade-offs: tiny WAL volume bump per UPDATE/DELETE (sends old row + new instead of new + PK) — negligible at this app\'s data volume; no security implications (the OLD row is gated by the same SELECT policy that already governs reads); no perf implications (row matching for replication still uses the PK index). Verified live via MCP: all 23 tables now `replica_identity = full`, zero `default` left.',
+      '🛡 `useRealtimeRefresh` hook now also re-fetches on `document.visibilitychange` (when state becomes `visible`) and `window.focus`, debounced 500ms so the back-to-back fire on tab-restore is collapsed into one callback. Closes a separate gap that bit the GroupManagementTab member list after 048 ran — a screen mounted before a backgrounded period would miss every realtime event that arrived while the tab was suspended (Supabase Realtime has no "redeliver missed events on reconnect" semantic), and would keep rendering stale data forever. Now every tab-resume idempotently forces one re-fetch through the same channel as ordinary realtime updates, so the UI converges on the truth even after long backgrounded periods. The hook holds the latest callback in a ref so the listeners never re-bind on every render — clean, no-thrash. File: `src/hooks/useRealtimeRefresh.ts`.',
+    ],
+  },
   {
     version: '5.35.1',
     date: '2026-05-03',
