@@ -3663,16 +3663,15 @@ const SettingsScreen = () => {
             }
             const maxHeat = Math.max(1, ...heatmap.flat());
             const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
-            // slotNames[i] correspond to indices 0/1/2/3 = 0-6 / 6-12 / 12-18 /
-            // 18-24 respectively. Renamed slot 0 from "לילה" to "אחרי חצות"
-            // (literally "after midnight"): "לילה" colloquially in Hebrew
-            // refers to late evening (~22:00-04:00), not 0-6 AM, so calling
-            // the 0-6 slot "לילה" was misleading — readers saw an entry on
-            // Sunday's night column and assumed it meant "tonight, hasn't
-            // happened yet" when actually it was data from this morning's
-            // small hours. "אחרי חצות" is unambiguously "after midnight"
-            // (today's first 6 hours) which is exactly what the slot covers.
-            const slotNames = ['אחרי חצות', 'בוקר', 'צהריים', 'ערב'];
+            // slotNames[i] correspond to indices 0/1/2/3 = 0-6 / 6-12 / 12-18
+            // / 18-24 respectively. Slot 0 is "לילה" (per user preference);
+            // the previous "Sun night already happened?" confusion is now
+            // resolved by (a) the chronological column order below — slot 0
+            // sits at the start-of-day end of the row, not the end-of-day
+            // end — and (b) the live `todaySlotIdx` border that visibly
+            // marks "you are here" so readers can tell which cells are
+            // past, present, and future without parsing the label.
+            const slotNames = ['לילה', 'בוקר', 'צהריים', 'ערב'];
             const slotHours = ['0–6', '6–12', '12–18', '18–24'];
             // Display columns chronologically: 0-6 → 6-12 → 12-18 → 18-24.
             // Old order [1, 2, 3, 0] put the 0-6 column at the visual end
@@ -3686,6 +3685,15 @@ const SettingsScreen = () => {
             // left as the day progresses, with empty cells at the
             // not-yet-happened end.
             const slotDisplayOrder = [0, 1, 2, 3];
+            // "You are here" marker: which (day-of-week, slot) cell the
+            // user's clock is currently sitting inside. Used by the cell
+            // renderer to draw a high-contrast border on the live cell so
+            // readers can immediately tell "this is now; cells before it
+            // chronologically are past, cells after are not-yet-happened".
+            // Mirrors the same hour-bucketing used when populating the
+            // heatmap so the marker can never disagree with the data.
+            const _hourNow = now.getHours();
+            const todaySlotIdx = _hourNow < 6 ? 0 : _hourNow < 12 ? 1 : _hourNow < 18 ? 2 : 3;
             const todayDayIdx = now.getDay();
 
             const userStats = Array.from(userMap.entries()).map(([groupKey, entries]) => {
@@ -4193,16 +4201,29 @@ const SettingsScreen = () => {
                             const count = heatmap[di][si];
                             const intensity = count / maxHeat;
                             const showHighContrast = intensity > 0.55;
+                            // "You are here" marker — a thicker, brighter
+                            // outline on the single cell representing
+                            // today + the current 6-hour slot. Wins over
+                            // the row-level `isToday` outline below via
+                            // CSS specificity (set on the same `outline`
+                            // property).
+                            const isLiveCell = isToday && si === todaySlotIdx;
+                            const cellOutline = isLiveCell
+                              ? '2px solid rgba(99,102,241,0.95)'
+                              : isToday
+                                ? '1px solid rgba(99,102,241,0.35)'
+                                : 'none';
                             return (
                               <div
                                 key={`${di}-${si}`}
-                                title={`${dayNames[di]} ${slotNames[si]}: ${count} sessions`}
+                                title={`${dayNames[di]} ${slotNames[si]}: ${count} sessions${isLiveCell ? ' (now)' : ''}`}
                                 style={{
                                   height: '18px', borderRadius: '3px',
                                   background: count === 0
                                     ? 'var(--background)'
                                     : `rgba(99, 102, 241, ${0.15 + intensity * 0.7})`,
-                                  outline: isToday ? '1px solid rgba(99,102,241,0.35)' : 'none',
+                                  outline: cellOutline,
+                                  outlineOffset: isLiveCell ? '1px' : 0,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   fontSize: '0.55rem', fontWeight: 600, lineHeight: 1,
                                   fontVariantNumeric: 'tabular-nums',

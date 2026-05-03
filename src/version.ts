@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.7';
+export const APP_VERSION = '5.35.8';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,14 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.8',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Activity tab heatmap: reverted slot-0 label "אחרי חצות" back to "לילה" per user preference, and added a high-contrast "you are here" border around the cell representing the current (day-of-week, 6-hour slot) tuple. The chronological column reorder from 5.35.7 plus this live-cell marker make the past/present/future split immediately readable without depending on the label\'s wording: cells to the chronological right of the marker (in RTL) are this morning\'s already-elapsed slots, the bordered cell itself is the current slot, and cells to the left are slots that haven\'t happened yet today. Removes the original "Sun night didn\'t happen yet" confusion at the visual level — the user can now literally see which cells are past and which are future without parsing the Hebrew label.',
+      '🛠 Implementation. Added `todaySlotIdx` next to `todayDayIdx` (mirrors the same `hour < 6/12/18` bucketing used when populating `heatmap[][]` so the marker can never disagree with the data). In the cell renderer, added `isLiveCell = isToday && si === todaySlotIdx` and gave it a thicker, brighter outline (`2px solid rgba(99,102,241,0.95)` with a 1px outlineOffset for breathing room) than the existing row-level `isToday` outline. Wins over the row outline via specificity on the same `outline` property — no z-index gymnastics. Tooltip on the live cell appends "(now)" so hover discovery confirms the meaning. File: `src/screens/SettingsScreen.tsx`.',
+    ],
+  },
   {
     version: '5.35.7',
     date: '2026-05-03',
