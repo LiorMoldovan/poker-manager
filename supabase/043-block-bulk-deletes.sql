@@ -57,6 +57,14 @@
 -- For tables where the new client only ever deletes ONE row at a time
 -- (game_players, players, games). FK CASCADE deletes go through at
 -- depth > 1 and are allowed.
+--
+-- Implemented as an AFTER DELETE statement-level trigger because Postgres
+-- only allows `REFERENCING OLD TABLE` on AFTER triggers (BEFORE triggers
+-- raise `42P17: transition table name can only be specified for an AFTER
+-- trigger`). Semantics for our purpose are identical: a `RAISE EXCEPTION`
+-- inside an AFTER statement-level trigger aborts the entire statement, so
+-- the DELETE is rolled back atomically — no row ever leaves the table on
+-- a blocked call.
 CREATE OR REPLACE FUNCTION block_bulk_direct_delete()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -93,21 +101,21 @@ END $$;
 
 DROP TRIGGER IF EXISTS guard_no_bulk_delete ON game_players;
 CREATE TRIGGER guard_no_bulk_delete
-  BEFORE DELETE ON game_players
+  AFTER DELETE ON game_players
   REFERENCING OLD TABLE AS old_table
   FOR EACH STATEMENT
   EXECUTE FUNCTION block_bulk_direct_delete();
 
 DROP TRIGGER IF EXISTS guard_no_bulk_delete ON games;
 CREATE TRIGGER guard_no_bulk_delete
-  BEFORE DELETE ON games
+  AFTER DELETE ON games
   REFERENCING OLD TABLE AS old_table
   FOR EACH STATEMENT
   EXECUTE FUNCTION block_bulk_direct_delete();
 
 DROP TRIGGER IF EXISTS guard_no_bulk_delete ON players;
 CREATE TRIGGER guard_no_bulk_delete
-  BEFORE DELETE ON players
+  AFTER DELETE ON players
   REFERENCING OLD TABLE AS old_table
   FOR EACH STATEMENT
   EXECUTE FUNCTION block_bulk_direct_delete();
