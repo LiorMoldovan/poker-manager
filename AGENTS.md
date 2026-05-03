@@ -19,6 +19,40 @@ A Hebrew-language web app for managing friendly poker nights among ~8-10 regular
 | Styling | Inline React styles + CSS variables (dark theme) |
 | Font | Outfit (Google Fonts) |
 
+## Supabase MCP — Use It Before Writing SQL
+
+**You have direct read access to the live Supabase DB via an MCP server.** It is configured in `.cursor/mcp.json` (which is gitignored — contains a Supabase Personal Access Token). The server is registered with Cursor under the name **`supabase`** (or possibly `project-0-Poker Game-supabase` for legacy account-level installs). Use whichever name is in your available MCP tools list — they both expose the same tools and project (`ursjltxklmxmapfvkttj`).
+
+The server runs in **`--read-only`** mode, so you can freely run any `SELECT` / introspection without risk. Connected user is `supabase_read_only_user`.
+
+### Always inspect the live DB before:
+- Writing a new `supabase/0XX-*.sql` migration (check current schema, defaults, RLS, existing functions/triggers — don't infer from old SQL files)
+- Diagnosing a bug that involves data shape, missing rows, RLS issues, or query results
+- Asking the user "can you run this SELECT and paste the result?" — DON'T. Run it yourself.
+
+### Available tools
+| Tool | Use for |
+|------|---------|
+| `list_tables` | Inspect current schema (set `verbose: true` for columns + FKs + PKs + RLS) |
+| `execute_sql` | Any read query (`SELECT`, `EXPLAIN`). Use for RLS (`pg_policies`), functions (`pg_get_functiondef`), triggers (`pg_trigger`), sample rows |
+| `list_migrations` | What's applied to the live DB |
+| `get_logs` | Postgres / API / Auth / Realtime / Edge Function logs |
+| `get_advisors` | Security + performance advisors (RLS gaps, missing indexes) |
+| `list_branches`, `list_edge_functions`, `generate_typescript_types`, `search_docs` | Other introspection |
+| `apply_migration` | **DO NOT CALL.** Migrations go through the numbered SQL file workflow (user applies them; preserves audit trail per `supabase-migration` rule) |
+
+### Required workflow for any DB-touching task
+1. **Inspect** the live state with `list_tables` / `execute_sql`.
+2. **Author** the migration as `supabase/0XX-name.sql`.
+3. User applies it.
+4. **Verify** with `execute_sql` (new columns exist, defaults set, policies active, sample rows correct).
+
+### Anti-pattern (real past failure — do NOT repeat)
+Reading `supabase/*.sql` and `schema.sql` to infer the live state, then asking the user "can you run this SELECT?" The MCP answers instantly. Asking the user to be a query relay wastes their time and erodes trust.
+
+### If the MCP is unavailable
+If neither `supabase` nor `project-0-Poker Game-supabase` appears in your tools, tell the user: "the Supabase MCP is not registered in this session — please check `.cursor/mcp.json` exists with a valid `SUPABASE_ACCESS_TOKEN` and reload Cursor (`Ctrl+Shift+P → Developer: Reload Window`)." Do not silently fall back to "ask the user to run queries."
+
 ## Critical Rules
 
 ### 1. Never Commit Without Permission

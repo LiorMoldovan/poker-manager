@@ -28,3 +28,6 @@ npm-debug.log*
 
 # Dev scripts (may contain tokens)
 scripts/
+
+# Cursor MCP config (contains Supabase PAT)
+.cursor/mcp.json

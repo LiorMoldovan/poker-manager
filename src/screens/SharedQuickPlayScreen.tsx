@@ -305,7 +305,13 @@ const SharedQuickPlayScreen = () => {
       ? currentMilestone * 100
       : null;
 
-    directWriteSession(name, session, crossedMilestone || undefined);
+    // Fire-and-forget — but surface any rejection so it doesn't disappear silently.
+    // On Supabase failure, directWriteSession internally buffers the session to
+    // localStorage; the next time the user opens SharedTrainingScreen, flushPendingUploads
+    // will retry. Errors here are unexpected (e.g. localStorage quota); log loudly.
+    directWriteSession(name, session, crossedMilestone || undefined).catch(err => {
+      console.error('[training] directWriteSession unexpected failure:', err, { playerName: name });
+    });
 
     if (finalReports.length > 0) {
       (async () => {

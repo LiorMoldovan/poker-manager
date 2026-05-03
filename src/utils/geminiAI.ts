@@ -5,7 +5,7 @@
 
 import { generateMilestones as generateMilestonesEngine } from './milestones';
 import { formatHebrewHalf } from './calculations';
-import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits } from '../types';
+import { Game, PeriodMarkers, PlayerStats, LiveGameTTSPool, TTSPlayerMessages, TTSMessage, TTSRivalry, PlayerTraits, TTSPlaceholder, TTSAnticipatedCategory } from '../types';
 import { getTraitsForPlayer } from './playerTraits';
 import { getAllPlayerTraits } from '../database/storage';
 import { getRebuyRecords, isPlayerFemale, getAllPlayers, getAllGames, getAllGamePlayers, getSettings } from '../database/storage';
@@ -3488,6 +3488,12 @@ ${comboText ? `═══ היסטוריית הרכב ═══\n${comboText}\n` 
 ${rivalryPairs.length > 0 ? `\n═══ קשרים ═══\n${rivalryPairs.map(r => `${r.p1} ↔ ${r.p2}: ${r.desc}`).join('\n')}\n` : ''}
 ═══ הנחיות ═══
 
+‼️ קריטי — מספר הקניות הנוכחי ב-{COUNT} בלבד:
+כשהמשפט מתייחס למספר הקניות של השחקן בערב הזה — חובה מוחלטת להשתמש ב-{COUNT}. אסור לכתוב ספרה או מילה בעברית במקום ה-{COUNT}. זה הכי חשוב — משפטים שיכתבו ספרה/מילה כמספר קניות נוכחי, יידחו אוטומטית מהמערכת ולא יישמעו.
+דוגמאות אסורות (יידחו): "כבר חמש קניות", "עוד שלוש קניות", "עם ארבע קניות", "קונה שש קניות הערב", "ארבע קניות וזה לא נגמר".
+דוגמאות נכונות: "כבר {COUNT} קניות", "עוד {COUNT} קניות", "עם {COUNT} קניות הערב".
+היחיד שמותר לכתוב מספר בעברית ליד "קניות" הוא כשמתייחסים לעבר/ממוצע/שיא: "ממוצע של שלוש קניות למשחק", "השיא שלו חמש קניות", "פעם קנה שמונה קניות", "במשחק הקודם ארבע קניות". זה מותר רק כשהמשפט כולל אחת מהמילים: ממוצע, שיא, בעבר, פעם, היסטור, בדרך כלל, תמיד, למשחק, הקודם, אף פעם.
+
 כל "text" הוא 5-20 מילים, עברית דיבורית טבעית, מצחיק, חד וקולע.
 המשפטים מיועדים להקראה ב-TTS (טקסט לדיבור) ולכן חשוב:
 - משפטים קצרים ופשוטים — לא משפטים מורכבים עם פסוקיות מרובות
@@ -3611,18 +3617,106 @@ ${rivalryPairs.length > 0 ? `\n═══ קשרים ═══\n${rivalryPairs.ma
   }
 };
 
-function ensureMessageArray(raw: unknown): TTSMessage[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((m): m is TTSMessage =>
-    m && typeof m === 'object' && typeof (m as TTSMessage).text === 'string' && (m as TTSMessage).text.length > 0
-  );
+// Hebrew number words 1..10, both feminine and masculine forms.
+// Used to detect literal counts written next to "קני..." (קניות / קנייה).
+const HEBREW_LIVE_COUNT_WORDS = [
+  '\u05D0\u05D7\u05EA',                     // אחת
+  '\u05E9\u05EA\u05D9',                     // שתי
+  '\u05E9\u05EA\u05D9\u05D9\u05DD',         // שתיים
+  '\u05E9\u05DC\u05D5\u05E9',               // שלוש
+  '\u05E9\u05DC\u05D5\u05E9\u05D4',         // שלושה
+  '\u05D0\u05E8\u05D1\u05E2',               // ארבע
+  '\u05D0\u05E8\u05D1\u05E2\u05D4',         // ארבעה
+  '\u05D7\u05DE\u05E9',                     // חמש
+  '\u05D7\u05DE\u05D9\u05E9\u05D4',         // חמישה
+  '\u05E9\u05E9',                           // שש
+  '\u05E9\u05D9\u05E9\u05D4',               // שישה
+  '\u05E9\u05D1\u05E2',                     // שבע
+  '\u05E9\u05D1\u05E2\u05D4',               // שבעה
+  '\u05E9\u05DE\u05D5\u05E0\u05D4',         // שמונה
+  '\u05EA\u05E9\u05E2',                     // תשע
+  '\u05EA\u05E9\u05E2\u05D4',               // תשעה
+  '\u05E2\u05E9\u05E8',                     // עשר
+  '\u05E2\u05E9\u05E8\u05D4',               // עשרה
+];
+
+// Matches "<hebrew number> קני..." anywhere in the text.
+// The leading boundary is start-of-string OR a non-Hebrew char (whitespace, comma, period, etc.)
+// to avoid partial-word matches like "מאוחר" matching "אחת".
+const NUMBER_NEAR_KNI_RE = new RegExp(
+  `(?:^|[^\\u0590-\\u05FF])(?:${HEBREW_LIVE_COUNT_WORDS.join('|')})\\s+\\u05E7\\u05E0\\u05D9`,
+  'u',
+);
+
+// If any of these qualifiers appear in the text, the number near "קני..." is
+// understood as a historical/average/record reference rather than the live count
+// (e.g. "ממוצע של שלוש קניות למשחק", "השיא שלו חמש קניות"). These sentences are valid
+// and must NOT be rejected.
+const HEBREW_HISTORY_QUALIFIERS = [
+  '\u05DE\u05DE\u05D5\u05E6\u05E2',                                 // ממוצע
+  '\u05E9\u05D9\u05D0',                                             // שיא
+  '\u05D1\u05E2\u05D1\u05E8',                                       // בעבר
+  '\u05E4\u05E2\u05DD',                                             // פעם
+  '\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8',                           // היסטור (prefix)
+  '\u05D1\u05D3\u05E8\u05DA \u05DB\u05DC\u05DC',                     // בדרך כלל
+  '\u05EA\u05DE\u05D9\u05D3',                                       // תמיד
+  '\u05DC\u05DE\u05E9\u05D7\u05E7',                                 // למשחק (avg-per-game)
+  '\u05D4\u05E7\u05D5\u05D3\u05DD',                                 // הקודם (last game)
+  '\u05D0\u05E3 \u05E4\u05E2\u05DD',                                // אף פעם
+];
+
+// True if the sentence has a hardcoded live count: a Hebrew number word
+// adjacent to "קני..." with NO {COUNT} placeholder and NO history qualifier
+// to justify the literal number.
+function hasLiteralLiveCount(text: string): boolean {
+  if (text.includes('{COUNT}')) return false;
+  if (!NUMBER_NEAR_KNI_RE.test(text)) return false;
+  if (HEBREW_HISTORY_QUALIFIERS.some(q => text.includes(q))) return false;
+  return true;
 }
 
-function ensureMessageRecord(raw: unknown): Record<string, TTSMessage[]> {
+function detectPlaceholdersFromText(text: string): TTSPlaceholder[] {
+  const out: TTSPlaceholder[] = [];
+  if (text.includes('{PLAYER}')) out.push('{PLAYER}');
+  if (text.includes('{COUNT}')) out.push('{COUNT}');
+  if (text.includes('{POT}')) out.push('{POT}');
+  if (text.includes('{RECORD}')) out.push('{RECORD}');
+  if (text.includes('{RIVAL}')) out.push('{RIVAL}');
+  if (text.includes('{RANK}')) out.push('{RANK}');
+  return out;
+}
+
+interface TtsValidateOpts {
+  requireCount?: boolean;
+  categoryLabel?: string;
+}
+
+function ensureMessageArray(raw: unknown, opts: TtsValidateOpts = {}): TTSMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TTSMessage[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== 'object') continue;
+    const text = (m as TTSMessage).text;
+    if (typeof text !== 'string' || text.length === 0) continue;
+    if (hasLiteralLiveCount(text)) {
+      console.warn(`TTS reject [${opts.categoryLabel || 'msg'}] hardcoded live count, missing {COUNT}: "${text}"`);
+      continue;
+    }
+    if (opts.requireCount && !text.includes('{COUNT}')) {
+      console.warn(`TTS reject [${opts.categoryLabel || 'msg'}] missing required {COUNT}: "${text}"`);
+      continue;
+    }
+    out.push({ text, placeholders: detectPlaceholdersFromText(text) });
+  }
+  return out;
+}
+
+function ensureMessageRecord(raw: unknown, opts: TtsValidateOpts = {}): Record<string, TTSMessage[]> {
   if (!raw || typeof raw !== 'object') return {};
   const result: Record<string, TTSMessage[]> = {};
   for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
-    const msgs = ensureMessageArray(val);
+    const childLabel = opts.categoryLabel ? `${opts.categoryLabel}.${key}` : key;
+    const msgs = ensureMessageArray(val, { ...opts, categoryLabel: childLabel });
     if (msgs.length > 0) result[key] = msgs;
   }
   return result;
@@ -3637,10 +3731,17 @@ function buildPoolFromParsed(
   const rawPlayers = (parsed.players || {}) as Record<string, Record<string, unknown>>;
   const rawShared = (parsed.shared || {}) as Record<string, unknown>;
 
+  const COUNT_REQUIRED_ANTICIPATED = new Set<TTSAnticipatedCategory>([
+    'above_avg',
+    'record_tied',
+    'record_broken',
+    'tied_for_lead',
+  ]);
+
   const poolPlayers: Record<string, TTSPlayerMessages> = {};
   for (const p of players) {
     const raw = rawPlayers[p.name] || {};
-    const generic = ensureMessageArray(raw.generic);
+    const generic = ensureMessageArray(raw.generic, { categoryLabel: `players.${p.name}.generic` });
     const anticipated = raw.anticipated as Record<string, unknown> | undefined;
 
     const playerEntry: TTSPlayerMessages = {
@@ -3649,9 +3750,12 @@ function buildPoolFromParsed(
 
     if (anticipated && typeof anticipated === 'object') {
       const antMap: TTSPlayerMessages['anticipated'] = {};
-      const categories = ['above_avg', 'record_tied', 'record_broken', 'is_leader', 'rival_matched', 'tied_for_lead'] as const;
+      const categories: TTSAnticipatedCategory[] = ['above_avg', 'record_tied', 'record_broken', 'is_leader', 'rival_matched', 'tied_for_lead'];
       for (const cat of categories) {
-        const msgs = ensureMessageArray(anticipated[cat]);
+        const msgs = ensureMessageArray(anticipated[cat], {
+          requireCount: COUNT_REQUIRED_ANTICIPATED.has(cat),
+          categoryLabel: `players.${p.name}.anticipated.${cat}`,
+        });
         if (msgs.length > 0) antMap[cat] = msgs;
       }
       if (Object.keys(antMap).length > 0) playerEntry.anticipated = antMap;
@@ -3680,15 +3784,15 @@ function buildPoolFromParsed(
     generatedAt: new Date().toISOString(),
     players: poolPlayers,
     shared: {
-      first_blood: ensureMessageRecord(rawShared.first_blood),
-      bad_beat: ensureMessageRecord(rawShared.bad_beat),
-      bad_beat_generic: ensureMessageArray(rawShared.bad_beat_generic),
-      big_hand: ensureMessageRecord(rawShared.big_hand),
-      big_hand_generic: ensureMessageArray(rawShared.big_hand_generic),
-      break_time: ensureMessageArray(rawShared.break_time),
-      auto_announce: ensureMessageArray(rawShared.auto_announce),
-      awards_generosity: ensureMessageRecord(rawShared.awards_generosity),
-      awards_survival: ensureMessageRecord(rawShared.awards_survival),
+      first_blood: ensureMessageRecord(rawShared.first_blood, { categoryLabel: 'shared.first_blood' }),
+      bad_beat: ensureMessageRecord(rawShared.bad_beat, { categoryLabel: 'shared.bad_beat' }),
+      bad_beat_generic: ensureMessageArray(rawShared.bad_beat_generic, { categoryLabel: 'shared.bad_beat_generic' }),
+      big_hand: ensureMessageRecord(rawShared.big_hand, { categoryLabel: 'shared.big_hand' }),
+      big_hand_generic: ensureMessageArray(rawShared.big_hand_generic, { categoryLabel: 'shared.big_hand_generic' }),
+      break_time: ensureMessageArray(rawShared.break_time, { categoryLabel: 'shared.break_time' }),
+      auto_announce: ensureMessageArray(rawShared.auto_announce, { categoryLabel: 'shared.auto_announce' }),
+      awards_generosity: ensureMessageRecord(rawShared.awards_generosity, { requireCount: true, categoryLabel: 'shared.awards_generosity' }),
+      awards_survival: ensureMessageRecord(rawShared.awards_survival, { categoryLabel: 'shared.awards_survival' }),
     },
     rivalries,
     usedIndices: {},

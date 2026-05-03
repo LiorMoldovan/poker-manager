@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from '../i18n';
+import { useTranslation, translateChipColor } from '../i18n';
 import { shareToWhatsApp } from '../utils/sharing';
 import {
   getAllPlayers, addPlayer, getSettings, saveSettings, getChipValues,
@@ -549,7 +549,7 @@ export default function GroupWizard({ ownerPlayerName, groupName, onComplete, on
                       background: cv.displayColor, border: cv.displayColor === '#FFFFFF' ? '1px solid #888' : 'none',
                     }} />
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', flex: 1, minWidth: 0 }}>
-                      {cv.color}
+                      {translateChipColor(cv.color, t)}
                     </span>
                     <NumericInput
                       value={cv.value}

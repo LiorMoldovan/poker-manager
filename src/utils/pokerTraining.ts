@@ -2023,14 +2023,15 @@ export const flushPendingUploads = async (keepalive = false): Promise<void> => {
   const ok = await writeTrainingAnswersWithRetry((data: TrainingAnswersFile) => {
     data = normalizeTrainingPlayers(data);
 
-    for (const { playerName, session, pendingMilestone, bufferedAt } of pending) {
+    for (const { playerName, session, pendingMilestone } of pending) {
       const correctedName = LEGACY_NAME_CORRECTIONS[playerName] || playerName;
       let player = data.players.find(p => p.playerName === correctedName);
       if (!player) {
-        const ageMs = bufferedAt ? Date.now() - bufferedAt : Infinity;
-        if (ageMs > 30 * 60 * 1000) {
-          continue;
-        }
+        // Always create the player record on flush. The previous "drop after 30 min"
+        // safety check was a silent data-loss path: a player whose first-ever session
+        // failed to upload directly (network blip, tab backgrounded) and didn't open
+        // the app for 30+ min would have their entire training history wiped on the
+        // next flush. Upserts are idempotent — recreating a row is the right behavior.
         player = { playerName: correctedName, sessions: [], totalQuestions: 0, totalCorrect: 0, accuracy: 0 };
         data.players.push(player);
       }

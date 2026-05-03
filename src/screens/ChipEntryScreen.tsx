@@ -18,7 +18,7 @@ import { calculateChipTotal, calculateProfitLoss, cleanNumber } from '../utils/c
 import { usePermissions } from '../App';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
-import { useTranslation } from '../i18n';
+import { useTranslation, translateChipColor } from '../i18n';
 
 // Numpad Modal Component with auto-advance
 interface NumpadModalProps {
@@ -108,7 +108,7 @@ const NumpadModal = ({
                 border: chipDisplayColor === '#FFFFFF' || chipDisplayColor === '#EAB308' ? '2px solid #888' : 'none'
               }} 
             />
-            <h3 className="modal-title">{chipColor}{t('chips.chipsSuffix')}</h3>
+            <h3 className="modal-title">{translateChipColor(chipColor, t)}{t('chips.chipsSuffix')}</h3>
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
@@ -151,7 +151,8 @@ const NumpadModal = ({
           display: 'grid', 
           gridTemplateColumns: 'repeat(3, 1fr)', 
           gap: '0.5rem',
-          marginBottom: '1rem'
+          marginBottom: '1rem',
+          direction: 'ltr'
         }}>
           {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map(key => (
             <button
@@ -200,7 +201,7 @@ const NumpadModal = ({
                   }} 
                 />
               )}
-              {nextChipColor}
+              {nextChipColor ? translateChipColor(nextChipColor, t) : ''}
             </>
           )}
         </button>

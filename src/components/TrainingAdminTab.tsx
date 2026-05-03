@@ -860,6 +860,114 @@ const TrainingAdminTab = () => {
     return clone;
   };
 
+  // Recompute aggregate scores from a player's current results.
+  // Mirrors the scoring rules used elsewhere: nearMiss + neutralized excluded from totals.
+  const recomputePlayerTotals = (player: TrainingPlayerData) => {
+    const nonNeutral = player.sessions.flatMap(s => s.results).filter(r => !r.neutralized && !r.nearMiss);
+    player.totalQuestions = nonNeutral.length;
+    player.totalCorrect = nonNeutral.filter(r => r.correct).length;
+    player.accuracy = player.totalQuestions > 0
+      ? Math.round((player.totalCorrect / player.totalQuestions) * 100)
+      : 0;
+    player.sessions.forEach(s => {
+      s.correctAnswers = s.results.filter(r => r.correct && !r.nearMiss && !r.neutralized).length;
+    });
+  };
+
+  // Re-grade past answers against fixed scenarios (corrected answer keys) and
+  // recompute every affected player's totals. Also clears matching flag reports
+  // (since accepting a fix implicitly resolves the reports). If a player's
+  // chosenId no longer exists in the fixed scenario, the answer is neutralized
+  // (it can't be fairly graded against a different option set).
+  const regradeAnswersForFixedScenarios = (
+    data: TrainingAnswersFile,
+    fixedScenarios: PoolScenario[],
+  ): TrainingAnswersFile => {
+    const clone = JSON.parse(JSON.stringify(data)) as TrainingAnswersFile;
+    const byPoolId = new Map<string, PoolScenario>();
+    fixedScenarios.forEach(s => byPoolId.set(s.poolId, s));
+    const fixedIds = new Set(byPoolId.keys());
+
+    clone.players.forEach(player => {
+      let touched = false;
+      player.sessions.forEach(session => {
+        session.results.forEach(r => {
+          if (!fixedIds.has(r.poolId)) return;
+          if (r.neutralized) return;
+          const scenario = byPoolId.get(r.poolId)!;
+          const opt = scenario.options.find(o => o.id === r.chosenId);
+          if (!opt) {
+            r.neutralized = true;
+            touched = true;
+            return;
+          }
+          const newCorrect = !!opt.isCorrect;
+          const newNearMiss = !newCorrect && !!opt.nearMiss;
+          if (r.correct !== newCorrect || (!!r.nearMiss) !== newNearMiss) {
+            r.correct = newCorrect;
+            r.nearMiss = newNearMiss ? true : undefined;
+            touched = true;
+          }
+        });
+        if (session.flaggedPoolIds) {
+          const filtered = session.flaggedPoolIds.filter(id => !fixedIds.has(id));
+          if (filtered.length !== session.flaggedPoolIds.length) {
+            session.flaggedPoolIds = filtered;
+            touched = true;
+          }
+        }
+        if (session.flagReports) {
+          const filtered = session.flagReports.filter(r => !fixedIds.has(r.poolId));
+          if (filtered.length !== session.flagReports.length) {
+            session.flagReports = filtered;
+            touched = true;
+          }
+        }
+      });
+      if (touched) recomputePlayerTotals(player);
+    });
+    clone.lastUpdated = new Date().toISOString();
+    return clone;
+  };
+
+  // Mark answers as neutralized for removed pool ids and clear their flag reports.
+  // Used by the bulk pool review when scenarios are dropped from the pool.
+  const neutralizeAnswersForRemovedPoolIds = (
+    data: TrainingAnswersFile,
+    removedPoolIds: string[],
+  ): TrainingAnswersFile => {
+    const clone = JSON.parse(JSON.stringify(data)) as TrainingAnswersFile;
+    const removeSet = new Set(removedPoolIds);
+    clone.players.forEach(player => {
+      let touched = false;
+      player.sessions.forEach(session => {
+        session.results.forEach(r => {
+          if (removeSet.has(r.poolId) && !r.neutralized) {
+            r.neutralized = true;
+            touched = true;
+          }
+        });
+        if (session.flaggedPoolIds) {
+          const filtered = session.flaggedPoolIds.filter(id => !removeSet.has(id));
+          if (filtered.length !== session.flaggedPoolIds.length) {
+            session.flaggedPoolIds = filtered;
+            touched = true;
+          }
+        }
+        if (session.flagReports) {
+          const filtered = session.flagReports.filter(r => !removeSet.has(r.poolId));
+          if (filtered.length !== session.flagReports.length) {
+            session.flagReports = filtered;
+            touched = true;
+          }
+        }
+      });
+      if (touched) recomputePlayerTotals(player);
+    });
+    clone.lastUpdated = new Date().toISOString();
+    return clone;
+  };
+
   const handleDismissFlagged = async (poolId: string) => {
     setDismissingFlagged(poolId);
     setFlagMsg(`דוחה דיווחים...`);
@@ -1341,20 +1449,23 @@ ${historyContext}
       }
 
       setPool(newPool);
-      pushFixLog('שמירה 3/3: מנקה דיווחים בקובץ התשובות...', 'info');
-      const ok = await writeTrainingAnswersWithRetry((data) => clearFlagsLocally(data, poolId));
+      pushFixLog('שמירה 3/3: מתקן ציוני שחקנים לפי המפתח החדש...', 'info');
+      const fixedScenarioForRegrade: PoolScenario = { ...fixed, reviewedAt: new Date().toISOString() };
+      const ok = await writeTrainingAnswersWithRetry((data) =>
+        regradeAnswersForFixedScenarios(data, [fixedScenarioForRegrade])
+      );
       if (!ok) {
         pushFixLog('המאגר הועלה, אך עדכון קובץ התשובות נכשל — נסה רענון ואז "רענן" בלשונית', 'error');
         setShowFixStepDetails(true);
-        setFlagMsg('⚠️ המאגר עודכן; ניקוי דיווחים בקובץ התשובות נכשל — רענן נתונים');
+        setFlagMsg('⚠️ המאגר עודכן; תיקון ציונים נכשל — רענן נתונים');
         setFixPreview(null);
         return;
       }
       if (answers) {
-        setAnswers(clearFlagsLocally(answers, poolId));
+        setAnswers(regradeAnswersForFixedScenarios(answers, [fixedScenarioForRegrade]));
       }
-      pushFixLog('✅ כל השלבים הושלמו — השאלה במאגר והדיווחים אוחדו', 'success');
-      setFlagMsg('✅ השאלה תוקנה — הדיווחים נמחקו');
+      pushFixLog('✅ כל השלבים הושלמו — השאלה תוקנה והציונים עודכנו', 'success');
+      setFlagMsg('✅ השאלה תוקנה — ציוני השחקנים עודכנו לפי המפתח החדש');
       // Notify reporters that their report was accepted and the question was fixed.
       // Use the FIXED scenario for context so the message reflects the corrected question.
       notifyReportersOfResolution({
@@ -1406,6 +1517,10 @@ ${historyContext}
     const scenarios = unreviewedIndices.map(i => updatedScenarios[i]);
     const totalBatches = Math.ceil(scenarios.length / BATCH);
     let fixed = 0, removed = 0, ok = 0, errors = 0;
+    // Track which scenarios were fixed/removed so we can re-grade past training
+    // answers after the new pool is uploaded.
+    const fixedScenariosForRegrade: PoolScenario[] = [];
+    const removedPoolIdsForNeutralize: string[] = [];
 
     for (let b = 0; b < totalBatches; b++) {
       const start = b * BATCH;
@@ -1511,6 +1626,7 @@ JSON בלבד, בלי markdown:`;
 
           if (item.status === 'remove') {
             removed++;
+            removedPoolIdsForNeutralize.push(item.poolId);
             updatedScenarios.splice(idx, 1);
             setReviewLog(prev => [...prev, `🗑 ${item.poolId}: ${item.issues?.join(', ')}`]);
           } else if (item.status === 'fixed' && item.fixedScenario) {
@@ -1533,6 +1649,7 @@ JSON בלבד, בלי markdown:`;
               categoryId: (f.categoryId || orig.categoryId) as string,
               reviewedAt: reviewStamp,
             };
+            fixedScenariosForRegrade.push(updatedScenarios[idx]);
             setReviewLog(prev => [...prev, `✏️ ${item.poolId}: ${item.issues?.join(', ')}`]);
           } else {
             ok++;
@@ -1579,7 +1696,41 @@ JSON בלבד, בלי markdown:`;
       if (uploadResult.success) {
         updatePoolCache(newPool);
         setPool(newPool);
-        setReviewMsg(`✅ סיום: ${ok} תקינות, ${fixed} תוקנו, ${removed} הוסרו, ${errors} שגיאות`);
+
+        // Re-grade historical training answers against the new keys. Without this
+        // step, players who answered fixed questions stay marked wrong (or right)
+        // based on the old answer key. Removed scenarios are neutralized so they
+        // no longer count for/against any player.
+        let regradeFailed = false;
+        if (fixedScenariosForRegrade.length > 0 || removedPoolIdsForNeutralize.length > 0) {
+          const okWrite = await writeTrainingAnswersWithRetry((data) => {
+            let next = data;
+            if (fixedScenariosForRegrade.length > 0) {
+              next = regradeAnswersForFixedScenarios(next, fixedScenariosForRegrade);
+            }
+            if (removedPoolIdsForNeutralize.length > 0) {
+              next = neutralizeAnswersForRemovedPoolIds(next, removedPoolIdsForNeutralize);
+            }
+            return next;
+          });
+          regradeFailed = !okWrite;
+          if (okWrite && answers) {
+            let nextLocal = answers;
+            if (fixedScenariosForRegrade.length > 0) {
+              nextLocal = regradeAnswersForFixedScenarios(nextLocal, fixedScenariosForRegrade);
+            }
+            if (removedPoolIdsForNeutralize.length > 0) {
+              nextLocal = neutralizeAnswersForRemovedPoolIds(nextLocal, removedPoolIdsForNeutralize);
+            }
+            setAnswers(nextLocal);
+          }
+        }
+
+        if (regradeFailed) {
+          setReviewMsg(`⚠️ סיום: ${ok} תקינות, ${fixed} תוקנו, ${removed} הוסרו — תיקון ציונים נכשל, רענן ונסה שוב`);
+        } else {
+          setReviewMsg(`✅ סיום: ${ok} תקינות, ${fixed} תוקנו, ${removed} הוסרו, ${errors} שגיאות`);
+        }
       } else {
         setReviewMsg(`⚠️ ${ok} ok / ${fixed} fixed / ${removed} removed — שגיאת העלאה: ${uploadResult.message}`);
       }

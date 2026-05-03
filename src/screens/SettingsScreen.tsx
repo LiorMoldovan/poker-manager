@@ -49,7 +49,7 @@ import ScheduleTab from '../components/ScheduleTab';
 import { NumericInput } from '../components/NumericInput';
 import GroupSetupScreen from './GroupSetupScreen';
 import type { GroupMember } from '../hooks/useSupabaseAuth';
-import { useTranslation } from '../i18n';
+import { useTranslation, translateChipColor } from '../i18n';
 import { shareToWhatsApp } from '../utils/sharing';
 
 const SettingsScreen = () => {
@@ -1335,7 +1335,7 @@ const SettingsScreen = () => {
                       flexShrink: 0,
                     }}
                   />
-                  <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>{chip.color}</span>
+                  <span style={{ flex: 1, fontWeight: 600, fontSize: '0.85rem' }}>{translateChipColor(chip.color, t)}</span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 500 }}>=</span>
                   <NumericInput
                     className="input"
@@ -1348,7 +1348,7 @@ const SettingsScreen = () => {
                   {canEditChips && (
                     <button
                       className="row-action row-action-danger"
-                      onClick={() => setDeleteChipConfirm({ id: chip.id, name: chip.color })}
+                      onClick={() => setDeleteChipConfirm({ id: chip.id, name: translateChipColor(chip.color, t) })}
                       title={t('settings.chips.deleteTitle')}
                     >
                       🗑️

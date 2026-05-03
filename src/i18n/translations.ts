@@ -372,6 +372,12 @@ const he = {
   'chips.calculateResults': '🧮 חשב תוצאות',
   'chips.numpadDone': '✓ סיום שחקן',
   'chips.numpadNext': 'הבא →',
+  'chips.color.white': 'לבן',
+  'chips.color.red': 'אדום',
+  'chips.color.blue': 'כחול',
+  'chips.color.green': 'ירוק',
+  'chips.color.black': 'שחור',
+  'chips.color.yellow': 'צהוב',
 
   // ── Game Summary ──
   'summary.loading': 'טוען סיכום...',
@@ -1949,6 +1955,12 @@ const en: Record<keyof typeof he, string> = {
   'chips.calculateResults': '🧮 Calculate Results',
   'chips.numpadDone': '✓ Done with Player',
   'chips.numpadNext': 'Next →',
+  'chips.color.white': 'White',
+  'chips.color.red': 'Red',
+  'chips.color.blue': 'Blue',
+  'chips.color.green': 'Green',
+  'chips.color.black': 'Black',
+  'chips.color.yellow': 'Yellow',
 
   // ── Game Summary ──
   'summary.loading': 'Loading summary...',

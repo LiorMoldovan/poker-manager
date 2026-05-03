@@ -6,6 +6,23 @@ alwaysApply: false
 
 # Supabase Standards
 
+## ⚡ Use The Supabase MCP First
+
+You have live read access to this project's Supabase DB via an MCP server (configured in `.cursor/mcp.json`, registered as `supabase` — or the legacy `project-0-Poker Game-supabase` if present). Server runs read-only as `supabase_read_only_user` against project `ursjltxklmxmapfvkttj`. **Always inspect the live DB before authoring a migration or diagnosing a bug.** Do NOT ask the user to run `SELECT` queries you can run yourself.
+
+- `list_tables` (with `verbose: true`) — current schema, columns, FKs, PKs, RLS state
+- `execute_sql` — any read query. Use to inspect:
+  - RLS policies: `select * from pg_policies where tablename = '<t>'`
+  - Function bodies: `select pg_get_functiondef('<fn>'::regproc)`
+  - Triggers: `select * from pg_trigger where tgrelid = '<t>'::regclass`
+  - Sample rows / counts to confirm assumptions
+- `list_migrations` — what's already applied
+- `get_logs` / `get_advisors` — debugging + security/perf hints
+
+**Workflow**: inspect live state → author `supabase/0XX-*.sql` → user applies → verify with `execute_sql`. See `AGENTS.md` "Supabase MCP" section for full rules. **Do not call `apply_migration`** — migrations go through the numbered SQL file workflow below.
+
+**If the MCP is missing**: tell the user to verify `.cursor/mcp.json` and reload Cursor. Do not silently revert to "ask the user to run queries."
+
 ## Migration Status: COMPLETE
 
 The app is fully Supabase-backed. There is no `USE_SUPABASE` flag, no `config.ts`, no localStorage fallback, and no `PinLock`. All data goes through `supabaseCache.ts`.

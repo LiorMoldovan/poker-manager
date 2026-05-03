@@ -4,13 +4,62 @@ import { GamePlayer, GameAction, SharedExpense, LiveGameTTSPool, TTSMessage, TTS
 import { getGamePlayers, updateGamePlayerRebuys, getSettings, updateGameStatus, getGame, addSharedExpense, removeSharedExpense, updateSharedExpense, removeGamePlayer, addPlayerToGame, getAllPlayers, getPlayerStats, loadTTSPool, loadTTSPoolModel, saveTTSPool, isPlayerFemale } from '../database/storage';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import { cleanNumber } from '../utils/calculations';
-import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, setTTSStatusCallback, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
+import { numberToHebrewTTS, hebrewNum, hebrewNumConstruct, hebrewOrdinal, speakHebrew, getElevenLabsApiKey, getElevenLabsUsageLive, initElevenLabsSession, warmupAudioContext } from '../utils/tts';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { generateTraitMessages } from '../utils/playerTraits';
 import { getRebuyRecords as getRebuyRecordsFromStorage } from '../database/storage';
 import { usePermissions } from '../App';
 import AddExpenseModal from '../components/AddExpenseModal';
 import { useTranslation } from '../i18n';
+
+// Runtime safety net: same logic as `hasLiteralLiveCount` in geminiAI.ts.
+// Catches sentences that slipped into a previously-saved pool before the
+// generation-time filter existed, or pools generated when this filter wasn't active.
+const TTS_LIVE_COUNT_WORDS = [
+  '\u05D0\u05D7\u05EA',                     // אחת
+  '\u05E9\u05EA\u05D9',                     // שתי
+  '\u05E9\u05EA\u05D9\u05D9\u05DD',         // שתיים
+  '\u05E9\u05DC\u05D5\u05E9',               // שלוש
+  '\u05E9\u05DC\u05D5\u05E9\u05D4',         // שלושה
+  '\u05D0\u05E8\u05D1\u05E2',               // ארבע
+  '\u05D0\u05E8\u05D1\u05E2\u05D4',         // ארבעה
+  '\u05D7\u05DE\u05E9',                     // חמש
+  '\u05D7\u05DE\u05D9\u05E9\u05D4',         // חמישה
+  '\u05E9\u05E9',                           // שש
+  '\u05E9\u05D9\u05E9\u05D4',               // שישה
+  '\u05E9\u05D1\u05E2',                     // שבע
+  '\u05E9\u05D1\u05E2\u05D4',               // שבעה
+  '\u05E9\u05DE\u05D5\u05E0\u05D4',         // שמונה
+  '\u05EA\u05E9\u05E2',                     // תשע
+  '\u05EA\u05E9\u05E2\u05D4',               // תשעה
+  '\u05E2\u05E9\u05E8',                     // עשר
+  '\u05E2\u05E9\u05E8\u05D4',               // עשרה
+];
+
+const TTS_NUMBER_NEAR_KNI_RE = new RegExp(
+  `(?:^|[^\\u0590-\\u05FF])(?:${TTS_LIVE_COUNT_WORDS.join('|')})\\s+\\u05E7\\u05E0\\u05D9`,
+  'u',
+);
+
+const TTS_HISTORY_QUALIFIERS = [
+  '\u05DE\u05DE\u05D5\u05E6\u05E2',                                 // ממוצע
+  '\u05E9\u05D9\u05D0',                                             // שיא
+  '\u05D1\u05E2\u05D1\u05E8',                                       // בעבר
+  '\u05E4\u05E2\u05DD',                                             // פעם
+  '\u05D4\u05D9\u05E1\u05D8\u05D5\u05E8',                           // היסטור
+  '\u05D1\u05D3\u05E8\u05DA \u05DB\u05DC\u05DC',                     // בדרך כלל
+  '\u05EA\u05DE\u05D9\u05D3',                                       // תמיד
+  '\u05DC\u05DE\u05E9\u05D7\u05E7',                                 // למשחק
+  '\u05D4\u05E7\u05D5\u05D3\u05DD',                                 // הקודם
+  '\u05D0\u05E3 \u05E4\u05E2\u05DD',                                // אף פעם
+];
+
+function hasLiteralLiveCountAtRuntime(text: string): boolean {
+  if (text.includes('{COUNT}')) return false;
+  if (!TTS_NUMBER_NEAR_KNI_RE.test(text)) return false;
+  if (TTS_HISTORY_QUALIFIERS.some(q => text.includes(q))) return false;
+  return true;
+}
 
 const LiveGameScreen = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -51,25 +100,10 @@ const LiveGameScreen = () => {
   const [ttsModelName, setTtsModelName] = useState<string>('');
   const ttsQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  // TTS debug overlay
-  const [ttsLog, setTtsLog] = useState<Array<{ text: string; type: string; ts: number }>>([]);
-  const [showTtsDebug, setShowTtsDebug] = useState(false);
   const [showAllActions, setShowAllActions] = useState(false);
-  const ttsDebugTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     warmupAudioContext();
-    setTTSStatusCallback((entry) => {
-      const now = Date.now();
-      setTtsLog(prev => [...prev.slice(-14), { text: entry.text, type: entry.type, ts: now }]);
-      setShowTtsDebug(true);
-      if (ttsDebugTimerRef.current) clearTimeout(ttsDebugTimerRef.current);
-      ttsDebugTimerRef.current = setTimeout(() => setShowTtsDebug(false), 30000);
-    });
-    return () => {
-      setTTSStatusCallback(null);
-      if (ttsDebugTimerRef.current) clearTimeout(ttsDebugTimerRef.current);
-    };
   }, []);
 
   // Load AI TTS pool on mount
@@ -101,42 +135,53 @@ const LiveGameScreen = () => {
     vars: { PLAYER?: string; COUNT?: number; POT?: number; RECORD?: number; RIVAL?: string; RANK?: number }
   ): string | null => {
     let text = msg.text;
-    const placeholders = msg.placeholders || [];
-    for (const ph of placeholders) {
+    const tokens: Array<'{PLAYER}' | '{COUNT}' | '{POT}' | '{RECORD}' | '{RIVAL}' | '{RANK}'> = [];
+    if (text.includes('{PLAYER}')) tokens.push('{PLAYER}');
+    if (text.includes('{COUNT}')) tokens.push('{COUNT}');
+    if (text.includes('{POT}')) tokens.push('{POT}');
+    if (text.includes('{RECORD}')) tokens.push('{RECORD}');
+    if (text.includes('{RIVAL}')) tokens.push('{RIVAL}');
+    if (text.includes('{RANK}')) tokens.push('{RANK}');
+
+    for (const ph of tokens) {
       switch (ph) {
         case '{PLAYER}':
           if (!vars.PLAYER) return null;
-          text = text.replace('{PLAYER}', vars.PLAYER);
+          text = text.split('{PLAYER}').join(vars.PLAYER);
           break;
-        case '{COUNT}':
+        case '{COUNT}': {
           if (vars.COUNT == null) return null;
-          {
+          while (text.includes('{COUNT}')) {
             const countPos = text.indexOf('{COUNT}');
             const afterCount = text.substring(countPos + 7);
             const beforeNoun = /^\s+[\u0590-\u05FF]/.test(afterCount);
             text = text.replace('{COUNT}', formatBuyins(vars.COUNT, beforeNoun));
           }
           break;
+        }
         case '{POT}':
           if (vars.POT == null) return null;
-          text = text.replace('{POT}', String(vars.POT));
+          text = text.split('{POT}').join(String(vars.POT));
           break;
         case '{RECORD}':
           if (vars.RECORD == null) return null;
-          text = text.replace('{RECORD}', formatBuyins(vars.RECORD));
+          text = text.split('{RECORD}').join(formatBuyins(vars.RECORD));
           break;
         case '{RIVAL}':
           if (!vars.RIVAL) return null;
-          text = text.replace('{RIVAL}', vars.RIVAL);
+          text = text.split('{RIVAL}').join(vars.RIVAL);
           break;
         case '{RANK}':
           if (vars.RANK == null) return null;
-          text = text.replace('{RANK}', hebrewOrdinal(vars.RANK));
+          text = text.split('{RANK}').join(hebrewOrdinal(vars.RANK));
           break;
       }
     }
-    // Safety: ensure no unfilled placeholders remain
     if (text.includes('{') && text.includes('}')) return null;
+    if (vars.COUNT != null && hasLiteralLiveCountAtRuntime(msg.text)) {
+      console.warn(`TTS runtime reject: hardcoded live count, no {COUNT}: "${msg.text}"`);
+      return null;
+    }
     return text;
   };
 
@@ -2264,51 +2309,6 @@ const LiveGameScreen = () => {
         </div>
       )}
 
-      {/* TTS Debug Overlay — centered, grows with content, auto-hides after 15s */}
-      {showTtsDebug && ttsLog.length > 0 && (
-        <div
-          onClick={() => setShowTtsDebug(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 9999,
-          }}
-        >
-          <div
-            style={{
-              background: 'rgba(15,23,42,0.95)',
-              borderRadius: 12,
-              padding: '12px 16px',
-              margin: '0 16px',
-              minWidth: 280,
-              maxWidth: 420,
-              border: '1px solid rgba(148,163,184,0.2)',
-              fontSize: '0.75rem',
-              fontFamily: 'monospace',
-              direction: 'ltr',
-              textAlign: 'left',
-            }}
-          >
-            <div style={{ color: '#94a3b8', marginBottom: 6, fontWeight: 600, fontSize: '0.8rem' }}>🔊 TTS Debug</div>
-            {ttsLog.map((e, i) => {
-              const color = e.type === 'success' ? '#4ade80'
-                : (e.type === 'warn' || e.type === 'error') ? '#f87171'
-                : '#e2e8f0';
-              const timeStr = new Date(e.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-              return (
-                <div key={i} style={{ color, lineHeight: 1.5 }}>
-                  <span style={{ color: '#64748b' }}>{timeStr}</span> {e.text}
-                </div>
-              );
-            })}
-            <div style={{ color: '#475569', marginTop: 8, fontSize: '0.65rem', textAlign: 'center' }}>tap to dismiss</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

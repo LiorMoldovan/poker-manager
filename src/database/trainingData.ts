@@ -196,12 +196,12 @@ export const upsertPlayerSession = async (
     }, { onConflict: 'group_id,player_name' });
 
     if (error) {
-      console.warn('upsertPlayerSession failed:', error.message);
+      console.error('[training] upsertPlayerSession failed — session will be buffered for retry:', error.message, { playerName, gid });
       return false;
     }
     return true;
   } catch (err) {
-    console.warn('upsertPlayerSession error:', err);
+    console.error('[training] upsertPlayerSession threw — session will be buffered for retry:', err, { playerName, gid });
     return false;
   }
 };
@@ -256,7 +256,7 @@ export const writeTrainingAnswersWithRetry = async (
     }
     return true;
   } catch (err) {
-    console.warn('Training answers Supabase write failed:', err);
+    console.error('[training] writeTrainingAnswersWithRetry failed — caller should buffer for retry:', err);
     return false;
   }
 };
