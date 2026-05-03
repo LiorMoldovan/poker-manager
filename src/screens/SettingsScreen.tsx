@@ -3663,9 +3663,29 @@ const SettingsScreen = () => {
             }
             const maxHeat = Math.max(1, ...heatmap.flat());
             const dayNames = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
-            const slotNames = ['לילה', 'בוקר', 'צהריים', 'ערב'];
+            // slotNames[i] correspond to indices 0/1/2/3 = 0-6 / 6-12 / 12-18 /
+            // 18-24 respectively. Renamed slot 0 from "לילה" to "אחרי חצות"
+            // (literally "after midnight"): "לילה" colloquially in Hebrew
+            // refers to late evening (~22:00-04:00), not 0-6 AM, so calling
+            // the 0-6 slot "לילה" was misleading — readers saw an entry on
+            // Sunday's night column and assumed it meant "tonight, hasn't
+            // happened yet" when actually it was data from this morning's
+            // small hours. "אחרי חצות" is unambiguously "after midnight"
+            // (today's first 6 hours) which is exactly what the slot covers.
+            const slotNames = ['אחרי חצות', 'בוקר', 'צהריים', 'ערב'];
             const slotHours = ['0–6', '6–12', '12–18', '18–24'];
-            const slotDisplayOrder = [1, 2, 3, 0];
+            // Display columns chronologically: 0-6 → 6-12 → 12-18 → 18-24.
+            // Old order [1, 2, 3, 0] put the 0-6 column at the visual end
+            // (left in RTL), which made it look like the LATEST part of
+            // the day even though it's actually the EARLIEST. Combined with
+            // a rolling 7-day window where today's row only has data for
+            // hours that have elapsed, the old layout produced an empty
+            // "evening" cell sandwiched between filled "noon" and filled
+            // "0-6" cells — visually nonsensical. The chronological order
+            // makes today's row fill from the right (in RTL) toward the
+            // left as the day progresses, with empty cells at the
+            // not-yet-happened end.
+            const slotDisplayOrder = [0, 1, 2, 3];
             const todayDayIdx = now.getDay();
 
             const userStats = Array.from(userMap.entries()).map(([groupKey, entries]) => {

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.6';
+export const APP_VERSION = '5.35.7';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,13 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.7',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Activity tab heatmap: chronological column order + clearer 0-6 slot label. User asked why Sunday\'s "night" column had entries on a Sunday afternoon ("Sun night didn\'t happen yet so how come there are entries there?"). Two compounding issues: (1) the slot was labelled "לילה 0-6" but in Hebrew "לילה" colloquially means late evening (~22:00-04:00), not the 0-6 AM slot the column actually represented — readers parsed it as "tonight" instead of "between midnight and 6 AM today". Renamed to "אחרי חצות" (literally "after midnight") which is unambiguous: it\'s today\'s first 6 hours, already happened by the time anyone looks at the dashboard. (2) The column display order was [morning, noon, evening, night] which suggested a chronological progression — but `night (0-6)` is BEFORE morning chronologically, not after evening, so the 0-6 cell ended up at the visual "end of the day" position even though its data was from the start of the day. Worse, with the rolling 7-day window, today\'s row only fills cells for hours that have elapsed; the old layout put an empty "evening 18-24" cell BETWEEN filled "noon" and filled "night" cells, which made readers wonder why the future was rendered before the past. Reordered `slotDisplayOrder` from `[1, 2, 3, 0]` to `[0, 1, 2, 3]` so columns now progress chronologically `0-6 → 6-12 → 12-18 → 18-24`. In RTL Hebrew layout this means the day starts at the visual right and progresses leftward — today\'s row fills right-to-left as hours pass, and the not-yet-happened cells sit at the leftmost (latest) end of the row. File: `src/screens/SettingsScreen.tsx`.',
+    ],
+  },
   {
     version: '5.35.6',
     date: '2026-05-03',
