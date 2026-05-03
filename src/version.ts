@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.2';
+export const APP_VERSION = '5.35.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.35.3',
+    date: '2026-05-03',
+    changes: [
+      '🩹 Settings → Activity tab now renders each user\'s *current* linked player name instead of the name that was stamped onto their session at session-start. User reported that after migration 046 merged `ספי טורס` into `ספי`, the Settings → Players list correctly showed `ספי`, but the Settings → Activity tab kept rendering `ספי טורס ⭐ חבר ● פעיל היום` even after the realtime/replica fixes from 048. Cause was completely separate from the realtime issue: the Activity tab built its `nameByKey` map from `activity_log.player_name`, which is a denormalised stamp written at the start of each session by `logActivity()` (see `src/utils/activityLogger.ts`). That stamp captures who-this-was-at-session-time and is intentionally never rewritten when the user\'s linked player record is renamed or merged later — by design, because it has to keep working for users who left the group. The Activity tab uses the *latest* stamp per user, and Sefi\'s latest stamp was 2026-05-03 09:26 (post-merge, but before he opened the app again under the new linked name), so it forever read `ספי טורס`. Verified live: 12 of 12 of his rows stamped that way.',
+      '🛡 Fix is a live join in the renderer. The Activity tab already loads `activityMembers` via `groupMgmt.fetchMembers()` (the existing `fetch_group_members_with_email` RPC, owner-restricted, returns `userId → playerName` joined against the live `players` table). We now build a `liveNameByUserId` map from that and use it to override the stamped name whenever the activity row carries a `userId` that matches a live group member. Both `latestNamedByKey` (used for sort / grouping) and `nameByKey` (used for rendering) consult it. Stamped names survive only as fallback for activity rows whose user is no longer in the group, or for anonymous device-only sessions — exactly the cases where the stamp is the right answer. Result: any future rename or merge propagates to the Activity tab on next refresh with no migration needed. File: `src/screens/SettingsScreen.tsx`.',
+      '🩹 New SQL `049-heal-activity-log-player-names.sql` heals the underlying `activity_log` data so the stored stamps also catch up to the post-merge truth. Generic across all groups (not just Sefi\'s): for every row whose `user_id` is currently linked to a player in the same group via `group_members`, if the row\'s stamped `player_name` differs from the live `players.name`, overwrite the stamp. Skips rows where `user_id` is NULL (anonymous sessions) and rows whose user is no longer a group member (genuine historical attribution we shouldn\'t rewrite). Idempotent — re-running is a no-op once names align. Reports the row count via `RAISE NOTICE`. Verified scope live via MCP read-only access: 13 rows / 1 user affected (Sefi\'s 12 stamped sessions plus one transitional row), no other groups currently drifted. Code change is sufficient on its own to fix the visible UI bug since the live join overrides the stamp at render time, but running this migration brings the stored data into agreement so future readers (potential analytics, exports, or any new consumer of `activity_log.player_name`) see one consistent answer.',
+    ],
+  },
   {
     version: '5.35.2',
     date: '2026-05-03',

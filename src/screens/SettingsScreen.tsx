@@ -3520,21 +3520,42 @@ const SettingsScreen = () => {
             // row that actually has a player_name wins. If no row in the group
             // ever carried a name, fall back to the manual device label or the
             // 8-char device id prefix (legacy behavior).
+            //
+            // BUT — and this is the bit that broke after migration 046 merged
+            // ספי טורס into ספי — `entry.playerName` is a stamp captured at
+            // session start, not a live join. If the user's *linked* player
+            // record was renamed/merged later, the stamp lags forever (until
+            // they open the app again under the new linked name). To make
+            // the Activity tab reflect the *current* identity of each human
+            // we override the stamped name with the live linked-player name
+            // from `activityMembers` whenever we have a userId match. The
+            // historical stamp survives only when no live link exists (user
+            // left the group, or anonymous device-only session). See SQL
+            // migration 049 for the matching one-shot heal of the stamps
+            // themselves so other consumers of activity_log.player_name
+            // (none today, but defensive) see the same truth.
+            const liveNameByUserId = new Map<string, string>();
+            for (const m of activityMembers) {
+              if (m.userId && m.playerName) liveNameByUserId.set(m.userId, m.playerName);
+            }
             const latestNamedByKey = new Map<string, { date: number; name: string }>();
             for (const entry of activityLog) {
-              if (!entry.playerName) continue;
+              const stampedName = entry.userId ? (liveNameByUserId.get(entry.userId) || entry.playerName) : entry.playerName;
+              if (!stampedName) continue;
               const k = keyOf(entry);
               const ts = new Date(entry.lastActive || entry.timestamp).getTime();
               const cur = latestNamedByKey.get(k);
-              if (!cur || ts > cur.date) latestNamedByKey.set(k, { date: ts, name: entry.playerName });
+              if (!cur || ts > cur.date) latestNamedByKey.set(k, { date: ts, name: stampedName });
             }
             const nameByKey = new Map<string, string>();
             for (const entry of activityLog) {
               const k = keyOf(entry);
               if (nameByKey.has(k)) continue;
+              // Prefer the live linked name, then the latest stamped, then fallback.
+              const liveName = entry.userId ? liveNameByUserId.get(entry.userId) : undefined;
               const named = latestNamedByKey.get(k);
               const fallback = deviceLabels[entry.deviceId] || entry.deviceId.slice(0, 8);
-              nameByKey.set(k, named?.name || fallback);
+              nameByKey.set(k, liveName || named?.name || fallback);
             }
             const nameOf = (e: ActivityLogEntry): string => nameByKey.get(keyOf(e)) || e.deviceId.slice(0, 8);
 
