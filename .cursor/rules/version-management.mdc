@@ -38,6 +38,56 @@ Version is bumped ONLY as part of the merge/push process (see git-workflow rule)
 ## Changelog Format
 
 - Each change line starts with an emoji indicating type
-- Common prefixes: ✅ feature, 🔧 fix, 📱 UI, 🤖 AI, 📊 data, 🔍 tracking
-- Keep descriptions concise (one line each)
+- Common prefixes: ✅ feature, 🔧 fix, 📱 UI, 🤖 AI, 📊 data, 🔍 tracking, 🎯 algo, 🛠 internals, 🛡 safety, 🩹 heal, 🐛 bug
 - List most important change first
+
+## CRITICAL: Very Short Bullets
+
+The changelog renders verbatim in the **About** screen (Settings → About → "Latest Changes") as a `<ul>` list visible to every member of every group. This is a USER-FACING release notes section, not an engineering journal.
+
+**Hard rules — non-negotiable:**
+
+- **Aim for 3–8 words per bullet.** Hard cap: 12 words. If a bullet has more than ~12 words, split it or trim it.
+- **One thing per bullet.** No "and"-chained ideas. No semicolons. No parenthetical asides explaining context.
+- **No sentences.** Bullets are headlines, not sentences. No periods at the end. No "the / a / an" filler when it can be dropped.
+- **No root-cause autopsies, no methodology notes, no validation harness details, no inline benchmarks with p100/avg/30-trial breakdowns.** Commit messages and PR descriptions are where that detail lives.
+- **No quoting the user's bug report verbatim.** Write what changed from the user's perspective, not what they said when they reported it.
+- **File references** are fine when essential to identify a migration (e.g. `SQL 050: schedule-auto-create`) but not as a list of every file touched.
+- **Aim for 3–6 bullets per version.** A version with 10+ bullets usually means several should be merged or trimmed.
+- **No emoji-only bullets.** Every bullet still needs a few words after the emoji.
+
+**Good (very short bullet):**
+
+```
+🎯 Optimal settlement for 7-8 player games
+🛠 Recursion threshold: 7 → 8
+🛡 Validated against 12 real games
+```
+
+**Acceptable (≤12 words):**
+
+```
+🗓 Auto-open weekly poll (configurable day + time)
+```
+
+**Bad (still too long — read like a sentence):**
+
+```
+🎯 Settlement algorithm now optimal for 7-8 player games — fewer transfers and a fairer split.
+```
+
+**Bad (story, not bullet):**
+
+```
+🎯 Settlement algorithm now actually optimal for 7-8 player games (the typical poker night). User flagged that a recent 8-player game showed... [600 more words]
+```
+
+If you catch yourself writing more than ~12 words for one bullet, stop and trim. Members reading the About screen want a glanceable list, not a wall of paragraphs. Detail belongs in `git log`.
+
+## Past Entries
+
+When updating older changelog entries (e.g. style cleanups, condensing for readability), apply the same short-bullet rules. Don't leave older versions as long stories while new ones are short — the About screen lists up to 10 entries, and consistency matters across the whole list.
+
+## Internal-Only Details
+
+Some changes touch behavior that intentionally isn't surfaced in the UI/i18n/settings (e.g. hard-coded constants, internal heuristics, dev-only flags). **Do not document those in the user-facing changelog** — describing them gives them visibility we explicitly chose not to give. Mention them in the commit message instead so the engineering history still has the audit trail.

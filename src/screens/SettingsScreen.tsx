@@ -214,8 +214,8 @@ const SettingsScreen = () => {
   const canAddPlayers = hasPermission('player:add');
 
 
-  type TabId = 'group' | 'schedule' | 'scheduleLab' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
-  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'scheduleLab', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
+  type TabId = 'group' | 'schedule' | 'game' | 'chips' | 'players' | 'backup' | 'about' | 'activity' | 'ai' | 'training' | 'superadmin' | 'push' | 'report';
+  const VALID_TAB_IDS: readonly TabId[] = ['group', 'schedule', 'game', 'chips', 'players', 'backup', 'about', 'activity', 'ai', 'training', 'superadmin', 'push', 'report'];
   const location = useLocation();
   const getDefaultTab = (): TabId => {
     // Honor ?tab=<id> URL param (used by deep links from push notifications)
@@ -660,16 +660,9 @@ const SettingsScreen = () => {
     { id: 'report', label: t('settings.tabReport'), icon: '📩', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'about', label: t('settings.tabAbout'), icon: 'ℹ️', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
     { id: 'schedule', label: t('settings.tabSchedule'), icon: '📅', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: false },
-    { id: 'scheduleLab', label: t('settings.tabScheduleLab'), icon: '🧪', requiresPermission: null, ownerOnly: false, adminOnly: false, superAdminOnly: true },
   ];
   
   const tabs = allTabs.filter(tab => {
-    // `scheduleLab` is the legacy poll-card fallback, kept reachable
-    // for super-admins via the deep-link `?tab=scheduleLab` while we
-    // dog-food the new compact card. We hide it from the visible
-    // tab bar so the chrome stays clean — the activeTab guard at
-    // the render site still authorises super-admins to land on it.
-    if (tab.id === 'scheduleLab') return false;
     if (tab.superAdminOnly && !isSuperAdmin) return false;
     if (tab.ownerOnly && !isOwner) return false;
     if (tab.adminOnly && role !== 'admin' && !isSuperAdmin && !isOwner) return false;
@@ -994,21 +987,6 @@ const SettingsScreen = () => {
       {/* Schedule Tab (Game Polls) */}
       {activeTab === 'schedule' && (
         <ScheduleTab />
-      )}
-
-      {/* Schedule Lab — super-admin-only fallback to the *legacy* poll
-          card layout. The default `schedule` tab now ships the
-          Compact layout to every user; this sub-tab keeps the
-          original chrome around so a super admin can sanity-check
-          parity bugs against the old visuals on real polls. Same
-          data, same admin handlers, same WhatsApp share / proxy /
-          lock / edit / cancel / delete flows; only the visual
-          chrome differs. The body is double-gated by `isSuperAdmin`
-          so a shared deep link (`?tab=scheduleLab`) can't expose it
-          to non-super-admins. Will be removed once the Compact
-          layout has soaked long enough in production. */}
-      {activeTab === 'scheduleLab' && isSuperAdmin && (
-        <ScheduleTab variant="legacy" />
       )}
 
       {/* Game Settings Tab */}

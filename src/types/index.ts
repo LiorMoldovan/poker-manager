@@ -305,6 +305,15 @@ export interface Settings {
   scheduleDefaultDelayHours?: number;      // 0..240, default 48
   scheduleDefaultTime?: string;            // 'HH:MM' 24h, default '21:00'
   scheduleDefaultAllowMaybe?: boolean;     // default true
+  // Auto-create-poll schedule. When enabled, ScheduleTab auto-opens a new
+  // poll the first time any admin loads the tab at-or-after the next
+  // weekly trigger occurrence (day-of-week + time). Uses the group's
+  // existing default-poll values for shape (target, delay, allow-maybe,
+  // proposed date = nextGameNightIso).
+  scheduleAutoCreateEnabled?: boolean;     // default false
+  scheduleAutoCreateDay?: number;          // 0=Sun..6=Sat, default 0 (Sunday)
+  scheduleAutoCreateTime?: string;         // 'HH:MM' 24h, default '18:00'
+  scheduleAutoCreatedAt?: string;          // ISO timestamp of last auto-create fire (re-fire guard)
 }
 
 export interface Settlement {

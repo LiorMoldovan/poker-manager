@@ -1,39 +1,12 @@
-// ─── PollCardCompact ───────────────────────────────────────────────────
-// Alternate "Compact" body for a single schedule poll. Same data flow
-// and exact same handler wiring as the legacy `PollCard` in
-// ../ScheduleTab.tsx — voting, admin proxy, manual pick / re-pin,
-// edit, lock toggle, cancel, delete, start scheduled game, share
-// (invitation / confirmation / cancellation / chooser modal),
-// member subscribe toggle — only the visual layout differs.
+// ─── PollCard ─────────────────────────────────────────────────────────
+// Single schedule-poll card. One tile per proposed date, each tile is
+// self-contained with its own count pills, progress bar, and
+// (👑 Leading / ✅ Locked) badge.
 //
-// Rendered inside the same `ScheduleTab` host (which orchestrates
-// data loading, EditPollModal, PollManualCloseModal, cancel/delete
-// confirms, and the toast queue), gated by `variant="compact"`.
-// While we validate full feature parity it lives behind a separate
-// super-admin sub-tab; the regular schedule tab keeps using legacy.
+// Rendered inside `ScheduleTab` which owns the data fetch, modal stack
+// (EditPollModal, PollManualCloseModal, cancel/delete confirms), and
+// the toast queue. This component handles all per-poll affordances:
 //
-// Visual differences vs legacy (intentional, per user feedback that
-// the legacy chrome is "crowded and confusing"):
-//   * No status pill / target-progress text / open-seats hint /
-//     created-at line in the header — the phase-color top border
-//     + PollTimer carry the status signal, and the per-tile
-//     `yes/target` counter + progress bar carry the recruit signal.
-//   * No DateCompetitionStrip scoreboard. Each date tile is now
-//     self-contained and carries its own count pills + progress
-//     bar + (👑 Leading / ✅ Locked) badge.
-//   * No dedicated single-date confirmed banner. The locked tile's
-//     ✅ Locked badge + green border carries the lock-in identity.
-//   * No per-date "summary:" footer label. Count pills moved to
-//     the tile header.
-//   * Prominent "Your vote" summary chip directly above the tiles
-//     so the member sees their own vote at a glance (fixes the
-//     "they didn't find themselves in it" feedback).
-//   * "(you)" badge next to the current member's name in the
-//     expanded voter list, same purpose.
-//
-// Functional equivalence checklist — every legacy handler that
-// reaches the network or opens a modal is invoked from the matching
-// affordance below:
 //   - onVote(yes/maybe/no)             → per-tile RSVP buttons
 //   - admin proxy vote                 → per-tile "+ proxy" chip → ProxyVoteModal
 //   - admin manual pick / re-pin       → per-tile pick chip (multi-date only,
@@ -43,6 +16,8 @@
 //   - handleToggleVotingLock           → "🔒/🔓" admin chip (lock/unlock)
 //   - onCancel                         → "בטל" admin chip
 //   - onDelete                         → "מחק" admin chip
+//   - reminder                         → "📣 תזכורת" admin chip → ReminderModal
+//                                         (open / expanded only)
 //   - start scheduled game             → "התחל משחק" admin chip
 //                                         (admin, confirmed-at-target, !confirmedGameId)
 //   - handleShareInvitation            → "📤 שתף הצבעה" chip
@@ -62,18 +37,19 @@ import {
   VoterGroups,
   PollShareCard,
   ProxyVoteModal,
+  ReminderModal,
   ModalPortal,
   fmtHebrewDate,
   ghostBtn,
   shareBtn,
-} from '../ScheduleTab';
-import type { PollCardProps, DateStat } from '../ScheduleTab';
-import { getAllPolls, setPollVotingLock } from '../../database/storage';
-import { captureAndSplit, shareFiles } from '../../utils/sharing';
-import type { TranslationKey } from '../../i18n/translations';
-import type { RsvpResponse, Player } from '../../types';
+} from './ScheduleTab';
+import type { PollCardProps, DateStat } from './ScheduleTab';
+import { getAllPolls, setPollVotingLock } from '../database/storage';
+import { captureAndSplit, shareFiles } from '../utils/sharing';
+import type { TranslationKey } from '../i18n/translations';
+import type { RsvpResponse, Player } from '../types';
 
-export default function PollCardCompact(props: PollCardProps) {
+export default function PollCard(props: PollCardProps) {
   const {
     poll, players, currentPlayer, isAdmin, now,
     onVote, onEdit, onManualClose, onCancel, onDelete,
@@ -89,9 +65,8 @@ export default function PollCardCompact(props: PollCardProps) {
 
   const playerById = useMemo(() => new Map(players.map(p => [p.id, p])), [players]);
 
-  // Per-date yes/maybe/no counts + proxy-vote breakdown. Identical
-  // shape and computation to the legacy PollCard so VoterGroups
-  // receives the same data it expects.
+  // Per-date yes/maybe/no counts + proxy-vote breakdown.
+  // Shape matches what VoterGroups expects.
   const dateStats = useMemo(() => {
     const stats = new Map<string, DateStat>();
     for (const d of poll.dates) {
@@ -115,8 +90,13 @@ export default function PollCardCompact(props: PollCardProps) {
     return stats;
   }, [poll]);
 
-  // Resolve user_id → player.name for proxy-vote attribution. Mirrors
-  // the legacy PollCard derivation exactly (see comment there).
+  // Resolve user_id → player.name for proxy-vote attribution. We
+  // derive the mapping from every self-cast vote across all polls —
+  // when userId === castByUserId, the playerId on that row tells us
+  // which player belongs to that auth user. Admins are typically
+  // permanent players who self-vote on at least one poll, so this
+  // covers the common case without requiring a server RPC. Falls back
+  // to a generic label when the actor has never voted themselves.
   const userIdToPlayerName = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of getAllPolls()) {
@@ -141,13 +121,13 @@ export default function PollCardCompact(props: PollCardProps) {
     return m;
   }, [poll.votes, currentPlayer]);
 
-  // Migration 039 admin-toggleable soft lock. Mirrors legacy.
+  // Migration 039 admin-toggleable soft lock.
   const isVotingLocked = !!poll.votingLockedAt;
 
-  // Mirrors the legacy permission gate exactly — same SQL semantics,
-  // same error-reason discriminants. Critical that this stays in
+  // Permission gate — same SQL semantics + error-reason discriminants
+  // the server's cast_poll_vote enforces. Critical that this stays in
   // sync so the disabled-button reasoning here matches what the
-  // server enforces in cast_poll_vote.
+  // server actually rejects.
   const canVote = useMemo(() => {
     if (!currentPlayer) return { allowed: false, reason: 'no_player_link' as const };
     if (poll.status === 'cancelled' || poll.status === 'expired') {
@@ -169,6 +149,12 @@ export default function PollCardCompact(props: PollCardProps) {
 
   // Admin proxy-vote modal state — keyed by date id; null when closed.
   const [proxyDateId, setProxyDateId] = useState<string | null>(null);
+
+  // Reminder modal state — admin nudge for non-voters on open / expanded
+  // polls. Opens a list of eligible non-voters with checkboxes, defaults
+  // to "all checked", sends push + email through the existing dispatch
+  // path (which respects the group's Push / Email toggles).
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   // Per-date "show voters" toggle. Default collapsed.
   const [expandedVoterDates, setExpandedVoterDates] = useState<Set<string>>(() => new Set());
@@ -256,7 +242,6 @@ export default function PollCardCompact(props: PollCardProps) {
     };
   }, [adminMenuOpen]);
 
-  // Confirmed date helpers — mirror legacy.
   const confirmedDate = poll.dates.find(d => d.id === poll.confirmedDateId);
   const confirmedPlayers = useMemo(() => {
     if (!confirmedDate) return [] as Player[];
@@ -266,7 +251,10 @@ export default function PollCardCompact(props: PollCardProps) {
       .filter((p): p is Player => !!p);
   }, [confirmedDate, poll.votes, playerById]);
 
-  // visualStatus pivot — identical to legacy (see comment there).
+  // visualStatus pivot: a confirmed-below-target poll renders with the
+  // same chrome it had before lock-in (open / expanded), so members
+  // immediately see "still recruiting" instead of the green "locked"
+  // skin that no longer matches reality.
   const confirmedDateYes = confirmedDate
     ? (dateStats.get(confirmedDate.id)?.yes ?? 0)
     : 0;
@@ -276,7 +264,6 @@ export default function PollCardCompact(props: PollCardProps) {
     ? (poll.expandedAt ? 'expanded' : 'open')
     : poll.status;
 
-  // Status palette — mirrors legacy.
   const statusColor: Record<string, string> = {
     open:      '#3b82f6',
     expanded:  '#f97316',
@@ -306,9 +293,9 @@ export default function PollCardCompact(props: PollCardProps) {
   }, [poll.dates, poll.confirmedDateId, dateStats]);
 
   // ─── WhatsApp screenshot share ─────────────────────────
-  // Identical infrastructure to legacy: an off-screen `<PollShareCard>`
-  // rendered into a fixed-position div, captured via html2canvas, split
-  // into N images, and handed to navigator.share / fallback download.
+  // Off-screen `<PollShareCard>` rendered into a fixed-position div,
+  // captured via html2canvas, split into N images, and handed to
+  // navigator.share / fallback download.
   const shareCardRef = useRef<HTMLDivElement>(null);
   const [shareMode, setShareMode] = useState<'invitation' | 'confirmation' | 'cancellation' | null>(null);
   const [isSharing, setIsSharing] = useState(false);
@@ -338,7 +325,7 @@ export default function PollCardCompact(props: PollCardProps) {
 
   // Per-mode WhatsApp caption with deep-link to the specific poll
   // (`/p/<token>` short-form, falls back to UUID for old in-flight
-  // rows). Identical to legacy.
+  // rows).
   const buildShareCaption = (mode: 'invitation' | 'confirmation' | 'cancellation'): string => {
     const captionKey = (
       mode === 'invitation'   ? 'schedule.share.captionInvitation' :
@@ -371,7 +358,7 @@ export default function PollCardCompact(props: PollCardProps) {
     buildShareCaption('cancellation'),
   );
 
-  // Lock / unlock voting (migration 039). Mirrors legacy.
+  // Lock / unlock voting (migration 039).
   const [lockSubmitting, setLockSubmitting] = useState(false);
   const handleToggleVotingLock = async () => {
     if (lockSubmitting) return;
@@ -393,11 +380,10 @@ export default function PollCardCompact(props: PollCardProps) {
     <div className="card poll-card" style={{
       padding: 14, marginBottom: 12,
       // Phase-color top border — visible on both LTR and RTL without
-      // depending on physical sides, replaces the legacy `borderRight`.
+      // depending on physical sides.
       borderTop: `3px solid ${statusColor[visualStatus] || 'var(--border)'}`,
     }}>
-      {/* Phase-aware countdown banner — same component the legacy
-          card uses. Self-hides on cancelled / expired. */}
+      {/* Phase-aware countdown banner. Self-hides on cancelled / expired. */}
       <PollTimer poll={poll} now={now} t={t} />
 
       {/* Optional admin note */}
@@ -555,10 +541,9 @@ export default function PollCardCompact(props: PollCardProps) {
                         border: '1px solid rgba(99, 102, 241, 0.40)',
                       }}>👑 {t('schedule.leadingDate')}</span>
                     )}
-                    {/* Admin manual-pick / re-pin — same gating as
-                        legacy: multi-date polls only, hidden on the
-                        already-pinned tile, hidden once a game has
-                        been started from the poll. */}
+                    {/* Admin manual-pick / re-pin. Multi-date polls only,
+                        hidden on the already-pinned tile, hidden once a
+                        game has been started from the poll. */}
                     {isAdmin
                       && onManualClose
                       && poll.dates.length >= 2
@@ -598,16 +583,11 @@ export default function PollCardCompact(props: PollCardProps) {
                   display: 'flex', alignItems: 'center',
                   flexWrap: 'wrap', gap: 8, marginBottom: 8,
                 }}>
-                  {/* Solid-emerald progress bar. The legacy PollCard
-                      uses a warm-to-cool thermometer gradient, but at
-                      4px tall the gradient stops blur into one another
-                      and don't read as distinct hues. The Compact tile
-                      already removed VoteCountPills, so the bar's only
-                      job is "how far toward target" — width alone is
-                      enough; colour stays neutral-green for the whole
-                      fill. Same `#10b981` as RSVP-yes / Locked badge
-                      so the colour identity stays consistent across
-                      the tile. */}
+                  {/* Solid-emerald progress bar. The bar's only job
+                      is "how far toward target" — width alone is enough,
+                      colour stays neutral-green for the whole fill. Same
+                      `#10b981` as RSVP-yes / Locked badge so the colour
+                      identity stays consistent across the tile. */}
                   <div style={{
                     flex: 1, minWidth: 60,
                     height: 4, background: 'rgba(148, 163, 184, 0.18)',
@@ -764,9 +744,8 @@ export default function PollCardCompact(props: PollCardProps) {
       )}
 
       {/* Action chip strip — card-level admin actions + member
-          subscribe + member-or-admin share. Same conditions as
-          legacy, but the visual hierarchy was tightened up for
-          mobile:
+          subscribe + member-or-admin share. Visual hierarchy is
+          tuned for mobile:
             * Constructive chips (Start game / Share / Edit /
               Subscribe) sit at the row's start.
             * Secondary admin toggles (Lock voting) and destructive
@@ -852,6 +831,21 @@ export default function PollCardCompact(props: PollCardProps) {
             {isSharing ? t('common.capturing') : t('common.share')}
           </button>
         )}
+        {/* Reminder — admin-only, open + expanded polls only. Confirmed
+            polls already have a locked date; "didn't vote yet" is no
+            longer the relevant axis there (the relevant action is
+            confirming attendance, which the share-game flow covers).
+            Sits with the constructive cluster (start / share / edit)
+            since it's a non-destructive nudge action. */}
+        {isAdmin && (poll.status === 'open' || poll.status === 'expanded') && (
+          <button
+            onClick={() => setReminderOpen(true)}
+            title={t('schedule.reminder.button')}
+            style={ghostBtn}
+          >
+            📣 {t('schedule.reminder.button')}
+          </button>
+        )}
         {/* Edit (admin, active polls). */}
         {isAdmin && (poll.status === 'open' || poll.status === 'expanded' || poll.status === 'confirmed') && (
           <button onClick={onEdit} style={ghostBtn}>✎ {t('schedule.editPoll')}</button>
@@ -910,9 +904,8 @@ export default function PollCardCompact(props: PollCardProps) {
                 >
                   {(() => {
                     // Chip-style menu items — each option is its
-                    // own coloured tinted pill (matches the inline
-                    // lock chip on the legacy strip), white text so
-                    // the colour reads as semantic accent rather
+                    // own coloured tinted pill, white text so the
+                    // colour reads as semantic accent rather
                     // than as the dominant palette. Hover deepens
                     // the tint instead of swapping to a neutral
                     // wash.
@@ -1012,9 +1005,20 @@ export default function PollCardCompact(props: PollCardProps) {
         />
       )}
 
+      {/* Reminder modal — admin-only, open + expanded polls only */}
+      {isAdmin && reminderOpen && (
+        <ReminderModal
+          poll={poll}
+          players={players}
+          onClose={() => setReminderOpen(false)}
+          onSuccess={onSuccess}
+          onError={onError}
+          t={t}
+        />
+      )}
+
       {/* Share-target chooser modal — only opens for confirmed-
-          below-target where invitation + confirmation both apply.
-          Same compact pill UI as legacy. */}
+          below-target where invitation + confirmation both apply. */}
       {shareChooserOpen && (
         <ModalPortal>
           <div
@@ -1059,8 +1063,8 @@ export default function PollCardCompact(props: PollCardProps) {
       )}
 
       {/* Off-screen premium screenshot card (rendered only while
-          sharing). Same `direction: 'ltr'` host wrapper legacy uses
-          to prevent RTL inheritance from confusing the screenshot. */}
+          sharing). `direction: 'ltr'` host wrapper prevents RTL
+          inheritance from confusing the screenshot. */}
       {shareMode && (
         <div style={{
           position: 'fixed', left: -10000, top: 0,

@@ -74,7 +74,7 @@ Game profits across all players must always sum to exactly zero. Enforced by two
 Build prompts as one flowing instruction set. NEVER patch prompts with constraints — it degrades quality. Refactor the entire prompt if something needs changing.
 
 ### 7. Version in `src/version.ts`
-Not in `package.json`. Always bump as part of merge process.
+Not in `package.json`. Always bump as part of merge process. **Changelog bullets must be very short — 3–8 words each, hard cap 12 words.** They are headlines, not sentences (no periods, no "and"-chained ideas, no parenthetical asides). The changelog renders in Settings → About for every member. Verbose root-cause autopsies, benchmarks, methodology notes, and file lists belong in the commit message — not the user-facing changelog. Internal-only details (hard-coded constants, dev heuristics never surfaced in the UI) should be left out entirely. Apply the same short-bullet rules when updating older entries; don't leave a long-paragraph past while shipping short bullets going forward. See `.cursor/rules/version-management.mdc` for full guidance.
 
 ### 8. Windows PowerShell
 Dev environment is Windows. No bash syntax (`&&`, heredocs, `cat`, `grep`). Use Cursor tools or PowerShell.

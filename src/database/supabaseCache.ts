@@ -94,6 +94,13 @@ function toSettings(row: Record<string, unknown>): Settings {
   if (row.schedule_default_delay_hours != null) s.scheduleDefaultDelayHours = Number(row.schedule_default_delay_hours);
   if (row.schedule_default_time != null) s.scheduleDefaultTime = String(row.schedule_default_time);
   if (row.schedule_default_allow_maybe != null) s.scheduleDefaultAllowMaybe = row.schedule_default_allow_maybe === true;
+  // Auto-create-poll schedule (migration 050). All columns NOT NULL with
+  // server-side defaults, but tolerate missing keys so the mapper works
+  // during the migration window.
+  if (row.schedule_auto_create_enabled != null) s.scheduleAutoCreateEnabled = row.schedule_auto_create_enabled === true;
+  if (row.schedule_auto_create_day != null) s.scheduleAutoCreateDay = Number(row.schedule_auto_create_day);
+  if (row.schedule_auto_create_time != null) s.scheduleAutoCreateTime = String(row.schedule_auto_create_time);
+  if (row.schedule_auto_created_at != null) s.scheduleAutoCreatedAt = String(row.schedule_auto_created_at);
   return s;
 }
 
@@ -284,6 +291,10 @@ function settingsToRow(s: Settings, groupId: string) {
     schedule_default_delay_hours: s.scheduleDefaultDelayHours ?? 48,
     schedule_default_time: s.scheduleDefaultTime ?? '21:00',
     schedule_default_allow_maybe: s.scheduleDefaultAllowMaybe ?? true,
+    schedule_auto_create_enabled: s.scheduleAutoCreateEnabled ?? false,
+    schedule_auto_create_day: s.scheduleAutoCreateDay ?? 0,
+    schedule_auto_create_time: s.scheduleAutoCreateTime ?? '18:00',
+    schedule_auto_created_at: s.scheduleAutoCreatedAt ?? null,
   };
 }
 

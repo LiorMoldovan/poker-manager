@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.35.9';
+export const APP_VERSION = '5.37.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -14,5267 +14,4712 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '5.37.0',
+    date: '2026-05-04',
+    changes: [
+      '📣 Send-reminder button on every active poll',
+      '🎯 Recipients: registered members missing any date',
+      '🟠 Per-row badges: לא הצביע / 1/3',
+      '✉️ Email: personal greeting + live state + countdown',
+      '✉️ All emails forced RTL via RLM prefix',
+      '🧹 Removed legacy poll card variant',
+    ],
+  },
+  {
+    version: '5.36.0',
+    date: '2026-05-04',
+    changes: [
+      '🗓 Auto-open weekly poll (configurable day + time)',
+      '🗓 One date per configured game-night day',
+      '🛠 Reuses target / delay / start time',
+      '🔔 Push + email follow Schedule toggles',
+      '🛡 New SQL: 050-schedule-auto-create',
+    ],
+  },
+  {
     version: '5.35.9',
     date: '2026-05-03',
     changes: [
-      '🎯 Settlement algorithm now actually optimal for 7-8 player games (the typical poker night). User flagged that a recent 8-player game showed a 6-transfer settlement with one player (Sami) doing 3 separate trips and ליאור landing on a 5-shekel small leftover — and asked whether the algorithm could do better. Investigation found two compounding issues: (1) the recursive ranker had a hard-coded threshold of `active.length <= 7` in `settleGroup` (`src/utils/calculations.ts`), so every 8-player group silently routed to greedy and never saw the optimisation logic at all — the bug had been there since the optimised engine was introduced and was the actual root cause of the suboptimal-looking settlements; (2) even when the recursive ranker did run (≤ 7 players), its tiebreaker was only 2-component (max smallest transfer, then min count), which left two genuine fairness dimensions unoptimised — one player ending up with 3-4 separate trips while everyone else had 1, and tiny sub-`minTransfer` leftovers landing on whoever the search happened to visit first.',
-      '🛠 Threshold raised from `<= 7` to `<= 8` in `settleGroup`. Verified empirically before shipping: at threshold 9 the recursion blows up on real-shape inputs (avg 2.1 s, p100 5.7 s — would freeze the screen on every 9-player game), at threshold 8 it stays at avg 42 ms / p100 100 ms which is imperceptible for a one-shot screen mount. Tested 30 trials per group size at both uniform-random and realistic poker-shape (1-2 big winners, 1-2 big losers, rest small) input distributions. For the rare indivisible 9+ player group, `findMaxZeroSumPartition` almost always splits it into independent zero-sum sub-groups of ≤ 8 anyway (random-input timing showed 9-player games avg 2 ms in practice for this reason); only genuinely-indivisible 9+ groups fall through to greedy.',
-      '🛠 New 4-component lexicographic score in `bestSettleRecursive` (replaces the old 2-tuple). Priority order, "lower is strictly better": (1) fewest sub-`minTransfer` transfers involving a `PROTECTED_FROM_SMALL_TRANSFER` player — currently `{ ליאור, Lior }`, hard-coded constant in calculations.ts, never surfaced anywhere in the UI/settings/i18n so it remains invisible to non-developers, (2) largest minimum transfer amount (matches the old behaviour, no regression — empirically 0/12 real games saw their smallest-transfer shrink), (3) fewest total transfers, (4) lowest "max trips per person" — new fairness dimension that prevents one debtor doing 4 separate trips while everyone else does 1. The protected-player rule is a hard preference, not a hard rule: when no arrangement can avoid a sub-`minTransfer` transfer touching a protected player (e.g. their own balance is below the threshold), the algorithm falls through cleanly to the rest of the ranking instead of deadlocking. Threaded `minTransfer` through `bestSettleRecursive` and `settleGroup` so the per-frame score function can evaluate the protected-small predicate.',
-      '🛡 Validated against 12 most-recent completed games pulled from the production DB (last ~3 months). Built an independent brute-force optimum solver (separate code path, same 4-component score, written from scratch in the validation harness) as ground truth. Result: NEW matches OPT in 12/12 real games and 10/10 synthetic stress shapes; NEW reduces max-trips-per-person vs. OLD in 10/12 real games (typically from 4 trips down to 2-3); NEW eliminates a Lior-on-tiny-leftover that OLD had in 1/12; NEW regresses the smallest-transfer in 0/12 (i.e. nothing got worse on the dimension the previous algorithm was optimising for). The screenshot game specifically (8 players, ליאור big creditor): OLD count=7 min=3.6 maxPP=4 liorTiny=1 → NEW count=7 min=3.6 maxPP=2 liorTiny=0 — same number of transfers, max-per-person halved, no Lior tiny tail.',
-      '🛡 Auto-close guard added in `GameSummaryScreen.tsx` to keep the algorithm change strictly forward-only for stored data. Before the guard, the >48-hour-completed-game auto-close path would re-fire on any past game on first re-open after the algorithm change, see the new ranker producing different (from, to) pairs than what was stored in `paid_settlements`, and silently append a second wave of `autoClosed: true` rows — polluting the historical record with mixed old + new pairs. Guard checks `loadedPaid.some(p => p.autoClosed)` and bails out: any game that has ever been auto-closed is treated as historically locked and never receives further auto-close stamps regardless of what the recompute produces. Display may show different pairs on screen for old games (the algorithm output is informational), but the DB row is byte-for-byte unchanged. New code paths only persist on games that were never closed before — i.e. genuinely new games going forward.',
-      '📊 Methodology note for future-me. Validation harness was a temp file (`__tmp_settle_validation.ts` + `__tmp_settle_timing.ts`, both deleted before commit) that imported `calculateSettlement` and compared against three rankers on the same balances: OLD reconstructed from prior code, NEW = current code, OPT = independent brute-force same-shape recursion under the new score. Real games pulled via Supabase MCP (`execute_sql` on `games` + `game_players` joined by `g.id`, last 12 completed, 4-8 players each). Apples-to-apples comparison required applying the same `Math.round(amount) > 0` post-filter that production code applies, otherwise rounded-to-zero transfers (sub-shekel Lior balances) showed up as artificial differences between NEW and OPT.',
+      '🎯 Optimal settlement for 7-8 player games',
+      '🛠 Recursion threshold: 7 → 8',
+      '🛠 Fewer trips per person',
+      '🛡 Validated against 12 real games',
+      '🛡 Auto-closed games stay locked',
     ],
   },
   {
     version: '5.35.7',
     date: '2026-05-03',
     changes: [
-      '🩹 Activity tab heatmap: chronological column order + clearer 0-6 slot label. User asked why Sunday\'s "night" column had entries on a Sunday afternoon ("Sun night didn\'t happen yet so how come there are entries there?"). Two compounding issues: (1) the slot was labelled "לילה 0-6" but in Hebrew "לילה" colloquially means late evening (~22:00-04:00), not the 0-6 AM slot the column actually represented — readers parsed it as "tonight" instead of "between midnight and 6 AM today". Renamed to "אחרי חצות" (literally "after midnight") which is unambiguous: it\'s today\'s first 6 hours, already happened by the time anyone looks at the dashboard. (2) The column display order was [morning, noon, evening, night] which suggested a chronological progression — but `night (0-6)` is BEFORE morning chronologically, not after evening, so the 0-6 cell ended up at the visual "end of the day" position even though its data was from the start of the day. Worse, with the rolling 7-day window, today\'s row only fills cells for hours that have elapsed; the old layout put an empty "evening 18-24" cell BETWEEN filled "noon" and filled "night" cells, which made readers wonder why the future was rendered before the past. Reordered `slotDisplayOrder` from `[1, 2, 3, 0]` to `[0, 1, 2, 3]` so columns now progress chronologically `0-6 → 6-12 → 12-18 → 18-24`. In RTL Hebrew layout this means the day starts at the visual right and progresses leftward — today\'s row fills right-to-left as hours pass, and the not-yet-happened cells sit at the leftmost (latest) end of the row. File: `src/screens/SettingsScreen.tsx`.',
+      '🩹 Activity heatmap: chronological column order',
+      '🩹 "לילה 0-6" → "אחרי חצות"',
     ],
   },
   {
     version: '5.35.6',
     date: '2026-05-03',
     changes: [
-      '🩹 Settings → Activity tab: replaced the Sun→Sat calendar week (5.35.4) with a rolling 7-day window ending today. Closes the "Sunday surprise" we hit in 5.35.5 — opening the tab on a Sunday morning showed near-empty stats and degenerate `D.M` labels because the calendar week had just rolled over and `today` was the only day in the window. A rolling window always covers exactly 7 calendar days regardless of which weekday the owner opens the tab on, so the dashboard reads the same shape every visit and the day-of-week label drift can\'t happen anymore.',
-      '🛠 Implementation. Both `_wkStart` (the early header copy that runs before activityLog loads) and `currentWeekStart` (the body copy used by every consumer below) are now `today_at_midnight − 6 days`. The inclusive range `[today−6, now]` is a real 7 calendar days. Helper renamed `startOfSunWeek` → `startOfRolling7d`; the variable name `currentWeekStart` is kept across all six consumers (`weekUserDays`, `mostActiveThisWeek`, `heatmap`, `weeklyTrend`, `currentWeekRangeLabel`, `trainingEngagement`) for diff hygiene — its meaning is now "start of the rolling 7-day window" and there\'s a comment to that effect. Same-day collapse from 5.35.5 deleted as dead code: a 7-day rolling window can\'t degenerate to a single day. Heatmap maths unchanged — it aggregates by `getDay()` and a rolling 7-day window contains exactly one of each day-of-week, so each `dayNames[]` row still gets one calendar day\'s data. Weekly trend buckets become 3 contiguous rolling 7-day windows (`[t−6,t]`, `[t−13,t−7]`, `[t−20,t−14]`) — half-open on the upper end to avoid double-counting boundary entries; no overlap, no gaps. File: `src/screens/SettingsScreen.tsx`.',
-      '🛠 Labels. The "📆 השבוע: 3–3.5 (מיום ראשון)" caption becomes "📆 7 ימים אחרונים: 27.4–3.5 (נע)" / "Last 7 days: 27.4–3.5 (rolling)". The "(rolling)" / "(נע)" hint signals readers that this isn\'t a Sun→Sat calendar week — useful since the dashboard previously was Sat→Fri (≤5.35.3) then Sun→Sat (5.35.4–5) so longtime users expect calendar weeks. i18n keys retuned: `weekSessions` → "ביקורים ב-7 ימים" / "Visits (7d)"; `trendUsers` → "משתמשים (7 ימים)" / "Users (7d)"; `trendSessions` → "ביקורים (7 ימים)" / "Visits (7d)"; the "אימון השבוע" training-engagement title becomes "אימון ב-7 ימים אחרונים" / "Training (last 7d)". The `vsLastWeek` comparison label stays as "vs last week" / "לעומת שבוע קודם" — the previous 7-day bucket IS the right meaning of "last week" for a rolling dashboard, and that phrasing reads better than "vs prev 7d". Heatmap title `מפת חום שבועית` / `Weekly heat map` left intact — colloquially correct (it\'s 7 days of data) and the rolling-window caption right next to it spells out the exact range. Files: `src/screens/SettingsScreen.tsx`, `src/i18n/translations.ts`.',
+      '🩹 Activity tab: rolling 7-day window',
+      '🩹 Labels: "7 ימים אחרונים (נע)"',
     ],
   },
   {
     version: '5.35.5',
     date: '2026-05-03',
     changes: [
-      '🩹 Settings → Activity tab date labels: collapse the degenerate "3–3.5" range into a single "3.5" when the week start day equals today, and replace the now-stale "(משבת אחרונה)" / "(since last Sat)" caption with "(מיום ראשון)" / "(since Sun)" to match the Sunday-anchored week from 5.35.4. Visible immediately on Sundays: with Sun→Sat weeks the new week\'s start IS Sunday, so visiting the tab on a Sunday produced labels like `📆 3–3.5` (start day = end day = today, May 3) in 4 different places — the section header, the "השבוע" line below the live-now strip, the small "this week" badge on the visits-this-week summary card, and the per-week-row label on the weekly trend card. Fix is a same-day check (`sameMonth && s.getDate() === e.getDate()`) in both label builders that returns `D.M` directly. Same logic mirrored in both the early `headerWeekRangeLabel` (computed before activityLog data loads, exposed in the section header next to the title) and the in-body `currentWeekRangeLabel` (used by the rest of the cards) so they never disagree. The "(since last Saturday)" caption was a leftover from when the window was Sat→Fri — now correctly says "since Sunday" in HE/EN. File: `src/screens/SettingsScreen.tsx`.',
+      '🩹 Activity dates: collapse same-day range',
+      '🩹 Caption: "מיום ראשון" instead of "משבת"',
     ],
   },
   {
     version: '5.35.4',
     date: '2026-05-03',
     changes: [
-      '🩹 Settings → Activity tab: weekly window now anchors to Sunday→Saturday instead of Saturday→Friday. User wanted "this week" to read Sun→Sat to match the calendar he and the rest of the group think in. Affects the weekly heatmap (`מפת חום שבועית`), the "ביקורים השבוע" / unique-users / week-over-week delta on the summary cards, the 3-bar weekly trend chart, the weekly training engagement card, and the date-range label in the section header. Implementation is a one-line change to the offset math (`r.setDate(r.getDate() - r.getDay())` — `Date.getDay()` already returns 0=Sun…6=Sat, so the offset is just `getDay()` directly, no `+1) % 7` shenanigan needed). Both code sites that computed week-start (the inline header version at the top of the activity-tab block and the shared `startOfSatWeek` → renamed `startOfSunWeek`) updated together so every consumer of `currentWeekStart` agrees. Heatmap row labels (א=Sun, ב=Mon, …, ש=Sat) were already in `getDay()` index order so nothing in the rendering needed to move; previously the first row (Sun) was effectively part of the *next* week\'s bucket which was always slightly off-feel — now the row order and the bucket edges match. Verified across all 6 consumers of `currentWeekStart` (`weekUserDays`, `mostActiveThisWeek`, `heatmap`, `weeklyTrend`, `currentWeekRangeLabel`, `trainingEngagement`) — every one of them now reports the same Sun-anchored window. No other screens carried Saturday-week logic so this is a single-screen behaviour change with no cross-screen drift to worry about. File: `src/screens/SettingsScreen.tsx`.',
+      '🩹 Weekly window: Sun→Sat',
     ],
   },
   {
     version: '5.35.3',
     date: '2026-05-03',
     changes: [
-      '🩹 Settings → Activity tab now renders each user\'s *current* linked player name instead of the name that was stamped onto their session at session-start. User reported that after migration 046 merged `ספי טורס` into `ספי`, the Settings → Players list correctly showed `ספי`, but the Settings → Activity tab kept rendering `ספי טורס ⭐ חבר ● פעיל היום` even after the realtime/replica fixes from 048. Cause was completely separate from the realtime issue: the Activity tab built its `nameByKey` map from `activity_log.player_name`, which is a denormalised stamp written at the start of each session by `logActivity()` (see `src/utils/activityLogger.ts`). That stamp captures who-this-was-at-session-time and is intentionally never rewritten when the user\'s linked player record is renamed or merged later — by design, because it has to keep working for users who left the group. The Activity tab uses the *latest* stamp per user, and Sefi\'s latest stamp was 2026-05-03 09:26 (post-merge, but before he opened the app again under the new linked name), so it forever read `ספי טורס`. Verified live: 12 of 12 of his rows stamped that way.',
-      '🛡 Fix is a live join in the renderer. The Activity tab already loads `activityMembers` via `groupMgmt.fetchMembers()` (the existing `fetch_group_members_with_email` RPC, owner-restricted, returns `userId → playerName` joined against the live `players` table). We now build a `liveNameByUserId` map from that and use it to override the stamped name whenever the activity row carries a `userId` that matches a live group member. Both `latestNamedByKey` (used for sort / grouping) and `nameByKey` (used for rendering) consult it. Stamped names survive only as fallback for activity rows whose user is no longer in the group, or for anonymous device-only sessions — exactly the cases where the stamp is the right answer. Result: any future rename or merge propagates to the Activity tab on next refresh with no migration needed. File: `src/screens/SettingsScreen.tsx`.',
-      '🩹 New SQL `049-heal-activity-log-player-names.sql` heals the underlying `activity_log` data so the stored stamps also catch up to the post-merge truth. Generic across all groups (not just Sefi\'s): for every row whose `user_id` is currently linked to a player in the same group via `group_members`, if the row\'s stamped `player_name` differs from the live `players.name`, overwrite the stamp. Skips rows where `user_id` is NULL (anonymous sessions) and rows whose user is no longer a group member (genuine historical attribution we shouldn\'t rewrite). Idempotent — re-running is a no-op once names align. Reports the row count via `RAISE NOTICE`. Verified scope live via MCP read-only access: 13 rows / 1 user affected (Sefi\'s 12 stamped sessions plus one transitional row), no other groups currently drifted. Code change is sufficient on its own to fix the visible UI bug since the live join overrides the stamp at render time, but running this migration brings the stored data into agreement so future readers (potential analytics, exports, or any new consumer of `activity_log.player_name`) see one consistent answer.',
+      '🩹 Activity uses live linked player names',
+      '🩹 SQL 049: heal stamped player names',
     ],
   },
   {
     version: '5.35.2',
     date: '2026-05-03',
     changes: [
-      '🩹 Realtime DELETE events now actually reach connected clients. Latent project-wide bug, surfaced by yesterday\'s 046-merge-duplicate-player-sefi migration: the user kept seeing the deleted `ספי טורס` row in Settings → Players for hours after the DB was clean. Root cause is a Supabase Realtime + RLS + REPLICA IDENTITY interaction: Supabase Realtime evaluates a table\'s SELECT policy against the OLD row payload before forwarding a `postgres_changes` event to a client. With `REPLICA IDENTITY DEFAULT` (the Postgres default — and what every one of our 23 realtime-subscribed tables had been using since `003-realtime.sql` first enabled Realtime), the OLD row payload contains ONLY the primary key — every other column is NULL. Our group-scoped RLS predicate is `group_id IN (SELECT group_id FROM group_members WHERE user_id = auth.uid())`, which against `group_id = NULL` evaluates to NULL, treated as false, so the DELETE event is silently dropped. The client\'s in-memory cache never learns the row was deleted; the deleted row stays visible until something else triggers a re-fetch (any UPDATE on the same table, a logout, a manual refresh).',
-      '🛡 New SQL `048-realtime-replica-full.sql` does two things: (1) sets `REPLICA IDENTITY FULL` on every realtime-subscribed table — `players`, `games`, `game_players`, `shared_expenses`, `game_forecasts`, `paid_settlements`, `period_markers`, `settings`, `chip_values`, `pending_forecasts`, `chronicle_profiles`, `graph_insights`, `tts_pools`, `group_members`, `groups`, `notifications`, `player_traits`, `training_answers`, `training_pool`, `training_insights`, `game_polls`, `game_poll_dates`, `game_poll_votes` (23 in total). With FULL, the entire OLD row is shipped in the WAL DELETE record, so RLS evaluates against the real `group_id` and the event reaches every authorised client. (2) Issues a no-op `UPDATE players SET name = name WHERE id = ec7b80…` so the user\'s already-open Settings tab gets a fresh realtime UPDATE event that triggers `scheduleRealtimeRefresh(\'players\')` and clears the stale ספי טורס entry from the cache without any user action. Trade-offs: tiny WAL volume bump per UPDATE/DELETE (sends old row + new instead of new + PK) — negligible at this app\'s data volume; no security implications (the OLD row is gated by the same SELECT policy that already governs reads); no perf implications (row matching for replication still uses the PK index). Verified live via MCP: all 23 tables now `replica_identity = full`, zero `default` left.',
-      '🛡 `useRealtimeRefresh` hook now also re-fetches on `document.visibilitychange` (when state becomes `visible`) and `window.focus`, debounced 500ms so the back-to-back fire on tab-restore is collapsed into one callback. Closes a separate gap that bit the GroupManagementTab member list after 048 ran — a screen mounted before a backgrounded period would miss every realtime event that arrived while the tab was suspended (Supabase Realtime has no "redeliver missed events on reconnect" semantic), and would keep rendering stale data forever. Now every tab-resume idempotently forces one re-fetch through the same channel as ordinary realtime updates, so the UI converges on the truth even after long backgrounded periods. The hook holds the latest callback in a ref so the listeners never re-bind on every render — clean, no-thrash. File: `src/hooks/useRealtimeRefresh.ts`.',
+      '🩹 Realtime DELETE events now reach clients',
+      '🛡 SQL 048: REPLICA IDENTITY FULL',
+      '🛡 Re-fetch on tab focus',
     ],
   },
   {
     version: '5.35.1',
     date: '2026-05-03',
     changes: [
-      '🩹 Heal duplicate-player record for `ספי` and prevent the same class of bug from happening again. User reported that Settings > Players showed `ספי טורס` while Statistics showed `ספי` — turned out to be two genuinely different `players` rows for the same human in the same group: an old admin-created record `ספי` (Dec 2025, 5 completed games) and a new self-created record `ספי טורס` (May 1 2026, 0 games but linked to user `sefitores`). His login was attached to the empty record while all his game history sat under the unlinked one, so neither view could show "him" correctly.',
-      '🐛 Root cause: `PlayerPicker` (`src/App.tsx`) only ever rendered a name-input — it never showed the joiner the list of unlinked players in the group, despite `.cursor/rules/group-management.mdc` explicitly saying the picker should *"show: list of unlinked players + I\'m not on the list — create me"*. So when Sefi joined on May 1, he had no way to know `ספי` already existed, typed his preferred full name, and `self_create_and_link` minted a duplicate. Same trap is set for every future joiner — anyone whose chosen display name doesn\'t exactly match an admin-created roster row creates a duplicate.',
-      '🩹 New SQL `046-merge-duplicate-player-sefi.sql` heals Sefi\'s specific duplicate. Re-links `group_members.player_id` from the empty `ספי טורס` (a71324…) to the historical `ספי` (ec7b80…), moves the lone `game_poll_votes` row that was attached to the dup, defensively migrates any `player_invites` / `player_traits` / `game_players` references (idempotent — UPDATE is no-op when no rows match), then deletes the duplicate `players` row. The DELETE is single-row (passes the `block_bulk_deletes` trigger from migration 043) and guarded with `NOT EXISTS` checks against every reference table so an unexpected new FK row would turn the delete into a safe no-op rather than an orphan. Final `RAISE NOTICE` block verifies post-state. Verified live: `players_dup=0, game_players_on_old=5, group_members_on_old=1, poll_votes_on_old=1, all_orphan_refs=0` — Sefi will see `ספי` consistently across every screen on next reload.',
-      '🛡 New SQL `047-list-linkable-players.sql` adds the RPC the picker needs. SECURITY DEFINER with pinned `search_path = public, pg_temp` (matches 045 hygiene), takes optional `p_group_id` (falls back to caller\'s primary group), validates caller is a member of that group before returning data, returns `(id, name)` for every player in the group that no `group_members` row is linked to. Required because the `gm_select` RLS policy on `group_members` only returns the caller\'s own row — a joiner literally cannot compute "unlinked players" client-side. `revoke all from public, grant execute to authenticated`.',
-      '🛡 PlayerPicker rewrite. Now calls `list_linkable_players` on mount and, when the group has unlinked players, renders them as a vertical list of "I am [Name]" buttons that call `link_member_to_player` directly — same flow that the cursor rule promised. A small dashed "I\'m not on the list — create me" link drops into the original name-input self-create flow as a fallback. If the group genuinely has zero unlinked players (fresh group, no admin-created roster), the picker goes straight to the input — no regression. New `listLinkablePlayers` wrapper added to `useSupabaseAuth` and exposed on the hook surface alongside the existing `linkToPlayer`. New i18n keys (HE + EN): `picker.existingHeader`, `picker.existingHelp`, `picker.notInList`, `picker.linkError`, `picker.backToList`. Files: `src/App.tsx`, `src/hooks/useSupabaseAuth.ts`, `src/i18n/translations.ts`.',
-      '🔒 `game:delete` capability removed from the `admin` role permission set in `src/permissions.ts` — only group owner + super admin can delete a completed game from history now. Prevents accidental / hostile destructive action by promoted admins; owners typically pick admins who haven\'t internalized the consequences yet, and a deleted game cascade-removes 8+ `game_players` rows, the AI summary, the comic, the forecast comparison, paid_settlements, etc. The capability stays available via the existing owner-and-above checks (`isOwner` / `isSuperAdmin`) so no UI path is broken — admins simply no longer see the delete affordance.',
-      '🔧 Activity log `getScreenName` now maps `/p/*` paths to `Poll Link` instead of falling through to the generic `Other` bucket. Match the existing routing convention (`/p/<token>` is the public poll-share landing page used by WhatsApp share links). Owner activity dashboard now reports those visits as a distinct screen so it\'s actually possible to see how many people are landing via shared poll links vs visiting the polls tab from inside the app.',
+      '🩹 Heal duplicate Sefi player record',
+      '🛡 SQL 046: merge duplicate',
+      '🛡 SQL 047: list_linkable_players RPC',
+      '🛡 PlayerPicker shows existing players first',
+      '🔒 Admins can no longer delete games',
+      '🔧 Activity log: "/p/*" → "Poll Link"',
     ],
   },
   {
     version: '5.35.0',
     date: '2026-05-03',
     changes: [
-      '🎯 Training admin "Save AI fix" + bulk pool review now actually re-grade historical answers against the corrected key. Previously these flows only cleared the flag entries on `training_answers` (`clearFlagsLocally`) and never re-derived `correct` / `nearMiss` against the new `options[].isCorrect` — so a player who answered correctly *per the fix* stayed marked wrong, and `stats.totalCorrect` / `accuracy` never moved when an admin accepted a flagged report. Players were complaining "the fix didn\'t work." `confirmAIFix` now writes via the new `regradeAnswersForFixedScenarios(data, [fixedScenario])` helper, and `handleReviewPool` calls `neutralizeAnswersForRemovedPoolIds(data, removedIds)` for scenarios marked "remove" so dropped questions stop counting toward accuracy. Both helpers walk `sessions[].results[]`, neutralize answers whose `chosenId` no longer exists in the new option set (can\'t be fairly graded against a different shape), strip the matching entries from `flaggedPoolIds` / `flagReports`, then call `recomputePlayerTotals` to refresh `totalQuestions` / `totalCorrect` / `accuracy` / per-session `correctAnswers`. Admin progress log now reads "מתקן ציוני שחקנים לפי המפתח החדש..." → "✅ השאלה תוקנה — ציוני השחקנים עודכנו לפי המפתח החדש". File: `src/components/TrainingAdminTab.tsx`.',
-      '🩹 New SQL `044-regrade-training-answers.sql` heals historical drift caused by past fixes that ran before the regrade patch shipped. One-time scan of every `training_answers` row that walks `sessions[].results[]`, looks up the chosen option in the *current* `training_pool` scenario for the same `group_id`, re-derives `correct` / `nearMiss` from the live key, neutralizes any result whose `chosenId` no longer exists in the option set, then recomputes `session.correctAnswers` and `stats.{totalQuestions, totalCorrect, accuracy}` for every changed row. Idempotent; safe to re-run. Pure data heal — no schema changes.',
-      '🛡 New SQL `045-security-and-perf-hardening.sql` mechanically clears the safe subset of Supabase advisor lints: (a) `function_search_path_mutable` — pinned `search_path = public, pg_temp` on 8 SECURITY DEFINER / DB-level functions that were inheriting the caller\'s search path; (b) `auth_rls_initplan` — wrapped 84 RLS policies\' `auth.uid()` references as `(SELECT auth.uid())` so PG caches the value once per query instead of re-evaluating per row (big win on `activity_log`, ~20K rows); (c) added 3 covering indexes on FK columns hit on every owner check / activity dashboard / member→player lookup. Deliberately scoped to mechanical wins — REVOKE-on-anon-RPC audits, super-admin cross-group RLS gaps, and HaveIBeenPwned dashboard toggles are tracked separately because they need design decisions, not one-line fixes.',
-      '🔧 TTS rebuy summary fix (regression from yesterday). The pre-rebuy announcement was correct ("X is buying in again"), but the post-rebuy summary occasionally substituted a hard-coded Hebrew number for the live count — e.g. spoke "כבר חמש קניות" while the screen said 4. Root cause: Gemini\'s pool-generation prompt told the model to use `{COUNT}` as a placeholder for the player\'s current buy-in count, but the model was non-deterministically inlining a literal Hebrew word ("שלוש", "ארבע", "חמש"...) instead, so the runtime substitution had nothing to replace. The bad sentence then got cached in the per-game TTS pool and replayed across rebuys until the game ended. Two-layer fix: **(1)** strengthened the prompt with an explicit critical rule listing forbidden patterns ("כבר חמש קניות", "עוד שלוש קניות"...) and allowed historical/average qualifiers (`ממוצע`, `שיא`, `בעבר`, `פעם`, `היסטור`, `בדרך כלל`, `תמיד`, `למשחק`, `הקודם`, `אף פעם`); **(2)** added a `hasLiteralLiveCount` validator at generation time AND an identical `hasLiteralLiveCountAtRuntime` at speak time — the runtime check drops bad sentences from the playback queue even if the pool was generated by an older client/build. Regex matches any of the 14 Hebrew live-count words (אחת/שתי/שתיים/שלוש/שלושה/ארבע/ארבעה/חמש/חמישה/שש/שישה/שבע/שבעה/שמונה/תשע/תשעה/עשר/עשרה) immediately before "קניה"/"קניות" but only outside the qualifier whitelist. Files: `src/utils/geminiAI.ts` (prompt + generation filter), `src/screens/LiveGameScreen.tsx` (runtime safety net).',
-      '🩹 Training upload pipeline — removed a silent data-loss path. `flushPendingUploads` (the localStorage retry queue for shared-training sessions when the direct Supabase write fails) was throwing away buffered sessions for any player who didn\'t already have a row in `training_answers` AND whose buffered session was older than 30 minutes. This was meant as a defense against stale buffer entries but actually wiped a new player\'s entire training history if their first-ever session\'s direct upload failed (network blip, tab backgrounded, mobile sleep) and they happened to not open the app for 30+ min. Real impact: `שגיא אחיין` trained yesterday but didn\'t appear on the leaderboard — his initial upload presumably failed and his buffered first-session was dropped on the next flush. Fix: always create the player record on flush. Upserts are idempotent, so re-creating a row is the right behavior. Recovery path for `שגיא`: if his localStorage buffer is still intact, opening the app on this build will flush it successfully and his data will appear. File: `src/utils/pokerTraining.ts`.',
-      '🔧 Training upload errors are no longer silent. `console.warn` swallow points in `upsertPlayerSession` and `writeTrainingAnswersWithRetry` were upgraded to `console.error` with structured context (`{ playerName, gid }`) so future failures are visible in DevTools instead of buried. `directWriteSession` in `SharedQuickPlayScreen` is still fire-and-forget (awaiting it would block the conclude-session UI flow), but now has an explicit `.catch()` that logs unexpected rejections — previously they vanished into an unhandled-promise warning. Files: `src/database/trainingData.ts`, `src/screens/SharedQuickPlayScreen.tsx`.',
-      '🔧 ChipEntryScreen numpad now reads left-to-right (1/2/3 · 4/5/6 · 7/8/9) on Hebrew RTL devices. Numbers are universally LTR but the numpad grid was inheriting the app-shell `direction: rtl` and rendering as 3/2/1 · 6/5/4 · 9/8/7 — confusing for chip counting. Override: `direction: "ltr"` on the numpad grid container only; surrounding chrome and modal title stay RTL. File: `src/screens/ChipEntryScreen.tsx`.',
-      '🔧 Default chip-color names are now translated. The 6 stock colors (White / Red / Blue / Green / Black / Yellow) seeded by `create_group()` and the GroupWizard were rendering as English strings inside Hebrew UI ("Blue 1₪", "מחק את Red?"). Custom user-edited colors (e.g. `חרדון`, project-specific palette names) deliberately pass through unchanged — only the 6 default English keys are mapped. New `translateChipColor(color, t)` helper in `src/i18n/index.ts` does a case-insensitive lookup against new keys `chips.color.{white,red,blue,green,black,yellow}` (HE + EN) in `src/i18n/translations.ts`; helper falls through for any unrecognized name. Applied at every render site: ChipEntryScreen modal title + "next chip" button, SettingsScreen chip list + delete confirmation, GroupWizard chip preview. Files: `src/i18n/index.ts`, `src/i18n/translations.ts`, `src/screens/ChipEntryScreen.tsx`, `src/screens/SettingsScreen.tsx`, `src/components/GroupWizard.tsx`.',
-      '📚 Agent docs: `AGENTS.md` and `.cursor/rules/supabase-migration.mdc` now document the Supabase MCP — read-only DB access via `.cursor/mcp.json` (gitignored — contains the Supabase PAT). Workflow is "inspect live state with `list_tables`/`execute_sql` → author `supabase/0XX-*.sql` → user applies → verify". Anti-pattern called out explicitly: "do NOT ask the user to run a SELECT and paste the result — run it yourself via the MCP". `.gitignore` updated to keep `.cursor/mcp.json` out of the repo since it contains the Supabase access token.',
+      '🎯 Training "Save AI fix" re-grades old answers',
+      '🩹 SQL 044: regrade historical answers',
+      '🛡 SQL 045: security/perf hardening',
+      '🔧 TTS: drop bad rebuy-count sentences',
+      '🩹 Training upload: stop dropping new players',
+      '🔧 Surface upload errors in console',
+      '🔧 Numpad reads left-to-right on RTL',
+      '🔧 Translate default chip color names',
+      '📚 Document Supabase MCP in agent docs',
     ],
   },
   {
     version: '5.34.2',
     date: '2026-05-03',
     changes: [
-      '🚨 Fix completed-game wipe on group sync. Sunday morning, Saturday\'s game appeared in History as "0 שחקנים • 0 קניות" — the `games` row was intact but every `game_players` row had been deleted from Supabase, breaking the WhatsApp pay-link (`/game-summary/<id>?pay=1`) for everyone in the chat. Recovered the lost data from the `backups` table (auto game-end backup taken at Sun 02:11 IL contained the full 8-player roster + chip counts + profits), but the recovery was wiped a second time within minutes by the same code path — proof that the bug was active in production and stomping any restored rows.',
-      '🐛 Root cause: `pushToSupabase` (`src/database/supabaseCache.ts`) treated the **local in-memory cache as authoritative for deletes** in three sync paths. After upserting the local rows, each path also ran `SELECT id FROM <table> WHERE <scope>` and then `DELETE` of any server id NOT in local — i.e. *"if I don\'t have it, it must be garbage."* For `players` and `games` the scope was the whole group; for `game_players` the scope was every game with at least one local row. The shared_expenses / game_forecasts / paid_settlements / period_markers child tables had the same pattern keyed on `IN (allLocalGameIds)` — and `game_forecasts` / `paid_settlements` did the even more destructive *delete-all-then-bulk-insert*.',
-      '🐛 Why local was incomplete: (a) `fetchByGameIds` did `.select(*).in(column, batch)` with NO `.range()`, so PostgREST silently capped the response at 1000 rows — once a group reached ~1000 game_players rows in a single id-batch, the cache loaded a truncated subset; (b) per-batch errors were logged as warnings but returned [], so any transient RLS / network blip produced a partial cache; (c) other devices in the group could be mid-init, on a stale bundle, or replaying a `pagehide` flush queued from an earlier session, all of which drove the same delete-back into the server.',
-      '🩹 Fix: replaced "local is authoritative" with **"server is authoritative, local only writes what it changed"**. The PLAYERS, GAMES, and GAME_PLAYERS sync flushes are now upsert-only — they never delete. Real deletes happen on the user-action paths and emit explicit `supabase.from(table).delete().eq("id", id)` calls (`deletePlayer`, `deleteGame`, `removeGamePlayer`, `removeSharedExpense` — see `src/database/storage.ts`). The schema cascades on `games.id → game_players / shared_expenses / game_forecasts / paid_settlements / period_markers / comics / tts_pools`, so `deleteGame` still removes the whole footprint atomically with one DB call.',
-      '🩹 Child-table reconciliation (forecasts, paid_settlements, expenses, period_markers — these don\'t have UNIQUE(game_id, ...) constraints we can upsert against, so they need explicit replace) is now scoped to **only games the user actually touched in this flush**, gated on `gameLocalWriteAt`. A stale tab merely re-upserting the games array (e.g. after a realtime echo) finds an empty marker set and is a pure no-op for child tables — it can no longer mass-replace another game\'s forecasts. To make this safe end-to-end, every single-game mutator now sets the marker: `createGame`, `updateGameChipGap`, `addSharedExpense`, `removeSharedExpense`, `updateSharedExpense`, `linkForecastToGame` (the existing markers on `updateGameStatus` / `updateGame` / AI summary / comic save / forecast accuracy / forecast comment are unchanged).',
-      '🩹 `fetchByGameIds` now paginates each id-batch via `.range(from, from+1000-1)`, mirroring `fetchAllRows`. Combined with the upsert-only flushes, a >1000-row child query can\'t silently truncate AND can\'t cause data loss even if it did.',
-      '🛡 New SQL migration `043-block-bulk-deletes.sql` installs a server-side guardrail so the same bug can\'t corrupt the database again — and so the deploy of v5.34.2 doesn\'t leave a 5-minute window where stale clients can still cause damage. A statement-level `BEFORE DELETE` trigger on `game_players`, `games`, and `players` rejects any direct DELETE statement that affects more than one row (e.g. the old client\'s `DELETE WHERE id IN (...)` garbage-collection pattern). Single-row direct deletes (`DELETE WHERE id = $1`) — which is all the v5.34.2 client uses — pass through untouched, and FK CASCADE deletes (e.g. `deleteGame` cascading to `game_players`) are detected via `pg_trigger_depth() > 1` and allowed. Net effect: the moment this migration is applied, every still-running v5.34.1-and-older client in the group has its destructive sync path blocked at the database, so no one needs to be asked to "close and reopen the app" for the rollout to be safe — the existing 5-minute `/api/version` poll in `src/main.tsx` will eventually self-reload them onto v5.34.2.',
-      '✅ Net result: a stale, partial, or pre-init cache is now a benign read-only situation for that device — it shows fewer rows locally until the next refresh, but it can never corrupt the server. Verified: the affected game\'s 8-player roster restored from the auto game-end backup, WhatsApp pay-link works again. Files: `src/database/supabaseCache.ts` (sync flushes + `fetchByGameIds`), `src/database/storage.ts` (explicit deletes + marker calls), `supabase/043-block-bulk-deletes.sql` (DB-level bulk-delete guard), `src/version.ts`.',
+      '🚨 Fix completed-game wipe on group sync',
+      '🐛 Local cache no longer authoritative for deletes',
+      '🩹 Sync flushes are now upsert-only',
+      '🩹 fetchByGameIds paginates >1000 rows',
+      '🛡 SQL 043: block bulk deletes server-side',
     ],
   },
   {
     version: '5.34.1',
     date: '2026-05-02',
     changes: [
-      '🛠 New SQL migration `042-min-transfer-default.sql` flips the `settings.min_transfer` column default from `20` to `5` so new groups created via `create_group()` no longer inherit a 20₪ minimum-transfer threshold the frontend never advertised. Root cause: the RPC inserts settings with only `(group_id)` and lets every other column fall back to the schema default — frontend `DEFAULT_SETTINGS.minTransfer = 5` therefore never reached the database. `supabase/schema.sql:150` updated to match. Existing groups intentionally untouched (some owners have legitimately raised the threshold). Optional follow-up `UPDATE settings SET min_transfer = 5 WHERE min_transfer = 20` can normalise legacy groups that never edited the value.',
-      '🔧 Schedule poll bulk-cancel proxy votes now works. Previously the "Delete vote" CTA in the proxy modal only appeared when exactly one player was selected — admins who multi-selected a roster (e.g. 5 absentees) couldn\'t bulk-remove their proxy votes and had to either click each row individually or open/close the modal once per player. The footer now shows "Delete vote" for single selection or "Delete N votes" for multi-select; the perform path serialises `adminDeleteVote(dateId, playerId)` calls (no bulk RPC exists), reports `הצבעה נמחקה` / `N הצבעות נמחקו`, and the confirmation modal lists the affected names so the admin can verify the scope before confirming. Selected players without a current vote are silently skipped — they\'re a no-op, not a blocker. New translation keys `schedule.proxy.{deleteVotesBulk, confirmDeleteBulk, confirmDeleteTitleBulk, deletedBulk}` (HE + EN). Modal helper text also trimmed: `אדמינים יכולים להצביע בשם שחקנים שלא נרשמו לאפליקציה. הצבעה כזו תוחלף אוטומטית אם השחקן נרשם ומצביע בעצמו.` → `אדמין מצביע בשם שחקן שלא נרשם. אם השחקן יצביע בעצמו — הצבעתו תחליף.`',
-      '🔧 Settings header (Schedule tab) now fits a single line on phones down to ~280px wide. Was wrapping to two rows on 320–375px because the heading + ⚙️ + create button (was `פתיחת הצבעה`) overflowed. Trimmed labels (HE: `פתיחת הצבעה` → `הצבעה`, removed leading `+`; EN: `Open poll` → `Poll`), reduced h2 from 20px → 18px with `min-width: 0` + `text-overflow: ellipsis` so the title shrinks before forcing a wrap, button paddings tightened (8/14 → 7/12), and primary CTA reordered to the right edge in RTL with the gear icon demoted to the left as a secondary chip. Removed `flex-wrap: wrap` since the new sizing fits down to 280px. Also hid the super-admin-only `🧪 המשחק הבא (ישן)` legacy fallback tab from the visible bar — it remains reachable via deep-link `?tab=scheduleLab` for super-admins, but it no longer takes up chrome real estate.',
-      '🔧 Settings → Players row redesigned: dropped the redundant `⭐ / 🏠 / 👤` type emoji on every player row (the collapsible section header above already labels each row\'s type — repeating it on each row was visual noise) and replaced the nearly-invisible 0.55rem ♀/♂ glyph at 60% opacity with a bold 0.95rem coloured glyph (♀ pink #EC4899, ♂ blue #60A5FA) sitting inline directly after the name with a tooltip (`נקבה`/`זכר`). Name bumped to 0.9rem with `text-overflow: ellipsis` so long names truncate cleanly. The .row-action chip cluster keeps its existing emerald/purple/red palette unchanged.',
-      '🔧 Schedule poll PollTimer phase strings shortened to fit a single line on 320px-wide phones: `⏳ פתוח לקבועים · מתרחב לכולם בעוד {time}` → `⏳ קבועים · נפתח לכולם בעוד {time}`; `🚪 פתוח לכל השחקנים · נסגר בעוד {time}` → `🚪 פתוח לכולם · נסגר בעוד {time}`; `🎉 המשחק יתחיל בעוד {time}` → `🎉 המשחק בעוד {time}`; `🚪 מוכן להרחבה לכל השחקנים` → `🚪 מוכן להיפתח לכולם`. Duration formatters tightened: `{d} ימים, {h} שעות` → `{d} ימים {h} שע׳`; `{h} שעות, {m} דקות` → `{h} שע׳ {m} דק׳`; etc. Hebrew abbreviation `שע׳` / `דק׳` is the standard short form. EN strings left unchanged (already concise).',
-      '🔧 Compact poll-card kebab menu (admin overflow popover) now renders through `ModalPortal` with `position: fixed` coordinates derived from `getBoundingClientRect()`. Previous in-tree `position: absolute` layout was clipped by the `.poll-card { will-change: transform }` stacking context — when two poll cards were on screen, the second card painted over the first card\'s popover regardless of `z-index`. Switched from logical `inset-inline-end` (which mirrors to `left` in RTL and pushed the menu off-screen on the right edge of the app shell) to physical `top` / `left` clamped 8px inside the viewport, anchored so the menu\'s right edge lines up with the kebab\'s right edge. Click-outside, Esc-to-close, scroll/resize re-anchoring, and the disabled-while-submitting state on the lock item are all preserved. Lock toggle (🔒 נעל / 🔓 שחרר) was also moved into the kebab so the visible action strip stays at ≤ 3 chips on every status (was 5 chips with awkward auto-margin wrap on confirmed polls). Each menu item is a coloured tinted pill (lock = amber/emerald per state, cancel/delete = red) with white labels and hover-deepening tints — chip-style instead of the earlier text-only rows.',
-      '🔧 `fmtHebrewDate` / `fmtHebrewDateCompact` now insert a middle-dot (`·`) between the three semantic chunks: `יום חמישי 7/5 21:00` → `יום חמישי · 7/5 · 21:00`. The plain-space-separated format read as one run-on phrase; the typographic separator gives weekday / date / time their own visual beat without using punctuation. Cascades to the compact poll-card date tile header, confirmed-poll banner, manual-close confirm modal copy, and WhatsApp share-card text. Polls without a `proposedTime` degrade cleanly (one separator, not two).',
-      '🔧 Settings → Push tab tightened up: subscriber count now agrees with the chip list (deduplicated by player name — was raw row count, so a single player with phone + laptop + tablet inflated the headline to "135 שחקנים" while the chip list showed actual count); copy reworded to `{count} שחקנים מהקבוצה מנויים להתראות` / `{count} players in this group subscribed to push` so it can\'t be confused with the total roster. Removed the `בחר הכל` / `נקה הכל` (Select all / Deselect all) shortcuts from the recipient picker — the "All players" target option already covers the bulk case. Push templates rewritten for actual admin needs: `🃏 ערב פוקר השבוע!` → `🗳️ נפתחה הצבעה למשחק הבא, מוזמנים להצביע` (vote nudge), `💰 תזכורת: יש חוב פתוח` → `💰 תזכורת: נשארו חובות פתוחים מהמשחק האחרון` (concrete reference), `❌ המשחק הלילה בוטל` → `❌ המשחק היום בוטל` (works for any time of day, not just evening), `🎯 המשחק מתחיל בקרוב!` → `⏰ תזכורת: המשחק מתחיל בקרוב, לא לאחר` (pre-game reminder; the auto push already covers "starting now"). EN strings parallel-trimmed.',
-      '🔧 Settings → Activity tab now sorts the members list by full timestamp of each member\'s most recent activity (descending), not by day-rounded `daysSince`. Previously every member who visited today landed in the same `daysSince === 0` bucket and the rendered order followed arbitrary `userMap` iteration order — so a member who tapped 5 minutes ago could appear below one who logged in 8 hours ago. The `daysSince` value still drives the active/recent/stale badge colours but no longer the sort key.',
-      '🔧 Other small copy/UX polish: Schedule action chip "📤 שתף משחק" → "📤 שתף" / "Share game" → "Share" (the card context already conveys what\'s being shared); report screen drops the redundant `דיווח על בעיה` h3 and promotes the `סוג הדיווח` category label to take its place at h3 size + centred; activity log heatmap and weekly trend already correctly group by stable identity (preserved from `v5.33.5`).',
+      '🛠 SQL 042: min-transfer default 20 → 5',
+      '🔧 Schedule poll: bulk-cancel proxy votes',
+      '🔧 Settings header fits on 280px',
+      '🔧 Player rows: cleaner gender glyph',
+      '🔧 Compact poll timer phase strings',
+      '🔧 Kebab menu via portal (no clipping)',
+      '🔧 Hebrew dates use middle-dot separator',
+      '🔧 Push tab: deduped subscriber count',
+      '🔧 Activity sorted by full timestamp',
     ],
   },
   {
     version: '5.34.0',
     date: '2026-05-02',
     changes: [
-      '✅ Promoted the new compact schedule poll card to be the default for all members. Each date is now a self-contained tile that carries its own count pills, single-line progress bar + `yes/target` ratio, leading-date / locked badges, and per-tile RSVP / proxy / pick controls — replacing the previous double-rendered competition strip + per-date footer that members described as "crowded and confusing". Header collapses status pill / target progress text / open-seats hint into the phase-coloured top border + PollTimer, and adds a 📍 prefix to the location string so the venue chip reads as a place rather than a name. Gendered "(אתה)" / "(את)" tag in the expanded voter list resolves from the player\'s `gender` field. The previous layout is preserved in full as a super-admin-only fallback sub-tab "📅 המשחק הבא (ישן)" so behaviour can be A/B-compared and the old card remains reachable while the new one is dog-fooded. Files: new `src/components/scheduleLab/PollCardCompact.tsx`; `ScheduleTab` now accepts a `variant: "compact" | "legacy"` prop and exports its shared helpers/sub-components; `SettingsScreen` renders the legacy variant in the gated lab tab.',
-      '🔧 Schedule poll-card admin actions reorganised for mobile: the visible action strip is now ≤ 3 chips on every status (Start game / Share / Edit) plus a single ⋯ kebab. The kebab opens a chip-stacked popover containing 🔒 lock-voting (amber when open → "freeze", emerald when frozen → "unfreeze"), 🚫 cancel poll, and 🗑 delete poll — each its own coloured tinted pill with white label so the colour reads as semantic accent rather than dominant text. Popover renders through `ModalPortal` with `position: fixed` coordinates from `getBoundingClientRect`, anchored to the kebab\'s right edge and clamped 8px inside the viewport. The previous in-tree popover was getting clipped by `.poll-card { will-change: transform }` (which establishes a CSS stacking context, so any sibling poll card painted over the menu regardless of `z-index`) and an earlier attempt using logical `inset-inline-end` mirrored the menu off-screen under the app\'s RTL shell. Click-outside, Esc-to-close, scroll/resize re-anchoring, hover/focus ring, and disabled-while-submitting on the lock item are all preserved.',
-      '🔧 Schedule date tile (compact card) tightened up: vote-count summary, progress bar, and `yes/target` ratio now share a single flex row with `tabular-nums` on the ratio so the digits don\'t wobble between 0/7 ↔ 10/14. The "📌 בחר" manual-pick chip moved out of the RSVP row and into the tile header (smaller pill, never wraps to a second line on phones), and the "➕" admin-proxy chip pinned to the row\'s end with `marginInlineStart: auto` so RSVP buttons never split between two rows on a 375px viewport. Header badge cluster (Locked / Leading / pinned) realigns with the date via `alignItems: flex-start`. Active-RSVP styling kept understated (1.5px ring + soft tint, no glow halo) per direct feedback that the earlier emphasis was "too much".',
-      '🔧 Schedule copy shortened across the board: lock-confirm modal body trimmed to "לנעול את המשחק על {date}? ההצבעות נשמרות וניתן עדיין לעדכן." and its CTA to "נעל תאריך" (was a wrap-prone "נעל על תאריך זה"); ScheduleConfigPanel helper texts (`emailsHelper`, `voteChangeNotifsHelper`, `pushHelper`, `defaultsHelper`) all parallel-trimmed to one short sentence each; `editPollSubtitle` collapsed to "השינויים יחולו מיידית."; `proxy.add` reduced to a bare `➕` glyph (the row label was redundant with the tooltip); `cancelPollShort` gained a 🚫 prefix so the kebab options read as iconified actions (HE + EN). Removed the now-redundant `schedule.yourVote.*` / `notVotedYet` / `voteHereCue` keys — the per-tile RSVP state is sufficient indication and the standalone "your vote" chip became visual noise once the tiles got compact.',
-      '🛠 Recreated the May 2 confirmed poll that was hard-deleted from `game_polls` after the next-week poll opened (no orphan rows survived in `game_poll_dates` / `game_poll_votes`, so soft-delete is recommended for a future migration). Re-inserted the poll with status `confirmed`, the original target/location, and the seven `yes` votes from the screenshot so it reappears as an active confirmed poll for today.',
+      '✅ New compact schedule poll card',
+      '🔧 Action strip: ≤3 chips + kebab',
+      '🔧 Tighter date tile layout',
+      '🔧 Shorter schedule copy across the board',
+      '🛠 Restored deleted May-2 confirmed poll',
     ],
   },
   {
     version: '5.33.6',
     date: '2026-05-01',
     changes: [
-      '🔧 Number inputs across the app (Settings: buy-in value, chips per buy-in, minimum transfer, per-chip value; new-group wizard: buy-in value, chips per buy-in, per-chip value; Schedule poll create/edit modals: target count, expansion delay; Schedule defaults config: default target, default delay) can now be cleared with a single backspace/delete and re-typed from scratch. Previously every one of these 12 inputs was bound directly to a numeric state with the classic `parseInt(e.target.value) || 0` (or `|| 2`, `|| 1`) fallback — when the user emptied the field the parser returned `NaN`, the `||` fallback coerced it to a default, the input re-rendered showing that default with the cursor parked after it, and to type a fresh number the user had to select-all then overwrite (un-friendly, especially on mobile). Replaced all of them with a new `NumericInput` component that holds an internal *string draft*: typing keeps the draft in local state, an empty draft is allowed mid-edit and never propagates to the parent, a parsed integer is committed only when the draft is non-empty and parses cleanly, and on blur an empty/invalid draft snaps back to the last committed value (drafts below `min` snap up to `min`, drafts above `max` snap down to `max`). External prop changes only refresh the draft when they differ from the last committed value, so realtime sync from another tab no longer clobbers an in-progress edit. The component also forwards `onBlur` so callers like the Schedule defaults panel can chain a `commit*` persist-to-DB step that runs AFTER the clamp logic. Files: new `src/components/NumericInput.tsx`; replacements in `src/screens/SettingsScreen.tsx`, `src/components/GroupWizard.tsx`, and `src/components/ScheduleTab.tsx`.',
+      '🔧 NumericInput: clear and re-type cleanly',
     ],
   },
   {
     version: '5.33.5',
     date: '2026-05-01',
     changes: [
-      '🔧 Activity tab no longer renders the same person as two separate cards (e.g. `ספי טורס` plus a phantom `4e34f3a9` device-id stub). Root cause was a two-bug interaction: (1) the App-level activity effect could fire `logActivity` before `auth.membership.playerName` had loaded — `auth.user` and `state.memberships` are set by two separate async passes in `useSupabaseAuth`, leaving a brief window where role is null and so is playerName. The effect early-returned on null role, but for a member who was briefly unlinked from a player (or for token refreshes that hit before membership refetch) the insert went through with `player_name = NULL`. (2) The Activity tab grouped rows by computed display name (`playerName || deviceLabel || deviceId.slice(0,8)`), so identity-equivalent rows with one NULL and one named field landed in different buckets. Fix is layered: write path now (a) gates `logActivity` on `!auth.loading` so the first session waits for membership to settle, (b) depends on `auth.user?.id` instead of the full user reference so a Supabase token refresh does not tear down and rebuild the session, and (c) backfills NULL `player_name`/`user_id` on older rows for the same `(group_id, device_id)` whenever a new session inserts a known name; read path in `SettingsScreen.tsx` now groups all 9 reduce/dedup loops (userMap, todayUniqueUsers, weekUserDays, mostActiveThisWeek, lastVisitor, heatmap, weeklyTrend.users, weeklyTrend.userDays, liveUsers) by stable identity (`user_id || device_id`) and resolves the display name once per group from the most recent named row. New SQL migration `041-activity-log-backfill-name.sql` cleans historical NULL rows in one shot.',
+      '🔧 Activity: no more duplicate user cards',
+      '🛡 SQL 041: backfill NULL player_name',
     ],
   },
   {
     version: '5.33.4',
     date: '2026-05-01',
     changes: [
-      '✂️ WhatsApp share captions trimmed to the bare call-to-action so the chat-preview text is short and punchy rather than competing with the share image. Invitation: was `🗳️ הצבעה פתוחה לערב הפוקר הבא — היכנסו והצביעו` → now just `היכנסו והצביעו` (EN: `Open the app to vote`). Confirmation: was `🃏 ערב פוקר נקבע — לפרטים מלאים ומעקב, היכנסו לאפליקציה` → now `לפרטים מלאים ומעקב, היכנסו לאפליקציה` (EN: `See the full lineup and details in the app`). The share-card image already conveys the context (poll status, dates, players, location) — the caption only needs to nudge readers to tap the link. Cancellation caption left unchanged because the 🛑 prefix carries useful out-of-band signal in chat lists where the image preview may be collapsed. Translation keys `schedule.share.captionInvitation` and `schedule.share.captionConfirmation` (HE/EN).',
+      '✂️ Trimmed WhatsApp share captions',
     ],
   },
   {
     version: '5.33.3',
     date: '2026-04-30',
     changes: [
-      '🏷 Added "סיכום:" / "Summary:" label above the per-date detail row\'s vote-count pills. Without a heading the bare row of pills (`✓ 1 מגיע   ? 0 אעדכן   ✗ 1 בחוץ`) read as a continuation of the voter chips above it instead of a distinct summary block — the dashed top border alone wasn\'t enough of a separator on dense cards. The label sits ABOVE the pill row (not inline) because the large-variant pills with words after the numbers already wrap on narrow viewports; an inline label would either steal width from the pills or get pushed onto its own line awkwardly. Translation keys `schedule.dateSummaryLabel` (HE/EN).',
+      '🏷 Added "סיכום:" label above vote pills',
     ],
   },
   {
     version: '5.33.2',
     date: '2026-04-30',
     changes: [
-      '📲 PWA install signal hardened so Edge/Chromium reliably create a true standalone PWA instead of a browser bookmark. After v5.33.0 the user reported their reinstalled Edge PWA opened as a regular browser tab instead of the standalone app shell. Root cause: with only an SVG icon and no `display_override` / `id`, recent Edge mobile builds intermittently fall back to "add as shortcut" instead of "install as app". Fixes in `public/manifest.json`: explicit `id: "/"` (stable PWA identity matching the prior start_url so existing installs are preserved), `display_override: ["standalone", "minimal-ui"]` for the formal display fallback chain, icons split into separate `purpose: "any"` and `purpose: "maskable"` entries (Chromium has historic bugs interpreting the combined `"any maskable"` purpose with SVG sources). Fixes in `index.html`: added `apple-touch-icon` link (without it iOS shows a screenshot-thumbnail home-screen icon), `apple-mobile-web-app-title="Poker"` (cleaner iOS home-screen label than the long <title>), `viewport-fit=cover` (lets standalone PWA paint under the iOS notch), `mobile-web-app-capable` + `application-name` meta tags (Edge mobile reads these as install-qualification hints).',
+      '📲 PWA install hardened for Edge mobile',
     ],
   },
   {
     version: '5.33.1',
     date: '2026-04-30',
     changes: [
-      '🖼 WhatsApp share `MAX_SLICE_HEIGHT` raised from 1200 to 1900 CSS px in `src/utils/sharing.ts`. The v5.31.3 +20% typography bump on the confirmation share card pushed it ~50px past 1200 with a typical 6-10 player leaderboard, splitting an otherwise-readable card into two cropped halves — a regression flagged by the user. WhatsApp itself has no hard image-height cap; the chat preview just shows the top portion with a tap-to-expand affordance, which is far better UX than a forcibly-split image. 1900 covers the realistic worst case (10–12 player leaderboard + admin note + boarding hero) while still feeling like one image. Polls with more attendees still split, just at a more meaningful threshold.',
-      '🔍 WhatsApp invitation share-card typography pushed another +10–15% on top of v5.31.3. Affects ONLY invitation mode (the user explicitly asked to keep confirmation as-is now that it stays on one image): strip date headline 26→30, strip section heading 22→24, strip count pills 19→22, single-date count pills 21→24, single-date voter chips 22→24 / group caption 17→19, single-date location 22→25, target meter pill 22→24, target label 22→24, phase pills 21→23, "view voters in app" callout 22→24, single-date proposed-dates section label 22→24, admin note 22→24. Confirmation\'s `ShareBoardingHero` (30/18) and `PollSharePeriodLeaderboard` (22/23/21/18) and the cancellation body are unchanged.',
+      '🖼 Share image cap raised 1200 → 1900px',
+      '🔍 Invitation typography +10–15%',
     ],
   },
   {
     version: '5.33.0',
     date: '2026-04-30',
     changes: [
-      '🚑 Bootstrap watchdog added to `index.html` to self-heal blank-screen PWA boot failures (e.g. Edge mobile PWA showing a blank page after deploy while Chrome PWA on the same device worked). Root cause: a stale `index.html` lingering in the OS-level PWA shell cache referenced hashed JS chunks (`/assets/main-XXXX.js`) that no longer exist on the new Vercel deploy. The script tag 404\'d, React never mounted, and `ErrorBoundary` couldn\'t catch the failure because it happened before React booted. Two new triggers now detect the failure: (1) a capture-phase `error` listener catches `<script>` / `<link>` load failures synchronously, (2) a 10-second watchdog timer fires if `<div id="root">` is still empty by then. Either trigger unregisters every service worker, clears every CacheStorage entry, then hard-reloads with `?_pwa=<ts>` so the browser is forced past its HTTP cache too. Recovery is gated by a `sessionStorage` flag so we attempt at most once per session — if the recovery itself fails (server down etc.), the user sees a normal blank page and can retry by pulling to refresh, instead of being stuck in a reload loop.',
-      '🧹 `main.tsx` clears the bootstrap watchdog as soon as the React tree is rendered, so the recovery path never fires on a healthy boot. Errors that occur INSIDE React after that point continue to be caught by the existing `ErrorBoundary` (with its visible fallback UI + manual reload button) — the watchdog only handles the pre-React failure mode.',
-      '🔄 `public/sw.js` `CACHE_VERSION` bumped from `v3` to `v4`. The constant isn\'t used for any cache key (the SW deliberately delete-all-caches on activate; it\'s push-only otherwise), but bumping the file content forces the browser to detect a new service worker, which triggers install→activate→`clients.claim()`. The matching `updatefound` listener in `main.tsx` then reloads the page once the new SW activates — a clean, non-destructive way to push the bootstrap-watchdog hotfix to every PWA install on first open after deploy without waiting for users to manually reinstall.',
+      '🚑 Bootstrap watchdog auto-heals blank PWA',
+      '🧹 Watchdog clears once React renders',
+      '🔄 Service worker bumped v3 → v4',
     ],
   },
   {
     version: '5.32.2',
     date: '2026-04-30',
     changes: [
-      '🏷 `DateCompetitionStrip` heading renamed from "השוואה בין תאריכים" / "Date competition" to "סיכום הצבעות" / "Vote summary". The old label leaned into a "race between dates" framing that doesn\'t match how admins actually read the strip (they want the at-a-glance count summary, not a contest narrative). The new wording also covers single-date polls semantically — "vote summary" applies whether there\'s one date or six, while "date competition" implies a comparison.',
+      '🏷 Heading: "השוואה בין תאריכים" → "סיכום הצבעות"',
     ],
   },
   {
     version: '5.32.1',
     date: '2026-04-30',
     changes: [
-      '✂️ Schedule poll per-date detail row "בחר" button removed for single-date polls too. Previously v5.31.4 hid it for multi-date polls (where the `DateCompetitionStrip` scoreboard already exposed the same pick action) but kept it for single-date polls as the only manual-close entry point. Single-date polls genuinely have nothing to "pick between" — the label always read as a confusing no-op — and admins can already start a game on whatever yes-count they have via the standard new-game flow without formally pinning the poll first, so the early-pin step on single-date polls was redundant. Net effect: the per-date detail row footer is now consistently count-pills-only across all poll shapes, and the strip remains the sole pick-affordance for multi-date polls. The underlying `manuallyClosePollRpc` / `onManualClose` handler / `PollManualCloseModal` stays in place because the multi-date strip still uses them.',
+      '✂️ Removed "בחר" on single-date polls',
     ],
   },
   {
     version: '5.32.0',
     date: '2026-04-30',
     changes: [
-      '🔗 Schedule-poll WhatsApp share link replaced with a 6-character slug. Each poll now gets an auto-generated short code (Crockford-style base32, no 0/1/i/l/o so it can\'t be misread) and the deep link in the share caption goes from `…/p/<36-char-uuid>` to `…/p/7g4xq2` — short enough to fit on a single tappable line in WhatsApp on every phone instead of wrapping mid-uuid into a noisy multi-line blob. Reads more like an invite code than a database identifier.',
-      '🛡️ Server-side enforcement via new migration `040-poll-share-slug.sql`. Adds `share_slug TEXT` column to `game_polls` with a partial UNIQUE index, a slug generator function `_generate_poll_share_slug()` (probes for free slots up to 50 retries — collision-impossible at 31^6 ≈ 887M keyspace), a BEFORE INSERT trigger that auto-populates the slug on every new poll, a one-shot backfill loop that issues a slug to every existing row, and a public RPC `resolve_poll_share_slug(p_slug)` granted to authenticated AND anon (the slug→UUID mapping leaks no sensitive data — the UUID is already public, it was the previous URL form).',
-      '🛤️ `App.tsx` `PollDeepLinkRedirect` upgraded to handle both link shapes. The same `/p/:pollId` route now sniffs the param via a UUID regex: UUID-shaped → redirect synchronously (preserves backward compat with old long-form share links from before this version); slug-shaped → call the resolver RPC, then redirect once the UUID is back. Failures fall back to the bare schedule tab so unknown slugs land on something useful instead of a 404. Resolution latency is single-RPC and renders nothing in flight (no skeleton flash on the typical sub-100ms round-trip).',
+      '🔗 Poll share link uses 6-char slug',
+      '🛡️ SQL 040: share_slug column + RPC',
+      '🛤️ Deep-link route handles both shapes',
     ],
   },
   {
     version: '5.31.4',
     date: '2026-04-30',
     changes: [
-      '✂️ Schedule poll per-date detail row "בחר" button hidden for multi-date polls. The same pick / re-pin affordance already lives in the upper `DateCompetitionStrip` scoreboard row, so duplicating it in the detail footer below was just visual noise — every multi-date row was carrying two near-identical dashed-ghost buttons that pointed to the same modal. Single-date polls (no strip above) keep the button as their only pin entry point. Net effect: the per-date detail row footer on multi-date polls drops to just the count pills, which leaves more breathing room around the larger \'large\' size variant from v5.31.0.',
+      '✂️ Hid duplicate "בחר" on multi-date rows',
     ],
   },
   {
     version: '5.31.3',
     date: '2026-04-30',
     changes: [
-      '🔗 Schedule-poll WhatsApp share link cleaned up. The deep link in the caption switched from the long-form `/settings?tab=schedule&poll=<uuid>` (~78 chars after origin) to a short-form `/p/<uuid>` (~40 chars). On most phones the new URL fits on a single tappable line in the chat preview instead of wrapping mid-uuid into a noisy multi-line blob. Added a tiny `PollDeepLinkRedirect` route in `App.tsx` that normalizes `/p/:pollId` to the canonical settings/schedule URL with `replace: true`, so existing scroll-to-card + URL-strip handlers in `ScheduleTab` keep working unchanged. Long-form links from earlier shares still resolve — the canonical route is unchanged, only the new outbound shares use the short form.',
-      '🔍 WhatsApp share-card typography bumped ~20% for legibility. The 900px-wide rasterised PNG previously rendered most secondary text at 14–18px, which compresses to a hard-to-read size in WhatsApp\'s chat thumbnail. Bumped header subtitle 19→23, section labels 18→22, footer 18→22, strip count pills 15→19, single-date count pills 17→21, voter chips 18→22, location 18→22, boarding-pass values 28→30 / labels 16→18, phase pills 18→21, leaderboard pill 20→23 / table 20→22 / period meta 18→21, register-CTA URL 19→23, registered-only note 17→20, voter-group caption 14→17, period-rank footnote 15→18, cancellation-reason header 18→22 / location 18→22. Pill paddings and gaps were nudged proportionally so the larger numerals don\'t crowd their borders. Title (36px), date headlines (22→26), and the full-width admin-note callouts (already 22px) were left alone — they were already prominent. Net effect: recipients read the share without zooming in, and the card height grows by ~5% which stays well within WhatsApp\'s slice-height budget.',
+      '🔗 Share link: /p/<uuid> short form',
+      '🔍 Share-card typography +20%',
     ],
   },
   {
     version: '5.31.2',
     date: '2026-04-30',
     changes: [
-      '✂️ Schedule poll "pick this date" buttons shortened — both the `DateCompetitionStrip` row button and the per-date detail row footer button now show just "בחר" / "Pick" instead of "בחר תאריך" / "Pick date". Same short-label / long-tooltip pattern as the destructive cluster from v5.31.1: the full status-aware label ("בחר תאריך" pre-confirm, or the equivalent re-pin language post-confirm) is preserved as a hover tooltip and as the modal title that opens on click. Frees ~30-40px on every strip row, which is enough on a 360px viewport to fit the full date label like "יום חמישי 30/4" without ellipsis truncation.',
+      '✂️ Pick button: "בחר" instead of "בחר תאריך"',
     ],
   },
   {
     version: '5.31.1',
     date: '2026-04-30',
     changes: [
-      '✂️ Schedule poll action-row destructive cluster (Lock / Cancel / Delete) labels shortened to "🔒 נעל" / "בטל" / "🗑 מחק" (was "🔒 נעל הצבעה" / "בטל הצבעה" / "🗑 מחק לצמיתות"). The full long form is preserved as the button `title` attribute (hover tooltip on desktop, long-press on mobile) and as the modal title that opens on click — so the warning still surfaces, just not on the resting button face. Net effect: the second action-row line now fits on a single ~360px-wide viewport without crowding, and the destructive cluster reads as a clean "verb-only" trio (lock / cancel / delete) parallel to the first row\'s constructive trio (start / share / edit). Hebrew + English. Locked-state labels follow suit: "🔓 שחרר" / "🔓 Unlock" instead of the longer "🔓 שחרר הצבעה" / "🔓 Unlock voting". Side benefit: the polls-history delete button (which reused the same short key) now also shows the trash emoji.',
+      '✂️ Shorter destructive button labels',
     ],
   },
   {
     version: '5.31.0',
     date: '2026-04-30',
     changes: [
-      '🔒 New admin-only "lock voting" toggle on schedule polls. Sits in the action row of any still-active poll (open / expanded / confirmed) as "🔒 נעל הצבעה" / "🔒 Lock voting" — one click freezes the lineup so no further vote changes (member self-RSVP or admin proxy) can land until the admin unlocks. The button flips to "🔓 שחרר הצבעה" / "🔓 Unlock voting" while locked and a yellow "🔒 ההצבעה נעולה" badge appears next to the status pill so the locked state is visible at a glance. Closes the gap between "the game is confirmed but starts tomorrow" and "I want to start the canonical game flow now" — admins can now freeze the lineup without committing to NewGameScreen\'s forecast/TTS/buy-in flow.',
-      '🛡️ Server-side enforcement via new migration `039-schedule-voting-lock.sql`. Adds `voting_locked_at TIMESTAMPTZ` to `game_polls`, a new admin-only `set_poll_voting_lock(poll_id, locked)` RPC, and tightens `cast_poll_vote` / `admin_cast_poll_vote` / `admin_delete_poll_vote` to raise `voting_locked` whenever the column is non-null. The lock applies even to admin proxy actions so it can\'t be silently bypassed — admin must unlock first to make any change. Independent of poll status: the lock can be toggled on/off freely without affecting status, dates, votes, or notification flags.',
-      '🎨 Action row reorganized so destructive actions (Cancel poll, Delete permanently) cluster on a separate visual line from constructive ones (Start game, Share, Edit, Lock). A flexbox-break trick wraps the row mid-flow on viewport widths where everything would otherwise crowd onto a single line — admins are less likely to mis-tap the destructive cluster when scanning the constructive one.',
-      '🌐 New translation keys: `schedule.lockVotes` / `schedule.unlockVotes` (button labels), `schedule.lockVotesTooltip` / `schedule.unlockVotesTooltip` (hover hints), `schedule.votingLockedBadge` (header pill), `schedule.errorVotingLocked` (RSVP-disabled tooltip + RPC error mapping), `schedule.votingLockedSuccess` / `schedule.votingUnlockedSuccess` (toast confirmations). Hebrew + English.',
-      '🎨 Schedule poll vote-count pills got a `large` size variant. Per-date detail row footers + the single-date confirmed banner now render the count summary at 13px (up from 11px) with extra padding and the Hebrew/English label after the number — "✓ 6 מגיעים   ? 1 אעדכן   ✗ 0 לא מגיעים" instead of "✓ 6 ? 1 ✗ 0". The compact symbol-only variant stays in `DateCompetitionStrip` rows where space is tight. Also adds `flexWrap: wrap` to the per-date footer so the larger pills can drop the pick button to a second line on narrow viewports rather than overflowing.',
-      '🌌 `DateCompetitionStrip` panel re-skinned. Replaced the flat slate tint with a soft indigo gradient (`rgba(99, 102, 241, 0.12) → 0.06`) + indigo border + bluish drop-shadow + light-indigo (`#a5b4fc`) heading so the "🗳 השוואה בין תאריכים" widget reads as a distinct scoreboard panel rather than a passive container. Non-leader rows inside the panel were lifted to the app\'s standard `var(--surface)` so they sit on the indigo wash like cards on a tray; leader rows keep their green identity (rail + green tint) which now contrasts cleanly with both the panel and the runner-up rows. Indigo was chosen because it doesn\'t collide with any of the existing role colors (green=leader/yes, red=no/destructive, yellow/amber=maybe/expanded/lock, blue=open status pill, primary blue=actions).',
-      '🔒 Lock-voting toggle button moved to the second action-row line alongside Cancel + Delete (was previously on the first row with Edit). The mental model for that cluster is "actions that finalize / wind down the poll", and locking voting is the lightest of the three (fully reversible, no data lost) so it leads the cluster in RTL reading order. Constructive actions (Start game, Share, Edit) keep the first row.',
-      '✂️ "Switch the locked-in date" confirmation modal copy trimmed. Dropped the tie-break / use-case explanation and the "the game switched to this date" trailing clause; kept only what the admin actually needs to confirm (votes are preserved, players will be re-notified). The action button label below already conveys the intent so the body doesn\'t need to re-explain when to use the flow. Hebrew + English.',
+      '🔒 New: lock voting on schedule polls',
+      '🛡️ SQL 039: voting_lock column + RPC',
+      '🎨 Action row: constructive vs destructive split',
+      '🌐 New translation keys for lock state',
+      '🎨 Vote-count pills: large variant',
+      '🌌 DateCompetitionStrip: indigo skin',
     ],
   },
   {
     version: '5.30.3',
     date: '2026-04-30',
     changes: [
-      '📤 Share buttons consolidated. Open / expanded polls still show a single one-tap "📤 שתף הצבעה" / "Share poll" button, and confirmed-at-target polls still show a single one-tap "📤 שתף משחק" / "Share game" button — no regression. The genuinely-ambiguous "confirmed-below-target" case (admin pinned a date but yes-count < target) used to render BOTH buttons side-by-side, but the labels were near-identical and admins couldn\'t scan to know which to pick. That case now collapses to a single "📤 שתף ▾" button that opens a lightweight chooser — title only, then the same two compact "📤 שתף הצבעה" / "📤 שתף משחק" pill buttons the action row already uses, side-by-side. Picking either pill closes the modal and kicks off the same capture+share path as before. Compact, no extra body copy, familiar buttons.',
+      '📤 One share button + chooser when ambiguous',
     ],
   },
   {
     version: '5.30.2',
     date: '2026-04-30',
     changes: [
-      '🪗 Per-date voter chip lists in schedule polls now collapse by default. Each row\'s footer carries a "▼ הצג מצביעים (N)" / "▼ Show voters (N)" toggle; the count pills, RSVP buttons, proxy badge, pinned-date highlight, and pick button all stay visible while collapsed so the row remains fully actionable. Confirmed dates with 6+ proxy chips used to push a single card past 500px tall on mobile and bury share/action buttons below the fold — now every per-date card lands at a roughly fixed compact height, which (a) makes the "Date competition" strip clearly distinct from the per-date detail block, (b) makes individual rows visually distinct from each other, and (c) puts the share buttons back within thumb reach without scrolling. State is local to the card so expanding one date doesn\'t expand the others.',
+      '🪗 Per-date voter chips collapse by default',
     ],
   },
   {
     version: '5.30.1',
     date: '2026-04-30',
     changes: [
-      '🚧 Game-Night Comic feature parked. The collapsible "🎨 קומיקס הערב" section on GameSummaryScreen is hidden behind a single feature flag (COMIC_FEATURE_ENABLED = false). Free image-model output (Pollinations Sana / FLUX) does not reach the quality bar set by the Imagen-tier reference comic — embedded text gags, character-identity continuity, and 6-panel layouts are not achievable on the free tier. All code, types, translations, the Supabase Storage bucket, the games-table comic columns, and the validation script remain in place. Re-enable by flipping the flag to true once a viable image source (paid Imagen, free Hugging Face comic-trained model, or HTML-overlay sign labels added to ComicRenderer) lands.',
+      '🚧 Comic feature parked behind flag',
     ],
   },
   {
     version: '5.30.0',
     date: '2026-04-30',
     changes: [
-      '🗳️ Multi-date schedule polls now show a "השוואה בין תאריכים" / "Date competition" strip above the per-date detail rows so admins/voters see the standings at a glance instead of scrolling through each date\'s voter list. Each strip row carries the date, ✓/?/✕ count pills, and a percentage-driven progress bar. The leading row gets a green left-rail + bold weight; the rail follows the admin\'s pinned date when the poll is confirmed (so a tie-breaker pick stays anchored even when seats slip below target). The 🏆 trophy glyph was dropped — it used to jump to the vote-leader after an admin pinned a different date, reading as "your pick lost" — and ✅ now renders only when a date is genuinely confirmed-at-target.',
-      '🎯 New "tie-breaker" / "change-of-mind" pick flow — when two dates are tied at the target (or whenever an admin wants to switch the lock), a "בחר תאריך" / "Pick date" button lives on every per-date row (both inside the strip and in the detail block below). Selecting fires the new `manual_close_game_poll` RPC variant from migration 038 which now accepts re-pinning on already-confirmed polls (was previously open/expanded only). The confirmation modal flips its title and copy between "lock in this date" (initial pick) and "switch the locked-in date" (re-pin). A success/error toast surfaces after the RPC: success says "Game switched to <date>"; if the SQL silently no-ops (e.g. migration 038 not applied yet, or a game was already started from this poll) the user gets a clear "nothing changed" hint pointing at the migration.',
-      '📤 Share buttons re-architected to match user intent. Open / expanded polls show a single "📤 שתף הצבעה" / "Share poll" button (invitation card with the competition strip). Confirmed-at-target polls show "📤 שתף משחק" / "Share game" (boarding-pass + player-list confirmation card). Confirmed-below-target polls (post-lock-in dropout OR early-pick) are genuinely ambiguous — the admin might want to recruit (share poll) OR announce the locked date (share game) — so BOTH buttons render side-by-side and the admin chooses. Each button always displays the action it will perform so admins can scan the row and know what\'s about to leave the app.',
-      '✂️ Multi-date share images are now compact enough to land in WhatsApp without being chopped — the upper "target progress" meter is dropped (the strip\'s per-date bars carry the same signal), per-date voter chip walls are replaced with a single "👀 לפרטי המצביעים לכל תאריך, פתחו את האפליקציה" CTA, and the boundary-aware screenshot slicer (in `sharing.ts`) snaps cuts to `data-share-split` row boundaries instead of slicing mid-row. Single-date shares keep the original detailed layout with full voter chips since they comfortably fit in one image.',
-      '🔁 Confirmed-below-target polls (someone dropped out post-lock-in) now visually pivot back to the open/expanded chrome — voting affordances are live again, members can flip yes↔no on the locked date and record votes on runner-up dates, and the in-app status pill reads "open"/"expanded" so the card matches reality. The share image keeps a separate gate on raw `poll.status` so a tie-breaker pick still produces the "game is set" share regardless of where votes currently stand.',
-      '🐛 RTL bidi fix on the seat counter — the Hebrew template `{count} / {target} שחקנים` was rendering as `7 / 6 שחקנים` in the Hebrew/RTL container because the spaces around the slash were absorbed as RTL neutrals, splitting "6" and "7" into two separate single-digit LTR runs that the bidi algorithm then reordered. Wrapped the fraction in Unicode LRI…PDI (`\u2066…\u2069`) so the digits + slash stay inside a single LTR isolate and now read `6 / 7` as intended.',
-      '🎨 Schedule poll progress bars use a single percentage-driven palette (red → orange → yellow → lime → emerald) for ALL bars, regardless of leader status. Previously the leading bar used a different palette which produced weird artifacts where a "leader" with fewer yes-votes had a more advanced gradient than a runner-up that was actually further along. Color now reflects truth (how close to target this date is); leader-ness is conveyed exclusively by the green left-rail + bold weight + ✅ glyph instead.',
-      '🛠️ Pick button visibility tightened — the "בחר תאריך" affordance is now hidden on the currently-pinned date in BOTH at-target and below-target reopen states. Earlier it stayed visible in below-target so admins could "re-affirm" the same date, but the modal that opened ("switch the locked-in date to <same date>") read as a confusing no-op. Other (non-pinned) rows still expose the button so an admin can shift the lock to a runner-up.',
-      '🪞 Single-date confirmed-at-target polls no longer double-render the confirmed banner alongside a redundant per-date row. The block gate that included `visualStatus===\'confirmed\'` for multi-date competition strips also accidentally re-rendered the same date below the banner with duplicate RSVP controls and voter list. Now the per-date rows render only for open/expanded polls OR multi-date confirmed polls — single-date confirmed-at-target stays clean.',
-      '🌐 Schedule feature surfaced in the new-group wizard\'s "what does Poker Manager do?" page and the Settings → Help → Game Flow page, both with concise Hebrew + English copy explaining the multi-date poll → vote → confirm flow.',
-      '🔔 Notification banner shows the actual notification title when there\'s exactly one unread (instead of always saying "settlement"); falls back to a count-aware label otherwise.',
-      '🔗 Google OAuth round-trips now preserve the full URL (path + query) instead of redirecting to the bare origin. Recipients tapping a share-card deep link (`/settings?tab=schedule&poll=<id>`) and signing in with Google now land back on the right poll instead of the home page. A subtle cyan pulse animation also draws the eye to the deep-linked card after auto-scroll.',
-      '🎨 Comic bubbles use `width: max-content` (capped by maxWidth) so absolutely-positioned bubbles get a tight inline fit instead of falling back to unstable shrink-to-fit sizing — fixes the "single word per line" rendering on narrow viewports.',
+      '🗳️ New "Date competition" strip',
+      '🎯 Pick / re-pin date flow',
+      '📤 Share buttons match user intent',
+      '✂️ Multi-date share image compact',
+      '🔁 Below-target reverts to voting chrome',
+      '🐛 RTL bidi fix on seat counter',
+      '🎨 Single percentage-driven palette',
+      '🌐 Schedule surfaced in wizard help',
+      '🔔 Notification banner shows real title',
+      '🔗 Google OAuth preserves full URL',
     ],
   },
   {
     version: '5.29.3',
     date: '2026-04-30',
     changes: [
-      '🐛 Payment modal arrow direction — the `from → to` header in the settle-up modal previously forced `direction: ltr` so it always rendered with a right-pointing arrow regardless of UI language. In Hebrew RTL the eye scans right-to-left, so the right-pointing arrow visually went *against* the reading flow and made it look like the recipient was paying the payer instead. Now the arrow flips to `←` in RTL (and stays `→` in LTR), and the LTR override is removed so the layout inherits the parent\'s direction. The arrow now always points from the payer to the recipient in the user\'s natural reading direction.',
+      '🐛 Payment modal arrow flips in RTL',
     ],
   },
   {
     version: '5.29.2',
     date: '2026-04-30',
     changes: [
-      '🎟️ Confirmation share-card header redesigned: centered "stamp" layout (icon above title), confirmation title changed from "ערב פוקר נסגר" to the warmer "ערב פוקר נקבע", and the lock icon replaced with a ticket icon to read as an event invitation rather than a closure.',
-      '👥 Participants pill (✓ N) moved to the right edge of the table caption (RTL leading) so it\'s the first thing the eye lands on. Label renamed from "מגיעים" → "משתתפים" / "Coming" → "Participants".',
-      'ℹ️ Added a small italic footnote under the leaderboard explaining that ranks reflect each player\'s overall current half-year standing (not just their position within the participants list) — clears up why ranks may not start at 1 nor be contiguous.',
+      '🎟️ Confirmation hero: stamp layout',
+      '👥 Participants pill on right edge',
+      'ℹ️ Footnote explaining ranks',
     ],
   },
   {
     version: '5.29.1',
     date: '2026-04-30',
     changes: [
-      '🪪 Confirmation share card collapsed to a single screen: the separate "names manifest" block is gone — confirmed players now live as rows inside the period stats table (rank/medal · name · profit · avg · games · win%). Players who haven\'t played in the current half-year sit at the bottom with em-dashes so the table doubles as the attendee roster.',
-      '📝 Admin note moved up to sit right under the boarding-pass hero (instead of trailing the card), so the host\'s message reads as part of the booking.',
-      '📊 Table redesigned to mirror the StatisticsScreen share-table format: centered metadata caption (📊 period · X משחקים · ✓ N מגיעים) over a hairline divider, then a clean borderless table with row separators, color-coded profit/avg/win%, and overall period rank with medals for top 3.',
+      '🪪 Confirmation card: single screen',
+      '📝 Admin note moved up',
+      '📊 Table mirrors stats share format',
     ],
   },
   {
     version: '5.29.0',
     date: '2026-04-30',
     changes: [
-      '📊 Schedule confirmation share card now includes a half-year leaderboard table for the confirmed players: rank · name · profit · avg · games · win%. Pulls from getPlayerStats with the current H1/H2 window so numbers match the Statistics tab exactly. Top-3 ranks get medals (🥇🥈🥉). Auto-hides when the period has no completed games or no confirmed player has played yet.',
-      '🔍 Rank shown is the OVERALL period rank (not 1..N within attendees) so each confirmed player is positioned in the broader half-year season.',
-      '📐 Share card upsized 720→900 px wide with proportional typography across all three modes (confirmation, invitation, cancellation): title 26→34, hero values 22→28, manifest names 17→22, voter chips 15→18, all paddings/radii/badges scaled. At html2canvas scale: 2 the rendered PNG is 1800 px wide for crisper readability without breaking the WhatsApp size budget.',
-      '🔢 Profit/avg sign formatting now wraps the entire signed run in a single LRM mark (matching formatCurrency), so the +/- sits on the correct side of the number in RTL.',
+      '📊 Confirmation card: half-year leaderboard',
+      '🔍 Shows overall period rank',
+      '📐 Share card: 720 → 900px',
+      '🔢 Sign formatting via single LRM',
     ],
   },
   {
     version: '5.28.1',
     date: '2026-04-30',
     changes: [
-      '🎫 Schedule share-card polish: removed redundant status pill ("✓ סגור" / "🗳 הצביעו" / "⊘ בוטל") that just doubled what the title already says — colored emoji badge alone now carries the mode.',
-      '🔧 Fixed English key leakage ("schedule.share.headerSubtitleConfirmation") on the confirmation share image — root cause was the t() fallback treating `\'\'` as missing; switched to dropping the subtitle field entirely on confirmation. Cleaned up 5 dead translation keys.',
-      '📱 Share card upsized 520→720 px wide with proportionally scaled paddings and font sizes (titles, hero values, manifest names, notes, voter chips, all of it). At default scale: 2 the rendered PNG is 1440 px wide — sharper preview in WhatsApp without quality loss.',
-      '🎨 Comic bubbles: capped maxWidth at 55% (78%→55%) and minWidth at 22% so bubbles no longer cover the character art beneath. Caption width capped at 70%. Font-size clamps tightened to keep 2-line wraps with the new narrower bubbles.',
-      '🤖 Comic prompt rework: panel scenes now lead with character + action ("Yossi slams cards down with a triumphant grin") instead of cinematic environment; explicit ban on photo / cinematic / depth-of-field / wide-shot language so FLUX returns illustrated character close-ups instead of empty rooms.',
+      '🎫 Removed redundant status pill on share',
+      '🔧 Fixed English key leakage on confirmation',
+      '📱 Share card: 520 → 720px',
+      '🎨 Comic bubbles narrower',
+      '🤖 Comic prompt: character-first',
     ],
   },
   {
     version: '5.28.0',
     date: '2026-04-30',
     changes: [
-      '🎨 Game-Night Comic — drastic quality rework. Image generation moved off Gemini (paid-tier only) to Pollinations.ai FLUX, free anonymous tier. Each of the 4 panels is now generated separately at 1024×1024 with a focused single-scene prompt that aggressively forbids text, then composited client-side onto a 2068×2068 canvas with hairline gutters. Hybrid parallel-then-sequential-retry strategy with 429 backoff handles the anonymous-tier concurrent-request limit gracefully. Result: zero text leakage, sharper composition, clean Hebrew DOM bubbles on top.',
-      '📊 Comic art progress is reported per-panel ("Drawing panel 2 of 4…") so the ~4–6 minute generation feels measurable instead of hung. Localized in HE + EN.',
-      '💬 Comic speech bubbles widened (maxWidth 60% → 78%, minWidth 20% → 38%) with overflowWrap instead of wordBreak, fixing awkward narrow Hebrew column wrapping on mobile.',
-      '🎫 Schedule confirmation hero (boarding-pass strip) redesigned with four uniform segments — day · date · time · location — same typographic weight, accent stripe carries the color. Reads as a single horizontal strip instead of competing focal points. Hebrew weekday now renders as "שבת" instead of redundant "יום שבת".',
-      '🔧 Postgres trigger fix (035-fix-zero-sum-trigger.sql): check_game_zero_sum no longer fires on the BEFORE-INSERT phase of upserts of already-completed games, eliminating the spurious "Game profits must sum to zero" toast when saving AI summaries, comics, paid settlements, etc. on historically drifted games.',
+      '🎨 Comic art: Pollinations FLUX, no text leakage',
+      '📊 Per-panel progress reporting',
+      '💬 Wider speech bubbles',
+      '🎫 Boarding-pass: 4 uniform segments',
+      '🔧 SQL 035: zero-sum trigger fix',
     ],
   },
   {
     version: '5.27.6',
     date: '2026-04-30',
     changes: [
-      '📦 Consolidated push of accumulated multi-agent work (5.27.0 → 5.27.5): training-report notifications, Activity weekly trend metric fix, expanded member-card split, Training Engagement last-session column + sort + green weekly count.',
+      '📦 Consolidated multi-agent push (5.27.0–5.27.5)',
     ],
   },
   {
     version: '5.27.5',
     date: '2026-04-30',
     changes: [
-      '🎨 Activity > Training Engagement — per-row weekly questions count (e.g. `8 שאלות`) is now emerald green (`#10B981`) instead of indigo, so it visually separates from the indigo `2/8 פעילים` summary count in the card header. Easier to scan: header = summary, row = individual achievement.',
+      '🎨 Training: weekly count chip → emerald',
     ],
   },
   {
     version: '5.27.4',
     date: '2026-04-30',
     changes: [
-      '🎯 Activity > Training Engagement card — rows are now sorted by most-recent training session first (descending by `lastSession.date`), so the player who trained most recently always appears at the top regardless of whether they hit their weekly goal. Players who never trained sink to the bottom. Tiebreaker is `weekQs` desc, then name for stable ordering.',
+      '🎯 Training rows: sort by last session',
     ],
   },
   {
     version: '5.27.3',
     date: '2026-04-30',
     changes: [
-      '👤 Activity > expanded member card now splits into two clearly-separated sections: 🎯 ביקור אחרון (last session date+time, that session\'s duration in minutes, and the screens visited only in that visit — no ×counts since it\'s a single session) and 📈 סה"כ (30 ימים) (active days, total session count, total minutes, and the cumulative screen chips with ×counts). A faint divider sits between them. Previously everything was bundled into one ambiguous row and the screens chip list mixed last-visit with all-time data.',
+      '👤 Activity card: split last-visit vs 30d',
     ],
   },
   {
     version: '5.27.2',
     date: '2026-04-30',
     changes: [
-      '🎯 Activity > Training Engagement card — each row now shows the player\'s last training date + time (e.g. `30/4 21:30`) alongside accuracy / total sessions, so you can see at a glance when each player last trained without needing to expand them. Date is bidi-isolated (`dir="ltr"`) so the digits render correctly inside the RTL row.',
+      '🎯 Training rows: show last session date+time',
     ],
   },
   {
     version: '5.27.1',
     date: '2026-04-30',
     changes: [
-      '📊 Activity weekly trend chart — bars now represent total visits (user-days) instead of unique users, matching the "ביקורים השבוע" stat above. The number on top of each bar, the bar height, the gradient intensity, and the ▲/▼ delta vs last week are all driven by `sessions` (user-days). Unique-user count is still shown in the bottom-left legend (`משתמשים השבוע`), so both metrics remain visible — just no longer disagree silently.',
+      '📊 Weekly trend bars: visits, not unique users',
     ],
   },
   {
     version: '5.27.0',
     date: '2026-04-30',
     changes: [
-      '🔔 Training reports — auto-notify the reporter when admin resolves a flagged question. Both push notification (short summary) AND email (full nicely-formatted message) are sent automatically when admin clicks Remove / Dismiss / Apply Fix.',
-      '🤖 If admin used AI to analyze the report, the rich `acceptText` / `rejectText` (with thanks + detailed explanation) is included in the email — same content quality as the manual WhatsApp share. If admin acted without AI, a generic outcome message is built per action: removed / fixed / kept.',
-      '📨 Email is personalized per reporter (greeting with their name, question context with cards/board/situation/correct answer, their own original comment, then the verdict + explanation).',
-      '🛠️ New `src/utils/trainingReportNotifications.ts` helper centralizes the dispatch (best-effort, never blocks/throws). Wired into `handleRemoveFlagged`, `handleDismissFlagged`, and `confirmAIFix`. `fixPreview` now carries the captured `reports[]` so the post-save notification has access to the original reporters even after the flagReports are cleared from training_answers.',
+      '🔔 Auto-notify reporter on flag resolve',
+      '🤖 AI rationale included in email',
+      '📨 Personalized per-reporter emails',
+      '🛠️ New trainingReportNotifications helper',
     ],
   },
   {
     version: '5.26.4',
     date: '2026-04-30',
     changes: [
-      '🛡️ Multi-device save safety: gameToRow() now omits optional fields (aiSummary, comic_*, forecast_*, location, chip_gap, etc.) when undefined locally instead of writing null. A stale cache on another device/tab can no longer clobber a freshly-saved AI summary just by upserting an unrelated game change — postgres on-conflict update only touches columns present in the payload.',
-      '🐛 Fixes the overnight regression where the AI summary would disappear after another device had loaded the game prior to summary generation and then made any unrelated change.',
+      '🛡️ Multi-device save: omit undefined fields',
+      '🐛 Fix: AI summary no longer disappears',
     ],
   },
   {
     version: '5.26.3',
     date: '2026-04-30',
     changes: [
-      '🐛 Fix: AI summary / comic regenerations no longer revert to the previous (or empty) state when realtime echoes race the debounced sync — supabaseCache now tracks per-game pending writes and preserves local copies during refreshGroups for a 15s window',
-      '🚨 Sync errors are now visible: failing Supabase upserts dispatch a `supabase-sync-error` event that App.tsx surfaces as an error toast (throttled), so silent failures (missing columns, RLS, network) can never again let writes evaporate after the next realtime refresh',
-      '🧹 markGameLocallyWritten() called from saveGameAiSummary, saveGameComic, clearGameComic, saveForecastAccuracy, saveForecastComment, updateGame, updateGameStatus — and cleared automatically when the games upsert succeeds',
+      '🐛 Fix: AI regenerations no longer revert',
+      '🚨 Surface sync errors as toasts',
+      '🧹 Track per-game pending writes',
     ],
   },
   {
     version: '5.26.2',
     date: '2026-04-30',
     changes: [
-      '🩺 Comic generation error: surfaces the raw upstream error message inline (collapsible "Technical details") so failures can be diagnosed on mobile without devtools',
-      '🔁 Comic art fallback: try the canonical `gemini-2.5-flash-image-preview` alias first (broader regional availability) and `gemini-2.5-flash-image` as backup',
-      '📐 Schedule tab header: title no longer truncates on narrow viewports — buttons wrap to a new line instead',
+      '🩺 Comic errors: collapsible technical details',
+      '🔁 Comic art: model alias fallback',
+      '📐 Schedule header: title no longer truncates',
     ],
   },
   {
     version: '5.26.1',
     date: '2026-04-29',
     changes: [
-      '🎨 Comic pipeline: stage-tagged errors (ComicStageError) surface which step failed (script/art/upload) in the UI instead of a generic message',
-      '🔄 Comic art: multi-model fallback chain — tries each IMAGE_MODEL in order on 429/404/503/empty-image, with per-attempt console logging',
-      '📊 Comic pipeline: structured console logging at every stage (start, style, script, art, bbox, upload, success/fail) for easier debugging',
-      '📐 Schedule tab header: flex-wrap layout so action buttons wrap gracefully on narrow viewports instead of title truncation',
+      '🎨 Stage-tagged comic errors',
+      '🔄 Comic art: multi-model fallback chain',
+      '📊 Structured pipeline logging',
+      '📐 Schedule header: flex-wrap layout',
     ],
   },
   {
     version: '5.26.0',
     date: '2026-04-29',
     changes: [
-      '🎨 Game-Night Comic: admin can generate a one-page Hebrew comic of any completed game and share it to WhatsApp — three-stage AI pipeline (script → art → face-bbox) using Gemini 2.5 Flash Image, with DOM-rendered Hebrew bubbles for crisp typography',
-      '🖼️ Six comic styles auto-picked by game vibe (Sunday strip, Manga, Noir, Pixar 3D, Tintin ligne claire, Retro 70s) with style-matched bubble themes; "Try another style" cycles through them, capped at 3 regenerations per game',
-      '🗄️ New supabase/033 migration: game-comics Storage bucket (admin-write RLS, public-read) + 4 new columns on games — fail-silent, all members see the same comic via existing realtime',
-      '🗳️ Schedule polls — major upgrade: admins can delete (027) and edit (028) polls; per-vote history (029) shows when each vote was cast or changed',
-      '🔔 Schedule polls — vote-change notifications (030, 031, 032): voters learn when participants change their RSVP after confirmation; admins can opt out per-poll, change-window controls',
-      '📲 Vote reminder banner: floating banner nudges members with unanswered open polls, with one-tap deep link to vote',
-      '🔡 Loaded Heebo font alongside Outfit so Hebrew renders cleanly inside the comic speech bubbles',
+      '🎨 New: Game-Night Comic',
+      '🖼️ Six auto-picked comic styles',
+      '🗄️ SQL 033: comic Storage bucket',
+      '🗳️ Polls: delete + edit + vote history',
+      '🔔 Polls: vote-change notifications',
+      '📲 Vote reminder banner',
+      '🔡 Heebo font for comic bubbles',
     ],
   },
   {
     version: '5.25.0',
     date: '2026-04-28',
     changes: [
-      '📅 Schedule (Next Game): full date-poll feature — admins propose dates, members RSVP, auto-confirm on target, expansion delay, WhatsApp share, proxy votes',
-      '⚙️ Schedule create-poll: removed 2–5 date limit — start with one auto-filled date (next game-night day from settings), add more as needed',
-      '🧭 Settings: moved “המשחק הבא” tab to the end (after “אודות”) for less prominent placement',
-      '🗓️ Activity heatmap: added date range header (e.g. 21/4–28/4) and highlight today\'s row for clarity',
+      '📅 New: Schedule (Next Game) date polls',
+      '⚙️ Removed 2-5 date limit on polls',
+      '🧭 Settings: moved Schedule tab to end',
+      '🗓️ Activity heatmap: date range header',
     ],
   },
   {
     version: '5.24.4',
     date: '2026-04-28',
     changes: [
-      '🗓️ Activity heatmap: added date range header (e.g. 21/4–28/4) and highlight today\'s row for clarity',
+      '🗓️ Heatmap: highlight today\'s row',
     ],
   },
   {
     version: '5.24.3',
     date: '2026-04-28',
     changes: [
-      '🎯 Pool generation prompt: aligned with quality-scan checks (hand recognition, no spoilers in situation, bluff = wrong, unique cards, no placeholders)',
-      '✅ Generation now includes self-check checklist before returning JSON — fewer questions need fixing on scan',
-      '🛡 Local validation tightened: rejects scenarios with duplicate cards, placeholder text, or hand spoilers in situation',
+      '🎯 Pool generation aligned with quality scan',
+      '✅ AI self-check before returning JSON',
+      '🛡 Tighter local validation',
     ],
   },
   {
     version: '5.24.2',
     date: '2026-04-28',
     changes: [
-      '⚡ Quality scan: smaller batches (4 vs 10) and tokens (4096 vs 8192) to avoid Vercel Edge timeout (504)',
-      '🔄 Quality scan: prefer stable gemini-2.5-flash over preview models (avoid 503 high-demand errors)',
-      '🔁 Quality scan: retry once on 429/503/504 before falling back to next model',
+      '⚡ Quality scan: smaller batches',
+      '🔄 Prefer stable models',
+      '🔁 Retry on 429/503/504',
     ],
   },
   {
     version: '5.24.1',
     date: '2026-04-28',
     changes: [
-      '⚡ Pool generation: split into small batches (6 questions each) to avoid Vercel Edge timeout (was 35 in one call → 504)',
-      '🔄 Pool generation: prefer stable gemini-2.5-flash over preview models (avoid 503 high-demand errors)',
-      '🔁 Pool generation: retry on 504 too, shorter 5s backoff between retries',
+      '⚡ Pool generation: 6 questions per batch',
+      '🔄 Prefer stable models',
+      '🔁 Retry on 504',
     ],
   },
   {
     version: '5.24.0',
     date: '2026-04-28',
     changes: [
-      '🤖 Pool generation: try all 3 Gemini models with fallback (was hard-coded to flash-3 only)',
-      '🔍 Per-category diagnostics: see exactly which model failed and why (HTTP status, JSON parse errors, validation reasons)',
-      '💬 Training fix preview: WhatsApp share to reporter now visible in fix preview modal (regression after AI flow migration)',
+      '🤖 Pool gen: try all 3 models',
+      '🔍 Per-category diagnostics',
+      '💬 Restored WhatsApp share in fix preview',
     ],
   },
   {
     version: '5.23.4',
     date: '2026-04-26',
     changes: [
-      '📱 Group wizard: mobile-first layout — centered column (26rem), safe-area padding, aligned header/footer',
-      '📱 Add-players step: full-width name field, gender + add row below, hint card, improved empty/chips spacing',
+      '📱 Wizard: mobile-first centered layout',
+      '📱 Better add-players spacing',
     ],
   },
   {
     version: '5.23.3',
     date: '2026-04-26',
     changes: [
-      '📱 Group wizard: fix scroll so header/footer stay reachable on small screens (flex minHeight + iOS touch scroll)',
+      '📱 Wizard scroll fix on small screens',
     ],
   },
   {
     version: '5.23.2',
     date: '2026-04-26',
     changes: [
-      '📱 Live game: align rebuy count and buy-in label in a fixed column across player rows',
+      '📱 Live game: aligned rebuy column',
     ],
   },
   {
     version: '5.23.1',
     date: '2026-04-26',
     changes: [
-      '📱 Statistics table mode bar: flex-wrap and slightly tighter controls for small screens',
+      '📱 Stats mode bar: flex-wrap',
     ],
   },
   {
     version: '5.23.0',
     date: '2026-04-26',
     changes: [
-      '✅ Add/remove players during live game (admin/owner/superadmin)',
-      '📱 Compact single-line player rows in live game — less scrolling with 7-8 players',
-      '📱 Player count added to live game summary card',
-      '📱 Recent actions collapsed by default with expand toggle',
-      '🔧 ROI division-by-zero guard in game summary highlights',
-      '✅ GroupWizard: editable chip values, flow arrows, auto-focus player input',
-      '✅ GroupWizard: features & game flow modals reused from Settings',
-      '📱 Wizard done step cleanup, WhatsApp share container styled consistently',
-      '📱 Settings: unified button styles, version badge simplified',
-      '📊 Statistics: reordered table mode buttons, fixed avg column label',
-      '🔧 SuperAdmin/Owner now inherit admin permissions across all screens',
+      '✅ Add/remove players during live game',
+      '📱 Compact single-line player rows',
+      '📱 Player count in summary card',
+      '📱 Recent actions collapsed by default',
+      '🔧 ROI division-by-zero guard',
+      '✅ Wizard improvements',
+      '📱 Settings: unified buttons',
+      '📊 Stats: reordered mode buttons',
+      '🔧 Owner inherits admin permissions',
     ],
   },
   {
     version: '5.22.6',
     date: '2026-04-21',
     changes: [
-      '🎨 Split push/email test into separate buttons',
-      '🎨 Group info card: added total players, games count, active since date',
-      '🎨 Members sorting: owner first, then admins, then by player type',
-      '🎨 Invite code merged into group info card with LTR layout fix',
-      '🎨 Game flow guide modal with 5 steps + AI disclaimer',
-      '🎨 Settings cleanup: removed unused cards, compacted heatmap & member cards',
-      '🎨 Buyin value setting now shows helper explanation',
-      '🃏 Board cards visible in training issue reports and shared screenshots',
-    ]
+      '🎨 Split push/email test buttons',
+      '🎨 Group info: totals + active since',
+      '🎨 Members sorted by role',
+      '🎨 Invite code in group info card',
+      '🎨 Game flow guide modal',
+      '🎨 Settings cleanup',
+      '🎨 Buyin value helper text',
+      '🃏 Board cards in training reports',
+    ],
   },
   {
     version: '5.22.5',
     date: '2026-04-21',
     changes: [
-      '🔧 Exclude super admin from activity dashboard',
-      '🔧 Activity member table sorted by last login (most recent first)',
-      '🔧 Fix resolve email notification, improved email messages',
-    ]
+      '🔧 Exclude super admin from activity',
+      '🔧 Activity sorted by last login',
+      '🔧 Better email notifications',
+    ],
   },
   {
     version: '5.22.0',
     date: '2026-04-21',
     changes: [
-      '✅ דיווח בעיה: new Settings tab for members to report bugs/issues with categories and free text',
-      '✅ Owner gets email notification on new reports, reporter gets email when resolved',
-      '✅ Super admin sees reports from all groups with group name labels',
-      '🔧 Activity monitoring center: fixed inflated session counts, accurate unique user-day metrics',
-      '🔧 Activity monitoring: calendar-date "active today", screen visit data in member cards',
-      '🔧 Activity monitoring: owner included in dashboard, accurate identified user counts',
-    ]
+      '✅ New: report-a-bug Settings tab',
+      '✅ Owner emailed on new reports',
+      '✅ Super admin sees all groups\' reports',
+      '🔧 Activity: accurate session counts',
+      '🔧 Activity: today by calendar date',
+      '🔧 Activity: owner included',
+    ],
   },
   {
     version: '5.21.0',
     date: '2026-04-21',
     changes: [
-      'Push notifications: recipient filter by player type (permanent, guests, occasional, manual)',
-      'Push notifications: send via Push, Email, or both channels',
-      'Push notifications: self-test button (Push + Email to yourself)',
-      'Push notifications: auto-refresh subscriber list after send, stale endpoint cleanup',
-      'Push API: removed verbose debug logs, clean per-player result chips',
-      'Email API: broadcast mode for generic messages (separate from settlement emails)',
-      'Fixed player type label mapping in push filter to match Players tab',
+      'Push: filter by player type',
+      'Push: send via Push, Email, or both',
+      'Push: self-test button',
+      'Push: stale endpoint cleanup',
+      'Push API: cleaner result chips',
+      'Email: broadcast mode',
+      'Fix: player type label mapping',
     ],
   },
   {
     version: '5.20.0',
     date: '2026-04-20',
     changes: [
-      'Setup wizard: chip values step, invite players step, welcome summary modal, About tab shortcut',
-      'Setup wizard: RTL-correct navigation arrows, step descriptions, skip optional steps',
-      'Push notifications: aggressive cleanup for dead endpoints, auto-recover stale subscriptions',
-      'Push tab: cleaned up debug UI, simplified test button',
-      'Training analysis: share as image instead of text (html2canvas)',
-      'Game navigation: fixed route paths for game details (/game/:id)',
-      'ElevenLabs TTS card: super admin only, graceful fallback on API error',
+      'Wizard: chips, invites, summary',
+      'Wizard: RTL arrows, skip optional steps',
+      'Push: stale subscription recovery',
+      'Push tab: cleaned up debug UI',
+      'Training: share as image',
+      'Game routes: fixed paths',
+      'TTS card: super admin only',
     ],
   },
   {
     version: '5.19.0',
     date: '2026-04-20',
     changes: [
-      'Training system refactor: direct Supabase writes, realtime sync, removed GitHub-era workarounds',
-      'Activity tracking: reduced cooldown to 2min, immediate screen push on navigation',
-      'Activity tab: popular screens card, training engagement card, feature adoption card',
-      'Activity tab: show today active user names, weekly trend, improved member cards with screen data',
-      'Super admin dashboard: premium redesign, per-group activity/training/feature adoption stats',
-      'Super admin: weekly trainers from actual session dates, auto-scroll expanded groups',
-      'Supabase optimizations: parallel player_traits loading, batched game child sync, scoped realtime refresh',
-      'Training pool: replaced localStorage cache with in-memory cache',
-      'Training writes: only upsert changed rows, delete removed players',
-      'Group management: removed redundant member count badge, consistent role alignment',
-      'SQL migrations 015-018: training realtime, group member counts, global stats with activity data',
+      'Training: direct Supabase + realtime',
+      'Activity: 2min cooldown',
+      'Activity tab: popular screens, training, adoption',
+      'Activity: today active names + weekly trend',
+      'Super admin: premium dashboard',
+      'Super admin: weekly trainers from sessions',
+      'Supabase: parallel + scoped refresh',
+      'Training pool: in-memory cache',
+      'Training writes: only changed rows',
+      'Group mgmt: cleaner role layout',
+      'SQL 015-018 applied',
     ],
   },
   {
     version: '5.18.0',
     date: '2026-04-20',
     changes: [
-      '✨ Premium UI animations: smooth page transitions, card entrances, button feedback, shimmer loading',
-      '👥 Redesigned group members list with avatars, staggered animations, inline controls',
-      '🔔 Settlement notifications: email + in-app alerts when payments are marked or disputed',
-      '🔧 Push notifications: DER-to-P1363 signature fix, per-device diagnostics, stale subscription cleanup',
-      '📸 Screenshot fix: freeze animations before html2canvas capture for correct rendering',
-      '🧹 Removed redundant "Unlink Player" button — use Remove for cleaner group management',
+      '✨ Premium UI animations',
+      '👥 Redesigned members list',
+      '🔔 Settlement notifications',
+      '🔧 Push: signature + diagnostics fix',
+      '📸 Screenshot: freeze animations',
+      '🧹 Removed redundant unlink button',
     ],
   },
   {
     version: '5.17.4',
     date: '2026-04-20',
     changes: [
-      '👥 Fix: group members can now see all other members (was only showing self)',
-      '🔒 Members see names and roles but not emails — admin controls remain restricted',
+      '👥 Members can see all other members',
+      '🔒 Names + roles, not emails',
     ],
   },
   {
     version: '5.17.3',
     date: '2026-04-20',
     changes: [
-      '🔔 Fix push notifications: VAPID key consistency, JWK import, detailed error reporting',
-      '🎯 Test Push button now respects player selection',
-      '📝 Dynamic helper text reflects send target',
+      '🔔 Push: VAPID + JWK fixes',
+      '🎯 Test Push respects selection',
+      '📝 Helper text reflects target',
     ],
   },
   {
     version: '5.17.2',
     date: '2026-04-20',
     changes: [
-      '🔐 Fix auth: use JWKS for ES256 JWT verification (was failing with raw bytes)',
-      '🔄 Unified auth across all API routes (github-backup now uses shared JWKS auth)',
-      '🔑 Robust token refresh in backup and proxy auth headers',
-      '🩺 Added /api/health diagnostic endpoint with selftest mode',
+      '🔐 Auth: JWKS for ES256',
+      '🔄 Unified auth across API routes',
+      '🔑 Robust token refresh',
+      '🩺 Added /api/health',
     ],
   },
   {
     version: '5.17.1',
     date: '2026-04-20',
     changes: [
-      '🔧 Fix push notifications: corrected VAPID JWT signature format (P1363 instead of DER)',
-      '📧 Fix email: added EmailJS private key (accessToken) for server-side calls',
-      '🗄️ Fix push subscription upsert: added missing UPDATE RLS policy',
-      '✏️ Fix player traits editor: commas and spaces now work in style/quirks fields',
+      '🔧 Push: P1363 signature format',
+      '📧 Email: EmailJS private key',
+      '🗄️ Push: UPDATE RLS policy',
+      '✏️ Player traits: comma/space fix',
     ],
   },
   {
     version: '5.17.0',
     date: '2026-04-19',
     changes: [
-      '🔔 Push notifications — admins can send real push notifications to players (even when app is closed)',
-      '📧 Settlement email switched from Resend to EmailJS (free, no domain needed)',
-      '🔧 Service Worker + Web Push API with zero third-party dependencies',
-      '💬 Notification templates: poker night, pay reminder, game cancelled, game starting',
-      '🎯 Recipient picker: send to all players or select specific ones',
+      '🔔 Real push notifications',
+      '📧 Email: Resend → EmailJS',
+      '🔧 Service worker + Web Push API',
+      '💬 Notification templates',
+      '🎯 Recipient picker',
     ],
   },
   {
     version: '5.16.1',
     date: '2026-04-19',
     changes: [
-      '🔧 Fix Vercel build — remove invalid toolbar property from vercel.json',
+      '🔧 Fix Vercel build: vercel.json',
     ],
   },
   {
     version: '5.16.0',
     date: '2026-04-19',
     changes: [
-      '✅ Multi-group support — switch between groups, create/join new groups without leaving current one',
-      '📦 Full backup & restore — download all 19 tables as JSON, auto-push to GitHub (keeps 3 per group)',
-      '📦 Backup tab in Settings — status indicator, restore from file or GitHub, 30-day reminder banner',
-      '🌐 i18n audit — fixed 50+ hardcoded Hebrew strings across all screens for proper bilingual support',
-      '🤖 AI features restricted to group owner only (forecasts, summaries, chronicles, insights)',
-      '🔧 TTS pool auto-cleanup — free DB space by deleting voice data when game ends',
-      '🔧 Enhanced auto game-end backup — now includes chronicle profiles and graph insights',
-      '🔧 Vercel toolbar disabled — removed floating debug icon from deployed site',
-    ]
+      '✅ Multi-group support',
+      '📦 Full backup & restore',
+      '📦 Backup tab in Settings',
+      '🌐 i18n audit: 50+ strings',
+      '🤖 AI restricted to group owner',
+      '🔧 TTS pool auto-cleanup',
+      '🔧 Auto game-end backup includes more data',
+      '🔧 Vercel toolbar disabled',
+    ],
   },
   {
     version: '5.15.1',
     date: '2026-04-19',
     changes: [
-      '✅ Cache isolation fix — reset cache on logout, prevent stale data across sessions',
-      '✅ Graphs & Statistics preserve player selection on realtime data refresh',
-      '✅ Game summary share button Hebrew localization',
-      '✅ Removed legacy storage event listeners',
-    ]
+      '✅ Cache reset on logout',
+      '✅ Preserve player selection on refresh',
+      '✅ Hebrew share button',
+      '✅ Removed legacy listeners',
+    ],
   },
   {
     version: '5.15.0',
     date: '2026-04-19',
     changes: [
-      '✅ Permissions overhaul — removed viewer role, simplified to admin + member',
-      '✅ Super Admin dashboard — global stats, training toggle, orphaned group detection',
-      '✅ New group setup wizard for owners — guided players + API key setup',
-      '✅ AI key onboarding guide for group owners',
-      '✅ Member read-only views on all game screens (live, chip entry, summary)',
-      '✅ Training access control — per-group training_enabled flag',
-      '✅ Removed backup tab — Supabase handles all data storage',
-      '✅ Settlement toggle now works for admins + participants',
-      '✅ Permission hardening — members cannot undo rebuys, edit expenses, or abandon games',
-      '✅ Hebrew localization fixes across activity log and settings',
-    ]
+      '✅ Permissions: removed viewer role',
+      '✅ Super Admin dashboard',
+      '✅ New group setup wizard',
+      '✅ AI key onboarding',
+      '✅ Member read-only on game screens',
+      '✅ Per-group training_enabled flag',
+      '✅ Removed backup tab (Supabase)',
+      '✅ Settlement toggle for participants',
+      '✅ Permission hardening',
+      '✅ Hebrew localization fixes',
+    ],
   },
   {
     version: '5.14.0',
     date: '2026-04-18',
     changes: [
-      '✅ Personal player invites — send unique invite codes that auto-link players on join',
-      '✅ Add member by email — owner can add registered users directly from Group tab',
-      '✅ Nice shareable invite messages with WhatsApp support',
-      '✅ Join flow supports both personal (8-char) and generic (6-char) invite codes',
-    ]
+      '✅ Personal player invites',
+      '✅ Add member by email',
+      '✅ Shareable invite messages',
+      '✅ Join supports both code formats',
+    ],
   },
   {
     version: '5.13.0',
     date: '2026-04-17',
     changes: [
-      '✅ Group Management tab in Settings — view members, change roles, invite code, transfer ownership',
-      '✅ Per-group API keys — each group configures its own Gemini & ElevenLabs keys',
-      '✅ Post-creation invite code screen with copy/share',
-      '✅ Self-create player flow for new users not in the player list',
-      '🔧 Owner-aware security in all management RPCs — admins cannot modify the owner',
-      '🔧 Player delete guard — blocks deletion if player has game history',
-      '🔧 Player linking uniqueness — prevents two members linking to the same player',
-      '🔧 Removed deprecated memberSync role',
-    ]
+      '✅ Group Management tab',
+      '✅ Per-group API keys',
+      '✅ Post-creation invite screen',
+      '✅ Self-create player flow',
+      '🔧 Owner-aware RPC security',
+      '🔧 Player delete guard',
+      '🔧 Player linking uniqueness',
+      '🔧 Removed memberSync role',
+    ],
   },
   {
     version: '5.12.6',
     date: '2026-04-12',
     changes: [
-      '🔄 Fix stale training data — fetch remote before flushing pending uploads, preventing deleted/stale data resurrection',
-      '🧹 Admin deletion clears pending upload buffer for deleted player',
-      '⏱️ Stale buffer safety — pending uploads older than 30min won\'t recreate removed players',
-      '📊 Play screen rebuilds progress from remote on load, fixing nearMiss accuracy mismatch (53% → 74%)',
-    ]
+      '🔄 Fix stale training data on flush',
+      '🧹 Clear pending buffer on player delete',
+      '⏱️ 30min stale-buffer safety',
+      '📊 Rebuild progress from remote',
+    ],
   },
   {
     version: '5.12.5',
     date: '2026-04-12',
     changes: [
-      '🔄 Training progress — remote cloud data is now always authoritative, fixing stale local progress after session deletions',
-    ]
+      '🔄 Remote training data is authoritative',
+    ],
   },
   {
     version: '5.12.4',
     date: '2026-04-12',
     changes: [
-      '🧹 Per-player cloud data management — admin can delete all data or select specific sessions per player from GitHub',
-      '📊 Insight generation stats — admin sees date, sessions, questions, accuracy at insight generation time',
-      '🗑️ Removed hardcoded leaderboard exclusion — replaced with admin-controlled per-player deletion tool',
-    ]
+      '🧹 Per-player cloud data management',
+      '📊 Insight generation stats',
+      '🗑️ Removed hardcoded leaderboard exclusion',
+    ],
   },
   {
     version: '5.12.3',
     date: '2026-04-12',
     changes: [
-      '🔄 Cloud sync merge — local-only completed games preserved during sync instead of being deleted, auto-pushed back to cloud',
-      '🔑 Authenticated GitHub reads — all fetch calls now use embedded token to avoid rate limits',
-      '📋 Training fix format rules — shared TRAINING_SCENARIO_FIX_FORMAT_RULES constant for consistent AI fix output',
-      '🎯 Training leaderboard exclusion — admin can hide specific players from the shared leaderboard',
-      '📊 getTrainingSessionCounts utility — centralized scoring with neutralized answer support',
-      '🗂️ History screen improvements — stable game sort, useCallback optimization, route-aware reload',
-      '⚙️ runGeminiTextPrompt extended — responseMimeType, topP, topK parameters for structured output',
-    ]
+      '🔄 Cloud sync: preserve local-only games',
+      '🔑 Authenticated GitHub reads',
+      '📋 Shared training fix-format rules',
+      '🎯 Admin per-player leaderboard exclusion',
+      '📊 getTrainingSessionCounts utility',
+      '🗂️ History: stable sort + reload',
+      '⚙️ runGeminiTextPrompt: more params',
+    ],
   },
   {
     version: '5.12.2',
     date: '2026-04-09',
     changes: [
-      '📤 Friends can share published forecasts — share button on published forecast card, works without admin/API key',
-      '🖼️ WebP forecast images — smaller files for faster WhatsApp sharing, PNG fallback',
-      '📱 Sequential WhatsApp sharing — multi-image forecasts sent one-by-one for better device compatibility',
-      '⚡ Optimized capture scale (1.7x) — smaller upload size while staying sharp on mobile',
-    ]
+      '📤 Friends can share published forecasts',
+      '🖼️ WebP forecast images',
+      '📱 Sequential WhatsApp sharing',
+      '⚡ Optimized capture scale',
+    ],
   },
   {
     version: '5.12.1',
     date: '2026-04-09',
     changes: [
-      '📅 Custom date range filter in Graphs — same free-form date picker now available on graphs screen',
-      '🧠 Smarter insight staleness — auto-detects stale coaching (3+ sessions since last), legacy name alias resolution',
-      '✨ Batch insights button always visible — shows "up to date" when all fresh, count when updates needed',
-      '🏷️ Needs-insight badge on player rows — visual indicator for players requiring coaching update',
-    ]
+      '📅 Custom date range in Graphs',
+      '🧠 Smarter insight staleness',
+      '✨ Always-visible batch insights button',
+      '🏷️ Needs-insight badge on rows',
+    ],
   },
   {
     version: '5.12.0',
     date: '2026-04-09',
     changes: [
-      '📅 Custom date range filter in Statistics — free-form start/end date picker alongside existing period filters',
-      '🎯 Forecast tone/highlight validation — blocks optimistic text for negative predictions and vice versa, with hedge detection',
-      '📎 Roster impact in AI forecast prompts — historical avg profit when playing with/without tonight\'s opponents',
-      '🃏 Board cards separated from situation text — new boardCards field prevents info leaks in training questions',
-      '🔧 runGeminiTextPrompt shared utility — coaching now uses callWithFallback with model rotation and MAX_TOKENS recovery',
-      '📊 Forecast accuracy: direction-correct predictions now get partial credit (~) instead of miss (✗)',
-      '🧹 Cleaned up pool generation prompt — shorter, structured format with strict field separation rules',
-      '⚡ Pool fetch timeout — 3.5s timeout prevents slow GitHub responses from blocking training start',
-      '🔇 Neutralized answer support — faulty questions can be marked without deleting player history',
-    ]
+      '📅 Custom date range in Statistics',
+      '🎯 Forecast tone/highlight validation',
+      '📎 Roster impact in forecast prompts',
+      '🃏 Board cards separated from situation',
+      '🔧 Shared runGeminiTextPrompt with fallbacks',
+      '📊 Direction-correct gets partial credit',
+      '🧹 Cleaner pool generation prompt',
+      '⚡ Pool fetch: 3.5s timeout',
+      '🔇 Neutralized answer support',
+    ],
   },
   {
     version: '5.11.5',
     date: '2026-04-06',
     changes: [
-      '🎯 Holistic player coaching — replaces per-milestone reports with rich AI coaching using training + real game data',
-      '📊 Real game stats in AI prompts — profit, win rate, streaks, and ranking integrated into coaching and insights',
-      '🤖 Auto-generate coaching for eligible players — triggers on admin tab open for 100+ question players',
-      '💬 Personal coach card on training hub — shareable coaching insight with stats header',
-      '📈 Improved insights — stronger/weakest categories with sample counts, 70% threshold, better tiebreaking',
-      '🔧 Milestone bundled with session upload — single atomic write instead of separate calls',
-    ]
+      '🎯 Holistic player coaching',
+      '📊 Real game stats in AI prompts',
+      '🤖 Auto-coaching for eligible players',
+      '💬 Personal coach card',
+      '📈 Better strongest/weakest insights',
+      '🔧 Milestone bundled with session upload',
+    ],
   },
   {
     version: '5.11.4',
     date: '2026-04-06',
     changes: [
-      '🎨 Training mode buttons — stacked layout with icon and question count on top, label below',
-    ]
+      '🎨 Training mode buttons: stacked layout',
+    ],
   },
   {
     version: '5.11.3',
     date: '2026-04-06',
     changes: [
-      '➕ Force expand pool — admin can add questions even when pool is healthy',
-      '🔍 Auto quality scan after generation completes',
-      '📊 Pool question counts shown on training mode buttons and category picker',
-      '💬 Richer WhatsApp flag responses — includes question context, reporter name, and original comment',
-      '🛡️ Robust AI review error handling — detailed per-model error logging, JSON parse recovery',
-    ]
+      '➕ Force expand pool',
+      '🔍 Auto quality scan after gen',
+      '📊 Pool counts on mode buttons',
+      '💬 Richer flag responses',
+      '🛡️ Robust AI review error handling',
+    ],
   },
   {
     version: '5.11.2',
     date: '2026-04-05',
     changes: [
-      '🔍 AI flag report analysis — analyze flagged questions with AI verdict (accept/reject/partial), refinement chat, and WhatsApp share',
-      '📊 Shared training analytics — analyzePlayerTraining and formatAnalysisForPrompt used by reports and admin insights',
-      '🏠 Home-game reasoning enforcement — prompts forbid isolation/fold-equity logic, require home-game explanations',
-      '📝 Richer personal reports — trend analysis, comparison to previous report, consistent weakness detection',
-    ]
+      '🔍 AI flag report analysis',
+      '📊 Shared training analytics',
+      '🏠 Home-game reasoning enforced',
+      '📝 Richer personal reports',
+    ],
   },
   {
     version: '5.11.1',
     date: '2026-04-05',
     changes: [
-      '🔧 GitHub large file support — Blob API fallback for files >1MB without inline content',
-      '📋 AI report milestone teaser — shows remaining questions until next personal report',
-      '🃏 Hebrew poker terminology enforcement — correct terms in AI generation and fix prompts, pot odds clarity',
-    ]
+      '🔧 GitHub Blob API for >1MB files',
+      '📋 Milestone teaser in reports',
+      '🃏 Hebrew poker terminology enforced',
+    ],
   },
   {
     version: '5.11.0',
     date: '2026-04-05',
     changes: [
-      '🎯 Player styles and game context — training prompts now include real player behaviors and table dynamics',
-      '📝 Personal training reports — AI-generated analysis at milestone intervals with strengths and weaknesses',
-      '💬 Answer reactions — fun Hebrew responses for correct and wrong answers',
-      '🔄 Identity switch requires admin PIN for security',
-      '🗣️ Game night summary prompt rewritten for better accuracy and record emphasis',
-      '🃏 Inline card coloring in explanations, new odds/math training categories',
-    ]
+      '🎯 Player styles + game context in prompts',
+      '📝 AI personal training reports',
+      '💬 Fun answer reactions',
+      '🔄 Identity switch needs admin PIN',
+      '🗣️ Game-night summary prompt rewritten',
+      '🃏 Inline card coloring + odds categories',
+    ],
   },
   {
     version: '5.10.9',
     date: '2026-03-11',
     changes: [
-      '🛠️ Training admin cleanup — simplified alerts, removed unused imports, memoized computations',
-      '⬅️ Settlement arrows fixed to ← for correct RTL payment direction',
-    ]
+      '🛠️ Training admin cleanup',
+      '⬅️ Settlement arrows: ← in RTL',
+    ],
   },
   {
     version: '5.10.8',
     date: '2026-03-11',
     changes: [
-      '📸 Shared captureAndSplit utility — auto-splits tall screenshots for sharing across all screens',
-      '🚩 Rich flag reports — players can specify reason and comment when flagging questions',
-      '🛠️ Admin flag management — dismiss flags, AI-fix questions, preview before saving',
-      '🎯 Near-miss answers excluded from accuracy calculations across leaderboard and progress',
-      '🗣️ TTS now includes training data per player for contextual commentary',
-      '🃏 Card BiDi fix — playing cards render correctly in RTL text',
-    ]
+      '📸 Shared captureAndSplit utility',
+      '🚩 Rich flag reports',
+      '🛠️ Admin flag management + AI fix',
+      '🎯 Near-miss excluded from accuracy',
+      '🗣️ Training data in TTS prompts',
+      '🃏 Card BiDi fix in RTL',
+    ],
   },
   {
     version: '5.10.7',
     date: '2026-03-11',
     changes: [
-      '⚡ Drastically reduce GitHub auto-commits to prevent Vercel deploy cancellation',
-      '🔄 Pool generation: single upload at the end instead of per-category (47→1 commits)',
-      '⏱️ Training answers: 10-min cooldown between GitHub pushes, buffer locally',
-      '📊 Activity logger: 15-min cooldown between session updates, buffer in localStorage',
-    ]
+      '⚡ Reduced GitHub auto-commits',
+      '🔄 Pool gen: single upload',
+      '⏱️ Training answers: 10min cooldown',
+      '📊 Activity logger: 15min cooldown',
+    ],
   },
   {
     version: '5.10.6',
     date: '2026-03-11',
     changes: [
-      '🔄 Fix mobile cache — no-cache headers now apply to all SPA routes, not just /index.html',
-    ]
+      '🔄 Mobile cache: no-cache for all routes',
+    ],
   },
   {
     version: '5.10.5',
     date: '2026-03-11',
     changes: [
-      '🤖 AI pool review — admin can scan entire training pool for logic, language, and nearMiss issues',
-      '💾 Partial session save — training progress saved on navigate-away, not just on completion',
-      '🪪 Identity by player ID — resolves name changes and legacy name corrections automatically',
-      '🎨 Standings screenshot hardcoded dark theme — consistent look for sharing regardless of user theme',
-      '📊 Top wins filter respects selected players, not just player types',
-      '🔧 Training banner text wrapping enabled, tip icon alignment fix',
-    ]
+      '🤖 AI pool review',
+      '💾 Partial session save',
+      '🪪 Identity by player ID',
+      '🎨 Hardcoded dark theme on standings',
+      '📊 Top wins respect selected players',
+      '🔧 Training banner UI fixes',
+    ],
   },
   {
     version: '5.10.4',
     date: '2026-03-11',
     changes: [
-      '🚩 Flagged question removal — loading state, error handling, uses local cache to avoid stale GitHub reads',
-      '🎯 Near-miss icon changed from ½ to ~, cleaner near-miss label text',
-    ]
+      '🚩 Better flagged-question removal',
+      '🎯 Near-miss icon: ½ → ~',
+    ],
   },
   {
     version: '5.10.3',
     date: '2026-03-11',
     changes: [
-      '📸 Image-based sharing for training results and leaderboard via html2canvas',
-      '🔄 Rebuild local progress from remote data when switching devices',
-      '🎯 Near-miss tracking — marks GTO-valid answers that are suboptimal for home games',
-      '💰 Added ₪/שקלים currency context to all AI prompts for accurate output',
-      '📋 Training admin generation log with per-category status and counts',
-      '🔧 Forecast state updates immediately after generation, local cache updated on flagged removal',
-    ]
+      '📸 Image-based training shares',
+      '🔄 Rebuild progress from remote',
+      '🎯 Near-miss tracking',
+      '💰 ₪ context in AI prompts',
+      '📋 Training admin generation log',
+      '🔧 Forecast / flagged updates immediate',
+    ],
   },
   {
     version: '5.10.2',
     date: '2026-03-11',
     changes: [
-      '🔄 Fix cloud sync skipping updates when remote has more completed games than local',
-    ]
+      '🔄 Fix sync skipping when remote ahead',
+    ],
   },
   {
     version: '5.10.1',
     date: '2026-03-11',
     changes: [
-      '🎯 Personalized training banner — dynamic messages based on player stats, streak, accuracy, and activity',
-      '🛡️ Pool generation crash recovery — auto-saves draft and resumes from where it left off',
-      '🤖 Pool gen uses best model only with retry-on-rate-limit instead of falling back to lite',
-      '🔧 Truncated JSON salvage — recovers partial scenarios from cut-off AI responses',
-      '♾️ Unlimited mode score display — compact counter replaces dots when >20 scenarios',
-    ]
+      '🎯 Personalized training banner',
+      '🛡️ Pool gen: crash recovery',
+      '🤖 Pool gen: best model + retry',
+      '🔧 Truncated JSON salvage',
+      '♾️ Unlimited mode counter',
+    ],
   },
   {
     version: '5.10.0',
     date: '2026-03-11',
     changes: [
-      '🎯 Shared Training — pool-based poker training accessible to all players with progress tracking and badges',
-      '🛠️ Training Admin tab in Settings for managing training pool generation',
-      '☁️ Forecast publish/unpublish/delete now auto-syncs to cloud',
-      '🔄 Cloud forecast is authoritative — always syncs from remote',
-      '💱 Removed ₪ currency symbol across all screens for cleaner display',
-    ]
+      '🎯 New: Shared Training (pool-based)',
+      '🛠️ Training Admin tab',
+      '☁️ Forecast publish auto-syncs',
+      '🔄 Cloud forecast authoritative',
+      '💱 Removed ₪ symbol',
+    ],
   },
   {
     version: '5.9.8',
     date: '2026-03-11',
     changes: [
-      '🔄 Forecast refresh keeps original players and location context',
-      '📍 Location saved with pending forecast for accurate regeneration',
-    ]
+      '🔄 Forecast refresh keeps context',
+      '📍 Location saved with pending forecast',
+    ],
   },
   {
     version: '5.9.7',
     date: '2026-03-11',
     changes: [
-      '🧪 Smart global insights — detects dependency, consistency, and profitability patterns across all players',
-      '🔮 Forecast card redesign — collapsible, colored by profit/surprise, crown for top player',
-      '📢 Unpublished forecast visible to admin with publish/hide controls',
-      '📊 Exact win counts in insights (no rounding), game count labels on With/Without bars',
-      '🎯 Dynamic veteran threshold in AI forecast angle assignment',
-    ]
+      '🧪 Smart global insights',
+      '🔮 Forecast card redesign',
+      '📢 Unpublished visible to admin',
+      '📊 Exact win counts',
+      '🎯 Dynamic veteran threshold',
+    ],
   },
   {
     version: '5.9.6',
     date: '2026-03-11',
     changes: [
-      '📱 Mobile-friendly insight layout — text moved below name row to prevent wrapping',
-      '🔤 Larger insight text (0.7rem) for better readability on phones',
-      '🎨 Key Insights section with header, consistent card styling',
-    ]
+      '📱 Mobile-friendly insight layout',
+      '🔤 Larger insight text',
+      '🎨 Key Insights section header',
+    ],
   },
   {
     version: '5.9.5',
     date: '2026-03-11',
     changes: [
-      '🧪 Massively enriched Chemistry insights — diverse, non-repetitive per-player observations',
-      '🔍 New Key Insights headline section with deduplicated top findings',
-      '🎯 Every player row now always shows at least one insight with total profit/loss',
-      '🧹 Removed duplicated summary layer — insights are the single source of truth',
-    ]
+      '🧪 Enriched Chemistry insights',
+      '🔍 Key Insights headline section',
+      '🎯 Every player shows insight',
+      '🧹 Removed duplicate summary layer',
+    ],
   },
   {
     version: '5.9.4',
     date: '2026-03-30',
     changes: [
-      '✨ Settlement UX improvements and personal highlighting across summary/statistics',
-      '📱 History and statistics polish updates',
-    ]
+      '✨ Settlement UX improvements',
+      '📱 History/stats polish',
+    ],
   },
   {
     version: '5.9.3',
     date: '2026-03-26',
     changes: [
-      '🔄 Merged latest app improvements across gameplay, screens, and AI/TTS utilities',
-    ]
+      '🔄 Merged latest improvements',
+    ],
   },
   {
     version: '5.9.2',
     date: '2026-03-25',
     changes: [
-      '📅 Monthly summary table on last game of the month',
-      '🚫 Date-based blocked transfers in settlement algorithm',
-      '📊 Combo history hidden when only 1 shared game',
-      '💬 ElevenLabs test text minimized to save quota',
-      '🗑️ Delete confirmation + icon for TTS game entries',
-      '📱 Activity log shows only meaningful sessions',
-    ]
+      '📅 Monthly summary on month\'s last game',
+      '🚫 Date-based blocked transfers',
+      '📊 Combo history hidden if 1 shared game',
+      '💬 ElevenLabs test text minimized',
+      '🗑️ Delete TTS game entries',
+      '📱 Activity log: meaningful sessions only',
+    ],
   },
   {
     version: '5.9.1',
     date: '2026-03-11',
     changes: [
-      '⚡ TTS latency optimization — AudioContext playback, aggressive silence trim, faster cascade',
-      '🗑️ Delete individual device activity records',
-      '🗑️ Delete individual ElevenLabs TTS game usage entries',
-      '📱 Activity log session path text wrapping fix',
-    ]
+      '⚡ TTS latency optimization',
+      '🗑️ Delete individual activity records',
+      '🗑️ Delete individual TTS entries',
+      '📱 Activity log text-wrap fix',
+    ],
   },
   {
     version: '5.9.0',
     date: '2026-03-11',
     changes: [
-      '🎙️ TTS prompt refined — prioritize dynamic game stats over personal facts',
-      '📅 Period marker detection uses next game night date instead of today',
-      '🔇 Removed auto-announce timer from live game',
-    ]
+      '🎙️ TTS prioritizes dynamic stats',
+      '📅 Period markers use next game night',
+      '🔇 Removed auto-announce timer',
+    ],
   },
   {
     version: '5.8.9',
     date: '2026-03-11',
     changes: [
-      '💸 Settlement blocked transfers — prevent specific player-to-player payments',
-    ]
+      '💸 Settlement: blocked transfers',
+    ],
   },
   {
     version: '5.8.8',
     date: '2026-03-11',
     changes: [
-      '☁️ Pending forecast cloud sync between devices',
-      '📊 Combo history insights deduplication and refinements',
-      '🌐 Hebrew labels for graph period selectors',
-      '🎮 Larger social action buttons in live game',
-      '📱 Activity log device display cleanup',
-    ]
+      '☁️ Pending forecast cloud sync',
+      '📊 Combo history dedup',
+      '🌐 Hebrew graph period labels',
+      '🎮 Larger live game buttons',
+      '📱 Activity device cleanup',
+    ],
   },
   {
     version: '5.8.7',
     date: '2026-03-19',
     changes: [
-      '📋 Game summary screen cleanup and refinements',
-    ]
+      '📋 Game summary cleanup',
+    ],
   },
   {
     version: '5.8.6',
     date: '2026-03-19',
     changes: [
-      '🔊 TTS engine major upgrade — improved voice quality and reliability',
-      '⚙️ Settings TTS configuration and testing panel',
+      '🔊 TTS engine major upgrade',
+      '⚙️ Settings TTS panel',
       '🎮 Live game TTS refinements',
-    ]
+    ],
   },
   {
     version: '5.8.5',
     date: '2026-03-19',
     changes: [
-      '🔊 Edge TTS integration for higher quality Hebrew voice',
-      '⚙️ Settings screen overhaul with improved layout and controls',
-      '🎮 Live game cleanup and refinements',
-      '📊 Statistics and graphs minor fixes',
-    ]
+      '🔊 Edge TTS for Hebrew',
+      '⚙️ Settings overhaul',
+      '🎮 Live game cleanup',
+      '📊 Stats/graphs minor fixes',
+    ],
   },
   {
     version: '5.8.4',
     date: '2026-03-18',
     changes: [
-      '🤖 Background AI processing for game-end summaries',
-      '📊 AI usage tracker enhancements with detailed metrics',
-      '🔊 TTS engine improvements and reliability fixes',
-      '🎮 Live game and game summary UI refinements',
-      '📝 Dev server port 3000 documented in project rules',
-    ]
+      '🤖 Background AI summaries',
+      '📊 AI usage tracker enhancements',
+      '🔊 TTS reliability fixes',
+      '🎮 Live game / summary polish',
+      '📝 Documented dev port 3000',
+    ],
   },
   {
     version: '5.8.3',
     date: '2026-03-18',
     changes: [
-      '📊 AI usage tracker — monitor Gemini API calls and token consumption',
-      '⚙️ Settings screen enhancements and AI usage dashboard',
-    ]
+      '📊 New: AI usage tracker',
+      '⚙️ AI usage dashboard',
+    ],
   },
   {
     version: '5.8.2',
     date: '2026-03-18',
     changes: [
-      '🔧 Storage, AI, and UI refinements across screens',
-    ]
+      '🔧 Storage / AI / UI refinements',
+    ],
   },
   {
     version: '5.8.1',
     date: '2026-03-18',
     changes: [
-      '🎙️ Enhanced TTS — Hebrew ordinals, construct forms, and richer rebuy announcements',
-      '🏆 Record tracking — once-per-session announcements for personal and group rebuy records',
-      '⏱️ AI progress bar component with timing estimates',
-      '🎭 Player traits and gender-aware Hebrew throughout live game',
-      '📊 2026 stats scoping for TTS pool generation',
-      '🔧 AI model display names and timing instrumentation',
-    ]
+      '🎙️ Hebrew ordinals + richer announcements',
+      '🏆 Once-per-session record announcements',
+      '⏱️ AI progress bar component',
+      '🎭 Player traits + gender Hebrew',
+      '📊 2026 stats scoping for TTS',
+      '🔧 Model display names + timing',
+    ],
   },
   {
     version: '5.8.0',
     date: '2026-03-17',
     changes: [
-      '🎙️ AI TTS pool — pre-generated contextual voice messages during live games',
-      '🎭 Player traits system — personality-based commentary and reactions',
-      '🏆 Rebuy records tracking with personal and group records',
-      '📣 Social actions — bad beat and big hand announcements',
-      '🎪 Awards ceremony at game end',
-      '🔄 Cursor rules migrated to .mdc format with AGENTS.md',
-    ]
+      '🎙️ AI TTS pool',
+      '🎭 Player traits system',
+      '🏆 Rebuy records tracking',
+      '📣 Social actions',
+      '🎪 Awards ceremony',
+      '🔄 Cursor rules → .mdc',
+    ],
   },
   {
     version: '5.7.3',
     date: '2026-03-16',
     changes: [
-      '🔍 Device fingerprinting — GPU, canvas hash, and hardware info for activity tracking',
-      '📱 Activity log redesigned with device-grouped view and profiles',
-    ]
+      '🔍 Device fingerprinting',
+      '📱 Activity log: device-grouped view',
+    ],
   },
   {
     version: '5.7.2',
     date: '2026-03-16',
     changes: [
-      '🏠 Refined location insights and AI prompt improvements',
-    ]
+      '🏠 Refined location insights',
+    ],
   },
   {
     version: '5.7.1',
     date: '2026-03-16',
     changes: [
-      '🏠 Location insights — per-player performance analysis by game location',
-      '🤝 Combo history UI polish — improved layout with date headers and color-coded results',
-      '📍 Location data integrated into game summary AI narratives',
-    ]
+      '🏠 Location insights',
+      '🤝 Combo history polish',
+      '📍 Locations in summary AI',
+    ],
   },
   {
     version: '5.7.0',
     date: '2026-03-16',
     changes: [
-      '📊 AI graph insights — trend analysis and narratives on the graphs screen',
-      '🤝 Combo history — track results for specific player group combinations',
-      '📱 Activity logger — session tracking with device info and screen visits',
-      '🎯 Unified surprise system — code-controlled, tighter thresholds, max 2 per forecast',
-      '📄 Forecast pages split to 4 players each for better readability',
-      '💬 H2H storylines rewritten with accurate profit-gap language',
-      '📋 Game summary collapsible sections and deep-link navigation',
-      '🔊 TTS only on game end, not when browsing history',
-    ]
+      '📊 AI graph insights',
+      '🤝 Combo history',
+      '📱 Activity logger',
+      '🎯 Unified surprise system',
+      '📄 Forecast pages: 4 players each',
+      '💬 Better H2H storylines',
+      '📋 Game summary: deep-link sections',
+      '🔊 TTS only at game end',
+    ],
   },
   {
     version: '5.6.0',
     date: '2026-03-15',
     changes: [
-      '📖 Player chronicles — AI-generated per-player stories on statistics screen',
-      '🏷️ Period markers — auto-detect and manually tag first/last game of month, half, year',
-      '🎭 Pre-game teaser — AI narrative before the game starts',
-      '🏆 Milestones engine refactored into dedicated module with new categories',
-      '🤖 Gemini model cascade updated — Gemini 3 Flash + 3.1 Flash Lite',
-      '📊 Statistics screen overhaul with chronicle sharing and period filtering',
-      '🎮 New game screen: location and period type selectors',
-      '📜 Game summary deep-linking from statistics and history',
-    ]
+      '📖 Player chronicles',
+      '🏷️ Period markers',
+      '🎭 Pre-game teaser',
+      '🏆 Milestones engine refactor',
+      '🤖 Gemini cascade updated',
+      '📊 Stats: chronicle sharing',
+      '🎮 Location + period selectors',
+      '📜 Summary deep-linking',
+    ],
   },
   {
     version: '5.5.3',
     date: '2026-03-13',
     changes: [
-      '⚠️ AI summary error handling with user-friendly Hebrew messages',
-      '📜 History screen button layout and styling improvements',
-    ]
+      '⚠️ AI summary error handling',
+      '📜 History button polish',
+    ],
   },
   {
     version: '5.5.2',
     date: '2026-03-13',
     changes: [
-      '🔄 Regenerate AI summary button for admins on game summary screen',
-      '🔮 Robust forecast algorithm — median-based magnitude with group-level clamping',
-      '📜 History screen UI enhancements with action buttons',
-    ]
+      '🔄 Regenerate AI summary button',
+      '🔮 Robust forecast algorithm',
+      '📜 History UI enhancements',
+    ],
   },
   {
     version: '5.5.1',
     date: '2026-03-13',
     changes: [
-      '🔊 TTS engine refactored into dedicated module with Hebrew number pronunciation',
-      '🧮 Optimized settlement algorithm for fewer transfers',
-      '🎙️ AI summary caching fix — regenerates truncated summaries',
-      '📉 Graphs & Statistics screens cleanup and streamlining',
-      '🎮 LiveGame screen simplified with shared TTS utility',
-    ]
+      '🔊 TTS module + Hebrew numbers',
+      '🧮 Optimized settlement algorithm',
+      '🎙️ Fix truncated AI summaries',
+      '📉 Graphs/stats cleanup',
+      '🎮 LiveGame uses shared TTS',
+    ],
   },
   {
     version: '5.5.0',
     date: '2026-03-13',
     changes: [
-      '🤖 AI game night summary with head-to-head storylines and group narratives',
-      '📊 Half-year standings table on game summary screen',
-      '☁️ Restore from cloud backup button in settings',
-      '🔮 Simplified forecast algorithm — cleaner direction + magnitude logic',
-      '⚡ Smart deploy: data syncs no longer trigger Vercel rebuilds',
-      '💾 Training sync reduced to once every 3 days with minimum threshold',
-    ]
+      '🤖 AI game-night summary',
+      '📊 Half-year standings',
+      '☁️ Restore from cloud backup',
+      '🔮 Simplified forecast',
+      '⚡ Smart deploy: skip data syncs',
+      '💾 Training sync every 3 days',
+    ],
   },
   {
     version: '5.4.2',
     date: '2026-03-12',
     changes: [
-      '🔄 Training UI refinements and prompt improvements',
-    ]
+      '🔄 Training UI polish',
+    ],
   },
   {
     version: '5.4.1',
     date: '2026-03-11',
     changes: [
-      '⚡ Quick Training mode — fast text-based poker quiz with batch generation',
-      '🗺️ Table position map — visual seating layout with position labels',
-      '🇮🇱 Full Hebrew localization for all scenario categories and AI prompts',
-      '🃏 Card validation — duplicate/invalid card detection in generated hands',
-      '📝 Improved AI prompt with stricter card-context consistency rules',
-    ]
+      '⚡ Quick Training mode',
+      '🗺️ Table position map',
+      '🇮🇱 Full Hebrew localization',
+      '🃏 Card validation',
+      '📝 Stricter card-context prompt',
+    ],
   },
   {
     version: '5.4.0',
     date: '2026-03-11',
     changes: [
-      '🎯 Poker Training — AI-powered training scenarios tailored to your table dynamics',
-      '🧠 24 scenario categories covering draws, hand strength, bet sizing, reads, and structure',
-      '📊 Training progress tracking with accuracy trends, session history, and weak spot detection',
-      '☁️ Training data cloud sync to GitHub (admin only)',
-      '🔧 Fix FullBackupData type mismatch in cloud sync',
-      '🧹 Remove unused handlePlayerTypeChange from Settings',
-    ]
+      '🎯 New: Poker Training',
+      '🧠 24 scenario categories',
+      '📊 Progress tracking + insights',
+      '☁️ GitHub cloud sync',
+      '🔧 Backup type fix',
+      '🧹 Settings cleanup',
+    ],
   },
   {
     version: '5.2.6',
     date: '2026-02-26',
     changes: [
-      '🐛 Fix Insights blank screen — variable used before definition',
-      '🔊 Fix rebuy sound stopping after multiple rebuys — reuse AudioContext',
-      '🎤 Added 80+ new rebuy voice messages for variety',
-      '🖥️ Fix all dropdown menus for PC — explicit colors for dark theme',
-      '🎨 Redesign Impact cards (With vs Without) — cleaner modern layout',
-      '🎭 Redesign "Moments of the Night" — single line per row, card style',
-      '🧹 Remove redundant arrows from impact badges',
-    ]
+      '🐛 Fix Insights blank screen',
+      '🔊 Reuse AudioContext for rebuy sound',
+      '🎤 80+ new rebuy voice messages',
+      '🖥️ Fix dropdowns on PC',
+      '🎨 Redesign Impact cards',
+      '🎭 Redesign "Moments of the Night"',
+      '🧹 Remove arrows from impact badges',
+    ],
   },
   {
     version: '5.2.0',
     date: '2026-02-26',
     changes: [
-      '🎙️ TTS game summary announcement — winner & loser announced when game ends',
-      '📊 Pot milestone TTS — announces when total buyins cross 5/10/15/20+ milestones',
-      '🏆 Last man standing — announces the last player still on their first buyin',
-      '🎯 Improved quick rebuy messages — personalized with player stats',
-      '📋 Game highlights redesign — combines multiple players per line, exactly 10 highlights',
-      '🔥 Streaks simplified to 4+ only, hot & cold combined in one line',
-      '🎯 Upsets merged into single highlight (win & loss together)',
-      '👑 Rebuy King & Comeback thresholds raised to 5+ buyins',
-      '🧹 Removed unused state, fixed all lint warnings in GameSummaryScreen',
-    ]
+      '🎙️ TTS: winner & loser at game end',
+      '📊 Pot milestone TTS',
+      '🏆 Last man standing',
+      '🎯 Personalized rebuy messages',
+      '📋 Highlights redesign: 10 lines',
+      '🔥 Streaks 4+ only',
+      '🎯 Upsets merged',
+      '👑 Rebuy King: 5+ buyins',
+      '🧹 Lint cleanup',
+    ],
   },
   {
     version: '5.1.0',
     date: '2026-02-05',
     changes: [
-      '🎭 Highlights now match assigned angle (no more repetitive "פורמה" for everyone)',
-      '📊 Stat cards label rankings clearly (⭐ period table vs all-time) to prevent AI confusion',
-      '🚫 Stronger no-negative-numbers rule + post-processing strips negative ₪ amounts from sentences',
-      '🎯 Rankings instruction: AI only says "מוביל" if player is actually #1 in period table',
-      '⚡ Surprise flag only when forecast is +40₪ or more',
-      '🔙 Comeback threshold lowered from 30 to 20 days',
-    ]
+      '🎭 Highlights match assigned angle',
+      '📊 Stat-card label clarity',
+      '🚫 Stronger no-negative rule',
+      '🎯 "מוביל" only for #1',
+      '⚡ Surprise only at +40₪',
+      '🔙 Comeback: 30 → 20 days',
+    ],
   },
   {
     version: '5.0.0',
     date: '2026-02-05',
     changes: [
-      '🤖 AI Forecast Complete Overhaul - AI generates both profit prediction AND narrative sentences',
-      '📝 Rich prompt with structured stat cards, role, rules, good/bad examples in Hebrew',
-      '🎭 Unique narrative angle per player (streak, ranking battle, comeback, milestone, form, veteran, dark horse)',
-      '⚡ Quality-first model order: gemini-2.5-flash > 2.0-flash > lite variants',
-      '🎨 Higher creativity settings (temperature 0.7, topK 40, topP 0.95)',
-      '🧹 Removed 300+ lines of code-generated sentence templates',
-      '🛡️ Fallback sentence from stat card if AI returns empty/short response',
-      '✅ Code-generated highlights kept for factual accuracy',
-    ]
+      '🤖 AI forecast: complete overhaul',
+      '📝 Rich Hebrew prompt with examples',
+      '🎭 Unique angle per player',
+      '⚡ Quality-first model order',
+      '🎨 Higher creativity settings',
+      '🧹 Removed 300+ template lines',
+      '🛡️ Fallback sentence',
+      '✅ Code-generated highlights kept',
+    ],
   },
   {
     version: '4.63.0',
     date: '2026-02-05',
     changes: [
-      '📊 Every sentence now includes 2-3 real stats (ranking, win%, average, profit)',
-      '🎯 Stat-rich sentence filter: prefers sentences with 3+ numbers over generic ones',
-      '🚫 Removed all generic filler sentences (no more "X games of experience" without stats)',
-      '🔗 Forecast correlation now includes win%, ranking, and period average',
-    ]
+      '📊 Every sentence has 2-3 stats',
+      '🎯 Filter prefers stat-rich sentences',
+      '🚫 Removed generic fillers',
+      '🔗 Forecast correlation expanded',
+    ],
   },
   {
     version: '4.61.0',
     date: '2026-02-05',
     changes: [
-      '🔗 Forecast correlation: Sentence tone matches AI prediction (optimistic/cautious)',
-      '🚫 No redundancy: Forecast number not repeated in sentences - just matching tone',
-      '✅ Tested on 8 real permanent players (ליאור, אייל, ארז, אורן, ליכטר, סגל, תומר, פיליפ)',
-      '📊 99% pass rate: Statistics accuracy verified against real player data',
-    ]
+      '🔗 Sentence tone matches prediction',
+      '🚫 No redundant forecast number',
+      '✅ Tested on 8 real players',
+      '📊 99% pass rate',
+    ],
   },
   {
     version: '4.60.0',
     date: '2026-02-05',
     changes: [
-      '💪 Encouraging tone: All sentences focus on potential and comeback, not losses',
-      '🚫 No negative records: Removed all mentions of loss amounts and negative totals',
-      '🎯 Smart conditionals: Sentences only show positive stats when they exist',
-      '😊 Adult humor: Light, encouraging tone without being childish',
-      '📊 99% quality pass rate: Deep tested across 10 player scenarios',
-    ]
+      '💪 Encouraging tone',
+      '🚫 No negative records',
+      '🎯 Smart conditionals',
+      '😊 Adult humor',
+      '📊 99% quality pass',
+    ],
   },
   {
     version: '4.59.0',
     date: '2026-02-05',
     changes: [
-      '🎰 MASSIVE variety: 10-26 sentence options per player (tested across 12 scenarios)',
-      '📊 100% factual: Every sentence includes real numbers - averages, streaks, profits, rankings',
-      '🔥 New sentence types: win rate, streak momentum, milestone proximity, ranking gaps',
-      '♀️ Gender-correct: Proper Hebrew for male/female players throughout',
-      '✨ Unique highlights: Priority-based selection ensures no two players get same highlight',
-      '🎯 AI simplified: Only predicts profit - all sentences generated with verified statistics',
-    ]
+      '🎰 10-26 sentence options per player',
+      '📊 100% factual stats',
+      '🔥 New sentence types',
+      '♀️ Gender-correct Hebrew',
+      '✨ Unique per-player highlights',
+      '🎯 AI predicts profit only',
+    ],
   },
   {
     version: '4.58.0',
     date: '2026-02-05',
     changes: [
-      '📊 Rich sentences: Every sentence now includes actual statistics (averages, profits, rankings)',
-      '🎯 Highlight improvement: Shows most important fact with numbers (streak, last game, rank gap, etc.)',
-      '📈 Context-aware: Sentences include period stats, historical comparison, gaps to other players',
-      '🔢 Examples: "3 נצחונות ברצף! ממוצע +45₪ ב-5 משחקים אחרונים. מי יעצור אותו?"',
-    ]
+      '📊 Sentences include statistics',
+      '🎯 Highlights show numbers',
+      '📈 Context-aware sentences',
+      '🔢 Real numeric examples',
+    ],
   },
   {
     version: '4.48.0',
     date: '2026-02-05',
     changes: [
-      '⏪ Rollback: Restored v4.43.9 AI prompt (proven working version)',
-      '🗑️ Removed experimental code-generated sentences',
-      '✅ Back to AI-generated content with proper constraints',
-    ]
+      '⏪ Restored v4.43.9 prompt',
+      '🗑️ Removed experimental code',
+      '✅ Back to AI-generated content',
+    ],
   },
   {
     version: '4.46.0',
     date: '2026-02-05',
     changes: [
-      '🎨 Rewrite: Clean AI prompt with few-shot examples',
-      '✨ Creative: AI generates engaging highlight + sentence',
-      '📊 Clear data: Clean player stats format for AI',
-      '🌡️ Temperature 0.9 for varied, creative output',
-      '💾 Backup: v4.43.9 saved as geminiAI.backup.v4.43.9.ts',
-    ]
+      '🎨 Clean prompt + few-shot examples',
+      '✨ Creative AI output',
+      '📊 Clear data format',
+      '🌡️ Temperature 0.9',
+      '💾 Backup of v4.43.9',
+    ],
   },
   {
     version: '4.45.0',
     date: '2026-02-05',
     changes: [
-      '🏗️ Major: 100% code-generated sentences - AI only balances profits',
-      '✨ Diverse: 7 unique sentence patterns based on player index',
-      '🎯 Accurate: All facts computed in code, not AI interpretation',
-      '🚀 Faster: Simplified AI prompt, reduced token usage',
-    ]
+      '🏗️ 100% code-generated sentences',
+      '✨ 7 unique patterns',
+      '🎯 Facts in code, not AI',
+      '🚀 Faster, simpler prompt',
+    ],
   },
   {
     version: '4.44.3',
     date: '2026-02-05',
     changes: [
       '🇮🇱 Hebrew: WON/LOST → רווח/הפסד',
-      '✅ Pre-built highlight + sentence (no duplication)',
-      '🎨 7 unique patterns with separate highlight and sentence',
-      '📝 AI just polishes, not generates'
-    ]
+      '✅ Pre-built highlight + sentence',
+      '🎨 7 unique patterns',
+      '📝 AI just polishes',
+    ],
   },
   {
     version: '4.44.2',
     date: '2026-02-05',
     changes: [
-      '🐛 FIX: Switch statement instead of arrow functions array',
-      '✅ Safer pattern selection - no minification issues',
-      '🔧 Added null safety for periodGames'
-    ]
+      '🐛 Switch instead of arrow array',
+      '✅ Safer pattern selection',
+      '🔧 Null safety for periodGames',
+    ],
   },
   {
     version: '4.44.1',
     date: '2026-02-05',
     changes: [
-      '🎨 CODE generates 7 different sentence patterns per player index',
-      '✅ AI just polishes the pre-built sentences - variety guaranteed',
-      '📝 Each player gets unique opening based on position',
-      '🔧 Sentences built in code, not by AI interpretation'
-    ]
+      '🎨 Code generates patterns by index',
+      '✅ AI just polishes',
+      '📝 Unique opening per player',
+      '🔧 Sentences built in code',
+    ],
   },
   {
     version: '4.44.0',
     date: '2026-02-05',
     changes: [
-      '🔧 REFACTOR: Pre-computed fact sheets - AI copies exact phrases',
-      '✅ Ranking phrase pre-built in code (מוביל only for #1)',
-      '📝 Simplified prompt - AI assembles, not interprets',
-      '🎯 Temperature 0.7 for accuracy with variety'
-    ]
+      '🔧 Pre-computed fact sheets',
+      '✅ Ranking phrase pre-built',
+      '📝 Simplified prompt',
+      '🎯 Temperature 0.7',
+    ],
   },
   {
     version: '4.43.11',
     date: '2026-02-22',
     changes: [
-      '🎰 Rebuy Stats table in Statistics page (avg, total, max, invested, ROI)',
-      '🔢 Rebuy sentences now match announced total buyins count',
-      '🗑️ Removed redundant/confusing rebuy sentences'
-    ]
+      '🎰 Rebuy Stats table in Statistics',
+      '🔢 Sentences match announced count',
+      '🗑️ Removed redundant rebuy lines',
+    ],
   },
   {
     version: '4.43.10',
     date: '2026-02-05',
     changes: [
-      '🔧 Temperature 0.95 → 0.9 to reduce hallucinations',
-      '✅ highlight and sentence must match (same ranking/facts)',
-      '🚫 Stricter rule: use only facts from data, don\'t invent'
-    ]
+      '🔧 Temperature 0.95 → 0.9',
+      '✅ Highlight + sentence must match',
+      '🚫 Use only data facts',
+    ],
   },
   {
     version: '4.43.9',
     date: '2026-02-05',
     changes: [
-      '🎲 Random seed + player order in prompt for unique outputs each run',
-      '🔥 Temperature 0.85 → 0.95 for maximum variety',
-      '✅ Each forecast request now truly different'
-    ]
+      '🎲 Random seed + player order',
+      '🔥 Temperature 0.85 → 0.95',
+      '✅ Truly different each run',
+    ],
   },
   {
     version: '4.43.8',
     date: '2026-02-05',
     changes: [
-      '🚨 CRITICAL: Each sentence MUST start with different word',
-      '✍️ Explicit opening patterns per player (1-7)',
-      '🎨 Stronger variety enforcement in prompt'
-    ]
+      '🚨 Each sentence: different opener',
+      '✍️ Explicit opening patterns',
+      '🎨 Stronger variety enforcement',
+    ],
   },
   {
     version: '4.43.7',
     date: '2026-02-05',
     changes: [
-      '🔧 Single game says "במשחק היחיד" not "ממוצע"',
-      '🔢 Whole numbers only (no decimals)',
-      '📈 Trend must show comparison: historical X₪ vs recent Y₪'
-    ]
+      '🔧 Single game: "במשחק היחיד"',
+      '🔢 Whole numbers only',
+      '📈 Trend must show comparison',
+    ],
   },
   {
     version: '4.43.6',
     date: '2026-02-05',
     changes: [
-      '🎨 Forecast sentence variety: 7 different opening patterns',
-      '🎲 Temperature 0.6 → 0.85 for more creative variety between runs',
-      '✅ Positive prompt instructions instead of "don\'t do" rules'
-    ]
+      '🎨 7 different opening patterns',
+      '🎲 Temperature 0.6 → 0.85',
+      '✅ Positive prompt instructions',
+    ],
   },
   {
     version: '4.43.5',
     date: '2026-02-05',
     changes: [
-      '🔧 FIX: Ranking now uses GLOBAL half-year ranking (matches visible table)',
-      '✅ Uses rank among ALL active players, not just tonight\'s players',
-      '✅ Shows "X שחקנים פעילים" when using global rank',
-      '✅ Falls back to tonight\'s players ranking if global not available'
-    ]
+      '🔧 Use GLOBAL half-year ranking',
+      '✅ Among all active players',
+      '✅ Shows total active count',
+      '✅ Falls back to tonight\'s players',
+    ],
   },
   {
     version: '4.43.4',
     date: '2026-02-05',
     changes: [
-      '🔧 FIX: Now uses CURRENT PERIOD (H1/H2) not just year',
-      '✅ H1 2026 = Jan-Jun, H2 2026 = Jul-Dec',
-      '✅ If no games in current half, falls back to previous half WITH NOTE',
-      '✅ Player data shows period label (e.g., "H1 2026")',
-      '✅ If using previous period, marked as "(מתקופה קודמת)"'
-    ]
+      '🔧 Use current period (H1/H2)',
+      '✅ Falls back to previous half',
+      '✅ Period label per player',
+      '✅ Marks "(מתקופה קודמת)"',
+    ],
   },
   {
     version: '4.43.3',
     date: '2026-02-05',
     changes: [
-      '🔧 CRITICAL FIX: "Recent" now means CURRENT YEAR (matches visible table!)',
-      '✅ No more confusion: AI uses 2026 games only for averages',
-      '✅ Player data shows all current year games, not "last 5"',
-      '✅ Suggestion calculation uses current year performance',
-      '✅ Surprise detection uses current year vs all-time comparison'
-    ]
+      '🔧 "Recent" = current year',
+      '✅ AI uses 2026 only',
+      '✅ Player data: full year',
+      '✅ Suggestion uses current year',
+    ],
   },
   {
     version: '4.43.2',
     date: '2026-02-05',
     changes: [
-      '📊 FORECAST RANGE FIX: Predictions now more meaningful (±50-150₪ typical)',
-      '✅ Amplified predictions by 2.5x for realistic game swings',
-      '✅ Minimum threshold: ±25₪ (no more +1₪ predictions)',
-      '🎲 SURPRISE FIX: Now only for players with bad history + good recent form',
-      '✅ Surprise always means POSITIVE prediction (unexpected win)',
-      '✅ Surprise player boosted to at least +50₪'
-    ]
+      '📊 Forecast: ±50-150₪ typical',
+      '✅ Amplified 2.5x',
+      '✅ Min ±25₪',
+      '🎲 Surprise: bad history + good form',
+      '✅ Surprise = positive prediction',
+    ],
   },
   {
     version: '4.43.0',
     date: '2026-02-05',
     changes: [
-      '🔄 COMPLETE PROMPT REWRITE - clean, focused, Hebrew-first',
-      '📈 Trend analysis now HIGH PRIORITY with clear Hebrew labels',
-      '✅ Player data in Hebrew, concise format',
-      '✅ Clear rules: tone matching, specific facts required',
-      '✅ Fixed: no more "הלילה" (using "השחקנים")',
-      '✅ Fixed: comeback players properly marked',
-      '❌ Removed: redundant rules, confusing English/Hebrew mix'
-    ]
+      '🔄 Complete prompt rewrite — Hebrew-first',
+      '📈 Trend analysis prioritized',
+      '✅ Concise Hebrew player data',
+      '✅ Clear tone-matching rules',
+      '✅ "השחקנים" not "הלילה"',
+      '❌ Removed redundant rules',
+    ],
   },
   {
     version: '4.42.5',
     date: '2026-02-05',
     changes: [
-      '📈 Added TREND ANALYSIS: AI compares recent vs all-time performance',
-      '✅ IMPROVING: "history bad but recent good" → optimistic forecast',
-      '✅ DECLINING: "usually good but recent slump" → cautious forecast',
-      '✅ Player data now shows both recent avg AND all-time avg for comparison',
-      '✅ AI instructed to mention trend contrasts in sentences'
-    ]
+      '📈 Added trend analysis',
+      '✅ IMPROVING / DECLINING flags',
+      '✅ Recent + all-time avg',
+      '✅ AI mentions trend contrasts',
+    ],
   },
   {
     version: '4.42.4',
     date: '2026-02-05',
     changes: [
-      '🔧 CRITICAL: Enforced 3-way alignment between expectedProfit, highlight, and sentence',
-      '✅ Added explicit alignment table: positive profit → optimistic text',
-      '✅ Added forbidden combinations to prevent contradictions',
-      '✅ isSurprise=true now requires POSITIVE expectedProfit',
-      '✅ Added verification checklist at end of prompt'
-    ]
+      '🔧 Enforced 3-way alignment',
+      '✅ Explicit alignment table',
+      '✅ Forbidden combinations',
+      '✅ Surprise must be positive',
+      '✅ Verification checklist',
+    ],
   },
   {
     version: '4.42.3',
     date: '2026-02-05',
     changes: [
-      '🔧 Fixed: Restored critical prompt rules lost in over-optimization',
-      '✅ "DON\'T mention expectedProfit number in sentence" rule restored',
-      '✅ Tone/profit correlation enforced (positive→optimistic, negative→hopeful)',
-      '✅ Current ranking (2026) made more prominent, all-time only if notable',
-      '✅ Player data restructured - clearer hierarchy',
-      '❌ No more highlighting big losses'
-    ]
+      '🔧 Restored critical prompt rules',
+      '✅ "Don\'t mention profit" restored',
+      '✅ Tone/profit correlation',
+      '✅ Current ranking emphasized',
+      '✅ Cleaner data hierarchy',
+      '❌ No more big-loss highlights',
+    ],
   },
   {
     version: '4.42.2',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed: Comeback players now mentioned (was missing)',
-      'Prompt optimized: ~60% shorter, clearer structure',
-      'Player data more compact but complete'
-    ]
+      '✅ Comeback players mentioned',
+      'Prompt 60% shorter',
+      'Player data more compact',
+    ],
   },
   {
     version: '4.41.5',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed Hebrew text - changed "/משחק" to "למשחק" (proper Hebrew grammar)',
-      'Applied to all milestone descriptions'
-    ]
+      '✅ "/משחק" → "למשחק" (grammar)',
+      'Applied to all milestone descriptions',
+    ],
   },
   {
     version: '4.41.4',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed "2026 מתחילה" milestone showing incorrectly after games were played',
-      'New year milestone now only shows in January with 0-1 games played',
-      'Added "Early Year Leader" milestone for Jan/Feb with actual 2026 standings'
-    ]
+      '✅ Fixed "2026 מתחילה" timing',
+      'Only in January with 0-1 games',
+      'Added "Early Year Leader"',
+    ],
   },
   {
     version: '4.41.3',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed forecast tone mismatch - sentence now matches prediction direction',
-      '✅ Fixed milestone deduplication - same player no longer appears twice as main subject',
-      'Strengthened AI prompt rules for tone/prediction alignment'
-    ]
+      '✅ Forecast tone matches prediction',
+      '✅ Milestone deduplication',
+      'Strengthened tone alignment',
+    ],
   },
   {
     version: '4.41.2',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed Vercel caching - mobile will now always get latest version',
-      'Added cache-busting headers to vercel.json'
-    ]
+      '✅ Fixed Vercel cache for mobile',
+      'Cache-busting headers',
+    ],
   },
   {
     version: '4.41.1',
     date: '2026-02-05',
     changes: [
-      '✅ Fixed milestone distance rounding (no more decimal values like 69.75₪)',
-      'Added comprehensive validation scripts for all features',
-      'All 49 validation tests passing at 100%'
-    ]
+      '✅ Milestone rounding fix',
+      'Added validation scripts',
+      '49 tests passing',
+    ],
   },
   {
     version: '4.41.0',
     date: '2026-02-05',
     changes: [
-      '✅ Major AI forecast improvements - optimized prompts for accuracy and engagement',
-      '✅ Completely rewrote milestone/insight generation with 7 professional categories',
-      'New categories: battles, streaks, milestones, form, drama, records, season',
-      'Smart deduplication ensures diverse, high-quality insights (5-8 per game)',
-      'Implemented GlobalRankingContext for precise active player rankings (33% threshold)',
-      'Improved Hebrew text quality with punchy titles and exact statistics'
-    ]
+      '✅ Major AI forecast improvements',
+      '✅ 7 milestone categories',
+      'Smart deduplication',
+      'GlobalRankingContext',
+      'Punchy Hebrew titles',
+    ],
   },
   {
     version: '4.40.46',
     date: '2026-01-19',
     changes: [
-      '✅ CRITICAL: Hall of Fame 2026 now uses SAME data as Season Podium 2026',
-      'Fixed: Current year was being calculated twice with different thresholds',
-      'Now guaranteed to show identical names for current year in both sections'
-    ]
+      '✅ Hall of Fame matches Season Podium',
+      'Single calculation for current year',
+    ],
   },
   {
     version: '4.40.45',
     date: '2026-01-19',
     changes: [
-      '✅ Season Podium now shows ALL player types (highest profit regardless of type)',
-      'Both Hall of Fame and Season Podium now rank by profit only, not player type',
-      'Fixed: Season Podium was incorrectly filtering to permanent players only'
-    ]
+      '✅ Season Podium: all player types',
+      'Both rank by profit only',
+    ],
   },
   {
     version: '4.40.44',
     date: '2026-01-19',
     changes: [
-      '✅ Reverted v4.40.43 - Hall of Fame correctly shows ALL player types',
-      'Hall of Fame = historical records (all players), Season Podium = competition (permanent only)',
-      'Real fix from v4.40.42: proper data loading and name updates from current state'
-    ]
+      '✅ Reverted v4.40.43',
+      'HoF = all players, Podium = permanent',
+      'Real fix: data loading + name updates',
+    ],
   },
   {
     version: '4.40.42',
     date: '2026-01-19',
     changes: [
-      '✅ PROPER FIX: Added initial data load on mount + storage change listener',
-      'Fixed: podiumData was calculating with empty players array on first render',
-      'Fixed: No listener for GitHub sync storage changes - data never reloaded',
-      'Now Hall of Fame recalculates with correct data on mount and after syncs'
-    ]
+      '✅ Initial data load + storage listener',
+      'Fixed empty players on first render',
+      'Fixed missing sync listener',
+    ],
   },
   {
     version: '4.40.41',
     date: '2026-01-19',
     changes: [
-      '✅ REAL FIX: Hall of Fame now uses players STATE instead of calling getAllPlayers()',
-      'The memo was fetching stale data from storage instead of using React state',
-      'Now correctly shows current player names matching Season Podium'
-    ]
+      '✅ HoF uses player STATE',
+      'Fixed stale storage fetch',
+    ],
   },
   {
     version: '4.40.40',
     date: '2026-01-19',
     changes: [
-      '✅ CRITICAL FIX: Hall of Fame now recalculates when player data changes',
-      'Fixed podiumData useMemo to depend on players state instead of empty array',
-      'This ensures Hall of Fame shows current player names after syncs/updates'
-    ]
+      '✅ HoF recalculates on data change',
+      'useMemo depends on players state',
+    ],
   },
   {
     version: '4.40.39',
     date: '2026-01-19',
     changes: [
-      '🔍 Added debug logging to compare Season Podium vs Hall of Fame calculations',
-      'Identified root cause: useMemo was returning stale cached data'
-    ]
+      '🔍 Debug logging added',
+      'Identified stale useMemo cache',
+    ],
   },
   {
     version: '4.40.38',
     date: '2026-01-19',
     changes: [
-      '🔍 Enhanced debugging: Now showing all database players at podium calculation time',
-      'Check console to see player database state vs what Hall of Fame shows'
-    ]
+      '🔍 Debug player database state',
+    ],
   },
   {
     version: '4.40.37',
     date: '2026-01-19',
     changes: [
-      '🐛 Debug version: Added console logging to diagnose Hall of Fame name issue',
-      'Check browser console (F12) to see if player names are being updated'
-    ]
+      '🐛 Debug HoF name issue',
+    ],
   },
   {
     version: '4.40.36',
     date: '2026-01-19',
     changes: [
-      '🔧 Fixed Season Podium (H1/H2/Yearly) showing incorrect player names',
-      '📊 Fixed Biggest Wins leaderboard showing historical names instead of current names',
-      'All player name displays now use current database names across the app',
-      'Complete fix for player name consistency in all statistics sections'
-    ]
+      '🔧 Fixed Season Podium names',
+      '📊 Fixed Biggest Wins names',
+      'Always use current names',
+    ],
   },
   {
     version: '4.40.35',
     date: '2026-01-19',
     changes: [
-      '🏆 Fixed Hall of Fame displaying incorrect player names',
-      'Player names now always show current database names, not historical game record names',
-      'Affects all years in Hall of Fame table including 2026',
-      'Ensures name changes are reflected correctly in historical records'
-    ]
+      '🏆 HoF: current names not historical',
+      'All years affected',
+    ],
   },
   {
     version: '4.40.34',
     date: '2026-01-19',
     changes: [
-      '✨ Unified Leaders section format to match other record sections',
-      'Leaders now display in 2-column grid layout with center alignment',
-      '🔧 Fixed Best Avg/Game sign handling - now correctly shows + or - based on value',
-      'Consistent visual styling across all record sections'
-    ]
+      '✨ Unified Leaders section format',
+      '🔧 Best Avg/Game sign handling',
+    ],
   },
   {
     version: '4.40.33',
     date: '2026-01-19',
     changes: [
-      '📊 Statistics records now align with applied filters',
-      'Removed minimum games requirement for win rate records',
-      'Removed minimum games requirement for average profit records',
-      'Fixed Hebrew translation: Buyin King record now shows "רכישות" instead of "כל המשחקים"',
-      'All records now respect your selected time period filters'
-    ]
+      '📊 Records align with filters',
+      'No min-games on win rate',
+      'No min-games on average profit',
+      'Buyin King: "רכישות"',
+    ],
   },
   {
     version: '4.40.32',
     date: '2026-01-05',
     changes: [
-      '🔊 Voice notification on Undo rebuy!',
-      'When you undo a rebuy, you hear: "ביטול. [שם] מינוס אחד. סך הכל [X]"',
-      'Same Hebrew voice as rebuy announcements',
-      'Works for both full and half buyins'
-    ]
+      '🔊 Voice on Undo rebuy',
+      'Hebrew announcement',
+      'Same voice as rebuys',
+    ],
   },
   {
     version: '4.40.31',
     date: '2026-01-05',
     changes: [
-      '👋 Remove player after game started!',
-      'If a player doesn\'t show up, click ✕ to remove them',
-      'Only works before they rebuy (initial buyin only)',
-      'Admin-only feature with confirmation dialog',
-      'No more stuck with missing players!'
-    ]
+      '👋 Remove player after game starts',
+      'Click ✕ before they rebuy',
+      'Admin only with confirmation',
+    ],
   },
   {
     version: '4.40.30',
     date: '2026-01-04',
     changes: [
-      '🧹 Milestone DEDUPLICATION - no more repetition!',
-      'Each player appears in max 2 milestones',
-      'Each theme (streak, form, comeback) only once',
-      'Hot streak + Form comparison = picks best one only',
-      'Reduced from 10 to 8 max milestones (quality > quantity)',
-      'Smarter theme detection to avoid similar messages'
-    ]
+      '🧹 Milestone deduplication',
+      'Max 2 per player',
+      'Each theme once',
+      'Reduced 10 → 8 milestones',
+    ],
   },
   {
     version: '4.40.29',
     date: '2026-01-04',
     changes: [
       '🗑️ Removed chatbot feature',
-      'Cleaner app without the chat button'
-    ]
+    ],
   },
   {
     version: '4.40.26',
     date: '2026-01-04',
     changes: [
-      '🌟 DRAMATIC MILESTONES - The stories that matter!',
-      '"מהפסיד למנצח" - player who usually loses but just won!',
-      '"מנצח לנפגע" - star player who unexpectedly lost',
-      '"מלחמת הרצפים" - hot streak vs cold streak clash',
-      '"הרים רוסיים" - biggest swings in recent games',
-      '"המקום האחרון עולה" - bottom player showing comeback',
-      '"המוביל מאבד אחיזה" - leader losing momentum',
-      '2025 champion: First week only (high priority), second week (low), then GONE!',
-      'Focus on current dynamics, not old history!'
-    ]
+      '🌟 Dramatic milestones',
+      '"מהפסיד למנצח" / "מנצח לנפגע"',
+      '"מלחמת הרצפים"',
+      '"הרים רוסיים" / "המקום האחרון עולה"',
+      '2025 champion fades after week 2',
+    ],
   },
   {
     version: '4.40.25',
     date: '2026-01-04',
     changes: [
-      '🤖 ULTIMATE POKER CHATBOT!',
-      '⚔️ Head-to-head: "X נגד Y" - full rivalry stats',
-      '😈 Nemesis: "מי הנמסיס של X?" - who beats you most',
-      '🎯 Victim: "מי הקורבן של X?" - who you beat most',
-      '📈 Trends: "מי משתפר?" - who is improving/declining',
-      '🏠 Location stats: "מי מנצח אצל X?" - performance by venue',
-      '🎢 Volatility: "מי הכי תנודתי?" - consistent vs wild players',
-      '👥 Lineups: "מי משחק הכי הרבה ביחד?" - common pairs',
-      '🔮 Predictions: "תחזית להערב" - smart betting tips',
-      '💬 Follow-ups: "ומה איתו?" - remembers context',
-      'AI gets enhanced data: trends, h2h, locations',
-      '30+ new question patterns supported!'
-    ]
+      '🤖 Enhanced poker chatbot',
+      '⚔️ Head-to-head + nemesis + victim',
+      '📈 Trends + location + volatility',
+      '🔮 Predictions + follow-ups',
+      '30+ new patterns',
+    ],
   },
   {
     version: '4.40.24',
     date: '2026-01-04',
     changes: [
-      '🔥 Streaks now span across years!',
-      'Win in Dec 2025 + Win in Jan 2026 = 2-game streak',
-      'AI forecasts use the TRUE continuous streak',
-      'Milestones correctly show cross-year streaks',
-      'Fact-checking uses actual streak (not year-limited)',
-      'More accurate streak reporting in all views'
-    ]
+      '🔥 Streaks span across years',
+      'Forecasts use true streak',
+      'Cross-year reporting',
+    ],
   },
   {
     version: '4.40.23',
     date: '2026-01-04',
     changes: [
-      '📅 Chatbot now understands DATE-BASED questions!',
-      '"מי ניצח בנובמבר?" - who won in November',
-      '"מה היה לפני חודש?" - what happened a month ago',
-      '"כמה משחקים היו ב-2025?" - games count in 2025',
-      '"תוצאות בדצמבר" - December results',
-      'Supports Hebrew & English month names',
-      'Supports: לפני חודש, לפני שבוע, החודש, השנה',
-      'Filters ALL games by date range automatically'
-    ]
+      '📅 Date-based chatbot questions',
+      'Hebrew & English month names',
+      'Auto-filters games by range',
+    ],
   },
   {
     version: '4.40.22',
     date: '2026-01-04',
     changes: [
-      '💬 Smarter chatbot fallback - never says "I don\'t understand"',
-      'Unknown questions now show interesting facts instead of error',
-      'Added 10+ more question patterns (average, win rate, summary, predictions)',
-      '"עזרה" / "help" shows what you can ask',
-      '"סיכום" shows quick group overview',
-      '"על מי להמר?" gives fun prediction based on streaks',
-      '"עובדות מעניינות" shows fun stats',
-      'Always gives useful info, even for unexpected questions'
-    ]
+      '💬 Smarter chatbot fallback',
+      '10+ new question patterns',
+      '"עזרה" / "סיכום" support',
+    ],
   },
   {
     version: '4.40.21',
     date: '2026-01-04',
     changes: [
-      '🔍 AI Forecast FACT-CHECKING system!',
-      'Auto-detects and corrects wrong streak claims (e.g., "4 wins" when actually 1)',
-      'Auto-detects and corrects wrong game counts (e.g., "2 games in Jan" when 1)',
-      'Replaces broken/incorrect sentences with factual fallbacks',
-      'Fixes Hebrew patterns like "רצף X נצחונות" and "X משחקים בינואר"',
-      'Logs all corrections to console for debugging',
-      'No more AI hallucinations in forecast text!'
-    ]
+      '🔍 Forecast fact-checking',
+      'Auto-corrects wrong streaks',
+      'Auto-corrects game counts',
+      'Logs corrections',
+    ],
   },
   {
     version: '4.40.20',
     date: '2026-01-04',
     changes: [
-      '💬 BULLETPROOF Chatbot - always works!',
-      'Smart local answers for 20+ question types',
-      'AI enhancement when available (not required)',
-      'No more "can\'t connect" errors - graceful fallback',
-      'Questions about: last game, players, leaderboard, records, streaks',
-      'Works offline with local data intelligence',
-      'Timeout handling and retry logic for AI',
-      'Better loading animation'
-    ]
+      '💬 Bulletproof chatbot',
+      '20+ local question types',
+      'Graceful AI fallback',
+      'Better timeout handling',
+    ],
   },
   {
     version: '4.40.19',
     date: '2026-01-04',
     changes: [
-      '🎯 MUCH more dynamic milestones in New Game!',
-      'NEW: "Last Game Hero" - who won last time?',
-      'NEW: "Looking for Comeback" - redemption stories',
-      'NEW: "Hot Form" / "Cold Form" - recent performance vs average',
-      'NEW: Monthly position changes - who is climbing?',
-      'NEW: Fun rotating facts that change by day',
-      'REMOVED: Static "Consistency King" (same player every week)',
-      'REDUCED: "2025 Champion" priority after first 2 weeks of January',
-      'IMPROVED: Half-year leader only high priority if close race'
-    ]
+      '🎯 Dynamic milestones',
+      'Last Game Hero / Comeback / Form',
+      'Monthly position changes',
+      'Removed static "Consistency King"',
+    ],
   },
   {
     version: '4.40.18',
     date: '2026-01-04',
     changes: [
-      '🎯 MUCH better player insights for low-data periods!',
-      'Single game: Dramatic, engaging sentences with personality',
-      'Two games: Pattern-based narratives (streak detection, comebacks)',
-      '3 unique sentences per player even with 1-2 games',
-      'Fun predictions, comparisons, and call-to-actions',
-      'No more boring "Player won X in his only game" statements',
-      'Hebrew insights with variety and humor'
-    ]
+      '🎯 Better insights for low data',
+      '3 unique sentences per player',
+      'Dramatic narratives',
+      'Hebrew variety + humor',
+    ],
   },
   {
     version: '4.40.17',
     date: '2026-01-04',
     changes: [
-      '🤖 MAJOR: Complete AI chatbot rewrite!',
-      'Now uses TRUE natural language understanding - ask ANYTHING',
-      'AI receives ALL your data: every game, every player, every stat',
-      'No more pattern matching - AI understands context and nuance',
-      'Ask in Hebrew or English, get answers in Hebrew',
-      'Examples: "מי הכי מצליח בחצי שנה האחרונה?", "תספר לי על ליאור"',
-      '"מי ניצח הכי הרבה פעמים?", "איפה שיחקנו לאחרונה?"',
-      'Beautiful new chat UI with purple theme',
-      'Dynamic suggested questions based on your data'
-    ]
+      '🤖 Chatbot rewrite: full NLU',
+      'AI sees all your data',
+      'Hebrew or English input',
+      'New purple chat UI',
+    ],
   },
   {
     version: '4.40.16',
     date: '2026-01-04',
     changes: [
-      '💬 Chat is now a floating button (bottom-right corner)',
-      'Cleaner navigation bar - back to 5 icons',
-      '🔧 MAJOR FIX: Chatbot now actually works!',
-      'Answers questions about last game location, who finished last, who won',
-      'Supports Hebrew questions about players, leaderboard, records',
-      'Much better question understanding and responses',
-      'Improved header text in chat modal'
-    ]
+      '💬 Chat as floating button',
+      'Cleaner navigation: 5 icons',
+      '🔧 Chatbot now actually works',
+      'Hebrew Q&A support',
+    ],
   },
   {
     version: '4.40.15',
     date: '2026-01-04',
     changes: [
-      '🔧 FIX: Navigation bar - all 6 icons now fit on screen',
-      'Reduced icon and text size for compact navigation',
-      'Settings icon visible again alongside Chat icon'
-    ]
+      '🔧 Nav bar: 6 icons fit',
+      'Smaller icons + text',
+    ],
   },
   {
     version: '4.40.14',
     date: '2026-01-21',
     changes: [
-      '🐛 FIX: Player profile sentences for low data (1-2 games)',
-      'Removed meaningless generic statements for players with few games',
-      'Now shows simple factual statements: "Player won/lost X in game"',
-      'For 2 games: Shows both results clearly',
-      'Complex analysis only appears for 5+ games',
-      'Much more meaningful and accurate profiles'
-    ]
+      '🐛 Fix profile sentences for low data',
+      'Simple statements for 1-2 games',
+      'Complex analysis: 5+ games only',
+    ],
   },
   {
     version: '4.40.13',
     date: '2026-01-21',
     changes: [
-      '💬 NEW: AI Chatbot feature!',
-      'Ask questions in natural language about players, games, and statistics',
-      'Uses local data for answers - works offline',
-      'AI enhancement available when Gemini API key is configured',
-      'Smart fallback: local answers when AI unavailable',
-      'Accessible from navigation menu',
-      'Supports questions about wins, losses, streaks, leaderboards, and more'
-    ]
+      '💬 New: AI Chatbot',
+      'Natural-language questions',
+      'Local-first, AI-enhanced',
+      'Smart fallback',
+    ],
   },
   {
     version: '4.40.12',
     date: '2026-01-04',
     changes: [
-      '🎯 Milestones: Focus on recent insights and interesting findings',
-      'Removed repetitive consistency/stability milestone (always same player)',
-      'Reduced routine "leader is leading" messages when gap is large',
-      'Added recent form changes milestone (improving/declining trends)',
-      'Added pattern-breaking milestone (players breaking their usual pattern)',
-      'Streak milestones now only show current active streaks, not old records',
-      'Focus on current period dynamics instead of historical champions'
-    ]
+      '🎯 Recent insights focus',
+      'Removed repetitive consistency',
+      'Reduced routine "leader" text',
+      'Recent form milestone',
+      'Pattern-breaking milestone',
+      'Active streaks only',
+    ],
   },
   {
     version: '4.40.11',
     date: '2026-01-04',
     changes: [
-      '🎯 Milestones: Fixed leaderboard battles to use actual overall rankings',
-      'Milestones now only show "can pass" when both players are actually adjacent in overall ranking',
-      'Prevents incorrect milestones when filtered players skip over missing players',
-      'Uses actual rank numbers from all players, not just filtered set',
-      'Podium battles and close battles also check overall ranking positions'
-    ]
+      '🎯 Use actual overall rankings',
+      'Adjacent-only "can pass"',
+      'Podium + close battles fixed',
+    ],
   },
   {
     version: '4.40.10',
     date: '2026-01-04',
     changes: [
-      '🤖 AI Forecast: Fixed streak calculation for year-specific periods',
-      'Streaks now calculated only from games in the current year (2026)',
-      'Prevents incorrect "2-game streak in 2026" when only 1 game played',
-      'Year-specific streak shown in CURRENT YEAR section of AI prompt',
-      'All-time streaks still shown separately in ALL-TIME section'
-    ]
+      '🤖 Fix streaks for current year',
+      'No false 2-game streaks',
+      'All-time still shown separately',
+    ],
   },
   {
     version: '4.40.9',
     date: '2026-01-04',
     changes: [
-      '👤 Player Profiles: Improved low-data scenarios (1-2 games)',
-      'Lowered thresholds for player classification and narrative generation',
-      'Player profiles now show meaningful insights even with 1 game',
-      'Style classification works with single games (profitable/losing/average)',
-      'Sentences focus on available data instead of requiring many games'
-    ]
+      '👤 Profiles work with 1-2 games',
+      'Style classification with single game',
+      'Sentences focus on available data',
+    ],
   },
   {
     version: '4.40.8',
     date: '2026-01-04',
     changes: [
-      '🔧 Streaks: Break-even games (0 profit) now break streaks',
-      'Games ending with 0 profit reset both win and loss streaks',
-      'Affects current streaks, longest streaks, and milestone calculations',
-      'Consistent behavior across Statistics, Graphs, and AI Forecast'
-    ]
+      '🔧 Break-even (0) breaks streaks',
+      'Consistent across all views',
+    ],
   },
   {
     version: '4.40.7',
     date: '2026-01-04',
     changes: [
-      '🎯 Milestones: Improved low-data scenarios (1-2 games)',
-      'Lowered thresholds for milestones when period has few games',
-      'Added simple milestones that work with 1 game (leader, winner, close battles)',
-      'Focus on available data instead of "no data" messages',
-      'Milestones now meaningful even in early periods of the year'
-    ]
+      '🎯 Milestones for 1-2 games',
+      'Lower thresholds',
+      'Simple 1-game milestones',
+    ],
   },
   {
     version: '4.40.6',
     date: '2026-01-04',
     changes: [
-      '🎯 Milestones: Added variety to consistency/stability descriptions',
-      'Consistency milestone now has 5 different description variations',
-      'Each player gets a consistent but unique description (based on name hash)',
-      'Fixes repetitive "עקביות מרשימה" sentence for stable players like Lior'
-    ]
+      '🎯 Variety in consistency text',
+      '5 description variations',
+      'Stable but unique per player',
+    ],
   },
   {
     version: '4.40.5',
     date: '2026-01-04',
     changes: [
-      '🤖 AI Forecast: Improved sentence quality',
-      'AI no longer redundantly mentions profit numbers (already shown in header)',
-      'Sentences now focus on stats, streaks, milestones, and interesting stories',
-      'Fixed mismatch issue - AI warned not to mention numbers that don\'t match expectedProfit'
-    ]
+      '🤖 No redundant profit numbers',
+      'Focus on stats + storylines',
+    ],
   },
   {
     version: '4.40.4',
     date: '2026-01-04',
     changes: [
-      '📊 Graphs: Aligned filters UI to match Statistics screen',
-      'Combined filters into single card with consistent styling',
-      'Time period filter now matches Statistics exactly',
-      'Player filter matches Statistics layout and behavior'
-    ]
+      '📊 Graphs filters match Stats',
+      'Same time period UI',
+      'Same player filter behavior',
+    ],
   },
   {
     version: '4.40.3',
     date: '2026-01-04',
     changes: [
-      '🔧 Fixed: Build error in StatisticsScreen (mismatched JSX tags)',
-      'Fixed Vercel deployment issue - removed extra closing fragment tag',
-      'Build now succeeds successfully'
-    ]
+      '🔧 Fixed Vercel build error',
+      'Removed extra closing tag',
+    ],
   },
   {
     version: '4.40.2',
     date: '2026-01-04',
     changes: [
-      '📊 Statistics: Removed player type filter (redundant with active players filter)',
-      'All player types now included by default',
-      'Cleaner, simpler filter interface'
-    ]
+      '📊 Removed redundant type filter',
+      'Cleaner filter interface',
+    ],
   },
   {
     version: '4.40.1',
     date: '2026-01-04',
     changes: [
-      '📊 Statistics: Filters now always visible even with no data',
-      'Can change time period when selected period has no games',
-      'Helpful message in Hebrew when no stats for selected period'
-    ]
+      '📊 Filters always visible',
+      'Helpful Hebrew empty state',
+    ],
   },
   {
     version: '4.40.0',
     date: '2025-12-28',
     changes: [
-      '🔄 New MemberSync role (PIN: 0852)',
-      'Has all Member permissions plus automatic cloud sync',
-      'Uses embedded token - no configuration needed',
-      'Games sync to GitHub automatically when finished'
-    ]
+      '🔄 New MemberSync role (PIN 0852)',
+      'Auto cloud sync on game end',
+    ],
   },
   {
     version: '4.39.12',
     date: '2025-12-28',
     changes: [
-      '🍕 Compact shared expenses box in rebuy screen',
-      'Reduced padding, smaller fonts, tighter layout'
-    ]
+      '🍕 Compact shared expenses box',
+    ],
   },
   {
     version: '4.39.11',
     date: '2025-12-28',
     changes: [
-      '🍕 Show full expense details in settlement table',
-      'Displays description, amount, payer and eaters for each expense'
-    ]
+      '🍕 Full expense details in settlement',
+    ],
   },
   {
     version: '4.39.10',
     date: '2025-12-28',
     changes: [
-      '🍕 Added legend for pizza icons in settlements',
-      'Big pizza = שילם (paid), Small pizza = אכל (ate)'
-    ]
+      '🍕 Pizza icons legend',
+    ],
   },
   {
     version: '4.39.9',
     date: '2025-12-28',
     changes: [
-      '🍕 Expense display shows payer and eater names',
-      'Big pizza icon for payer, small for eaters',
-      'Hebrew labels: שילם (paid), אכלו (ate)'
-    ]
+      '🍕 Show payer + eater names',
+    ],
   },
   {
     version: '4.39.8',
     date: '2025-12-28',
     changes: [
-      '🍕 Compact expense modal - fits on one screen',
-      'Description and amount on same row',
-      'Smaller buttons and reduced spacing'
-    ]
+      '🍕 Compact expense modal',
+    ],
   },
   {
     version: '4.39.7',
     date: '2025-12-28',
     changes: [
-      '📊 Historical periods: Insights now show past tense for completed periods',
-      'H1 2024, Year 2023 etc. show "סיים במקום ראשון" not "האם יצליח?"',
-      'Skips speculative milestones (passing, approaching milestones) for history',
-      'Current periods still show future-oriented language'
-    ]
+      '📊 Past tense for completed periods',
+      'Skip speculative milestones',
+    ],
   },
   {
     version: '4.39.6',
     date: '2025-12-28',
     changes: [
-      '🍕 Settlement icons: Big pizza next to food buyer name',
-      'Small pizza icon next to food eaters',
-      'Easy to see who paid for food vs who ate'
-    ]
+      '🍕 Pizza icons by name',
+    ],
   },
   {
     version: '4.39.5',
     date: '2025-12-28',
     changes: [
-      '🔀 Combined settlements: Poker + Expenses in ONE transfer list!',
-      'No more separate expense settlements - all merged together',
-      'Minimizes number of transfers between players',
-      'Poker profit/loss still shown separately in results table',
-      'Settlements header shows (+ 🍕) when expenses are included'
-    ]
+      '🔀 Combined poker + expense settlements',
+      'Fewer transfers between players',
+    ],
   },
   {
     version: '4.39.4',
     date: '2025-12-28',
     changes: [
-      '✏️ Shared Expenses: Edit existing expenses',
-      'Click the pencil icon to modify any expense',
-      'Update description, amount, payer, or participants'
-    ]
+      '✏️ Edit existing expenses',
+    ],
   },
   {
     version: '4.39.3',
     date: '2025-12-28',
     changes: [
-      '🔙 AI Forecast: Added "comeback after absence" indicator',
-      'Shows when player returns after 30/60/90+ days',
-      'AI can mention long breaks in forecast sentences'
-    ]
+      '🔙 Comeback after absence indicator',
+      '30/60/90+ days',
+    ],
   },
   {
     version: '4.39.2',
     date: '2025-12-28',
     changes: [
-      '🍕 Simplified expense modal: default is "פיצה", free text for other'
-    ]
+      '🍕 Default expense: "פיצה"',
+    ],
   },
   {
     version: '4.39.1',
     date: '2025-12-28',
     changes: [
-      '🔧 Fixed AI forecast accuracy: now shows explicit last game result to prevent AI from making up data',
-      'Added "LAST GAME: WON/LOST X₪" to each player in AI prompt',
-      'Made factual accuracy the #1 writing rule for AI',
-      'Added strong warnings against AI inventing win/loss data'
-    ]
+      '🔧 Forecast: explicit last-game result',
+      'Strong anti-invention warnings',
+    ],
   },
   {
     version: '4.39.0',
     date: '2025-12-28',
     changes: [
-      '🍕 NEW: Shared Expenses feature!',
-      'Track food/pizza purchases during games',
-      'Mark who paid and who participated',
-      'Cost split equally among participants',
-      'Separate from poker profit/loss calculations',
-      'Shows in settlement with clear indication',
-      'Visible in game summary, details, and history'
-    ]
+      '🍕 New: Shared Expenses',
+      'Track food/pizza purchases',
+      'Split equally among participants',
+      'Separate from poker P&L',
+    ],
   },
   {
     version: '4.38.22',
     date: '2025-12-28',
     changes: [
-      '📅 AI Prompt: Focus on YEAR/HALF, not all-time!',
-      'Reordered player data: Year → Half → Recent → All-time',
-      'Added Current Half (H1/H2) stats for each player',
-      'Fixed: Streak of 1 now says "Won/Lost last game" not "streak"',
-      'All-time section marked as "only for dramatic milestones"',
-      'Added rule 6: Focus on current year/half in sentences'
-    ]
+      '📅 Focus on year/half, not all-time',
+      'Streak of 1 → "won/lost last"',
+      'All-time only for milestones',
+    ],
   },
   {
     version: '4.38.21',
     date: '2025-12-28',
     changes: [
-      '🎲 AI Prompt: Pre-select surprise candidates!',
-      'Added TL;DR with 5 key rules at top of prompt',
-      'Surprise players now pre-calculated and named in prompt',
-      'AI told exactly who to mark as surprise',
-      'Simplified surprise instructions (was 10 lines, now 2)'
-    ]
+      '🎲 Pre-select surprise candidates',
+      'TL;DR with 5 key rules',
+    ],
   },
   {
     version: '4.38.20',
     date: '2025-12-28',
     changes: [
-      '🧹 AI Prompt: Removed redundancy and simplified!',
-      'Removed player dynamics/rivalries section (low impact)',
-      'Removed duplicate accuracy warnings',
-      'Consolidated sentence matching rules',
-      'Prompt is now ~20% shorter and clearer'
-    ]
+      '🧹 Removed redundant prompt sections',
+      '~20% shorter prompt',
+    ],
   },
   {
     version: '4.38.19',
     date: '2025-12-28',
     changes: [
-      '🎲 AI Forecast: Added MANDATORY surprise requirement!',
-      'AI must now include at least 1 surprise prediction',
-      'Added examples of when to use surprises',
-      'Maximum 35% of players can be surprises'
-    ]
+      '🎲 Mandatory surprise requirement',
+      'Max 35% surprise rate',
+    ],
   },
   {
     version: '4.38.18',
     date: '2025-12-28',
     changes: [
-      '🤖 AI Forecast: Major improvements!',
-      'Added SUGGESTED expected profit to guide AI',
-      'AI now uses 70% recent + 30% overall weighting',
-      'Added RECENT FORM section with trend indicator',
-      'Lowered AI temperature from 0.75 to 0.6 (more accurate)',
-      'AI told to stay close to suggested profits (±30₪)'
-    ]
+      '🤖 Suggested expected profit',
+      '70% recent + 30% overall',
+      'Recent form section',
+      'Temperature 0.6',
+    ],
   },
   {
     version: '4.38.17',
     date: '2025-12-28',
     changes: [
-      '🎯 Forecast: Major accuracy improvements!',
-      'Reduced random variance (was ±₪20, now ±₪10)',
-      'Increased recent weight (70% recent, 30% overall)',
-      'Stronger streak modifiers (up to 50% bonus/penalty)',
-      'Adjusted thresholds based on actual player data',
-      'Guaranteed 1 surprise if eligible players exist',
-      'Increased max surprises from 25% to 35%'
-    ]
+      '🎯 Reduced random variance',
+      '70/30 recent/overall',
+      'Stronger streak modifiers',
+      'Surprise rate 25 → 35%',
+    ],
   },
   {
     version: '4.38.16',
     date: '2025-12-28',
     changes: [
-      '🎙️ Voice: Quick rebuy now says ONLY the quick message (not both)'
-    ]
+      '🎙️ Quick rebuy: only quick message',
+    ],
   },
   {
     version: '4.38.15',
     date: '2025-12-28',
     changes: [
-      '📍 Moved location to display next to date in History cards'
-    ]
+      '📍 Location next to date in History',
+    ],
   },
   {
     version: '4.38.14',
     date: '2025-12-28',
     changes: [
-      '🎙️ Voice: Fixed Hebrew numbers to feminine forms (אחת, שתיים, שלוש...)',
-      '🔊 Sound: Added AudioContext resume for suspended state fix'
-    ]
+      '🎙️ Hebrew feminine number forms',
+      '🔊 AudioContext resume fix',
+    ],
   },
   {
     version: '4.38.13',
     date: '2025-12-28',
     changes: [
-      '📍 Location is now mandatory to start a game',
-      '📍 Game location now displayed in History cards',
-      '🔧 Updated Dec 27 game location to "ליאור"'
-    ]
+      '📍 Location mandatory',
+      '📍 Shown in History cards',
+    ],
   },
   {
     version: '4.38.12',
     date: '2025-12-28',
     changes: [
-      '🎙️ Voice: Added more rebuy sentences',
-      '1st rebuy: +4 new encouraging messages',
-      '2nd rebuy: +4 new positive messages',
-      '3rd rebuy: +4 new mild concern messages'
-    ]
+      '🎙️ More rebuy sentences',
+    ],
   },
   {
     version: '4.38.11',
     date: '2025-12-28',
     changes: [
-      '🎙️ Voice: Updated quick rebuy messages',
-      'Changed "מהר חזרו" to "תנשום קצת בין הקניות"',
-      'Changed "עוד פעם? כבר?" to "תזכור שזה על כסף אמיתי"'
-    ]
+      '🎙️ Updated quick rebuy lines',
+    ],
   },
   {
     version: '4.38.10',
     date: '2025-12-28',
     changes: [
-      'Hall of Fame: Now includes ALL player types who were active in each year',
-      'Activity = played at least 20% of games in the period (min 3 games)',
-      'Guests who played a lot in 2023 will appear in 2023 Hall of Fame'
-    ]
+      'HoF: includes all active player types',
+      'Activity = 20% of period games',
+    ],
   },
   {
     version: '4.38.9',
     date: '2025-12-28',
     changes: [
-      'Hall of Fame: Now shows only permanent players (same as Season Podium)',
-      'Guests and occasional players excluded from Hall of Fame'
-    ]
+      'HoF: only permanent players',
+    ],
   },
   {
     version: '4.38.8',
     date: '2025-12-28',
     changes: [
-      '🐛 FIX: Hall of Fame and Season Podium now show current player names',
-      'Was using old names from game records, now uses current player names',
-      'Fixed for both Season Podium (permanent) and Hall of Fame (all players)'
-    ]
+      '🐛 HoF + Podium: current names',
+    ],
   },
   {
     version: '4.38.7',
     date: '2025-12-28',
     changes: [
-      '🎙️ Voice: Fixed all rebuy sentences to be gender-neutral',
-      'Voice: Changed "קנה" to "עוד" for natural female voice',
-      'Voice: Removed all male "אתה" forms from sentences',
-      'Voice: Improved Hebrew pronunciation with better spelling',
-      'Voice: Natural female voice settings (rate 0.9, pitch 1.0)'
-    ]
+      '🎙️ Gender-neutral rebuy lines',
+      'Better Hebrew pronunciation',
+      'Female voice settings',
+    ],
   },
   {
     version: '4.38.6',
     date: '2025-12-28',
     changes: [
-      'UI: Removed + signs from Season Podium and Hall of Fame for cleaner look'
-    ]
+      'Removed + signs on Podium / HoF',
+    ],
   },
   {
     version: '4.38.5',
     date: '2025-12-28',
     changes: [
-      '🏅 Hall of Fame: Fixed to show ALL players (not just permanent)',
-      'No player type filter - shows the absolute best performers',
-      'Reduced min games threshold to 20% (min 3 games) for qualification'
-    ]
+      '🏅 HoF: all players, top performers',
+      'Min 20% / 3 games',
+    ],
   },
   {
     version: '4.38.4',
     date: '2025-12-28',
     changes: [
-      '🥇🥈🥉 Hall of Fame: Now shows top 3 places for each period',
-      'Shows 1st, 2nd, and 3rd place winners for H1, H2, and Full Year',
-      'Each place shows player name with their profit'
-    ]
+      '🥇🥈🥉 HoF: top 3 per period',
+      'Player + profit per place',
+    ],
   },
   {
     version: '4.38.3',
     date: '2025-12-28',
     changes: [
-      '📤 Hall of Fame: Added screenshot sharing button',
-      'Share "היכל התהילה" table to WhatsApp'
-    ]
+      '📤 HoF: screenshot share',
+    ],
   },
   {
     version: '4.38.2',
     date: '2025-12-28',
     changes: [
-      'Hall of Fame now includes current year (2025)',
-      'Automatically adds new years - in 2026 it will show 2026, 2025, etc.'
-    ]
+      'HoF includes current year',
+      'Auto-adds new years',
+    ],
   },
   {
     version: '4.38.1',
     date: '2025-12-28',
     changes: [
-      '🏅 NEW: Hall of Fame - Historical champions table showing H1, H2, and Yearly winners',
-      'Covers all years from 2021 to present in one view',
-      'Clean table layout with champions and their winning profits'
-    ]
+      '🏅 New: Hall of Fame',
+      'H1, H2, Yearly winners',
+      'Years 2021 to present',
+    ],
   },
   {
     version: '4.38.0',
     date: '2025-12-28',
     changes: [
-      '🏆 NEW: Season Podium showing top 3 players for H1, H2, and Full Year',
-      'Podium is independent of filters - always shows current year standings',
-      'Share podium as screenshot to WhatsApp',
-      'Beautiful visual design with medals and colored sections'
-    ]
+      '🏆 New: Season Podium (top 3)',
+      'Independent of filters',
+      'Share as screenshot',
+    ],
   },
   {
     version: '4.37.11',
     date: '2025-12-25',
     changes: [
-      'UI: Fixed last 6 games display to show the actual latest games'
-    ]
+      'UI: last 6 games are actually latest',
+    ],
   },
   {
     version: '4.37.10',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Player games modal now shows ALL games (was limited to 20)',
-      '🐛 FIX: Rebuy data correctly hidden for "All Time" view (mixed pre-2026 data)',
-      'Added scrollable container for player games modal',
-      'Comprehensive regression testing completed'
-    ]
+      '🐛 Player games modal: ALL games',
+      '🐛 Hide rebuy data for All Time',
+    ],
   },
   {
     version: '4.37.9',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Player Insights now shows ALL players (was limited to 10)',
-      'ליכטר and any other players beyond 10 will now appear'
-    ]
+      '🐛 Insights shows ALL players',
+    ],
   },
   {
     version: '4.37.8',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Double minus sign in recovery/loser milestones',
-      '🐛 FIX: Group games milestone now correctly shows "participations" not "games"',
-      'Tested milestone logic across different periods and player combinations'
-    ]
+      '🐛 Double-minus fix in milestones',
+      '🐛 "participations" not "games"',
+    ],
   },
   {
     version: '4.37.7',
     date: '2025-12-25',
     changes: [
-      'UI: Fixed menu cards to fit container properly with minWidth:0 and consistent sizing'
-    ]
+      'UI: menu cards fit container',
+    ],
   },
   {
     version: '4.37.6',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Duplicate milestones showing same player battles',
-      'Added deduplication logic - same player pair now only appears in ONE milestone',
-      'Champion battle, Leaderboard battles, Podium battle, and Close battle tracked'
-    ]
+      '🐛 Dedup duplicate milestones',
+    ],
   },
   {
     version: '4.37.5',
     date: '2025-12-25',
     changes: [
-      'UI: Limit player stats to show only last 6 games (display only)'
-    ]
+      'UI: limit player stats to 6 games',
+    ],
   },
   {
     version: '4.37.4',
     date: '2025-12-25',
     changes: [
-      'UI: Aligned menu card sizes across Statistics, Graphs, and Settings screens'
-    ]
+      'UI: aligned menu card sizes',
+    ],
   },
   {
     version: '4.37.3',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Null safety for empty player list',
-      'Fixed: Potential crash when no players have data'
-    ]
+      '🐛 Null safety for empty player list',
+    ],
   },
   {
     version: '4.37.2',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Critical bugs in milestones and player profiles',
-      'Fixed: biggestLoss was treated as positive but is stored as negative',
-      'Fixed: Comeback King milestone now correctly identifies players with big losses',
-      'Fixed: Volatility display now shows correct negative loss values',
-      'Fixed: Player profile sentences now correctly format loss amounts',
-      'Fixed: Array mutation bug in most games calculation',
-      'Fixed: Record sentences now handle edge cases properly'
-    ]
+      '🐛 biggestLoss sign fix',
+      '🐛 Comeback King logic fix',
+      '🐛 Volatility / sentence formatting',
+      '🐛 Array mutation fix',
+    ],
   },
   {
     version: '4.37.1',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Build error - duplicate variable declaration',
-      'Fixed: currentMonth was declared twice in milestones section',
-      'Vercel deployment should now succeed'
-    ]
+      '🐛 Build error: duplicate variable',
+    ],
   },
   {
     version: '4.37.0',
     date: '2025-12-25',
     changes: [
-      '🏷️ PLAYER STYLES: Completely rewritten for clarity!',
-      'Removed abstract "כריש" style - now uses clear labels',
-      'Removed misleading "מאוזן" for losing players',
-      'NEW: רווחי (Profitable), מפסיד (Losing), חם (Hot), קר (Cold)',
-      'NEW: תנודתי (Volatile), יציב (Stable), משתפר (Improving), יורד (Declining)',
-      'NEW: מתקשה (Struggling) for negative players instead of "balanced"',
-      'Streak-based styles (חם/קר) take priority when on 3+ streak',
-      'Each style now clearly reflects player performance'
-    ]
+      '🏷️ Player styles rewritten',
+      'New labels: רווחי, מפסיד, חם, קר…',
+      'Streak-based styles take priority',
+      'Clearer per-style meaning',
+    ],
   },
   {
     version: '4.36.0',
     date: '2025-12-25',
     changes: [
-      '🎯 MILESTONE VARIETY: Added 8 more milestone types! (Now 20 total)',
-      'NEW: Win rate milestone (approaching 60%)',
-      'NEW: Biggest loser (struggling player)',
-      'NEW: Volatility king (biggest swings)',
-      'NEW: Group total games milestone',
-      'NEW: Longest win streak record holder',
-      'NEW: Close battle (30₪ or less gap)',
-      'NEW: Iron player (most games played)',
-      'NEW: Best average profit',
-      'All 20 milestones sorted by priority, top 8 shown'
-    ]
+      '🎯 8 new milestone types (20 total)',
+      'Win rate, biggest loser, volatility, …',
+      'Top 8 by priority shown',
+    ],
   },
   {
     version: '4.35.0',
     date: '2025-12-25',
     changes: [
-      '🏆 DRAMATIC MILESTONES: End-of-year/half-year special titles!',
-      'NEW: "אלוף שנת 2025?" with dramatic end-of-year messaging',
-      'NEW: "אלוף H2?" for half-year championships',
-      'Exciting questions: "האם מישהו יצליח לעקוף אותו?"',
-      'Restored 150-200₪ gap thresholds for more milestone variety',
-      'NEW: "מרדף על מקום 2!" for podium battles',
-      'All milestones now ask dramatic questions',
-      'Rebuy data still only for 2026+'
-    ]
+      '🏆 Year/half-year championship titles',
+      '"אלוף 2025?" / "אלוף H2?"',
+      'Dramatic questions',
+      '"מרדף על מקום 2"',
+    ],
   },
   {
     version: '4.34.0',
     date: '2025-12-25',
     changes: [
-      '🔧 REBUY DATA: Only used for 2026+ (data collection started late 2025)',
-      'Player styles using rebuys only apply when viewing 2026+ data',
-      'Rebuy sentences only shown for 2026+ timeframes',
-      '🎯 REALISTIC MILESTONES: Gap thresholds reduced to 80₪ max',
-      'Only show "can pass" if gap is achievable in one game',
-      'Fixed hardcoded player name in milestone title',
-      'Recovery milestone reduced to 80₪ realistic gap',
-      'Round number milestone reduced to 80₪ gap',
-      '✅ Data accuracy improvements across all filters'
-    ]
+      '🔧 Rebuy data: 2026+ only',
+      '🎯 Realistic milestone gaps',
+      'Max 80₪ "can pass" gap',
+    ],
   },
   {
     version: '4.33.0',
     date: '2025-12-25',
     changes: [
-      '🎨 PLAYER STYLES: Completely rewritten multi-factor classification!',
-      'NEW STYLES: כריש, מהמר, רכבת הרים, שמרן, יעיל, מנצל הזדמנויות, לוחם',
-      'Classification uses: win rate, avg profit, rebuys, volatility, win/loss ratio',
-      '📝 NARRATIVE VARIETY: 60+ unique sentences in 12 categories!',
-      'Categories: Champions, Big Winners, Unlucky, Strugglers, Streaks, Rebuys, etc.',
-      'Each player gets different sentences - no more repetitive feedback',
-      'Sentences include actual data: rebuys, exact profits, streaks, recent form',
-      'Random selection from pools ensures variety on each view'
-    ]
+      '🎨 Player styles: multi-factor classification',
+      '📝 60+ unique sentences in 12 categories',
+      'Variety per view',
+    ],
   },
   {
     version: '4.32.0',
     date: '2025-12-25',
     changes: [
-      '🎯 INSIGHTS REDESIGN: Milestones now have creative variety!',
-      'NEW: Champion title battles, recovery stories, consistency kings',
-      'NEW: Biggest win records, comeback kings, player of the period',
-      'Milestones sorted by priority - most interesting shown first',
-      '👤 PLAYER PROFILES: Replaced split boxes with flowing narrative',
-      'Each player gets 2-3 natural sentences describing their performance',
-      'Narrative includes stats, streaks, playing style, and suggestions',
-      'Much cleaner and more readable player summaries'
-    ]
+      '🎯 Creative milestone variety',
+      '👤 Profiles: flowing narrative',
+      '2-3 sentences per player',
+    ],
   },
   {
     version: '4.31.4',
     date: '2025-12-25',
     changes: [
-      '🐛 MAJOR FIX: No more duplicate milestones!',
-      'FIXED: Lose streaks - only worst player shown',
-      'FIXED: Recovery to positive - only closest to 0 shown',
-      'FIXED: Year-end redemption - only best candidate shown',
-      'FIXED: Hot year - only biggest improvement shown',
-      'FIXED: Round numbers - only closest player shown',
-      'FIXED: Win rate 60% - only best candidate shown',
-      'FIXED: Volatility - only most volatile shown',
-      'FIXED: Consistency - only most consistent shown',
-      'All milestone categories now show ONE best candidate only'
-    ]
+      '🐛 No duplicate milestones',
+      'One best candidate per category',
+    ],
   },
   {
     version: '4.31.3',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Lose streak duplicates removed!',
-      'Now only shows ONE lose streak milestone (the worst one)',
-      'Removed redundant Section 21 (covered by Section 2)',
-      'Section 12 (comeback) only triggers for exactly -2 streaks',
-      '26 tests now pass including new lose streak test'
-    ]
+      '🐛 Lose streak duplicates removed',
+      'Section 12 only for -2 streaks',
+    ],
   },
   {
     version: '4.31.2',
     date: '2025-12-25',
     changes: [
-      '🧪 COMPREHENSIVE TEST SUITE: 25 tests across 8 categories!',
-      'NEW: Duplicate prevention tests (record chase, streaks)',
-      'NEW: Data integrity tests (zero values, rankings, negative profits)',
-      'NEW: Forecast accuracy tests (year vs all-time, streak validation)',
-      'All tests pass - milestone logic verified and working correctly'
-    ]
+      '🧪 25 tests across 8 categories',
+      'Duplicate prevention + integrity',
+    ],
   },
   {
     version: '4.31.1',
     date: '2025-12-25',
     changes: [
-      '🐛 FIX: Duplicate milestones removed!',
-      'Record-breaking milestones now show only 1 candidate (the best one)',
-      'Fixed: Players with 0 wins no longer appear in record chase',
-      'Section 11 and 19 now complement each other (no overlap)',
-      'Cleaner milestone list with no repetition'
-    ]
+      '🐛 Record-chase duplicates fixed',
+      'No 0-win players in record chase',
+    ],
   },
   {
     version: '4.31.0',
     date: '2025-12-25',
     changes: [
-      '🎯 NEW: Insights tab in Statistics page!',
-      'Shows potential milestones based on selected filters',
-      'Player profiles with playing style analysis',
-      'Strengths, weaknesses, and personalized suggestions',
-      'Stats-driven insights: volatility, consistency, trends',
-      'All filters (period, player type) apply to insights'
-    ]
+      '🎯 New: Insights tab in Statistics',
+      'Player profiles + suggestions',
+      'All filters apply',
+    ],
   },
   {
     version: '4.30.0',
     date: '2025-12-25',
     changes: [
-      '🎆 NEW: "Fresh Start" milestones for new year/half!',
-      'Shows "שנת 2026 מתחילה!" when year has few games',
-      'Shows "H2 מתחיל!" when half has few games',
-      'All-time milestones still show when year/half is empty',
-      'Graceful handling of empty period data',
-      'All 20 tests passing!'
-    ]
+      '🎆 "Fresh Start" milestones',
+      'Year/half kickoff',
+      'Graceful empty handling',
+    ],
   },
   {
     version: '4.29.0',
     date: '2025-12-25',
     changes: [
-      '🗓️ YEAR TRANSITION: Automatic handling of 2025→2026!',
-      '🏆 NEW: "2025 Final Results" summary in January',
-      '🥈🥉 NEW: Shows who finished 2nd, 3rd last year',
-      '📊 NEW: "H1 Final Results" summary in July',
-      'All dates/years calculated dynamically (no hardcoding)',
-      'All 20 tests still passing!'
-    ]
+      '🗓️ Year transition handling',
+      '🏆 "2025 Final Results" in January',
+      '🥈🥉 2nd / 3rd shown',
+      '📊 H1 finals in July',
+    ],
   },
   {
     version: '4.28.0',
     date: '2025-12-25',
     changes: [
-      '📊 NEW: H2 (Half-Year) tracking milestones!',
-      '🏆 NEW: Year-end special milestones (December)!',
-      '⏰ NEW: "Last chance for 2025" battles',
-      '🎢 NEW: Volatility alerts for big-swing players',
-      '👑 NEW: Half-year leader highlights',
-      '⚔️ NEW: Historical rivalry detection',
-      '🎊 NEW: Group total games milestones',
-      'All 20 tests passing!'
-    ]
+      '📊 H2 tracking milestones',
+      '🏆 December year-end specials',
+      '⏰ "Last chance for 2025"',
+      '🎢 Volatility alerts',
+      '👑 Half-year leader highlights',
+    ],
   },
   {
     version: '4.27.0',
     date: '2025-12-25',
     changes: [
-      '🧪 EXTENSIVE TEST SUITE: 20+ tests across 6 categories',
-      '🐛 FIX: AI forecast now also converts dates to DD/MM/YYYY',
-      'Test categories: Streaks, Year Profits, Leaderboard, Round Numbers, Games, Dates',
-      'Added verifyPlayerData() for individual player inspection',
-      'Run window.runAllTests() in console to verify all logic',
-      'Each test shows severity: critical/high/medium/low'
-    ]
+      '🧪 20+ tests across 6 categories',
+      '🐛 Forecast date format DD/MM/YYYY',
+      'Per-player verification helper',
+    ],
   },
   {
     version: '4.26.0',
     date: '2025-12-25',
     changes: [
-      '🐛 CRITICAL: Game history was limited to 6 games - now includes ALL games!',
-      'This was causing wrong year profit calculations (missing games)',
-      'Comprehensive test suite added (14 tests)',
-      'Date parsing improved to handle slashes, dots, and ISO formats',
-      'Added verifyForecastData() function for data inspection',
-      'Run window.testMilestones() in console to verify'
-    ]
+      '🐛 Full game history (was 6 games)',
+      'Wrong year-profit fixed',
+      'Date parser: dot/slash/ISO',
+    ],
   },
   {
     version: '4.25.0',
     date: '2025-12-25',
     changes: [
-      '🐛 CRITICAL BUG FIX: Date format mismatch causing wrong year profits!',
-      'Fixed: Dates were formatted with dots (25.12.2025) but parser expected slashes (25/12/2025)',
-      'parseGameDate now handles both dot and slash formats',
-      'Milestone dates now explicitly use DD/MM/YYYY format',
-      'Year table milestones require 5+ games (was 2)',
-      'Added test suite for milestone accuracy verification'
-    ]
+      '🐛 Date format mismatch fix',
+      'Year-table milestones: 5+ games',
+    ],
   },
   {
     version: '4.24.1',
     date: '2025-12-25',
     changes: [
-      '🔍 DEBUG: Added logging for year profit calculations',
-      'Year table milestones now require 5+ games (was 2)',
-      'Investigating Tomer year profit discrepancy'
-    ]
+      '🔍 Year-profit logging',
+      'Year-table: 5+ games required',
+    ],
   },
   {
     version: '4.24.0',
     date: '2025-12-25',
     changes: [
-      '🎨 MAJOR: Mandatory sentence variety - no more boring repetition!',
-      'BANNED: "במקום ה-X הכללי" as sentence opener',
-      'Each player MUST start with a different style (name+verb, question, stat, metaphor, etc.)',
-      '7 distinct opening patterns enforced in prompt',
-      'Examples rewritten to show variety (rivalry, milestone, comeback, metaphor)',
-      'AI must read all sentences aloud before submitting to check similarity'
-    ]
+      '🎨 Mandatory sentence variety',
+      'Banned "במקום ה-X" opener',
+      '7 distinct opening patterns',
+    ],
   },
   {
     version: '4.23.1',
     date: '2025-12-25',
     changes: [
-      '🎯 Tomer fix: Be kind but NEVER invent positive facts!',
-      'Removed "optimistic" instruction that caused false data',
-      'Milestones: 7-10 interesting ones only (not forced 10)',
-      'Removed boring filler milestones (player stats, year summaries)',
-      'Only show milestones with priority 50+ (truly interesting)',
-      'Priority threshold ensures quality over quantity'
-    ]
+      '🎯 No invented positive facts',
+      '7-10 interesting milestones',
+      'Priority 50+ only',
+    ],
   },
   {
     version: '4.23.0',
     date: '2025-12-25',
     changes: [
-      '🚨 CRITICAL ACCURACY FIX - Complete rewrite!',
-      'Added YEAR stats section for each player (games, profit, avg)',
-      'Added explicit RANK field for each player',
-      'Added HUGE accuracy warning with common errors to avoid',
-      'Examples: dont claim streaks that dont exist!',
-      'Examples: dont say #1 wants to reach first place!',
-      'Examples: dont mix year profit with all-time!',
-      'Verification checklist before each sentence',
-      'Clearer data formatting with headers'
-    ]
+      '🚨 Critical accuracy rewrite',
+      'Year stats per player',
+      'Explicit RANK field',
+      'Verification checklist',
+    ],
   },
   {
     version: '4.22.0',
     date: '2025-12-25',
     changes: [
-      '📸 Milestones: Split into multiple screenshots (5 per page)',
-      '🎯 More accurate milestones - no false record claims!',
-      'Removed "שיא קבוצתי" claims (only current player data)',
-      'Added player stats (rank, total, avg, win%) as fallback',
-      'Added year performance summaries for each player',
-      'Added personal best records (factual)',
-      'Guaranteed 10 milestones with accurate data'
-    ]
+      '📸 Milestones split: 5 per page',
+      '🎯 No false record claims',
+      'Personal best records added',
+      '10 milestones guaranteed',
+    ],
   },
   {
     version: '4.21.1',
     date: '2025-12-25',
     changes: [
-      '🚨 EVERY number in forecast must have context!',
-      'Must specify: בטבלה הכללית / בטבלת 2025 / החודש',
-      'Examples: "2000₪ בטבלה הכללית", "ממוצע -7₪ (כל הזמנים)"',
-      'Forbidden: vague references like "רף ה-2000₪" without table',
-      'AI prompt now has strict rules with wrong/right examples',
-      'Fixes: Lior 2000₪, Erez 500₪, Lichter -7₪ context issues'
-    ]
+      '🚨 Every number needs context',
+      'Specify which table',
+      'No vague references',
+    ],
   },
   {
     version: '4.21.0',
     date: '2025-12-25',
     changes: [
-      '📝 Much longer, clearer milestone descriptions!',
-      'Every milestone specifies WHICH TABLE (כללית/שנתית/חודשית)',
-      'Full context: current position, exact amounts, what needs to happen',
-      'Explains why milestone matters and what it means',
-      'Game milestones include player stats summary',
-      'All sentences are now detailed and informative'
-    ]
+      '📝 Longer milestone descriptions',
+      'Specify which table',
+      'Explain why it matters',
+    ],
   },
   {
     version: '4.20.4',
     date: '2025-12-25',
     changes: [
-      '🔤 Milestones: RTL Hebrew alignment (right-to-left)',
-      '🔢 Clean numbers only - no decimals (87.5 → 88)',
-      '🎯 Always show exactly 10 most interesting milestones',
-      'All profit values rounded with Math.round()',
-      'Better Hebrew text flow in milestone cards'
-    ]
+      '🔤 RTL Hebrew alignment',
+      '🔢 Whole numbers only',
+      '🎯 Always 10 milestones',
+    ],
   },
   {
     version: '4.20.3',
     date: '2025-12-25',
     changes: [
-      '📝 Clarified: No need to repeat profit number in sentence',
-      'Focus on interesting story (streaks, milestones, rivalries)',
-      'Only use number if it adds value to the point',
-      'But IF you use a number → must match exactly',
-      'Better examples showing story-focused sentences'
-    ]
+      '📝 No need to repeat profit number',
+      'Focus on the story',
+    ],
   },
   {
     version: '4.20.2',
     date: '2025-12-25',
     changes: [
-      '🔢 NUMBER MATCH: If sentence mentions profit, must equal expectedProfit!',
-      'Header shows +100 → sentence must say +100 (not +70)',
-      'Added clear examples of correct number matching',
-      'Option to write sentence without profit number (stats/streaks)',
-      'Double check: tone AND number must both match'
-    ]
+      '🔢 Number must equal expectedProfit',
+      'Optional sentence without number',
+    ],
   },
   {
     version: '4.20.1',
     date: '2025-12-25',
     changes: [
-      '🔗 CRITICAL: Sentence must match expectedProfit!',
-      'Positive profit = positive/optimistic sentence',
-      'Negative profit = cautious/warning sentence',
-      'Added correlation examples in prompt',
-      'Forbidden: contradicting tone vs prediction',
-      'AI now has clear rules for matching sentiment'
-    ]
+      '🔗 Sentence must match expectedProfit',
+      'Tone correlates with prediction',
+    ],
   },
   {
     version: '4.20.0',
     date: '2025-12-25',
     changes: [
-      '🎯 NEW: Dedicated Milestones Button!',
-      'Orange "Milestones" button next to Forecast',
-      'Shows top 7-10 most interesting highlights for tonight',
-      'Share to WhatsApp as screenshot',
-      'Includes: streaks, leaderboard races, close battles, records',
-      'Round numbers, win rates, comebacks, and more!',
-      'All milestones ranked by "interestingness"'
-    ]
+      '🎯 New: Milestones button',
+      'Top 7-10 highlights',
+      'WhatsApp screenshot share',
+    ],
   },
   {
     version: '4.19.1',
     date: '2025-12-25',
     changes: [
-      '🎯 10 MORE milestone types added!',
-      '📅 Yearly participation: "10th game of 2025!"',
-      '🎯 Win rate milestones: "One win from 60% win rate!"',
-      '⚔️ Close battles: "Only 25₪ apart - tonight decides!"',
-      '🚀 Jump positions: "Can jump 2 places with a big win!"',
-      '🔄 Recovery: "Back to positive for the year with +80₪"',
-      '🏆 Personal best month potential',
-      '🤝 Exact ties: "Tied at +450₪ - tonight breaks it!"',
-      '🎯 Attendance streaks: "5 of last 5 games!"',
-      '📅 Monthly game counts: "3rd game this December!"'
-    ]
+      '🎯 10 more milestone types',
+      'Win rate, close battles, jumps',
+      'Recovery, monthly counts',
+    ],
   },
   {
     version: '4.19.0',
     date: '2025-12-25',
     changes: [
-      '🎯 Multi-timeframe milestones! Not just all-time anymore:',
-      '📅 This Year leaderboard passing opportunities',
-      '📊 This Half (H1/H2) rankings and milestones',
-      '🗓️ Monthly "Player of the Month" competition',
-      '📈 Form comparison: "Best year ever?" vs historical',
-      '🎮 Games milestones: "50th game tonight!"',
-      'All milestones labeled clearly with timeframe'
-    ]
+      '🎯 Multi-timeframe milestones',
+      'Year + Half + Monthly',
+      'All clearly labeled',
+    ],
   },
   {
     version: '4.18.2',
     date: '2025-12-25',
     changes: [
-      '📊 Clearer milestone descriptions with explicit context!',
-      'All milestones now specify "ALL-TIME" or "בסך הכל"',
-      'Leaderboard shows current rank and exact amounts',
-      'Examples show correct vs incorrect milestone phrasing',
-      'AI instructed to always clarify what numbers mean'
-    ]
+      '📊 Explicit "ALL-TIME" labels',
+      'Current rank + amounts',
+    ],
   },
   {
     version: '4.18.1',
     date: '2025-12-25',
     changes: [
-      '🎰 NEW: 20 random casino sounds for rebuys!',
-      'Hero Returns, Monster Pot, All-In Victory, Ship It!',
-      'Chip sounds, jackpot celebrations, money drops',
-      'Different sound plays randomly each rebuy'
-    ]
+      '🎰 20 random rebuy sounds',
+    ],
   },
   {
     version: '4.18.0',
     date: '2025-12-25',
     changes: [
-      '🎯 NEW: Milestones & Records at Stake!',
-      '📈 Leaderboard passing: "If X wins +80₪, they\'ll pass Y!"',
-      '🔥 Streak records: "One more win = new group record!"',
-      '💰 Round numbers: "Only 65₪ from crossing 1000₪ all-time!"',
-      '⚠️ Danger zones: "Close to dropping below -500₪!"',
-      '💪 Comeback tracking: "3 losses but still +400₪ overall"',
-      'AI now weaves milestones into sentences automatically!'
-    ]
+      '🎯 New: Records at Stake',
+      'Leaderboard passing hints',
+      'Streak / round-number alerts',
+    ],
   },
   {
     version: '4.17.2',
     date: '2025-12-25',
     changes: [
-      '📊 Shows AI the ACTUAL game statistics (avg profit, median, etc.)',
-      '📋 Shows recent game examples to AI (how games REALLY end)',
-      '✅ Hard constraints: minimum profit values, spread requirements',
-      '❌ Explicit wrong vs correct examples for profit ranges'
-    ]
+      '📊 Show AI actual game stats',
+      '📋 Recent example games',
+      '✅ Hard profit constraints',
+    ],
   },
   {
     version: '4.17.1',
     date: '2025-12-25',
     changes: [
-      '🎯 Realistic profit ranges - based on actual game history!',
-      '💚 Special handling for Tomer - always optimistic and encouraging',
-      '🚫 Stronger anti-repetition rules - each player gets unique angle',
-      'Calibrated expectedProfit to each player\'s historical range'
-    ]
+      '🎯 Realistic profit ranges',
+      '💚 Special handling for Tomer',
+      '🚫 Stronger anti-repetition',
+    ],
   },
   {
     version: '4.17.0',
     date: '2025-12-25',
     changes: [
-      '🤖 AI Forecast v3.0 - New English prompt with Legacy Factor!',
-      'All-Time Records included: profit leader, biggest win/loss, best win rate',
-      'Cross-references current form with historical records',
-      'The "Nemesis" angle - highlights player rivalries',
-      'Data-Backed Insights - specific dates, percentages, amounts',
-      'Output still in Hebrew, but AI reasons in English for better logic'
-    ]
+      '🤖 Forecast v3.0: Legacy Factor',
+      'All-time records included',
+      'Nemesis angle',
+      'Hebrew output, English reasoning',
+    ],
   },
   {
     version: '4.16.24',
     date: '2025-12-22',
     changes: [
-      'Fixed: Statistics page blank due to code ordering issue'
-    ]
+      'Fix: Statistics blank screen',
+    ],
   },
   {
     version: '4.16.23',
     date: '2025-12-22',
     changes: [
-      'Top 20 Wins: Now filtered by time period and player types',
-      'Shows timeframe label below the title'
-    ]
+      'Top 20 Wins: filtered by period',
+    ],
   },
   {
     version: '4.16.22',
     date: '2025-12-22',
     changes: [
-      'Graphs: Removed emoji from page title for consistency'
-    ]
+      'Graphs: removed emoji from title',
+    ],
   },
   {
     version: '4.16.21',
     date: '2025-12-22',
     changes: [
-      'Statistics: Compact sort dropdown + Gain/Loss toggle button',
-      'Gain/Loss mode shows Total Gain and Total Loss columns',
-      'Replaces Profit and Avg columns when enabled'
-    ]
+      'Stats: compact sort + Gain/Loss',
+    ],
   },
   {
     version: '4.16.20',
     date: '2025-12-22',
     changes: [
-      'Statistics: Sort option is now a dropdown selector',
-      'Default sort is Profit, can select Games or Win%'
-    ]
+      'Stats: sort dropdown',
+    ],
   },
   {
     version: '4.16.19',
     date: '2025-12-22',
     changes: [
-      'Statistics: Combined sort buttons into single cycling button',
-      'Click to cycle: Profit → Games → Win% → Profit'
-    ]
+      'Stats: cycling sort button',
+    ],
   },
   {
     version: '4.16.18',
     date: '2025-12-21',
     changes: [
-      'Voice: Reverted quick rebuy messages'
-    ]
+      'Voice: reverted quick rebuy',
+    ],
   },
   {
     version: '4.16.17',
     date: '2025-12-21',
     changes: [
-      'Voice: Simplified quick rebuy message'
-    ]
+      'Voice: simplified quick rebuy',
+    ],
   },
   {
     version: '4.16.16',
     date: '2025-12-21',
     changes: [
-      'Voice: Updated rebuy sentences per feedback'
-    ]
+      'Voice: updated rebuy sentences',
+    ],
   },
   {
     version: '4.16.15',
     date: '2025-12-21',
     changes: [
-      'Graphs: Now accessible to both Admin and Member roles'
-    ]
+      'Graphs accessible to admin + member',
+    ],
   },
   {
     version: '4.16.14',
     date: '2025-12-21',
     changes: [
-      'H2H: Changed Big Win/Loss threshold from ₪200 to ₪150'
-    ]
+      'H2H: big-win/loss threshold ₪150',
+    ],
   },
   {
     version: '4.16.13',
     date: '2025-12-21',
     changes: [
-      'Voice: Updated 1st rebuy sentences per feedback',
-      'Voice: Fixed 3rd rebuy sentence'
-    ]
+      'Voice: 1st + 3rd rebuy fixes',
+    ],
   },
   {
     version: '4.16.12',
     date: '2025-12-21',
     changes: [
-      'Voice: Rewrote all sentences to be complete, natural Hebrew phrases'
-    ]
+      'Voice: natural Hebrew sentences',
+    ],
   },
   {
     version: '4.16.11',
     date: '2025-12-21',
     changes: [
-      'H2H: Added legend to Play Style comparison (Big Win >₪200, etc.)'
-    ]
+      'H2H: play-style legend',
+    ],
   },
   {
     version: '4.16.10',
     date: '2025-12-21',
     changes: [
-      'Voice: Quick rebuy threshold changed from 10 min to 5 min'
-    ]
+      'Voice: quick rebuy = 5 min',
+    ],
   },
   {
     version: '4.16.9',
     date: '2025-12-21',
     changes: [
-      'Voice: Messages now based on REBUY count (not total buyins)',
-      'Voice: First rebuy = first rebuy message (was off by one)',
-      'Voice: Simplified all Hebrew sentences - short and natural'
-    ]
+      'Voice: based on rebuy count',
+      'First rebuy = first message',
+      'Shorter Hebrew sentences',
+    ],
   },
   {
     version: '4.16.8',
     date: '2025-12-21',
     changes: [
-      'Fixed: Graphs blank screen (moved streak calculation after dependencies)'
-    ]
+      'Fix: Graphs blank screen',
+    ],
   },
   {
     version: '4.16.7',
     date: '2025-12-21',
     changes: [
-      'Sound: Changed to "ching-ching" coin sound (like cash register)',
-      'Display: Rebuy counter now shows 1.5, 2.5, etc properly!',
-      'Voice: Now says "קנה אחד" for 1 buyin'
-    ]
+      'Sound: ching-ching coin',
+      'Display: 1.5 / 2.5 rebuys',
+      'Voice: "קנה אחד" for 1',
+    ],
   },
   {
     version: '4.16.6',
     date: '2025-12-21',
     changes: [
-      'Fixed: H2H blank screen (restored cumulative comparison chart)',
-      'Profit: Added 🔥 Streaks & Recent Form visualization',
-      'Shows current streak, best/worst streaks, last 5 game results (W/L/T)'
-    ]
+      'Fix: H2H blank screen',
+      '🔥 Streaks & recent form',
+    ],
   },
   {
     version: '4.16.5',
     date: '2025-12-21',
     changes: [
-      'Voice: Changed back to "קָנָה" with niqqud for better pronunciation',
-      'Voice: Updated all sentences per user feedback',
-      'Voice: Fixed 0.5 counter display',
-      'Voice: Improved sentence variety and tone'
-    ]
+      'Voice: "קָנָה" with niqqud',
+      '0.5 counter fix',
+    ],
   },
   {
     version: '4.16.4',
     date: '2025-12-21',
     changes: [
-      'H2H: 🏆 Direct Battles - who outperforms whom more often',
-      'H2H: 🔥 Recent Form - last 5 shared games results',
-      'H2H: 📊 Play Style - session distribution (big/small wins/losses)',
-      'H2H: 🎲 Volatility comparison - who is more consistent'
-    ]
+      'H2H: direct battles + recent form',
+      'Play style + volatility',
+    ],
   },
   {
     version: '4.16.3',
     date: '2025-12-21',
     changes: [
-      'Voice: Cash drawer opening sound (mechanical slide + click)',
-      'Voice: Changed "קנה" to "נכנס" for better pronunciation',
-      'Voice: Fixed 0.5 detection (floating point fix)',
-      'Voice: Hebrew numbers for totals (אחד, שתיים, שלוש...)',
-      'Voice: Lower pitch for male voice'
-    ]
+      'Voice: cash-drawer sound',
+      '"קנה" → "נכנס"',
+      'Hebrew totals, lower pitch',
+    ],
   },
   {
     version: '4.16.2',
     date: '2025-12-21',
     changes: [
-      'Voice: Fixed half-buyin announcement (says "קנה חצי" properly)',
-      'Voice: 3 cash register sound variations (ka-ching, coins, bell)',
-      'Voice: Better Hebrew pronunciation, male voice preference',
-      'Voice: Shorter, more natural sentences',
-      'Voice: Total buyins spoken in Hebrew (אחד וחצי, שניים וחצי)'
-    ]
+      'Voice: "קנה חצי" works',
+      '3 cash-register variations',
+      'Hebrew totals',
+    ],
   },
   {
     version: '4.16.1',
     date: '2025-12-21',
     changes: [
-      'NEW: Monthly Profit bar chart in Graphs 📊',
-      'Shows profit/loss per month with green/red bars',
-      'Includes Best Month, Worst Month, and Average stats'
-    ]
+      'New: Monthly Profit bar chart',
+      'Best/Worst/Average month stats',
+    ],
   },
   {
     version: '4.16.0',
     date: '2025-12-21',
     changes: [
-      'NEW: Month filter in Statistics and Graphs 📅',
-      'Filter data by specific month (in addition to H1/H2/Year)',
-      'Select any month from any year for detailed analysis'
-    ]
+      'New: Month filter in Stats + Graphs',
+    ],
   },
   {
     version: '4.15.1',
     date: '2025-12-21',
     changes: [
-      'Sync Protection: Only COMPLETED games are uploaded to cloud',
-      'Incomplete/live games stay local and won\'t be synced',
-      'Removed 7 stale incomplete games from cloud data'
-    ]
+      'Sync: only completed games upload',
+      'Removed 7 stale incomplete games',
+    ],
   },
   {
     version: '4.15.0',
     date: '2025-12-21',
     changes: [
-      '🤖 AI Forecast v2.0 - Complete prompt rewrite!',
-      'Concrete good/bad examples for AI to learn from',
-      'Player archetypes: Consistent, Volatile, Phoenix, Hunter...',
-      'Emotional hooks: Every sentence must be share-worthy',
-      'Lower temperature (0.75) for data-focused responses',
-      'Simplified to 5 clear rules + inspiration section'
-    ]
+      '🤖 Forecast v2.0: prompt rewrite',
+      'Player archetypes',
+      'Emotional hooks',
+      'Lower temperature 0.75',
+    ],
   },
   {
     version: '4.14.4',
     date: '2025-12-21',
     changes: [
-      'H2H: Show shared games out of total games in selected period'
-    ]
+      'H2H: shared games / total',
+    ],
   },
   {
     version: '4.14.3',
     date: '2025-12-21',
     changes: [
-      'Graphs: Removed tooltip completely for cleaner chart experience'
-    ]
+      'Graphs: removed tooltip',
+    ],
   },
   {
     version: '4.14.2',
     date: '2025-12-21',
     changes: [
-      'Graphs: Fixed tooltip - now shows in a panel below the chart instead of overlaying it',
-      'Graphs: Tap any point on the chart to see detailed values'
-    ]
+      'Graphs: tooltip in panel below',
+    ],
   },
   {
     version: '4.14.1',
     date: '2025-12-21',
     changes: [
-      'Graphs: Removed Race chart (wasn\'t useful)',
-      'Graphs: Added time period filter (H1/H2/Year/All)',
-      'Graphs: Player names in legend match their line colors',
-      'Graphs: Stable color assignment per player'
-    ]
+      'Graphs: removed Race chart',
+      'Period filter + colored legend',
+    ],
   },
   {
     version: '4.14.0',
     date: '2025-12-21',
     changes: [
-      '🔄 NEW: Resume interrupted games!',
-      'If app closes mid-game, see "המשך משחק" banner on home',
-      'Auto-save chip counts during entry (no data loss!)',
-      'Option to abandon incomplete game if needed',
-      'Works for both Live Game and Chip Entry stages'
-    ]
+      '🔄 New: resume interrupted games',
+      'Auto-save during chip entry',
+      'Optional abandon flow',
+    ],
   },
   {
     version: '4.13.3',
     date: '2025-12-21',
     changes: [
-      '💸 Settlements: NO more tiny transfers!',
-      'Small creditors paid by larger debtors (both parts substantial)',
-      'Example: תומר pays ספי ₪36 + אייל ₪84 (not סגל→ספי ₪30 + ₪6 split)',
-      'All transfers now ≥ minTransfer threshold'
-    ]
+      '💸 No more tiny transfers',
+      'All transfers ≥ minTransfer',
+    ],
   },
   {
     version: '4.13.0',
     date: '2025-12-21',
     changes: [
-      '🔮 NEW: Forecast flow redesigned!',
-      'Forecast now only in New Game (before game starts)',
-      'Pending forecast saved and linked to game',
-      'Mismatch dialog when players change',
-      'Option to update forecast or keep existing',
-      'Forecast comparison shows at game end',
-      'Removed forecast from Live Game (Rebuy page)'
-    ]
+      '🔮 Forecast flow redesigned',
+      'Forecast in New Game only',
+      'Mismatch dialog on roster change',
+      'Comparison at game end',
+    ],
   },
   {
     version: '4.11.9',
     date: '2025-12-18',
     changes: [
-      'NEW: Top 20 Single Night Wins table 🏆',
-      'Shows rank, player, amount, players count, date',
-      'All-time records (no filter restrictions)',
-      'Clickable rows to view game details',
-      'Share button for screenshot'
-    ]
+      'New: Top 20 Single Night Wins',
+      'Clickable rows + share button',
+    ],
   },
   {
     version: '4.11.8',
     date: '2025-12-18',
     changes: [
-      'Live Game forecast: Split sharing like New Game 📱',
-      '5 players per screenshot page',
-      'Multiple images shared together for large groups'
-    ]
+      'Live game forecast: split sharing',
+    ],
   },
   {
     version: '4.11.6',
     date: '2025-12-18',
     changes: [
-      'Forecast vs Reality: Compact table fits screen 📱',
-      'Shorter column headers (Fcst, Real, Gap)',
-      'Smaller fonts and tighter spacing',
-      'AI summary always visible (shows loading or fallback)'
-    ]
+      'Forecast vs Reality: compact table',
+      'AI summary always visible',
+    ],
   },
   {
     version: '4.11.5',
     date: '2025-12-18',
     changes: [
-      'Player stats: Fixed to show last 6 games (was 15)'
-    ]
+      'Player stats: 6 games (was 15)',
+    ],
   },
   {
     version: '4.11.4',
     date: '2025-12-18',
     changes: [
-      'Chip Count: Player name shown in numpad header 👤',
-      'Green banner at top of numpad shows current player',
-      'No auto-open on screen entry - you choose the player',
-      'Fixed deployment caching issues'
-    ]
+      'Chip count: name in numpad header',
+      'No auto-open',
+    ],
   },
   {
     version: '4.11.3',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Final polished prompt 🎯',
-      'Guidelines not strict rules - AI uses common sense',
-      'Sentence 25-35 words - players will love to read & share',
-      'Milestones, streaks, trend changes, volatility analysis',
-      'Unique story for each player - unforgettable forecasts!'
-    ]
+      'Forecast: polished prompt',
+      'Sentence 25-35 words',
+      'Unique story per player',
+    ],
   },
   {
     version: '4.11.2',
     date: '2025-12-18',
     changes: [
-      'Forecast comparison: AI summary includes overall rating 📊',
-      'Score system: Accurate=2pts, Close=1pt, Missed=0pts',
-      'Rating levels: מעולה (≥80%), טוב (≥60%), סביר (≥40%), חלש (<40%)',
-      'AI summary now includes the rating and key insights'
-    ]
+      'Forecast comparison: rating system',
+      'Accurate=2 / Close=1 / Missed=0',
+      'Levels: מעולה / טוב / סביר / חלש',
+    ],
   },
   {
     version: '4.11.1',
     date: '2025-12-18',
     changes: [
-      'Chip Count: User-controlled flow 🎰',
-      'No auto-select on screen entry - you choose the player',
-      'Numpad opens when YOU select a player',
-      'Auto-advances through chip colors after each confirm',
-      'After last chip OR Done button → back to player selection',
-      'You choose the next player yourself'
-    ]
+      'Chip count: user-controlled flow',
+      'Auto-advance through chip colors',
+    ],
   },
   {
     version: '4.11.0',
     date: '2025-12-18',
     changes: [
-      'Forecast comparison: New gap-based accuracy 🎯',
-      '✓ = Gap ≤30 (accurate), ~ = Gap 31-60 (close), ✗ = Gap >60 (missed)',
-      'Gap column shows absolute distance only (no +/-)',
-      'Legend added above comparison table',
-      'AI summary: Relevant insights (not jokes)',
-      'Forecast button: Admin only on Live Game screen'
-    ]
+      'Forecast comparison: gap-based',
+      '✓ ≤30 / ~ 31-60 / ✗ >60',
+      'Legend + admin-only forecast button',
+    ],
   },
   {
     version: '4.10.8',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Balanced prompt - stats + creativity 📊',
-      'expectedProfit now based on player historical average',
-      'highlight must include specific numbers from data',
-      'sentence creative but grounded in real statistics',
-      'Proper weight to recent games performance'
-    ]
+      'Forecast: balanced prompt',
+      'Historical-average expected profit',
+      'Highlights with specific numbers',
+    ],
   },
   {
     version: '4.10.7',
     date: '2025-12-18',
     changes: [
-      'Forecast button on Live Game: Admin only 🔐',
-      'Non-admin users won\'t see the forecast generation button',
-      'Game summary works normally if no forecast was generated'
-    ]
+      'Forecast button: admin only',
+    ],
   },
   {
     version: '4.10.6',
     date: '2025-12-18',
     changes: [
-      'NEW: Generate & Share Forecast from Live Game page 🔮',
-      'Purple button at top of rebuy screen to generate AI forecast',
-      'Can generate forecast anytime during the game',
-      'Forecast is saved to game for later comparison',
-      'Share directly to WhatsApp from the modal'
-    ]
+      'New: forecast from Live Game',
+      'Save + share via WhatsApp',
+    ],
   },
   {
     version: '4.10.5',
     date: '2025-12-18',
     changes: [
-      'NEW: Share forecast prompt when starting game 📤',
-      'After clicking Start Game, prompts to share forecast first',
-      'Forecast vs Reality now included in shared screenshots',
-      'AI funny comment about accuracy in the screenshot',
-      'Full flow: Share forecast → Play → Share results with comparison'
-    ]
+      'Share forecast on game start',
+      'Forecast in result screenshots',
+      'AI accuracy comment',
+    ],
   },
   {
     version: '4.10.4',
     date: '2025-12-18',
     changes: [
-      'NEW: Forecast vs Reality comparison at game end 🎯',
-      'Shows table comparing predictions to actual results',
-      'AI generates a short comment about forecast accuracy',
-      'Direction accuracy displayed (✓/✗ per player)',
-      'Forecasts are saved with the game when it starts'
-    ]
+      'New: Forecast vs Reality at end',
+      'AI accuracy comment',
+      'Direction accuracy ✓/✗',
+    ],
   },
   {
     version: '4.10.3',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Smarter, cleaner prompt 🧠',
-      'No more repetitive "loses to X" for every player',
-      'Each player gets unique highlight - different angle',
-      'Common sense: dominant player mentioned once, not everywhere',
-      'Shorter, punchier sentences'
-    ]
+      'Forecast: smarter prompt',
+      'Unique highlight per player',
+      'Shorter, punchier sentences',
+    ],
   },
   {
     version: '4.10.2',
     date: '2025-12-18',
     changes: [
-      'Forecast screenshot: Fixed sort order (highest to lowest)',
-      'Forecast screenshot: Shows minus sign for negative amounts',
-      'Screenshot now matches on-screen display order'
-    ]
+      'Forecast screenshot: sort fix',
+      'Minus signs shown',
+    ],
   },
   {
     version: '4.10.1',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Rate limit countdown timer ⏳',
-      'Shows 60-second countdown when rate limited',
-      'Option to use static forecast while waiting',
-      'Notifies when ready to retry'
-    ]
+      'Forecast: rate-limit countdown',
+      'Static fallback option',
+    ],
   },
   {
     version: '4.10.0',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Player dynamics analysis 🤝',
-      'Analyzes how players perform when playing TOGETHER',
-      'Finds rivalries and patterns between specific players',
-      'Sentences reference the actual group dynamics',
-      'More game history (15 games) for better analysis'
-    ]
+      'Forecast: player dynamics analysis',
+      '15 games of history',
+      'Rivalry detection',
+    ],
   },
   {
     version: '4.9.9',
     date: '2025-12-18',
     changes: [
-      'AI Forecast: Enhanced creativity and variety 🎲',
-      'Random seed + timestamp ensures different results each time',
-      'Prompt emphasizes: surprise, originality, varied styles',
-      'Never boring or repetitive - even with same players!'
-    ]
+      'Forecast: more variety per run',
+      'Random seed + timestamp',
+    ],
   },
   {
     version: '4.9.8',
     date: '2025-12-18',
     changes: [
-      'Data Fix: Corrected all player types (permanent/guest/occasional)',
-      '11 permanent, 5 permanent_guest, 24 guest players',
-      'Synced to all users via cloud sync'
-    ]
+      'Data fix: corrected player types',
+      'Synced via cloud',
+    ],
   },
   {
     version: '4.9.7',
     date: '2025-12-18',
     changes: [
-      'Forecast: Sorted by expected profit (highest first) 📊',
-      'Winners at the top, losers at the bottom'
-    ]
+      'Forecast: sorted by expected profit',
+    ],
   },
   {
     version: '4.9.6',
     date: '2025-12-18',
     changes: [
-      'Forecast: Split into multiple screenshots for many players 📸',
-      '5 players per screenshot to fit WhatsApp better',
-      'Page numbers shown when multiple screenshots (1/2, 2/2)',
-      'All screenshots shared in one click'
-    ]
+      'Forecast: split into screenshots',
+      '5 players per page',
+    ],
   },
   {
     version: '4.9.4',
     date: '2025-12-18',
     changes: [
-      'UI: Aligned medal positions across all tables 🏅',
-      'Medals now appear AFTER player name everywhere',
-      'Game Summary, Game Details, WhatsApp sharing - all consistent'
-    ]
+      'UI: aligned medal positions',
+    ],
   },
   {
     version: '4.9.2',
     date: '2025-12-18',
     changes: [
-      'Voice: Improved English voice - prefers female voices 🎙️',
-      'Tries Samantha, Zira, Susan, Karen voices',
-      'Console logs available voices for debugging',
-      'Natural pace and pitch settings'
-    ]
+      'Voice: prefer female English voices',
+    ],
   },
   {
     version: '4.9.1',
     date: '2025-12-18',
     changes: [
-      'Voice: Better English voice selection 🎙️',
-      'Prefers Google/Enhanced/Premium voices',
-      'Falls back to British English for clarity',
-      'Pre-loads voices on page load'
-    ]
+      'Voice: better English voice selection',
+    ],
   },
   {
     version: '4.9.0',
     date: '2024-12-18',
     changes: [
-      'AI Forecast: Complete API diagnostic rewrite',
-      'First lists available models to verify API key access',
-      'Tries v1beta AND v1 API versions',
-      'Detailed troubleshooting in console'
-    ]
+      'Forecast: API diagnostic rewrite',
+      'Lists available models first',
+    ],
   },
   {
     version: '4.8.11',
     date: '2025-12-18',
     changes: [
-      'Voice: Hebrew name + English "buyin" 🗣️',
-      'Player name spoken in natural Hebrew',
-      'Action spoken in natural English ("buyin" / "half buyin")'
-    ]
+      'Voice: Hebrew name + English action',
+    ],
   },
   {
     version: '4.8.10',
     date: '2025-12-18',
     changes: [
-      'Voice: Added alert chime before announcement 🔔',
-      'Pleasant ding-dong sound to get attention',
-      'Then speaks the player name + action'
-    ]
+      'Voice: alert chime before name',
+    ],
   },
   {
     version: '4.8.9',
     date: '2024-12-18',
     changes: [
-      'AI Forecast: Auto-detects working Gemini model',
-      'Tries: gemini-pro, gemini-1.5-pro, gemini-1.5-flash, gemini-1.0-pro',
-      'Saves working model for future use',
-      'Better error logging in console'
-    ]
+      'Forecast: auto-detect Gemini model',
+      'Saves working model',
+    ],
   },
   {
     version: '4.8.8',
     date: '2025-12-18',
     changes: [
-      'Voice: Changed to natural Hebrew - "קנה" / "קנה חצי"',
-      'Sounds better than English "buyin" transliteration'
-    ]
+      'Voice: Hebrew "קנה" / "קנה חצי"',
+    ],
   },
   {
     version: '4.8.7',
     date: '2025-12-18',
     changes: [
-      'NEW: Voice announcement for buyins! 🔊',
-      'Says player name + action in Hebrew',
-      'Helps prevent mistakes during the game'
-    ]
+      'New: voice announcement for buyins',
+    ],
   },
   {
     version: '4.8.6',
     date: '2024-12-18',
     changes: [
-      'Fixed: AI API model endpoint (was 404)',
-      'Now using gemini-pro model'
-    ]
+      'Fix: AI model endpoint',
+    ],
   },
   {
     version: '4.8.5',
     date: '2024-12-18',
     changes: [
-      'AI Forecast: Dynamic profit range per player',
-      'Based on player historical range (best win to worst loss)',
-      'High variance players get more extreme forecasts',
-      'Low variance players get moderate forecasts'
-    ]
+      'Forecast: dynamic profit range',
+      'Based on player history',
+    ],
   },
   {
     version: '4.8.4',
     date: '2024-12-18',
     changes: [
-      'AI Forecast: Enhanced prompt with better rules',
-      'Highlight now explains the REASON for the forecast',
-      'Extra weight given to recent games',
-      'Detects patterns: gaps, streaks, trend changes',
-      'If forecast goes against history - mentions it'
-    ]
+      'Forecast: better prompt rules',
+      'Highlight explains the reason',
+      'Recent games weighted more',
+    ],
   },
   {
     version: '4.8.3',
     date: '2025-12-18',
     changes: [
-      'Screenshot: Reverted to original vertical layout on screen',
-      'Share now sends 2 separate images (Results + Settlements)',
-      'Both images sent in one click via native share'
-    ]
+      'Screenshot: vertical layout',
+      'Share sends 2 images',
+    ],
   },
   {
     version: '4.8.2',
     date: '2024-12-18',
     changes: [
-      'AI Forecast: Fixed API key test function',
-      'AI now receives FULL game history (not just last 10)',
-      'Data sent only for selected players',
-      'Better error logging for debugging'
-    ]
+      'Forecast: API key test fixed',
+      'Full game history per player',
+    ],
   },
   {
     version: '4.8.1',
     date: '2025-12-18',
     changes: [
-      'Screenshot: 2-column layout - Results and Settlements side by side',
-      'More compact screenshot for sharing with many players',
-      'Smaller fonts and tighter spacing in screenshot'
-    ]
+      'Screenshot: 2-column layout',
+    ],
   },
   {
     version: '4.8.0',
     date: '2024-12-18',
     changes: [
-      'NEW: AI-Powered Forecasts! 🤖',
-      'Uses Google Gemini AI for creative, personalized predictions',
-      'AI receives ALL player data: stats, streaks, recent games, history',
-      'Dynamic, unique forecasts every time',
-      'Sarcastic comments for inactive players',
-      'Free to use - just add your Gemini API key in Settings',
-      'Fallback to static forecasts if no API key'
-    ]
+      'New: AI-Powered Forecasts',
+      'Uses Google Gemini',
+      'Sarcastic comments for absentees',
+      'Free with API key',
+    ],
   },
   {
     version: '4.7.0',
     date: '2025-12-18',
     changes: [
-      'NEW: Graphs feature (Admin only) 📊',
-      'Cumulative Profit Line Chart - visualize profit trends over time',
-      'Head-to-Head Comparison - compare any 2 players side by side',
-      'Leaderboard Race - animated ranking progression with replay',
-      'Player selector for filtering graphs',
-      'Interactive tooltips and legends'
-    ]
+      'New: Graphs feature (Admin only)',
+      'Cumulative profit chart',
+      'Head-to-head comparison',
+      'Leaderboard race',
+    ],
   },
   {
     version: '4.6.41',
     date: '2025-12-18',
     changes: [
-      'Removed "Import Historical Data" feature (replaced by cloud sync)',
-      'Cleaned up unused import scripts and files'
-    ]
+      'Removed historical-import (now via cloud)',
+    ],
   },
   {
     version: '4.6.40',
     date: '2025-12-18',
     changes: [
-      'Fix: CORS error when fetching from GitHub API',
-      'Removed Cache-Control header that was blocked'
-    ]
+      'Fix: GitHub fetch CORS',
+    ],
   },
   {
     version: '4.6.39',
     date: '2025-12-18',
     changes: [
-      'Fix: Proper UTF-8 decoding for Hebrew names in sync',
-      'Added sync debugging logs to console'
-    ]
+      'Fix: UTF-8 decoding for Hebrew names',
+    ],
   },
   {
     version: '4.6.38',
     date: '2025-12-18',
     changes: [
-      'Fix: Sync now uses GitHub API instead of raw CDN (fixes caching issue)',
-      'Deletions now properly sync to all devices'
-    ]
+      'Fix: sync via API not raw CDN',
+    ],
   },
   {
     version: '4.6.37',
     date: '2025-12-18',
     changes: [
-      'Sync: Page now reloads after cloud sync to show new data',
-      'New games synced from cloud are now immediately visible'
-    ]
+      'Sync: page reloads after sync',
+    ],
   },
   {
     version: '4.6.36',
     date: '2025-12-18',
     changes: [
-      'CRITICAL FIX: Statistics now works after sync',
-      'Player IDs now correctly matched to game data during sync',
-      'Default players no longer conflict with synced data'
-    ]
+      'Critical: stats works after sync',
+      'Player IDs matched correctly',
+    ],
   },
   {
     version: '4.6.35',
     date: '2025-12-18',
     changes: [
-      'Player Stats: Arrow (❯) now grey to match Records view'
-    ]
+      'Player stats: grey arrow',
+    ],
   },
   {
     version: '4.6.34',
     date: '2025-12-18',
     changes: [
-      'Fix: Synced players now have correct type (permanent/guest)',
-      'Statistics now shows synced players correctly'
-    ]
+      'Fix: synced players have correct type',
+    ],
   },
   {
     version: '4.6.33',
     date: '2025-12-18',
     changes: [
-      'Player Stats: Aligned with Records design - icons + labels above values',
-      'Added icons: 💰 Biggest Win, 💸 Biggest Loss, 🏆 Win Streak, 💔 Loss Streak',
-      'Changed to 2-column grid layout matching Records view',
-      'Values now show "X wins ❯" / "X losses ❯" format'
-    ]
+      'Player stats: aligned with Records design',
+      '2-column grid + icons + labels',
+    ],
   },
   {
     version: '4.6.32',
     date: '2025-12-18',
     changes: [
-      'Cloud Sync: Full replacement with version tracking',
-      'Sync only happens when cloud data is newer (no redundant syncs)',
-      'Game deletion auto-syncs to cloud (admin only)',
-      'Players NOT synced - auto-created from game data if missing'
-    ]
+      'Cloud sync: full replacement',
+      'Version tracking',
+      'Auto-sync on game delete',
+    ],
   },
   {
     version: '4.6.30',
     date: '2025-12-18',
     changes: [
-      'Aligned stat-card boxes with Records design (same background, border-radius, padding)',
-      'Smaller stat value font size to match Records style'
-    ]
+      'Stat-card boxes match Records design',
+    ],
   },
   {
     version: '4.6.29',
     date: '2025-12-18',
     changes: [
-      'Player Stats: Added timeframe header matching Records view',
-      'Aligned player streak badges with Records design style'
-    ]
+      'Player stats: timeframe header',
+    ],
   },
   {
     version: '4.6.28',
     date: '2025-12-18',
     changes: [
-      'Current Streaks: Changed "3W" to "3 Wins" and "4L" to "4 Losses" for clarity'
-    ]
+      'Streaks: "3 Wins" / "4 Losses"',
+    ],
   },
   {
     version: '4.6.27',
     date: '2025-12-18',
     changes: [
-      'Cloud Sync: Delta mode - only adds new games (safe)',
-      'Players NOT synced - auto-created from game data if missing',
-      'Admin: Force Full Sync button to propagate deletions'
-    ]
+      'Cloud sync: delta mode',
+      'Force Full Sync button',
+    ],
   },
   {
     version: '4.6.26',
     date: '2025-12-18',
     changes: [
-      'Records title now shows filtered timeframe (e.g., "Records (H1 2025)")'
-    ]
+      'Records title shows timeframe',
+    ],
   },
   {
     version: '4.6.25',
     date: '2025-12-18',
     changes: [
-      'Records header: Changed to English only "🏆 Records"',
-      'Current Streaks: Compact display "3W" / "4L" instead of long text',
-      'Fixed text wrapping in streak cards'
-    ]
+      'Records header: English only',
+      'Compact streak display',
+    ],
   },
   {
     version: '4.6.24',
     date: '2025-12-18',
     changes: [
-      'Records: Added gray arrow indicator for clickable items',
-      'Aligned records and player stats - both now show gray ❯ arrow'
-    ]
+      'Records: gray arrow for clickable',
+    ],
   },
   {
     version: '4.6.23',
     date: '2025-12-18',
     changes: [
-      'Records: Cleaner layout - click row for details, removed green buttons',
-      'Player stats: Shorter labels (Best, Worst, W Streak, L Streak)',
-      'All labels now prevent text wrapping for better display'
-    ]
+      'Records: cleaner layout',
+      'Shorter player-stat labels',
+    ],
   },
   {
     version: '4.6.22',
     date: '2025-12-18',
     changes: [
-      'Cloud Sync: Full data replacement - admin is master of all data',
-      'Deleted games now sync to all users (removes from their devices)',
-      'App reloads after sync to show updated data immediately'
-    ]
+      'Cloud sync: full data replacement',
+      'Deletes propagate to all users',
+    ],
   },
   {
     version: '4.6.21',
     date: '2025-12-18',
     changes: [
-      'Records: Fixed layout - details arrow no longer wraps to new line',
-      'Compact record display fits screen properly'
-    ]
+      'Records: layout fix',
+    ],
   },
   {
     version: '4.6.20',
     date: '2025-12-18',
     changes: [
-      'NEW: GitHub Cloud Sync - games auto-sync to cloud when completed',
-      'Admin can upload data to GitHub, other users auto-download on app open',
-      'Viewer role excluded from sync (stays isolated)',
-      'Sync settings in Backup tab (admin only)'
-    ]
+      'New: GitHub Cloud Sync',
+      'Auto-sync on game complete',
+      'Viewer role excluded',
+    ],
   },
   {
     version: '4.6.19',
     date: '2025-12-18',
     changes: [
-      'All numbers now display as whole numbers (no decimals)',
-      'Cleaner display throughout the app'
-    ]
+      'All numbers: whole numbers only',
+    ],
   },
   {
     version: '4.6.18',
     date: '2025-12-18',
     changes: [
-      'Numbers with 4+ digits now show thousand separators (e.g., 1,234)',
-      'Applied across all screens: Statistics, History, Game Summary, etc.'
-    ]
+      'Numbers: thousand separators',
+    ],
   },
   {
     version: '4.6.17',
     date: '2025-12-18',
     changes: [
-      'Player records W/L bar: Latest game now on the right',
-      'Player records W/L bar: Date now includes year',
-      'Player records W/L bar: Date font slightly larger'
-    ]
+      'Player W/L bar: latest on right',
+      'Date includes year',
+    ],
   },
   {
     version: '4.6.16',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Share button NOT included in screenshot (clean table only)'
-    ]
+      'Stats screenshot: no share button',
+    ],
   },
   {
     version: '4.6.15',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Share button now visible in screenshot'
-    ]
+      'Stats screenshot: includes share button',
+    ],
   },
   {
     version: '4.6.14',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Share button smaller and centered'
-    ]
+      'Stats: smaller centered share button',
+    ],
   },
   {
     version: '4.6.13',
     date: '2025-12-18',
     changes: [
-      'Fixed: Player games list now respects time period filter',
-      'Clicking player name shows only games from selected period'
-    ]
+      'Player games respect period filter',
+    ],
   },
   {
     version: '4.6.12',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Added share button to send screenshot to WhatsApp',
-      'Screenshot includes period info header for context'
-    ]
+      'Stats: WhatsApp screenshot share',
+    ],
   },
   {
     version: '4.6.11',
     date: '2025-12-18',
     changes: [
-      'Fixed: Statistics page crash (missing useRef import)'
-    ]
+      'Fix: Stats crash (useRef import)',
+    ],
   },
   {
     version: '4.6.10',
     date: '2025-12-18',
     changes: [
-      'Import button now shows file preparation date',
-      'Dynamic display of games count from import file'
-    ]
+      'Import: shows file prep date',
+    ],
   },
   {
     version: '4.6.9',
     date: '2025-12-18',
     changes: [
-      'Fixed: Time period preserved when navigating from records to game details',
-      'Fixed: Record details modal no longer re-opens when changing filters',
-      'Navigation now preserves all filter settings (period, year)'
-    ]
+      'Period preserved in navigation',
+      'Filter changes don\'t reopen modal',
+    ],
   },
   {
     version: '4.6.8',
     date: '2025-12-18',
     changes: [
-      'Import historical data now shows when the file was prepared',
-      'Updated import data with latest games'
-    ]
+      'Import: file prep timestamp',
+    ],
   },
   {
     version: '4.6.7',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Better spacing between columns',
-      'More balanced distribution of space across the table'
-    ]
+      'Stats table: better column spacing',
+    ],
   },
   {
     version: '4.6.6',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Compact layout - no more line wrapping',
-      'Shorter column headers (G for Games, W% for Win%)',
-      'All cells use nowrap for clean display'
-    ]
+      'Stats table: compact, no wrap',
+    ],
   },
   {
     version: '4.6.5',
     date: '2025-12-18',
     changes: [
-      'Records: Changed Hebrew labels back to English',
-      'Leaders section: "Top Earner" and "Biggest Loser" (not all-time)'
-    ]
+      'Records: English labels',
+    ],
   },
   {
     version: '4.6.4',
     date: '2025-12-18',
     changes: [
-      'Statistics table: Added Average (Avg) column',
-      'Statistics table: Removed decimal points - whole numbers only',
-      'Statistics table: Medals (🥇🥈🥉) now appear after player name'
-    ]
+      'Stats table: Avg column',
+      'Whole numbers only',
+      'Medals after name',
+    ],
   },
   {
     version: '4.6.3',
     date: '2025-12-18',
     changes: [
-      'Fixed: Renamed "All-Time Leaders" to "מובילים" (reflects selected period)',
-      'Records now correctly show data for the selected time period'
-    ]
+      'Renamed "All-Time Leaders" → "מובילים"',
+    ],
   },
   {
     version: '4.6.1',
     date: '2025-12-17',
     changes: [
-      'Simplified active players formula: 33% of total games in period',
-      'Shows "מינימום X הופעות מתוך Y משחקים" (minimum appearances)'
-    ]
+      'Active filter: 33% of period games',
+    ],
   },
   {
     version: '4.6.0',
     date: '2024-12-17',
     changes: [
-      'Forecast: Gender support only for מור (female)',
-      'All other players use male Hebrew forms'
-    ]
+      'Forecast: gender support for מור',
+    ],
   },
   {
     version: '4.5.9',
     date: '2025-12-17',
     changes: [
-      'Clarified filter explanation: "מעל 33%" (above 33%)'
-    ]
+      'Filter explanation: "מעל 33%"',
+    ],
   },
   {
     version: '4.5.8',
     date: '2025-12-17',
     changes: [
-      'Changed active filter label to "שחקנים פעילים בלבד"',
-      'Added explanation: "33% מממוצע המשחקים בתקופה"'
-    ]
+      'Active filter label clarified',
+    ],
   },
   {
     version: '4.5.7',
     date: '2025-12-17',
     changes: [
-      'Fixed: Filter buttons (H1/H2/Year/etc) no longer trigger game popups',
-      'Added type=button and preventDefault to ALL filter buttons',
-      'Comprehensive fix for all filter interactions in Statistics page'
-    ]
+      'Filter buttons no longer trigger popups',
+    ],
   },
   {
     version: '4.5.6',
     date: '2025-12-17',
     changes: [
-      'Fixed: Stat box data now respects the selected time period filter',
-      'Fixed: Game details page scrolls to top when opened',
-      'Fixed: Back navigation returns to correct view (individual/records/table)',
-      'Fixed: Navigation from individual view stays in individual view'
-    ]
+      'Stat box respects period',
+      'Game details scrolls to top',
+      'Back navigation preserves view',
+    ],
   },
   {
     version: '4.5.5',
     date: '2024-12-17',
     changes: [
-      'Forecast: Gender-aware sentences in Hebrew!',
-      'Correct male/female forms (הוא/היא, שלו/שלה, etc.)',
-      'Automatic detection of female names (מור, נועה, etc.)',
-      'All forecast sentences updated with proper grammar'
-    ]
+      'Forecast: gender-aware Hebrew',
+      'Auto-detect female names',
+    ],
   },
   {
     version: '4.5.4',
     date: '2025-12-17',
     changes: [
-      'Individual player view: All stat boxes now clickable (Games, Wins, Losses, Best Win, etc.)',
-      'W/L tiles now navigate directly to game details (simpler flow)',
-      'Stat box clicks open records-style modal with game list',
-      'Clickable stats show ❯ indicator',
-      'Aligned UX with records view pattern'
-    ]
+      'Player view: all stat boxes clickable',
+      'Stats records-style modal',
+    ],
   },
   {
     version: '4.5.3',
     date: '2024-12-17',
     changes: [
-      'Forecast: Sarcastic/cynical sentences for long absences!',
-      'Different levels: 3+ months, 6+ months, year+ absence',
-      'Highlights also sarcastic for inactive players',
-      'More humor and personality in returning player messages'
-    ]
+      'Forecast: sarcastic for absentees',
+      '3+ / 6+ / year+ levels',
+    ],
   },
   {
     version: '4.5.2',
     date: '2025-12-17',
     changes: [
-      'Fixed: Filter buttons (H1/H2/Year) no longer trigger unwanted popups',
-      'Table view: Click on any player row to see their game history',
-      'Player game history modal shows all games with navigation to full details'
-    ]
+      'Filter buttons no popups',
+      'Click row in table → game history',
+    ],
   },
   {
     version: '4.5.1',
     date: '2025-12-17',
     changes: [
-      'Renamed Settings tab from "Backup" to "Backup & Restore"'
-    ]
+      'Settings tab: "Backup & Restore"',
+    ],
   },
   {
     version: '4.5.0',
     date: '2025-12-17',
     changes: [
-      'Individual player stats: Last 6 games only (not 10)',
-      'Clickable game tiles in player stats - shows game details modal',
-      'Navigate from game modal to full game details with back navigation',
-      'Scroll to player card when returning from game details'
-    ]
+      'Player stats: last 6 games',
+      'Clickable game tiles',
+      'Scroll to player on return',
+    ],
   },
   {
     version: '4.4.0',
     date: '2024-12-17',
     changes: [
-      'Forecast: Smart time awareness - checks actual game dates',
-      'No more "לאחרונה" for players who havent played in months',
-      'Much longer, more engaging forecast sentences',
-      'Special handling for returning players after long breaks',
-      'Highlights adapted to player activity level'
-    ]
+      'Forecast: time-aware sentences',
+      'No "לאחרונה" for absent players',
+      'Returning-player handling',
+    ],
   },
   {
     version: '4.3.6',
     date: '2025-12-17',
     changes: [
-      'Back button returns to exact record details modal (not just Records page)',
-      'Record info is preserved when navigating from game details back to records'
-    ]
+      'Back returns to record details',
+    ],
   },
   {
     version: '4.3.5',
     date: '2024-12-17',
     changes: [
-      'Navigation: Back to Records now returns to Records view (not Table)',
-      'Preserves the view mode when navigating back from game details'
-    ]
+      'Back returns to Records view',
+    ],
   },
   {
     version: '4.3.4',
     date: '2024-12-17',
     changes: [
-      'Records: Each tied player now has their own "פרטים ❯" button',
-      'Click to see game details for any player sharing a record',
-      'Better layout for expanded tied players list'
-    ]
+      'Records: per-player "פרטים"',
+    ],
   },
   {
     version: '4.3.3',
     date: '2024-12-17',
     changes: [
-      'Navigation: "Back to Records" when coming from record drill-down',
-      'Bottom button changes to "📊 Records" accordingly',
-      'Seamless flow: Records → Game Details → Back to Records'
-    ]
+      'Records: dedicated back-flow',
+    ],
   },
   {
     version: '4.3.2',
     date: '2024-12-17',
     changes: [
-      'Forecast: Now fully dynamic - different results each time!',
-      'Highlights: Random selection from top relevant insights',
-      'Sentences: Doubled the variety (10+ options per category)',
-      'Expected values: Added significant variance for uniqueness'
-    ]
+      'Forecast: fully dynamic per run',
+      'Doubled sentence variety',
+    ],
   },
   {
     version: '4.3.1',
     date: '2024-12-17',
     changes: [
-      'Records: Fixed date format (DD/MM/YYYY)',
-      'Records: Click any game row to see full game details',
-      'Hover effect and arrow indicator for clickable games'
-    ]
+      'Records: DD/MM/YYYY dates',
+      'Click row → game details',
+    ],
   },
   {
     version: '4.3.0',
     date: '2024-12-17',
     changes: [
-      'Forecast: Dynamic personalized highlights for each player',
-      'Each player gets unique insight based on their actual data',
-      'Detects: streaks, improvement/decline, comebacks, volatility',
-      'Compares recent (last 10 games) vs historical performance'
-    ]
+      'Forecast: dynamic per-player highlights',
+      'Detects streaks/comebacks/volatility',
+    ],
   },
   {
     version: '4.2.3',
     date: '2024-12-17',
     changes: [
-      'Fixed: Records drill-down now shows actual game data',
-      'UI: Changed icon to clearer "פרטים ❯" button',
-      'Added getAllGamePlayers function for record details'
-    ]
+      'Records drill-down: actual data',
+      '"פרטים ❯" button',
+    ],
   },
   {
     version: '4.2.2',
     date: '2024-12-17',
     changes: [
-      'Forecast: Highlights line shows stats from last games (wins, streak, average)',
-      'Forecast: Creative fun sentences separate from data',
-      'Forecast: Cleaner layout - highlights first, then prediction',
-      'Removed formula mention from footer'
-    ]
+      'Forecast: stats highlights',
+      'Creative sentences separate',
+    ],
   },
   {
     version: '4.2.1',
     date: '2024-12-17',
     changes: [
-      'Records: Click 🔍 to see game details behind any record',
-      'Modal shows all relevant games with dates and profits',
-      'Works for streaks, wins, losses, biggest games, etc.'
-    ]
+      'Records: 🔍 to see games',
+    ],
   },
   {
     version: '4.2.0',
     date: '2024-12-17',
     changes: [
-      'Improved: Forecast now weighs recent performance (60%) over overall history (40%)',
-      'Improved: Sentences reference actual data (X/Y wins, streak info, averages)',
-      'Added: Streak badges show hot/cold streaks (🔥/❄️)',
-      'Added: Trend detection - improving vs declining players',
-      'Fixed: Smarter surprise predictions based on contradicting trends'
-    ]
+      'Forecast: 60% recent / 40% history',
+      'Streak badges 🔥/❄️',
+      'Trend detection',
+      'Smarter surprises',
+    ],
   },
   {
     version: '4.1.3',
     date: '2024-12-17',
     changes: [
-      'Fixed: Forecast button now works correctly',
-      'Added missing imports for screenshot sharing'
-    ]
+      'Fix: forecast button works',
+    ],
   },
   {
     version: '4.1.2',
     date: '2024-12-17',
     changes: [
-      'Fixed: אורח filter button now highlights green like others'
-    ]
+      'Fix: אורח filter highlight',
+    ],
   },
   {
     version: '4.1.1',
     date: '2024-12-17',
     changes: [
-      'Forecast: Completely rewritten engaging sentences',
-      'Personal, witty predictions with real player stats',
-      'Fun commentary players will enjoy sharing',
-      'Smart surprise system (up to 30%, not forced)',
-      'Screenshot-based WhatsApp sharing',
-      'Cleaner UI with RTL support'
-    ]
+      'Forecast: rewritten sentences',
+      'Smart surprise system',
+      'Screenshot WhatsApp share',
+    ],
   },
   {
     version: '4.1.0',
     date: '2024-12-17',
     changes: [
-      'Role-Based Permissions: Admin, Member, Viewer',
-      'Admin (2351): Full control over everything',
-      'Member (2580): Can manage games and add players',
-      'Viewer (9876): View-only access + backup features',
-      'Settings shows current role with emoji indicator',
-      'UI adapts based on permissions (hide/disable buttons)',
-      'All roles can use Backup & Data features'
-    ]
+      'Roles: Admin / Member / Viewer',
+      'PIN-based access',
+      'UI adapts to permissions',
+    ],
   },
   {
     version: '4.0.0',
     date: '2024-12-17',
     changes: [
-      'Forecast 3.0: Complete professional overhaul',
-      'Smart surprise system - UP TO 35% (not forced)',
-      'Unique sentences per player - no duplicates',
-      'Cleaner sentence structure - less repetitive',
-      'Screenshot-based WhatsApp sharing',
-      'Clear visual legend (green=win, red=loss, purple=surprise)',
-      'Better UI with RTL support',
-      'Cached forecasts - consistent display'
-    ]
+      'Forecast 3.0: pro overhaul',
+      'Smart surprise (≤35%)',
+      'Unique sentences per player',
+      'Visual legend',
+      'Cached forecasts',
+    ],
   },
   {
     version: '3.9.9',
     date: '2024-12-17',
     changes: [
-      'Records: Name and value now side by side',
-      'Ties show value once (same for all)',
-      'Expanded ties just show additional names'
-    ]
+      'Records: name + value side by side',
+    ],
   },
   {
     version: '3.9.8',
     date: '2024-12-17',
     changes: [
-      'Records: Shows ties with expandable list',
-      'Click "+N" badge to see all tied players',
-      'Works for all record categories'
-    ]
+      'Records: expandable ties',
+    ],
   },
   {
     version: '3.9.7',
     date: '2024-12-17',
     changes: [
-      'History: Consistent buyins display for all games'
-    ]
+      'History: consistent buyins display',
+    ],
   },
   {
     version: '3.9.6',
     date: '2024-12-17',
     changes: [
-      'History: Show ALL players sorted by profit (highest first)',
-      'History: Added "פרטים מלאים" button for game details',
-      'History: Shows total buyins instead of pot for new games',
-      'Smaller badges to fit all players in view'
-    ]
+      'History: all players sorted by profit',
+      '"פרטים מלאים" button',
+    ],
   },
   {
     version: '3.9.5',
     date: '2024-12-17',
     changes: [
-      'Active Players toggle moved to top of filters',
-      'Active Players filter ON by default',
-      'Better filter organization in Statistics'
-    ]
+      'Active Players filter at top',
+      'On by default',
+    ],
   },
   {
     version: '3.9.4',
     date: '2024-12-17',
     changes: [
-      'Statistics defaults to current half year (H1 Jan-Jun, H2 Jul-Dec)',
-      'Automatically selects the relevant half based on current date'
-    ]
+      'Stats default: current half-year',
+    ],
   },
   {
     version: '3.9.3',
     date: '2024-12-17',
     changes: [
-      'UI: Active Players filter now uses iOS-style toggle switch',
-      'UI: Year selector made more compact and elegant',
-      'Cleaner filter section appearance'
-    ]
+      'iOS-style toggle for Active Players',
+      'Compact year selector',
+    ],
   },
   {
     version: '3.9.2',
     date: '2024-12-17',
     changes: [
-      'Bugfix: Fixed JSX syntax error causing Vercel build failure',
-      'Statistics time period filter now correctly wrapped'
-    ]
+      'Bugfix: JSX syntax error',
+    ],
   },
   {
     version: '3.8.0',
     date: '2024-12-17',
     changes: [
-      'New Game: Added optional location selector',
-      'Quick options: ליאור, סגל, ליכטר, אייל',
-      'Custom location via free text input',
-      'Location stored for future analysis'
-    ]
+      'New game: location selector',
+      'Quick + custom options',
+    ],
   },
   {
     version: '3.7.2',
     date: '2024-12-17',
     changes: [
-      'Removed hardcoded Dec 6 game auto-import',
-      'Buyin King only shows with real buyin data'
-    ]
+      'Removed Dec-6 auto-import',
+    ],
   },
   {
     version: '3.7.1',
     date: '2024-12-17',
     changes: [
-      'New Game: More compact layout - less scrolling',
-      'Smaller tiles, reduced spacing, compact header',
-      'All 11 permanent players visible without scroll'
-    ]
+      'New game: compact layout',
+      '11 players visible no-scroll',
+    ],
   },
   {
     version: '3.7.0',
     date: '2024-12-17',
     changes: [
-      'Terminology: Changed "Rebuy" to "Buyin" across the app',
-      'Buyin = total purchases (initial + additional)',
-      'Updated: Settings, Live Game, Summary, Statistics, Sharing'
-    ]
+      'Terminology: "Rebuy" → "Buyin"',
+    ],
   },
   {
     version: '3.6.4',
     date: '2024-12-17',
     changes: [
-      'Guest badge now uses grey background (same as Occasional)',
-      'Only Permanent uses green highlight'
-    ]
+      'Guest badge: grey background',
+    ],
   },
   {
     version: '3.6.3',
     date: '2024-12-17',
     changes: [
-      'Changed labels: אורח (singular), מזדמן (singular)',
-      'New icon for Guest: 🏠 (was 👥)',
-      'Occasional keeps: 👤'
-    ]
+      'Labels: אורח / מזדמן (singular)',
+      'Guest icon: 🏠',
+    ],
   },
   {
     version: '3.6.2',
     date: '2024-12-17',
     changes: [
-      'Settings: Players sorted by type (Permanent → Guests → Occasional)',
-      'Alphabetical within each type',
-      'Auto-sorts when adding/editing players'
-    ]
+      'Settings: players sorted by type',
+    ],
   },
   {
     version: '3.6.1',
     date: '2024-12-17',
     changes: [
-      'Import reads player types from Excel (קבוע/אורח/מזדמן column)',
-      '11 Permanent, 5 Guests, 24 Occasional players'
-    ]
+      'Import: read player types',
+    ],
   },
   {
     version: '3.6.0',
     date: '2024-12-17',
     changes: [
-      'Import now REPLACES all data (full reset)',
-      'Includes all 217 games from Excel',
-      'Warning dialog before import'
-    ]
+      'Import replaces all data',
+      '217 games from Excel',
+    ],
   },
   {
     version: '3.5.0',
     date: '2024-12-16',
     changes: [
-      'Renamed player types: קבוע, אורח, מזדמן',
-      'New icons: ⭐ Permanent, 🏠 Guest, 👤 Occasional',
-      'Hebrew descriptions for player type selection'
-    ]
+      'Renamed types: קבוע / אורח / מזדמן',
+      'New icons + Hebrew descriptions',
+    ],
   },
   {
     version: '3.4.3',
     date: '2024-12-16',
     changes: [
-      'UI: Unified selection colors across all screens',
-      'All selected/active buttons now use consistent green'
-    ]
+      'UI: unified selection colors',
+    ],
   },
   {
     version: '3.4.2',
     date: '2024-12-16',
     changes: [
-      'BUGFIX: Fixed Select/Deselect All in New Game screen',
-      'BUGFIX: Fixed Clear button in Statistics screen',
-      'Select All now works with visible players only'
-    ]
+      'Bugfix: Select/Deselect All',
+      'Bugfix: Stats Clear button',
+    ],
   },
   {
     version: '3.4.1',
     date: '2024-12-16',
     changes: [
-      'BUGFIX: Fixed screen freeze when switching tabs',
-      'Performance: Added memoization to Statistics screen'
-    ]
+      'Bugfix: tab-switch freeze',
+      'Stats: memoization added',
+    ],
   },
   {
     version: '3.4.0',
     date: '2024-12-16',
     changes: [
-      'Statistics: Player type filter now supports multi-select',
-      'Select any combination of Permanent, Permanent Guest, Guest'
-    ]
+      'Stats: multi-select player type',
+    ],
   },
   {
     version: '3.3.0',
     date: '2024-12-16',
     changes: [
-      'Statistics: Added minimum games filter',
-      'Filter players by games played (All, 5+, 10+, 20+, 50+)'
-    ]
+      'Stats: minimum games filter',
+    ],
   },
   {
     version: '3.2.0',
     date: '2024-12-16',
     changes: [
-      'Statistics: Added time period filter (All, Year, H1, H2)',
-      'Filter by any year from 2021 to present',
-      'H1 = Jan-Jun, H2 = Jul-Dec'
-    ]
+      'Stats: time period filter',
+      'Filter by year (2021+)',
+    ],
   },
   {
     version: '3.1.0',
     date: '2024-12-16',
     changes: [
-      'Excel Import: Added one-click import for ~213 historical games',
-      'Import creates backup before applying',
-      'Intelligent merge - avoids duplicate games/players'
-    ]
+      'Excel import: 213 historical games',
+      'Backup before applying',
+    ],
   },
   {
     version: '3.0.0',
     date: '2024-12-16',
     changes: [
-      'Player Types: Added 3 categories - Permanent, Permanent Guest, Guest',
-      'New Game: 3 collapsible sections for player types',
-      'Statistics: Filter by player type',
-      'Settings: Edit player type with 3 options',
-      'Preparing for Excel history import'
-    ]
+      '3 player types: Permanent / Guest / Occasional',
+      'Stats: filter by type',
+      'Settings: type editor',
+    ],
   },
   {
     version: '2.10.0',
     date: '2024-12-16',
     changes: [
-      'Backup: Simplified UI - Download button saves backup file to Downloads'
-    ]
+      'Backup: Download to Downloads',
+    ],
   },
   {
     version: '2.9.9',
     date: '2024-12-16',
     changes: [
-      'Backup: "Open WhatsApp" button now opens WhatsApp directly after download'
-    ]
+      'Backup: Open WhatsApp button',
+    ],
   },
   {
     version: '2.9.8',
     date: '2024-12-16',
     changes: [
-      'Backup: Added step-by-step instructions for sharing backup to WhatsApp'
-    ]
+      'Backup: WhatsApp share instructions',
+    ],
   },
   {
     version: '2.9.7',
     date: '2024-12-16',
     changes: [
-      'Backup: Improved share - downloads file first if direct file sharing not supported'
-    ]
+      'Backup: download fallback for share',
+    ],
   },
   {
     version: '2.9.6',
     date: '2024-12-16',
     changes: [
-      'Backup: Share now sends actual JSON file (not text) for easy restore'
-    ]
+      'Backup: share JSON file',
+    ],
   },
   {
     version: '2.9.5',
     date: '2024-12-16',
     changes: [
-      'Backup: Added "Share to WhatsApp" option for cloud backup via WhatsApp'
-    ]
+      'Backup: WhatsApp share option',
+    ],
   },
   {
     version: '2.9.4',
     date: '2024-12-16',
     changes: [
-      'Statistics: Game tiles now show date below each game (DD/MM format)'
-    ]
+      'Stats: date below each game tile',
+    ],
   },
   {
     version: '2.9.3',
     date: '2024-12-16',
     changes: [
-      'Statistics: Changed indicator to "אחרון" label for clarity'
-    ]
+      'Stats: "אחרון" label',
+    ],
   },
   {
     version: '2.9.2',
     date: '2024-12-16',
     changes: [
-      'Statistics: Added ▲ indicator under the most recent game'
-    ]
+      'Stats: ▲ on most recent game',
+    ],
   },
   {
     version: '2.9.1',
     date: '2024-12-16',
     changes: [
-      'Statistics: Last games display now shows 6 games instead of 5',
-      'Statistics: Most recent game now appears first (left side)'
-    ]
+      'Stats: 6 games (was 5)',
+      'Most recent on the left',
+    ],
   },
   {
     version: '2.9.0',
     date: '2024-12-16',
     changes: [
-      'Forecast 2.0: Complete overhaul of prediction system',
-      '40% surprise rate - predictions that go against history',
-      '100+ unique Hebrew sentences across all categories',
-      'No duplicate sentences in same forecast',
-      'Surprise predictions highlighted with 🎲 and purple color',
-      'All sentences reference historical data when available'
-    ]
+      'Forecast 2.0: complete overhaul',
+      '40% surprise rate',
+      '100+ unique Hebrew sentences',
+    ],
   },
   {
     version: '2.8.4',
     date: '2024-12-15',
     changes: [
-      'Forecast now balanced: total wins = total losses (zero-sum)',
-      'Sentences match the balanced expected values'
-    ]
+      'Forecast balanced: zero-sum',
+    ],
   },
   {
     version: '2.8.3',
     date: '2024-12-15',
     changes: [
-      'Auto backup changed from Sunday to Friday'
-    ]
+      'Auto backup: Sun → Fri',
+    ],
   },
   {
     version: '2.8.2',
     date: '2024-12-15',
     changes: [
-      'Chip delete icon now matches player delete icon style'
-    ]
+      'Chip delete icon styled to match',
+    ],
   },
   {
     version: '2.8.1',
     date: '2024-12-15',
     changes: [
-      'Auto backup after each game ends',
-      'Backups now show type: Auto (Game End), Auto (Sunday), Manual',
-      'Backup list shows trigger information'
-    ]
+      'Auto backup after each game',
+      'Backup type labels',
+    ],
   },
   {
     version: '2.8.0',
     date: '2024-12-15',
     changes: [
-      'Delete confirmation dialogs for players and chips',
-      'All deletions now require confirmation before proceeding'
-    ]
+      'Delete confirmation dialogs',
+    ],
   },
   {
     version: '2.7.9',
     date: '2024-12-15',
     changes: [
-      'Forecast: Sentences now match expected profit direction',
-      'Forecast: Much longer and more detailed sentences',
-      'Forecast: 100+ unique sentences with player name and stats',
-      'Forecast: Surprises now also adjust the expected profit'
-    ]
+      'Forecast: sentences match direction',
+      'Longer + 100+ unique lines',
+    ],
   },
   {
     version: '2.7.8',
     date: '2024-12-15',
     changes: [
-      'Settings: Unified player edit - name & type in one modal',
-      'Settings: Cleaner player buttons (Edit + Delete only)',
-      'Settings: Backup section redesigned with grouped actions'
-    ]
+      'Settings: unified player edit',
+      'Cleaner backup section',
+    ],
   },
   {
     version: '2.7.7',
     date: '2024-12-15',
     changes: [
-      'Settings: Players tab is now first',
-      'Settings: Tabs styled like Statistics page (max 4 per row)',
-      'Settings: Tab layout matches Statistics page format'
-    ]
+      'Settings: Players tab first',
+      'Tabs styled like Statistics',
+    ],
   },
   {
     version: '2.7.6',
     date: '2024-12-15',
     changes: [
-      'Settings: Can now edit player names with ✏️ button',
-      'All historical data and statistics migrate to new name'
-    ]
+      'Settings: edit player names',
+    ],
   },
   {
     version: '2.7.5',
     date: '2024-12-15',
     changes: [
-      'Forecast: Much more variety in sentences (100+ options)',
-      'Forecast: 15% chance for surprise predictions against the data',
-      'Forecast: More categories based on stats depth'
-    ]
+      'Forecast: 100+ sentence options',
+      '15% surprise predictions',
+    ],
   },
   {
     version: '2.7.4',
     date: '2024-12-15',
     changes: [
-      'Settings tabs now wrap to new line instead of scrolling'
-    ]
+      'Settings tabs wrap (no scroll)',
+    ],
   },
   {
     version: '2.7.3',
     date: '2024-12-15',
     changes: [
-      'Settings: Player list now shows type (קבוע/אורח)',
-      'Settings: Can choose player type when adding new player',
-      'Settings: Can toggle player type for existing players'
-    ]
+      'Settings: player type column',
+      'Choose type when adding',
+      'Toggle for existing',
+    ],
   },
   {
     version: '2.7.2',
     date: '2024-12-15',
     changes: [
-      'Forecast sentences now in Hebrew'
-    ]
+      'Forecast sentences in Hebrew',
+    ],
   },
   {
     version: '2.7.1',
     date: '2024-12-15',
     changes: [
-      'Settings page now has tabs: Game, Chips, Players, Backup, About',
-      'Cleaner navigation between settings sections'
-    ]
+      'Settings: tabs added',
+    ],
   },
   {
     version: '2.7.0',
     date: '2024-12-15',
     changes: [
-      'Added Forecast feature on New Game screen',
-      'Predicts player profit/loss based on history',
-      'Generates funny/cynical sentences for each player',
-      'Share forecast to WhatsApp'
-    ]
+      'New: Forecast on New Game',
+      'Profit/loss prediction',
+      'Funny sentences per player',
+      'WhatsApp share',
+    ],
   },
   {
     version: '2.6.0',
     date: '2024-12-15',
     changes: [
-      'Added Backup & Restore feature in Settings',
-      'Auto-backup every Sunday on app open',
-      'Manual backup, download, and import options',
-      'Keeps last 4 backups (1 month)'
-    ]
+      'New: Backup & Restore',
+      'Auto-backup on Sundays',
+      'Keeps last 4 backups',
+    ],
   },
   {
     version: '2.5.6',
     date: '2024-12-15',
     changes: [
-      'Simplified Game Details - removed stat tiles, added Total Rebuys to Results header'
-    ]
+      'Game Details simplified',
+      'Total Rebuys in header',
+    ],
   },
   {
     version: '2.5.5',
     date: '2024-12-15',
     changes: [
-      'Added Total Rebuys display at top of Results table in Game Summary'
-    ]
+      'Total Rebuys in summary',
+    ],
   },
   {
     version: '2.5.4',
     date: '2024-12-15',
     changes: [
-      'Fixed Game Details table to fit screen - no horizontal scroll'
-    ]
+      'Game Details fits screen',
+    ],
   },
   {
     version: '2.5.3',
     date: '2024-12-15',
     changes: [
-      'Fixed Game Details table - restored Chips column with proper calculation'
-    ]
+      'Restored Chips column',
+    ],
   },
   {
     version: '2.5.2',
     date: '2024-12-15',
     changes: [
-      'Simplified Game Details table - removed Chips column, fixed value formatting'
-    ]
+      'Removed Chips column',
+    ],
   },
   {
     version: '2.5.1',
     date: '2024-12-15',
     changes: [
-      'Fixed table alignment - profit column no longer wraps to new line'
-    ]
+      'Profit column no wrap',
+    ],
   },
   {
     version: '2.5.0',
     date: '2024-12-15',
     changes: [
-      'Simplified chip display - always uses stored finalValue for reliability'
-    ]
+      'Use stored finalValue',
+    ],
   },
   {
     version: '2.4.9',
     date: '2024-12-15',
     changes: [
-      'Fixed chip display for games without detailed chip counts'
-    ]
+      'Fix: chip display fallback',
+    ],
   },
   {
     version: '2.4.8',
     date: '2024-12-15',
     changes: [
-      'Game Details now uses screenshot sharing like Game Summary'
-    ]
+      'Game Details: screenshot share',
+    ],
   },
   {
     version: '2.4.7',
     date: '2024-12-15',
     changes: [
-      'Fixed table width in Game Details to fit container'
-    ]
+      'Table width fits container',
+    ],
   },
   {
     version: '2.4.6',
     date: '2024-12-15',
     changes: [
-      'Fixed Chips column in Game Details - shows chips not shekels'
-    ]
+      'Chips column: chips not shekels',
+    ],
   },
   {
     version: '2.4.5',
     date: '2024-12-15',
     changes: [
-      'Added historical game import (Dec 6, 2024)',
-      'Historical data automatically imported on first load'
-    ]
+      'Historical import: Dec-6 2024',
+    ],
   },
   {
     version: '2.4.4',
     date: '2024-12-14',
     changes: [
-      'Sort tabs (Profit/Games/Win Rate) now equally spread'
-    ]
+      'Sort tabs equally spread',
+    ],
   },
   {
     version: '2.4.3',
     date: '2024-12-14',
     changes: [
-      'Fixed bug: small transfers no longer displayed twice',
-      'Settlements and Small Amounts are now separate lists'
-    ]
+      'Fix: small transfers no double',
+      'Settlements + Small Amounts split',
+    ],
   },
   {
     version: '2.4.2',
     date: '2024-12-14',
     changes: [
-      'Fixed sort buttons layout - icon above text for all tabs'
-    ]
+      'Sort buttons layout fix',
+    ],
   },
   {
     version: '2.4.1',
     date: '2024-12-14',
     changes: [
-      'Added stats-only PIN (9876) for view-only access',
-      'Stats-only users can only see Statistics page',
-      'Full access PIN (2580) unchanged'
-    ]
+      'Stats-only PIN (9876)',
+    ],
   },
   {
     version: '2.4.0',
     date: '2024-12-14',
     changes: [
-      'Added permanent vs guest player types',
-      'Settings: new players are permanent by default',
-      'New Game: new players are guests by default with toggle',
-      'New Game: guests shown in collapsible section',
-      'Statistics: toggle to include/exclude guests',
-      'Existing players migrated to permanent'
-    ]
+      'Permanent vs guest player types',
+      'Settings + game flow toggles',
+    ],
   },
   {
     version: '2.3.9',
     date: '2024-12-14',
     changes: [
-      'Added multi-select player filter to Statistics page',
-      'Filter works across Table, Records, and Players views',
-      'Select/deselect players to compare stats'
-    ]
+      'Stats: multi-select player filter',
+    ],
   },
   {
     version: '2.3.8',
     date: '2024-12-14',
     changes: [
-      'Changed Total Rebuys text to white in statistics'
-    ]
+      'Total Rebuys text in white',
+    ],
   },
   {
     version: '2.3.7',
     date: '2024-12-14',
     changes: [
-      'Enriched player statistics with more data',
-      'Added wins/losses count, avg win/loss, best/worst streak',
-      'Added Average Performance records section',
-      'Added Most Wins, Most Losses, Worst Win Rate records',
-      'Fixed streak calculations in storage'
-    ]
+      'Enriched player statistics',
+      'Avg performance records',
+      'Most/least wins records',
+    ],
   },
   {
     version: '2.3.6',
     date: '2024-12-14',
     changes: [
-      'Restored nice progress bar format',
-      'Colored border at top, stats row, proper spacing'
-    ]
+      'Restored progress bar format',
+    ],
   },
   {
     version: '2.3.5',
     date: '2024-12-14',
     changes: [
-      'Fixed Statistics: loss colors now red (not blue)',
-      'Removed confusing Best/Worst streak from player cards',
-      'Fixed -0 display - shows dash if no value',
-      'Streak records only show if > 1 game',
-      'Changed Ice Cold to Cold Streak with red color'
-    ]
+      'Stats: loss colors red',
+      'Removed confusing streaks',
+      'Cold Streak red color',
+    ],
   },
   {
     version: '2.3.4',
     date: '2024-12-14',
     changes: [
-      'Fixed chip entry page - reduced empty space',
-      'More compact bottom bar with progress overlay'
-    ]
+      'Chip entry: less empty space',
+    ],
   },
   {
     version: '2.3.3',
     date: '2024-12-14',
     changes: [
-      'Removed Reset Statistics button',
-      'Fixed table: medal and number on same line'
-    ]
+      'Removed Reset Statistics',
+      'Medal + number on same line',
+    ],
   },
   {
     version: '2.3.2',
     date: '2024-12-14',
     changes: [
-      'Restored Records view in Statistics',
-      'Current streaks (On Fire / Ice Cold)',
-      'All-time leaders and single game records',
-      'Streak records and other achievements',
-      'Individual view with last 5 games trend'
-    ]
+      'Restored Records view',
+      'Current streaks',
+      'All-time leaders',
+      'Individual view trend',
+    ],
   },
   {
     version: '2.3.1',
     date: '2024-12-14',
     changes: [
-      'Restored player selector on chip count page',
-      'Select one player at a time to count chips',
-      'Done button marks player complete and auto-advances',
-      'Tap completed player to edit their count'
-    ]
+      'Restored chip-page player selector',
+      'Done auto-advances',
+    ],
   },
   {
     version: '2.3.0',
     date: '2024-12-14',
     changes: [
-      'MAJOR FIX: Restored Vercel rewrites for page refresh',
-      'Added loading states to all game screens',
-      'Added catch-all route for unknown URLs',
-      'Fixed chip grid to always show 2 columns',
-      'App initialization loading screen'
-    ]
+      'Major fix: Vercel rewrites',
+      'Loading states on game screens',
+      'Catch-all route',
+      '2-column chip grid',
+    ],
   },
   {
     version: '2.2.9',
     date: '2024-12-14',
     changes: [
-      'Restored version display on PIN login screen'
-    ]
+      'Version on PIN screen',
+    ],
   },
   {
     version: '2.2.8',
     date: '2024-12-14',
     changes: [
-      'Statistics: Simplified to Table and Individual views',
-      'Removed Records view',
-      'Table is default, no horizontal scroll',
-      'Restored Reset Statistics button'
-    ]
+      'Stats: Table + Individual only',
+    ],
   },
   {
     version: '2.2.7',
     date: '2024-12-14',
     changes: [
-      'Statistics: Table is now default view and first tab',
-      'Tabs appear on same line',
-      'Table fits in one view'
-    ]
+      'Stats: Table is default',
+    ],
   },
   {
     version: '2.2.6',
     date: '2024-12-14',
     changes: [
-      'Fixed progress bar - now 28px with visible background',
-      'Bottom bar fixed to bottom - no scrolling past it'
-    ]
+      'Progress bar: 28px + visible bg',
+    ],
   },
   {
     version: '2.2.5',
     date: '2024-12-14',
     changes: [
-      'Removed Reset All Statistics button'
-    ]
+      'Removed Reset All Statistics',
+    ],
   },
   {
     version: '2.2.4',
     date: '2024-12-14',
     changes: [
-      'Progress bar 36px with chip count overlay'
-    ]
+      'Progress bar: 36px + chip count',
+    ],
   },
   {
     version: '2.2.3',
     date: '2024-12-14',
     changes: [
-      'Bottom bar flows with content - no empty space'
-    ]
+      'Bottom bar flows with content',
+    ],
   },
   {
     version: '2.2.2',
     date: '2024-12-14',
     changes: [
-      'Added version to PIN login screen'
-    ]
+      'Version on PIN login screen',
+    ],
   },
   {
     version: '1.9.4',
     date: '2024-12-14',
     changes: [
-      'Changed summary table headers to text: Chips, Rebuy'
-    ]
+      'Summary headers: Chips, Rebuy',
+    ],
   },
   {
     version: '1.9.3',
     date: '2024-12-14',
     changes: [
-      'Updated chips and rebuy icons in summary table'
-    ]
+      'Updated chips/rebuy icons',
+    ],
   },
   {
     version: '1.9.2',
     date: '2024-12-14',
     changes: [
-      'Centered Home and Share buttons on summary screen'
-    ]
+      'Centered Home + Share buttons',
+    ],
   },
   {
     version: '1.9.1',
     date: '2024-12-14',
     changes: [
-      'Updated PIN code'
-    ]
+      'Updated PIN code',
+    ],
   },
   {
     version: '1.9.0',
     date: '2024-12-14',
     changes: [
-      'Added PIN lock screen for app access',
-      'Session persists until browser is closed'
-    ]
+      'PIN lock screen',
+      'Session persists until close',
+    ],
   },
   {
     version: '1.8.0',
     date: '2024-12-14',
     changes: [
-      'Neutral +/- buttons - no red/green colors',
-      'Cleaner top counter design',
-      'Simplified Expected vs Counted display'
-    ]
+      'Neutral +/- buttons',
+      'Cleaner top counter',
+    ],
   },
   {
     version: '1.7.8',
     date: '2024-12-14',
     changes: [
-      'Changelog shows only latest version by default',
-      'Click to expand and see full version history'
-    ]
+      'Changelog: latest only by default',
+    ],
   },
   {
     version: '1.7.7',
     date: '2024-12-14',
     changes: [
-      'Player tiles now spread evenly using grid layout',
-      'Tiles fill the available width edge to edge'
-    ]
+      'Player tiles: even grid',
+    ],
   },
   {
     version: '1.7.6',
     date: '2024-12-14',
     changes: [
-      'Larger player tiles with bigger names',
-      'More spacing between tiles'
-    ]
+      'Larger player tiles',
+    ],
   },
   {
     version: '1.7.5',
     date: '2024-12-14',
     changes: [
-      'Increased spacing between player selection tiles'
-    ]
+      'More tile spacing',
+    ],
   },
   {
     version: '1.7.4',
     date: '2024-12-14',
     changes: [
-      'Progress stays red/orange longer - only green near 100%',
-      'Summary card visible and styled from start',
-      'Consistent color scheme using progress color'
-    ]
+      'Progress red/orange longer',
+      'Summary card visible early',
+    ],
   },
   {
     version: '1.7.3',
     date: '2024-12-14',
     changes: [
-      'Players with 0 chips can now be marked as Done',
-      'Removed long-press rapid increment feature',
-      'Simplified +/- button behavior'
-    ]
+      'Done allowed at 0 chips',
+      'Removed long-press rapid increment',
+    ],
   },
   {
     version: '1.7.2',
     date: '2024-12-14',
     changes: [
-      'Progress bar now uses gradient colors',
-      'Red (0%) → Orange → Yellow → Green (100%)',
-      'Smooth color transition as you count'
-    ]
+      'Progress bar: gradient colors',
+    ],
   },
   {
     version: '1.7.1',
     date: '2024-12-14',
     changes: [
-      'Progress bar now at absolute bottom of screen'
-    ]
+      'Progress bar at absolute bottom',
+    ],
   },
   {
     version: '1.7.0',
     date: '2024-12-14',
     changes: [
-      'Progress bar moved to fixed bottom position',
-      'Always visible while counting chips',
-      'Shows players done, chips remaining, and Calculate button'
-    ]
+      'Fixed-bottom progress bar',
+    ],
   },
   {
     version: '1.6.3',
     date: '2024-12-14',
     changes: [
-      'Compact player selection with pill-style buttons',
-      'Reduced page header and spacing for less scrolling',
-      'Start Game button now visible without scrolling'
-    ]
+      'Compact player selection',
+      'Start Game button visible',
+    ],
   },
   {
     version: '1.6.2',
     date: '2024-12-14',
     changes: [
-      'Added visible Done button to collapse player after counting',
-      'Button turns green when player has chips counted'
-    ]
+      'Visible Done button',
+    ],
   },
   {
     version: '1.6.1',
     date: '2024-12-14',
     changes: [
-      'Fixed chip counting screen blank issue'
-    ]
+      'Fix: chip counting blank screen',
+    ],
   },
   {
     version: '1.6.0',
     date: '2024-12-14',
     changes: [
-      'Added collapsible player cards in chip counting',
-      'Added floating progress bar showing count progress',
-      'Tap player header to collapse/expand after counting'
-    ]
+      'Collapsible player cards',
+      'Floating progress bar',
+    ],
   },
   {
     version: '1.5.1',
     date: '2024-12-14',
     changes: [
-      'Removed winner box from summary page'
-    ]
+      'Removed winner box',
+    ],
   },
   {
     version: '1.5.0',
     date: '2024-12-14',
     changes: [
-      'Added long-press rapid increment on +/- buttons',
-      'Added numpad modal for quick chip count entry',
-      'Tap chip color to open numpad for direct input'
-    ]
+      'Long-press rapid +/-',
+      'Numpad modal for chip count',
+    ],
   },
   {
     version: '1.4.1',
     date: '2024-12-14',
     changes: [
-      'Reduced winner box size for better layout'
-    ]
+      'Smaller winner box',
+    ],
   },
   {
     version: '1.4.0',
     date: '2024-12-14',
     changes: [
-      'WhatsApp share now sends screenshot of summary',
-      'Captures results table and settlements as image',
-      'Uses native share on mobile devices'
-    ]
+      'WhatsApp share: screenshot',
+      'Native share on mobile',
+    ],
   },
   {
     version: '1.3.0',
     date: '2024-12-14',
     changes: [
-      'Simplified rebuys column to show only count',
-      'Improved table layout for mobile screens',
-      'Redesigned WhatsApp export with clean table format'
-    ]
+      'Rebuys: count only',
+      'Mobile-friendly table',
+      'WhatsApp export redesign',
+    ],
   },
   {
     version: '1.2.0',
     date: '2024-12-14',
     changes: [
-      'Added total chips column to game summary table',
-      'Added total rebuy column to game summary table',
-      'Included total chips and rebuys in WhatsApp export message'
-    ]
+      'Total chips column',
+      'Total rebuy column',
+      'Both in WhatsApp export',
+    ],
   },
   {
     version: '1.1.0',
     date: '2024-12-14',
     changes: [
-      'Added app versioning system',
-      'Added changelog tracking in Settings',
-      'Version now displayed in Settings screen'
-    ]
+      'Versioning system',
+      'Changelog in Settings',
+    ],
   },
   {
     version: '1.0.0',
     date: '2024-12-01',
     changes: [
       'Initial release',
-      'Poker game management',
+      'Game management',
       'Player tracking',
       'Chip calculations',
-      'Game history and statistics'
-    ]
-  }
+      'History and statistics',
+    ],
+  },
 ];
