@@ -50,11 +50,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 // started rendering — if we got here at all, the worst-case "blank
 // screen because the JS chunk 404'd" failure mode is ruled out.
 // (Errors from INSIDE React get caught by ErrorBoundary in App.tsx.)
+//
+// Three things to tear down: the hard watchdog timer, the soft
+// loading-overlay timer (in case the overlay hasn't been added yet),
+// and the overlay DOM element (in case it has). All three are no-ops
+// if not present, so the cleanup is safe even when the overlay never
+// appeared (typical fast-boot path).
 const w = window as unknown as {
   __pokerBootWatchdog?: ReturnType<typeof setTimeout>;
+  __pokerLoadingOverlayTimer?: ReturnType<typeof setTimeout>;
 };
 if (w.__pokerBootWatchdog) {
   clearTimeout(w.__pokerBootWatchdog);
   w.__pokerBootWatchdog = undefined;
 }
+if (w.__pokerLoadingOverlayTimer) {
+  clearTimeout(w.__pokerLoadingOverlayTimer);
+  w.__pokerLoadingOverlayTimer = undefined;
+}
+const __pwaOverlay = document.getElementById('__pwa_loading_overlay');
+if (__pwaOverlay) __pwaOverlay.remove();
 

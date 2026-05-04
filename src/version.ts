@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.37.0';
+export const APP_VERSION = '5.37.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.37.1',
+    date: '2026-05-04',
+    changes: [
+      '🚑 Blank-screen watchdog: 10s → 6s',
+      '🚑 Up to 3 auto-recovery attempts (was 1)',
+      '🚑 "טוען…" overlay at 2.5s for visible feedback',
+      '🚑 Final retry UI after exhausted recovery',
+    ],
+  },
   {
     version: '5.37.0',
     date: '2026-05-04',
