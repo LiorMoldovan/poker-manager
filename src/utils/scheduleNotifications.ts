@@ -424,11 +424,14 @@ function buildReminderEmailBody(poll: GamePoll, recipientName?: string): string 
     return `• ${formatHebrewDateTime(d)}${loc}\n  ${tally.join(' · ')}`;
   }).join('\n\n');
 
-  // Generic disclaimer covering BOTH cases. The wording deliberately
-  // doesn't claim "you haven't voted" — it asks the recipient to verify,
-  // which reads correctly whether they're a ghost or a partial voter.
+  // Generic disclaimer covering ALL THREE recipient cases the picker
+  // pulls in: ghosts (zero votes), partial voters (missing at least
+  // one date), and maybe-voters (answered every date but at least one
+  // is "אעדכן" — i.e. still not a final answer). The wording asks the
+  // recipient to confirm/finalize their answer rather than claiming
+  // "you haven't voted", so it reads correctly for any of the three.
   const greeting = recipientName ? `היי ${recipientName},\n\n` : '';
-  const intro = 'זו תזכורת להצבעה על המשחק הבא. אם עוד לא הצבעת, או שהצבעת רק על חלק מהתאריכים — בבקשה היכנסו והשלימו את ההצבעה.';
+  const intro = 'זו תזכורת להצבעה על המשחק הבא. אם עוד לא הצבעת, הצבעת רק על חלק מהתאריכים, או שסימנת "אעדכן" ועדיין לא נתת תשובה סופית — בבקשה היכנסו והשלימו את ההצבעה.';
   const deadlineLine = buildReminderDeadlineLine(poll);
   const deadlineBlock = deadlineLine ? `\n\n${deadlineLine}` : '';
   const stateHeader = '📊 מצב ההצבעה כרגע:';

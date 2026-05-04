@@ -4179,44 +4179,55 @@ export function ReminderModal(props: ReminderModalProps) {
     return players.filter(p => p.type === 'permanent');
   }, [players, poll.status]);
 
-  // "Hasn't fully engaged" set: registered eligible members who have
-  // either zero vote rows OR vote rows that don't cover every poll date.
-  // A player who voted yes on date A but is silent on dates B/C is
-  // INCLUDED — silence on a date is itself a missing answer the admin
-  // needs to plan around, and the reminder body wording is generic
-  // enough to read correctly for both "haven't voted at all" and
-  // "voted on some dates only" cases.
+  // "Hasn't given a final answer" set: registered eligible members who
+  // are missing a decisive yes/no on at least one poll date. A 'maybe'
+  // ("אעדכן") response is treated as still-pending — the voter
+  // explicitly told the group "I'll get back to you", so they qualify
+  // for the same nudge as a ghost or partial voter. A row joins the
+  // list when at least one date is unanswered (missing) OR answered
+  // with 'maybe'.
   //
-  // Each entry pairs the player with the number of dates they HAVE voted
-  // on (out of the poll's total dates) so the picker can render a per-
-  // row status badge: zero = ghost, anything in-between = partial. The
-  // total date count is kept on the entry too so the badge can read
-  // "1 / 3" without recomputing in the render. Sorted alphabetically by
-  // Hebrew collation. Returns [] while `registeredIds` is still loading
-  // so the picker shows the loading shell rather than a flash of
-  // unfiltered names.
-  const nonVoters = useMemo<Array<{ player: Player; votedCount: number; totalDates: number }>>(() => {
+  // Each entry breaks the response down so the picker can render a per-
+  // row status badge:
+  //   * ghost   — zero vote rows of any kind
+  //   * maybe   — every date is answered but at least one is 'maybe'
+  //   * partial — some dates are still missing (with or without maybes)
+  //
+  // The badge reading off this breakdown is computed at render time so
+  // we keep both `decisiveCount` (yes/no) and `maybeCount` here. Sorted
+  // alphabetically by Hebrew collation. Returns [] while `registeredIds`
+  // is still loading so the picker shows the loading shell rather than
+  // a flash of unfiltered names.
+  const nonVoters = useMemo<Array<{ player: Player; decisiveCount: number; maybeCount: number; totalDates: number }>>(() => {
     if (!registeredIds) return [];
     const dateIds = poll.dates.map(d => d.id);
     const totalDates = dateIds.length;
-    // Map of playerId → set of dateIds they voted on. Built once per
-    // poll-state change so the per-player filter below is O(dates)
-    // not O(votes).
-    const votesByPlayer = new Map<string, Set<string>>();
+    // Map of playerId → (dateId → response). Built once per poll-state
+    // change so the per-player tally below is O(dates) not O(votes).
+    const votesByPlayer = new Map<string, Map<string, RsvpResponse>>();
     for (const v of poll.votes) {
-      let set = votesByPlayer.get(v.playerId);
-      if (!set) { set = new Set(); votesByPlayer.set(v.playerId, set); }
-      set.add(v.dateId);
+      let m = votesByPlayer.get(v.playerId);
+      if (!m) { m = new Map(); votesByPlayer.set(v.playerId, m); }
+      m.set(v.dateId, v.response);
     }
-    const rows: Array<{ player: Player; votedCount: number; totalDates: number }> = [];
+    const rows: Array<{ player: Player; decisiveCount: number; maybeCount: number; totalDates: number }> = [];
     for (const p of eligiblePlayers) {
       if (!registeredIds.has(p.id)) continue;
-      const voted = votesByPlayer.get(p.id);
-      const votedCount = voted ? dateIds.filter(id => voted.has(id)).length : 0;
-      // No votes at all → ghost. Has votes but missing at least one
-      // date → partial. Both qualify for the reminder.
-      if (votedCount < totalDates) {
-        rows.push({ player: p, votedCount, totalDates });
+      const responses = votesByPlayer.get(p.id);
+      let decisiveCount = 0;
+      let maybeCount = 0;
+      if (responses) {
+        for (const id of dateIds) {
+          const r = responses.get(id);
+          if (r === 'yes' || r === 'no') decisiveCount++;
+          else if (r === 'maybe') maybeCount++;
+        }
+      }
+      // Qualify for reminder when at least one date is non-decisive —
+      // either missing entirely (decisive + maybe < total) or marked
+      // with 'maybe' (maybe > 0). Both reduce to: decisive < total.
+      if (decisiveCount < totalDates) {
+        rows.push({ player: p, decisiveCount, maybeCount, totalDates });
       }
     }
     rows.sort((a, b) => a.player.name.localeCompare(b.player.name, 'he'));
@@ -4373,17 +4384,37 @@ export function ReminderModal(props: ReminderModalProps) {
                   marginBottom: 12,
                 }}
               >
-                {nonVoters.map(({ player, votedCount, totalDates }) => {
+                {nonVoters.map(({ player, decisiveCount, maybeCount, totalDates }) => {
                   const checked = selectedIds.has(player.id);
-                  // Ghost = zero votes; partial = some-but-not-all. Wording
-                  // and color hint are differentiated so the admin can
-                  // triage at a glance without reading every row.
-                  const isGhost = votedCount === 0;
-                  const badgeLabel = isGhost
-                    ? t('schedule.reminder.statusGhost')
-                    : t('schedule.reminder.statusPartial', { voted: votedCount, total: totalDates });
-                  const badgeColor = isGhost ? '#ef4444' : '#f59e0b';
-                  const badgeBg = isGhost ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.14)';
+                  // Three buckets — wording + color hint differentiated so
+                  // the admin can triage at a glance without reading every
+                  // row. Priority order: ghost (zero engagement) > maybe
+                  // (engaged on every date but at least one is "אעדכן") >
+                  // partial (some dates still unanswered).
+                  const missing = totalDates - decisiveCount - maybeCount;
+                  const isGhost = decisiveCount === 0 && maybeCount === 0;
+                  const isMaybeOnly = !isGhost && missing === 0 && maybeCount > 0;
+                  let badgeLabel: string;
+                  let badgeColor: string;
+                  let badgeBg: string;
+                  if (isGhost) {
+                    badgeLabel = t('schedule.reminder.statusGhost');
+                    badgeColor = '#ef4444';
+                    badgeBg = 'rgba(239, 68, 68, 0.12)';
+                  } else if (isMaybeOnly) {
+                    badgeLabel = t('schedule.reminder.statusMaybe');
+                    badgeColor = '#eab308';
+                    badgeBg = 'rgba(234, 179, 8, 0.14)';
+                  } else {
+                    // Partial — show total engagement (decisive + maybe)
+                    // out of total dates. Counting maybe toward the X here
+                    // matches the voter list's "X voters" tally so the
+                    // numbers don't mysteriously disagree across screens.
+                    const voted = decisiveCount + maybeCount;
+                    badgeLabel = t('schedule.reminder.statusPartial', { voted, total: totalDates });
+                    badgeColor = '#f59e0b';
+                    badgeBg = 'rgba(245, 158, 11, 0.14)';
+                  }
                   return (
                     <label
                       key={player.id}
