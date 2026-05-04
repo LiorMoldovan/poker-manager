@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.37.2';
+export const APP_VERSION = '5.37.3';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.37.3',
+    date: '2026-05-04',
+    changes: [
+      '🛡 Join-request banner: pick existing player on accept',
+      '🎯 Auto-suggests player by email match',
+      '🛡 Closes duplicate-player join path',
+    ],
+  },
   {
     version: '5.37.2',
     date: '2026-05-04',

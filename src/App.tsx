@@ -8,6 +8,7 @@ import { useSupabaseAuth } from './hooks/useSupabaseAuth';
 import { LanguageProvider, useTranslation } from './i18n';
 import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, flushAllPendingSyncs } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
+import { getAllPlayers } from './database/storage';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
 import GroupWizard from './components/GroupWizard';
@@ -407,6 +408,8 @@ function SupabaseApp() {
   const [addMemberPrompt, setAddMemberPrompt] = useState<string | null>(null);
   const [addMemberStatus, setAddMemberStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [addMemberMsg, setAddMemberMsg] = useState('');
+  const [addMemberPlayerId, setAddMemberPlayerId] = useState<string>('');
+  const [addMemberUnlinked, setAddMemberUnlinked] = useState<{ id: string; name: string; type: string }[]>([]);
   const [notifCount, setNotifCount] = useState(0);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [showGroupWizard, setShowGroupWizard] = useState(false);
@@ -664,12 +667,54 @@ function SupabaseApp() {
       setAddMemberPrompt(email);
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [auth.membership, role]);
+  }, [auth.membership, role, isSuperAdmin, isOwner]);
+
+  // When the deep-link banner opens, compute which existing players in this
+  // group aren't linked to any user yet, so the admin can attach the joiner
+  // to a historical player record (preventing Sefi/Tomer-style duplicates).
+  // Auto-suggest a likely match by comparing the email's local-part to each
+  // unlinked player's name.
+  useEffect(() => {
+    if (!addMemberPrompt || !auth.membership) {
+      if (!addMemberPrompt) {
+        setAddMemberPlayerId('');
+        setAddMemberUnlinked([]);
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const members = await auth.fetchMembers();
+        if (cancelled) return;
+        const linked = new Set(members.map(m => m.playerId).filter((x): x is string => !!x));
+        const typeOrder: Record<string, number> = { permanent: 0, permanent_guest: 1, guest: 2 };
+        const players = getAllPlayers()
+          .filter(p => !linked.has(p.id))
+          .map(p => ({ id: p.id, name: p.name, type: p.type as string }))
+          .sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9) || a.name.localeCompare(b.name));
+        setAddMemberUnlinked(players);
+
+        const localPart = (addMemberPrompt.split('@')[0] || '').toLowerCase();
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z\u0590-\u05ff]/g, '');
+        const localNorm = norm(localPart);
+        const match = players.find(p => {
+          const playerNorm = norm(p.name);
+          if (!playerNorm || !localNorm) return false;
+          return localNorm.includes(playerNorm) || playerNorm.includes(localNorm);
+        });
+        if (match) setAddMemberPlayerId(match.id);
+      } catch (e) {
+        if (!cancelled) console.warn('addMember: failed to load unlinked players', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addMemberPrompt, auth.membership, auth.fetchMembers]);
 
   const handleAddMemberFromLink = async () => {
     if (!addMemberPrompt) return;
     setAddMemberStatus('loading');
-    const { error } = await auth.addMemberByEmail(addMemberPrompt);
+    const { error } = await auth.addMemberByEmail(addMemberPrompt, addMemberPlayerId || undefined);
     if (error) {
       const msg = (error as { message?: string })?.message || '';
       if (msg.includes('No registered user')) setAddMemberMsg(t('addMember.noUser'));
@@ -679,7 +724,12 @@ function SupabaseApp() {
     } else {
       setAddMemberMsg(t('addMember.added', { email: addMemberPrompt }));
       setAddMemberStatus('success');
-      setTimeout(() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }, 3000);
+      setTimeout(() => {
+        setAddMemberPrompt(null);
+        setAddMemberStatus('idle');
+        setAddMemberPlayerId('');
+        setAddMemberUnlinked([]);
+      }, 3000);
     }
   };
 
@@ -845,13 +895,47 @@ function SupabaseApp() {
       padding: '1rem', direction: 'rtl', boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
     }}>
       {addMemberStatus === 'idle' && (
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', maxWidth: '420px', margin: '0 auto' }}>
           <p style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text)' }}>
             {t('addMember.title')}
           </p>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
             {t('addMember.question', { email: addMemberPrompt })}
           </p>
+          {addMemberUnlinked.length > 0 && (
+            <div style={{ marginBottom: '0.75rem', textAlign: 'right' }}>
+              <label style={{
+                display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)',
+                marginBottom: '0.3rem', fontWeight: 500,
+              }}>
+                {t('addMember.linkLabel')}
+              </label>
+              <select
+                value={addMemberPlayerId}
+                onChange={e => setAddMemberPlayerId(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.5rem 0.6rem', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'Outfit, sans-serif',
+                  cursor: 'pointer', boxSizing: 'border-box',
+                }}
+              >
+                <option value="" style={{ background: '#1a1a2e', color: '#94a3b8' }}>
+                  {t('addMember.linkAsNew')}
+                </option>
+                {addMemberUnlinked.map(p => (
+                  <option key={p.id} value={p.id} style={{ background: '#1a1a2e', color: '#ffffff' }}>
+                    {p.name}{p.type === 'permanent' ? ' ⭐' : p.type === 'permanent_guest' ? ' 🏠' : ''}
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem', lineHeight: 1.4 }}>
+                {addMemberPlayerId
+                  ? t('addMember.linkHelpSelected')
+                  : t('addMember.linkHelpUnselected')}
+              </p>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
             <button
               onClick={handleAddMemberFromLink}
@@ -864,7 +948,12 @@ function SupabaseApp() {
               {t('addMember.confirm')}
             </button>
             <button
-              onClick={() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }}
+              onClick={() => {
+                setAddMemberPrompt(null);
+                setAddMemberStatus('idle');
+                setAddMemberPlayerId('');
+                setAddMemberUnlinked([]);
+              }}
               style={{
                 padding: '0.55rem 1.5rem', borderRadius: '8px',
                 border: '1px solid var(--border)', background: 'none',
@@ -887,7 +976,12 @@ function SupabaseApp() {
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: '#EF4444', marginBottom: '0.5rem' }}>{addMemberMsg}</p>
           <button
-            onClick={() => { setAddMemberPrompt(null); setAddMemberStatus('idle'); }}
+            onClick={() => {
+              setAddMemberPrompt(null);
+              setAddMemberStatus('idle');
+              setAddMemberPlayerId('');
+              setAddMemberUnlinked([]);
+            }}
             style={{
               padding: '0.4rem 1rem', borderRadius: '6px', border: '1px solid var(--border)',
               background: 'none', color: 'var(--text-muted)', cursor: 'pointer',

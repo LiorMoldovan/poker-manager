@@ -84,6 +84,10 @@ const he = {
   'addMember.noUser': 'לא נמצא משתמש רשום עם האימייל הזה',
   'addMember.alreadyMember': 'המשתמש כבר חבר בקבוצה',
   'addMember.error': 'שגיאה בהוספה',
+  'addMember.linkLabel': 'קשר לשחקן קיים',
+  'addMember.linkAsNew': '➕ הוסף כשחקן חדש',
+  'addMember.linkHelpSelected': 'המשתמש יקושר לשחקן הקיים — כל ההיסטוריה תישמר.',
+  'addMember.linkHelpUnselected': 'אם הוא שחקן ותיק שכבר ברשימה — בחר אותו כדי לא לפצל את ההיסטוריה.',
 
   // ── Auth Screen ──
   'auth.title': 'Poker Manager',
@@ -1686,6 +1690,10 @@ const en: Record<keyof typeof he, string> = {
   'addMember.noUser': 'No registered user found with this email',
   'addMember.alreadyMember': 'User is already a group member',
   'addMember.error': 'Error adding member',
+  'addMember.linkLabel': 'Link to existing player',
+  'addMember.linkAsNew': '➕ Add as a new player',
+  'addMember.linkHelpSelected': 'This account will be linked to the existing player — full history kept.',
+  'addMember.linkHelpUnselected': 'If they\u2019re an existing regular, pick their name to keep their history in one place.',
 
   // ── Auth Screen ──
   'auth.title': 'Poker Manager',
