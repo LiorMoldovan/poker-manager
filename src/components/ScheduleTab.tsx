@@ -4757,7 +4757,11 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
           {t('schedule.config.autoCreateDay')}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+        {/* Single-row day picker — flex:1 on each chip plus flexWrap:nowrap
+            guarantees all 7 chips share the width evenly on any viewport,
+            even narrow phones where ש (the widest Hebrew weekday letter)
+            previously pushed the last chip onto a second row. */}
+        <div style={{ display: 'flex', flexWrap: 'nowrap', gap: 4, marginBottom: 10 }}>
           {[0, 1, 2, 3, 4, 5, 6].map(day => {
             const labelKey = (
               ['settings.game.sun', 'settings.game.mon', 'settings.game.tue',
@@ -4770,14 +4774,16 @@ function ScheduleConfigPanel(props: ScheduleConfigPanelProps) {
                 key={day}
                 onClick={() => handleAutoCreateDay(day)}
                 style={{
-                  padding: '6px 12px', borderRadius: 8,
+                  flex: 1,
+                  padding: '6px 4px', borderRadius: 8,
                   fontSize: 13, fontWeight: isSelected ? 700 : 500,
                   background: isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.04)',
                   color: isSelected ? '#fff' : 'var(--text-muted)',
                   border: `1px solid ${isSelected ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}`,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  minWidth: 36,
+                  minWidth: 0,
+                  textAlign: 'center',
                 }}
               >
                 {t(labelKey)}
