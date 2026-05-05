@@ -197,7 +197,7 @@ function StartNewGameCta({ order, step, t, onClick }: SectionProps & { onClick: 
           {t('home.startNewGame.helper')}
         </div>
       </div>
-      <span style={{ fontSize: '1rem', color: '#10b981', flexShrink: 0, fontWeight: 700 }}>›</span>
+      <span style={{ fontSize: '1rem', color: '#10b981', flexShrink: 0, fontWeight: 700 }}>‹</span>
     </button>
   );
 }

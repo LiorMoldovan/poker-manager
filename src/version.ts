@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.38.0';
+export const APP_VERSION = '5.38.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.38.1',
+    date: '2026-05-05',
+    changes: [
+      '🩹 Unified chevron glyph across home tab',
+      '🩹 CTA arrow flipped to RTL-correct direction',
+      '🧹 Removed redundant arrow in training button',
+    ],
+  },
   {
     version: '5.38.0',
     date: '2026-05-05',
