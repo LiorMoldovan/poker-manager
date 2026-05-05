@@ -36,7 +36,7 @@ const he = {
   'common.total': 'סה"כ',
 
   // ── Home Dashboard (premium landing page for all roles) ──
-  'home.startNewGame.title': '🃏 התחל משחק חדש',
+  'home.startNewGame.title': 'התחל משחק חדש',
   'home.startNewGame.helper': 'בחירת שחקנים, תחזית, וכל מה שצריך',
   'home.schedule.confirmedTitle': 'ערב פוקר נקבע',
   'home.schedule.confirmedHelper': 'לחצו לפרטים מלאים',
@@ -58,7 +58,7 @@ const he = {
   'home.personal.streakLosses': '{n} הפסדים ברצף',
   'home.personal.streakNone': 'בלי רצף פעיל',
   'home.personal.records': 'שיא רווח: {biggest} · רצף הכי ארוך: {streak}',
-  'home.lastGame.title': '🏆 המשחק האחרון',
+  'home.lastGame.title': 'המשחק האחרון',
   'home.lastGame.winner': 'מנצח: {name}',
   'home.lastGame.myProfit': 'הרווח שלך: {profit}',
   'home.lastGame.myLoss': 'ההפסד שלך: {amount}',
@@ -1729,7 +1729,7 @@ const en: Record<keyof typeof he, string> = {
   'common.total': 'Total',
 
   // ── Home Dashboard (premium landing page for all roles) ──
-  'home.startNewGame.title': '🃏 Start New Game',
+  'home.startNewGame.title': 'Start New Game',
   'home.startNewGame.helper': 'Pick players, run forecast, kick off',
   'home.schedule.confirmedTitle': 'Poker Night Set',
   'home.schedule.confirmedHelper': 'Tap for full details',
@@ -1751,7 +1751,7 @@ const en: Record<keyof typeof he, string> = {
   'home.personal.streakLosses': '{n} losses in a row',
   'home.personal.streakNone': 'No active streak',
   'home.personal.records': 'Best win: {biggest} · Longest streak: {streak}',
-  'home.lastGame.title': '🏆 Last Game',
+  'home.lastGame.title': 'Last Game',
   'home.lastGame.winner': 'Winner: {name}',
   'home.lastGame.myProfit': 'Your profit: {profit}',
   'home.lastGame.myLoss': 'Your loss: {amount}',
