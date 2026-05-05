@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.39.1';
+export const APP_VERSION = '5.40.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,24 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.40.0',
+    date: '2026-05-06',
+    changes: [
+      '🏠 Home dashboard rebuilt with one card system',
+      '📐 Cards reordered by information hierarchy',
+      '📊 Personal card opens your player view',
+      '🏅 Leaderboard card opens monthly table',
+      '🧠 Training banner unified into dashboard',
+      '🚪 Sign-out moved into top header',
+      '👁 View-As pill inline with version',
+      '🔵 Self-highlight uses blue across app',
+      '🎲 Trivia: 12 facts, recency-aware',
+      '📱 Stat tiles handle long currency values',
+      '✏️ Hebrew grammar fix in trivia',
+      '🎨 Skeleton loader matches new dashboard',
+    ],
+  },
   {
     version: '5.39.1',
     date: '2026-05-05',

@@ -10,8 +10,6 @@ import { usePermissions } from '../App';
 import { generateAIForecasts, getGeminiApiKey, getLastUsedModel, getModelDisplayName, PlayerForecastData, ForecastResult, GlobalRankingContext, detectPeriodMarkers, generateLiveGameTTSPool } from '../utils/geminiAI';
 import { getComboHistory, buildComboHistoryText, ComboHistory } from '../utils/comboHistory';
 import AIProgressBar from '../components/AIProgressBar';
-import { getSharedProgress } from '../utils/pokerTraining';
-import { formatCurrency } from '../utils/calculations';
 import { withAITiming } from '../utils/aiTiming';
 import { PeriodMarkers } from '../types';
 import { HomeDashboard } from '../components/HomeDashboard';
@@ -177,7 +175,7 @@ const NewGameScreen = () => {
   const routerLocation = useLocation();
   const { t, isRTL } = useTranslation();
   const periodLabel = (value: string) => t(`period.${value}` as TranslationKey);
-  const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
+  const { role, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const isMember = role === 'member' && !isSuperAdmin;
   // ── Screen mode ──
@@ -1753,168 +1751,14 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Training Banner — visible when training is enabled for the group.
-          Home mode only: on /new-game we want the screen focused on the
-          game-creation flow, not training. */}
-      {mode === 'home' && trainingEnabled && (() => {
-        const tp = playerName ? getSharedProgress(playerName) : null;
-        const myStats = playerName ? playerStats.find(s => s.playerName === playerName) : null;
-        const hasTraining = tp && tp.totalQuestions > 0;
-        const lastProfit = myStats?.lastGameResults?.[0]?.profit ?? 0;
-        const lastDate = myStats?.lastGameResults?.[0]?.date;
-        const daysSinceGame = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
-        const last3 = myStats?.lastGameResults?.slice(0, 3) || [];
-        const last3Avg = last3.length >= 3 ? last3.reduce((s, g) => s + g.profit, 0) / last3.length : null;
-        const acc = hasTraining ? Math.round((tp.totalCorrect / tp.totalQuestions) * 100) : 0;
-        // Total questions answered = scored (correct + wrong) + neutralized.
-        // tp.totalQuestions is scored-only, so the casual "X שאלות באימונים"
-        // would otherwise be lower than the leaderboard's "ענו" column. Match
-        // the leaderboard so the same player sees the same number everywhere.
-        const totalAnsweredQs = tp ? tp.totalQuestions + (tp.totalNeutral || 0) : 0;
-
-        // Daily seed so the message changes once per day, not per render
-        const daySeed = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-        const pick = <T,>(arr: T[]): T => arr[(daySeed + (playerName?.length || 0)) % arr.length];
-
-        type Msg = { icon: string; title: string; sub: string };
-        const msgs: Msg[] = [];
-        const n = playerName || '';
-        const wp = myStats ? Math.round(myStats.winPercentage) : 0;
-
-        if (hasTraining && myStats) {
-          if (daysSinceGame !== null && daysSinceGame >= 21) {
-            const weeks = Math.floor(daysSinceGame / 7);
-            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות — תתחמם באימון` });
-            msgs.push({ icon: '🔔', title: `${n}, מתגעגעים לשולחן?`, sub: `${acc}% דיוק באימונים · ${formatCurrency(myStats.totalProfit)} סה"כ` });
-          }
-          if (tp.streak.current >= 3) {
-            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · סה"כ ${formatCurrency(myStats.totalProfit)} במשחקים` });
-          }
-          if (acc < 45) {
-            msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק — יש מה לשפר`, sub: `שיא הפסד ${formatCurrency(Math.abs(myStats.biggestLoss))} · ${totalAnsweredQs} שאלות` });
-          }
-          if (acc >= 70) {
-            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — האימון עובד`, sub: `שיא רווח ${formatCurrency(myStats.biggestWin)} · סה"כ ${formatCurrency(myStats.totalProfit)}` });
-          }
-          if (myStats.currentStreak < 0) {
-            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות — תמשיך להתאמן` });
-          }
-          msgs.push({ icon: '⚡', title: `${n}, ${acc}% דיוק · ${wp}% נצחונות`, sub: `${tp.sessionsCompleted} אימונים · ממוצע ${formatCurrency(myStats.avgProfit)} למשחק` });
-          msgs.push({ icon: '💪', title: `${n}, ${totalAnsweredQs} שאלות באימונים`, sub: `סה"כ ${formatCurrency(myStats.totalProfit)} · ${myStats.gamesPlayed} משחקים` });
-        } else if (hasTraining) {
-          if (tp.streak.current >= 3) {
-            msgs.push({ icon: '🔥', title: `${n}, רצף ${tp.streak.current} ימים!`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות` });
-          }
-          if (acc >= 70) {
-            msgs.push({ icon: '🏆', title: `${n}, ${acc}% דיוק — אתה חד`, sub: `${tp.sessionsCompleted} אימונים · ${totalAnsweredQs} שאלות` });
-          }
-          msgs.push({ icon: '💪', title: `${n}, ${acc}% דיוק`, sub: `${totalAnsweredQs} שאלות · ${tp.sessionsCompleted} אימונים` });
-          msgs.push({ icon: '⚡', title: `${n}, ${tp.sessionsCompleted} אימונים עד עכשיו`, sub: `${acc}% דיוק · ${totalAnsweredQs} שאלות` });
-        } else if (myStats && myStats.gamesPlayed > 0) {
-          const signed = (v: number) => `${v >= 0 ? '\u200E+' : '\u200E'}${cleanNumber(v)}`;
-          if (daysSinceGame !== null && daysSinceGame >= 21) {
-            const weeks = Math.floor(daysSinceGame / 7);
-            msgs.push({ icon: '⏰', title: `${n}, ${weeks} שבועות בלי משחק`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
-            msgs.push({ icon: '🔔', title: `${n}, חזרת! בוא נתאמן`, sub: `${myStats.gamesPlayed} משחקים · ממוצע ${signed(myStats.avgProfit)} למשחק` });
-          }
-          if (myStats.currentStreak <= -3) {
-            msgs.push({ icon: '🔥', title: `${n}, ${Math.abs(myStats.currentStreak)} הפסדים ברצף`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
-          }
-          if (lastProfit < -100) {
-            msgs.push({ icon: '💪', title: `${n}, הפסדת ${cleanNumber(Math.abs(lastProfit))}`, sub: `ממוצע ${signed(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
-          }
-          if (lastProfit < 0 && lastProfit >= -100) {
-            msgs.push({ icon: '💪', title: `${n}, הפסדת ${cleanNumber(Math.abs(lastProfit))}`, sub: `סה"כ ${signed(myStats.totalProfit)} · ${wp}% נצחונות` });
-          }
-          if (last3Avg !== null && last3Avg < -50) {
-            msgs.push({ icon: '⚡', title: `${n}, ממוצע ${signed(Math.round(last3Avg))} ב-3 אחרונים`, sub: `${wp}% נצחונות · סה"כ ${signed(myStats.totalProfit)}` });
-          }
-          if (myStats.winPercentage < 40 && myStats.gamesPlayed >= 5) {
-            msgs.push({ icon: '🔥', title: `${n}, רק ${wp}% נצחונות`, sub: `סה"כ ${signed(myStats.totalProfit)} · ממוצע ${signed(myStats.avgProfit)} למשחק` });
-          }
-          if (lastProfit > 100) {
-            msgs.push({ icon: '🏆', title: `${n}, ניצחת ${signed(lastProfit)}!`, sub: `שיא ${signed(myStats.biggestWin)} · ${myStats.winCount} נצחונות` });
-          }
-          if (Math.abs(lastProfit) <= 100) {
-            msgs.push({ icon: '⚡', title: `${n}, סיימת בלי רווח`, sub: `ממוצע ${signed(myStats.avgProfit)} למשחק · ${myStats.gamesPlayed} משחקים` });
-          }
-          msgs.push({ icon: '💪', title: `${n}, ${myStats.gamesPlayed} משחקים`, sub: `${wp}% נצחונות · ממוצע ${signed(myStats.avgProfit)} למשחק` });
-          if (myStats.biggestWin > 0) {
-            msgs.push({ icon: '🏆', title: `${n}, שיא רווח ${signed(myStats.biggestWin)}`, sub: `${wp}% נצחונות · ${myStats.gamesPlayed} משחקים` });
-          }
-          if (myStats.totalProfit < 0) {
-            msgs.push({ icon: '🔥', title: `${n}, סה"כ ${signed(myStats.totalProfit)}`, sub: `${myStats.lossCount} הפסדים · ממוצע ${signed(myStats.avgProfit)} למשחק` });
-          }
-          if (myStats.totalProfit > 0) {
-            msgs.push({ icon: '🏆', title: `${n}, סה"כ ${signed(myStats.totalProfit)} ברווח`, sub: `${myStats.winCount} נצחונות · שיא ${signed(myStats.biggestWin)}` });
-          }
-          if (myStats.longestWinStreak >= 2) {
-            msgs.push({ icon: '🔥', title: `${n}, רצף של ${myStats.longestWinStreak} נצחונות`, sub: `${wp}% נצחונות · סה"כ ${signed(myStats.totalProfit)}` });
-          }
-        } else if (playerName) {
-          msgs.push({ icon: '✨', title: `${n}, מוכן לאימון ראשון?`, sub: '' });
-          msgs.push({ icon: '🔥', title: `${n}, בוא נתחיל להתאמן`, sub: '' });
-        }
-
-        if (msgs.length === 0) {
-          msgs.push({ icon: '🔥', title: 'אימון פוקר', sub: 'תרגל ושפר את המשחק שלך' });
-        }
-
-        const chosen = pick(msgs);
-        const icon = chosen.icon;
-        const title = chosen.title;
-        const sub = chosen.sub;
-
-        return (
-          <div
-            onClick={() => navigate('/shared-training')}
-            style={{
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: '10px',
-              padding: '0.6rem 0.8rem',
-              marginBottom: '0.5rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{icon}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text)' }}>{title}</div>
-              {sub && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{sub}</div>}
-            </div>
-            <button className="btn btn-secondary" style={{ flexShrink: 0, padding: '0.3rem 0.6rem', fontSize: '0.7rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.3rem', margin: 0, minWidth: 'auto' }}><img src="/poker-training-icon.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} /> {t('newGame.training')}</button>
-          </div>
-        );
-      })()}
-
-      {/* ── Home mode: dashboard + sign-out, no admin form ── */}
+      {/* ── Home mode: dashboard, no admin form ──
+          The HomeDashboard component owns the full dashboard stack —
+          including the training banner — so this file no longer
+          renders any home-only content above it. Sign-out lives in
+          the dedicated home-mode account header at the very top of
+          the screen (see above). */}
       {mode === 'home' && (
         <>
-          {/* Sign-out button anchored top-right. No title on home — the
-              dashboard cards below ARE the home content. The empty span
-              keeps the button right-aligned via space-between. */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-            <span />
-            <button
-              onClick={signOut}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                padding: '0.2rem 0.4rem',
-                opacity: 0.7,
-              }}
-              title={t('common.signOut')}
-            >
-              🔓
-            </button>
-          </div>
-
           {/* Premium home dashboard — schedule + last-game + personal
               stats + monthly leaderboard + rotating trivia. Reads
               from the in-memory cache so realtime updates flow through
@@ -1938,11 +1782,12 @@ const NewGameScreen = () => {
         </>
       )}
 
-      {/* ── New-game mode: admin action header + form ── */}
+      {/* ── New-game mode: admin action header + form ──
+          Sign-out lives in the global GroupSwitcher header at the top
+          of the app, so this header only carries page-specific
+          actions (back + title + select-all). */}
       {mode === 'new-game' && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-          {/* Header: back button + title on the right (RTL "start"),
-              select-all + sign-out on the left ("end"). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button
               onClick={() => navigate('/')}
@@ -1961,21 +1806,6 @@ const NewGameScreen = () => {
                 {permanentPlayers.every(p => selectedIds.has(p.id)) ? t('newGame.deselectAll') : t('newGame.selectAll')}
               </button>
             )}
-            <button
-              onClick={signOut}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-muted)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                padding: '0.2rem 0.4rem',
-                opacity: 0.7,
-              }}
-              title={t('common.signOut')}
-            >
-              🔓
-            </button>
           </div>
         </div>
       )}

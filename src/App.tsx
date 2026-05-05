@@ -118,19 +118,31 @@ function prefetchNavScreens() {
   }
 }
 
+// Loading skeleton shown while a lazy-loaded screen module resolves.
+// Shape mirrors the home dashboard (NewGameScreen → HomeDashboard) since
+// that's the most common landing surface and skeleton-shape mismatches
+// cause a visible "jump" when the real content appears. Layout, top-down:
+//   * end-aligned sign-out pill placeholder
+//   * 5 stacked rounded cards matching the dashboard's card stack
+//     (compact / hero / compact / hero / compact)
+// Single column, `gap` for spacing — matches `HomeDashboard.tsx`'s
+// `flex-direction: column; gap: 0.6rem` so widths/edges line up.
 function ScreenSkeleton() {
+  const cardHeights = ['4rem', '9rem', '4rem', '9rem', '3rem'];
   return (
     <div className="skeleton-screen" style={{ direction: 'rtl' }}>
-      <div className="skeleton-pulse" style={{ height: '2rem', width: '45%', borderRadius: '8px', marginBottom: '0.5rem' }} />
-      <div className="skeleton-pulse" style={{ height: '0.9rem', width: '30%', borderRadius: '6px', marginBottom: '1.5rem' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} className="skeleton-pulse" style={{ height: '4rem', borderRadius: '10px' }} />
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '0.5rem' }}>
+        <div className="skeleton-pulse" style={{ height: '1.6rem', width: '5.5rem', borderRadius: 999 }} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {cardHeights.map((h, i) => (
+          <div
+            key={i}
+            className="skeleton-pulse"
+            style={{ height: h, borderRadius: 12 }}
+          />
         ))}
       </div>
-      <div className="skeleton-pulse" style={{ height: '8rem', borderRadius: '12px', marginBottom: '1rem' }} />
-      <div className="skeleton-pulse" style={{ height: '5rem', borderRadius: '12px', marginBottom: '1rem' }} />
-      <div className="skeleton-pulse" style={{ height: '5rem', borderRadius: '12px' }} />
     </div>
   );
 }
@@ -199,6 +211,15 @@ interface PermissionContextType {
   playerName: string | null;
   hasPermission: (permission: Parameters<typeof hasPermission>[1]) => boolean;
   signOut: () => void;
+  // Super-admin-only "View As" controls. Present only when the REAL
+  // user is super admin (regardless of any active preview override).
+  // Surfaced through the context so the GroupSwitcher header can
+  // render the pill inline; gated by `realIsSuperAdmin` in
+  // SupabaseApp so non-privileged users never even see the field.
+  viewAs?: {
+    current: ViewAsRole | null;
+    cycle: () => void;
+  };
   groupMgmt?: GroupManagementFns;
   multiGroup?: {
     memberships: import('./hooks/useSupabaseAuth').GroupMembership[];
@@ -251,22 +272,22 @@ export function readViewAsRole(): ViewAsRole | null {
   } catch { return null; }
 }
 
-// Floating pill that always reflects the current preview state and
+// Inline pill that always reflects the current preview state and
 // cycles through views on tap. Rendered only for the REAL super admin
 // so non-privileged users never see it. The yellow accent in non-real
 // modes is a deliberate "you are not seeing the full app right now"
-// reminder so the super admin doesn't get confused mid-debug.
-function ViewAsSwitcher({
+// reminder so the super admin doesn't get confused mid-debug. Lives
+// inside the GroupSwitcher header bar (next to the version label) so
+// it never overlaps page content or other top-bar controls.
+export function ViewAsSwitcher({
   current,
-  onChange,
+  onCycle,
 }: {
   current: ViewAsRole | null;
-  onChange: (next: ViewAsRole | null) => void;
+  // Parameterless — cycle order lives with the parent that owns the
+  // state, so the pill stays a pure visual component. Tap → next view.
+  onCycle: () => void;
 }) {
-  const order: (ViewAsRole | null)[] = [null, 'member', 'admin', 'owner'];
-  const idx = order.indexOf(current);
-  const next = order[(idx + 1) % order.length];
-
   const labels: Record<string, { text: string; bg: string; border: string; color: string }> = {
     'real':   { text: '👑 Super Admin', bg: 'rgba(168, 85, 247, 0.18)', border: 'rgba(168, 85, 247, 0.55)', color: '#c084fc' },
     'member': { text: '👁 כחבר',         bg: 'rgba(234, 179, 8, 0.22)',  border: 'rgba(234, 179, 8, 0.65)',  color: '#fbbf24' },
@@ -277,17 +298,13 @@ function ViewAsSwitcher({
 
   return (
     <button
-      onClick={() => onChange(next)}
+      onClick={onCycle}
       style={{
-        // Tucked into the top-left corner so it overlays the empty
-        // 3rem spacer the GroupSwitcher leaves on its visual-left
-        // edge (in RTL the version number is right, the group name
-        // is centered, and the leftmost flex child is the spacer).
-        // `left` uses absolute pixels so positioning is identical
-        // in LTR + RTL.
-        position: 'fixed',
-        top: 2, left: 4,
-        zIndex: 10000,
+        // Inline header child — no fixed positioning. Sits adjacent to
+        // the version label so the header has a consistent
+        // [version + super-admin] · [group] · [sign-out] tri-section
+        // layout. Keep it compact so it doesn't compete with the
+        // centered group name.
         padding: '3px 8px',
         fontSize: '0.65rem',
         fontWeight: 700,
@@ -297,7 +314,6 @@ function ViewAsSwitcher({
         borderRadius: 999,
         cursor: 'pointer',
         fontFamily: 'Outfit, sans-serif',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
         userSelect: 'none',
         whiteSpace: 'nowrap',
         lineHeight: 1.2,
@@ -870,6 +886,17 @@ function SupabaseApp() {
 
   const triggerGroupWizard = useCallback(() => setShowGroupWizard(true), []);
 
+  // Cycle helper for the View-As pill. Defined outside the memo so the
+  // identity is stable per-render. The four-state cycle (real →
+  // member → admin → owner → real → ...) mirrors the previous
+  // ViewAsSwitcher implementation 1:1; only the rendering location
+  // changed.
+  const cycleViewAs = useCallback(() => {
+    const order: (ViewAsRole | null)[] = [null, 'member', 'admin', 'owner'];
+    const idx = order.indexOf(viewAsRole);
+    setViewAsRole(order[(idx + 1) % order.length]);
+  }, [viewAsRole, setViewAsRole]);
+
   const permissionValue: PermissionContextType = useMemo(() => ({
     role,
     isOwner,
@@ -878,6 +905,10 @@ function SupabaseApp() {
     playerName,
     hasPermission: (permission) => isSuperAdmin || isOwner || hasPermission(role, permission),
     signOut,
+    // View-As controls present only when the REAL user is super admin
+    // (gated on `realIsSuperAdmin`, not the possibly-overridden flag,
+    // so the pill is always reachable to switch back).
+    viewAs: realIsSuperAdmin ? { current: viewAsRole, cycle: cycleViewAs } : undefined,
     groupMgmt: auth.membership ? {
       groupName: auth.membership.groupName,
       inviteCode: auth.membership.inviteCode,
@@ -904,7 +935,7 @@ function SupabaseApp() {
       triggerGroupWizard,
       userEmail: auth.user?.email ?? '',
     },
-  }), [role, isOwner, isSuperAdmin, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard]);
+  }), [role, isOwner, isSuperAdmin, realIsSuperAdmin, viewAsRole, cycleViewAs, trainingEnabled, playerName, signOut, auth, groupId, switchGroup, deleteGroupCb, leaveGroupCb, triggerGroupWizard]);
 
   if (auth.loading) {
     return (
@@ -1323,14 +1354,10 @@ function SupabaseApp() {
   return (
     <ErrorBoundary>
       <PermissionContext.Provider value={permissionValue}>
-        {/* Super-admin-only "View As" pill. Renders ABOVE everything
-            else so it stays accessible from any screen / any role
-            preview. Gated on the real super-admin flag, not the
-            (possibly-overridden) one, so the user can always switch
-            back to their real role. */}
-        {realIsSuperAdmin && (
-          <ViewAsSwitcher current={viewAsRole} onChange={setViewAsRole} />
-        )}
+        {/* Super-admin-only "View As" pill is rendered inline inside
+            the GroupSwitcher header (next to the version label) so it
+            never overlaps page content. The pill consumes
+            `permissionValue.viewAs` from this context. */}
         {addMemberBanner}
         {notificationBanner}
         {notificationPanel}

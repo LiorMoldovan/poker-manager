@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { usePermissions } from '../App';
+import { usePermissions, ViewAsSwitcher } from '../App';
 import { useTranslation } from '../i18n';
 import { APP_VERSION } from '../version';
 import GroupSetupScreen from '../screens/GroupSetupScreen';
 
 export default function GroupSwitcher() {
   const { t, isRTL } = useTranslation();
-  const { multiGroup } = usePermissions();
+  const { multiGroup, signOut, viewAs } = usePermissions();
   const [modalOpen, setModalOpen] = useState(false);
   const [setupMode, setSetupMode] = useState<'create' | 'join' | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -111,9 +111,17 @@ export default function GroupSwitcher() {
         background: 'var(--surface)', borderBottom: '1px solid var(--border)',
         direction: isRTL ? 'rtl' : 'ltr',
       }}>
-        <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.5, fontFamily: 'monospace' }}>
-          v{APP_VERSION}
-        </span>
+        {/* Visual-start cluster: version label + (super-admin only)
+            View-As preview pill. Wrapped together so they share the
+            start side and don't break the centered group-name layout. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', opacity: 0.5, fontFamily: 'monospace' }}>
+            v{APP_VERSION}
+          </span>
+          {viewAs && (
+            <ViewAsSwitcher current={viewAs.current} onCycle={viewAs.cycle} />
+          )}
+        </div>
         <button
           onClick={() => setModalOpen(true)}
           style={{
@@ -127,7 +135,28 @@ export default function GroupSwitcher() {
           </span>
           <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>▼</span>
         </button>
-        <div style={{ width: '3rem' }} />
+        {/* Sign-out anchored to the visual end of the header bar.
+            Replaces the previous 3rem balancing spacer so we reclaim
+            that whitespace on every screen instead of paying for a
+            dedicated sign-out row on the home dashboard. Compact icon
+            + label keeps the action discoverable without crowding the
+            centered group name. */}
+        <button
+          onClick={signOut}
+          title={t('common.signOut')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.25rem',
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)',
+            fontFamily: 'Outfit, sans-serif',
+            fontSize: '0.7rem', fontWeight: 500,
+            padding: '0.2rem 0.4rem',
+            opacity: 0.85,
+          }}
+        >
+          <span aria-hidden style={{ fontSize: '0.8rem', lineHeight: 1 }}>🔓</span>
+          <span>{t('common.signOut')}</span>
+        </button>
       </div>
 
       {modalOpen && (
