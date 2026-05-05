@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.38.1';
+export const APP_VERSION = '5.38.2';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.38.2',
+    date: '2026-05-05',
+    changes: [
+      '✨ Tap-to-cycle on home trivia card',
+      '🎚 Fade transition between trivia facts',
+      '🔢 Position indicator (e.g. 2/5)',
+    ],
+  },
   {
     version: '5.38.1',
     date: '2026-05-05',

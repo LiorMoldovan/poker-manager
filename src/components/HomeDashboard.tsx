@@ -596,28 +596,91 @@ interface TriviaProps extends SectionProps {
 
 function TriviaCard({ order, step, t, games, gamePlayers, playerStats }: TriviaProps) {
   const trivia = useMemo(() => buildTriviaList(games, gamePlayers, playerStats, t), [games, gamePlayers, playerStats, t]);
+
+  // Initial pick is a deterministic daily rotation — `dayOfYear % len` so
+  // the same fact shows for the whole UTC day across all devices on first
+  // load. After that the user can tap-to-cycle through the rest. We don't
+  // persist the index across navigations on purpose: every fresh visit to
+  // the home tab starts on "today's" fact, which is what most users want.
+  const initialIndex = useMemo(() => {
+    if (trivia.length === 0) return 0;
+    const dayOfYear = Math.floor(
+      (Date.now() - new Date(new Date().getUTCFullYear(), 0, 0).getTime()) / 86_400_000,
+    );
+    return dayOfYear % trivia.length;
+  }, [trivia.length]);
+
+  const [index, setIndex] = useState(initialIndex);
+  // Keep index in range if the trivia list shrinks (e.g. data changes).
+  const safeIndex = trivia.length > 0 ? index % trivia.length : 0;
+
   if (trivia.length === 0) return null;
-  // Deterministic daily rotation — `dayOfYear % len` so the same fact
-  // shows for the whole UTC day across all devices, then cycles.
-  const dayOfYear = Math.floor(
-    (Date.now() - new Date(new Date().getUTCFullYear(), 0, 0).getTime()) / 86_400_000,
-  );
-  const pick = trivia[dayOfYear % trivia.length];
+
+  const pick = trivia[safeIndex];
+  const canCycle = trivia.length > 1;
+
+  const handleClick = () => {
+    if (!canCycle) return;
+    hapticTap();
+    setIndex(i => (i + 1) % trivia.length);
+  };
+
   return (
-    <div style={baseCardStyle(order, step, {
-      cursor: 'default',
-      background: 'rgba(255,255,255,0.025)',
-      gap: '0.6rem',
-    })}>
-      <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{pick.icon}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 0.3 }}>
-          {t('home.trivia.title')}
+    <div
+      onClick={handleClick}
+      style={baseCardStyle(order, step, {
+        cursor: canCycle ? 'pointer' : 'default',
+        background: 'rgba(255,255,255,0.025)',
+        gap: '0.6rem',
+      })}
+    >
+      {/* `key` retriggers contentFadeIn on the inner content so the swap
+          between facts gets a soft fade instead of a hard cut. The outer
+          card animation (entrance stagger) is preserved. */}
+      <span
+        key={`icon-${safeIndex}`}
+        style={{
+          fontSize: '1.2rem',
+          flexShrink: 0,
+          animation: 'contentFadeIn 0.25s ease-out',
+        }}
+      >
+        {pick.icon}
+      </span>
+      <div
+        key={`text-${safeIndex}`}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          animation: 'contentFadeIn 0.25s ease-out',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: '0.4rem',
+          fontSize: '0.65rem',
+          color: 'var(--text-muted)',
+          fontWeight: 700,
+          letterSpacing: 0.3,
+        }}>
+          <span>{t('home.trivia.title')}</span>
+          {canCycle && (
+            <span style={{
+              fontSize: '0.6rem',
+              fontWeight: 600,
+              opacity: 0.55,
+              letterSpacing: 0,
+            }}>
+              {t('home.trivia.tapForNext', { current: safeIndex + 1, total: trivia.length })}
+            </span>
+          )}
         </div>
         <div style={{ fontSize: '0.78rem', color: 'var(--text)', fontWeight: 600, marginTop: '0.1rem', lineHeight: 1.4 }}>
           {pick.text}
         </div>
       </div>
+      {canCycle && <span style={ChevronStyle}>‹</span>}
     </div>
   );
 }
