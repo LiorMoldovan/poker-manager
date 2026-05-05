@@ -14,6 +14,7 @@ import { getSharedProgress } from '../utils/pokerTraining';
 import { formatCurrency } from '../utils/calculations';
 import { withAITiming } from '../utils/aiTiming';
 import { PeriodMarkers } from '../types';
+import { HomeDashboard, PLAYER_PICKER_ANCHOR_ID } from '../components/HomeDashboard';
 
 /** קצת מתחת ל-2 — פחות פיקסלים להעלאה לווטסאפ, עדיין חד מספיק לטלפון */
 const FORECAST_SHARE_CAPTURE_SCALE = 1.7;
@@ -1873,6 +1874,22 @@ const NewGameScreen = () => {
         );
       })()}
 
+      {/* ── Premium home dashboard ──
+          Renders for every role. Members get a polished landing surface
+          (schedule + last game + personal stats + monthly leaderboard +
+          rotating trivia); admins get the same plus a "Start New Game"
+          CTA at the very top that smooth-scrolls to the player picker
+          anchor below. The dashboard reads everything from the in-memory
+          cache so it stays in sync with realtime updates without an
+          explicit subscription. */}
+      <HomeDashboard
+        playerName={playerName}
+        playerStats={playerStats}
+        isAdmin={isAdmin}
+        trainingEnabled={trainingEnabled}
+        hasActiveGame={!!activeGame}
+      />
+
       {isMember && !trainingEnabled && (
         <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '1rem' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👀</div>
@@ -1883,7 +1900,13 @@ const NewGameScreen = () => {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>{t('newGame.title')}</h1>
+        {/* Title is admin-facing — for members the dashboard cards
+            above already explain what's happening, and the bottom-nav
+            label still reads "משחק חדש". An empty span keeps the
+            sign-out button right-aligned via space-between. */}
+        {isMember
+          ? <span />
+          : <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>{t('newGame.title')}</h1>}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {isAdmin && permanentPlayers.length > 0 && (
             <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
@@ -1914,9 +1937,12 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Game Creation — admin only */}
+      {/* Game Creation — admin only.
+          The id on the wrapping card is the smooth-scroll target for the
+          admin "Start New Game" CTA rendered at the top of the home
+          dashboard (see HomeDashboard.tsx, PLAYER_PICKER_ANCHOR_ID). */}
       {!isMember && (<>
-      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
+      <div id={PLAYER_PICKER_ANCHOR_ID} className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem', scrollMarginTop: '12px' }}>
         {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
             <div style={{ fontSize: '1.3rem' }}>👥</div>

@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.37.4';
+export const APP_VERSION = '5.38.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.38.0',
+    date: '2026-05-05',
+    changes: [
+      '🏠 Premium home dashboard for every role',
+      '🎯 Schedule card with live countdown',
+      '📊 Personal stats hero with count-up',
+      '🏆 Last-game recap card',
+      '🏅 Monthly leaderboard, top 3',
+      '💡 Daily-rotating trivia card',
+      '🃏 Admin: Start New Game CTA',
+      '🛡 Super-admin View-As pill',
+      '📤 Share chooser: distinct labels',
+      '📣 New notification: "המשחק מלא"',
+      '🛡 SQL 051: target-filled claim slot',
+    ],
+  },
   {
     version: '5.37.4',
     date: '2026-05-04',

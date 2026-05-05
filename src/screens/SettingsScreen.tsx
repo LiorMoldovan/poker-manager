@@ -33,6 +33,12 @@ import {
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
 import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail } from '../utils/apiProxy';
+import {
+  previewScheduleEmail,
+  previewAllScheduleEmails,
+  SCHEDULE_EMAIL_VARIANTS,
+  type ScheduleEmailVariantId,
+} from '../utils/previewScheduleEmails';
 import { getAIStatus, getTodayActions, getTodayTokens, getTodayLog, resetUsage, type AIStatusData } from '../utils/aiUsageTracker';
 import { fetchActivityLog } from '../utils/activityLogger';
 import { fetchTrainingAnswers, fetchTrainingPool } from '../database/trainingData';
@@ -282,6 +288,23 @@ const SettingsScreen = () => {
   const [pushDetails, setPushDetails] = useState<{ player: string; type: string; status: number | string; ok: boolean }[] | null>(null);
   const [pushSubscriberCount, setPushSubscriberCount] = useState(0);
   const [sendVia, setSendVia] = useState<'push' | 'email' | 'both'>('push');
+
+  // Schedule-email preview tester (super admin only). Defaults the
+  // recipient to the signed-in user's auth email so the most common
+  // path ("send to me") is one click. Variant 'all' fans out to all
+  // 8 templates; specific variants hit just one. State stays local —
+  // none of this is persisted because previews are inherently ephemeral.
+  const [emailPreviewTo, setEmailPreviewTo] = useState<string>('');
+  const [emailPreviewVariant, setEmailPreviewVariant] = useState<ScheduleEmailVariantId | 'all'>('all');
+  const [emailPreviewSending, setEmailPreviewSending] = useState(false);
+  const [emailPreviewResult, setEmailPreviewResult] = useState<string | null>(null);
+  // Pre-fill the recipient with the signed-in user's address as soon as
+  // it's known. We only set the default once (when the field is empty)
+  // so manual edits aren't clobbered if `userEmail` re-resolves later.
+  useEffect(() => {
+    const userEmail = multiGroup?.userEmail ?? '';
+    if (userEmail && !emailPreviewTo) setEmailPreviewTo(userEmail);
+  }, [multiGroup?.userEmail, emailPreviewTo]);
 
   useEffect(() => {
     loadData();
@@ -3415,6 +3438,146 @@ const SettingsScreen = () => {
             </div>
 
           </div>
+
+          {/* Schedule-email preview tester — super admin only.
+              Lives in its own card below the generic push/email tester
+              so the layout stays predictable for non-super-admins
+              (they just don't see this card). The actual builders
+              and synthetic poll fixture live in `previewScheduleEmails.ts`. */}
+          {isSuperAdmin && (
+            <div className="card" style={{ marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>
+                {t('push.previewTitle')}
+              </h3>
+              <p style={{ margin: '0 0 0.85rem', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {t('push.previewHelper')}
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>
+                  {t('push.previewEmailLabel')}
+                  <input
+                    type="email"
+                    value={emailPreviewTo}
+                    onChange={(e) => { setEmailPreviewTo(e.target.value); setEmailPreviewResult(null); }}
+                    disabled={emailPreviewSending}
+                    dir="ltr"
+                    style={{
+                      width: '100%', marginTop: '0.3rem',
+                      padding: '0.5rem 0.6rem', borderRadius: '0.5rem',
+                      border: '1px solid var(--border)', background: 'var(--surface)',
+                      color: 'var(--text)', fontSize: '0.85rem',
+                      fontFamily: 'Outfit, sans-serif',
+                    }}
+                  />
+                </label>
+
+                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>
+                  {t('push.previewVariantLabel')}
+                  <select
+                    value={emailPreviewVariant}
+                    onChange={(e) => { setEmailPreviewVariant(e.target.value as ScheduleEmailVariantId | 'all'); setEmailPreviewResult(null); }}
+                    disabled={emailPreviewSending}
+                    style={{
+                      width: '100%', marginTop: '0.3rem',
+                      padding: '0.5rem 0.6rem', borderRadius: '0.5rem',
+                      border: '1px solid var(--border)',
+                      background: '#1f2937', color: '#f9fafb',
+                      fontSize: '0.85rem',
+                      fontFamily: 'Outfit, sans-serif',
+                    }}
+                  >
+                    <option value="all" style={{ background: '#1f2937', color: '#f9fafb' }}>
+                      {t('push.previewVariantAll')}
+                    </option>
+                    {SCHEDULE_EMAIL_VARIANTS.map((id) => {
+                      // Translation keys use camelCase but variant ids use
+                      // kebab-case (matches the subject prefix). Map at the
+                      // call site to keep both ergonomic.
+                      const labelKey = ({
+                        'invitation': 'push.previewVariant.invitation',
+                        'expanded': 'push.previewVariant.expanded',
+                        'confirmed-at-target': 'push.previewVariant.confirmedAtTarget',
+                        'confirmed-below-target-yes': 'push.previewVariant.confirmedBelowTargetYes',
+                        'confirmed-below-target-others': 'push.previewVariant.confirmedBelowTargetOthers',
+                        'target-filled': 'push.previewVariant.targetFilled',
+                        'cancellation': 'push.previewVariant.cancellation',
+                        'vote-change': 'push.previewVariant.voteChange',
+                      } as const)[id];
+                      return (
+                        <option key={id} value={id} style={{ background: '#1f2937', color: '#f9fafb' }}>
+                          {t(labelKey)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              </div>
+
+              <button
+                onClick={async () => {
+                  const target = emailPreviewTo.trim();
+                  if (!target || !target.includes('@') || target.length < 5) {
+                    setEmailPreviewResult(`❌ ${t('push.previewInvalidEmail')}`);
+                    return;
+                  }
+                  setEmailPreviewSending(true);
+                  setEmailPreviewResult(null);
+                  try {
+                    if (emailPreviewVariant === 'all') {
+                      const results = await previewAllScheduleEmails(target);
+                      const sent = results.filter(r => r.ok).length;
+                      const total = results.length;
+                      const ok = sent === total;
+                      setEmailPreviewResult(`${ok ? '✓' : '⚠'} ${t('push.previewSentAll', { sent, total })}`);
+                    } else {
+                      const r = await previewScheduleEmail(target, emailPreviewVariant);
+                      setEmailPreviewResult(r.ok
+                        ? `✓ ${t('push.previewSent', { variant: r.variant })}`
+                        : `❌ ${t('push.previewError')}`);
+                    }
+                  } catch (err) {
+                    console.warn('previewScheduleEmail failed:', err);
+                    setEmailPreviewResult(`❌ ${err instanceof Error ? err.message : t('push.previewError')}`);
+                  } finally {
+                    setEmailPreviewSending(false);
+                  }
+                }}
+                disabled={emailPreviewSending}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid rgba(168, 85, 247, 0.55)',
+                  background: emailPreviewSending ? 'rgba(168, 85, 247, 0.1)' : 'rgba(168, 85, 247, 0.18)',
+                  color: '#c084fc',
+                  cursor: emailPreviewSending ? 'wait' : 'pointer',
+                  fontSize: '0.85rem',
+                  fontFamily: 'Outfit, sans-serif',
+                  fontWeight: 600,
+                  opacity: emailPreviewSending ? 0.7 : 1,
+                }}
+              >
+                {emailPreviewSending
+                  ? t('push.previewSending')
+                  : emailPreviewVariant === 'all'
+                    ? t('push.previewSendAll')
+                    : t('push.previewSend')}
+              </button>
+
+              {emailPreviewResult && (
+                <p style={{
+                  margin: '0.6rem 0 0',
+                  fontSize: '0.78rem',
+                  color: emailPreviewResult.startsWith('❌') ? '#EF4444'
+                    : emailPreviewResult.startsWith('⚠') ? '#F59E0B'
+                    : '#10B981',
+                }}>
+                  {emailPreviewResult}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -438,6 +438,12 @@ export default function PollCard(props: PollCardProps) {
             const isPinnedHere = poll.confirmedDateId === d.id;
             const isLockedHere = isPinnedHere && poll.status === 'confirmed' && !isConfirmedBelowTarget;
             const isLeading = leaderDateId === d.id;
+            // Fill-pinned-first lock: when an admin manually pins a date
+            // before the target was reached, all other dates freeze so
+            // remaining recruitment funnels into the picked date. Lifts
+            // automatically the moment the pinned date hits target
+            // (`isConfirmedBelowTarget` flips to false).
+            const isFillPinnedLocked = isConfirmedBelowTarget && !isPinnedHere;
             const expanded = expandedVoterDates.has(d.id);
             const pct = poll.targetPlayerCount > 0
               ? Math.min(100, Math.round((s.yes / poll.targetPlayerCount) * 100))
@@ -534,12 +540,21 @@ export default function PollCard(props: PollCardProps) {
                         border: '1px solid rgba(16, 185, 129, 0.40)',
                       }}>✅ {t('schedule.lockedDate')}</span>
                     )}
-                    {!isLockedHere && isLeading && (
+                    {!isLockedHere && !isFillPinnedLocked && isLeading && (
                       <span style={{
                         padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
                         background: 'rgba(99, 102, 241, 0.14)', color: '#a5b4fc',
                         border: '1px solid rgba(99, 102, 241, 0.40)',
                       }}>👑 {t('schedule.leadingDate')}</span>
+                    )}
+                    {isFillPinnedLocked && (
+                      <span
+                        title={t('schedule.errorFillPinnedFirst')}
+                        style={{
+                          padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                          background: 'rgba(250, 204, 21, 0.12)', color: '#facc15',
+                          border: '1px solid rgba(250, 204, 21, 0.40)',
+                        }}>{t('schedule.fillPinnedFirstBadge')}</span>
                     )}
                     {/* Admin manual-pick / re-pin. Multi-date polls only,
                         hidden on the already-pinned tile, hidden once a
@@ -636,7 +651,7 @@ export default function PollCard(props: PollCardProps) {
                     // disabling proactively gives instant feedback.
                     const wouldOverfill =
                       resp === 'yes' && !active && s.yes >= poll.targetPlayerCount;
-                    const disabled = !canVote.allowed || wouldOverfill;
+                    const disabled = !canVote.allowed || wouldOverfill || isFillPinnedLocked;
                     return (
                       <button
                         key={resp}
@@ -644,6 +659,7 @@ export default function PollCard(props: PollCardProps) {
                         onClick={() => onVote(poll, d.id, resp)}
                         title={
                           wouldOverfill ? t('schedule.errorSeatFull') :
+                          isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
                           canVote.allowed ? '' :
                           canVote.reason === 'no_player_link' ? t('schedule.errorNoPlayerLink') :
                           canVote.reason === 'tier_not_allowed' ? t('schedule.errorTierNotAllowed') :
@@ -665,10 +681,11 @@ export default function PollCard(props: PollCardProps) {
                   {isAdmin && (
                     <button
                       onClick={() => setProxyDateId(d.id)}
-                      disabled={isVotingLocked}
-                      title={isVotingLocked
-                        ? t('schedule.errorVotingLocked')
-                        : t('schedule.proxy.modalTitle')}
+                      disabled={isVotingLocked || isFillPinnedLocked}
+                      title={
+                        isVotingLocked ? t('schedule.errorVotingLocked') :
+                        isFillPinnedLocked ? t('schedule.errorFillPinnedFirst') :
+                        t('schedule.proxy.modalTitle')}
                       className="poll-rsvp-btn"
                       style={{
                         // Icon-only button: keep the vertical box matched
@@ -681,8 +698,8 @@ export default function PollCard(props: PollCardProps) {
                         border: '1px solid rgba(16, 185, 129, 0.4)',
                         background: 'rgba(16, 185, 129, 0.12)',
                         color: '#34d399', fontSize: 13, fontWeight: 600,
-                        cursor: isVotingLocked ? 'not-allowed' : 'pointer',
-                        opacity: isVotingLocked ? 0.4 : 1,
+                        cursor: (isVotingLocked || isFillPinnedLocked) ? 'not-allowed' : 'pointer',
+                        opacity: (isVotingLocked || isFillPinnedLocked) ? 0.4 : 1,
                         lineHeight: 1,
                       }}>{t('schedule.proxy.add')}</button>
                   )}
@@ -1035,16 +1052,34 @@ export default function PollCard(props: PollCardProps) {
                   aria-label={t('common.close')}
                 >×</button>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+              {/* Stacked, full-width buttons with a label + helper line
+                  so the admin sees exactly what each option will share
+                  (poll screenshot vs. confirmed-game screenshot). The
+                  bare "📤 שתף" buttons that lived here previously made
+                  the two options indistinguishable. */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
                 <button
                   onClick={() => {
                     setShareChooserOpen(false);
                     handleShareInvitation();
                   }}
                   disabled={isSharing}
-                  style={shareBtn}
+                  style={{
+                    ...shareBtn,
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    width: '100%',
+                    padding: '0.6rem 0.9rem',
+                    gap: 2,
+                    textAlign: 'start',
+                  }}
                 >
-                  {t('schedule.share.shareInvitationLabel')}
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                    {t('schedule.share.chooserInvitationLabel')}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {t('schedule.share.chooserInvitationHelper')}
+                  </span>
                 </button>
                 <button
                   onClick={() => {
@@ -1052,9 +1087,22 @@ export default function PollCard(props: PollCardProps) {
                     handleShareConfirmation();
                   }}
                   disabled={isSharing}
-                  style={shareBtn}
+                  style={{
+                    ...shareBtn,
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    width: '100%',
+                    padding: '0.6rem 0.9rem',
+                    gap: 2,
+                    textAlign: 'start',
+                  }}
                 >
-                  {t('schedule.share.shareConfirmationLabel')}
+                  <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                    {t('schedule.share.chooserConfirmationLabel')}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {t('schedule.share.chooserConfirmationHelper')}
+                  </span>
                 </button>
               </div>
             </div>

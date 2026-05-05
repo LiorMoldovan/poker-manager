@@ -24,6 +24,7 @@ import {
   sendInvitationToPermanentMembers,
   sendReminderNotifications,
   sendConfirmedNotifications,
+  sendTargetFilledNotifications,
   sendCancellationNotifications,
   sendVoteChangeNotifications,
 } from '../utils/scheduleNotifications';
@@ -595,6 +596,24 @@ export default function ScheduleTab() {
       if (updated.status === 'confirmed' && !updated.confirmedNotificationsSentAt) {
         sendConfirmedNotifications(updated).catch(err =>
           console.warn('sendConfirmedNotifications failed:', err));
+      }
+      // Migration 051: post-pin seat-fill announcement. Fires only on a
+      // confirmed poll whose pinned date just reached the seat target
+      // AND that didn't already burn the target_filled claim slot.
+      // The at-target confirmed flow above preemptively claims the slot
+      // (see `sendConfirmedNotifications`), so this never double-fires
+      // when the poll hits target at the same moment as confirmation.
+      if (updated.status === 'confirmed'
+          && updated.confirmedDateId
+          && !updated.targetFilledNotificationsSentAt) {
+        const yesCount = updated.votes.reduce(
+          (n, v) => n + (v.dateId === updated.confirmedDateId && v.response === 'yes' ? 1 : 0),
+          0,
+        );
+        if (yesCount >= updated.targetPlayerCount) {
+          sendTargetFilledNotifications(updated).catch(err =>
+            console.warn('sendTargetFilledNotifications failed:', err));
+        }
       }
       // Vote-change notification: fire only if this was an UPDATE that
       // actually CHANGED the response. The voted_at-vs-created_at delta
@@ -1241,21 +1260,54 @@ export function PollTimer({ poll, now, t }: PollTimerProps) {
     // so we omit it and let the text countdown carry the load.
     progress = null;
   } else if (poll.status === 'confirmed') {
-    color = '#10b981';
-    bg = 'rgba(16, 185, 129, 0.10)';
-    border = 'rgba(16, 185, 129, 0.30)';
     const confirmed = poll.dates.find(d => d.id === poll.confirmedDateId);
     if (!confirmed) return null;
+    // Confirmed-below-target: a date was pinned (often via the admin's
+    // 📌 manual-pick) before yes-votes hit the seat target. The banner
+    // pivots to a recruit-urgency tone (amber) so the headline matches
+    // the actual blocker — "we still need N more players" — instead of
+    // celebrating a game that can't actually start at target headcount
+    // yet. Lifts automatically when the missing count reaches 0.
+    const yesForConfirmed = poll.votes.reduce(
+      (n, v) => n + (v.dateId === confirmed.id && v.response === 'yes' ? 1 : 0),
+      0,
+    );
+    const missing = Math.max(0, poll.targetPlayerCount - yesForConfirmed);
+    const isBelowTarget = missing > 0;
+    if (isBelowTarget) {
+      // Soft indigo — same hue family as the "👑 Leading" badge so
+      // it reads as informational ("we're recruiting"), not alarming.
+      color = '#a5b4fc';
+      bg = 'rgba(99, 102, 241, 0.08)';
+      border = 'rgba(99, 102, 241, 0.25)';
+    } else {
+      color = '#10b981';
+      bg = 'rgba(16, 185, 129, 0.10)';
+      border = 'rgba(16, 185, 129, 0.30)';
+    }
     const target = getDateRowTimestamp(confirmed);
     const remaining = target - now;
     if (remaining <= -STARTED_WINDOW_MS) {
-      label = t('schedule.timer.confirmedNow');
-      isSoon = true;
+      // Game time has passed — can't recruit any more, just tell members.
+      label = isBelowTarget
+        ? (missing === 1
+            ? t('schedule.timer.confirmedBelowTargetDueOne')
+            : t('schedule.timer.confirmedBelowTargetDueMany', { missing }))
+        : t('schedule.timer.confirmedNow');
+      isSoon = !isBelowTarget;
     } else if (remaining <= SOON_WINDOW_MS) {
-      label = t('schedule.timer.confirmedSoon');
-      isSoon = true;
+      label = isBelowTarget
+        ? (missing === 1
+            ? t('schedule.timer.confirmedBelowTargetOne', { time: formatRemainingMs(remaining, t) })
+            : t('schedule.timer.confirmedBelowTargetMany', { missing, time: formatRemainingMs(remaining, t) }))
+        : t('schedule.timer.confirmedSoon');
+      isSoon = !isBelowTarget;
     } else {
-      label = t('schedule.timer.confirmedPhase', { time: formatRemainingMs(remaining, t) });
+      label = isBelowTarget
+        ? (missing === 1
+            ? t('schedule.timer.confirmedBelowTargetOne', { time: formatRemainingMs(remaining, t) })
+            : t('schedule.timer.confirmedBelowTargetMany', { missing, time: formatRemainingMs(remaining, t) }))
+        : t('schedule.timer.confirmedPhase', { time: formatRemainingMs(remaining, t) });
     }
     const start = poll.confirmedAt
       ? new Date(poll.confirmedAt).getTime()
@@ -3269,6 +3321,24 @@ function EditPollModal(props: EditPollModalProps) {
         sendConfirmedNotifications(refreshed).catch(err =>
           console.warn('sendConfirmedNotifications failed:', err));
       }
+      // Lowering the target can also retroactively satisfy the seat
+      // count on an already-confirmed poll (yes count was 6 with target
+      // 7, admin drops target to 6). Fire the post-pin "המשחק מלא"
+      // follow-up here so the yes-voters get the announcement without
+      // waiting for someone else to vote.
+      if (refreshed
+          && refreshed.status === 'confirmed'
+          && refreshed.confirmedDateId
+          && !refreshed.targetFilledNotificationsSentAt) {
+        const yesCount = refreshed.votes.reduce(
+          (n, v) => n + (v.dateId === refreshed.confirmedDateId && v.response === 'yes' ? 1 : 0),
+          0,
+        );
+        if (yesCount >= refreshed.targetPlayerCount) {
+          sendTargetFilledNotifications(refreshed).catch(err =>
+            console.warn('sendTargetFilledNotifications failed:', err));
+        }
+      }
       onSuccess(t('schedule.editPollSaved'));
       onClose();
     } catch (e) {
@@ -3664,6 +3734,23 @@ export function ProxyVoteModal(props: ProxyVoteModalProps) {
           && !refreshed.confirmedNotificationsSentAt) {
         sendConfirmedNotifications(refreshed).catch(err =>
           console.warn('sendConfirmedNotifications failed:', err));
+      }
+      // Bulk proxy yes-votes can also fill the seat target on an
+      // already-confirmed (manually-pinned-below-target) poll. Mirror
+      // the cast-vote handler so the post-pin "המשחק מלא" follow-up
+      // fires immediately instead of waiting for a sweep tick.
+      if (refreshed
+          && refreshed.status === 'confirmed'
+          && refreshed.confirmedDateId
+          && !refreshed.targetFilledNotificationsSentAt) {
+        const yesCount = refreshed.votes.reduce(
+          (n, v) => n + (v.dateId === refreshed.confirmedDateId && v.response === 'yes' ? 1 : 0),
+          0,
+        );
+        if (yesCount >= refreshed.targetPlayerCount) {
+          sendTargetFilledNotifications(refreshed).catch(err =>
+            console.warn('sendTargetFilledNotifications failed:', err));
+        }
       }
       onSuccess(
         selectedCount > 1

@@ -9,6 +9,10 @@ import { LanguageProvider, useTranslation } from './i18n';
 import { initSupabaseCache, isCacheForGroup, resetCache, subscribeToRealtime, unsubscribeFromRealtime, fetchNotifications, getCachedNotifications, markNotificationRead, getUnreadNotificationCount, savePushSubscription, deletePushSubscription, flushAllPendingSyncs } from './database/supabaseCache';
 import { fixChipCountIds } from './database/migrateToSupabase';
 import { getAllPlayers } from './database/storage';
+// Side-effect import: attaches `window.previewAllScheduleEmails(email)`
+// for one-shot manual previews from the browser console (deployed only —
+// the EmailJS Edge Function doesn't run on localhost).
+import './utils/previewScheduleEmails';
 import Navigation from './components/Navigation';
 import GroupSwitcher from './components/GroupSwitcher';
 import GroupWizard from './components/GroupWizard';
@@ -228,6 +232,83 @@ export const LEGACY_NAME_CORRECTIONS: Record<string, string> = {
 
 export const usePermissions = () => useContext(PermissionContext);
 
+// ── "View As" preview (super-admin debug tool) ──
+// A super admin can preview the UI exactly as another role would see
+// it, without touching anything server-side. The override is purely
+// client-side and lives in sessionStorage, gated on the REAL super-
+// admin flag, so it cannot be used to grant privileges.
+//   * `member` → role='member', isOwner=false, isSuperAdmin=false
+//   * `admin`  → role='admin',  isOwner=false, isSuperAdmin=false  (regular admin)
+//   * `owner`  → role='admin',  isOwner=true,  isSuperAdmin=false  (group owner)
+//   * `null`   → real values (default for super admins)
+export type ViewAsRole = 'member' | 'admin' | 'owner';
+export const VIEW_AS_KEY = 'pm-view-as-role';
+
+export function readViewAsRole(): ViewAsRole | null {
+  try {
+    const v = sessionStorage.getItem(VIEW_AS_KEY);
+    return v === 'member' || v === 'admin' || v === 'owner' ? v : null;
+  } catch { return null; }
+}
+
+// Floating pill that always reflects the current preview state and
+// cycles through views on tap. Rendered only for the REAL super admin
+// so non-privileged users never see it. The yellow accent in non-real
+// modes is a deliberate "you are not seeing the full app right now"
+// reminder so the super admin doesn't get confused mid-debug.
+function ViewAsSwitcher({
+  current,
+  onChange,
+}: {
+  current: ViewAsRole | null;
+  onChange: (next: ViewAsRole | null) => void;
+}) {
+  const order: (ViewAsRole | null)[] = [null, 'member', 'admin', 'owner'];
+  const idx = order.indexOf(current);
+  const next = order[(idx + 1) % order.length];
+
+  const labels: Record<string, { text: string; bg: string; border: string; color: string }> = {
+    'real':   { text: '👑 Super Admin', bg: 'rgba(168, 85, 247, 0.18)', border: 'rgba(168, 85, 247, 0.55)', color: '#c084fc' },
+    'member': { text: '👁 כחבר',         bg: 'rgba(234, 179, 8, 0.22)',  border: 'rgba(234, 179, 8, 0.65)',  color: '#fbbf24' },
+    'admin':  { text: '👁 כמנהל',         bg: 'rgba(234, 179, 8, 0.22)',  border: 'rgba(234, 179, 8, 0.65)',  color: '#fbbf24' },
+    'owner':  { text: '👁 כבעלים',        bg: 'rgba(234, 179, 8, 0.22)',  border: 'rgba(234, 179, 8, 0.65)',  color: '#fbbf24' },
+  };
+  const cfg = labels[current ?? 'real'];
+
+  return (
+    <button
+      onClick={() => onChange(next)}
+      style={{
+        // Tucked into the top-left corner so it overlays the empty
+        // 3rem spacer the GroupSwitcher leaves on its visual-left
+        // edge (in RTL the version number is right, the group name
+        // is centered, and the leftmost flex child is the spacer).
+        // `left` uses absolute pixels so positioning is identical
+        // in LTR + RTL.
+        position: 'fixed',
+        top: 2, left: 4,
+        zIndex: 10000,
+        padding: '3px 8px',
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        background: cfg.bg,
+        border: `1px solid ${cfg.border}`,
+        color: cfg.color,
+        borderRadius: 999,
+        cursor: 'pointer',
+        fontFamily: 'Outfit, sans-serif',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+        lineHeight: 1.2,
+      }}
+      title="Cycle preview role (super-admin debug tool)"
+    >
+      {cfg.text}
+    </button>
+  );
+}
+
 export const useOnlineStatus = () => {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
@@ -418,11 +499,42 @@ function SupabaseApp() {
   const [showPushNudge, setShowPushNudge] = useState(false);
 
   const groupId = auth.membership?.groupId ?? null;
-  const role = auth.membership?.role ?? null;
-  const isOwner = auth.membership?.isOwner ?? false;
-  const isSuperAdmin = auth.isSuperAdmin;
+  const realRole = auth.membership?.role ?? null;
+  const realIsOwner = auth.membership?.isOwner ?? false;
+  const realIsSuperAdmin = auth.isSuperAdmin;
   const trainingEnabled = auth.membership?.trainingEnabled ?? false;
   const playerName = auth.membership?.playerName ?? null;
+
+  // ── "View As" preview (super admin only) ──
+  // Lets the real super admin see the app exactly as a member / regular
+  // admin / owner would, without changing anything server-side. Purely
+  // a client-side override of the role flags exposed via PermissionContext;
+  // RLS / RPCs continue to trust the JWT, so there is no security impact.
+  // Persisted in sessionStorage so a page refresh keeps the same preview,
+  // but a tab close / new browser doesn't carry the override over.
+  const [viewAsRole, setViewAsRoleRaw] = useState<ViewAsRole | null>(() => readViewAsRole());
+  const setViewAsRole = useCallback((next: ViewAsRole | null) => {
+    setViewAsRoleRaw(next);
+    try {
+      if (next) sessionStorage.setItem(VIEW_AS_KEY, next);
+      else sessionStorage.removeItem(VIEW_AS_KEY);
+    } catch { /* sessionStorage may be blocked — preview just won't persist */ }
+  }, []);
+  // Override is gated on the REAL super-admin flag so a non-super-admin
+  // can't force their session into a different role by writing the
+  // sessionStorage key from devtools.
+  const effectiveViewAs: ViewAsRole | null = realIsSuperAdmin ? viewAsRole : null;
+  const role: PermissionRole | null = effectiveViewAs === 'member'
+    ? 'member'
+    : (effectiveViewAs === 'admin' || effectiveViewAs === 'owner')
+      ? 'admin'
+      : realRole;
+  const isOwner = effectiveViewAs === 'owner'
+    ? true
+    : effectiveViewAs
+      ? false
+      : realIsOwner;
+  const isSuperAdmin = effectiveViewAs ? false : realIsSuperAdmin;
 
   useEffect(() => {
     if (!groupId) return;
@@ -1094,8 +1206,12 @@ function SupabaseApp() {
     </div>
   );
 
-  const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
-  const defaultRoute = isAdmin ? '/' : '/statistics';
+  // Everyone (admins, members, super-admin previews) lands on the
+  // home tab now. Members previously fell through to /statistics
+  // because the home screen was empty for them, but it now shows
+  // the schedule + last-game + training dashboard, so it's the
+  // right landing surface for every role.
+  const defaultRoute = '/';
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as Record<string, unknown>).MSStream;
 
@@ -1204,6 +1320,14 @@ function SupabaseApp() {
   return (
     <ErrorBoundary>
       <PermissionContext.Provider value={permissionValue}>
+        {/* Super-admin-only "View As" pill. Renders ABOVE everything
+            else so it stays accessible from any screen / any role
+            preview. Gated on the real super-admin flag, not the
+            (possibly-overridden) one, so the user can always switch
+            back to their real role. */}
+        {realIsSuperAdmin && (
+          <ViewAsSwitcher current={viewAsRole} onChange={setViewAsRole} />
+        )}
         {addMemberBanner}
         {notificationBanner}
         {notificationPanel}
@@ -1218,7 +1342,10 @@ function SupabaseApp() {
             {!hideNav && <VoteReminderBanner />}
             <Suspense fallback={<ScreenSkeleton />}>
               <Routes>
-                <Route path="/" element={isAdmin || isSuperAdmin || trainingEnabled ? <NewGameScreen /> : <Navigate to="/statistics" replace />} />
+                {/* Home — visible to every role. NewGameScreen renders
+                    the admin game-creation panel when allowed, and a
+                    schedule/last-game/training dashboard for members. */}
+                <Route path="/" element={<NewGameScreen />} />
                 <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
                 <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
                 <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />

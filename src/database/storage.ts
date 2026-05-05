@@ -1586,7 +1586,7 @@ export const setMyVoteChangeNotifs = (groupId: string, enabled: boolean): Promis
 
 export const claimPollNotifications = (
   pollId: string,
-  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation',
+  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled',
 ): Promise<boolean> => claimPollNotificationsRpc(pollId, kind);
 
 export const linkPollToGame = (pollId: string, gameId: string): Promise<void> =>

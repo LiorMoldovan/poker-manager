@@ -179,6 +179,7 @@ function toGamePoll(row: Record<string, unknown>): GamePoll {
     expandedNotificationsSentAt: (row.expanded_notifications_sent_at as string | null) ?? null,
     confirmedNotificationsSentAt: (row.confirmed_notifications_sent_at as string | null) ?? null,
     cancellationNotificationsSentAt: (row.cancellation_notifications_sent_at as string | null) ?? null,
+    targetFilledNotificationsSentAt: (row.target_filled_notifications_sent_at as string | null) ?? null,
     dates: [],
     votes: [],
   };
@@ -1886,7 +1887,7 @@ export async function setMyVoteChangeNotifsRpc(groupId: string, enabled: boolean
 
 export async function claimPollNotificationsRpc(
   pollId: string,
-  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation',
+  kind: 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'target_filled',
 ): Promise<boolean> {
   const { data, error } = await supabase.rpc('claim_poll_notifications', {
     p_poll_id: pollId,

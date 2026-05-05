@@ -8,9 +8,13 @@ const Navigation = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasPermission, role, trainingEnabled } = usePermissions();
+  const { hasPermission, role } = usePermissions();
   const canCreateGame = hasPermission('game:create');
-  const showNewGameTab = canCreateGame || trainingEnabled;
+  // Home is visible to every authenticated role: admins use it as the
+  // new-game launchpad, members use it as the schedule + last-game
+  // dashboard. We still gate on `role` (truthy when the user is a
+  // group member) so unauthenticated views don't render the tab.
+  const showNewGameTab = !!role;
   const canViewGraphs = !!role;
 
   const handleNav = useCallback((e: React.MouseEvent<HTMLAnchorElement>, to: string) => {
@@ -30,7 +34,12 @@ const Navigation = () => {
       {showNewGameTab && (
         <NavLink to="/" onClick={e => handleNav(e, '/')} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
           <span className="nav-icon">🃏</span>
-          <span>{t('nav.newGame')}</span>
+          {/* Admins land on the new-game form here, so the action-
+              oriented label still fits. Members land on the home
+              dashboard (schedule + last game + training) — for them
+              "משחק חדש" promises an action they don't have, so we
+              show a neutral "בית" label instead. */}
+          <span>{canCreateGame ? t('nav.newGame') : t('nav.home')}</span>
         </NavLink>
       )}
       <NavLink to="/history" onClick={e => handleNav(e, '/history')} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>

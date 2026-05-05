@@ -232,6 +232,11 @@ export interface GamePoll {
   expandedNotificationsSentAt?: string | null;
   confirmedNotificationsSentAt?: string | null;
   cancellationNotificationsSentAt?: string | null;
+  // Migration 051: independent claim slot for the post-pin "המשחק מלא"
+  // follow-up. NULL until the seat target has been reached AND we've
+  // sent (or preemptively claimed for the at-target confirmed flow) the
+  // follow-up notification. Reset to NULL on re-pin.
+  targetFilledNotificationsSentAt?: string | null;
   // Embedded children (populated by cache layer)
   dates: GamePollDate[];
   votes: GamePollVote[];
