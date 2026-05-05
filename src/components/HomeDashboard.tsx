@@ -33,12 +33,6 @@ import { formatCurrency } from '../utils/calculations';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { hapticTap } from '../utils/haptics';
 
-// ── Smooth-scroll anchor ──
-// NewGameScreen renders the existing player-picker card with this id so the
-// admin CTA can call `scrollIntoView` without prop-drilling a ref through
-// the screen.
-export const PLAYER_PICKER_ANCHOR_ID = 'player-picker-anchor';
-
 interface HomeDashboardProps {
   playerName: string | null;
   playerStats: PlayerStats[];
@@ -95,11 +89,9 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, hasActiveGame 
   const goSchedule = () => { hapticTap(); navigate('/settings?tab=schedule'); };
   const goStats = () => { hapticTap(); navigate('/statistics'); };
   const goLastGame = () => { if (lastGame) { hapticTap(); navigate(`/game/${lastGame.id}`, { state: { from: 'home' } }); } };
-  const goNewGameAnchor = () => {
-    hapticTap();
-    const el = document.getElementById(PLAYER_PICKER_ANCHOR_ID);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+  // CTA navigates to the dedicated /new-game action screen — the dashboard
+  // is the home surface, the form lives one route deeper.
+  const goNewGame = () => { hapticTap(); navigate('/new-game'); };
 
   // Card stagger delay (ms) — kept short so the dashboard feels responsive
   // not laggy. Each tier of card uses index * STEP for animation-delay.
@@ -107,7 +99,7 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, hasActiveGame 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '0.5rem' }}>
-      {showAdminCta && <StartNewGameCta order={0} step={STEP} t={t} onClick={goNewGameAnchor} />}
+      {showAdminCta && <StartNewGameCta order={0} step={STEP} t={t} onClick={goNewGame} />}
       <ScheduleCard order={showAdminCta ? 1 : 0} step={STEP} t={t} poll={activePoll} onClick={goSchedule} />
       {myStats && <PersonalHeroCard order={showAdminCta ? 2 : 1} step={STEP} t={t} stats={myStats} onClick={goStats} />}
       {lastGame && (
@@ -234,14 +226,31 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
   const isConfirmed = poll.status === 'confirmed';
   let dateLabel = '';
   let countdown: string | null = null;
+  let location: string | null = null;
+  // Below-target = the admin pinned a date before the seat target was
+  // reached (the "fill-pinned-first" flow). We surface "X seats left"
+  // on the home card so members see the recruitment ask without having
+  // to open the schedule tab.
+  let missingSeats = 0;
   if (isConfirmed && poll.confirmedDateId) {
     const d = poll.dates.find(x => x.id === poll.confirmedDateId);
     if (d?.proposedDate) {
       const dt = new Date(`${d.proposedDate}T${d.proposedTime || '20:00'}`);
       dateLabel = dt.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
-      if (d.proposedTime) dateLabel += ` · ${d.proposedTime}`;
+      // proposedTime may arrive as "HH:MM" or "HH:MM:SS" depending on
+      // the source (manual edit vs DB Time column). Trim to HH:MM so the
+      // card never shows a stray ":00" suffix.
+      if (d.proposedTime) {
+        const hhmm = d.proposedTime.slice(0, 5);
+        dateLabel += ` · ${hhmm}`;
+      }
       countdown = computeCountdown(d.proposedDate, d.proposedTime, t);
+      // Per-date location wins; fall back to the poll-level default
+      // (matches how the schedule tab and notifications resolve location).
+      location = (d.location && d.location.trim()) || (poll.defaultLocation && poll.defaultLocation.trim()) || null;
     }
+    const yesCount = poll.votes.filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes').length;
+    missingSeats = Math.max(0, poll.targetPlayerCount - yesCount);
   }
 
   return (
@@ -256,11 +265,32 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
     >
       <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{isConfirmed ? '🎯' : '🗳'}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Header line: title + (when confirmed) the date inline as a
+            secondary fragment, then the countdown / seats-left pills.
+            Keeping the date on the same row saves a vertical line on the
+            home dashboard — the date is the headline once the night is
+            set, so it deserves headline placement. */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text)' }}>
             {isConfirmed ? t('home.schedule.confirmedTitle') : t('home.schedule.openTitle')}
+            {isConfirmed && dateLabel && (
+              <span style={{
+                fontWeight: 500, color: 'var(--text-muted)',
+                marginInlineStart: '0.4rem',
+              }}>
+                · {dateLabel}
+              </span>
+            )}
+            {isConfirmed && location && (
+              <span style={{
+                fontWeight: 500, color: 'var(--text-muted)',
+                marginInlineStart: '0.4rem',
+              }}>
+                · 📍 {location}
+              </span>
+            )}
           </span>
           {countdown && (
             <span style={{
@@ -271,12 +301,41 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
               border: '1px solid rgba(16, 185, 129, 0.4)',
             }}>{countdown}</span>
           )}
+          {/* Recruitment-aware "seats left" pill. Only shown for a
+              confirmed-but-below-target poll so members can tell at a
+              glance that the night still needs them. Indigo (not amber)
+              keeps the tone informative rather than alarming — the
+              decision was made in the schedule-tab banner refresh. */}
+          {isConfirmed && missingSeats > 0 && (
+            <span style={{
+              fontSize: '0.65rem', fontWeight: 700,
+              padding: '2px 8px', borderRadius: 999,
+              background: 'rgba(99, 102, 241, 0.16)',
+              color: '#a5b4fc',
+              border: '1px solid rgba(99, 102, 241, 0.4)',
+            }}>
+              {missingSeats === 1
+                ? t('home.schedule.missingOne')
+                : t('home.schedule.missingMany', { n: missingSeats })}
+            </span>
+          )}
         </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-          {isConfirmed
-            ? (dateLabel || t('home.schedule.confirmedHelper'))
-            : t('home.schedule.openHelper')}
-        </div>
+        {/* Optional subtitle line. Date + location now live in the
+            header span, so a confirmed poll usually needs no second
+            row. We only render one when:
+              * the poll is open/expanded (call-to-vote helper), or
+              * the poll is confirmed but the date couldn't be resolved
+                (defensive fallback — generic "tap for details"). */}
+        {!isConfirmed && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            {t('home.schedule.openHelper')}
+          </div>
+        )}
+        {isConfirmed && !dateLabel && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+            {t('home.schedule.confirmedHelper')}
+          </div>
+        )}
       </div>
       <span style={ChevronStyle}>‹</span>
     </div>

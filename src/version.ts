@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.38.2';
+export const APP_VERSION = '5.39.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.39.0',
+    date: '2026-05-05',
+    changes: [
+      '🛣 New Game moved to dedicated /new-game route',
+      '🏠 Home tab is now pure dashboard',
+      '↩ Back button on new-game screen',
+      '🧭 Bottom nav: home tab labeled "בית" for all',
+      '🔗 ScheduleTab Start-Game deep-links to /new-game',
+    ],
+  },
   {
     version: '5.38.2',
     date: '2026-05-05',

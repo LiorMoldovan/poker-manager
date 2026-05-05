@@ -8,13 +8,13 @@ const Navigation = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasPermission, role } = usePermissions();
-  const canCreateGame = hasPermission('game:create');
-  // Home is visible to every authenticated role: admins use it as the
-  // new-game launchpad, members use it as the schedule + last-game
-  // dashboard. We still gate on `role` (truthy when the user is a
-  // group member) so unauthenticated views don't render the tab.
-  const showNewGameTab = !!role;
+  const { role } = usePermissions();
+  // Home is the dashboard for every role. Admins start a new game from
+  // the prominent CTA on the dashboard rather than from the bottom nav,
+  // which keeps the nav semantically clean: every tab maps to a
+  // top-level surface (home / history / stats / graphs / settings) and
+  // not to a sub-action.
+  const showHomeTab = !!role;
   const canViewGraphs = !!role;
 
   const handleNav = useCallback((e: React.MouseEvent<HTMLAnchorElement>, to: string) => {
@@ -31,15 +31,10 @@ const Navigation = () => {
 
   return (
     <nav className="bottom-nav">
-      {showNewGameTab && (
+      {showHomeTab && (
         <NavLink to="/" onClick={e => handleNav(e, '/')} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <span className="nav-icon">🃏</span>
-          {/* Admins land on the new-game form here, so the action-
-              oriented label still fits. Members land on the home
-              dashboard (schedule + last game + training) — for them
-              "משחק חדש" promises an action they don't have, so we
-              show a neutral "בית" label instead. */}
-          <span>{canCreateGame ? t('nav.newGame') : t('nav.home')}</span>
+          <span className="nav-icon">🏠</span>
+          <span>{t('nav.home')}</span>
         </NavLink>
       )}
       <NavLink to="/history" onClick={e => handleNav(e, '/history')} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>

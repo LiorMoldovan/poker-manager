@@ -778,11 +778,14 @@ export default function PollCard(props: PollCardProps) {
         display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12,
       }}>
         {/* Start Scheduled Game — admin, confirmed-at-target,
-            !confirmedGameId. Routes to NewGameScreen. */}
+            !confirmedGameId. Routes to /new-game (the admin action
+            screen) with state to prefill players + location. The home
+            route just shows the dashboard now, so we deep-link straight
+            to where the form lives. */}
         {isAdmin && poll.status === 'confirmed' && confirmedDate && !poll.confirmedGameId && (
           <button
             onClick={() => {
-              navigate('/', {
+              navigate('/new-game', {
                 state: {
                   fromPoll: {
                     pollId: poll.id,

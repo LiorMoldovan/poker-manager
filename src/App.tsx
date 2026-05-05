@@ -535,6 +535,9 @@ function SupabaseApp() {
       ? false
       : realIsOwner;
   const isSuperAdmin = effectiveViewAs ? false : realIsSuperAdmin;
+  // Admin = anyone with create-game powers. Used by the /new-game route
+  // gate: members get redirected home to avoid an empty-state screen.
+  const isAdmin = role === 'admin' || isOwner || isSuperAdmin;
 
   useEffect(() => {
     if (!groupId) return;
@@ -1346,6 +1349,16 @@ function SupabaseApp() {
                     the admin game-creation panel when allowed, and a
                     schedule/last-game/training dashboard for members. */}
                 <Route path="/" element={<NewGameScreen />} />
+                {/* Admin-only "new game" action screen. Members hitting
+                    this URL fall through to the home dashboard via the
+                    redirect below — keeps the URL clean while preventing
+                    confused empty-state UX. The screen itself also gates
+                    its admin form on isMember=false so even if a member
+                    somehow lands here, no form leaks through. */}
+                <Route
+                  path="/new-game"
+                  element={isAdmin ? <NewGameScreen /> : <Navigate to="/" replace />}
+                />
                 <Route path="/live-game/:gameId" element={<LiveGameScreen />} />
                 <Route path="/chip-entry/:gameId" element={<ChipEntryScreen />} />
                 <Route path="/game-summary/:gameId" element={<GameSummaryScreen />} />

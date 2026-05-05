@@ -14,7 +14,7 @@ import { getSharedProgress } from '../utils/pokerTraining';
 import { formatCurrency } from '../utils/calculations';
 import { withAITiming } from '../utils/aiTiming';
 import { PeriodMarkers } from '../types';
-import { HomeDashboard, PLAYER_PICKER_ANCHOR_ID } from '../components/HomeDashboard';
+import { HomeDashboard } from '../components/HomeDashboard';
 
 /** קצת מתחת ל-2 — פחות פיקסלים להעלאה לווטסאפ, עדיין חד מספיק לטלפון */
 const FORECAST_SHARE_CAPTURE_SCALE = 1.7;
@@ -160,9 +160,10 @@ const applyPeriodOverride = (base: PeriodMarkers, override: string | null): Peri
   return { ...base, ...option.getMarkerOverrides() };
 };
 
-// State payload passed via navigate('/', { state: { fromPoll } }) when the
-// admin clicks "Start Scheduled Game" on a confirmed poll. Drives one-shot
-// prefill of players + location, and is consumed (history-replaced) after.
+// State payload passed via navigate('/new-game', { state: { fromPoll } })
+// when the admin clicks "Start Scheduled Game" on a confirmed poll.
+// Drives one-shot prefill of players + location, and is consumed
+// (history-replaced) after the prefill effect runs.
 type FromPollNavState = {
   fromPoll?: {
     pollId: string;
@@ -179,6 +180,19 @@ const NewGameScreen = () => {
   const { role, signOut, playerName, trainingEnabled, isSuperAdmin, isOwner } = usePermissions();
   const isAdmin = role === 'admin' || isSuperAdmin || isOwner;
   const isMember = role === 'member' && !isSuperAdmin;
+  // ── Screen mode ──
+  // The same component powers two routes:
+  //   '/'         → home dashboard (everyone): training widget +
+  //                 HomeDashboard cards. No admin form.
+  //   '/new-game' → admin-only "start a new game" action screen with
+  //                 the player picker, forecast, period markers, and
+  //                 start-game button. App.tsx redirects members away
+  //                 from /new-game so we don't need a member fallback
+  //                 here, but we still gate the form on `!isMember` as
+  //                 a defensive belt-and-suspenders.
+  // The active-game resume banner shows in both modes — admins need to
+  // see "you have an unfinished game" no matter where they land.
+  const mode: 'home' | 'new-game' = routerLocation.pathname === '/new-game' ? 'new-game' : 'home';
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showAddPlayer, setShowAddPlayer] = useState(false);
@@ -1739,8 +1753,10 @@ const NewGameScreen = () => {
         </div>
       )}
 
-      {/* Training Banner — visible when training is enabled for the group */}
-      {trainingEnabled && (() => {
+      {/* Training Banner — visible when training is enabled for the group.
+          Home mode only: on /new-game we want the screen focused on the
+          game-creation flow, not training. */}
+      {mode === 'home' && trainingEnabled && (() => {
         const tp = playerName ? getSharedProgress(playerName) : null;
         const myStats = playerName ? playerStats.find(s => s.playerName === playerName) : null;
         const hasTraining = tp && tp.totalQuestions > 0;
@@ -1874,75 +1890,110 @@ const NewGameScreen = () => {
         );
       })()}
 
-      {/* ── Premium home dashboard ──
-          Renders for every role. Members get a polished landing surface
-          (schedule + last game + personal stats + monthly leaderboard +
-          rotating trivia); admins get the same plus a "Start New Game"
-          CTA at the very top that smooth-scrolls to the player picker
-          anchor below. The dashboard reads everything from the in-memory
-          cache so it stays in sync with realtime updates without an
-          explicit subscription. */}
-      <HomeDashboard
-        playerName={playerName}
-        playerStats={playerStats}
-        isAdmin={isAdmin}
-        trainingEnabled={trainingEnabled}
-        hasActiveGame={!!activeGame}
-      />
+      {/* ── Home mode: dashboard + sign-out, no admin form ── */}
+      {mode === 'home' && (
+        <>
+          {/* Sign-out button anchored top-right. No title on home — the
+              dashboard cards below ARE the home content. The empty span
+              keeps the button right-aligned via space-between. */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+            <span />
+            <button
+              onClick={signOut}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                padding: '0.2rem 0.4rem',
+                opacity: 0.7,
+              }}
+              title={t('common.signOut')}
+            >
+              🔓
+            </button>
+          </div>
 
-      {isMember && !trainingEnabled && (
-        <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '1rem' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👀</div>
-          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
-            צפייה בלבד — רק מנהלים יכולים ליצור משחקים
-          </p>
+          {/* Premium home dashboard — schedule + last-game + personal
+              stats + monthly leaderboard + rotating trivia. Reads
+              from the in-memory cache so realtime updates flow through
+              without an explicit subscription. */}
+          <HomeDashboard
+            playerName={playerName}
+            playerStats={playerStats}
+            isAdmin={isAdmin}
+            trainingEnabled={trainingEnabled}
+            hasActiveGame={!!activeGame}
+          />
+
+          {isMember && !trainingEnabled && (
+            <div className="card" style={{ padding: '1.5rem', textAlign: 'center', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👀</div>
+              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+                צפייה בלבד — רק מנהלים יכולים ליצור משחקים
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── New-game mode: admin action header + form ── */}
+      {mode === 'new-game' && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          {/* Header: back button + title on the right (RTL "start"),
+              select-all + sign-out on the left ("end"). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={() => navigate('/')}
+              className="btn btn-sm btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.25rem 0.55rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+              title={t('common.back')}
+            >
+              <span style={{ fontSize: '0.9rem', lineHeight: 1 }}>›</span>
+              <span>{t('common.back')}</span>
+            </button>
+            <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>{t('newGame.title')}</h1>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {isAdmin && permanentPlayers.length > 0 && (
+              <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
+                {permanentPlayers.every(p => selectedIds.has(p.id)) ? t('newGame.deselectAll') : t('newGame.selectAll')}
+              </button>
+            )}
+            <button
+              onClick={signOut}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                padding: '0.2rem 0.4rem',
+                opacity: 0.7,
+              }}
+              title={t('common.signOut')}
+            >
+              🔓
+            </button>
+          </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        {/* Title is admin-facing — for members the dashboard cards
-            above already explain what's happening, and the bottom-nav
-            label still reads "משחק חדש". An empty span keeps the
-            sign-out button right-aligned via space-between. */}
-        {isMember
-          ? <span />
-          : <h1 className="page-title" style={{ fontSize: '1.25rem', margin: 0 }}>{t('newGame.title')}</h1>}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          {isAdmin && permanentPlayers.length > 0 && (
-            <button className="btn btn-sm btn-secondary" onClick={selectAll} style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}>
-              {permanentPlayers.every(p => selectedIds.has(p.id)) ? t('newGame.deselectAll') : t('newGame.selectAll')}
-            </button>
-          )}
-          <button
-            onClick={signOut}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              fontSize: '0.75rem',
-              cursor: 'pointer',
-              padding: '0.2rem 0.4rem',
-              opacity: 0.7,
-            }}
-            title={t('common.signOut')}
-          >
-            🔓
-          </button>
-        </div>
-      </div>
-
-      {error && (
+      {mode === 'new-game' && error && (
         <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '6px', marginBottom: '0.5rem', borderLeft: '3px solid var(--danger)' }}>
           <p style={{ color: 'var(--danger)', fontSize: '0.85rem', margin: 0 }}>{error}</p>
         </div>
       )}
 
-      {/* Game Creation — admin only.
-          The id on the wrapping card is the smooth-scroll target for the
-          admin "Start New Game" CTA rendered at the top of the home
-          dashboard (see HomeDashboard.tsx, PLAYER_PICKER_ANCHOR_ID). */}
-      {!isMember && (<>
-      <div id={PLAYER_PICKER_ANCHOR_ID} className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem', scrollMarginTop: '12px' }}>
+      {/* Game Creation — admin form. Only renders on the /new-game
+          route; the home dashboard has its own "Start New Game" CTA
+          that navigates here. The `!isMember` gate is defensive: App.tsx
+          already redirects members away from /new-game, so this should
+          never be reached by a member, but if it ever is we render
+          nothing rather than leaking the form. */}
+      {mode === 'new-game' && !isMember && (<>
+      <div className="card" style={{ padding: '0.5rem', marginBottom: '0.4rem' }}>
         {permanentPlayers.length === 0 && permanentGuestPlayers.length === 0 && guestPlayers.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
             <div style={{ fontSize: '1.3rem' }}>👥</div>
