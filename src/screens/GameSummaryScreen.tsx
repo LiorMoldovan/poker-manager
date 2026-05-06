@@ -204,7 +204,7 @@ const GameSummaryScreen = () => {
           t('notification.settlementBody', { reporter: identityName, amount: cleanNumber(amount), date: gameDateLabel }),
           { gameId, from, to, amount: roundedAmount, gameDate });
         await proxySendEmail({
-          to: targetInfo.email, subject: t('notification.emailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink,
+          to: targetInfo.email, subject: t('notification.emailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink, kind: 'settlement',
         });
       }
 
@@ -217,7 +217,7 @@ const GameSummaryScreen = () => {
           : t('notification.unlinkedDisputeBody', { amount: cleanNumber(amount), target: targetPlayer, date: gameDateLabel });
         await createNotification(groupId, actorInfo.userId, 'settlement_dispute_self', selfTitle, selfBody, { gameId, from, to, amount: roundedAmount, gameDate });
         await proxySendEmail({
-          to: actorInfo.email, subject: t('notification.selfDisputeEmailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink,
+          to: actorInfo.email, subject: t('notification.selfDisputeEmailSubject'), playerName: targetPlayer, reporterName: identityName, amount: roundedAmount, gameDate: gameDateLabel, payLink, kind: 'settlement',
         });
       }
 

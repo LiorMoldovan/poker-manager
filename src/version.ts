@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.41.0';
+export const APP_VERSION = '5.43.0';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,28 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.43.0',
+    date: '2026-05-06',
+    changes: [
+      '✂ Vote-change / invite / expand emails dropped — push only',
+      '✂ Training-report emails dropped — review in UI',
+      '🔔 Vote-alerts toggle relabelled "push only"',
+      'ℹ️ Push how-to hint at top of Notifications tab',
+      '🏷 Bug-report and broadcast sends tagged in usage card',
+    ],
+  },
+  {
+    version: '5.42.0',
+    date: '2026-05-06',
+    changes: [
+      '🔒 Email isolated to deployment owner group',
+      '📊 EmailJS usage card (super admin)',
+      '📬 Per-kind email send breakdown',
+      'ℹ️ One-shot toast when email blocked',
+      '🛡 Audit log with masked recipients',
+    ],
+  },
   {
     version: '5.41.0',
     date: '2026-05-06',

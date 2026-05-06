@@ -21,7 +21,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PlayerStats } from '../types';
-import { getAllPolls, getAllGames, getAllGamePlayers } from '../database/storage';
+import { getAllPolls, getAllGames, getAllGamePlayers, getAllPlayers } from '../database/storage';
+import { getGroupId, initSupabaseCache } from '../database/supabaseCache';
 import { formatCurrency, cleanNumber } from '../utils/calculations';
 import { useTranslation, type TranslationKey, type Language } from '../i18n';
 import { hapticTap } from '../utils/haptics';
@@ -53,6 +54,111 @@ const LOSS_COLOR = '#ef4444';
 
 // ─── HomeDashboard ──────────────────────────────────────────────────────
 
+// ── Pull-to-refresh hook ──────────────────────────────────────
+//
+// Implements the standard mobile gesture (drag down from the top of
+// the page → release → refresh). Stays a no-op on desktop because
+// `touchstart` doesn't fire from mouse events.
+//
+// Implementation notes:
+// - We register listeners on `document` with `passive: true`. Native
+//   scrolling continues to work; we never preventDefault. The
+//   gesture only "engages" when the page is already scrolled to the
+//   top — otherwise the listener returns immediately so it doesn't
+//   interfere with normal scrolling at any depth of the page.
+// - Damping (delta * 0.5) and a 120 px cap keep the indicator from
+//   feeling rubbery while still giving haptic-feeling resistance.
+// - Trigger threshold is 60 px — far enough to be intentional, near
+//   enough to be reachable without an awkward thumb stretch.
+// - Live values (touch start Y, current distance, refreshing state)
+//   are kept in refs so the effect doesn't re-subscribe on every
+//   pixel of pull, while React-state mirrors are used only to
+//   drive re-renders of the indicator.
+function usePullToRefresh(onRefresh: () => Promise<void>): { distance: number; refreshing: boolean } {
+  const [distance, setDistance] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const startY = useRef<number | null>(null);
+  const distanceRef = useRef(0);
+  const refreshingRef = useRef(false);
+
+  // Mirror state into refs so async event handlers always read the
+  // current value without needing the effect to re-attach when state
+  // changes (which would otherwise rip out and re-bind the touch
+  // listeners constantly during a pull).
+  useEffect(() => { refreshingRef.current = refreshing; }, [refreshing]);
+
+  useEffect(() => {
+    const isAtTop = (): boolean => {
+      const docTop = (document.scrollingElement?.scrollTop ?? document.documentElement.scrollTop) || 0;
+      return window.scrollY <= 0 && docTop <= 0;
+    };
+
+    const setDist = (d: number): void => {
+      distanceRef.current = d;
+      setDistance(d);
+    };
+
+    const onTouchStart = (e: TouchEvent): void => {
+      if (refreshingRef.current) return;
+      if (!isAtTop()) return;
+      startY.current = e.touches[0].clientY;
+    };
+
+    const onTouchMove = (e: TouchEvent): void => {
+      if (startY.current === null) return;
+      if (refreshingRef.current) return;
+      const delta = e.touches[0].clientY - startY.current;
+      // User started pulling but is now moving up (cancelling the
+      // gesture) → reset the indicator without releasing the touch
+      // tracker; if they pull down again we can resume.
+      if (delta <= 0) {
+        if (distanceRef.current !== 0) setDist(0);
+        return;
+      }
+      // If they scrolled away from the top while still touching,
+      // abort the gesture — pull-to-refresh should never compete
+      // with a normal upward scroll.
+      if (!isAtTop()) {
+        startY.current = null;
+        setDist(0);
+        return;
+      }
+      setDist(Math.min(delta * 0.5, 120));
+    };
+
+    const onTouchEnd = async (): Promise<void> => {
+      if (startY.current === null) return;
+      const finalDist = distanceRef.current;
+      startY.current = null;
+      setDist(0);
+      if (finalDist >= 60 && !refreshingRef.current) {
+        setRefreshing(true);
+        try {
+          await onRefresh();
+        } catch (err) {
+          console.error('[pull-to-refresh] failed:', err);
+        } finally {
+          setRefreshing(false);
+        }
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd, { passive: true });
+    document.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+      document.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [onRefresh]);
+
+  return { distance, refreshing };
+}
+
 interface HomeDashboardProps {
   playerName: string | null;
   playerStats: PlayerStats[];
@@ -69,6 +175,23 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
   const showAdminCta = isAdmin && !hasActiveGame;
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  // ── Pull-to-refresh ─────────────────────────────────────────
+  // Mobile users sometimes hear about a new poll/vote/result from a
+  // friend before our realtime subscription has fanned the change
+  // out. Rather than asking them to leave + re-enter the dashboard
+  // we expose the standard mobile "pull from the top" gesture to
+  // force a cache refresh. Desktop users never trigger it (no touch
+  // events) and the indicator is invisible until pulled, so this
+  // adds zero clutter to the page.
+  const { distance: pullDistance, refreshing: pullRefreshing } = usePullToRefresh(async () => {
+    const gid = getGroupId();
+    if (!gid) return;
+    await initSupabaseCache(gid);
+    // initSupabaseCache dispatches `supabase-cache-updated` on every
+    // phase, so the parent's `useRealtimeRefresh` listener will
+    // re-render the dashboard automatically.
+  });
 
   const myStats = useMemo(
     () => (playerName ? playerStats.find(s => s.playerName === playerName) ?? null : null),
@@ -111,7 +234,20 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
     return Math.max(0, Math.floor(ms / 86_400_000));
   }, [myStats]);
 
-  const goSchedule = () => { hapticTap(); navigate('/settings?tab=schedule'); };
+  // Admin shortcut: when there's no active poll, the empty-state
+  // schedule card jumps straight into "create poll" instead of
+  // dropping the admin on the Schedule tab landing where they'd
+  // need a second tap on the `+` button. The deep-link is consumed
+  // and stripped by ScheduleTab on mount. Members and admins with
+  // an existing poll keep the regular tab-landing behaviour.
+  const goSchedule = () => {
+    hapticTap();
+    if (isAdmin && !activePoll) {
+      navigate('/settings?tab=schedule&action=create-poll');
+    } else {
+      navigate('/settings?tab=schedule');
+    }
+  };
   const goLastGame = () => { if (lastGame) { hapticTap(); navigate(`/game/${lastGame.id}`, { state: { from: 'home' } }); } };
   const goNewGame = () => { hapticTap(); navigate('/new-game'); };
   // Tap on the personal card → open Statistics → Players tab and
@@ -157,8 +293,44 @@ export function HomeDashboard({ playerName, playerStats, isAdmin, trainingEnable
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: STACK_GAP, marginBottom: '0.5rem' }}>
+      {/* Pull-to-refresh indicator. Sits at the top of the dashboard
+          and renders only while the user is actively pulling or a
+          refresh is in flight. Centred, low-contrast, intentionally
+          unobtrusive — it should feel like a hint rather than a
+          piece of UI. The icon rotates with the pull distance to
+          give immediate feedback that the gesture is being read,
+          and spins continuously while the cache reload is running. */}
+      {(pullDistance > 0 || pullRefreshing) && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: pullRefreshing ? 44 : Math.min(pullDistance, 80),
+          transition: pullRefreshing ? 'height 0.18s ease-out' : 'none',
+          color: 'var(--text-muted)',
+          pointerEvents: 'none',
+          fontSize: '1.25rem',
+        }}>
+          <span style={{
+            display: 'inline-block',
+            opacity: pullRefreshing ? 1 : Math.min(pullDistance / 60, 1),
+            transform: pullRefreshing ? undefined : `rotate(${Math.min(pullDistance * 3, 360)}deg)`,
+            animation: pullRefreshing ? 'spin 0.8s linear infinite' : undefined,
+          }}>
+            ↻
+          </span>
+        </div>
+      )}
       {showAdminCta && <StartNewGameCta order={next()} step={STEP} t={t} onClick={goNewGame} />}
-      <ScheduleCard order={next()} step={STEP} t={t} poll={activePoll} onClick={goSchedule} />
+      <ScheduleCard
+        order={next()}
+        step={STEP}
+        t={t}
+        poll={activePoll}
+        myPlayerId={myStats?.playerId ?? null}
+        playerName={playerName}
+        onClick={goSchedule}
+      />
       {lastGame && (
         <LastGameCard
           order={next()}
@@ -394,10 +566,19 @@ function StartNewGameCta({ order, step, t, onClick }: SectionProps & { onClick: 
 
 interface ScheduleCardProps extends SectionProps {
   poll: ReturnType<typeof getAllPolls>[number] | null;
+  // The current viewer's linked playerId (NULL when the user hasn't
+  // self-claimed a player yet). Used to detect whether *this* viewer
+  // has cast a vote on the open poll, so the card can switch into a
+  // personalized "your vote is waiting" nudge instead of showing
+  // generic copy that any member sees regardless of state.
+  myPlayerId: string | null;
+  // Display name for the personalized title. Falls back to a generic
+  // title when null.
+  playerName: string | null;
   onClick: () => void;
 }
 
-function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
+function ScheduleCard({ order, step, t, poll, myPlayerId, playerName, onClick }: ScheduleCardProps) {
   if (!poll) {
     return (
       <HomeCard
@@ -418,6 +599,11 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
     let countdown: string | null = null;
     let location: string | null = null;
     let missingSeats = 0;
+    // Names of confirmed (yes-voting) players for the "מגיעים: …"
+    // line below the date/location. Resolved from playerId via the
+    // players cache so the order matches RSVP order, not name
+    // alphabetisation — first to commit shows up first.
+    let comingNames: string[] = [];
 
     if (poll.confirmedDateId) {
       const d = poll.dates.find(x => x.id === poll.confirmedDateId);
@@ -430,8 +616,12 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
         countdown = computeCountdown(d.proposedDate, d.proposedTime, t);
         location = (d.location && d.location.trim()) || (poll.defaultLocation && poll.defaultLocation.trim()) || null;
       }
-      const yesCount = poll.votes.filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes').length;
-      missingSeats = Math.max(0, poll.targetPlayerCount - yesCount);
+      const yesVotes = poll.votes.filter(v => v.dateId === poll.confirmedDateId && v.response === 'yes');
+      missingSeats = Math.max(0, poll.targetPlayerCount - yesVotes.length);
+      const playersById = new Map(getAllPlayers().map(p => [p.id, p.name]));
+      comingNames = yesVotes
+        .map(v => playersById.get(v.playerId))
+        .filter((name): name is string => Boolean(name));
     }
 
     // Subtitle is a single inline line. The location gets a 📍
@@ -481,6 +671,32 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
       </>
     ) : undefined;
 
+    // Body slot: "מגיעים: name · name · …" — answers the most-asked
+    // question on game day ("who's coming?") at a glance instead of
+    // forcing members to drill into the schedule tab. We render the
+    // FULL list with no truncation: a half-shown list ("ליאור · אייל
+    // · אורן · חרדון +2 נוספים") feels worse than either presenting
+    // everyone or no one. For typical 6-10 player groups this wraps
+    // to 1-2 lines naturally on mobile, which is acceptable.
+    let comingBody: React.ReactNode = null;
+    if (comingNames.length > 0) {
+      comingBody = (
+        <div style={{
+          fontSize: '0.7rem',
+          color: 'var(--text-muted)',
+          paddingTop: '0.4rem',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          lineHeight: 1.5,
+          wordBreak: 'break-word',
+        }}>
+          <span style={{ fontWeight: 600, opacity: 0.85 }}>
+            {t('home.schedule.confirmedComing')}:
+          </span>{' '}
+          {comingNames.join(' · ')}
+        </div>
+      );
+    }
+
     return (
       <HomeCard
         order={order}
@@ -490,22 +706,48 @@ function ScheduleCard({ order, step, t, poll, onClick }: ScheduleCardProps) {
         subtitle={subtitle}
         accessory={accessory}
         accent={accent}
+        body={comingBody}
         onClick={onClick}
       />
     );
   }
 
-  // Open / expanded poll → blue accent: a decision is pending and
-  // tapping the card lets members cast their vote. Distinct from the
-  // confirmed-game greens / amber so users can tell at a glance
-  // whether the night is set or still being decided.
+  // ── Open / expanded poll ──
+  // Two flavours, picked from the viewer's vote state so the card
+  // talks to *this* member instead of showing the same generic copy
+  // for everyone:
+  //   1. User hasn't voted → amber-tinted nudge with their name in
+  //      the title ("ליאור, ההצבעה מחכה לך"). Strong but not noisy.
+  //   2. User has voted → blue card confirming the vote is in. Stays
+  //      tappable so they can update or peek at interim results.
+  // We treat any vote on any date by `myPlayerId` as "voted" — the
+  // dashboard doesn't care which dates they picked, just whether
+  // they participated.
+  const hasMyVote = myPlayerId !== null && poll.votes.some(v => v.playerId === myPlayerId);
+
+  if (!hasMyVote) {
+    return (
+      <HomeCard
+        order={order}
+        step={step}
+        icon="🗳"
+        title={playerName
+          ? t('home.schedule.openYouHaventVoted', { name: playerName })
+          : t('home.schedule.openTitle')}
+        subtitle={t('home.schedule.openYouHaventVotedHelper')}
+        accent="warning"
+        onClick={onClick}
+      />
+    );
+  }
+
   return (
     <HomeCard
       order={order}
       step={step}
       icon="🗳"
-      title={t('home.schedule.openTitle')}
-      subtitle={t('home.schedule.openHelper')}
+      title={t('home.schedule.openYouVoted')}
+      subtitle={t('home.schedule.openYouVotedHelper')}
       accent="info"
       onClick={onClick}
     />
@@ -708,6 +950,22 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
     },
   ];
 
+  // ── Next-milestone hint ───────────────────────────────────────
+  // An open-loop "X away from Y" line that pinned-displays above
+  // the rotating tile grid whenever the player is within reach of
+  // a meaningful round number. Pinned (not rotated) because
+  // milestones are too motivating to leave to a daily lottery — if
+  // there's one within reach you want to see it every day until
+  // you cross it.
+  //
+  // Selection: we collect every candidate the player is "near",
+  // then pick the one with the smallest *normalised* distance
+  // (remaining / target) so we surface what's about to be crossed
+  // rather than something a year away. Hides itself entirely when
+  // nothing's in reach (brand-new players, players who just hit a
+  // big number and have nothing close).
+  const milestone = computeNextMilestone(stats, t);
+
   const applicable = pool.filter(p => p.applicable).map(p => p.tile);
   // Deterministic daily rotation. Day-of-year provides the day-to-day
   // shift, name hash ensures different players don't see the exact
@@ -729,12 +987,9 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
   const body = (
     // `minmax(0, 1fr)` (instead of plain `1fr`) prevents a track
     // from growing past its share when a long currency value like
-    // `₪123,456` is wider than the equal-width slice. Without this,
-    // a single big number would stretch its tile and squeeze the
-    // others on small screens. Column count tracks `picked.length`
-    // for the rare case (brand-new player) where fewer than 4 tiles
-    // are applicable — we'd rather show 2 wide tiles than 2 normal
-    // + 2 empty.
+    // `₪123,456` is wider than the equal-width slice. Column count
+    // tracks `picked.length` for the rare case (brand-new player)
+    // where fewer than 4 tiles are applicable.
     <div style={{
       display: 'grid',
       gridTemplateColumns: `repeat(${Math.max(picked.length, 1)}, minmax(0, 1fr))`,
@@ -758,10 +1013,121 @@ function PersonalCard({ order, step, t, stats, onClick }: PersonalCardProps) {
       icon="📊"
       title={t('home.personal.title')}
       subtitle={subtitle}
+      // Milestone hint sits in the title row's accessory slot so it
+      // shares space with the heading instead of opening a new line
+      // above the tiles. HomeCard's title row has `flexWrap: 'wrap'`
+      // already, so the badge gracefully drops to its own line on
+      // very narrow screens if the title needs the full width.
+      accessory={milestone ? <MilestoneBadge text={milestone} /> : undefined}
       body={body}
       onClick={onClick}
     />
   );
+}
+
+// Visual "achievement chip" for the next-milestone hint. Styled to
+// feel different from every other line on the dashboard without
+// reading as a warning — earlier amber tones felt alarm-like, so
+// we shifted to a soft indigo gradient (informational / "goal"
+// vibe). Tabular numerals so the count never jiggles between
+// glyph widths.
+function MilestoneBadge({ text }: { text: string }) {
+  return (
+    <div style={{
+      alignSelf: 'flex-start',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '0.4rem',
+      padding: '0.35rem 0.7rem',
+      borderRadius: 999,
+      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.10) 0%, rgba(129, 140, 248, 0.18) 100%)',
+      border: '1px solid rgba(129, 140, 248, 0.28)',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.15)',
+      fontFeatureSettings: '"tnum"',
+      maxWidth: '100%',
+    }}>
+      <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>🎯</span>
+      <span style={{
+        fontSize: '0.78rem',
+        fontWeight: 700,
+        color: '#c7d2fe',
+        letterSpacing: '0.015em',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>
+        {text}
+      </span>
+    </div>
+  );
+}
+
+// Pick the next round-number milestone the player is closest to.
+// Returns the localized one-line string, or null if nothing is
+// within reach. Distance is normalised (`remaining / target`) so
+// a 99 % filled small target wins over a 50 % filled big one —
+// the line should always feel "almost there", not "halfway there".
+//
+// Per-category `maxRemaining` filters out far-away targets so we
+// don't surface "990 משחקים ל-1000" to a player with 10 games.
+// Numbers tuned for a ~weekly poker night where 30 games ≈ a year
+// of play, ₪5k ≈ a few months of swings, 15 wins ≈ ~30 games at
+// a typical 50% win-or-better rate.
+function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string | null {
+  type Candidate = { text: string; ratio: number };
+  const candidates: Candidate[] = [];
+
+  // Games milestones — the most actionable category.
+  const gameTargets = [25, 50, 100, 150, 200, 250, 300, 400, 500, 750, 1000];
+  for (const target of gameTargets) {
+    const remaining = target - stats.gamesPlayed;
+    if (remaining > 0 && remaining <= 30) {
+      candidates.push({
+        text: t('home.personal.milestoneGames', { remaining, target }),
+        ratio: remaining / target,
+      });
+      break; // only the next one in this category matters
+    }
+  }
+
+  // Wins milestones.
+  const winTargets = [10, 25, 50, 100, 150, 200, 300, 500];
+  for (const target of winTargets) {
+    const remaining = target - stats.winCount;
+    if (remaining > 0 && remaining <= 15) {
+      candidates.push({
+        text: t('home.personal.milestoneWins', { remaining, target }),
+        ratio: remaining / target,
+      });
+      break;
+    }
+  }
+
+  // Profit milestones — only when the player is currently on the
+  // positive side. Showing "still 5,000 to break even" to someone
+  // deep in the red would undercut the encouraging framing of the
+  // PersonalCard.
+  if (stats.totalProfit > 0) {
+    const profitTargets = [1000, 2500, 5000, 10000, 20000, 50000, 100000];
+    for (const target of profitTargets) {
+      const remaining = target - stats.totalProfit;
+      if (remaining > 0 && remaining <= 5000) {
+        candidates.push({
+          text: t('home.personal.milestoneProfit', {
+            remaining: formatCurrency(Math.round(remaining)),
+            target: formatCurrency(target),
+          }),
+          ratio: remaining / target,
+        });
+        break;
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  // Closest to crossing wins. Smallest ratio = highest "% there".
+  candidates.sort((a, b) => a.ratio - b.ratio);
+  return candidates[0].text;
 }
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: 'win' | 'loss' }) {
@@ -1046,13 +1412,16 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
 
   const medals = ['🥇', '🥈', '🥉'];
   // ── Table layout ─────────────────────────────────────────────
-  // We render the top-3 as a real <table> mirroring the column
-  // structure on `StatisticsScreen` (# / שחקן / רווח / ממוצע /
-  // מש׳ / נצ%). This makes the dashboard leaderboard feel like a
-  // miniature of the full stats table — same headers, same numeric
-  // alignment, same shorthand — so the user can scan it the same
-  // way and tapping the card to drill into the full screen feels
-  // continuous instead of "different design over there".
+  // We render the top-3 as a real <table> with five columns mirroring
+  // the most distinct signals from `StatisticsScreen` (# / שחקן /
+  // רווח / מש׳ / נצ%). Average-per-game (ממוצע) is intentionally
+  // omitted here because it's derivable from the two adjacent columns
+  // (avg = profit ÷ games) AND it duplicates the profit column for
+  // early-month rows where each player has only 1 game so far.
+  // Dropping it gives the player-name column ~50 px more breathing
+  // room on narrow phones, so common names like "שגיא אחיין" fit
+  // without ellipsis. The full Statistics screen still shows ממוצע —
+  // tapping the card drills into that view.
   //
   // Notes:
   // - `tableLayout: 'fixed'` would give us tighter column control
@@ -1104,9 +1473,6 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
             {t('stats.profitCol')}
           </th>
           <th style={{ ...headerCellStyle, textAlign: numAlign }}>
-            {t('stats.avgCol')}
-          </th>
-          <th style={{ ...headerCellStyle, textAlign: numAlign }}>
             {t('stats.gamesCol')}
           </th>
           <th style={{ ...headerCellStyle, textAlign: numAlign }}>
@@ -1118,13 +1484,11 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
         {top3.map((p, i) => {
           const isMe = playerName !== null && p.name === playerName;
           const pct = p.games > 0 ? Math.round((p.wins / p.games) * 100) : 0;
-          const avg = p.games > 0 ? Math.round(p.profit / p.games) : 0;
           // Per-cell background paints the row uniformly even
           // though `<tr>` can't reliably take a background under
           // every browser when borders are involved.
           const rowBg = isMe ? ME_BG : 'transparent';
           const profitColor = p.profit > 0 ? WIN_COLOR : p.profit < 0 ? LOSS_COLOR : 'var(--text-muted)';
-          const avgColor = avg > 0 ? WIN_COLOR : avg < 0 ? LOSS_COLOR : 'var(--text-muted)';
           return (
             <tr
               key={p.name}
@@ -1160,14 +1524,6 @@ function LeaderboardCard({ order, step, t, games, gamePlayers, playerName, onCli
                 fontWeight: 700,
               }}>
                 {formatCurrency(p.profit)}
-              </td>
-              <td style={{
-                ...dataCellStyle,
-                background: rowBg,
-                textAlign: numAlign,
-                color: avgColor,
-              }}>
-                {formatCurrency(avg)}
               </td>
               <td style={{
                 ...dataCellStyle,
@@ -1944,6 +2300,78 @@ function buildTriviaList(
           icon: '⏱',
           text: t('home.trivia.cadence', { days: avgDays }),
         });
+      }
+    }
+  }
+
+  // ── 30. "On this day" — a memory hook from one year ago today.
+  //         Surfaces a notable game whose calendar date matches
+  //         today (any past year, prioritizing exactly 1 year ago)
+  //         with a ±1-day window so groups that only play on
+  //         weekends still get a hit when last year's match was
+  //         "the closest weekend" rather than the exact date.
+  //         Picks the night's MVP if positive, otherwise the
+  //         biggest loss — both make for memorable callbacks.
+  //         Skipped silently when no past-year game is close to
+  //         today's date (fresh groups, off-season periods).
+  const today = new Date();
+  const todayMonth = today.getMonth();
+  const todayDay = today.getDate();
+  const todayYear = today.getFullYear();
+  // Score each past completed game by how well its date matches
+  // today (year delta + day delta). Lower score = better match.
+  let bestMemory: { game: typeof games[number]; score: number } | null = null;
+  for (const g of games) {
+    if (g.status !== 'completed') continue;
+    const d = new Date(g.date);
+    if (Number.isNaN(d.getTime())) continue;
+    const yearDelta = todayYear - d.getFullYear();
+    if (yearDelta < 1) continue; // must be at least 1 year old
+    if (d.getMonth() !== todayMonth) continue;
+    const dayDelta = Math.abs(d.getDate() - todayDay);
+    if (dayDelta > 1) continue; // ±1-day window
+    // Prefer exact 1-year-ago + exact day-of-month. Tie-break by
+    // proximity (smaller dayDelta) then recency.
+    const score = (yearDelta - 1) * 100 + dayDelta * 10;
+    if (bestMemory === null || score < bestMemory.score) {
+      bestMemory = { game: g, score };
+    }
+  }
+  if (bestMemory) {
+    const memoryGameId = bestMemory.game.id;
+    const memoryPlayers = gamePlayers.filter(gp => gp.gameId === memoryGameId);
+    if (memoryPlayers.length > 0) {
+      // Pick MVP (highest profit) if positive — celebratory framing
+      // is friendlier than rubbing salt in an old loss. Fall back
+      // to the biggest loss only if every result was non-positive
+      // (a freak night where the rake / chip math left everyone at
+      // or below zero — shouldn't happen with zero-sum games but
+      // we still degrade gracefully).
+      let mvp = memoryPlayers[0];
+      for (const p of memoryPlayers) if (p.profit > mvp.profit) mvp = p;
+      if (mvp.profit > 0) {
+        list.push({
+          icon: '🕰',
+          text: t('home.trivia.onThisDay', {
+            name: mvp.playerName,
+            verb: verbForName('won', mvp.playerName, language),
+            profit: formatCurrency(mvp.profit),
+          }),
+        });
+      } else {
+        // Find biggest loss instead.
+        let worstNight = memoryPlayers[0];
+        for (const p of memoryPlayers) if (p.profit < worstNight.profit) worstNight = p;
+        if (worstNight.profit < 0) {
+          list.push({
+            icon: '🕰',
+            text: t('home.trivia.onThisDayLoss', {
+              name: worstNight.playerName,
+              verb: verbForName('lost', worstNight.playerName, language),
+              amount: formatCurrency(Math.abs(worstNight.profit)),
+            }),
+          });
+        }
       }
     }
   }

@@ -1,5 +1,7 @@
 import { supabase } from '../database/supabaseClient';
 import { getSettings } from '../database/storage';
+import { getGroupId } from '../database/supabaseCache';
+import { isEmailEnabledForCurrentGroup, notifyEmailDisabled } from './emailEligibility';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
@@ -214,6 +216,27 @@ export async function proxyElevenLabsUsage(_apiKey: string): Promise<Response> {
   });
 }
 
+// Tags the originating event so the usage card can break sends down by kind.
+// Stays narrow (string union) so callers don't drift into ad-hoc strings.
+export type EmailKind =
+  // Schedule lifecycle (mirrors NotificationKind in scheduleNotifications.ts)
+  | 'invitation'
+  | 'new_vote'
+  | 'expanded'
+  | 'confirmed'
+  | 'target_filled'
+  | 'cancelled'
+  | 'reminder'
+  // Game flow
+  | 'settlement'
+  // Training
+  | 'training'
+  | 'training_share'
+  // Dev tools
+  | 'preview'
+  // Catch-all for anything that doesn't fit the above
+  | 'broadcast';
+
 export async function proxySendEmail(payload: {
   to: string;
   subject: string;
@@ -222,14 +245,29 @@ export async function proxySendEmail(payload: {
   amount: number;
   gameDate?: string;
   payLink?: string;
+  kind?: EmailKind;
 }): Promise<boolean> {
+  if (!isEmailEnabledForCurrentGroup()) {
+    notifyEmailDisabled(payload.kind);
+    return false;
+  }
   try {
     const auth = await getAuthHeaders();
+    const groupId = getGroupId();
     const res = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, groupId, kind: payload.kind ?? 'settlement' }),
     });
+    if (res.status === 403) {
+      // Defense in depth: VITE_OWNER_GROUP_ID was misconfigured but the server
+      // still rejected. Fire the same event so the UI surfaces the situation.
+      notifyEmailDisabled(payload.kind);
+      return false;
+    }
+    if (res.ok && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('email-sent'));
+    }
     return res.ok;
   } catch {
     return false;
@@ -293,20 +331,76 @@ export async function proxySendBroadcastEmail(payload: {
   subject: string;
   message: string;
   senderName?: string;
+  kind?: EmailKind;
 }): Promise<boolean> {
+  if (!isEmailEnabledForCurrentGroup()) {
+    notifyEmailDisabled(payload.kind);
+    return false;
+  }
   try {
     const auth = await getAuthHeaders();
+    const groupId = getGroupId();
     const res = await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...auth },
       body: JSON.stringify({
         ...payload,
         message: wrapHebrewEmailForRTL(payload.message),
+        groupId,
+        kind: payload.kind ?? 'broadcast',
       }),
     });
+    if (res.status === 403) {
+      notifyEmailDisabled(payload.kind);
+      return false;
+    }
+    if (res.ok && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('email-sent'));
+    }
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+// ─── Email Usage (super admin only) ──────────────────────────────────────
+// Mirrors `proxyElevenLabsUsage` shape so the Settings AI card can use the
+// same fetch/cache pattern. Backed by Supabase (not the upstream provider)
+// because EmailJS Free has no public usage endpoint.
+
+export interface EmailUsageEntry {
+  sent_at: string;
+  recipient: string;
+  kind: string;
+  subject: string | null;
+  success: boolean;
+  http_status: number | null;
+  group_id: string | null;
+}
+
+export interface EmailUsageResponse {
+  used: number;
+  limit: number;
+  remaining: number;
+  resetDate: string;          // YYYY-MM-DD UTC
+  perKind: Record<string, number>;
+  perDay: Array<{ date: string; count: number }>;
+  recent: EmailUsageEntry[];
+  failed: number;
+}
+
+export async function proxyEmailUsage(): Promise<EmailUsageResponse | null> {
+  try {
+    const auth = await getAuthHeaders();
+    const res = await fetch('/api/email-usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth },
+      body: '{}',
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as EmailUsageResponse;
+  } catch {
+    return null;
   }
 }
 

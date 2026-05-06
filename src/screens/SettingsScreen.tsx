@@ -32,7 +32,8 @@ import {
 } from '../database/storage';
 import { getGeminiApiKey, getModelDisplayName, testModelAvailability, ModelTestResult } from '../utils/geminiAI';
 import { getElevenLabsApiKey, getElevenLabsUsageLive, getElevenLabsGameHistory, deleteElevenLabsGameEntry } from '../utils/tts';
-import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail } from '../utils/apiProxy';
+import { proxyGeminiGenerate, proxyElevenLabsTTS, proxySendPush, proxySendBroadcastEmail, proxyEmailUsage, type EmailUsageResponse } from '../utils/apiProxy';
+import { isEmailEnabledForCurrentGroup } from '../utils/emailEligibility';
 import { verbForName } from '../utils/hebrewGender';
 import {
   previewScheduleEmail,
@@ -99,6 +100,11 @@ const SettingsScreen = () => {
   // ElevenLabs TTS state (used by AI tab model tests)
   const [elKey, setElKey] = useState<string>('');
   const [elUsageLive, setElUsageLive] = useState<{ used: number; limit: number; remaining: number; resetDate: string } | null>(null);
+  // EmailJS usage (super-admin only). Loaded lazily when the AI tab is open
+  // and refreshed on `email-sent` events + tab visibility changes — no
+  // setInterval polling, per the project's no-cache rule.
+  const [emailUsage, setEmailUsage] = useState<EmailUsageResponse | null>(null);
+  const [showEmailRecent, setShowEmailRecent] = useState(false);
 
   // AI Status state
   const [, setAiStatus] = useState<AIStatusData | null>(null);
@@ -403,6 +409,28 @@ const SettingsScreen = () => {
     return () => clearInterval(interval);
   }, [activeTab]);
 
+  // EmailJS usage: fetch once on AI tab open (super admin only). Refresh
+  // triggers are event-driven — `email-sent` after a successful send, and
+  // `visibilitychange` when the user comes back from another tab. No
+  // polling: the data only changes when an email is actually sent.
+  useEffect(() => {
+    if (activeTab !== 'ai' || !isSuperAdmin) return;
+    let cancelled = false;
+    const refresh = () => {
+      proxyEmailUsage().then(u => { if (!cancelled) setEmailUsage(u); });
+    };
+    refresh();
+    const onSent = () => refresh();
+    const onVis = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('email-sent', onSent);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('email-sent', onSent);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [activeTab, isSuperAdmin]);
+
   // Sort players by type: permanent first, then permanent_guest (guests), then guest (occasional)
   const sortPlayersByType = (playerList: Player[]): Player[] => {
     const typeOrder: Record<PlayerType, number> = {
@@ -643,6 +671,7 @@ const SettingsScreen = () => {
             subject: `📩 ${subjectActor} ${sentVerb} דיווח חדש`,
             message: `היי 👋\n\n${bodyActor} ${sentVerb} דיווח חדש:\n\n📌 ${catLabel}\n${reportText.trim()}\n\nאפשר לבדוק את זה בלשונית "דיווחים" בהגדרות כשנוח 🙏`,
             senderName: 'Poker Manager',
+            kind: 'broadcast',
           });
         }
       } catch {
@@ -2275,6 +2304,150 @@ const SettingsScreen = () => {
               );
             })()}
 
+            {/* EmailJS Usage Card — super admin only.
+                Mirrors the ElevenLabs Usage card directly above it: same
+                quota bar, same stats row, same recent-list pattern. Data
+                comes from `email_usage_log` (we maintain it ourselves —
+                EmailJS Free has no usage API). The card refreshes on
+                `email-sent` events so the bar updates immediately when an
+                admin sends a poll notification or settlement email. */}
+            {isSuperAdmin && (() => {
+              const used = emailUsage?.used ?? 0;
+              const limit = emailUsage?.limit ?? 200;
+              const remaining = emailUsage?.remaining ?? Math.max(limit - used, 0);
+              const failed = emailUsage?.failed ?? 0;
+              const resetDate = emailUsage?.resetDate;
+              const usedPct = Math.min(Math.round((used / limit) * 100), 100);
+              const perKind = emailUsage?.perKind || {};
+              const perDay = emailUsage?.perDay || [];
+              const recent = emailUsage?.recent || [];
+              const avgPerDay = perDay.length > 0
+                ? Math.round(perDay.reduce((s, d) => s + d.count, 0) / perDay.length)
+                : 0;
+              // Sort kinds by count desc for the breakdown — most-frequent at the top.
+              const kindEntries = Object.entries(perKind).sort((a, b) => b[1] - a[1]);
+              // Translation key map. Falls back to the raw kind string for any
+              // future kinds we add before remembering to register a label.
+              const kindLabel = (kind: string): string => {
+                const key = `settings.ai.emailKind.${kind}` as 'settings.ai.emailKind.invitation';
+                const translated = t(key);
+                return translated === key ? kind : translated;
+              };
+              const usageLoc = language === 'he' ? 'he-IL' : 'en-US';
+              return (
+                <div className="card" style={{ padding: '1rem' }}>
+                  <h2 className="card-title" style={{ margin: '0 0 0.75rem' }}>{t('settings.ai.emailJsUsage')}</h2>
+                  <div>
+                    {/* Monthly quota bar */}
+                    <div style={{ marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text)' }}>
+                          {emailUsage ? t('settings.ai.emailUsedLimit', { used: used.toLocaleString(), limit: limit.toLocaleString() }) : t('settings.ai.emailUsageLoading')}
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: usedPct > 80 ? '#EF4444' : usedPct > 50 ? '#F59E0B' : '#10B981', fontWeight: 600 }}>
+                          {emailUsage ? t('settings.ai.emailRemaining', { remaining: remaining.toLocaleString() }) : ''}
+                        </span>
+                      </div>
+                      <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${usedPct}%`, height: '100%', borderRadius: 4, transition: 'width 0.5s',
+                          background: usedPct > 80 ? '#EF4444' : usedPct > 50 ? '#F59E0B' : '#10B981',
+                        }} />
+                      </div>
+                      {resetDate && (
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                          {t('settings.ai.emailResetLine', { date: resetDate, perDay: avgPerDay })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stats row */}
+                    {emailUsage && used + failed > 0 && (
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div style={{ background: 'rgba(59,130,246,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#3B82F6' }}>{used.toLocaleString()}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>{t('settings.ai.emailUsedLimit', { used, limit }).split(' /')[0]}</div>
+                        </div>
+                        <div style={{ background: 'rgba(239,68,68,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: failed > 0 ? '#EF4444' : 'var(--text-muted)' }}>{failed.toLocaleString()}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>{t('settings.ai.emailFailed')}</div>
+                        </div>
+                        <div style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 8, padding: '0.4rem 0.6rem', flex: 1, textAlign: 'center' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#10B981' }}>{avgPerDay.toLocaleString()}</div>
+                          <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>{t('settings.ai.emailAvgPerDay')}</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Per-kind breakdown */}
+                    {kindEntries.length > 0 && (
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>{t('settings.ai.emailByKind')}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                          {kindEntries.map(([kind, count]) => (
+                            <span key={kind} style={{
+                              fontSize: '0.65rem', padding: '0.2rem 0.5rem', borderRadius: '0.4rem',
+                              background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)',
+                              color: '#a5b4fc', fontFeatureSettings: '"tnum"',
+                            }}>
+                              {kindLabel(kind)} · {count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent sends — collapsible to keep the card compact */}
+                    {recent.length > 0 ? (
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                        <button
+                          onClick={() => setShowEmailRecent(s => !s)}
+                          style={{
+                            width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0,
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{t('settings.ai.emailRecent')} · {recent.length}</span>
+                          <span style={{ fontSize: '0.6rem', transform: showEmailRecent ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                        </button>
+                        {showEmailRecent && (
+                          <div style={{ marginTop: '0.4rem', maxHeight: '240px', overflowY: 'auto' }}>
+                            {recent.map((entry, i) => {
+                              const d = new Date(entry.sent_at);
+                              const dateStr = d.toLocaleDateString(usageLoc, { day: 'numeric', month: 'short' });
+                              const timeStr = d.toLocaleTimeString(usageLoc, { hour: '2-digit', minute: '2-digit' });
+                              return (
+                                <div key={`${entry.sent_at}-${i}`} style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                  padding: '0.3rem 0',
+                                  borderBottom: i < recent.length - 1 ? '1px solid var(--border)' : 'none',
+                                  fontSize: '0.65rem',
+                                }}>
+                                  <span style={{ minWidth: '70px', color: 'var(--text-muted)' }}>{dateStr} {timeStr}</span>
+                                  <span style={{ minWidth: '85px', color: 'var(--text)' }}>{kindLabel(entry.kind)}</span>
+                                  <span style={{ flex: 1, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'ltr', textAlign: isRTL ? 'right' : 'left' }}>{entry.recipient}</span>
+                                  <span style={{ color: entry.success ? '#10B981' : '#EF4444', fontWeight: 700 }}>
+                                    {entry.success ? '✓' : '✗'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      emailUsage && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', padding: '0.5rem 0', borderTop: '1px solid var(--border)' }}>
+                          {t('settings.ai.emailUsageEmpty')}
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Today's Usage Card */}
             <div className="card" style={{ padding: '1rem' }}>
               <h2 className="card-title" style={{ margin: '0 0 0.75rem' }}>{t('settings.ai.todayUsage')}</h2>
@@ -2505,6 +2678,7 @@ const SettingsScreen = () => {
                                 subject: '✅ הדיווח שלך טופל — תודה!',
                                 message: `היי 👋\n\nרק רצינו לעדכן שטיפלנו בדיווח שלך:\n\n📌 ${catLabel}\n${r.description || ''}\n\nתודה שעזרת לשפר את האפליקציה 🙏\n— ${authPlayerName || 'Poker Manager'}`,
                                 senderName: 'Poker Manager',
+                                kind: 'broadcast',
                               });
                             }
                           } catch (err) {
@@ -3021,6 +3195,40 @@ const SettingsScreen = () => {
       {/* Push Notifications Tab */}
       {activeTab === 'push' && (
         <div>
+          {/* Push-howto hint — surfaced at the top of every member's
+              Notifications tab so the path from "I want notifications" to
+              "I'm actually receiving them" is one short sentence away.
+              Phrased generically (no "in v5.43 we dropped X") because it's
+              user-facing forever; the why is captured in the changelog. */}
+          <p style={{
+            margin: '0 0 0.75rem',
+            fontSize: '0.78rem',
+            color: 'var(--text-muted)',
+            lineHeight: 1.55,
+          }}>
+            {t('settings.notifications.pushHowTo')}
+          </p>
+          {/* Email-disabled banner for non-owner groups. Visible to every
+              member (not just admins) so anyone wondering why they don't
+              receive email sees the explanation. Server-side enforcement
+              lives in api/send-email.ts; this card is purely informational. */}
+          {!isEmailEnabledForCurrentGroup() && (
+            <div className="card" style={{
+              marginBottom: '0.75rem',
+              background: 'rgba(245, 158, 11, 0.08)',
+              borderColor: 'rgba(245, 158, 11, 0.45)',
+              borderStyle: 'solid',
+              borderWidth: 1,
+            }}>
+              <h3 style={{ margin: '0 0 0.4rem', fontSize: '0.95rem', color: '#F59E0B', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span>ℹ️</span>
+                <span>{t('settings.notifications.emailDisabledTitle')}</span>
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text)', lineHeight: 1.55 }}>
+                {t('settings.notifications.emailDisabledBody')}
+              </p>
+            </div>
+          )}
           <div className="card" style={{ marginBottom: '0.75rem' }}>
             <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>
               🔔 {t('push.title')}
@@ -3245,6 +3453,7 @@ const SettingsScreen = () => {
                         subject: `🃏 הודעה מ${authPlayerName || 'הקבוצה'}`,
                         message: pushMsg.trim(),
                         senderName: authPlayerName || 'Poker Manager',
+                        kind: 'broadcast',
                       });
                       if (ok) emailSent++;
                     }
@@ -3424,6 +3633,7 @@ const SettingsScreen = () => {
                       subject: '🧪 Poker Manager - בדיקה',
                       message: language === 'he' ? 'הודעת בדיקה' : 'Test message',
                       senderName: authPlayerName,
+                      kind: 'preview',
                     });
                     setPushResult(ok ? '📧 ✅' : '📧 ❌');
                   } catch (err) {
@@ -3446,12 +3656,26 @@ const SettingsScreen = () => {
 
           </div>
 
-          {/* Schedule-email preview tester — super admin only.
-              Lives in its own card below the generic push/email tester
-              so the layout stays predictable for non-super-admins
-              (they just don't see this card). The actual builders
-              and synthetic poll fixture live in `previewScheduleEmails.ts`. */}
-          {isSuperAdmin && (
+          {/* Schedule-email preview tester — super admin only, AND only on
+              the owner group. On non-owner groups email is hard-blocked at
+              the Edge Function, so we replace this card with a tiny lock
+              notice instead of letting the super admin spam the disabled
+              endpoint. The actual builders + synthetic poll fixture live in
+              `previewScheduleEmails.ts`. */}
+          {isSuperAdmin && !isEmailEnabledForCurrentGroup() && (
+            <div className="card" style={{
+              marginBottom: '0.75rem',
+              background: 'rgba(107, 114, 128, 0.08)',
+              borderStyle: 'dashed',
+              borderColor: 'rgba(107, 114, 128, 0.4)',
+              borderWidth: 1,
+            }}>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                {t('settings.notifications.emailLockedPreview')}
+              </p>
+            </div>
+          )}
+          {isSuperAdmin && isEmailEnabledForCurrentGroup() && (
             <div className="card" style={{ marginBottom: '0.75rem' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '1rem' }}>
                 {t('push.previewTitle')}
@@ -4225,15 +4449,56 @@ const SettingsScreen = () => {
                             const lastSessionMin = lastEntry.sessionDuration || 0;
                             const lastSessionScreens = (lastEntry.screensVisited || []).slice();
 
-                            const totalSessions = user.entries.length;
-                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
-                            const screenCounts: Record<string, number> = {};
-                            for (const e of user.entries) {
+                            // Format minutes for display. `sessionDuration` is
+                            // rounded to whole minutes upstream
+                            // (`activityLogger.ts:269`) so we can't render
+                            // sub-minute precision — for very short sessions
+                            // we show "< 1 דק׳" / "< 1 min" instead of "0
+                            // דק׳" which would imply the visit didn't happen.
+                            const formatDuration = (min: number): string => {
+                              if (min < 1) return language === 'he' ? '< 1 דק׳' : '< 1 min';
+                              if (min < 60) return `${Math.round(min)} ${language === 'he' ? 'דק׳' : 'min'}`;
+                              // Multi-hour totals get an "Xh Ym" form so a
+                              // power user with 547 minutes reads as "9 שע׳
+                              // 7 דק׳" instead of an opaque "547 דק׳".
+                              const h = Math.floor(min / 60);
+                              const m = Math.round(min % 60);
+                              const hLbl = language === 'he' ? 'שע׳' : 'h';
+                              const mLbl = language === 'he' ? 'דק׳' : 'm';
+                              return m > 0 ? `${h} ${hLbl} ${m} ${mLbl}` : `${h} ${hLbl}`;
+                            };
+
+                            // Stats in two scopes:
+                            //   - last 30 days (recent activity window)
+                            //   - all-time (total time invested in the app)
+                            // Previously this section labelled itself
+                            // "30 days" but the totals were summed across
+                            // `user.entries` (all-time), so a member with
+                            // 91 lifetime sessions and 8 minutes in the
+                            // current month read as "91 sessions in the
+                            // last 30 days" — wrong. We compute both
+                            // windows explicitly below and surface them
+                            // under separate headings so each number
+                            // means what its label says.
+                            const last30 = user.entries.filter(e =>
+                              now.getTime() - new Date(e.lastActive || e.timestamp).getTime() < thirtyDaysMs,
+                            );
+                            const sessions30d = last30.length;
+                            const min30d = last30.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+                            const days30d = user.sessions30d; // unique active days, last 30
+                            const screenCounts30d: Record<string, number> = {};
+                            for (const e of last30) {
                               for (const s of e.screensVisited) {
-                                screenCounts[s] = (screenCounts[s] || 0) + 1;
+                                screenCounts30d[s] = (screenCounts30d[s] || 0) + 1;
                               }
                             }
-                            const screensSorted = Object.entries(screenCounts).sort((a, b) => b[1] - a[1]);
+                            const screens30dSorted = Object.entries(screenCounts30d).sort((a, b) => b[1] - a[1]);
+
+                            const totalSessions = user.entries.length;
+                            const totalMin = user.entries.reduce((s, e) => s + (e.sessionDuration || 0), 0);
+                            const totalUniqueDays = new Set(
+                              user.entries.map(e => new Date(e.lastActive || e.timestamp).toDateString()),
+                            ).size;
 
                             const sectionLabelStyle: React.CSSProperties = {
                               fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)',
@@ -4258,9 +4523,13 @@ const SettingsScreen = () => {
                                   </div>
                                   <div style={statRowStyle}>
                                     <span>🕐 {lastStr}</span>
-                                    {lastSessionMin >= 1 && (
-                                      <span>⏱️ {Math.round(lastSessionMin)} {language === 'he' ? 'דק׳' : 'min'}</span>
-                                    )}
+                                    {/* Always render the duration, even for
+                                        sub-1-minute sessions. The previous
+                                        `>= 1` gate hid useful information
+                                        ("they bounced after 30 seconds")
+                                        and made the row feel inconsistent
+                                        across members. */}
+                                    <span>⏱️ {formatDuration(lastSessionMin)}</span>
                                   </div>
                                   {lastSessionScreens.length > 0 ? (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
@@ -4278,21 +4547,21 @@ const SettingsScreen = () => {
                                 {/* divider */}
                                 <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
 
-                                {/* ── Total (last 30d) ── */}
+                                {/* ── Last 30 days ── all numbers in this
+                                     block are scoped to the last 30 days,
+                                     including the screens chip cloud. */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                                   <div style={sectionLabelStyle}>
-                                    📈 {language === 'he' ? 'סה"כ (30 ימים)' : 'Total (30 days)'}
+                                    📈 {language === 'he' ? '30 ימים אחרונים' : 'Last 30 days'}
                                   </div>
                                   <div style={statRowStyle}>
-                                    <span>📊 {user.sessions30d} {t('settings.activity.visits')}</span>
-                                    <span>🔁 {totalSessions} {language === 'he' ? 'סשנים' : 'sessions'}</span>
-                                    {totalMin >= 1 && (
-                                      <span>⏱️ {Math.round(totalMin)} {language === 'he' ? 'דק׳ סה"כ' : 'min total'}</span>
-                                    )}
+                                    <span>📊 {days30d} {language === 'he' ? 'ימים' : 'days'}</span>
+                                    <span>🔁 {sessions30d} {language === 'he' ? 'סשנים' : 'sessions'}</span>
+                                    <span>⏱️ {formatDuration(min30d)}</span>
                                   </div>
-                                  {screensSorted.length > 0 ? (
+                                  {screens30dSorted.length > 0 ? (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                                      {screensSorted.map(([screen, count]) => (
+                                      {screens30dSorted.map(([screen, count]) => (
                                         <span key={screen} style={chipStyle}>
                                           {screen} <span style={{ color: '#818cf8', fontWeight: 600 }}>×{count}</span>
                                         </span>
@@ -4300,9 +4569,35 @@ const SettingsScreen = () => {
                                     </div>
                                   ) : (
                                     <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textAlign: 'center', opacity: 0.6 }}>
-                                      {language === 'he' ? 'נתוני מסכים יופיעו מהביקור הבא' : 'Screen data will appear from next visit'}
+                                      {language === 'he' ? 'אין פעילות ב-30 הימים האחרונים' : 'No activity in the last 30 days'}
                                     </div>
                                   )}
+                                </div>
+
+                                {/* divider */}
+                                <div style={{ height: '1px', background: 'var(--border)', opacity: 0.7 }} />
+
+                                {/* ── All-time totals ── single line: a
+                                     member's lifetime engagement with the
+                                     app at a glance. Surfaces the "time
+                                     spent" headline that was previously
+                                     hidden inside the 30-day block under a
+                                     mislabelled total. */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                                  <div style={sectionLabelStyle}>
+                                    🌍 {language === 'he' ? 'כל הזמן' : 'All time'}
+                                  </div>
+                                  <div style={statRowStyle}>
+                                    <span>📊 {totalUniqueDays} {language === 'he' ? 'ימים' : 'days'}</span>
+                                    <span>🔁 {totalSessions} {language === 'he' ? 'סשנים' : 'sessions'}</span>
+                                    <span>
+                                      ⏱️ {formatDuration(totalMin)}
+                                      {' '}
+                                      <span style={{ opacity: 0.7 }}>
+                                        ({language === 'he' ? 'באפליקציה' : 'on app'})
+                                      </span>
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             );

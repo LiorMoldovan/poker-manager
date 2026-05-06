@@ -54,6 +54,7 @@ const VERB_KEYS = [
   'confirmed',   // אישר / אישרה — RSVP yes
   'willUpdate',  // יעדכן / תעדכן — RSVP maybe
   'declined',    // סירב / סירבה — RSVP no
+  'invited',     // מוזמן / מוזמנת — passive participle (invited to ...)
 ] as const;
 
 export type VerbKey = typeof VERB_KEYS[number];
@@ -68,6 +69,7 @@ const VERBS: Record<Language, LangVerbs> = {
     confirmed:  { male: 'אישר',    female: 'אישרה' },
     willUpdate: { male: 'יעדכן',   female: 'תעדכן' },
     declined:   { male: 'סירב',    female: 'סירבה' },
+    invited:    { male: 'מוזמן',   female: 'מוזמנת' },
   },
   en: {
     won:        { male: 'won',         female: 'won' },
@@ -78,6 +80,7 @@ const VERBS: Record<Language, LangVerbs> = {
     confirmed:  { male: 'confirmed',   female: 'confirmed' },
     willUpdate: { male: 'will update', female: 'will update' },
     declined:   { male: 'declined',    female: 'declined' },
+    invited:    { male: 'invited',     female: 'invited' },
   },
 };
 

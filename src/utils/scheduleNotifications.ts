@@ -8,12 +8,28 @@ import {
   getPlayerEmailForNotification, getSettings,
   getPollChangeRecipients,
 } from '../database/storage';
-import { proxySendPush, proxySendBroadcastEmail } from './apiProxy';
-import { verbForName, type VerbKey } from './hebrewGender';
+import { proxySendPush, proxySendBroadcastEmail, type EmailKind } from './apiProxy';
+import { verbForName, getPlayerGender, type VerbKey } from './hebrewGender';
 
 type NotificationKind =
   | 'creation' | 'expanded' | 'confirmed' | 'cancellation' | 'vote_change'
   | 'reminder' | 'target_filled';
+
+// Internal poll-event names don't perfectly match the EmailKind taxonomy
+// (which is shared across all email-sending flows in the app). This map
+// keeps the email-usage breakdown legible: every poll-driven email shows up
+// under one of the schedule-lifecycle kinds in the Settings AI usage card.
+function notificationKindToEmailKind(kind: NotificationKind): EmailKind {
+  switch (kind) {
+    case 'creation':     return 'invitation';
+    case 'expanded':     return 'expanded';
+    case 'confirmed':    return 'confirmed';
+    case 'cancellation': return 'cancelled';
+    case 'vote_change':  return 'new_vote';
+    case 'reminder':     return 'reminder';
+    case 'target_filled':return 'target_filled';
+  }
+}
 
 // ── Helpers ──
 
@@ -24,10 +40,83 @@ function formatHebrewDateTime(date: GamePollDate): string {
     const day = d.getDate();
     const month = d.getMonth() + 1;
     const time = date.proposedTime ? ` ${date.proposedTime.slice(0, 5)}` : '';
-    return `${weekday} ${day}/${month}${time}`;
+    // Date-first ordering: numerical date precedes the weekday name
+    // ("7/5 יום חמישי 21:00") so the calendar value catches the
+    // reader's eye first — the weekday is contextual colour. Applied
+    // everywhere this helper is used (vote events, confirmation
+    // emails, multi-date bullet lists, reminders).
+    return `${day}/${month} ${weekday}${time}`;
   } catch {
     return date.proposedDate;
   }
+}
+
+// Verbose, label-prefixed variant for "main event" confirmation emails
+// where the date IS the headline and the email has room to breathe. The
+// compact `formatHebrewDateTime` form (`7/5 יום חמישי 21:00`) is still
+// used inside multi-date bullet lists where labels would clutter the row.
+//
+// Output shape: "תאריך 7/5, יום חמישי, שעה 21:00"
+//   * "תאריך" + numeric date first, matching the date-first ordering of
+//     the compact form.
+//   * Weekday name middle for context.
+//   * "שעה" + HH:MM last so the time is the final pinpoint.
+function formatHebrewDateTimeVerbose(date: GamePollDate): string {
+  try {
+    const d = new Date(`${date.proposedDate}T${date.proposedTime || '21:00'}`);
+    const weekday = d.toLocaleDateString('he-IL', { weekday: 'long' });
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    // "בשעה" (preposition "at the hour") flows naturally after the
+    // weekday without a comma, so the line reads as one phrase rather
+    // than three comma-separated fragments. Drops a punctuation
+    // character on every email and feels more conversational.
+    const timeLabel = date.proposedTime
+      ? ` בשעה ${date.proposedTime.slice(0, 5)}`
+      : '';
+    return `תאריך ${day}/${month}, ${weekday}${timeLabel}`;
+  } catch {
+    return date.proposedDate;
+  }
+}
+
+// Build the seat-fill status line in natural Hebrew, branching by the
+// gap between confirmed and target. Hebrew has different phrasings for
+// 0 / 1 / many in both the players phrase ("אף שחקן" / "שחקן אחד" /
+// "{N} שחקנים") and the remaining phrase ("מקום אחרון" singular vs
+// "{N} מקומות" plural), so a single template can't cover all cases.
+//
+// Scenarios:
+//   - yesCount === 0  → "אף שחקן עוד לא אישר מתוך {target} מקומות,
+//                        נשארו עוד {target} מקומות"
+//   - yesCount === 1  → "שחקן אחד אישר מתוך {target} מקומות,
+//                        נשארו עוד {N} מקומות"
+//   - 2 ≤ yesCount < target ─ same shape with "{N} שחקנים אישרו"
+//   - one seat left   → "…, נשאר עוד מקום אחרון"
+//   - exactly target  → "…, כל המקומות מלאים" (drop the "מתוך" math —
+//                        it's redundant when full)
+//   - over target     → "{N} שחקנים אישרו לתאריך זה" (the original
+//                        target is no longer the relevant frame —
+//                        expansion is a positive signal, not an
+//                        overflow)
+export function buildSeatStateLine(yesCount: number, target: number): string {
+  let playersPhrase: string;
+  if (yesCount === 0) playersPhrase = 'אף שחקן עוד לא אישר';
+  else if (yesCount === 1) playersPhrase = 'שחקן אחד אישר';
+  else playersPhrase = `${yesCount} שחקנים אישרו`;
+
+  const remaining = target - yesCount;
+
+  if (remaining < 0) {
+    return `${playersPhrase} לתאריך זה`;
+  }
+  if (remaining === 0) {
+    return `${playersPhrase} — כל המקומות מלאים`;
+  }
+  if (remaining === 1) {
+    return `${playersPhrase} מתוך ${target} מקומות, נשאר עוד מקום אחרון`;
+  }
+  return `${playersPhrase} מתוך ${target} מקומות, נשארו עוד ${remaining} מקומות`;
 }
 
 function deepLinkUrl(pollId: string): string {
@@ -138,23 +227,76 @@ function formatDateBullet(d: GamePollDate, defaultLoc?: string | null): string {
   return `• ${formatHebrewDateTime(d)}${loc ? ` — ${loc}` : ''}`;
 }
 
-export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
+// "Voting closes at" deadline tailored for the invitation/reminder
+// emails to permanent members. They can already vote, so the
+// "ההצבעה תיפתח לכולם" expansion countdown isn't relevant — what
+// matters is when voting effectively ends, i.e. when the earliest
+// upcoming proposed date arrives. Drops the ⏳ emoji to match the
+// cleaner template style. Returns null if every proposed date is
+// already in the past (defensive — fresh polls always have at
+// least one upcoming).
+function buildPollClosesAtLine(poll: GamePoll): string | null {
+  const now = Date.now();
+  const stamps = poll.dates
+    .map(d => {
+      const time = d.proposedTime || '21:00';
+      const ts = new Date(`${d.proposedDate}T${time}`).getTime();
+      return Number.isFinite(ts) ? ts : 0;
+    })
+    .filter(ts => ts > now)
+    .sort((a, b) => a - b);
+  if (stamps.length === 0) return null;
+  return `ההצבעה נסגרת בעוד ${formatReminderRemainingHebrew(stamps[0] - now)}`;
+}
+
+// Decide between a single shared "מיקום – {loc}" line below the
+// bullets vs. inline per-date locations. Most groups schedule every
+// proposed date at the same default location (the host's home), so
+// repeating the name on every bullet is noise. When dates do differ
+// — a rare case where the admin set a custom per-date location —
+// we fall back to the inline-per-bullet form so each date stays
+// unambiguous.
+function buildDatesAndLocationBlock(poll: GamePoll): { dateLines: string; locationLine: string } {
+  const allShareDefault =
+    !!poll.defaultLocation &&
+    poll.dates.every(d => !d.location || d.location === poll.defaultLocation);
+  if (allShareDefault) {
+    const dateLines = poll.dates
+      .map(d => `• ${formatHebrewDateTime(d)}`)
+      .join('\n');
+    return { dateLines, locationLine: `מיקום – ${poll.defaultLocation}` };
+  }
   const dateLines = poll.dates
     .map(d => formatDateBullet(d, poll.defaultLocation))
     .join('\n');
-  const deadline = buildReminderDeadlineLine(poll);
+  return { dateLines, locationLine: '' };
+}
+
+export function buildInvitationMessage(poll: GamePoll): BuiltMessage {
+  const { dateLines, locationLine } = buildDatesAndLocationBlock(poll);
+  const deadline = buildPollClosesAtLine(poll);
   const subject = '🃏 ערב פוקר חדש — הצביעו!';
+  // Two-NBSP indent for the labelled rows ("התאריכים הפתוחים", "יעד",
+  // "ההצבעה נסגרת", CTA). The bullets and the location line stay
+  // unindented as visual anchors. Email-RTL wrapper uses
+  // `white-space: normal` so regular spaces would collapse.
+  const I = '\u00a0\u00a0';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 להצבעה: ${link}` : '';
+
   return {
     pushTitle: subject,
     pushBody: `הוצעו ${poll.dates.length} תאריכים. היכנסו והצביעו 📅`,
     emailSubject: subject,
     emailBody: (name) =>
       emailGreeting(name) +
-      'נפתחה הצבעה לערב פוקר חדש 🃏\n\n' +
-      `📅 התאריכים המוצעים:\n${dateLines}\n\n` +
-      `🎯 יעד: ${poll.targetPlayerCount} שחקנים` +
-      (deadline ? `\n${deadline}` : '') +
-      emailCtaBlock(poll, 'להצבעה'),
+      'ההצבעה לערב הפוקר עדיין פתוחה.\n\n' +
+      `${I}📅 התאריכים הפתוחים:\n${dateLines}\n\n` +
+      (locationLine ? `📍 ${locationLine}\n\n` : '') +
+      `${I}🎯 יעד: ${poll.targetPlayerCount} שחקנים` +
+      (deadline ? `\n${I}⏳ ${deadline}` : '') +
+      ctaBlock +
+      '\n\n— Poker Manager',
   };
 }
 
@@ -183,20 +325,23 @@ export function buildConfirmedMessage(
   yesNames: string[],
 ): BuiltMessage {
   const loc = confirmedDate.location || poll.defaultLocation;
-  const dateLine = formatHebrewDateTime(confirmedDate);
-  const locLine = loc ? `📍 ${loc}\n` : '';
+  const dateLineCompact = formatHebrewDateTime(confirmedDate);
+  const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
+  const locLine = loc ? `מיקום - ${loc}\n` : '';
   return {
     pushTitle: '✅ המשחק נסגר!',
-    pushBody: `${dateLine}${loc ? ` — ${loc}` : ''}`,
+    // Push body stays compact — small notification surface, every char
+    // counts. Email body uses the verbose label-prefixed format.
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''}`,
     emailSubject: '✅ נסגר! ניפגש בערב פוקר 🃏',
     emailBody: (name) =>
       emailGreeting(name) +
-      'הצבעת ערב הפוקר נסגרה — ניפגש 🎉\n\n' +
-      `📅 ${dateLine}\n` +
+      'נבחר תאריך — המשחק נסגר 🎉\n\n' +
+      `${dateLineVerbose}\n` +
       locLine +
-      `👥 ${yesNames.length} שחקנים שאישרו: ${yesNames.join(', ')}` +
+      `${yesNames.length} שחקנים אישרו: ${yesNames.join(', ')}` +
       emailCtaBlock(poll, 'לפרטים') +
-      '\n\nנתראה על השולחן! 🃏',
+      '\n\nתגיעו בזמן!',
   };
 }
 
@@ -211,20 +356,54 @@ export function buildTargetFilledMessage(
   yesNames: string[],
 ): BuiltMessage {
   const loc = confirmedDate.location || poll.defaultLocation;
-  const dateLine = formatHebrewDateTime(confirmedDate);
-  const locLine = loc ? `📍 ${loc}\n` : '';
+  const dateLineCompact = formatHebrewDateTime(confirmedDate);
+  const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
+
+  const yesCount = yesNames.length;
+  // Confirmed-players phrase, with name list. Same shape as the
+  // sibling confirmed-below-target builders for visual consistency
+  // across the four "the date is set" emails.
+  let confirmedLine: string;
+  if (yesCount === 0) {
+    confirmedLine = '0 שחקנים אישרו';
+  } else if (yesCount === 1) {
+    confirmedLine = `שחקן אחד אישר: ${yesNames[0]}.`;
+  } else {
+    confirmedLine = `${yesCount} שחקנים אישרו: ${yesNames.join(', ')}.`;
+  }
+
+  // Conditional seats line. By design this builder fires when target
+  // was just hit (yesCount >= target → missing === 0), so the line
+  // is normally omitted entirely. We compute it defensively in case
+  // the call-site contract drifts (e.g. expansion paths firing this
+  // builder for a not-quite-full state).
+  const missing = Math.max(0, poll.targetPlayerCount - yesCount);
+  const seatsLine = missing === 0
+    ? ''
+    : missing === 1
+      ? '\n🪑 נשאר עוד מקום אחרון'
+      : `\n🪑 נשארו עוד ${missing} מקומות`;
+
+  // Two-NBSP indent for the details "card" — the email-RTL wrapper
+  // would otherwise collapse the leading whitespace.
+  const I = '\u00a0\u00a0';
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 לפרטים: ${link}` : '';
+
   return {
     pushTitle: '🎉 המשחק מלא — ניפגש!',
-    pushBody: `${dateLine}${loc ? ` — ${loc}` : ''}`,
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''}`,
     emailSubject: '🎉 המשחק מלא — ניפגש בערב פוקר 🃏',
     emailBody: (name) =>
       emailGreeting(name) +
-      'נסגרה השורה — המשחק מלא 🎉\n\n' +
-      `📅 ${dateLine}\n` +
+      'הצבעת ערב הפוקר נסגרה — ניפגש 🎉\n\n' +
+      `${I}📅 ${dateLineVerbose}\n` +
       locLine +
-      `👥 ${yesNames.length} שחקנים שאישרו: ${yesNames.join(', ')}` +
-      emailCtaBlock(poll, 'לפרטים') +
-      '\n\nנתראה על השולחן! 🃏',
+      `${I}👥 ${confirmedLine}` +
+      seatsLine +
+      ctaBlock +
+      '\n\nנתראה על השולחן! 🃏\n\n— Poker Manager',
   };
 }
 
@@ -247,24 +426,72 @@ export function buildConfirmedBelowTargetYesMessage(
   missing: number,
 ): BuiltMessage {
   const loc = confirmedDate.location || poll.defaultLocation;
-  const dateLine = formatHebrewDateTime(confirmedDate);
-  const locLine = loc ? `📍 ${loc}\n` : '';
-  const missingPhrase = missing === 1
-    ? 'שחקן אחרון וסוגרים!'
-    : `חסרים עוד ${missing} שחקנים`;
+  const dateLineCompact = formatHebrewDateTime(confirmedDate);
+  const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
+
+  // Confirmed-players list, ordered by RSVP commit time. Same shape
+  // as the "others" variant — first to RSVP shows up first.
+  const playersById = new Map(getAllPlayers().map(p => [p.id, p.name]));
+  const confirmedNames = poll.votes
+    .filter(v => v.dateId === confirmedDate.id && v.response === 'yes')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(v => playersById.get(v.playerId))
+    .filter((n): n is string => Boolean(n));
+
+  let confirmedLine: string;
+  if (confirmedNames.length === 0) {
+    confirmedLine = `${yesCount} שחקנים אישרו`;
+  } else if (yesCount === 1) {
+    confirmedLine = `שחקן אחד אישר: ${confirmedNames[0]}.`;
+  } else {
+    confirmedLine = `${yesCount} שחקנים אישרו: ${confirmedNames.join(', ')}.`;
+  }
+
+  // Remaining-seats phrase (same singular/plural rules as the
+  // "others" variant for consistency across the two paired emails).
+  const seatsPhrase = missing === 1
+    ? 'נשאר עוד מקום אחרון'
+    : `נשארו עוד ${missing} מקומות`;
+
+  // Hero #2: addresses the recipient personally. "אתה רשום" (m.) /
+  // "את רשומה" (f.) — both pronoun and adjective swap, so a verb-
+  // table swap isn't enough; we branch on the resolved gender here.
+  // The seat-availability tail flips with `missing` (singular vs
+  // plural). Falls back to the masculine form when the recipient
+  // isn't a known player (no gender on file).
+  const gender = getPlayerGender;
+  const seatTail = missing === 1
+    ? 'אבל עוד יש מקום פנוי'
+    : `אבל עוד יש ${missing} מקומות פנויים`;
+
+  // Two-NBSP indent so the email-RTL wrapper's `white-space: normal`
+  // doesn't collapse the visual hierarchy. Same trick used in the
+  // "others" sibling email.
+  const I = '\u00a0\u00a0';
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 לפרטים: ${link}` : '';
+
   const subject = '✅ התאריך נבחר — אתם בפנים';
   return {
     pushTitle: subject,
-    pushBody: `${dateLine}${loc ? ` — ${loc}` : ''} · ${missingPhrase}`,
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''} · ${seatsPhrase}`,
     emailSubject: subject,
-    emailBody: (name) =>
-      emailGreeting(name) +
-      'נבחר תאריך לערב הפוקר 🎯\nאתם רשומים, אבל עוד חסרים שחקנים כדי לסגור.\n\n' +
-      `📅 ${dateLine}\n` +
-      locLine +
-      `👥 ${yesCount}/${poll.targetPlayerCount} שאישרו — ${missingPhrase}\n\n` +
-      'אם מכירים מישהו שיכול להצטרף, תפיצו את הלינק 🤝' +
-      emailCtaBlock(poll, 'לפרטים'),
+    emailBody: (name) => {
+      const youRegistered = gender(name) === 'female' ? 'את רשומה' : 'אתה רשום';
+      return (
+        emailGreeting(name) +
+        'נבחר תאריך לערב הפוקר 🎯\n' +
+        `${youRegistered}, ${seatTail}.\n\n` +
+        `${I}📅 ${dateLineVerbose}\n` +
+        locLine +
+        `${I}👥 ${confirmedLine}\n` +
+        `🪑 ${seatsPhrase}\n\n` +
+        'אם יש לכם אורח שרוצה להצטרף — תעדכנו 🤝' +
+        ctaBlock +
+        '\n\n— Poker Manager'
+      );
+    },
   };
 }
 
@@ -275,23 +502,68 @@ export function buildConfirmedBelowTargetOthersMessage(
   missing: number,
 ): BuiltMessage {
   const loc = confirmedDate.location || poll.defaultLocation;
-  const dateLine = formatHebrewDateTime(confirmedDate);
-  const locLine = loc ? `📍 ${loc}\n` : '';
+  const dateLineCompact = formatHebrewDateTime(confirmedDate);
+  const dateLineVerbose = formatHebrewDateTimeVerbose(confirmedDate);
+
+  // Resolve the names of the players who already RSVP'd "yes" on the
+  // pinned date, ordered by RSVP time (createdAt) so the list reads
+  // as a chronological commit order — first to confirm shows up
+  // first. Falls back gracefully if a vote's playerId can't be
+  // resolved (deleted player).
+  const playersById = new Map(getAllPlayers().map(p => [p.id, p.name]));
+  const confirmedNames = poll.votes
+    .filter(v => v.dateId === confirmedDate.id && v.response === 'yes')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .map(v => playersById.get(v.playerId))
+    .filter((n): n is string => Boolean(n));
+
+  // Player count phrase, with the names list when we have any.
+  // Hebrew counted-noun shape:
+  //   1   → "שחקן אחד אישר: {name}."
+  //   2+  → "{N} שחקנים אישרו: {names}."
+  // We never reach yesCount === 0 here (the function only fires on
+  // a confirmed-below-target pin, which requires ≥ 1 yes-voter), but
+  // the fallback is present in case the call-site contract drifts.
+  let confirmedLine: string;
+  if (confirmedNames.length === 0) {
+    confirmedLine = `${yesCount} שחקנים אישרו`;
+  } else if (yesCount === 1) {
+    confirmedLine = `שחקן אחד אישר: ${confirmedNames[0]}.`;
+  } else {
+    confirmedLine = `${yesCount} שחקנים אישרו: ${confirmedNames.join(', ')}.`;
+  }
+
+  // Remaining-seats phrase with singular/plural Hebrew agreement.
+  // We use "נשאר עוד מקום אחרון" for the last seat (specific
+  // wording requested) and "נשארו עוד {N} מקומות" for the plural.
   const seatsPhrase = missing === 1
-    ? 'נשאר מקום אחד פנוי'
-    : `נשארו ${missing} מקומות פנויים`;
+    ? 'נשאר עוד מקום אחרון'
+    : `נשארו עוד ${missing} מקומות`;
+
+  // Two-NBSP indent for the "details card" — the email-RTL wrapper
+  // uses `white-space: normal` and would collapse regular spaces, so
+  // \u00a0 (non-breaking space) is required to make the indent
+  // survive Gmail / Outlook rendering.
+  const I = '\u00a0\u00a0';
+  const locLine = loc ? `${I}📍 מיקום - ${loc}\n` : '';
+  const link = emailVoteLink(poll);
+  const ctaBlock = link ? `\n\n${I}👉 לאישור הגעה: ${link}` : '';
+
   return {
     pushTitle: '🪑 חסרים שחקנים למשחק',
-    pushBody: `${dateLine}${loc ? ` — ${loc}` : ''} · ${seatsPhrase}`,
+    pushBody: `${dateLineCompact}${loc ? ` — ${loc}` : ''} · ${seatsPhrase}`,
     emailSubject: '🪑 נקבע תאריך — נשארו מקומות פנויים',
     emailBody: (name) =>
       emailGreeting(name) +
-      'נקבע תאריך לערב הפוקר! עוד יש מקומות פנויים — אם זה מתאים לכם, אנחנו רוצים אתכם בפנים 🤝\n\n' +
-      `📅 ${dateLine}\n` +
+      'נקבע תאריך לערב הפוקר! 🎯\n' +
+      `עוד יש מקומות פנויים, ${verbForName('invited', name)} להצביע 🤝\n\n` +
+      `${I}📅 ${dateLineVerbose}\n` +
       locLine +
-      `👥 ${yesCount}/${poll.targetPlayerCount} שאישרו — ${seatsPhrase}\n\n` +
+      `${I}👥 ${confirmedLine}\n` +
+      `🪑 ${seatsPhrase}\n\n` +
       'ההצבעה כעת רק על התאריך הזה.' +
-      emailCtaBlock(poll, 'לאישור הגעה'),
+      ctaBlock +
+      '\n\n— Poker Manager',
   };
 }
 
@@ -331,7 +603,7 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
     emailSubject: '❌ ערב הפוקר בוטל',
     emailBody: (name) =>
       emailGreeting(name) +
-      'ערב הפוקר בוטל לפעם הזו 😔' +
+      'ערב הפוקר בוטל 😔' +
       reasonLine +
       '\n\nנתראה בפעם הבאה! 🃏',
   };
@@ -342,6 +614,20 @@ export function buildCancellationMessage(poll: GamePoll): BuiltMessage {
 // per-recipient so we can inject a personal greeting. Both channels are
 // independently gated by group settings — the WhatsApp share buttons +
 // in-app banners always work regardless.
+// Per-kind email allowlist — emails are reserved for the events members
+// genuinely shouldn't miss. Noisy / informational kinds (creation,
+// expanded, vote_change) are push-only. Introduced in v5.43 to keep us
+// inside the EmailJS free quota; push fan-out remains unchanged for every
+// kind so subscribers still get realtime updates if they have push set up.
+// Layered ON TOP of the group-level `scheduleEmailsEnabled` toggle — both
+// must be true for an email to go out.
+const EMAIL_ALLOWLIST: ReadonlySet<NotificationKind> = new Set<NotificationKind>([
+  'confirmed',
+  'target_filled',
+  'cancellation',
+  'reminder',
+]);
+
 async function dispatch(
   poll: GamePoll,
   kind: NotificationKind,
@@ -373,6 +659,11 @@ async function dispatch(
     console.log(`[schedule-notify/${kind}] push disabled by group setting`);
   }
 
+  if (!EMAIL_ALLOWLIST.has(kind)) {
+    console.log(`[schedule-notify/${kind}] email skipped (push-only kind)`);
+    return;
+  }
+
   if (!emailsEnabled) {
     console.log(`[schedule-notify/${kind}] emails disabled by group setting, skipping ${recipientNames.length} recipients`);
     return;
@@ -394,6 +685,7 @@ async function dispatch(
         subject: msg.emailSubject,
         message: msg.emailBody(name),
         senderName: 'Poker Manager',
+        kind: notificationKindToEmailKind(kind),
       });
       if (!ok) console.warn(`[schedule-notify/${kind}] email failed for ${name}`);
     } catch (err) {
@@ -566,9 +858,17 @@ export function buildVoteEventMessage(
     : '';
   // Distinct title so the lock-screen preview tells subscribers
   // immediately whether this is fresh activity or a flip — the body
-  // ("ליאור אישר לתאריך…") reads identically for both cases.
+  // ("7/5 יום חמישי 21:00 — ליאור אישר") reads identically for both
+  // cases.
   const title = isNewVote ? '🗳️ הצבעה חדשה' : '🔄 הצבעה עודכנה';
-  const summary = `${voterName}${proxyTag} ${responseLabel} לתאריך ${dateLine}`.trim();
+  // Date-led summary: the calendar slot is the highest-information
+  // payload (when? what's the slot?), so it leads. Actor + verb come
+  // after an em-dash. The verb stands alone grammatically without
+  // its old "לתאריך" preposition because the dash already signals
+  // "for this date — X did Y".
+  const summary = dateLine
+    ? `${dateLine} — ${voterName}${proxyTag} ${responseLabel}`.trim()
+    : `${voterName}${proxyTag} ${responseLabel}`.trim();
   // Live yes count for that date — gives the subscriber the seat-fill
   // status without making them open the app. `poll.votes` is the post-
   // write snapshot (caller passes the refreshed poll), so we count
@@ -576,7 +876,7 @@ export function buildVoteEventMessage(
   const yesCount = poll.votes.filter(
     v => v.dateId === vote.dateId && v.response === 'yes',
   ).length;
-  const stateLine = `📊 ${yesCount}/${poll.targetPlayerCount} שאישרו לתאריך זה`;
+  const stateLine = `📊 ${buildSeatStateLine(yesCount, poll.targetPlayerCount)}`;
   return {
     pushTitle: title,
     pushBody: summary,

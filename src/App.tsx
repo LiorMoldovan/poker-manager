@@ -614,6 +614,29 @@ function SupabaseApp() {
     return () => window.removeEventListener('supabase-sync-error', handler);
   }, []);
 
+  // One-shot toast when an email send is blocked because this group isn't
+  // the deployment owner's. Fired by `apiProxy.ts` either pre-flight (we
+  // know up front from VITE_OWNER_GROUP_ID) or as defense-in-depth on a
+  // server 403. Dedup via sessionStorage so we don't pester the user every
+  // time a new poll event would have triggered email — once per session is
+  // enough to set expectations.
+  useEffect(() => {
+    const SEEN_KEY = 'email-disabled-toast-shown';
+    const handler = () => {
+      try {
+        if (sessionStorage.getItem(SEEN_KEY) === '1') return;
+        sessionStorage.setItem(SEEN_KEY, '1');
+      } catch { /* sessionStorage unavailable, fall through and show once */ }
+      const lang = (typeof document !== 'undefined' && document.documentElement.lang === 'en') ? 'en' : 'he';
+      const msg = lang === 'en'
+        ? 'ℹ️ Email is disabled for this group · push notifications continue to work'
+        : 'ℹ️ מיילים מושבתים בקבוצה זו · התראות דחיפה ממשיכות לעבוד';
+      showToast(msg, 'info');
+    };
+    window.addEventListener('email-disabled-for-group', handler);
+    return () => window.removeEventListener('email-disabled-for-group', handler);
+  }, []);
+
   // Mobile-safety net: flush any pending debounced syncs when the tab is
   // hidden or being unloaded. Mobile browsers (especially iOS Safari) will
   // suspend or evict setTimeout when the tab backgrounds, so a 300ms

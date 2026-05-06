@@ -31,9 +31,6 @@ import {
 } from '../utils/pokerTraining';
 import { getGeminiApiKey } from '../utils/geminiAI';
 import { fetchTrainingAnswers, fetchTrainingInsights, uploadTrainingInsights } from '../database/trainingData';
-import { proxySendBroadcastEmail } from '../utils/apiProxy';
-import { verbForName } from '../utils/hebrewGender';
-import { supabase } from '../database/supabaseClient';
 
 const fixCardBidi = (text: string): string =>
   text.replace(/([AKQJ]|10|[2-9])(♠|♥|♦|♣)/g, '\u200E$1$2\u200E');
@@ -314,33 +311,9 @@ const SharedQuickPlayScreen = () => {
       console.error('[training] directWriteSession unexpected failure:', err, { playerName: name });
     });
 
-    if (finalReports.length > 0) {
-      (async () => {
-        try {
-          const { data: emails } = await supabase.rpc('get_super_admin_emails');
-          if (!emails || !Array.isArray(emails) || emails.length === 0) return;
-          const reasons = finalReports.map(r => {
-            const labels: Record<string, string> = { wrong_answer: 'תשובה שגויה', unclear_question: 'שאלה לא ברורה', wrong_for_home_game: 'לא למשחק ביתי', other: 'אחר' };
-            return `• ${labels[r.reason] || r.reason}${r.comment ? `: ${r.comment}` : ''}`;
-          }).join('\n');
-          const subject = finalReports.length > 1
-            ? `🎯 ${finalReports.length} דיווחים חדשים מאימון`
-            : `🎯 דיווח חדש מאימון`;
-          // Gender-aware verb: "ליאור פתח" (male) vs "מיכל פתחה"
-          // (female), looked up against the player roster by name.
-          const openedVerb = verbForName('opened', name);
-          const reportsNoun = finalReports.length === 1
-            ? 'דיווח'
-            : `${finalReports.length} דיווחים`;
-          const message = `היי 👋\n\n${name} ${openedVerb} ${reportsNoun} על שאלות אימון:\n\n${reasons}\n\nאפשר לראות ולטפל בלשונית "אימון" בהגדרות כשיש זמן 🙏`;
-          for (const email of emails) {
-            if (email) {
-              proxySendBroadcastEmail({ to: email, subject, message, senderName: 'Poker Training' }).catch(() => {});
-            }
-          }
-        } catch { /* best-effort */ }
-      })();
-    }
+    // Reports are persisted via directWriteSession above; admins review them
+    // in Settings → Training tab. Email fan-out to super-admins was retired
+    // in v5.43 to keep us inside the EmailJS free quota.
 
     if (!resultsToUse) {
       setShowSummary(true);

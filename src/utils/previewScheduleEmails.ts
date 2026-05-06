@@ -155,6 +155,7 @@ async function sendOne(
     subject,
     message: msg.emailBody('ליאור'),
     senderName: 'Poker Manager',
+    kind: 'preview',
   });
   return { variant, ok };
 }

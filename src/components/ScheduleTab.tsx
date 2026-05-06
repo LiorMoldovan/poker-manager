@@ -387,6 +387,21 @@ export default function ScheduleTab() {
     return () => clearTimeout(timer);
   }, [highlightedPollId]);
 
+  // Deep-link handler: `?action=create-poll` from the home dashboard's
+  // empty schedule card opens the create-poll modal directly, saving
+  // admins the extra "Settings → Schedule → +" tap. The param is
+  // stripped after handling so a refresh or back-navigation doesn't
+  // re-open the modal. Members who somehow land here see the param
+  // cleared without anything popping up.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('action') !== 'create-poll') return;
+    params.delete('action');
+    const newSearch = params.toString() ? `?${params.toString()}` : '';
+    if (isAdmin) setShowCreateModal(true);
+    navigate({ pathname: location.pathname, search: newSearch }, { replace: true });
+  }, [location.search, location.pathname, isAdmin, navigate]);
+
   const handleToggleSubscription = async (pollId: string) => {
     const isSubscribed = subscribedPollIds.has(pollId);
     // Optimistic update — flip the local Set immediately so the button
@@ -403,7 +418,19 @@ export default function ScheduleTab() {
         showMsg('success', t('schedule.subscribe.unsubscribed'));
       } else {
         await subscribeToPollChanges(pollId);
-        showMsg('success', t('schedule.subscribe.subscribed'));
+        // Vote-change alerts are push-only since v5.43 (email was
+        // retired to stay inside the EmailJS free quota). If push
+        // isn't actually enabled in this browser, the toggle is a
+        // no-op until the user installs the PWA + grants permission
+        // — surface that hint in the success toast so it's clear
+        // why notifications aren't arriving.
+        const pushReady = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+        showMsg(
+          'success',
+          pushReady
+            ? t('schedule.subscribe.subscribed')
+            : `${t('schedule.subscribe.subscribed')} — ${t('schedule.subscribe.pushHint')}`,
+        );
       }
     } catch (e) {
       // Roll back on failure.

@@ -27,6 +27,11 @@ body {
   color: var(--text);
   min-height: 100vh;
   line-height: 1.5;
+  /* Suppress the browser's native pull-to-refresh / rubber-band on
+     the page body so our custom pull-to-refresh on the home
+     dashboard isn't doubled-up with Chrome's "drag to reload" or
+     iOS Safari's bounce. Nested scroll containers are unaffected. */
+  overscroll-behavior-y: contain;
 }
 
 #root {
@@ -735,6 +740,11 @@ th {
 @keyframes fadeOut {
   from { opacity: 1; }
   to { opacity: 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Accessibility: respect reduced motion preference */
