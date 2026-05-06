@@ -176,14 +176,17 @@ export default async function handler(req: Request): Promise<Response> {
 
     if (!res.ok) {
       const errText = await res.text();
-      // Fire-and-forget log; we already have the response we need to return.
-      logEmailSend(authHeader, groupId, to, safeKind, subject, false, res.status, errText?.slice(0, 500) || null, usedTemplateId);
+      // MUST await: Vercel Edge runtime tears the worker down as soon as the
+      // Response is returned, so a fire-and-forget fetch to Supabase has no
+      // chance to complete. The dashboard would silently stay at 0.
+      // The added latency is one Supabase REST hop (~50-100ms) — acceptable.
+      await logEmailSend(authHeader, groupId, to, safeKind, subject, false, res.status, errText?.slice(0, 500) || null, usedTemplateId);
       return new Response(JSON.stringify({ error: { message: `EmailJS: ${errText || res.status}` } }), {
         status: 502, headers: JSON_HEADERS,
       });
     }
 
-    logEmailSend(authHeader, groupId, to, safeKind, subject, true, res.status, null, usedTemplateId);
+    await logEmailSend(authHeader, groupId, to, safeKind, subject, true, res.status, null, usedTemplateId);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200, headers: JSON_HEADERS,

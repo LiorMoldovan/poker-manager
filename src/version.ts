@@ -4,7 +4,7 @@
  * Last deploy trigger: 2026-04-20-v2
  */
 
-export const APP_VERSION = '5.43.0';
+export const APP_VERSION = '5.43.1';
 
 export interface ChangelogEntry {
   version: string;
@@ -13,6 +13,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '5.43.1',
+    date: '2026-05-06',
+    changes: [
+      '🐛 Fixed email log: send was fire-and-forget, never persisted',
+      'ℹ️ Usage card shows "logging since" date',
+      'ℹ️ Limit labeled "EmailJS Free default" or "from env"',
+      '🔗 Direct link to EmailJS dashboard',
+    ],
+  },
   {
     version: '5.43.0',
     date: '2026-05-06',

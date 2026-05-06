@@ -2314,9 +2314,11 @@ const SettingsScreen = () => {
             {isSuperAdmin && (() => {
               const used = emailUsage?.used ?? 0;
               const limit = emailUsage?.limit ?? 200;
+              const limitSource = emailUsage?.limitSource ?? 'default';
               const remaining = emailUsage?.remaining ?? Math.max(limit - used, 0);
               const failed = emailUsage?.failed ?? 0;
               const resetDate = emailUsage?.resetDate;
+              const loggingSince = emailUsage?.loggingSince || null;
               const usedPct = Math.min(Math.round((used / limit) * 100), 100);
               const perKind = emailUsage?.perKind || {};
               const perDay = emailUsage?.perDay || [];
@@ -2324,6 +2326,10 @@ const SettingsScreen = () => {
               const avgPerDay = perDay.length > 0
                 ? Math.round(perDay.reduce((s, d) => s + d.count, 0) / perDay.length)
                 : 0;
+              const loggingSinceLoc = language === 'he' ? 'he-IL' : 'en-US';
+              const loggingSinceStr = loggingSince
+                ? new Date(loggingSince).toLocaleDateString(loggingSinceLoc, { day: 'numeric', month: 'short', year: 'numeric' })
+                : null;
               // Sort kinds by count desc for the breakdown — most-frequent at the top.
               const kindEntries = Object.entries(perKind).sort((a, b) => b[1] - a[1]);
               // Translation key map. Falls back to the raw kind string for any
@@ -2357,6 +2363,32 @@ const SettingsScreen = () => {
                       {resetDate && (
                         <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                           {t('settings.ai.emailResetLine', { date: resetDate, perDay: avgPerDay })}
+                        </div>
+                      )}
+                      {/* Honesty block: the "limit" is a configured default, not a
+                          live read from EmailJS (their Free tier exposes no usage
+                          API), and the "used" count only reflects sends made
+                          AFTER our audit log started recording. Without this
+                          context the card looks fabricated to anyone who knows
+                          they sent emails before logging began. */}
+                      {emailUsage && (
+                        <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.4rem', lineHeight: 1.45 }}>
+                          {loggingSinceStr
+                            ? t('settings.ai.emailLoggingSince', { date: loggingSinceStr })
+                            : t('settings.ai.emailNoLogsYet')}
+                          {' · '}
+                          {limitSource === 'default'
+                            ? t('settings.ai.emailLimitDefault')
+                            : t('settings.ai.emailLimitFromEnv')}
+                          {' · '}
+                          <a
+                            href="https://dashboard.emailjs.com/admin"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#3B82F6', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                          >
+                            {t('settings.ai.emailOpenDashboard')}
+                          </a>
                         </div>
                       )}
                     </div>

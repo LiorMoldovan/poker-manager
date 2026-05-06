@@ -381,8 +381,19 @@ export interface EmailUsageEntry {
 export interface EmailUsageResponse {
   used: number;
   limit: number;
+  // 'env' = limit pulled from EMAILJS_MONTHLY_CAP env var (operator-set);
+  // 'default' = fell back to the documented Free-tier value of 200. The
+  // UI uses this to render a "default — verify in EmailJS dashboard"
+  // caveat so the limit isn't mistaken for a live read from EmailJS.
+  limitSource?: 'env' | 'default';
   remaining: number;
   resetDate: string;          // YYYY-MM-DD UTC
+  // ISO timestamp of the oldest row in `email_usage_log`. Null when the
+  // log is empty (which means we genuinely have nothing to report yet —
+  // the UI shows "no sends logged yet" in that case). Used to render
+  // "Logging started: <date>" so users understand historical sends from
+  // before this audit log existed are NOT counted in `used`.
+  loggingSince?: string | null;
   perKind: Record<string, number>;
   perDay: Array<{ date: string; count: number }>;
   recent: EmailUsageEntry[];

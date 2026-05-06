@@ -1037,8 +1037,8 @@ function MilestoneBadge({ text }: { text: string }) {
       alignSelf: 'flex-start',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.4rem',
-      padding: '0.35rem 0.7rem',
+      gap: '0.3rem',
+      padding: '0.25rem 0.55rem',
       borderRadius: 999,
       background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.10) 0%, rgba(129, 140, 248, 0.18) 100%)',
       border: '1px solid rgba(129, 140, 248, 0.28)',
@@ -1046,9 +1046,9 @@ function MilestoneBadge({ text }: { text: string }) {
       fontFeatureSettings: '"tnum"',
       maxWidth: '100%',
     }}>
-      <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>🎯</span>
+      <span style={{ fontSize: '0.85rem', lineHeight: 1 }}>🎯</span>
       <span style={{
-        fontSize: '0.78rem',
+        fontSize: '0.74rem',
         fontWeight: 700,
         color: '#c7d2fe',
         letterSpacing: '0.015em',
@@ -1083,7 +1083,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
     const remaining = target - stats.gamesPlayed;
     if (remaining > 0 && remaining <= 30) {
       candidates.push({
-        text: t('home.personal.milestoneGames', { remaining, target }),
+        text: t('home.personal.milestoneGames', { current: stats.gamesPlayed, target }),
         ratio: remaining / target,
       });
       break; // only the next one in this category matters
@@ -1096,7 +1096,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
     const remaining = target - stats.winCount;
     if (remaining > 0 && remaining <= 15) {
       candidates.push({
-        text: t('home.personal.milestoneWins', { remaining, target }),
+        text: t('home.personal.milestoneWins', { current: stats.winCount, target }),
         ratio: remaining / target,
       });
       break;
@@ -1114,7 +1114,7 @@ function computeNextMilestone(stats: PlayerStats, t: SectionProps['t']): string 
       if (remaining > 0 && remaining <= 5000) {
         candidates.push({
           text: t('home.personal.milestoneProfit', {
-            remaining: formatCurrency(Math.round(remaining)),
+            current: formatCurrency(Math.round(stats.totalProfit)),
             target: formatCurrency(target),
           }),
           ratio: remaining / target,

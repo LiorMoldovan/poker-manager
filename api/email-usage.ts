@@ -53,14 +53,28 @@ export default async function handler(req: Request): Promise<Response> {
     const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const resetDate = next.toISOString().slice(0, 10);
 
-    const limit = Math.max(1, Number(process.env.EMAILJS_MONTHLY_CAP || 200));
+    // EMAILJS_MONTHLY_CAP is a Vercel env var the deployment owner sets to
+    // match their actual EmailJS plan; it's NOT fetched from EmailJS (the
+    // free tier has no usage API). When the env is missing we fall back to
+    // the documented Free-tier default of 200 — and the UI surfaces this
+    // explicitly so nobody mistakes the cap for a live read from EmailJS.
+    const limitRaw = process.env.EMAILJS_MONTHLY_CAP;
+    const limit = Math.max(1, Number(limitRaw || 200));
+    const limitSource: 'env' | 'default' = limitRaw ? 'env' : 'default';
     const used = Number(data?.used || 0);
+    const oldestLogged: string | null = data?.oldest_logged_at || null;
 
     return new Response(JSON.stringify({
       used,
       limit,
+      limitSource,
       remaining: Math.max(limit - used, 0),
       resetDate,
+      // ISO timestamp of the oldest row in `email_usage_log`, or null if
+      // the table is empty. The UI uses this to render an honest
+      // "Logging started: <date>" caption so users know historical sends
+      // aren't counted.
+      loggingSince: oldestLogged,
       perKind: data?.per_kind || {},
       perDay: data?.per_day || [],
       recent: data?.recent || [],
